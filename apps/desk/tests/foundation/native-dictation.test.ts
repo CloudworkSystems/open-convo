@@ -223,3 +223,20 @@ test('the App can release a binding whose words it kept unplaced', async () => {
   assert.equal(host.operations[1], 'dictation.unbindDraft');
   lane.revoke();
 });
+
+test('a late final for an unbound target is never applied, even back at the same caret and revision', async () => {
+  const { host, lane, finals, options, state, sessionId } = setup();
+  const selection = { start: 0, end: 0 };
+  lane.setTarget({ state, sessionId, selection });
+  await until(() => lane.status === 'ready', 'binding');
+  const token = host.beginRecording()!;
+  lane.setTarget(null);
+  await until(() => host.beginRecording() === undefined, 'unbinding');
+  // A final queued before the unbind arrives afterwards.
+  host.push({ type: 'dictation.final', bindingId: token, deliveryId: 'd9000000-0000-4000-8000-000000000010', text: 'late words' });
+  const final = finals[0]!;
+  assert.ok(final.capture && final.target, 'Its text still reaches the App.');
+  const result = final.capture.deliver(state, final.target, selection, final.deliveryId, final.text, options);
+  assert.deepEqual(result, { kind: 'refused', reason: 'revoked' }, 'The App keeps it unplaced instead.');
+  lane.revoke();
+});

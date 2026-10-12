@@ -225,6 +225,8 @@ export class NativeDictationLane {
       || outcome.result.outcome === 'refused' && outcome.result.reason === 'unknown-binding');
     if (!gone) { this.fail(); return false; }
     if (this.bound === bound) this.bound = null;
+    // An unbound target is revoked: a late final keeps its text unplaced, never applies it.
+    bound.capture.invalidate();
     this.retire(bound);
     this.changed();
     return true;

@@ -11,7 +11,12 @@ export interface RetainedDictation {
   readonly deliveryId: string;
   readonly text: string;
   readonly state: 'saving' | 'not-placed' | 'save-failed';
+  /** For save-failed: which workspace problem it is, so the notice names an action that exists. */
+  readonly reason?: 'retry' | 'reconcile' | 'reload';
 }
+
+const reasonFor = (kind: string): RetainedDictation['reason'] =>
+  kind === 'failed' || kind === 'blocked' ? 'retry' : kind === 'unknown' ? 'reconcile' : 'reload';
 
 export interface DeskDictationView {
   readonly status: DictationLaneStatus | 'none';
@@ -95,8 +100,8 @@ export function useDeskDictation(access: DeskDictationAccess): DeskDictationView
         nonce: (previous?.nonce ?? 0) + 1 }));
       void save(result.state, { dictationDeliveryId: final.deliveryId }).then((saved) => {
         if (saved.kind === 'saved') drop(final.deliveryId);
-        else keep({ deliveryId: final.deliveryId, text: final.text, state: 'save-failed' });
-      }, () => keep({ deliveryId: final.deliveryId, text: final.text, state: 'save-failed' }));
+        else keep({ deliveryId: final.deliveryId, text: final.text, state: 'save-failed', reason: reasonFor(saved.kind) });
+      }, () => keep({ deliveryId: final.deliveryId, text: final.text, state: 'save-failed', reason: 'reload' }));
     });
     // The host's receipt is the durable confirmation; text is released only then or on a saved reply.
     // A receipt after Retry also settles an earlier failed save of the same delivery.
