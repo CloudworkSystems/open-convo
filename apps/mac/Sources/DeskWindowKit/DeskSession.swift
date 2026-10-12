@@ -302,8 +302,12 @@ public final class DeskSession {
             }
             let connections = ConnectionRegistry()
             let drafts = DraftBindingRegistry()
-            drafts.onHeldChange = { [weak self] in
-                Task { @MainActor in self?.heldDictationChanged(drafts) }
+            // Weak both ways: the registry keeps this callback.
+            drafts.onHeldChange = { [weak self, weak drafts] in
+                Task { @MainActor in
+                    guard let drafts else { return }
+                    self?.heldDictationChanged(drafts)
+                }
             }
             let lane = participantLaneForThisRun()
             // A lane made just now has seen no lock from before this unlock.
@@ -547,10 +551,12 @@ public final class DeskSession {
     /// questions ask all the same), and nil only when it answered clean or
     /// there is nothing left to lose: the Desk is not open, or a lock or
     /// close came while the page was asked (it took the page's work).
-    /// Set-aside dictation counts as unsaved work in any state with a
-    /// stack, locked too: closing the stack drops it.
+    /// Dictated words the Mac still keeps (set aside, or pushed and not yet
+    /// confirmed saved) count as unsaved work in any state with a stack,
+    /// locked too, including just after a lock whose own step has not yet
+    /// set them aside: closing the stack drops them.
     public func holdsUnsavedWork() async -> DeskUnsavedWork? {
-        if host != nil, !heldDictation.isEmpty { return .unsaved }
+        if host != nil, drafts?.keepsUnsavedWords == true { return .unsaved }
         guard state == .open, let host else { return nil }
         let answer: DeskUnsavedWork?
         if let unsavedWorkCheck {

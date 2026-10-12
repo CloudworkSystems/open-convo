@@ -127,6 +127,15 @@ public final class DraftBindingRegistry: @unchecked Sendable {
         return held
     }
 
+    /// Whether any words would be lost if the stack closed now: set-aside
+    /// text, or text pushed to a page and not yet confirmed saved (a lock
+    /// still under way may not have set it aside yet).
+    public var keepsUnsavedWords: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return !held.isEmpty || !retained.isEmpty
+    }
+
     /// Issues a fresh binding. Binding again does not retarget anything: each
     /// call is its own binding, the newest undelivered one is what a recording
     /// started now captures, and a recording started earlier keeps its own.

@@ -85,6 +85,29 @@ final class DeskHeldDictationTests: XCTestCase {
         XCTAssertEqual(unsaved, .unsaved, "closing a locked Desk would lose them")
     }
 
+    /// Codex P1 on #7: a close right after a lock request, before the
+    /// host's lock step sets pushed words aside, still asks.
+    func testCloseJustAfterLockAsksForUnconfirmedWords() async throws {
+        let (_, session, drafts) = try await open(prompt: FakePrompt())
+        drafts.retainUntilSaved(HeldDelivery(deliveryId: UUID(), generation: 1, reason: .notSaved,
+                                             text: "pushed, not saved", heldAt: Date()))
+        XCTAssertTrue(session.heldDictation.isEmpty, "pushed words are retained, not yet set aside")
+        session.lockNow(reason: .menu)
+        XCTAssertEqual(session.state, .locked)
+        let unsaved = await session.holdsUnsavedWork()
+        XCTAssertEqual(unsaved, .unsaved)
+    }
+
+    /// Codex P2 on #7: closing lets the stack's registry go.
+    func testCloseReleasesTheRegistry() async throws {
+        let (made, session, _) = try await open(prompt: FakePrompt())
+        weak var gone = session.draftRegistry
+        hold("words", in: try XCTUnwrap(gone))
+        try await waitUntil("the row to show") { !made.heldRow.isHidden }
+        await session.close()
+        try await waitUntil("the registry to be released") { gone == nil }
+    }
+
     func testCloseAsksWhenWordsAreSetAside() async throws {
         let keep = FakePrompt()
         keep.answer = false
