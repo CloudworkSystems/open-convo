@@ -6,13 +6,13 @@
 
 ## What to Review
 
-Commit `01c2473` ("Port the Mac app into apps/mac"), commit `76446a1` ("Port the Conversation Desk into apps/desk") and `ebb23b1`
+Commits `0d581f4` (update to True Convo GitHub main `c527e36` plus name removal), `01c2473` ("Port the Mac app into apps/mac"), `76446a1` ("Port the Conversation Desk into apps/desk") and `ebb23b1`
 ("Move the clarity library into packages/clarity") in
 `/Users/patrick/OPEN-CONVO`. Compare against the frozen sources (read-only;
 never write, merge into or push them):
 
-- Desk: `/Users/patrick/True-Convo-AI/apps/desk` at commit `78ebb50`
-- Mac app: `/Users/patrick/True-Convo-AI/apps/true-convo-mac` at commit `78ebb50`
+- Desk: `/Users/patrick/True-Convo-AI/apps/desk` at commit `c527e36` on GitHub (`origin/main`)
+- Mac app: `/Users/patrick/True-Convo-AI/apps/true-convo-mac` at commit `c527e36` on GitHub (`origin/main`)
 - Library: `/Users/patrick/cloudwork_systems/true_convo/open-convo` at `3afa8144`
 
 ## Questions to Answer
@@ -36,7 +36,7 @@ never write, merge into or push them):
 
 ## Commands
 
-From `apps/desk`: `npm ci`, `npx tsc --noEmit`, `npm test` (expect 541/541),
+From `apps/desk`: `npm ci`, `npx tsc --noEmit`, `npm test` (expect 559/559),
 `npm run test:browser`, `npm run test:native-proof`.
 From `packages/clarity`: `npm test` (expect 47/47).
 From `apps/mac` on the Mac: `swift build -j 2`, `swift test -j 2` (expect 0 failures).
