@@ -387,7 +387,12 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
         return;
       }
       // The reconciled original carried any sent delivery, so it is complete; a blocked one never reached the host.
-      if (unresolvedDelivery.current?.sent) unresolvedDelivery.current = null;
+      if (unresolvedDelivery.current?.sent) {
+        // Reconciliation brings no receipt, so release the delivery's binding here.
+        const deliveryId = unresolvedDelivery.current.options.dictationDeliveryId;
+        if (deliveryId) runtime.dictation?.release(deliveryId);
+        unresolvedDelivery.current = null;
+      }
       writeProblem.current = null;
       setProblem(null);
       notifyRunSave.current(result.state);
