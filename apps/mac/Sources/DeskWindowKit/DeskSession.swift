@@ -112,6 +112,11 @@ public final class DeskSession {
     public private(set) var host: DeskWebViewHost?
     public private(set) var store: ProofStore?
     private var hostProtocol: DeskHostProtocol?
+    /// The stack's dictation registry: its set-aside words live here, in
+    /// memory only, through a lock; they go when the stack closes.
+    private var drafts: DraftBindingRegistry?
+    /// Called on the main actor after the set-aside dictation changes.
+    public var onHeldDictationChange: (@MainActor () -> Void)?
     /// This run's participant lane: made once, by `makeParticipantLane`,
     /// when the first stack is built, and the same object for every stack
     /// after (Codex Q21). Nil without a factory, as in the app.
@@ -297,6 +302,9 @@ public final class DeskSession {
             }
             let connections = ConnectionRegistry()
             let drafts = DraftBindingRegistry()
+            drafts.onHeldChange = { [weak self] in
+                Task { @MainActor in self?.heldDictationChanged(drafts) }
+            }
             let lane = participantLaneForThisRun()
             // A lane made just now has seen no lock from before this unlock.
             let laneEpoch = laneEpochAtStart ?? lane?.lockEpoch
@@ -366,6 +374,7 @@ public final class DeskSession {
             wire(host)
             self.store = store
             self.hostProtocol = hostProtocol
+            self.drafts = drafts
             self.host = host
             if lockRequests != lockRequestsAtStart {
                 // A lock arrived while the Desk was opening: it stays locked
@@ -421,6 +430,29 @@ public final class DeskSession {
             guard let self, let ask = self.confirmLeavingUnsavedWork else { return false }
             return await ask(url, reason)
         }
+    }
+
+    // MARK: Set-aside dictation
+
+    /// Words the Desk could not place, oldest first. In memory only.
+    public var heldDictation: [HeldDelivery] { drafts?.heldDeliveries ?? [] }
+
+    /// Hands one set-aside dictation over once and forgets it. Refused
+    /// (nil) unless the Desk is open: a locked Desk shows no words.
+    public func takeHeldDictation(_ id: UUID) -> HeldDelivery? {
+        guard state == .open, let drafts else { return nil }
+        let taken = drafts.takeHeldDelivery(id)
+        if taken != nil { log("desk.dictation.held.taken", "remaining=\(drafts.heldDeliveries.count)") }
+        return taken
+    }
+
+    /// Test seam: the open stack's registry.
+    var draftRegistry: DraftBindingRegistry? { drafts }
+
+    private func heldDictationChanged(_ registry: DraftBindingRegistry) {
+        guard drafts === registry else { return }
+        log("desk.dictation.held", "count=\(registry.heldDeliveries.count)")
+        onHeldDictationChange?()
     }
 
     // MARK: Lock and close
@@ -501,7 +533,10 @@ public final class DeskSession {
         store?.close()
         self.host = nil
         hostProtocol = nil
+        let hadHeld = !heldDictation.isEmpty
+        drafts = nil
         store = nil
+        if hadHeld { onHeldDictationChange?() }
         let locked = state != .open
         state = locked ? .lockedNoStack : .closed
         log("desk.closed", "locked=\(locked)")
@@ -512,7 +547,10 @@ public final class DeskSession {
     /// questions ask all the same), and nil only when it answered clean or
     /// there is nothing left to lose: the Desk is not open, or a lock or
     /// close came while the page was asked (it took the page's work).
+    /// Set-aside dictation counts as unsaved work in any state with a
+    /// stack, locked too: closing the stack drops it.
     public func holdsUnsavedWork() async -> DeskUnsavedWork? {
+        if host != nil, !heldDictation.isEmpty { return .unsaved }
         guard state == .open, let host else { return nil }
         let answer: DeskUnsavedWork?
         if let unsavedWorkCheck {

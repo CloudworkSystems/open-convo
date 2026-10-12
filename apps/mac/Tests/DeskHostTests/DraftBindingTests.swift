@@ -59,7 +59,7 @@ struct DraftBindingTests {
         #expect(registry.pendingDeliveries.isEmpty, "navigation drops pending deliveries with their bindings")
     }
 
-    @Test("Held text survives navigation, is handed out once, and is cleared by lock")
+    @Test("Held text survives navigation and lock, is handed out once, and is cleared by close")
     func heldDeliveries() {
         let registry = DraftBindingRegistry()
         let held = HeldDelivery(deliveryId: registry.makeDeliveryId(), generation: 0, reason: .noBinding, text: "private words", heldAt: Date())
@@ -69,8 +69,49 @@ struct DraftBindingTests {
         #expect(registry.takeHeldDelivery(held.deliveryId) == held)
         #expect(registry.takeHeldDelivery(held.deliveryId) == nil)
         registry.hold(held)
+        registry.invalidateAll(keepingWords: true)
+        #expect(registry.heldDeliveries == [held], "lock keeps the owner's words in memory (owner decision A)")
         registry.invalidateAll()
-        #expect(registry.heldDeliveries.isEmpty, "lock leaves no dictated text in the host")
+        #expect(registry.heldDeliveries.isEmpty, "close leaves no dictated text in the host")
     }
+
+    @Test("Pushed text is kept until its commit is confirmed; released, navigated or locked before then, it is set aside as held")
+    func retainedUntilSaved() {
+        let registry = DraftBindingRegistry()
+        let changes = Counter()
+        registry.onHeldChange = { changes.increment() }
+        func push(_ text: String, generation: Int = 0) -> (binding: DraftBinding, deliveryId: UUID) {
+            let binding = registry.bind(connectionId: "c1", generation: generation, target: target)
+            let id = registry.makeDeliveryId()
+            #expect(registry.reservePending(PendingDelivery(deliveryId: id, bindingId: binding.bindingId, connectionId: "c1",
+                                                            generation: generation, target: target, pushedAt: Date())))
+            registry.retainUntilSaved(HeldDelivery(deliveryId: id, generation: generation, reason: .notSaved, text: text, heldAt: Date()))
+            return (binding, id)
+        }
+        let saved = push("saved words")
+        registry.completePending(saved.deliveryId)
+        #expect(registry.unbind(bindingId: saved.binding.bindingId, connectionId: "c1", generation: 0))
+        #expect(registry.heldDeliveries.isEmpty, "a confirmed save releases the text")
+
+        let released = push("released words")
+        #expect(registry.unbind(bindingId: released.binding.bindingId, connectionId: "c1", generation: 0))
+        #expect(registry.heldDeliveries.map(\.text) == ["released words"], "released before saving: set aside")
+        #expect(registry.heldDeliveries.first?.reason == .notSaved)
+
+        _ = push("navigated words")
+        registry.invalidate(generationsBefore: 1)
+        _ = push("locked words", generation: 1)
+        registry.invalidateAll(keepingWords: true)
+        #expect(registry.heldDeliveries.map(\.text) == ["released words", "navigated words", "locked words"])
+        #expect(registry.pendingDeliveries.isEmpty && registry.activeBindingCount == 0)
+        #expect(changes.value == 3, "the app is told each time words are set aside")
+    }
+}
+
+final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    var value: Int { lock.lock(); defer { lock.unlock() }; return count }
+    func increment() { lock.lock(); count += 1; lock.unlock() }
 }
 

@@ -56,12 +56,18 @@ public enum HeldReason: String, Equatable, Sendable {
     /// The host has no event sink, so nothing can be pushed to a page; the
     /// binding is left untouched.
     case noEventSink
+    /// Pushed to the page but never confirmed saved: the page's binding was
+    /// released, its document went away, or the Desk locked first.
+    case notSaved
+    /// The recording finished while the Desk was locked (owner decision A,
+    /// October 12: words are kept in memory through a lock, never on disk).
+    case locked
 }
 
 /// Final text the host kept natively because it could not be pushed to the
 /// draft its recording was started for. It is never pasted or typed; the app
-/// surfaces it for the owner to place by hand. Cleared on lock and close,
-/// kept across navigation. `generation` is the recording's document.
+/// surfaces it for the owner to place by hand. Kept across navigation and
+/// lock (in memory only), cleared on close. `generation` is the recording's document.
 public struct HeldDelivery: Equatable, Sendable {
     public let deliveryId: UUID
     public let generation: Int
@@ -72,8 +78,8 @@ public struct HeldDelivery: Equatable, Sendable {
 
 /// Ephemeral bindings and pending deliveries: one binding per host-issued
 /// id, tied to the connection and document generation it was made in.
-/// Advancing the generation drops bindings and pending deliveries; lock and
-/// close drop held text as well.
+/// Advancing the generation drops bindings and pending deliveries; their
+/// unsaved text moves to held. Lock keeps held text; close drops it.
 public final class DraftBindingRegistry: @unchecked Sendable {
     private let lock = NSLock()
     private let clock: @Sendable () -> Date
@@ -82,6 +88,11 @@ public final class DraftBindingRegistry: @unchecked Sendable {
     private var bindings: [UUID: DraftBinding] = [:]
     private var pending: [UUID: PendingDelivery] = [:]
     private var held: [HeldDelivery] = []
+    /// Text pushed to a page and kept, in memory only, until its commit is
+    /// confirmed. Never written to the store.
+    private var retained: [UUID: HeldDelivery] = [:]
+    /// Called after held text changes, outside the lock, so the app can show it.
+    public var onHeldChange: (@Sendable () -> Void)?
 
     public init(clock: @escaping @Sendable () -> Date = { Date() },
                 makeBindingId: @escaping @Sendable () -> UUID = { UUID() },
@@ -140,6 +151,11 @@ public final class DraftBindingRegistry: @unchecked Sendable {
             return false
         }
         bindings.removeValue(forKey: bindingId)
+        // Released before its delivery was saved: the page will not commit it.
+        let setAside = existing.deliveryId.map { setAsideLocked([$0]) } ?? false
+        lock.unlock()
+        if setAside { onHeldChange?() }
+        lock.lock()
         return true
     }
 
@@ -156,7 +172,7 @@ public final class DraftBindingRegistry: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         var id = makeDeliveryIdValue()
-        while pending[id] != nil || held.contains(where: { $0.deliveryId == id }) { id = makeDeliveryIdValue() }
+        while pending[id] != nil || retained[id] != nil || held.contains(where: { $0.deliveryId == id }) { id = makeDeliveryIdValue() }
         return id
     }
 
@@ -183,37 +199,71 @@ public final class DraftBindingRegistry: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         pending.removeValue(forKey: id)
+        retained.removeValue(forKey: id)
+    }
+
+    /// Keep pushed text until its commit is confirmed (`completePending`).
+    public func retainUntilSaved(_ delivery: HeldDelivery) {
+        lock.lock()
+        defer { lock.unlock() }
+        retained[delivery.deliveryId] = delivery
     }
 
     public func hold(_ delivery: HeldDelivery) {
         lock.lock()
-        defer { lock.unlock() }
         held.append(delivery)
+        lock.unlock()
+        onHeldChange?()
+    }
+
+    /// Moves retained text for these deliveries to held. Caller holds the lock.
+    private func setAsideLocked(_ ids: [UUID]) -> Bool {
+        var moved = false
+        for id in ids {
+            pending.removeValue(forKey: id)
+            guard let kept = retained.removeValue(forKey: id) else { continue }
+            held.append(kept)
+            moved = true
+        }
+        return moved
     }
 
     /// Hands a held text to the app once and forgets it.
     public func takeHeldDelivery(_ id: UUID) -> HeldDelivery? {
         lock.lock()
-        defer { lock.unlock() }
-        guard let index = held.firstIndex(where: { $0.deliveryId == id }) else { return nil }
-        return held.remove(at: index)
+        guard let index = held.firstIndex(where: { $0.deliveryId == id }) else { lock.unlock(); return nil }
+        let taken = held.remove(at: index)
+        lock.unlock()
+        onHeldChange?()
+        return taken
     }
 
     /// Navigation: bindings and pending deliveries from superseded documents
     /// are gone. Held text belongs to the host, not the document, and stays.
     public func invalidate(generationsBefore generation: Int) {
         lock.lock()
-        defer { lock.unlock() }
         bindings = bindings.filter { $0.value.generation >= generation }
-        pending = pending.filter { $0.value.generation >= generation }
+        let gone = pending.values.filter { $0.generation < generation }.map(\.deliveryId)
+        let moved = setAsideLocked(gone)
+        lock.unlock()
+        if moved { onHeldChange?() }
     }
 
-    /// Lock or close: nothing remains, held text included.
-    public func invalidateAll() {
+    /// Lock keeps the owner's words (unsaved text moves to held, held stays);
+    /// close drops everything. Bindings and pending deliveries go either way.
+    public func invalidateAll(keepingWords: Bool = false) {
         lock.lock()
-        defer { lock.unlock() }
+        let hadHeld = !held.isEmpty || !retained.isEmpty
+        if keepingWords {
+            _ = setAsideLocked(Array(pending.keys))
+            held.append(contentsOf: retained.values.sorted { $0.heldAt < $1.heldAt })
+        } else {
+            held.removeAll()
+        }
+        retained.removeAll()
         bindings.removeAll()
         pending.removeAll()
-        held.removeAll()
+        lock.unlock()
+        if hadHeld { onHeldChange?() }
     }
 }

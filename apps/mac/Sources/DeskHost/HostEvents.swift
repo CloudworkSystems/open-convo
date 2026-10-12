@@ -22,7 +22,7 @@ public enum HostConnectionReason: String, Equatable, Sendable {
 /// hands the event to a `HostEventSink`.
 public enum HostEvent: Equatable, Sendable {
     /// Literal final dictation for the bound draft, pushed once. The host keeps
-    /// no copy of `text` after the push; only the delivery receipt remains.
+    /// `text` in memory only until the delivery's commit is confirmed.
     case dictationFinal(connectionId: String, generation: Int, bindingId: UUID, deliveryId: UUID, text: String)
 
     /// The delivery named by `deliveryId` was saved by the durable commit

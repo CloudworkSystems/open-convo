@@ -152,7 +152,9 @@ final class DeskPaidUsageControlsTests: XCTestCase {
         XCTAssertNil(made.checkClaudeButton.superview)
         XCTAssertNil(made.confirmPaidUsageButton.superview)
         let column = try XCTUnwrap(made.window?.contentView?.subviews.first as? NSStackView)
-        XCTAssertEqual(column.arrangedSubviews.count, 3, "the strip, the stopped banner and the page, as before")
+        XCTAssertEqual(column.arrangedSubviews.count, 4,
+                       "the strip, the set-aside dictation row (hidden until used), the stopped banner and the page")
+        XCTAssertTrue(made.heldRow.isHidden)
     }
 
     func testStateLinesAndCheckClaudeBeforeUnlock() async throws {

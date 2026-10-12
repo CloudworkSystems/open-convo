@@ -74,6 +74,7 @@ struct DeskHostProtocolTests {
         let second = harness.connections.issue()
         let earlier = await harness.host.beginRecording()
         await harness.host.revokeForShutdown()
+        #expect(harness.drafts.heldDeliveries.isEmpty, "close drops held text")
         let revoked = harness.sink.connectionEvents
         #expect(revoked == [harness.connection, second].sorted { $0.id < $1.id }.map {
             .hostConnection(connectionId: $0.id, generation: 0, state: .revoked, reason: .shutdown)
@@ -743,7 +744,7 @@ struct DeskHostProtocolTests {
         #expect(await harness.host.handle(harness.unbindRequest(bindingId: bindingId)).outcome == .ok)
     }
 
-    @Test("A binding answers only the connection and generation that made it; navigation and lock leave no text in the host")
+    @Test("A binding answers only the connection and generation that made it; navigation and lock keep unsaved words as held text in memory, close drops them")
     func bindingLifetime() async throws {
         let harness = try HostHarness()
         defer { harness.clean() }
@@ -759,7 +760,8 @@ struct DeskHostProtocolTests {
         await harness.host.beginGeneration()
         #expect(harness.drafts.activeBindingCount == 0, "a new document drops the old generation's bindings")
         #expect(harness.drafts.pendingDeliveries.isEmpty)
-        #expect(harness.drafts.heldDeliveries.map(\.text) == ["private words held"], "held text belongs to the host and survives navigation")
+        #expect(harness.drafts.heldDeliveries.map(\.text) == ["private words held", "private words one"],
+                "held text survives navigation, and text pushed but never saved is set aside with it")
         let next = await harness.host.issueConnection()
         let lateUnbind = await harness.host.handle(harness.unbindRequest(bindingId: bindingId, connection: next))
         #expect(lateUnbind.reason == .unknownBinding)
@@ -772,7 +774,8 @@ struct DeskHostProtocolTests {
         _ = try await harness.bind(expectedRevision: 0, connection: next)
         #expect(!(await harness.deliver("private words two")).isHeld)
         await harness.host.lock()
-        #expect(harness.drafts.heldDeliveries.isEmpty, "lock clears held text")
+        #expect(harness.drafts.heldDeliveries.map(\.text) == ["private words held", "private words one", "private words two"],
+                "lock keeps held text and sets aside unsaved text (owner decision A)")
         #expect(harness.drafts.pendingDeliveries.isEmpty)
         #expect(harness.drafts.activeBindingCount == 0)
         #expect(harness.sink.finalTexts == ["private words one", "private words two"])

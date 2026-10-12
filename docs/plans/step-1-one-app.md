@@ -118,6 +118,14 @@ Each one ends with something the owner can try on the Mac.
    shrink button in the Desk, one toggle shortcut) as a starting point.
 2. **Answered October 12:** the step 1 build replaces today's True Convo app and
    keeps its permissions.
+3. **Answered October 12 (decision A):** dictated words are kept through a
+   lock, in memory only. They are lost on quit or crash until step 2 adds
+   saving to disk. PR 2 is split: **2a** keeps the words (the Mac holds each
+   final until the Desk confirms it saved, and sets aside anything unplaced)
+   and shows set-aside words as a row in the Desk window with Copy and
+   Dismiss, plus a short note on the pill. A locked Desk shows only how many,
+   never the words, and closing the window with set-aside words asks first.
+   **2b** switches dictation on with the separate Desk route.
 
 ## Requirements Carried Into PR 1 (Codex's Fifth Review)
 
