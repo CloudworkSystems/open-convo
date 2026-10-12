@@ -62,7 +62,12 @@ Each one ends with something the owner can try on the Mac.
    not sent.
 2. **Mac side switch-on.** Change `DeskDictationPolicy` so an open, focused Desk
    returns a new "Desk draft" decision; call the existing binding at recording
-   start and finish; update the policy check and tests.
+   start and finish; update the policy check and tests. Also handle **held
+   text**: if the Desk unbinds mid-recording (session change, composer closed,
+   navigation), the Mac keeps the words (`deliverFinal` returns `.held`) but
+   nothing shows or uses them today. Surface held text to the owner (for
+   example in the pill, with a copy or insert option) and clear it once used,
+   so dictated words are never stranded. (Added after Codex review.)
    *Owner tries:* open the Desk, unlock it, dictate, and the words appear in the
    draft, not sent. Lock it and dictation is refused.
 3. **Pill and Desk, both directions.** Proposed default, open to change:
@@ -72,8 +77,13 @@ Each one ends with something the owner can try on the Mac.
    - One keyboard shortcut that toggles between them.
    *Owner tries:* shrink the Desk to the pill, dictate into another app, click
    the pill's Desk button, and the Desk is back with its draft intact.
-4. **One build to install.** Run packaging and checks; the owner signs and
-   installs. *Owner tries:* the finish line above.
+4. **One build to install.** Today `package_app.sh` deliberately refuses to
+   install or Developer ID-sign any build that includes the Desk ("trial build
+   only"). This PR changes that rule, with tests, so a Desk build can be signed
+   and installed once the owner approves; the owner approved replacing today's
+   True Convo app on October 12. Signing and installing still happen only when
+   the owner says so. (Added after Codex review.)
+   *Owner tries:* the finish line above.
 
 ## Risks
 
@@ -86,8 +96,8 @@ Each one ends with something the owner can try on the Mac.
 
 ## Questions for the Owner
 
-1. **Answered October 12:** the HUD is the existing pill; an easy way back to
-   the Desk is required. Open: does the proposed default in PR 3 (Desk button
-   in the pill, shrink button in the Desk, one toggle shortcut) fit?
-2. **Installing:** the build replaces today's True Convo app and keeps its
-   permissions. OK to plan on that for the step 1 finish line?
+1. **Answered October 12:** the HUD is the existing pill, with an easy way back
+   to the Desk. The owner accepted the PR 3 default (Desk button in the pill,
+   shrink button in the Desk, one toggle shortcut) as a starting point.
+2. **Answered October 12:** the step 1 build replaces today's True Convo app and
+   keeps its permissions.
