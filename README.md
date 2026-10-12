@@ -1,7 +1,8 @@
 # Open Convo
 
-Open Convo is the welcoming, public-facing conversation product and the front
-door to True Convo. This repo is now where the product is built.
+Open Convo is the open-source core of True Convo. This repo is where True Convo
+is built: the Desk, the Mac app with dictation and the heads-up display, and the
+clarity tools.
 
 ## Status
 

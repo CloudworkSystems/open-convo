@@ -7,6 +7,14 @@ product repo. True Convo stays private as the reference and parts library.
 
 ## What the Product Is
 
+**Names.** The product is **True Convo**. **Open Convo** is its open-source core
+("True Convo core"): the part given away that people can use and label as their
+own. Non-core offerings are a True Convo subscription. Whether relabeling at all
+requires a subscription is still open. The Mac app keeps the name True Convo and
+its existing identity (`com.trueconvo.voice-cursor`), so an installed build
+replaces today's True Convo app and keeps its permissions and settings.
+
+
 One desktop app. The full Desk is its home; it shrinks down to a heads-up display
 and dictation that works wherever the cursor is in any Mac app. The Mac app
 (step 3) and the Desk (step 2) become the same application, not two products.
@@ -44,11 +52,20 @@ has tried it. Each step ends with something the owner can try.
    and the session reopens later without retelling. The app shows which model
    receives what before Send. *Finish line:* the owner holds a real conversation,
    quits, reopens and continues it.
-4. **Clarity tools in the conversation.** Connect `packages/clarity` to the Desk:
+4. **Clarity tools in the conversation.** Design rules from the owner: the
+   explainer is an outsider. Like the old Codex "More detail" right-click, it
+   answers from outside the conversation and never receives the main assistant's
+   system prompt, instructions or project rules, which is why its explanations
+   read more plainly. The owner highlights any part of a reply and right-clicks
+   for it. Connect `packages/clarity` to the Desk:
    Wait—what? on any assistant reply, select-a-phrase corrections, saved wording
    lessons that shape later replies, with Undo. *Finish line:* the owner uses
    Wait—what? and a correction in a real conversation and sees the next reply
    follow the lesson.
+   Voice corrections belong here too: "when I said this, I meant that" teaches
+   dictation the owner's voice and phrasing. The Mac app's `CorrectionMemory`
+   ("remember this fix") is the start of it, and it feeds the later Convo engine
+   for content creation.
 5. **Chosen memory on real storage.** Remember, correct, forget and Undo on the
    protected store; memory candidates wait for the owner's approval; forgotten
    items leave AI use immediately, with a 30-day Trash. *Finish line:* the owner
@@ -82,11 +99,11 @@ Strategy and interview files, `docs/reviews`, `docs/sessions`, session audits,
 
 ## Open Questions
 
-- The app's name and identity. It is still named True Convo with bundle ID
-  `com.trueconvo.voice-cursor`. Keeping that ID means an installed Open Convo
-  build replaces the installed True Convo app and keeps its microphone and
-  Accessibility permissions and settings; a new ID installs side by side and asks
-  for permissions again.
+- Which parts are open core and which are subscription-only. Everything lives
+  in this private repo for now. Before the repo goes public, the subscription
+  parts move to a separate private repo that builds on Open Convo.
+- The license and trademark approach, which decides whether others may relabel
+  the core freely or only with a subscription.
 - License, and when (or whether) the repo goes public.
 - Whether the in-progress True Convo branches (native host proof, build 8
   trial, participant wiring) get finished here or restarted fresh.

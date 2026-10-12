@@ -1,4 +1,4 @@
-# Open Convo for Mac
+# True Convo for Mac
 
 The desktop app. Today it is the dictation app with its heads-up display:
 talk at the cursor in any Mac app, fix a word once and it remembers. It also
@@ -31,5 +31,5 @@ approval each time.
 
 Ported from the frozen True Convo repo on October 12, 2026. Its build history,
 release notes (which name the owner's signing certificate) and license file
-stayed behind. The app is still named True Convo with bundle ID
-`com.trueconvo.voice-cursor`; renaming is an open decision in `PLAN.md`.
+stayed behind. The app keeps the name True Convo and bundle ID `com.trueconvo.voice-cursor`
+(owner's decision, October 12), so it replaces the installed True Convo app.
