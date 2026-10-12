@@ -58,7 +58,8 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
   const savedRevision = useRef<number | null>(null);
   const savedState = useRef<DeskState | null>(null);
   const writeProblem = useRef<Problem | null>(null);
-  const unresolvedDelivery = useRef<WorkspaceSaveOptions | null>(null);
+  // A dictation save that has not landed: `sent` means the host may already have its commit.
+  const unresolvedDelivery = useRef<{ options: WorkspaceSaveOptions; sent: boolean } | null>(null);
   const tail = useRef<Promise<void>>(Promise.resolve());
   const pending = useRef(0);
   const saveEpoch = useRef(0);
@@ -92,13 +93,13 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
     const operation = tail.current.then(async (): Promise<WorkspaceAttemptResult> => {
       if (!isCurrent()) return { kind: 'unavailable', error: 'The workspace connection is closed.' };
       if (writeProblem.current) {
-        if (options?.dictationDeliveryId) unresolvedDelivery.current = options;
+        if (options?.dictationDeliveryId) unresolvedDelivery.current = { options, sent: false };
         return { kind: 'blocked', error: 'This update has not been sent because an earlier save needs attention.' };
       }
       const result = await repository.save(captured, savedRevision.current, options);
       if (!isCurrent()) return { kind: 'unavailable', error: 'The workspace connection closed before save confirmation.' };
       if (result.kind === 'saved') {
-        if (unresolvedDelivery.current?.dictationDeliveryId === options?.dictationDeliveryId) unresolvedDelivery.current = null;
+        if (unresolvedDelivery.current?.options.dictationDeliveryId === options?.dictationDeliveryId) unresolvedDelivery.current = null;
         savedRevision.current = result.state.revision;
         savedState.current = result.state;
         notifyRunSave.current(result.state);
@@ -107,7 +108,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
         }
       } else {
         // A dictation save that did not land keeps its delivery identity for Retry.
-        if (options?.dictationDeliveryId) unresolvedDelivery.current = options;
+        if (options?.dictationDeliveryId) unresolvedDelivery.current = { options, sent: true };
         setWriteProblem({ kind: result.kind, message: result.error });
       }
       return result;
@@ -357,7 +358,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
       writeProblem.current = null;
       setProblem(null);
       // Retry carries a failed dictation's delivery identity, so the host completes that delivery.
-      save(stateRef.current, unresolvedDelivery.current ?? undefined);
+      save(stateRef.current, unresolvedDelivery.current?.options);
       await tail.current;
     } finally {
       retrying.current = false;
@@ -385,11 +386,13 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
         setWriteProblem({ kind: 'conflict', message: 'The native result does not match this visit. Keep the attempted work while resolving the difference.' });
         return;
       }
+      // The reconciled original carried any sent delivery, so it is complete; a blocked one never reached the host.
+      if (unresolvedDelivery.current?.sent) unresolvedDelivery.current = null;
       writeProblem.current = null;
       setProblem(null);
       notifyRunSave.current(result.state);
       if (visible.revision === result.state.revision) setSaveStatus({ kind: 'saved', message: savedMessage });
-      else save(visible); // Original outcome is now known; only now save subsequent retained edits.
+      else save(visible, unresolvedDelivery.current?.options); // Original outcome is now known; only now save subsequent retained edits.
     } catch {
       setWriteProblem({ kind: 'unknown', message: 'The original save is still unconfirmed. No replacement request was sent.' });
     } finally {
