@@ -37,6 +37,8 @@ reads from and writes to `CloudworkSystems/open-convo`.
   session and opens a pull request. Codex may review that pull request on
   GitHub. The owner merges it with GitHub's button.
 - **How far review goes depends on what the pull request contains.**
+  - *Any pull request that changes code* follows the code path below, even
+    when it also changes docs.
   - *Plans and other docs* get one Codex review round. Claude writes its P1
     findings into the plan as requirements for the code that follows, and the
     owner merges. Later rounds on a plan are optional, not a merge condition;
