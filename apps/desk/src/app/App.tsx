@@ -59,6 +59,8 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
   const savedState = useRef<DeskState | null>(null);
   const writeProblem = useRef<Problem | null>(null);
   // A dictation save that has not landed: `sent` means the host may already have its commit.
+  // Dictated words held only in this page (unplaced or unsaved) count as unsaved work.
+  const keptDictation = useRef(false);
   const unresolvedDelivery = useRef<{ options: WorkspaceSaveOptions; sent: boolean } | null>(null);
   const tail = useRef<Promise<void>>(Promise.resolve());
   const pending = useRef(0);
@@ -177,6 +179,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
     },
     save: (next, options) => save(next, options),
   });
+  keptDictation.current = dictation.retained.length > 0;
 
   useEffect(() => {
     let active = true;
@@ -234,7 +237,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
       // Valid legacy bytes are read-only until a deliberate content save.
     })();
     const leaving = (event: BeforeUnloadEvent) => {
-      if (writeProblem.current || pending.current > 0 || runs.hasUnconfirmed()) {
+      if (writeProblem.current || pending.current > 0 || runs.hasUnconfirmed() || keptDictation.current) {
         event.preventDefault();
         event.returnValue = '';
       }
