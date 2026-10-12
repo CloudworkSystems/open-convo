@@ -68,7 +68,7 @@ has tried it. Each step ends with something the owner can try.
 
 1. **Correction and clarity library. Done October 12.** (`packages/clarity`)
 2. **Conversation Desk. Ported October 12, awaiting Codex review.** (`apps/desk`)
-3. **Mac app** (`apps/true-convo-mac`, 134 tracked files). Swift package; built
+3. **Mac app. Ported October 12 to `apps/mac`, awaiting review.** (`apps/true-convo-mac`, 134 tracked files). Swift package; built
    and checked on the Mac. Signing and release settings stay with the owner.
 4. **Shared tooling, case by case** (`tools/capability-adapter`, `tools/action-guard`,
    `tools/agent-bridge`). Paid bridges and evaluation tools (`glm-bridge`,
@@ -82,6 +82,11 @@ Strategy and interview files, `docs/reviews`, `docs/sessions`, session audits,
 
 ## Open Questions
 
+- The app's name and identity. It is still named True Convo with bundle ID
+  `com.trueconvo.voice-cursor`. Keeping that ID means an installed Open Convo
+  build replaces the installed True Convo app and keeps its microphone and
+  Accessibility permissions and settings; a new ID installs side by side and asks
+  for permissions again.
 - License, and when (or whether) the repo goes public.
 - Whether the in-progress True Convo branches (native host proof, build 8
   trial, participant wiring) get finished here or restarted fresh.
@@ -100,3 +105,4 @@ Strategy and interview files, `docs/reviews`, `docs/sessions`, session audits,
 | --- | --- | --- | --- | --- |
 | 2026-10-12 | Clarity library → `packages/clarity` | `cloudwork_systems/true_convo/open-convo` (src, tests, contracts, fixtures, scripts) | cloudwork_systems `3afa8144` | Owner's name in test actors and one fixture (now "owner"); `session-view-controls` test (it read a separate Studio app by relative path); `status` script (checked docs not moved); all docs and workbench receipts held back pending review. 47/47 tests and 4 proofs pass. |
 | 2026-10-12 | Conversation Desk → `apps/desk` | True Convo `apps/desk` (committed files only) | True Convo `78ebb50` | README, PRODUCT.md, review docs, `.openai` hosting target, ChatGPT-site publish scripts and their tests, Mac preview launcher and its tests. Roadmap content rewritten as the Open Convo roadmap (same card IDs except `first-run-guide`); evidence links now point at this repo. Owner name removed from comments. Typecheck, build, 541/541 unit tests, 231 browser tests across 24 files and 4 native-proof tests pass. Awaiting Codex review. |
+| 2026-10-12 | Mac app → `apps/mac` | True Convo `apps/true-convo-mac` (committed files only) | True Convo `78ebb50` | BUILD-PLAN.md (project history, owner's name and business notes), RELEASING.md (names the owner's signing certificate and release history), LICENSE (license is still the owner's decision). Source and tests unchanged. On the Mac: `swift build` passes; `swift test` passes 116 XCTest (37 skipped, mostly needing the packaged Desk) and 279 Swift Testing tests. |
