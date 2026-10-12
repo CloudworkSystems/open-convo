@@ -19,24 +19,34 @@ and the Desk from it.
 - **Packaging** (`apps/mac/scripts/package_app.sh`) builds the Desk into the app.
   The app keeps the True Convo name and bundle ID, so it replaces today's app.
 
-## Built but Switched Off
+## Partly Built: Dictating Into a Desk Draft
 
-**Dictating into a Desk draft.** Both halves exist: the Mac side binds a draft
-at recording start and pushes the final text once (`DeskHost/DraftBinding.swift`,
-`dictation.bindDraft`, `dictation.final`), and the Desk side applies it with
-conflict checks (`apps/desk/src/adapters/dictation-draft.ts`). But one rule
-refuses it: `DeskDictationPolicy.decide` returns "not in this build" whenever
-the Desk is open and in front. Today, pressing the dictation key in the Desk
-does nothing, by design, so text can't land in the wrong app.
+- **Mac side: built.** It binds a draft at recording start and pushes the final
+  text once (`DeskHost/DraftBinding.swift`, `dictation.bindDraft`,
+  `dictation.final`).
+- **Desk side: only a standalone helper.** `apps/desk/src/adapters/dictation-draft.ts`
+  applies text to a draft with conflict checks, but nothing in the Desk uses it
+  yet: its own comment says it is not connected to the app, the native link or
+  storage, and `native-bootstrap.ts` wires only the repository and participants.
+  (Corrected after Codex review; the first version of this note overstated it.)
+- **One rule blocks it on purpose:** `DeskDictationPolicy.decide` returns "not in
+  this build" whenever the Desk is open and in front, so text can't land in the
+  wrong app.
 
 ## Missing
 
-1. **The switch-on and wiring for Desk dictation**: lift the refusal for an open
-   Desk, bind the draft when recording starts, deliver the final text into the
-   draft without sending it. Corrections stay refused in the Desk, and a locked
-   Desk still refuses.
-2. **Shrinking to the HUD and growing back to the Desk.** Nothing does this yet.
-   This needs the owner's description first (see Questions).
+1. **Desk dictation, both ends.** On the Desk side: capture the composer's
+   draft and selection when recording starts, bind and unbind it with the Mac,
+   handle the pushed `dictation.final` event, commit the result to the Desk's
+   state, and send a delivery receipt back. Unbind when the session changes, the
+   composer closes, the Desk locks or the owner navigates away. On the Mac side:
+   lift the refusal for an open Desk and call the existing binding at recording
+   start and finish. Corrections stay refused in the Desk, and a locked Desk
+   still refuses.
+2. **The pill as the HUD, with a way back to the Desk.** The owner decided
+   (October 12): the HUD *is* the existing dictation pill
+   (`LiveTranscriptWindow.swift`, the "convo cursor"), not a new design. What's
+   missing is an easy way back: today nothing in the pill opens the Desk.
 3. **One installable build the owner tries.** Packaging exists; signing and
    installing need the owner's approval each time.
 
@@ -44,21 +54,31 @@ does nothing, by design, so text can't land in the wrong app.
 
 Each one ends with something the owner can try on the Mac.
 
-1. **Desk dictation on.** Change `DeskDictationPolicy` so an open, focused Desk
-   returns a new "Desk draft" decision; wire the existing draft binding into the
-   dictation start and finish paths; update the policy check and tests.
+1. **Desk side of dictation.** Wire `dictation-draft.ts` into the Desk: capture
+   and bind at recording start, unbind on any change, handle `dictation.final`,
+   commit, and send the receipt. Tested in the browser against a stand-in for
+   the Mac, so it can be reviewed before any Mac code changes.
+   *Owner tries:* in the review copy, a simulated dictation lands in the draft,
+   not sent.
+2. **Mac side switch-on.** Change `DeskDictationPolicy` so an open, focused Desk
+   returns a new "Desk draft" decision; call the existing binding at recording
+   start and finish; update the policy check and tests.
    *Owner tries:* open the Desk, unlock it, dictate, and the words appear in the
    draft, not sent. Lock it and dictation is refused.
-2. **Shrink to HUD, grow to Desk.** Built to the owner's description.
-   *Owner tries:* collapse the Desk to the HUD, dictate into another app, grow
-   back, and the Desk is where it was.
-3. **One build to install.** Run packaging and checks; the owner signs and
+3. **Pill and Desk, both directions.** Proposed default, open to change:
+   - In the pill: a small Desk button that opens the Desk where it was left.
+   - In the Desk: a "shrink to pill" button that hides the Desk window and
+     leaves the pill showing.
+   - One keyboard shortcut that toggles between them.
+   *Owner tries:* shrink the Desk to the pill, dictate into another app, click
+   the pill's Desk button, and the Desk is back with its draft intact.
+4. **One build to install.** Run packaging and checks; the owner signs and
    installs. *Owner tries:* the finish line above.
 
 ## Risks
 
 - `apps/mac/Sources/VoiceCursorMac/main.swift` is about 10,900 lines in one
-  file. Changes in it are hard to review. PR 1 should touch it as little as
+  file. Changes in it are hard to review. PRs 2 and 3 should touch it as little as
   possible and keep new rules in `VoiceCursorCore`, where they can be tested
   without the app running.
 - The Desk port is still awaiting Codex review. If that review finds problems
@@ -66,8 +86,8 @@ Each one ends with something the owner can try on the Mac.
 
 ## Questions for the Owner
 
-1. **What does "shrink to the HUD" look like to you?** For example: a button or
-   shortcut that collapses the Desk window into the small floating dictation
-   bar, and clicking the bar opens the Desk again. Or something else.
+1. **Answered October 12:** the HUD is the existing pill; an easy way back to
+   the Desk is required. Open: does the proposed default in PR 3 (Desk button
+   in the pill, shrink button in the Desk, one toggle shortcut) fit?
 2. **Installing:** the build replaces today's True Convo app and keeps its
    permissions. OK to plan on that for the step 1 finish line?
