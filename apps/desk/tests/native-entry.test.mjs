@@ -67,6 +67,7 @@ async function fixture(mode = 'ready') {
       const capabilities = clone(vectors.cases.find((entry) => entry.name === 'host.capabilities').reply.capabilities);
       const bootstrap = Object.freeze({ v: 1, connectionId: vectors.context.connectionId, generation: vectors.context.documentGeneration });
       let hostLocked = false;
+      let bindings = 0;
       const lock = () => {
         hostLocked = true;
         window.dispatchEvent(new CustomEvent('trueconvo-host', { detail: { type: 'host.connection',
@@ -102,6 +103,9 @@ async function fixture(mode = 'ready') {
           if (request.operation === 'host.capabilities') {
             if (Object.keys(request.payload).length !== 0) throw Error('Unexpected capability payload');
             reply = { ...base, outcome: 'ok', capabilities: clone(capabilities) };
+          } else if (request.operation === 'dictation.unbindDraft') {
+            // Unbind names only the binding, never the workspace handle.
+            reply = hostLocked ? { ...base, outcome: 'refused', reason: 'store-locked' } : { ...base, outcome: 'ok' };
           } else {
             if (request.payload.workspaceHandle !== capabilities.workspaceHandle) throw Error('Unexpected workspace handle');
             if (hostLocked || mode === 'lock-on-commit' && request.operation === 'workspace.commitProof') {
@@ -117,6 +121,11 @@ async function fixture(mode = 'ready') {
                 record = clone(request.payload.record);
                 reply = { ...base, outcome: 'ok', revision: record.revision };
               }
+            } else if (request.operation === 'dictation.bindDraft') {
+              // Like the real host: the Desk keeps the focused draft bound for dictation.
+              bindings += 1;
+              reply = { ...base, outcome: 'ok', revision: request.payload.expectedRevision,
+                bindingId: `b1000000-0000-4000-8000-${String(bindings).padStart(12, '0')}` };
             } else throw Error('Unexpected fixture operation');
           }
           replies.set(request.requestId, { wire, reply: clone(reply) });

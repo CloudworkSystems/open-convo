@@ -14,6 +14,7 @@ export const DEVELOPMENT_SOURCE_FILES = Object.freeze([
   'src/adapters/workspace-repository.ts', 'src/adapters/native-proof-repository.ts',
   'src/adapters/native-host-client.ts', 'src/adapters/native-host-codec.ts', 'src/adapters/wk-host-transport.ts',
   'src/adapters/native-participant-codec.ts', 'src/adapters/native-participant-port.ts',
+  'src/adapters/dictation-draft.ts', 'src/adapters/native-dictation.ts', 'src/app/use-desk-dictation.tsx',
   'src/adapters/browser-repository.ts', 'src/adapters/browser-tab-view.ts', 'src/adapters/browser-layout.ts', 'src/domain/types.ts',
   'src/adapters/browser-roadmap.ts', 'src/adapters/indexeddb-record.ts', 'src/domain/recovery-roadmap.ts', 'src/content/recovery-roadmap.json',
   'src/adapters/browser-identity.ts', 'src/features/useBrowserIdentity.ts',

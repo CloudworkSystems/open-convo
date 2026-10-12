@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { WorkspaceLoadResult, WorkspaceSaveResult } from '../adapters/workspace-repository';
+import type { WorkspaceLoadResult, WorkspaceSaveOptions, WorkspaceSaveResult } from '../adapters/workspace-repository';
 import { DeskRuntimeContext, type DeskRuntime } from './runtime';
 import { sameParticipantIdentity } from '../domain/participant-choices';
 import { applyCommand, isViewCommand } from '../domain/commands';
@@ -9,6 +9,7 @@ import { DeskFoundation } from '../features/DeskFoundation';
 import { parsePreviewBuild, retireAnnotationDiagnostics, watchPreviewUpdates } from './preview-updates';
 import type { PreviewUpdateNotice } from './preview-updates';
 import { useConversationRuns, type WorkspaceAttemptResult } from './use-conversation-runs';
+import { DeskDictationContext, useDeskDictation } from './use-desk-dictation';
 
 type SaveStatus = { kind: 'saved' | 'saving' | 'error' | 'memory'; message: string };
 type Problem = { kind: 'failed' | 'conflict' | 'unknown' | 'unavailable'; message: string };
@@ -80,7 +81,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
     setSaveStatus({ kind: 'error', message: nativeProof ? 'Changes kept for this visit · native save needs attention' : 'Changes kept in this tab · save needs attention' });
   }
 
-  function save(snapshot: DeskState): Promise<WorkspaceAttemptResult> {
+  function save(snapshot: DeskState, options?: WorkspaceSaveOptions): Promise<WorkspaceAttemptResult> {
     // Each queued attempt owns an immutable snapshot. A successful older write
     // must never mark a newer visible draft as saved.
     const captured = structuredClone(snapshot);
@@ -90,7 +91,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
     const operation = tail.current.then(async (): Promise<WorkspaceAttemptResult> => {
       if (!isCurrent()) return { kind: 'unavailable', error: 'The workspace connection is closed.' };
       if (writeProblem.current) return { kind: 'blocked', error: 'This update has not been sent because an earlier save needs attention.' };
-      const result = await repository.save(captured, savedRevision.current);
+      const result = await repository.save(captured, savedRevision.current, options);
       if (!isCurrent()) return { kind: 'unavailable', error: 'The workspace connection closed before save confirmation.' };
       if (result.kind === 'saved') {
         savedRevision.current = result.state.revision;
@@ -155,6 +156,19 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
     save, error: setCommandError,
   });
   notifyRunSave.current = runs.confirmSaved;
+
+  const dictation = useDeskDictation({ runtime, state, settleSignal: saveStatus,
+    current: () => stateRef.current,
+    settled: () => pending.current === 0 && stateRef.current !== null && stateRef.current.revision === savedRevision.current,
+    blocked: () => writeProblem.current !== null || !isCurrent(),
+    present: (next) => {
+      stateRef.current = next;
+      setState(next);
+      setCommandError('');
+      setViewWarning(tabView.save(next));
+    },
+    save: (next, options) => save(next, options),
+  });
 
   useEffect(() => {
     let active = true;
@@ -420,6 +434,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
       )}
       {runs.otherRunControls}
       <div className="workspace-wrap">
+        <DeskDictationContext.Provider value={dictation}>
         <DeskFoundation
           state={state}
           saveStatus={saveStatus}
@@ -471,6 +486,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
           onThemeChange={(theme) => dispatch({ type: 'set-theme', theme })}
           onNexusViewChange={(view) => dispatch({ type: 'set-nexus-view', view })}
         />
+        </DeskDictationContext.Provider>
       </div>
     </div>
   );

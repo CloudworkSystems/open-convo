@@ -13,6 +13,7 @@ import type { ParticipantPort } from '../adapters/participant-runtime';
 import type { ParticipantIdentity } from '../domain/conversation-run-types';
 import type { NativeParticipantConnection } from '../adapters/native-participant-port';
 import type { NativeParticipantConfirmation } from '../adapters/native-participant-codec';
+import type { NativeDictationLane } from '../adapters/native-dictation';
 
 export interface RuntimeLifecycle {
   isActive(): boolean;
@@ -49,6 +50,8 @@ export interface DeskRuntime extends RuntimeLifecycle {
   readonly subscribeParticipants?: (listener: () => void) => () => void;
   readonly refreshParticipants?: () => Promise<void>;
   readonly workspace: WorkspaceRepository;
+  /** Native only: keeps the focused draft bound for Mac dictation. */
+  readonly dictation?: NativeDictationLane;
   readonly tabView: Pick<BrowserTabView, 'load' | 'save'>;
   readonly identity: Pick<BrowserIdentityStore, 'load' | 'save' | 'subscribe'>;
   readonly layout: { load(): { preferences: LayoutPreferences; warning: string | null }; save(value: LayoutPreferences): string | null };
@@ -126,7 +129,7 @@ function captureParticipantCatalog(value: readonly ParticipantChoice[] | undefin
   } catch { throw new Error('Invalid participant catalog.'); }
 }
 
-function createRuntime(mode: DeskRuntime['mode'], workspace: WorkspaceRepository, host?: RuntimeLifecycle, createId?: () => string, participant?: ParticipantPort, participantChoices?: readonly ParticipantChoice[], nativeParticipants?: NativeParticipantConnection): DeskRuntime {
+function createRuntime(mode: DeskRuntime['mode'], workspace: WorkspaceRepository, host?: RuntimeLifecycle, createId?: () => string, participant?: ParticipantPort, participantChoices?: readonly ParticipantChoice[], nativeParticipants?: NativeParticipantConnection, dictation?: NativeDictationLane): DeskRuntime {
   const choices = captureParticipantCatalog(participantChoices)?.map((choice) => {
     const connected = !!participant && sameParticipantIdentity(participant.identity, choice.identity);
     return Object.freeze({ ...choice, identity: Object.freeze({ ...choice.identity }),
@@ -183,7 +186,7 @@ function createRuntime(mode: DeskRuntime['mode'], workspace: WorkspaceRepository
   };
   let detachHost: (() => void) | undefined;
   const runtime: DeskRuntime = {
-    mode, workspace, isActive, canvasVisit, roadmapVisit, createId,
+    mode, workspace, isActive, canvasVisit, roadmapVisit, createId, dictation,
     get participant() {
       const entry = nativeParticipants?.snapshot.entry;
       return nativeParticipants ? entry && isActive() ? nativeParticipants.portFor({ id: entry.id, label: entry.label, model: entry.model, executionHost: entry.executionHost }) : undefined : participant;
@@ -260,8 +263,8 @@ export function createBrowserRuntime(): DeskRuntime { return createRuntime('brow
  * globals/URLs. Workspace writes go solely to the supplied native authority;
  * auxiliary identity, geometry, placement and preferences last for this visit.
  */
-export function createNativeProofRuntime(workspace: WorkspaceRepository, lifecycle: RuntimeLifecycle, options: { createId?: () => string; participant?: ParticipantPort; participantChoices?: readonly ParticipantChoice[]; nativeParticipants?: NativeParticipantConnection } = {}): DeskRuntime {
-  return createRuntime('native-proof', workspace, lifecycle, options.createId, options.participant, options.participantChoices, options.nativeParticipants);
+export function createNativeProofRuntime(workspace: WorkspaceRepository, lifecycle: RuntimeLifecycle, options: { createId?: () => string; participant?: ParticipantPort; participantChoices?: readonly ParticipantChoice[]; nativeParticipants?: NativeParticipantConnection; dictation?: NativeDictationLane } = {}): DeskRuntime {
+  return createRuntime('native-proof', workspace, lifecycle, options.createId, options.participant, options.participantChoices, options.nativeParticipants, options.dictation);
 }
 
 const availabilityCheckFailed = 'The Mac app could not confirm participant availability. Your draft is kept. Check availability again in the participant picker.';

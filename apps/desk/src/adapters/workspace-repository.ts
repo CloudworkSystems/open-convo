@@ -10,10 +10,13 @@ export type UnknownWorkspaceSave = {
 };
 export type WorkspaceSaveResult = SaveResult | UnknownWorkspaceSave | { kind: 'unavailable'; error: string };
 
+/** Only a native authority understands a dictation delivery; others refuse it. */
+export interface WorkspaceSaveOptions { readonly dictationDeliveryId?: string }
+
 /** One explicit authority per mounted runtime. Native failures never yield empty. */
 export interface WorkspaceRepository {
   loadLatest(): Promise<WorkspaceLoadResult>;
-  save(state: DeskState, expectedRevision: number | null): Promise<WorkspaceSaveResult>;
+  save(state: DeskState, expectedRevision: number | null, options?: WorkspaceSaveOptions): Promise<WorkspaceSaveResult>;
   subscribe(changed: () => void): () => void;
   /** Reconcile the original request; never substitute the latest visible state. */
   reconcilePending?(): Promise<WorkspaceSaveResult>;

@@ -69,3 +69,29 @@
     font-size: 9px;
   }
 }
+
+/* Dictated text the Desk could not place: kept until the owner acts. */
+.adjustable-composer .dictation-held {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.adjustable-composer .dictation-held-item {
+  border: 1px solid var(--tca-status-warning);
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--tca-text-body);
+}
+.adjustable-composer .dictation-held-item p { margin: 0 0 6px; }
+.adjustable-composer .dictation-held-text {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--tca-border-strong);
+  color: var(--tca-text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.adjustable-composer .dictation-held-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.adjustable-composer .dictation-ready { color: var(--tca-status-success); }

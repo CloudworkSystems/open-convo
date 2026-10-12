@@ -3,7 +3,7 @@ import { validateState } from '../domain/validation';
 import type { NativeHostClient, NativeRequestOutcome } from './native-host-client';
 import type { NativeProofRequest, NativeProofResult } from './native-host-codec';
 import type { ParticipantRunClaim } from './native-participant-codec';
-import type { WorkspaceLoadResult, WorkspaceRepository, WorkspaceSaveResult } from './workspace-repository';
+import type { WorkspaceLoadResult, WorkspaceRepository, WorkspaceSaveOptions, WorkspaceSaveResult } from './workspace-repository';
 
 type Client = NativeHostClient<NativeProofRequest, NativeProofResult>;
 export interface NativeProofRepositoryOptions { readonly participants?: boolean }
@@ -11,6 +11,7 @@ type Attempt = {
   readonly requestId: string;
   readonly expectedRevision: number;
   readonly participantRun?: ParticipantRunClaim;
+  readonly dictationDeliveryId?: string;
   state?: DeskState;
   promise?: Promise<WorkspaceSaveResult>;
   resolve?: (result: WorkspaceSaveResult) => void;
@@ -94,7 +95,7 @@ export class NativeProofRepository implements WorkspaceRepository {
     });
   }
 
-  save(state: DeskState, expectedRevision: number | null): Promise<WorkspaceSaveResult> {
+  save(state: DeskState, expectedRevision: number | null, options?: WorkspaceSaveOptions): Promise<WorkspaceSaveResult> {
     if (!this.active) return Promise.resolve(unavailable());
     if (this.pending) return this.pending.promise ?? Promise.resolve(this.unknown(this.pending));
     let captured: DeskState;
@@ -103,6 +104,8 @@ export class NativeProofRepository implements WorkspaceRepository {
     const failed = (): WorkspaceSaveResult => ({ kind: 'failed', error: 'The native save was refused before dispatch. Your attempted work remains separate from the saved workspace.', attemptedState: captured });
     if (!validateState(captured).valid || !Number.isSafeInteger(expectedRevision) || expectedRevision === null
       || expectedRevision < 0 || captured.revision <= expectedRevision) return Promise.resolve(failed());
+    const dictationDeliveryId = options?.dictationDeliveryId;
+    if (dictationDeliveryId !== undefined && !uuid4(dictationDeliveryId)) return Promise.resolve(failed());
     let participantRun: ParticipantRunClaim | undefined;
     if (this.participants) {
       // Only a validated native read or durable success establishes what the
@@ -122,7 +125,10 @@ export class NativeProofRepository implements WorkspaceRepository {
     let id: string;
     try { id = this.nextId(); }
     catch { return Promise.resolve(failed()); }
-    const attempt: Attempt = { requestId: id, expectedRevision, state: captured, ...(participantRun ? { participantRun } : {}) };
+    // A delivery commit only places dictated text; it never also starts a run.
+    if (participantRun && dictationDeliveryId) return Promise.resolve(failed());
+    const attempt: Attempt = { requestId: id, expectedRevision, state: captured, ...(participantRun ? { participantRun } : {}),
+      ...(dictationDeliveryId ? { dictationDeliveryId } : {}) };
     this.pending = attempt;
     return this.dispatch(attempt, false);
   }
@@ -194,6 +200,7 @@ export class NativeProofRepository implements WorkspaceRepository {
         requestId: attempt.requestId, operation: 'workspace.commitProof', payload: {
           workspaceHandle: this.workspaceHandle, expectedRevision: attempt.expectedRevision, record: attempt.state!,
           ...(attempt.participantRun ? { participantRun: attempt.participantRun } : {}),
+          ...(attempt.dictationDeliveryId ? { dictationDeliveryId: attempt.dictationDeliveryId } : {}),
         },
       });
       void result.then((outcome) => {
