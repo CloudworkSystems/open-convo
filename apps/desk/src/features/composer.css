@@ -1,0 +1,71 @@
+.conversation .adjustable-composer {
+  container-type: inline-size;
+}
+
+.adjustable-composer .composer-resize-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  cursor: ns-resize;
+  touch-action: none;
+  border-radius: 10px 10px 0 0;
+}
+
+.adjustable-composer .composer-resize-handle span {
+  width: 36px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--tca-border-strong);
+}
+
+.adjustable-composer .composer-resize-handle:hover,
+.adjustable-composer .composer-resize-handle:focus-visible {
+  background: var(--tca-accent-gradient-soft);
+  outline: 2px solid var(--tca-accent-strong);
+  outline-offset: -2px;
+}
+
+.conversation .adjustable-composer textarea {
+  resize: none;
+  min-height: 78px;
+  max-height: none;
+  padding-top: 6px;
+  border-radius: 0;
+}
+
+.adjustable-composer .composer-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+}
+
+.adjustable-composer .composer-actions .shortcut-hint {
+  display: block;
+  margin-left: 0;
+  line-height: 1.5;
+  max-width: 260px;
+}
+
+.adjustable-composer .model-harness-slot,
+.adjustable-composer .send-button {
+  white-space: nowrap;
+}
+
+@container (max-width: 480px) {
+  .adjustable-composer .composer-actions {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 6px;
+  }
+
+  .adjustable-composer .composer-actions .shortcut-hint {
+    grid-column: 1 / -1;
+    max-width: none;
+    font-size: 9px;
+  }
+
+  .adjustable-composer .model-harness-slot {
+    grid-column: 2;
+    font-size: 9px;
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "open-convo-desk",
+  "version": "0.31.0",
+  "private": true,
+  "type": "module",
+  "description": "The Open Convo Desk: a goal-led conversation workspace. Browser preview uses invented data and simulated replies.",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 4173 --strictPort",
+    "start": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
+    "build": "tsc --noEmit && vite build",
+    "build:native-proof": "tsc --noEmit && vite build --mode native-proof",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/foundation/*.test.ts",
+    "test:browser": "node --test tests/foundation/*.test.mjs",
+    "test:native-proof": "npm run build:native-proof && node --test tests/native-entry.test.mjs",
+    "check": "npm run build && npm test && npm run test:browser && npm run test:native-proof"
+  },
+  "dependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "26.6.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vite": "8.3.2"
+  }
+}

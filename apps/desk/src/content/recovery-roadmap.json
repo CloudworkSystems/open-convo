@@ -1,0 +1,281 @@
+{
+  "schemaVersion": 1,
+  "title": "Open Convo roadmap",
+  "updatedAt": "2026-10-12",
+  "cards": [
+    {
+      "id": "dictation-audio-default",
+      "title": "Keep dictation audio off by default",
+      "track": "Dictation",
+      "column": "review",
+      "sourceStatus": "The source change exists in the archived Mac app; it moves with the Mac app port.",
+      "outcome": "A fresh install keeps no recordings unless the user chooses to retain them.",
+      "checks": [
+        "Fresh preferences show retention off without saving an invented choice.",
+        "Existing saved choices survive a restart.",
+        "Confirm recording cleanup on a Mac."
+      ],
+      "dependsOn": [],
+      "sources": [
+        "PLAN.md: Mac app"
+      ],
+      "notes": [
+        "No existing recordings are deleted."
+      ]
+    },
+    {
+      "id": "first-run-guide",
+      "title": "Write the first-run guide",
+      "track": "Project",
+      "column": "next",
+      "sourceStatus": "Not started.",
+      "outcome": "A new person can open Open Convo and understand what it does and what stays on their device.",
+      "checks": [
+        "The guide uses plain wording first.",
+        "It names what is simulated in the preview."
+      ],
+      "dependsOn": [],
+      "sources": [
+        "PLAN.md"
+      ],
+      "notes": [
+        "A guide does not authorize a public release."
+      ]
+    },
+    {
+      "id": "review-followups",
+      "title": "Close the port review findings",
+      "track": "Project",
+      "column": "next",
+      "sourceStatus": "The Desk port is waiting for an independent review.",
+      "outcome": "Each review finding has a fix or an explicit disposition.",
+      "checks": [
+        "An independent reviewer checks the port for private material and broken behavior.",
+        "Findings are fixed or dispositioned in the move log."
+      ],
+      "dependsOn": [],
+      "sources": [
+        "PLAN.md",
+        "AGENTS.md"
+      ],
+      "notes": [
+        "A passing earlier review does not approve new code."
+      ]
+    },
+    {
+      "id": "history-reader",
+      "title": "Open saved sessions read-only",
+      "track": "Desk",
+      "column": "in-progress",
+      "sourceStatus": "A local read-only reader is built and tested with invented records. Hosted access is disabled.",
+      "outcome": "A read-only local reader shows saved sessions without rewriting, migrating or uploading them.",
+      "checks": [
+        "Prove the reader with invented records, including damaged and older formats.",
+        "The original file is unchanged after reading."
+      ],
+      "dependsOn": [
+        "review-followups"
+      ],
+      "sources": [
+        "apps/desk/README.md: history reader"
+      ],
+      "notes": [
+        "Reading a file never sends it to a model."
+      ]
+    },
+    {
+      "id": "session-basics",
+      "title": "Make Navigator useful for real session lists",
+      "track": "Desk",
+      "column": "next",
+      "sourceStatus": "Sample controls include pins, rename, folder and session details. Search and sorting remain planned.",
+      "outcome": "Find a session by title or content, rename or pin it, and organize it in domains without duplicating the conversation.",
+      "checks": [
+        "Renames and pins preserve record identities, drafts and creation times.",
+        "Restore recency sorting and title/content search.",
+        "A session can be linked into more than one folder without copying its messages."
+      ],
+      "dependsOn": [
+        "history-reader"
+      ],
+      "sources": [
+        "apps/desk/README.md: Navigator"
+      ],
+      "notes": [
+        "Folder placement does not change data permissions."
+      ]
+    },
+    {
+      "id": "conversation-feel",
+      "title": "Restore the agreed conversation feel",
+      "track": "Desk",
+      "column": "next",
+      "sourceStatus": "The preview still uses per-message identity rows.",
+      "outcome": "The conversation is the main view: one continuous chat, light user bubbles, a compact composer and readable replies.",
+      "checks": [
+        "Enter sends while multiline entry and drafts are preserved.",
+        "Add copy controls and readable formatting, including tables."
+      ],
+      "dependsOn": [
+        "review-followups"
+      ],
+      "sources": [
+        "apps/desk/README.md: conversation"
+      ],
+      "notes": [
+        "Try changes on invented conversations first."
+      ]
+    },
+    {
+      "id": "find-and-return",
+      "title": "Bring back Related and Revisit when",
+      "track": "Desk",
+      "column": "next",
+      "sourceStatus": "Not connected to the current UI.",
+      "outcome": "Find a related older session and set a visible reminder to return to it.",
+      "checks": [
+        "Related lookup obeys the selected local scope.",
+        "Revisit reminders survive a restart and can be edited or removed."
+      ],
+      "dependsOn": [
+        "session-basics"
+      ],
+      "sources": [
+        "PLAN.md"
+      ],
+      "notes": [
+        "Old passing tests do not prove a capability works in the new UI."
+      ]
+    },
+    {
+      "id": "durable-saves",
+      "title": "Make saves and recovery hold up",
+      "track": "Desk",
+      "column": "next",
+      "sourceStatus": "Browser sample saves use transactions. Native durable saving is planned.",
+      "outcome": "Long histories, drafts and interrupted runs survive restart, disk failure and competing edits without silent loss.",
+      "checks": [
+        "Test interrupted writes, full and read-only storage, stale edits and damaged stores.",
+        "Prove a recovery drill on a tested copy before real use."
+      ],
+      "dependsOn": [
+        "history-reader",
+        "review-followups"
+      ],
+      "sources": [
+        "apps/desk/README.md: storage"
+      ],
+      "notes": [
+        "Moving a roadmap card is not evidence that save checks passed."
+      ]
+    },
+    {
+      "id": "protected-history",
+      "title": "Protect private history before live use",
+      "track": "Desk",
+      "column": "next",
+      "sourceStatus": "Planned. The browser sample workspace is unencrypted.",
+      "outcome": "Local protected storage, lock, permissions and deletion are tested before private history becomes assistant context.",
+      "checks": [
+        "Check locking, wrong keys, restart and withdrawn access with invented records.",
+        "Show what a model would receive before Send."
+      ],
+      "dependsOn": [
+        "durable-saves"
+      ],
+      "sources": [
+        "AGENTS.md"
+      ],
+      "notes": [
+        "Real private history requires protected native storage."
+      ]
+    },
+    {
+      "id": "real-conversation",
+      "title": "Have one real conversation that saves and returns",
+      "track": "Desk",
+      "column": "next",
+      "sourceStatus": "Replies are simulated; no model is connected.",
+      "outcome": "Use one approved model route, see its reply arrive, stop it if needed, and return later without retelling the session.",
+      "checks": [
+        "Choose the approved route and its cost boundary when this step begins.",
+        "Test streaming, Stop, safe retry and typing during a reply."
+      ],
+      "dependsOn": [
+        "durable-saves",
+        "protected-history"
+      ],
+      "sources": [
+        "PLAN.md"
+      ],
+      "notes": [
+        "Subscription access is not permission for paid API use."
+      ]
+    },
+    {
+      "id": "chosen-memory",
+      "title": "Chosen memory and clarity controls",
+      "track": "Desk",
+      "column": "in-progress",
+      "sourceStatus": "Invented-data remember, correct, forget, restore and Undo controls are built. The clarity library lives in packages/clarity.",
+      "outcome": "Keep, correct or forget selected memory under user control, with the clarity controls built in.",
+      "checks": [
+        "Keep only material the user marks; prove exclusions across summaries and search.",
+        "Connect the Wait—what? and clarity correction controls from packages/clarity."
+      ],
+      "dependsOn": [
+        "protected-history",
+        "real-conversation"
+      ],
+      "sources": [
+        "packages/clarity/README.md"
+      ],
+      "notes": [
+        "Saving a memory does not authorize wider or cloud use."
+      ]
+    },
+    {
+      "id": "canvas-atlas-recovery",
+      "title": "Canvas connections and the Atlas knowledge view",
+      "track": "Later",
+      "column": "next",
+      "sourceStatus": "Canvas shows sample relationships; Atlas is planned.",
+      "outcome": "Canvas connects domains, sessions, ideas and work; Atlas offers a separate knowledge view.",
+      "checks": [
+        "Navigator and Canvas share record identities.",
+        "Prove Atlas with invented records before any real data."
+      ],
+      "dependsOn": [
+        "session-basics",
+        "protected-history"
+      ],
+      "sources": [
+        "PLAN.md"
+      ],
+      "notes": [
+        "A relationship map does not infer links on its own."
+      ]
+    },
+    {
+      "id": "agent-collaboration",
+      "title": "Bring several agents into one session",
+      "track": "Desk",
+      "column": "in-progress",
+      "sourceStatus": "The shared inbox and reported job status are built with invented data. Live agent connections remain.",
+      "outcome": "Several agents work from one session with visible responsibility and separately approved routes.",
+      "checks": [
+        "Show which agent acts next and which model did what.",
+        "Start with one Plan pilot that returns a saved plan and stops for review."
+      ],
+      "dependsOn": [
+        "real-conversation"
+      ],
+      "sources": [
+        "PLAN.md"
+      ],
+      "notes": [
+        "Selecting Publish does not authorize sending or release."
+      ]
+    }
+  ]
+}

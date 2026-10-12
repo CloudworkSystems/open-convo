@@ -1,0 +1,3 @@
+.modal.modal-scrollable { display: flex; flex-direction: column; overflow: hidden; }
+.modal-scrollable > .modal-heading { flex-shrink: 0; }
+.modal-scrollable > .modal-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 2px 4px 4px 2px; }

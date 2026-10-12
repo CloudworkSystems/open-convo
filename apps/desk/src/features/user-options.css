@@ -1,0 +1,15 @@
+.settings-shortcuts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.settings-shortcuts button { border: 1px solid var(--tca-border-default); border-radius: 7px; padding: 7px 10px; background: var(--tca-surface-1); color: var(--tca-text-primary); font-size: 12px; }
+.identity-avatar-preview { display: flex; align-items: center; gap: 12px; }
+.identity-avatar-preview img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; }
+.avatar-crop-editor { display: flex; flex-direction: column; gap: 12px; }
+.avatar-crop-frame { width: 220px; aspect-ratio: 1; flex-shrink: 0; max-width: 100%; border: 2px solid var(--tca-border-strong); border-radius: 50%; position: relative; overflow: hidden; touch-action: none; cursor: grab; background: var(--tca-surface-2); align-self: center; }
+.avatar-crop-frame:active { cursor: grabbing; }
+.avatar-crop-frame:focus-visible { outline: 2px solid var(--tca-text-primary); outline-offset: 4px; }
+.avatar-crop-frame img { position: absolute; max-width: none; user-select: none; pointer-events: none; }
+.avatar-zoom { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.identity-settings .avatar-zoom input[type="range"] { flex: 1; min-width: 0; padding: 0; }
+.avatar-zoom output { width: 4ch; text-align: right; }
+.avatar-crop-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.avatar-crop-actions .primary-button { font-size: 12px; padding: 8px 12px; }
+.user-settings [hidden] { display: none !important; }

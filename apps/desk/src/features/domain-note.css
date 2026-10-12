@@ -1,0 +1,37 @@
+.session-detail-panel .session-folder-context > .eyebrow { font-size: 9px; }
+.session-detail-panel .session-folder-context > h2 { margin: 9px 0 0; font-size: 18px; line-height: 1.3; overflow-wrap: anywhere; }
+.domain-note-card, .session-intent-card { border: 1px solid var(--tca-border-default); border-radius: 9px; padding: 12px 14px; background: var(--tca-surface-0); }
+.session-detail-panel .domain-note-card { margin-top: 15px; }
+.domain-note-heading { display: flex; align-items: center; justify-content: space-between; gap: 7px; margin-bottom: 8px; }
+.domain-note-heading .eyebrow { font-size: 8px; color: var(--tca-text-muted); }
+.domain-note-card p, .session-intent-card p { font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; }
+.domain-purpose, .session-intent { color: var(--tca-text-body); }
+.domain-note-placeholder { color: var(--tca-text-muted); }
+.domain-note-card textarea, .session-intent-card textarea { width: 100%; min-height: 90px; resize: vertical; background: var(--tca-surface-1); color: var(--tca-text-primary); border: 1px solid var(--tca-border-default); padding: 8px; border-radius: 5px; font-size: 12px; }
+.session-detail-divider { border-top: 1px solid var(--tca-border-default); margin: 20px 0; }
+.session-detail-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.session-detail-heading > div:first-child { min-width: 0; }
+.session-detail-heading .eyebrow { font-size: 9px; }
+.session-detail-heading h3 { margin: 8px 0 0; font-size: 17px; line-height: 1.35; overflow-wrap: anywhere; }
+.session-detail-actions { display: flex; flex: 0 0 auto; gap: 2px; }
+.session-intent-card h4 { font-size: 12px; }
+.session-metadata, .session-detail-panel .session-activity { border-top: 1px solid var(--tca-border-subtle); padding-top: 13px; margin-top: 18px; }
+.session-metadata > summary, .session-activity > summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--tca-text-body); }
+.session-activity > summary span { font-weight: 400; color: var(--tca-text-muted); }
+.session-metadata dl { display: grid; gap: 7px; margin: 14px 0; font-size: 11px; }
+.session-metadata dt { font-weight: 600; color: var(--tca-text-muted); }
+.session-metadata dd { margin: 0 0 8px; line-height: 1.6; color: var(--tca-text-body); overflow-wrap: anywhere; }
+.session-stable-id { font-family: var(--tca-font-mono); }
+.session-timezone { display: block; color: var(--tca-text-muted); font-size: 10px; }
+.session-metadata h4 { margin: 16px 0 9px; font-size: 11px; }
+.session-metadata .history-explanation { color: var(--tca-text-muted); font-size: 11px; line-height: 1.6; }
+.session-history { list-style: none; padding: 0; display: grid; gap: 13px; margin-top: 12px; }
+.session-history li > span { color: var(--tca-text-muted); font-size: 10px; }
+.session-history p { margin: 4px 0; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.session-history time { font-size: 10px; color: var(--tca-text-muted); }
+.session-activity[open] > ol { margin-top: 14px; }
+.session-activity[open] > .muted { margin-top: 14px; }
+.folder-session-list h3 { font-size: 13px; margin-bottom: 12px; }
+.folder-session-list ul { list-style: none; padding: 0; display: grid; gap: 5px; }
+.folder-session-list button { display: block; text-align: left; width: 100%; border: 1px solid var(--tca-border-subtle); border-radius: 6px; padding: 9px 10px; background: var(--tca-surface-0); font-size: 12px; overflow-wrap: anywhere; }
+.folder-session-list button:hover { background: var(--tca-accent-gradient-soft); }

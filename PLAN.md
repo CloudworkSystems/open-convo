@@ -13,7 +13,7 @@ owner confirms the order before step 2.
 1. **Correction and clarity library. Done October 12.** The original Open Convo core: 12 small
    modules, 41 passing tests, in `cloudwork_systems/true_convo/open-convo`.
    Smallest, already self-contained, and the intended open core.
-2. **Conversation Desk** (`apps/desk`, 186 tracked files in True Convo). The
+2. **Conversation Desk. Ported October 12, awaiting review.** (`apps/desk`, 186 tracked files in True Convo). The
    TypeScript/Vite workspace. Strip sample data, review records and anything
    tied to the old helpers before moving.
 3. **Mac app** (`apps/true-convo-mac`, 134 tracked files). Swift package. Native
@@ -40,3 +40,4 @@ Strategy and interview files, `docs/reviews`, `docs/sessions`, session audits,
 | Date | Piece | Source path | True Convo commit | Removed before move |
 | --- | --- | --- | --- | --- |
 | 2026-10-12 | Clarity library → `packages/clarity` | `cloudwork_systems/true_convo/open-convo` (src, tests, contracts, fixtures, scripts) | cloudwork_systems `3afa8144` | Owner's name in test actors and one fixture (now "owner"); `session-view-controls` test (it read a separate Studio app by relative path); `status` script (checked docs not moved); all docs and workbench receipts held back pending review. 47/47 tests and 4 proofs pass. |
+| 2026-10-12 | Conversation Desk → `apps/desk` | True Convo `apps/desk` (committed files only) | True Convo `78ebb50` | README, PRODUCT.md, review docs, `.openai` hosting target, ChatGPT-site publish scripts and their tests, Mac preview launcher and its tests. Roadmap content rewritten as the Open Convo roadmap (same card IDs except `first-run-guide`); evidence links now point at this repo. Owner name removed from comments. Typecheck, build and 541/541 unit tests pass; browser tests run separately. Awaiting Codex review. |

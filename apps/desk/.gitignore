@@ -1,0 +1,11 @@
+.true-convo-local/
+.DS_Store
+node_modules/
+
+# Local browser artifacts and credentials
+.playwright-cli/
+output/
+.env
+.env.*
+*.pem
+*.key

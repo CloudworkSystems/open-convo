@@ -1,0 +1,14 @@
+.application-shell { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+.workspace-wrap { flex: 1; min-height: 0; display: flex; }
+.save-recovery { display: flex; gap: 1.5rem; justify-content: space-between; padding: 1rem 1.5rem; color: var(--tca-text-primary); background: var(--tca-surface-2); border-bottom: 2px solid var(--tca-accent-strong); }
+.save-recovery p { margin: .25rem 0 0; max-width: 65ch; font-size: .925rem; }
+.recovery-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.recovery-button { border: 1px solid var(--tca-border-strong); border-radius: .65rem; padding: .6rem .85rem; background: var(--tca-btn-primary-bg); color: var(--tca-btn-primary-ink); font: inherit; cursor: pointer; }
+.recovery-button.secondary { background: var(--tca-surface-1); color: var(--tca-text-primary); }
+.recovery-button:focus-visible { outline: 3px solid var(--tca-accent-strong); outline-offset: 3px; }
+.recovery-page { min-height: 100dvh; padding: clamp(1.5rem, 6vw, 6rem); background: var(--tca-surface-page); color: var(--tca-text-primary); font-family: var(--tca-font-text); }
+.recovery-page h1 { font-size: clamp(2rem, 5vw, 3rem); }
+.recovery-page p { max-width: 65ch; line-height: 1.6; }
+.recovery-eyebrow { font-family: var(--tca-font-mono); font-size: .8rem; }
+.command-error { margin: 0; padding: .6rem 1.5rem; color: var(--tca-text-primary); background: var(--tca-surface-2); border-bottom: 1px solid var(--tca-border-default); }
+@media (max-width: 760px) { .save-recovery { flex-direction: column; gap: .75rem; padding: .9rem; } }

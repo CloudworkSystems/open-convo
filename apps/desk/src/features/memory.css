@@ -1,0 +1,31 @@
+.memory-page { max-width: 980px; }
+.memory-page-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.memory-page-heading h2 { margin: 0; font-size: 24px; }
+.memory-page-heading > span { color: var(--tca-text-muted); font-size: 13px; overflow-wrap: anywhere; }
+.memory-preview-notice { margin: 16px 0; }
+.memory-teaching, .memory-card { padding: 18px; border: 1px solid var(--tca-border-default); border-radius: 12px; background: var(--tca-surface-0); }
+.memory-teaching { display: grid; gap: 10px; margin-bottom: 22px; }
+.memory-form-selects { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.memory-form-selects > div { min-width: 0; display: grid; gap: 6px; }
+.memory-page label { font-size: 12px; font-weight: 600; }
+.memory-page select, .memory-page textarea { width: 100%; min-width: 0; background: var(--tca-surface-0); color: var(--tca-text-primary); border: 1px solid var(--tca-border-default); border-radius: 7px; padding: 9px; font: inherit; }
+.memory-page textarea { min-height: 100px; resize: vertical; }
+.memory-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; }
+.memory-actions > span { flex-basis: 100%; }
+.memory-actions button { min-height: 36px; }
+.memory-current { display: grid; gap: 14px; }
+.memory-card-heading { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--tca-text-muted); }
+.memory-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.memory-correction { display: grid; gap: 8px; margin-bottom: 10px; }
+.memory-page details > summary { cursor: pointer; font-size: 13px; padding: 8px 0; }
+.memory-history { margin-top: 10px; border-top: 1px solid var(--tca-border-default); font-size: 12px; }
+.memory-history ol { padding-left: 20px; }
+.memory-history li { padding: 7px 0; }
+.memory-history li > span { color: var(--tca-text-muted); }
+.memory-history li p { margin: 6px 0; }
+.memory-trash, .memory-context { margin-top: 22px; border-top: 1px solid var(--tca-border-default); padding-top: 6px; }
+.memory-trash .memory-card { margin-top: 12px; }
+.memory-source-preview { font-size: 12px; max-height: 230px; overflow: auto; }
+.memory-context ul { padding-left: 20px; }
+.memory-context li { padding: 5px 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+@media (max-width: 600px) { .memory-form-selects { grid-template-columns: 1fr; } .memory-teaching, .memory-card { padding: 14px; } }

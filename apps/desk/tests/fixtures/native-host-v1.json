@@ -1,0 +1,418 @@
+{
+  "description": "Invented cross-language v1 proof vectors. Uppercase UUIDv1 folder identity is intentionally preserved. Commit revision advances from 1 to 3; offsets select a complete UTF-16 surrogate pair. These vectors do not prove a connected native host. Canonical request/binding/session IDs include lowercase hex letters to expose case changes. The correlated commit vector requires a native-known invented delivery when executing; these are protocol vectors, not a complete recording sequence.",
+  "context": {
+    "connectionId": "51000000-0000-4000-8000-000000000001",
+    "documentGeneration": 2
+  },
+  "cases": [
+    {
+      "name": "host.capabilities",
+      "request": {
+        "v": 1,
+        "requestId": "61abcdef-0000-4000-8abc-000000000001",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "host.capabilities",
+        "payload": {}
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "61abcdef-0000-4000-8abc-000000000001",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "host.capabilities",
+        "outcome": "ok",
+        "capabilities": {
+          "contractVersion": 1,
+          "hostBuild": "invented-proof-build",
+          "appVersion": "invented-proof-version",
+          "store": "ready",
+          "lock": "unlocked",
+          "operations": [
+            "host.capabilities",
+            "workspace.read",
+            "workspace.commitProof",
+            "dictation.bindDraft",
+            "dictation.unbindDraft"
+          ],
+          "workspaceHandle": "invented-workspace-handle",
+          "limits": {
+            "recordBytes": 1048576,
+            "envelopeBytes": 1114112,
+            "textItemBytes": 65536,
+            "outstandingMutations": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "workspace.read",
+      "request": {
+        "v": 1,
+        "requestId": "61abcdef-0000-4000-8abc-000000000002",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "workspace.read",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle"
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "61abcdef-0000-4000-8abc-000000000002",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "workspace.read",
+        "outcome": "ok",
+        "revision": 1,
+        "record": {
+          "schemaVersion": 1,
+          "revision": 1,
+          "updatedAt": "2026-10-09T00:00:00.000Z",
+          "goals": [
+            {
+              "id": "A1000000-0000-1000-8000-000000000001",
+              "title": "Invented proof folder",
+              "nextStep": "Try an invented draft.",
+              "createdAt": "2026-10-09T00:00:00.000Z",
+              "updatedAt": "2026-10-09T00:00:00.000Z"
+            }
+          ],
+          "sessions": [
+            {
+              "id": "52abcdef-0000-4000-8abc-000000000001",
+              "goalId": "A1000000-0000-1000-8000-000000000001",
+              "title": "Invented proof session",
+              "createdAt": "2026-10-09T00:00:00.000Z",
+              "updatedAt": "2026-10-09T00:00:00.000Z"
+            }
+          ],
+          "messages": [
+            {
+              "id": "53000000-0000-4000-8000-000000000001",
+              "sessionId": "52abcdef-0000-4000-8abc-000000000001",
+              "role": "assistant",
+              "body": "Invented fixture, not a provider reply.",
+              "status": "complete",
+              "provenance": "simulation",
+              "createdAt": "2026-10-09T00:00:00.000Z"
+            }
+          ],
+          "drafts": {
+            "52abcdef-0000-4000-8abc-000000000001": "Before 😀 after"
+          },
+          "goalDrafts": {
+            "A1000000-0000-1000-8000-000000000001": {
+              "nextStep": null,
+              "workTitle": ""
+            }
+          },
+          "workItems": [
+            {
+              "id": "54000000-0000-4000-8000-000000000001",
+              "goalId": "A1000000-0000-1000-8000-000000000001",
+              "title": "Invented proof work",
+              "status": "planned",
+              "createdAt": "2026-10-09T00:00:00.000Z"
+            }
+          ],
+          "notes": [
+            {
+              "id": "55000000-0000-4000-8000-000000000001",
+              "goalId": "A1000000-0000-1000-8000-000000000001",
+              "body": "Invented proof note.",
+              "createdAt": "2026-10-09T00:00:00.000Z"
+            }
+          ],
+          "activity": [
+            {
+              "id": "56000000-0000-4000-8000-000000000001",
+              "goalId": "A1000000-0000-1000-8000-000000000001",
+              "sessionId": "52abcdef-0000-4000-8abc-000000000001",
+              "kind": "created",
+              "summary": "Invented fixture created.",
+              "createdAt": "2026-10-09T00:00:00.000Z"
+            }
+          ],
+          "selection": {
+            "goalId": "A1000000-0000-1000-8000-000000000001",
+            "sessionId": "52abcdef-0000-4000-8abc-000000000001",
+            "route": "sessions"
+          },
+          "preferences": {
+            "theme": "system"
+          },
+          "capabilities": {
+            "mode": "synthetic",
+            "provider": "demo-only",
+            "native": "unavailable"
+          }
+        }
+      }
+    },
+    {
+      "name": "workspace.commitProof",
+      "request": {
+        "v": 1,
+        "requestId": "61abcdef-0000-4000-8abc-000000000003",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "workspace.commitProof",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "expectedRevision": 1,
+          "record": {
+            "schemaVersion": 1,
+            "revision": 3,
+            "updatedAt": "2026-10-09T00:00:00.000Z",
+            "goals": [
+              {
+                "id": "A1000000-0000-1000-8000-000000000001",
+                "title": "Invented proof folder",
+                "nextStep": "Try an invented draft.",
+                "createdAt": "2026-10-09T00:00:00.000Z",
+                "updatedAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "sessions": [
+              {
+                "id": "52abcdef-0000-4000-8abc-000000000001",
+                "goalId": "A1000000-0000-1000-8000-000000000001",
+                "title": "Invented proof session",
+                "createdAt": "2026-10-09T00:00:00.000Z",
+                "updatedAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "messages": [
+              {
+                "id": "53000000-0000-4000-8000-000000000001",
+                "sessionId": "52abcdef-0000-4000-8abc-000000000001",
+                "role": "assistant",
+                "body": "Invented fixture, not a provider reply.",
+                "status": "complete",
+                "provenance": "simulation",
+                "createdAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "drafts": {
+              "52abcdef-0000-4000-8abc-000000000001": "Before 😀 after"
+            },
+            "goalDrafts": {
+              "A1000000-0000-1000-8000-000000000001": {
+                "nextStep": null,
+                "workTitle": ""
+              }
+            },
+            "workItems": [
+              {
+                "id": "54000000-0000-4000-8000-000000000001",
+                "goalId": "A1000000-0000-1000-8000-000000000001",
+                "title": "Invented proof work",
+                "status": "planned",
+                "createdAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "notes": [
+              {
+                "id": "55000000-0000-4000-8000-000000000001",
+                "goalId": "A1000000-0000-1000-8000-000000000001",
+                "body": "Invented proof note.",
+                "createdAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "activity": [
+              {
+                "id": "56000000-0000-4000-8000-000000000001",
+                "goalId": "A1000000-0000-1000-8000-000000000001",
+                "sessionId": "52abcdef-0000-4000-8abc-000000000001",
+                "kind": "created",
+                "summary": "Invented fixture created.",
+                "createdAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "selection": {
+              "goalId": "A1000000-0000-1000-8000-000000000001",
+              "sessionId": "52abcdef-0000-4000-8abc-000000000001",
+              "route": "sessions"
+            },
+            "preferences": {
+              "theme": "system"
+            },
+            "capabilities": {
+              "mode": "synthetic",
+              "provider": "demo-only",
+              "native": "unavailable"
+            }
+          }
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "61abcdef-0000-4000-8abc-000000000003",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "workspace.commitProof",
+        "outcome": "ok",
+        "revision": 3
+      }
+    },
+    {
+      "name": "dictation.bindDraft",
+      "request": {
+        "v": 1,
+        "requestId": "61abcdef-0000-4000-8abc-000000000004",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "dictation.bindDraft",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000001",
+          "expectedRevision": 3,
+          "expectedText": "Before 😀 after",
+          "selection": {
+            "start": 7,
+            "end": 9
+          }
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "61abcdef-0000-4000-8abc-000000000004",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "dictation.bindDraft",
+        "outcome": "ok",
+        "revision": 3,
+        "bindingId": "57abcdef-0000-4000-8abc-000000000001"
+      }
+    },
+    {
+      "name": "workspace.commitProof with dictation delivery",
+      "request": {
+        "v": 1,
+        "requestId": "61abcdef-0000-4000-8abc-000000000006",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "workspace.commitProof",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "expectedRevision": 3,
+          "record": {
+            "schemaVersion": 1,
+            "revision": 4,
+            "updatedAt": "2026-10-09T00:00:00.000Z",
+            "goals": [
+              {
+                "id": "A1000000-0000-1000-8000-000000000001",
+                "title": "Invented proof folder",
+                "nextStep": "Try an invented draft.",
+                "createdAt": "2026-10-09T00:00:00.000Z",
+                "updatedAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "sessions": [
+              {
+                "id": "52abcdef-0000-4000-8abc-000000000001",
+                "goalId": "A1000000-0000-1000-8000-000000000001",
+                "title": "Invented proof session",
+                "createdAt": "2026-10-09T00:00:00.000Z",
+                "updatedAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "messages": [
+              {
+                "id": "53000000-0000-4000-8000-000000000001",
+                "sessionId": "52abcdef-0000-4000-8abc-000000000001",
+                "role": "assistant",
+                "body": "Invented fixture, not a provider reply.",
+                "status": "complete",
+                "provenance": "simulation",
+                "createdAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "drafts": {
+              "52abcdef-0000-4000-8abc-000000000001": "Before invented dictation after"
+            },
+            "goalDrafts": {
+              "A1000000-0000-1000-8000-000000000001": {
+                "nextStep": null,
+                "workTitle": ""
+              }
+            },
+            "workItems": [
+              {
+                "id": "54000000-0000-4000-8000-000000000001",
+                "goalId": "A1000000-0000-1000-8000-000000000001",
+                "title": "Invented proof work",
+                "status": "planned",
+                "createdAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "notes": [
+              {
+                "id": "55000000-0000-4000-8000-000000000001",
+                "goalId": "A1000000-0000-1000-8000-000000000001",
+                "body": "Invented proof note.",
+                "createdAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "activity": [
+              {
+                "id": "56000000-0000-4000-8000-000000000001",
+                "goalId": "A1000000-0000-1000-8000-000000000001",
+                "sessionId": "52abcdef-0000-4000-8abc-000000000001",
+                "kind": "created",
+                "summary": "Invented fixture created.",
+                "createdAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "selection": {
+              "goalId": "A1000000-0000-1000-8000-000000000001",
+              "sessionId": "52abcdef-0000-4000-8abc-000000000001",
+              "route": "sessions"
+            },
+            "preferences": {
+              "theme": "system"
+            },
+            "capabilities": {
+              "mode": "synthetic",
+              "provider": "demo-only",
+              "native": "unavailable"
+            }
+          },
+          "dictationDeliveryId": "58abcdef-0000-4000-8abc-000000000001"
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "61abcdef-0000-4000-8abc-000000000006",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "workspace.commitProof",
+        "outcome": "ok",
+        "revision": 4
+      }
+    },
+    {
+      "name": "dictation.unbindDraft",
+      "request": {
+        "v": 1,
+        "requestId": "61abcdef-0000-4000-8abc-000000000005",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "dictation.unbindDraft",
+        "payload": {
+          "bindingId": "57abcdef-0000-4000-8abc-000000000001"
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "61abcdef-0000-4000-8abc-000000000005",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "dictation.unbindDraft",
+        "outcome": "ok"
+      }
+    }
+  ]
+}

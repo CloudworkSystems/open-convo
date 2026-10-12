@@ -1,0 +1,58 @@
+/* The two rails share the workspace height. Width is constrained by the host. */
+.desk-layout.details-visible {
+  grid-template-columns: var(--rail-slot, 260px) minmax(360px, 1fr) var(--inspector-width, 294px);
+}
+.workspace-details { grid-column: 3; grid-row: 1; height: 100%; }
+.workspace-details .goal-panel { height: 100%; }
+.desk-main-column { min-width: 0; }
+.desk-header { padding: 22px 28px 18px; gap: 12px; }
+.primary-module-heading { display: block; font-size: 20px; font-weight: 600; line-height: 1.3; letter-spacing: -.025em; }
+.nexus-view-tabs { margin-top: 0; }
+.nexus-view-tabs button { font-size: 16px; font-weight: 500; letter-spacing: -.02em; padding: 6px 9px; gap: 6px; }
+.nexus-view-tabs svg { width: 17px; height: 17px; }
+.workspace-header-tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.right-rail-toggle svg { transform: scaleX(-1); }
+.primitives-trigger { font-size: 11px; max-width: 82px; line-height: 1.4; }
+.conversation-layout .conversation-heading { padding-right: 0; }
+@media (max-width: 1199px) {
+  .desk-layout.details-visible { grid-template-columns: var(--rail-slot, 260px) minmax(0, 1fr); }
+}
+@media (max-width: 999px) {
+  .desk-layout.details-visible { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 599px) {
+  .desk-header { padding: 16px 14px; align-items: flex-start; }
+  .primary-module-heading { font-size: 18px; }
+  .nexus-view-tabs { gap: 1px; }
+  .nexus-view-tabs button { font-size: 14px; padding: 6px 4px; gap: 4px; }
+  .nexus-view-tabs svg { width: 14px; height: 14px; }
+  .workspace-header-tools { gap: 0; }
+  .primitives-trigger { max-width: 54px; font-size: 10px; padding: 5px 2px; }
+  .right-rail-toggle { width: 30px; height: 34px; }
+}
+
+/* Hidden navigation is reachable at every point along the application edge,
+   including above the workspace banner. Revealing it shows the complete rail. */
+@media (min-width: 1000px) {
+  .desk-layout.rail-hidden .rail-edge { position: fixed; left: 0; top: 0; bottom: 0; z-index: 31; width: 8px; }
+  .desk-layout.rail-hidden .desktop-navigation { position: fixed; left: 0; top: 0; bottom: 0; z-index: 30; }
+}
+.domain-row .folder-add, .domain-row .row-menu-trigger, .session-row .row-menu-trigger, .row-pin-trigger {
+  flex: 0 0 22px; width: 22px; height: 28px; padding: 3px;
+}
+.row-menu-trigger svg { width: 15px; height: 15px; }
+.session-link[draggable="true"] { cursor: grab; }
+.session-link[draggable="true"]:active { cursor: grabbing; }
+.domain-row.session-drop-target { background: var(--tca-accent-gradient-soft); outline: 2px solid var(--tca-accent-strong); outline-offset: -2px; }
+.user-avatar { overflow: hidden; }
+.user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.folder-icon-form fieldset { border: 0; padding: 0; margin: 0; }
+.folder-icon-form legend { font-size: 13px; font-weight: 550; margin-bottom: 12px; }
+.folder-icon-choices { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.folder-icon-choices label { display: flex; flex-direction: column; gap: 8px; align-items: center; padding: 10px 6px; border: 1px solid var(--tca-border-default); border-radius: 8px; font-size: 12px; cursor: pointer; }
+.folder-icon-choices label.selected { border-color: var(--tca-accent-strong); background: var(--tca-accent-gradient-soft); }
+.folder-icon-choices label:has(input:focus-visible) { outline: 2px solid var(--tca-accent-strong); outline-offset: 2px; }
+.folder-icon-form > p { margin-top: 12px; }
+@media (pointer: coarse) {
+  .domain-row .folder-add, .domain-row .row-menu-trigger, .session-row .row-menu-trigger, .row-pin-trigger { flex-basis: 32px; width: 32px; height: 40px; }
+}

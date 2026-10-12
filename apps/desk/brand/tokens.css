@@ -1,0 +1,99 @@
+/*
+  TCA2 visible brand tokens.
+  Palette: Ember.
+  Source decision: true_convo/brand/brand.md.
+*/
+
+:root,
+[data-brand="ember"],
+[data-tca-brand="ember"] {
+  color-scheme: dark;
+
+  --tca-brand-name: "Ember";
+
+  /* Typography — owner's pick, 2026-08-08 (Stack E, type-directions-v3-final.html).
+     Families are vendored in ./fonts/; load them before relying on these tokens. */
+  --tca-font-display: "Atkinson Hyperlegible Next", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --tca-font-text: "Atkinson Hyperlegible Next", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --tca-font-mono: "JetBrains Mono", "SFMono-Regular", ui-monospace, monospace;
+
+  /* Primary action rule (2026-08-08): text never sits on the gradient in the
+     dark shell — the magenta stop computes 3.7:1 under dark ink. Primary
+     buttons are white on solid magenta (5.1:1); the gradient serves as hover
+     glow or border only. */
+  --tca-btn-primary-bg: var(--tca-ember-magenta);
+  --tca-btn-primary-ink: #ffffff;
+
+  --tca-ember-magenta: #c8298b;
+  --tca-ember-coral: #f37a4a;
+  --tca-ember-amber: #f7b267;
+  --tca-ember-gradient: linear-gradient(
+    135deg,
+    var(--tca-ember-magenta) 0%,
+    var(--tca-ember-coral) 62%,
+    var(--tca-ember-amber) 100%
+  );
+  --tca-ember-gradient-soft: linear-gradient(
+    135deg,
+    rgba(200, 41, 139, 0.18) 0%,
+    rgba(243, 122, 74, 0.14) 62%,
+    rgba(247, 178, 103, 0.1) 100%
+  );
+
+  --tca-accent: var(--tca-ember-coral);
+  --tca-accent-strong: var(--tca-ember-magenta);
+  --tca-accent-warm: var(--tca-ember-amber);
+  --tca-accent-gradient: var(--tca-ember-gradient);
+  --tca-accent-gradient-soft: var(--tca-ember-gradient-soft);
+
+  --tca-surface-page: #15110f;
+  --tca-surface-0: #1b1614;
+  --tca-surface-1: #221c1a;
+  --tca-surface-2: #2b2320;
+  --tca-surface-3: #362c28;
+
+  --tca-text-primary: #f7f2ee;
+  --tca-text-body: #cec3bc;
+  --tca-text-muted: #908179;
+  --tca-text-faint: #5c4f48;
+
+  --tca-border-subtle: rgba(247, 242, 238, 0.12);
+  --tca-border-default: rgba(247, 242, 238, 0.14);
+  --tca-border-strong: rgba(247, 242, 238, 0.24);
+  --tca-focus-ring: rgba(243, 122, 74, 0.42);
+  --tca-shadow-ember: 0 18px 54px rgba(30, 10, 20, 0.42);
+
+  --tca-status-success: #5fae8a;
+  --tca-status-warning: #d49a3f;
+  --tca-status-danger: #d26a6a;
+  --tca-status-info: #6a9ecf;
+}
+
+/* Light mirror — from true-convo-landing-v2.html canonical tokens */
+[data-theme="light"],
+[data-tca-theme="light"] {
+  color-scheme: light;
+  --tca-surface-page: #FBF7F3;
+  --tca-surface-0: #FFFFFF;
+  --tca-surface-1: #F6EFE8;
+  --tca-surface-2: #EEE4DA;
+  --tca-surface-3: #E4D7C9;
+  --tca-text-primary: #17110E;
+  --tca-text-body: #433730;
+  --tca-text-muted: #706057;
+  --tca-text-faint: #A1928A;
+  --tca-border-subtle: rgba(23, 17, 14, 0.08);
+  --tca-border-default: rgba(23, 17, 14, 0.14);
+  --tca-border-strong: rgba(23, 17, 14, 0.24);
+
+  /* Light accent/status inks (2026-08-08, from the type-directions boards;
+     ratios computed on the light page surface). */
+  --tca-accent-ink: #d85a2e;   /* 3.6:1 — large text and UI parts only */
+  --tca-success-ink: #2f7a58;  /* 5.2:1 — safe for small text */
+  --tca-danger-ink: #a33a3a;   /* 6.5:1 — safe for small text */
+  --tca-warning-ink: #7d5a10;  /* 6.3:1 — safe for small text */
+
+  /* Focus-ring fix (2026-08-08): the coral rgba ring computes 2.6:1 on
+     cream; light mode uses solid deep coral instead (3.6:1). */
+  --tca-focus-ring: #d85a2e;
+}
