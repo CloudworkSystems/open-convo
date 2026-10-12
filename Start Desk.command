@@ -2,7 +2,10 @@
 # Double-click in Finder to run the Open Convo Desk on this Mac.
 # Open http://127.0.0.1:4183 in Codex's inline browser or any browser.
 # Close this window (or press Control-C) to stop it.
-cd "$(dirname "$0")/apps/desk" || exit 1
+cd "$(dirname "$0")" || exit 1
+echo "Getting the latest version from GitHub..."
+git pull --ff-only || echo "Could not update automatically; starting the version already here."
+cd apps/desk || exit 1
 if ! command -v npm >/dev/null 2>&1; then
   echo "Node.js is not installed, so the Desk cannot start."
   echo "Install it from https://nodejs.org, then double-click this file again."
