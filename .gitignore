@@ -1,0 +1,39 @@
+# macOS
+.DS_Store
+
+# Dependencies and build output
+node_modules/
+.venv/
+__pycache__/
+.build/
+DerivedData/
+dist/
+*.xcarchive
+*.dSYM/
+*.app/
+
+# Downloads and vendor drops
+vendor/
+
+# Private local data
+.open-convo-local/
+runtime-state/
+
+# Test artifacts
+.playwright-cli/
+output/
+
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.p8
+*.mobileprovision
+*.cer
+auth.json
+
+# Local agent settings
+.claude/settings.local.json
+.claude/worktrees/
