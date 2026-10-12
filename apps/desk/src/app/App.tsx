@@ -390,7 +390,11 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
       if (unresolvedDelivery.current?.sent) {
         // Reconciliation brings no receipt, so release the delivery's binding here.
         const deliveryId = unresolvedDelivery.current.options.dictationDeliveryId;
-        if (deliveryId) runtime.dictation?.release(deliveryId);
+        if (deliveryId) {
+          runtime.dictation?.release(deliveryId);
+          // No receipt follows reconciliation, so settle the kept copy here too.
+          dictation.dismiss(deliveryId);
+        }
         unresolvedDelivery.current = null;
       }
       writeProblem.current = null;
