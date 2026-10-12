@@ -49,6 +49,9 @@ class StandInHost {
 
   beginRecording(): string | undefined { return this.current; }
 
+  /** Keep a consumed binding registered, as the real host does until it is unbound. */
+  restore(token: string) { this.bindings.add(token); }
+
   deliverFinal(token: string | undefined, text: string): string | 'held' {
     if (!token || !this.bindings.has(token)) return 'held';
     this.bindings.delete(token);
@@ -190,4 +193,33 @@ test('a lock revokes the lane and forgets every capture', async () => {
   host.push({ type: 'dictation.final', bindingId: 'b7000000-0000-4000-8000-000000000001',
     deliveryId: 'd9000000-0000-4000-8000-000000000005', text: 'after lock' });
   assert.equal(finals.length, 0);
+});
+
+test('a consumed binding is released only after its delivery is confirmed saved', async () => {
+  const { host, lane, finals, state, sessionId } = setup();
+  lane.setTarget({ state, sessionId, selection: { start: 0, end: 0 } });
+  await until(() => lane.status === 'ready', 'binding');
+  const token = host.beginRecording();
+  host.deliverFinal(token, 'saved words');
+  host.restore(token!); // The real host keeps a consumed binding until it is unbound.
+  await wait(40);
+  assert.deepEqual(host.operations, ['dictation.bindDraft'], 'No unbind before the commit is confirmed.');
+  host.push({ type: 'dictation.receipt', deliveryId: finals[0]!.deliveryId,
+    commitRequestId: 'e9000000-0000-4000-8000-000000000009', revision: 9 });
+  await until(() => host.operations.length === 2, 'the release');
+  assert.deepEqual(host.operations, ['dictation.bindDraft', 'dictation.unbindDraft']);
+  lane.revoke();
+});
+
+test('the App can release a binding whose words it kept unplaced', async () => {
+  const { host, lane, finals, state, sessionId } = setup();
+  lane.setTarget({ state, sessionId, selection: { start: 0, end: 0 } });
+  await until(() => lane.status === 'ready', 'binding');
+  const token = host.beginRecording();
+  host.deliverFinal(token, 'kept words');
+  host.restore(token!);
+  lane.release(finals[0]!.deliveryId);
+  await until(() => host.operations.length === 2, 'the release');
+  assert.equal(host.operations[1], 'dictation.unbindDraft');
+  lane.revoke();
 });

@@ -77,19 +77,18 @@ export function useDeskDictation(access: DeskDictationAccess): DeskDictationView
       const { runtime, current, blocked, present, save } = accessRef.current;
       const state = current();
       const focus = composerRef.current;
-      if (!final.capture || !final.target || !state || blocked()) {
+      // Text kept unplaced is never committed under this delivery, so its binding can go.
+      const unplaced = () => {
         keep({ deliveryId: final.deliveryId, text: final.text, state: 'not-placed' });
-        return;
-      }
+        lane.release(final.deliveryId);
+      };
+      if (!final.capture || !final.target || !state || blocked()) { unplaced(); return; }
       // A selection mismatch (focus moved, caret moved) is a conflict, never a retarget.
       const selection = focus && focus.sessionId === final.target.sessionId ? focus.selection : { start: -1, end: -1 };
       const result = final.capture.deliver(state, final.target, selection, final.deliveryId, final.text,
         runtime.createId ? { id: runtime.createId } : undefined);
       if (result.kind === 'duplicate') return;
-      if (result.kind !== 'applied-in-memory') {
-        keep({ deliveryId: final.deliveryId, text: final.text, state: 'not-placed' });
-        return;
-      }
+      if (result.kind !== 'applied-in-memory') { unplaced(); return; }
       keep({ deliveryId: final.deliveryId, text: final.text, state: 'saving' });
       present(result.state);
       setCaret((previous) => ({ sessionId: final.target!.sessionId, position: result.selection.start,

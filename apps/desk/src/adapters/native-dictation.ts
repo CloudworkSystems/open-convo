@@ -74,6 +74,9 @@ export class NativeDictationLane {
   private desired: Desired | null = null;
   private bound: Bound | null = null;
   private readonly recent = new Map<string, Bound>();
+  /** Bindings that took a delivery, kept until its commit is confirmed (or it will never be committed). */
+  private readonly consumed = new Map<string, Bound>();
+  private readonly releasing: Bound[] = [];
   private running = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private failed = false;
@@ -143,6 +146,19 @@ export class NativeDictationLane {
     else this.timer = setTimeout(settle, this.settleMs);
   }
 
+  /**
+   * Unbind the binding that took this delivery. Called on its receipt, or by the
+   * App when it will not commit the delivery (text kept unplaced). Never before a
+   * commit that names the delivery: the host needs the binding to accept it.
+   */
+  release(deliveryId: string): void {
+    const owner = this.consumed.get(deliveryId);
+    if (!this.active || !owner) return;
+    this.consumed.delete(deliveryId);
+    this.releasing.push(owner);
+    void this.run();
+  }
+
   revoke(): void {
     if (!this.active) return;
     this.active = false;
@@ -151,6 +167,8 @@ export class NativeDictationLane {
     this.desired = null;
     this.bound = null;
     this.recent.clear();
+    this.consumed.clear();
+    this.releasing.length = 0;
     try { this.options.events.removeEventListener('trueconvo-host', this.receive); } catch { /* Revocation stays final. */ }
     this.changed();
     this.statusListeners.clear();
@@ -171,6 +189,11 @@ export class NativeDictationLane {
     this.running = true;
     try {
       while (this.active && !this.failed) {
+        const release = this.releasing.shift();
+        if (release) {
+          if (!await this.unbind(release)) break;
+          continue;
+        }
         const desired = this.desired;
         if (this.bound && this.bound.key !== desired?.key) {
           if (!await this.unbind(this.bound)) break;
@@ -260,6 +283,8 @@ export class NativeDictationLane {
       // A binding takes one delivery; the next dictation needs a fresh binding.
       // The App's next target (after applying and saving) rebinds; until then nothing is offered.
       if (owner && owner === this.bound) { this.bound = null; this.desired = null; this.retire(owner); this.changed(); }
+      // The host keeps a consumed binding until it is unbound; release it once the delivery settles.
+      if (owner) this.consumed.set(detail.deliveryId, owner);
       const final: DictationFinal = { deliveryId: detail.deliveryId, text: detail.text,
         ...(owner ? { capture: owner.capture, target: owner.target } : {}) };
       for (const listener of [...this.finalListeners]) {
@@ -270,6 +295,7 @@ export class NativeDictationLane {
     if (detail.type === 'dictation.receipt') {
       if (!exactKeys(detail, ['type', 'connectionId', 'generation', 'deliveryId', 'commitRequestId', 'revision'])
         || !uuid4(detail.deliveryId) || !uuid4(detail.commitRequestId) || !Number.isSafeInteger(detail.revision)) return;
+      this.release(detail.deliveryId as string);
       for (const listener of [...this.receiptListeners]) {
         try { listener(detail.deliveryId as string); } catch { /* Receipts are advisory to the view. */ }
       }
