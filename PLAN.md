@@ -21,20 +21,55 @@ yet a plan.
 `Start Desk.command` in the repo folder, then open http://127.0.0.1:4183 in
 Codex's inline browser. No website or ChatGPT hosting is involved.
 
-## Proposed Move Order
+## Build Plan
 
-Each step is a fresh copy with a private-content check (see AGENTS.md). The
-owner confirms the order before step 2.
+Agreed October 12, 2026. **Done** means it runs, its checks pass, and the owner
+has tried it. Each step ends with something the owner can try.
 
-1. **Correction and clarity library. Done October 12.** The original Open Convo core: 12 small
-   modules, 41 passing tests, in `cloudwork_systems/true_convo/open-convo`.
-   Smallest, already self-contained, and the intended open core.
-2. **Conversation Desk. Ported October 12, awaiting review.** (`apps/desk`, 186 tracked files in True Convo). The
-   TypeScript/Vite workspace. Strip sample data, review records and anything
-   tied to the old helpers before moving.
-3. **Mac app** (`apps/true-convo-mac`, 134 tracked files). Swift package. Native
-   builds and checks need the Mac. Signing and release settings stay with the
-   owner.
+### Top Five, In Order
+
+1. **One app: Desk, dictation and HUD.** Port the Mac app from True Convo
+   (`apps/true-convo-mac`), with recordings off by default. The Desk opens inside
+   the app; the app shrinks to the heads-up display; dictation works at the cursor
+   in any Mac app and can drop text into a Desk draft without sending it.
+   *Finish line:* the owner installs one build and uses dictation and the Desk
+   from it.
+2. **Protected storage on the Mac.** Conversations and memory saved locally,
+   encrypted, with keys in Keychain; lock, restart and crash recovery tested with
+   invented data first. Saves survive crashes, full disks and two windows
+   editing at once. *Finish line:* kill-and-reopen tests pass and the owner's
+   real conversation survives a restart.
+3. **One real conversation.** One approved model route using an existing
+   subscription, no paid fallback. Replies stream in, Stop works, safe retry,
+   and the session reopens later without retelling. The app shows which model
+   receives what before Send. *Finish line:* the owner holds a real conversation,
+   quits, reopens and continues it.
+4. **Clarity tools in the conversation.** Connect `packages/clarity` to the Desk:
+   Wait—what? on any assistant reply, select-a-phrase corrections, saved wording
+   lessons that shape later replies, with Undo. *Finish line:* the owner uses
+   Wait—what? and a correction in a real conversation and sees the next reply
+   follow the lesson.
+5. **Chosen memory on real storage.** Remember, correct, forget and Undo on the
+   protected store; memory candidates wait for the owner's approval; forgotten
+   items leave AI use immediately, with a 30-day Trash. *Finish line:* the owner
+   teaches, corrects and forgets something real and sees it respected.
+
+### After the Top Five
+
+6. Claude and Codex visible together in one session, with scoped delegation.
+7. Navigator search and sorting; Related and Revisit-when reminders.
+8. Reading the owner's real old sessions on the Mac, read-only.
+9. First creator beta: worksheet, website export, encrypted transfer between devices.
+10. Business features: one-change card, business messaging, phone handoff.
+11. Canvas/Atlas knowledge view, browser annotations, family and shared spaces.
+12. iOS app; later the OS shell.
+
+## Moving Pieces From True Convo
+
+1. **Correction and clarity library. Done October 12.** (`packages/clarity`)
+2. **Conversation Desk. Ported October 12, awaiting Codex review.** (`apps/desk`)
+3. **Mac app** (`apps/true-convo-mac`, 134 tracked files). Swift package; built
+   and checked on the Mac. Signing and release settings stay with the owner.
 4. **Shared tooling, case by case** (`tools/capability-adapter`, `tools/action-guard`,
    `tools/agent-bridge`). Paid bridges and evaluation tools (`glm-bridge`,
    `muse-bridge`, `jev-helper`, `jeff`) stay in True Convo unless the owner
