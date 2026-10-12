@@ -63,8 +63,13 @@ Each one ends with something the owner can try on the Mac.
    receipt. Tested in the browser against a stand-in that behaves like the real
    Mac side (captures only an existing binding), so the stand-in can't hide this
    gap. (Revised after Codex's third review.)
+   **Never lose words:** the Desk refuses a delivery if anything changed since
+   capture (even an unrelated update), and the Mac already counts it as
+   delivered, so the Mac can't rescue it. Whenever the Desk can't apply or save
+   dictated text, it keeps the text and shows it to the owner to copy or insert.
+   (Added after Codex's fourth review.)
    *Owner tries:* in the review copy, a simulated dictation lands in the draft,
-   not sent.
+   not sent; a simulated conflict shows the words instead of dropping them.
 2. **Mac side switch-on.** Change `DeskDictationPolicy` so an open, focused Desk
    returns a new "Desk draft" decision; call the existing binding at recording
    start and finish; update the policy check and tests. Also handle **held
@@ -73,8 +78,15 @@ Each one ends with something the owner can try on the Mac.
    nothing shows or uses them today. Surface held text to the owner (for
    example in the pill, with a copy or insert option) and clear it once used,
    so dictated words are never stranded. (Added after Codex review.)
-   *Owner tries:* open the Desk, unlock it, dictate, and the words appear in the
-   draft, not sent. Lock it and dictation is refused.
+   **A separate route for Desk recordings:** today every dictation that isn't
+   refused goes through the outside-app path (remembering the cursor target,
+   live typing, final paste), and paste can bring the last outside app forward
+   first. A Desk recording must skip all of that and send its words only through
+   `deliverFinal`, so private Desk text can never land in another app.
+   (Added after Codex's fourth review.)
+   *Owner tries:* open the Desk, unlock it, dictate with auto-paste and live
+   preview on, and the words appear only in the Desk draft, not sent and not in
+   any other app. Lock it and dictation is refused.
 3. **Pill and Desk, both directions.** Proposed default, open to change:
    - In the pill: a small Desk button that opens the Desk where it was left.
    - In the Desk: a "shrink to pill" button that hides the Desk window and
