@@ -10,7 +10,7 @@ product repo. True Convo stays private as the reference and parts library.
 Each step is a fresh copy with a private-content check (see AGENTS.md). The
 owner confirms the order before step 2.
 
-1. **Correction and clarity library.** The original Open Convo core: 12 small
+1. **Correction and clarity library. Done October 12.** The original Open Convo core: 12 small
    modules, 41 passing tests, in `cloudwork_systems/true_convo/open-convo`.
    Smallest, already self-contained, and the intended open core.
 2. **Conversation Desk** (`apps/desk`, 186 tracked files in True Convo). The
@@ -39,3 +39,4 @@ Strategy and interview files, `docs/reviews`, `docs/sessions`, session audits,
 
 | Date | Piece | Source path | True Convo commit | Removed before move |
 | --- | --- | --- | --- | --- |
+| 2026-10-12 | Clarity library → `packages/clarity` | `cloudwork_systems/true_convo/open-convo` (src, tests, contracts, fixtures, scripts) | cloudwork_systems `3afa8144` | Owner's name in test actors and one fixture (now "owner"); `session-view-controls` test (it read a separate Studio app by relative path); `status` script (checked docs not moved); all docs and workbench receipts held back pending review. 47/47 tests and 4 proofs pass. |

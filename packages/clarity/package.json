@@ -1,0 +1,17 @@
+{
+  "name": "@open-convo/clarity",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "clarity:integration:test": "node --test tests/clarity-explanation.test.mjs",
+    "clarity:continuity:test": "node --test tests/clarity-follow-up.test.mjs",
+    "clarity:session:test": "node --test tests/clarity-session-store.test.mjs",
+    "clarity:proof": "node scripts/clarity-correction-proof.mjs",
+    "jargon:proof": "node scripts/jargon-clarity-proof.mjs",
+    "memory:proof": "node scripts/candidate-memory-proof.mjs",
+    "proof": "node scripts/proof.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "description": "Clarity and correction logic: Wait\u2014what? re-pitches, plain-wording lessons, candidate memory cards."
+}

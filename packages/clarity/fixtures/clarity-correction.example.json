@@ -1,0 +1,70 @@
+{
+  "schema_version": "open-convo.clarity-correction.v1",
+  "id": "clarity-correction-fixture-001",
+  "kind": "clarity_correction",
+  "status": "working",
+  "surface": "trueconvo_desktop",
+  "owner_visible": true,
+  "selection": {
+    "source_role": "assistant",
+    "selected_text": "dependency injection",
+    "surrounding_text": "We'll add dependency injection so the runtime adapter can resolve providers without coupling the orchestration layer to a concrete implementation."
+  },
+  "immediate_result": {
+    "explanation": "It means this part is given the tools it needs instead of building them itself.",
+    "rewrite": "We'll give this part the tool it needs, so changing that tool later does not require rebuilding the rest.",
+    "requires_memory_review": false,
+    "replaces_original": false
+  },
+  "working_lesson": {
+    "version": 1,
+    "active": true,
+    "destination": "private_communication_profile",
+    "selected_language": "dependency injection",
+    "plain_meaning": "Giving this part the tools it needs instead of making it build them itself.",
+    "preferred_wording": "give this part the tool it needs",
+    "technical_term_policy": "define_if_needed",
+    "difficulty_reason": "stacked_jargon",
+    "guidance": "Use ordinary wording first. If the technical term matters, introduce it after the plain explanation and do not stack it with other unexplained terms.",
+    "durability": "working",
+    "scope": ["owner_private", "topic:software"],
+    "retrieval": {
+      "mode": "provisional",
+      "passive_promotion_allowed": false
+    }
+  },
+  "owner_notice": {
+    "text": "Saved as a working wording lesson.",
+    "available_actions": ["undo", "tune", "keep"]
+  },
+  "provenance": {
+    "source_refs": ["open-convo://fixture/clarity-correction-001"],
+    "provider": "fixture",
+    "agent_id": "trueconvo-desktop-fixture",
+    "project_id": "open-convo",
+    "session_id": "fake-session-clarity-001",
+    "captured_at": "2026-08-06T12:00:00.000Z"
+  },
+  "audit": {
+    "created_at": "2026-08-06T12:00:00.000Z",
+    "updated_at": "2026-08-06T12:00:00.000Z",
+    "actions": [
+      {
+        "action": "proposed",
+        "actor": "trueconvo-desktop-fixture",
+        "at": "2026-08-06T12:00:00.000Z",
+        "reason": "Fake owner-private clarity lesson created for the desktop proof."
+      }
+    ]
+  },
+  "effects": {
+    "writes_canonical_memory": false,
+    "external_action": false,
+    "agent_connected": false,
+    "changes_source_message": false
+  },
+  "access": {
+    "owner_id": "fixture-owner",
+    "visibility": "owner_private"
+  }
+}

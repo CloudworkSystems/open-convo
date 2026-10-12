@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:open-convo:schema:candidate-memory-card:v1",
+  "title": "Open Convo Candidate Memory Card",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "kind",
+    "status",
+    "owner_visible",
+    "memory",
+    "provenance",
+    "confidence",
+    "retrieval",
+    "owner_controls",
+    "audit",
+    "effects",
+    "access"
+  ],
+  "properties": {
+    "schema_version": { "const": "open-convo.candidate-memory-card.v1" },
+    "id": { "type": "string", "minLength": 1 },
+    "kind": { "const": "candidate_memory_card" },
+    "status": {
+      "enum": ["candidate", "parked", "approved_for_promotion", "forgotten"]
+    },
+    "owner_visible": { "const": true },
+    "memory": {
+      "type": "object",
+      "required": ["version", "text", "type", "durability", "scope"],
+      "properties": {
+        "version": { "type": "integer", "minimum": 1 },
+        "text": { "type": ["string", "null"] },
+        "type": {
+          "enum": ["fact", "preference", "decision", "commitment", "outcome", "steward_lesson"]
+        },
+        "durability": { "enum": ["core", "working", "dormant"] },
+        "scope": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["source_refs", "provider", "agent_id", "project_id", "session_id", "captured_at"],
+      "properties": {
+        "source_refs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "provider": { "type": "string", "minLength": 1 },
+        "agent_id": { "type": "string", "minLength": 1 },
+        "project_id": { "type": "string", "minLength": 1 },
+        "session_id": { "type": "string", "minLength": 1 },
+        "captured_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "confidence": {
+      "type": "object",
+      "required": ["level", "score", "rationale"],
+      "properties": {
+        "level": { "enum": ["high", "medium", "needs_signal"] },
+        "score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "rationale": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "retrieval": {
+      "type": "object",
+      "required": ["mode", "passive_promotion_allowed"],
+      "properties": {
+        "mode": { "enum": ["provisional", "suppressed"] },
+        "passive_promotion_allowed": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "owner_controls": {
+      "type": "object",
+      "required": ["available_actions"],
+      "properties": {
+        "available_actions": {
+          "type": "array",
+          "prefixItems": [
+            { "const": "keep" },
+            { "const": "correct" },
+            { "const": "forget" },
+            { "const": "park" }
+          ],
+          "minItems": 4,
+          "maxItems": 4
+        }
+      },
+      "additionalProperties": false
+    },
+    "audit": {
+      "type": "object",
+      "required": ["created_at", "updated_at", "actions"],
+      "properties": {
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["action", "actor", "at", "reason"],
+            "properties": {
+              "action": { "enum": ["proposed", "keep", "correct", "forget", "park"] },
+              "actor": { "type": "string", "minLength": 1 },
+              "at": { "type": "string", "format": "date-time" },
+              "reason": { "type": "string" },
+              "before": { "type": ["object", "null"] },
+              "after": { "type": ["object", "null"] }
+            },
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "effects": {
+      "type": "object",
+      "required": ["writes_canonical_memory", "external_action", "agent_connected"],
+      "properties": {
+        "writes_canonical_memory": { "const": false },
+        "external_action": { "const": false },
+        "agent_connected": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    "access": {
+      "type": "object",
+      "required": ["owner_id", "visibility"],
+      "properties": {
+        "owner_id": { "type": "string", "minLength": 1 },
+        "visibility": { "const": "owner_private" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

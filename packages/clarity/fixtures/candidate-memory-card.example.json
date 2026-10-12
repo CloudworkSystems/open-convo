@@ -1,0 +1,55 @@
+{
+  "schema_version": "open-convo.candidate-memory-card.v1",
+  "id": "candidate-memory-fixture-001",
+  "kind": "candidate_memory_card",
+  "status": "candidate",
+  "owner_visible": true,
+  "memory": {
+    "version": 1,
+    "text": "Imported runtimes remain candidates until the owner explicitly promotes them.",
+    "type": "decision",
+    "durability": "working",
+    "scope": ["owner_private", "open_convo"]
+  },
+  "provenance": {
+    "source_refs": ["agentmemory://fixture/memory-001"],
+    "provider": "agentmemory",
+    "agent_id": "codex-fixture",
+    "project_id": "open-convo",
+    "session_id": "fake-session-001",
+    "captured_at": "2026-07-11T15:57:47.961Z"
+  },
+  "confidence": {
+    "level": "high",
+    "score": 0.93,
+    "rationale": "The boundary is repeated in the imported-runtime process and trial receipt."
+  },
+  "retrieval": {
+    "mode": "provisional",
+    "passive_promotion_allowed": false
+  },
+  "owner_controls": {
+    "available_actions": ["keep", "correct", "forget", "park"]
+  },
+  "audit": {
+    "created_at": "2026-07-11T15:57:47.961Z",
+    "updated_at": "2026-07-11T15:57:47.961Z",
+    "actions": [
+      {
+        "action": "proposed",
+        "actor": "codex-fixture",
+        "at": "2026-07-11T15:57:47.961Z",
+        "reason": "Fake candidate created for the Open Convo owner-control proof."
+      }
+    ]
+  },
+  "effects": {
+    "writes_canonical_memory": false,
+    "external_action": false,
+    "agent_connected": false
+  },
+  "access": {
+    "owner_id": "owner",
+    "visibility": "owner_private"
+  }
+}

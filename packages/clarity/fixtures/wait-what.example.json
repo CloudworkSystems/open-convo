@@ -1,0 +1,61 @@
+{
+  "schema_version": "open-convo.wait-what.v1",
+  "id": "wait-what-fixture-001",
+  "kind": "wait_what_repair",
+  "status": "repaired",
+  "surface": "trueconvo_ios",
+  "owner_visible": true,
+  "target": {
+    "source_role": "assistant",
+    "latest_assistant_message": true,
+    "message_id": "assistant-message-fixture-001",
+    "assistant_text": "We'll place the capability behind an adapter so the orchestration layer can resolve providers without coupling the product to a concrete runtime."
+  },
+  "request": {
+    "phrase": "Wait—what?",
+    "attempt": 1
+  },
+  "repair": {
+    "version": 1,
+    "strategy": "main_point_with_missing_premise",
+    "main_point": "TrueConvo should ask for a job, not depend on one specific tool.",
+    "missing_premise": "Tools change. If the product is tied directly to one tool, changing it later becomes expensive.",
+    "repitch": "TrueConvo names the job it needs done. A small connector chooses the available tool, so the product can change tools later.",
+    "concrete_example": null,
+    "wording_treatment": "Lead with the main point, then add the missing setup in ordinary words."
+  },
+  "owner_notice": {
+    "text": "Re-pitched the latest answer. Nothing was remembered yet.",
+    "available_actions": ["repeat", "remember_how_i_speak"]
+  },
+  "memory": {
+    "working_lesson_created": false,
+    "durable_preference_written": false,
+    "passive_promotion_allowed": false
+  },
+  "effects": {
+    "external_action": false,
+    "command_approved": false,
+    "changes_source_message": false
+  },
+  "access": {
+    "owner_id": "fixture-owner",
+    "visibility": "owner_private"
+  },
+  "provenance": {
+    "source_ref": "trueconvo://session/fake-session/message/assistant-message-fixture-001#wait-what",
+    "captured_at": "2026-08-06T14:00:00.000Z"
+  },
+  "audit": {
+    "created_at": "2026-08-06T14:00:00.000Z",
+    "updated_at": "2026-08-06T14:00:00.000Z",
+    "actions": [
+      {
+        "action": "repair",
+        "actor": "trueconvo-clarity-fixture",
+        "at": "2026-08-06T14:00:00.000Z",
+        "reason": "The owner asked for the latest assistant thought to be re-pitched."
+      }
+    ]
+  }
+}
