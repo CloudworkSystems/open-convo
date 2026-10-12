@@ -42,9 +42,10 @@ A durable agent resumes from its last checkpoint after a refresh, a killed
 process or a restart, and long conversations are condensed in the background
 instead of stalling.
 
-For Open Convo: this is already step 2's finish line (kill-and-reopen tests).
-Add to it: an in-progress reply that was interrupted is recorded as interrupted,
-never silently lost and never silently re-sent.
+For Open Convo: step 2 supplies the persistence (kill-and-reopen tests, saves
+that survive crashes). Step 3, where replies first stream in, adds the rest: an
+in-progress reply that was interrupted is recorded as interrupted, never
+silently lost and never silently re-sent.
 
 ### 3. Do the Work, Then Wait for a Yes (Project Rules, Step 3)
 
@@ -62,11 +63,16 @@ and mark irreversible actions so they can never be replayed after a restart.
 In the video, a Jev add-on checks every shell command and blocked a delete until
 it was deliberately switched off. Each check costs a fraction of a cent.
 
-For Open Convo: when agents start taking actions, a small decision model can
-sort each action into "just do it" or "ask the owner." It filters; the owner
-still decides. True Convo's `tools/action-guard` and `jev-helper` are the
-starting points; both stayed behind in the move and need the owner's choice
-before porting. No paid model is added without approval.
+For Open Convo: the categories AGENTS.md already reserves for the owner
+(release, deployment, publication, spending, account or credential changes,
+services that outlive the session) are fixed rules checked in code first, and
+always ask the owner. No model can wave them through. Only actions left after
+those rules may go to a small decision model, which sorts them into "just do
+it" or "ask the owner." It filters; the owner still decides.
+
+True Convo's `tools/action-guard` and `jev-helper` are the starting points;
+both stayed behind in the move and need the owner's choice before porting.
+No paid model is added without approval.
 
 ### 5. Controls the Owner Can See and Change Mid-Conversation (Steps 3 and 5)
 
