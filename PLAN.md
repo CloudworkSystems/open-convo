@@ -12,6 +12,15 @@ and dictation that works wherever the cursor is in any Mac app. The Mac app
 (step 3) and the Desk (step 2) become the same application, not two products.
 An iOS app that works the same way on iPhone comes later.
 
+Longer term, the owner has discussed making it the shell for a whole operating
+system people can install and customize, in the spirit of Omarchy (a configured
+Linux setup). This is why it is sometimes called an OS. It is a direction, not
+yet a plan.
+
+**Reviewing the app:** for now the Desk runs on the owner's Mac. Double-click
+`Start Desk.command` in the repo folder, then open http://127.0.0.1:4183 in
+Codex's inline browser. No website or ChatGPT hosting is involved.
+
 ## Proposed Move Order
 
 Each step is a fresh copy with a private-content check (see AGENTS.md). The
