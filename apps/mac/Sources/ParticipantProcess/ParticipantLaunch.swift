@@ -17,8 +17,10 @@ public enum ParticipantCommandLine {
 }
 
 /// The CLI's environment: only `HOME`, `USER`, `TMPDIR`, `LANG`, `LC_ALL` from
-/// the app's own, and a fixed `PATH`. Everything else (API keys, base URLs,
-/// provider switches, proxies, the app's own variables) is dropped. The
+/// the app's own, then fixed values the app's own never change: `PATH` and
+/// the four switches of Codex F0 answer 10 (`CLIEnvironmentRule.fixed`).
+/// Everything else (API keys, base URLs, provider switches, proxies, the
+/// app's own variables, its own values for the fixed names) is dropped. The
 /// supervisor applies the same rule again before it spawns the CLI.
 public enum ParticipantEnvironment {
     public static let path = CLIEnvironmentRule.path
@@ -73,9 +75,20 @@ public struct ParticipantWorkingFolder: Sendable, Equatable {
         return ParticipantWorkingFolder(path: path)
     }
 
-    /// Removes the folder and anything the run left in it.
-    public func remove() {
-        try? FileManager.default.removeItem(atPath: path)
+    /// Removes the folder and anything the run left in it. True when the
+    /// folder is gone afterwards (removed now, or already absent); false when
+    /// the filesystem refused, and the folder, with whatever the run left in
+    /// it, may still be there. Deleting files is separate from process
+    /// cleanup: a false here says nothing about the run's process group.
+    @discardableResult
+    public func remove() -> Bool {
+        do {
+            try FileManager.default.removeItem(atPath: path)
+            return true
+        } catch {
+            var info = stat()
+            return lstat(path, &info) != 0 && errno == ENOENT
+        }
     }
 }
 

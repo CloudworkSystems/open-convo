@@ -83,7 +83,7 @@ async function samplePage() {
   await page.clock.install();
   await page.goto(origin);
   await page.bringToFront();
-  await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+  await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
   await page.getByRole('navigation', { name: 'Nexus views', exact: true }).getByRole('button', { name: 'Nexus Navigator', exact: true }).click();
   await expect(page.getByText('Sample workspace saved in this browser', { exact: true })).toBeVisible();
   return {
@@ -97,7 +97,7 @@ async function samplePage() {
 }
 
 async function openRoadmap(page) {
-  await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+  await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
   await page.getByRole('navigation', { name: 'Nexus views', exact: true }).getByRole('button', { name: 'Roadmap', exact: true }).click();
 }
 
@@ -133,7 +133,7 @@ test('a published preview waits for input and a modal, then refreshes the same t
     assert.equal(reloads, 0, 'An open modal must block reload even when no input is focused.');
     await expect(notice.getByRole('button', { name: 'Refresh preview' })).toBeDisabled();
     await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).focus();
+    await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).focus();
     assert.equal(await page.evaluate(() => document.hasFocus()), true);
     // Headless Chromium keeps hasFocus() true when another page is fronted.
     // Genuine browser/annotation focus loss and return require a manual trial.
@@ -169,7 +169,7 @@ test('an actual browser save failure keeps attempted work and disables preview r
     let reloads = 0;
     page.on('framenavigated', (frame) => { if (frame === page.mainFrame()) reloads += 1; });
     announce();
-    await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).focus();
+    await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).focus();
     await page.clock.fastForward(31_000);
     const notice = page.getByRole('status', { name: 'Preview update' });
     await expect(notice).toBeVisible();

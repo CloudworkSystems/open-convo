@@ -56,7 +56,7 @@ public struct CorrectionScope: Codable, Equatable, Hashable, Sendable {
     }()
 
     /// Target identifier meaning "every app": the lesson follows the person
-    /// wherever they dictate. Chosen by Patrick on 2026-09-27.
+    /// wherever they dictate. Chosen by the owner on 2026-09-27.
     public static let anyApplicationIdentifier = "*"
 
     public let externalTargetApplicationIdentifier: String

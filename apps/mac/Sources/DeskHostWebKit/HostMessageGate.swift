@@ -11,6 +11,12 @@ public enum HostTransportFailure: String, Equatable, Sendable {
     case wrongFrame = "wrong-frame"
     case wrongOrigin = "wrong-origin"
     case notAnObject = "not-an-object"
+    /// Not a refusal at the gate: the request was admitted on a live
+    /// connection, but by the time its answer was ready that connection was
+    /// gone (a reload, navigation, lock, close or crash revoked it), so the
+    /// answer was dropped (with a participant lane only; see
+    /// `HostMessageHandler`).
+    case staleReply = "stale-reply"
 }
 
 /// Where a script message came from, as WebKit reports it.
@@ -62,13 +68,17 @@ public enum HostMessageGate {
 /// walks) already exceeds the limit, and otherwise measured exactly as
 /// canonical JSON (the page's own `JSON.stringify` bytes modulo key order);
 /// and every envelope rule keeps its precise reason and echo.
+/// While `acceptsParticipant` is false (the default), `participant.*` is
+/// `unknown-operation`, exactly as on the byte path. The message handler
+/// passes its host's `DeskHostProtocol.acceptsParticipant`, which is true
+/// only for a host built with a participant lane.
 public enum HostRequestPipeline {
     public enum Decoded: Equatable, Sendable {
         case request(HostRequest)
         case refused(HostResponse)
     }
 
-    public static func decode(_ body: NSDictionary) -> Decoded {
+    public static func decode(_ body: NSDictionary, acceptsParticipant: Bool = false) -> Decoded {
         let value: JSONValue
         do {
             value = try JSONBridge.jsonValue(from: body, byteBudget: ProofLimits.envelopeBytes)
@@ -81,7 +91,7 @@ public enum HostRequestPipeline {
             return .refused(.refused(.payloadTooLarge, echo: HostEcho()))
         }
         do {
-            return .request(try HostRequest(validating: value))
+            return .request(try HostRequest(validating: value, acceptsParticipant: acceptsParticipant))
         } catch let rejection as HostRequestRejection {
             return .refused(.refused(rejection.refusal, echo: rejection.echo))
         } catch {

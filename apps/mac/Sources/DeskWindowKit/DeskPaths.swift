@@ -1,9 +1,12 @@
 import Darwin
 import Foundation
+import TrueConvoIdentity
 
 /// Where the invented Desk keeps its files.
 ///
-/// One base folder, `~/Library/Application Support/com.trueconvo.voice-cursor/desk-invented-proof/`,
+/// One base folder, `~/Library/Application Support/com.trueconvo.voice-cursor/desk-invented-proof/`
+/// (for the test copy, True Convo Test, `com.trueconvo.voice-cursor.test`
+/// instead: the app folder's name comes from `AppIdentity`),
 /// mode 0700, holding a plain `INVENTED-DATA-ONLY.txt` marker, and inside it
 /// one store folder per app run, `run-<yyyyMMdd-HHmmss>-<8 hex>/`, mode
 /// 0700, created on the run's first unlock. The made-up key for a run
@@ -37,7 +40,9 @@ public struct DeskPaths: Equatable, Sendable {
         case cannotCreate(String, Int32)
     }
 
-    public static let appFolderName = "com.trueconvo.voice-cursor"
+    /// The real app's folder name, `com.trueconvo.voice-cursor`. A `DeskPaths`
+    /// made for another identity uses that identity's name (`appFolder`).
+    public static let appFolderName = AppIdentity.release.applicationSupportFolderName
     public static let baseFolderName = "desk-invented-proof"
     public static let markerFileName = "INVENTED-DATA-ONLY.txt"
     public static let markerText = """
@@ -53,20 +58,25 @@ public struct DeskPaths: Equatable, Sendable {
 
     /// The user's Application Support folder (or an invented one in tests).
     public let applicationSupport: URL
-    /// `applicationSupport/com.trueconvo.voice-cursor/desk-invented-proof`, as given.
+    /// The app's own folder name inside it: `com.trueconvo.voice-cursor` for
+    /// the real app (and `swift run` and tests), `com.trueconvo.voice-cursor.test`
+    /// for True Convo Test.
+    public let appFolder: String
+    /// `applicationSupport/<appFolder>/desk-invented-proof`, as given.
     public let base: URL
 
-    public init(applicationSupport: URL) {
+    public init(applicationSupport: URL, identity: AppIdentity = .release) {
         self.applicationSupport = applicationSupport
-        base = applicationSupport
-            .appendingPathComponent(Self.appFolderName, isDirectory: true)
+        appFolder = identity.applicationSupportFolderName
+        base = identity.applicationSupportFolder(in: applicationSupport)
             .appendingPathComponent(Self.baseFolderName, isDirectory: true)
     }
 
-    /// The app's own base folder for the invented Desk.
-    public static func standard(fileManager: FileManager = .default) -> DeskPaths? {
+    /// The running app's own base folder for the invented Desk. The folder
+    /// name follows the running copy's identity (`AppIdentity.current`).
+    public static func standard(fileManager: FileManager = .default, identity: AppIdentity = .current) -> DeskPaths? {
         guard let support = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
-        return DeskPaths(applicationSupport: support)
+        return DeskPaths(applicationSupport: support, identity: identity)
     }
 
     enum Node: Equatable {
@@ -193,12 +203,12 @@ public struct DeskPaths: Equatable, Sendable {
         return OpenFolder(descriptor: descriptor, path: path)
     }
 
-    /// `com.trueconvo.voice-cursor`, then `desk-invented-proof`, each opened
-    /// relative to the one before and checked. Nil when one is missing and
-    /// nothing may be created.
+    /// The app folder (`com.trueconvo.voice-cursor`, or the test copy's),
+    /// then `desk-invented-proof`, each opened relative to the one before and
+    /// checked. Nil when one is missing and nothing may be created.
     func openBase(creating: Bool) throws -> OpenFolder? {
         guard let support = try openSupport(creating: creating),
-              let app = try Self.openChild(Self.appFolderName, in: support, label: "app", creating: creating) else { return nil }
+              let app = try Self.openChild(appFolder, in: support, label: "app", creating: creating) else { return nil }
         return try Self.openChild(Self.baseFolderName, in: app, label: "base", creating: creating)
     }
 

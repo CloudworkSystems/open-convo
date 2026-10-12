@@ -10,8 +10,9 @@ struct ReaderHarness {
     var outputs: [StreamJSONReader.Output] = []
     var now: UInt64 = 0
 
-    init(inputBytes: Int = 20, preparedBytes: Int = 1_000, limits: StreamJSONReaderLimits = .contract) {
-        reader = StreamJSONReader(configuration: .init(expectedInit: Invented.expectation, inputBytes: inputBytes,
+    init(inputBytes: Int = 20, preparedBytes: Int = 1_000, limits: StreamJSONReaderLimits = .contract,
+         expectation: ParticipantInitExpectation = Invented.expectation) {
+        reader = StreamJSONReader(configuration: .init(expectedInit: expectation, inputBytes: inputBytes,
                                                        preparedBytes: preparedBytes, limits: limits))
     }
 
@@ -306,6 +307,61 @@ struct StreamJSONReaderTests {
         #expect(run.sentStop)
         run.ends(SIGTERM)
         #expect(run.terminal == .terminal(.failed(.replyTooLong), groupCleared: true))
+    }
+
+    @Test("Text that cannot fit ends the run when it arrives, not at the next flush: the prefix, then reply-too-long (vector #48)")
+    func replyTooLongAtArrival() {
+        // Vector #48: 41 bytes of room; é (2 bytes) after 40 would pass it.
+        var run = ReaderHarness(inputBytes: 262_144 - 41)
+        run.spawned()
+        run.feed([Invented.initLine(), Invented.rateLimit(), Invented.messageStart, Invented.blockStart(0)])
+        run.now = 100
+        run.feed([Invented.textDelta("Four. Invented reply with an accent: caf\u{E9}, and more")])
+        #expect(run.texts == ["Four. Invented reply with an accent: caf"], "at the delta's millisecond, before any tick")
+        #expect(run.sentStop)
+        run.ends(SIGTERM)
+        #expect(run.terminal == .terminal(.failed(.replyTooLong), groupCleared: true))
+
+        // Text that still fits waits for its 250 ms as before.
+        var fits = ReaderHarness(inputBytes: 262_144 - 41)
+        fits.spawned()
+        fits.feed([Invented.initLine(), Invented.rateLimit(), Invented.messageStart, Invented.blockStart(0),
+                   Invented.textDelta(String(repeating: "x", count: 41))])
+        #expect(fits.texts.isEmpty && !fits.sentStop, "exactly the room: nothing decided yet")
+        fits.advance(250)
+        #expect(fits.texts == [String(repeating: "x", count: 41)])
+        fits.feed([Invented.textDelta("y")])
+        #expect(fits.sentStop, "one byte past the room ends it at once")
+        #expect(fits.texts.count == 1, "nothing more is emitted")
+    }
+
+    @Test("After text that cannot fit, a Stop, a paid-overflow signal or an exit without a result within the old 250 ms leaves reply-too-long")
+    func replyTooLongArrivalRaces() {
+        func overrun() -> ReaderHarness {
+            var run = ReaderHarness(inputBytes: 262_144 - 41)
+            run.spawned()
+            run.feed([Invented.initLine(), Invented.rateLimit(), Invented.messageStart, Invented.blockStart(0)])
+            run.now = 100
+            run.feed([Invented.textDelta("Four. Invented reply with an accent: caf\u{E9}, and more")])
+            run.now = 200
+            return run
+        }
+        var stop = overrun()
+        stop.stop()
+        stop.ends(SIGTERM)
+        #expect(stop.terminal == .terminal(.failed(.replyTooLong), groupCleared: true), "not local-stop")
+
+        var overage = overrun()
+        overage.feed([Invented.rateLimit(overageStatus: "allowed", isUsingOverage: true)])
+        overage.ends(SIGTERM)
+        #expect(overage.terminal == .terminal(.failed(.replyTooLong), groupCleared: true), "not paid-overflow")
+
+        var exited = overrun()
+        exited.ends(0)
+        #expect(exited.terminal == .terminal(.failed(.replyTooLong), groupCleared: true), "not process-error")
+        for run in [stop, overage, exited] {
+            #expect(run.texts == ["Four. Invented reply with an accent: caf"] && run.terminals.count == 1)
+        }
     }
 
     @Test("Held text that overruns the budget keeps nothing after the cut, so what is released is a prefix")
@@ -694,5 +750,121 @@ struct StreamJSONReaderEndingTests {
         #expect(run.terminals.count == 1)
         #expect(run.texts == ["one"])
         #expect(run.startedCount == 1)
+    }
+}
+
+@Suite("Stream reader: a cleanup retry that ends uncleared")
+struct StreamJSONReaderRetryTests {
+    @Test("After an uncleared terminal, each further uncleared is one cleanupRetryUncleared; the first is the terminal itself")
+    func retryUncleared() {
+        var run = ReaderHarness()
+        run.spawned()
+        run.feed([Invented.initLine()])
+        run.stop()
+        run.exit(SIGTERM)
+        run.uncleared()
+        #expect(run.terminal == .terminal(.stopped(.stopIncomplete), groupCleared: false))
+        #expect(!run.outputs.contains(.cleanupRetryUncleared), "the first uncleared ends the run; it is not a retry")
+
+        let before = run.outputs.count
+        run.stop()
+        #expect(run.outputs.count == before, "the retry's stop records nothing in the reader")
+        run.uncleared()
+        #expect(run.outputs.suffix(1) == [.cleanupRetryUncleared])
+        run.advance(60_000)
+        #expect(run.outputs.count == before + 1, "time alone reports nothing")
+        run.stop()
+        run.uncleared()
+        #expect(run.outputs.filter { $0 == .cleanupRetryUncleared }.count == 2, "one per retry")
+        #expect(run.reader.groupCleared == false)
+        #expect(!run.released)
+
+        run.cleared()
+        #expect(run.outputs.suffix(2) == [.groupClearedAfterTerminal, .cleanupReleased])
+        run.uncleared()
+        #expect(run.outputs.filter { $0 == .cleanupRetryUncleared }.count == 2, "nothing once the group is cleared")
+        #expect(run.terminals.count == 1)
+        #expect(run.reader.groupCleared == true)
+    }
+
+    @Test("A native end whose group survives retries the same way")
+    func nativeEndRetry() {
+        var run = ReaderHarness()
+        run.spawned()
+        run.feed([Invented.initLine()])
+        run.uncleared()
+        #expect(run.terminal == .terminal(.failed(.processError), groupCleared: false))
+        run.uncleared()
+        #expect(run.outputs.filter { $0 == .cleanupRetryUncleared }.count == 1)
+        #expect(run.terminals.count == 1)
+    }
+
+    @Test("Never after a cleared terminal, a spawn failure or a lost supervisor")
+    func noRetryOtherwise() {
+        var cleared = ReaderHarness()
+        cleared.spawned()
+        cleared.feed(Invented.passingStream(["done"]))
+        cleared.ends(0)
+        cleared.uncleared()
+        cleared.uncleared()
+        #expect(!cleared.outputs.contains(.cleanupRetryUncleared))
+        #expect(cleared.terminal == .terminal(.completed, groupCleared: true))
+
+        var failed = ReaderHarness()
+        failed.outputs += failed.reader.supervisor(.spawnFailed, now: 0)
+        failed.uncleared()
+        failed.uncleared()
+        #expect(!failed.outputs.contains(.cleanupRetryUncleared))
+        #expect(failed.terminals.count == 1)
+
+        var lost = ReaderHarness()
+        lost.spawned()
+        lost.feed([Invented.initLine()])
+        lost.controlClosed()
+        lost.uncleared()
+        lost.uncleared()
+        #expect(!lost.outputs.contains(.cleanupRetryUncleared))
+        #expect(lost.terminal == .terminal(.failed(.processError), groupCleared: false))
+    }
+
+    @Test("A supervisor lost after an uncleared terminal answers a waiting retry: cleanupRetryUncleared while a pipe is open, else only cleanupReleased")
+    func lostAfterUnclearedTerminal() {
+        // The retry's probe is cut short: the control socket closes while a
+        // surviving member still holds stdout open.
+        var open = ReaderHarness()
+        open.spawned()
+        open.feed([Invented.initLine()])
+        open.stop()
+        open.exit(SIGTERM)
+        open.uncleared()
+        #expect(open.terminal == .terminal(.stopped(.stopIncomplete), groupCleared: false))
+        open.stop()
+        open.stderrEOF()
+        let before = open.outputs.count
+        open.controlClosed()
+        #expect(Array(open.outputs.dropFirst(before)) == [.cleanupRetryUncleared])
+        #expect(open.reader.supervisorLost)
+        #expect(open.reader.groupCleared == false)
+        #expect(!open.released)
+        open.uncleared()
+        open.cleared()
+        #expect(open.outputs.count == before + 1, "nothing can follow from a closed socket")
+        open.stdoutEOF()
+        #expect(open.outputs.suffix(1) == [.cleanupReleased])
+        #expect(open.reader.groupCleared == false, "never later set true")
+        #expect(open.terminals.count == 1)
+
+        // Both pipes already at EOF: ownership ends at once, and that answers.
+        var closed = ReaderHarness()
+        closed.spawned()
+        closed.feed([Invented.initLine()])
+        closed.uncleared()
+        #expect(closed.terminal == .terminal(.failed(.processError), groupCleared: false))
+        closed.stdoutEOF()
+        closed.stderrEOF()
+        let settled = closed.outputs.count
+        closed.controlClosed()
+        #expect(Array(closed.outputs.dropFirst(settled)) == [.cleanupReleased])
+        #expect(closed.reader.groupCleared == false)
     }
 }

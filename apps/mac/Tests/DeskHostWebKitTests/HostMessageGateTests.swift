@@ -98,6 +98,28 @@ final class HostRequestPipelineTests: XCTestCase {
         XCTAssertEqual(refusal([:])?.reason, .unsupportedVersion)
     }
 
+    /// Participant names stay unknown on the object path unless the host was
+    /// built with a participant lane; then they decode like any operation.
+    func testParticipantNamesAreUnknownUnlessAccepted() {
+        for name in ["participant.availability", "participant.start", "participant.stop", "participant.status", "participant.events"] {
+            let body: NSDictionary = ["v": 1, "requestId": "61abcdef-0000-4000-8abc-000000000001", "connectionId": "c", "generation": 1,
+                                      "operation": name, "payload": [:]]
+            let refused = refusal(body)
+            XCTAssertEqual(refused?.reason, .unknownOperation, name)
+            XCTAssertEqual(refused?.echo, HostEcho(requestId: "61abcdef-0000-4000-8abc-000000000001", connectionId: "c", generation: 1,
+                                                   operation: name))
+            let withExtraKey = NSMutableDictionary(dictionary: body)
+            withExtraKey["path"] = "/tmp"
+            XCTAssertEqual(refusal(withExtraKey)?.reason, .unknownOperation, "refused before the envelope keys, as before")
+
+            guard case .request(let decoded) = HostRequestPipeline.decode(body, acceptsParticipant: true) else {
+                return XCTFail("\(name) decodes when accepted")
+            }
+            XCTAssertEqual(decoded.operation.rawValue, name)
+            XCTAssertEqual(try HostRequest.decode(decoded.canonicalData(), acceptsParticipant: true), decoded, "same request as the byte path")
+        }
+    }
+
     func testGraphsTheBridgeRefusesAreMalformedEnvelopes() {
         let withDate = refusal(["v": 1, "when": Date()])
         XCTAssertEqual(withDate?.reason, .malformedEnvelope)

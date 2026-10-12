@@ -80,7 +80,7 @@ async function isolated() {
 
 async function enter(page) {
   await page.goto(origin);
-  await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+  await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toBeVisible();
   await expect(page.getByText('Sample workspace saved in this browser', { exact: true })).toBeVisible();
 }
@@ -238,7 +238,7 @@ test('invalid primary records are retained and cannot be masked by a valid legac
       await writeNativeRecordRaw(page, WORKSPACE_DATABASE_NAME, raw, { notify: false });
       await page.reload();
       await expect(page.getByRole('heading', { name: 'Workspace needs recovery', exact: true })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Cloudwork Nexus', exact: true })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true })).toHaveCount(0);
       assert.equal(await readNativeRecordRaw(page), raw);
       assert.equal(await legacyRaw(page), backup);
       verify();
@@ -260,7 +260,7 @@ test('an unavailable native database fails closed and offers a clearly older ret
     await expect(page.getByRole('heading', { name: 'Workspace needs recovery', exact: true })).toBeVisible();
     await expect(page.getByRole('alert')).toContainText('may be older');
     await expect(page.getByRole('button', { name: 'Download retained browser copy', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Cloudwork Nexus', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true })).toHaveCount(0);
     assert.equal(await legacyRaw(page), backup);
     verify();
   } finally { await context.close(); }

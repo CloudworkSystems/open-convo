@@ -98,7 +98,7 @@ const identityBytes = (page) => readNativeRecordRaw(page, identityDatabase);
 
 async function enter(page) {
   await page.goto(origin);
-  await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+  await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toBeVisible();
   await expect(page.getByText('Sample workspace saved in this browser', { exact: true })).toBeVisible();
 }

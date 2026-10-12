@@ -1407,7 +1407,7 @@ test('a near-limit legacy workspace can return from DATA and an ungrouped view w
     await f.page.getByRole('button', { name: 'DATA', exact: true }).click();
     const globalStop = f.page.getByRole('button', { name: `Stop response in ${session.title}`, exact: true });
     await expect(globalStop).toBeEnabled();
-    await f.page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+    await f.page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
     await expect(transcript(f.page).first().getByRole('button', { name: 'Stop', exact: true })).toBeEnabled();
     await f.page.getByRole('button', { name: 'Ungrouped sessions', exact: true }).click();
     await expect(f.page.locator('#desk-main').getByRole('heading', { name: 'Ungrouped sessions', exact: true })).toBeVisible();

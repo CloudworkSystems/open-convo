@@ -44,7 +44,7 @@ test("clarity proof rejects phone, user-authored, mismatched, or raw transcript 
   assert.throws(() => validateClarityCorrection(rawTranscript), /raw audio or transcript/);
 });
 
-test("active Wong lesson produces narrow non-canonical guidance for a later reply", () => {
+test("active Memory Steward lesson produces narrow non-canonical guidance for a later reply", () => {
   const guidance = guidanceForFutureReply(fixture);
   assert.equal(guidance.preferredWording, "give this part the tool it needs");
   assert.equal(guidance.difficultyReason, "stacked_jargon");

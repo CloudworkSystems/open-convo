@@ -23,7 +23,7 @@ function localReturn(content) {
   };
 }
 
-test("active Wong lesson changes the next model request and remains temporary", async () => {
+test("active Memory Steward lesson changes the next model request and remains temporary", async () => {
   let observed;
   const result = await replyWithClarityLesson({
     schema_version: "open-convo.clarity-follow-up.v1",
@@ -44,7 +44,7 @@ test("active Wong lesson changes the next model request and remains temporary", 
   assert.equal(result.boundaries.writes_canonical_memory, false);
 });
 
-test("Undo removes the Wong guidance from a later model request", async () => {
+test("Undo removes the Memory Steward guidance from a later model request", async () => {
   const undone = applyClarityLessonAction(structuredClone(fixture), "undo", {
     actor: "fixture-owner",
     at: "2026-08-06T13:00:00.000Z",

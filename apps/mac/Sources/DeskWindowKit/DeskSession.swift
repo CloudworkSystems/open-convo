@@ -49,6 +49,18 @@ public enum DeskLockReason: String, Sendable, CaseIterable {
 ///
 /// Logging is identifiers only: states, reasons, kinds, URL scheme and
 /// host. Never page content, never a host event's detail.
+///
+/// Participants (plan S11; inactive). A session given `makeParticipantLane`
+/// makes one lane, on its first stack, and keeps it for the whole run
+/// (Codex Q21): each stack's host is built by the lane, attached to it
+/// before the page loads (with that stack's own event sink, Codex S7), and
+/// let go after its store closes; a lock reaches the lane first, in every
+/// state, once per lock request; a verified unlock reaches it after the
+/// stack's (section 14, S10 reading 1), only if no lock came since its
+/// owner check began, and lands before the page loads; the writes the lane
+/// owes get one bounded pass before the dispatch recovery's store work (S9
+/// ruling c). The app gives no factory, so its session has no lane and
+/// every stack is a v1 host advertising seven operations.
 @MainActor
 public final class DeskSession {
     public typealias Log = @Sendable (_ event: String, _ detail: String) -> Void
@@ -100,6 +112,14 @@ public final class DeskSession {
     public private(set) var host: DeskWebViewHost?
     public private(set) var store: ProofStore?
     private var hostProtocol: DeskHostProtocol?
+    /// This run's participant lane: made once, by `makeParticipantLane`,
+    /// when the first stack is built, and the same object for every stack
+    /// after (Codex Q21). Nil without a factory, as in the app.
+    public private(set) var participantLane: (any DeskParticipantLane)?
+    private let makeParticipantLane: (@MainActor () -> any DeskParticipantLane)?
+    /// A close under way for a stack attached to the lane: a second close
+    /// waits for it rather than letting that stack go under it.
+    private var closingStack: (host: DeskWebViewHost, done: Task<Void, Never>)?
     /// Whether run folders from earlier runs were present when this run's
     /// session was made (they can never reopen).
     public let earlierRunsExisted: Bool
@@ -133,12 +153,20 @@ public final class DeskSession {
     /// Counts closes: an unlock or open that saw the window close meanwhile
     /// leaves the Desk shut (nothing opens in a window nobody sees).
     private var closeRequests = 0
+    /// Whether one of those closes was the app's quit (`close(quitting:)`):
+    /// a stack attached while it ran is let go as a quit.
+    private var quitRequested = false
 
-    public init(paths: DeskPaths, bundle: DeskBundleLocation?, info: HostInfo, log: @escaping Log = { _, _ in }) {
+    /// `makeParticipantLane` is called at most once per session (one per
+    /// app run); nil, the default and the app's choice, keeps the Desk a v1
+    /// host.
+    public init(paths: DeskPaths, bundle: DeskBundleLocation?, info: HostInfo, log: @escaping Log = { _, _ in },
+                makeParticipantLane: (@MainActor () -> any DeskParticipantLane)? = nil) {
         self.paths = paths
         self.bundle = bundle
         self.info = info
         self.log = log
+        self.makeParticipantLane = makeParticipantLane
         earlierRunsExisted = !paths.existingRunFolderNames().isEmpty
         state = bundle == nil ? .unavailable(Message.bundleMissing) : .lockedNoStack
     }
@@ -160,9 +188,10 @@ public final class DeskSession {
 
     /// Whether a lock signal (screen lock, fast user switching, sleep) has
     /// anything to lock: the Desk is open, closed within this run (its key
-    /// still in memory), or being unlocked.
+    /// still in memory), or being unlocked; with a participant lane, always,
+    /// since the lane is locked in every state (section 14, S11 reading 3).
     public var respondsToLockSignals: Bool {
-        state == .open || state == .closed || unlocking
+        state == .open || state == .closed || unlocking || participantLane != nil
     }
 
     public func post(notice text: String?) {
@@ -184,6 +213,13 @@ public final class DeskSession {
         defer { unlocking = false }
         let lockRequestsAtStart = lockRequests
         let closeRequestsAtStart = closeRequests
+        // The lane's lock epoch as verification begins, for a kept stack
+        // and a stack built by this unlock alike: the lane is unlocked only
+        // if no lock came anywhere from here through the host's unlock and
+        // its own (S10 reading 1; S11 reading 4). Each lock request moves
+        // it once (`beginLock`; the host's own step does not lock the lane
+        // again), so only a lock requested after this read refuses it.
+        let laneEpochAtStart = participantLane?.lockEpoch
         if from != .closed {
             switch await verifier.verify(reason: MacOwnerVerifier.reason) {
             case .verified:
@@ -208,10 +244,22 @@ public final class DeskSession {
         }
         if notice == Message.notUnlocked || notice == MacOwnerVerifier.unavailableMessage { notice = nil }
         if from == .locked, let host {
-            await host.unlock()
+            // The host's unlock step, then the lane's (queued inside it,
+            // with the epoch read as the owner check began).
+            let laneUnlock = await host.unlock(laneEpoch: laneEpochAtStart)
             guard lockRequests == lockRequestsAtStart, state == .locked, self.host === host, !host.isLocked else {
                 log("desk.unlock.superseded", "from=locked now=\(state.logName)")
                 return
+            }
+            if let laneUnlock {
+                // The lane's unlock lands before the fresh document can ask
+                // anything, so the page's first commit finds the lane
+                // unlocked and the writes it held go first (S9 ruling c).
+                await laneUnlock.value
+                guard lockRequests == lockRequestsAtStart, state == .locked, self.host === host, !host.isLocked else {
+                    log("desk.unlock.superseded", "from=locked now=\(state.logName)")
+                    return
+                }
             }
             // Unlock requires a fresh document and bootstrap.
             host.reload()
@@ -219,12 +267,15 @@ public final class DeskSession {
             log("desk.unlocked", "from=locked")
             return
         }
-        await openStack(from: from, lockRequestsAtStart: lockRequestsAtStart, closeRequestsAtStart: closeRequestsAtStart)
+        await openStack(from: from, lockRequestsAtStart: lockRequestsAtStart, closeRequestsAtStart: closeRequestsAtStart,
+                        laneEpochAtStart: laneEpochAtStart)
     }
 
-    /// AssetResolver, ProofStore, event sink, registries, protocol, web
-    /// view, then the first load.
-    private func openStack(from: State, lockRequestsAtStart: Int, closeRequestsAtStart: Int) async {
+    /// AssetResolver, ProofStore, event sink, registries, protocol; with a
+    /// participant lane, its attach, its unlock (after the owner's check)
+    /// and its one bounded pass of the writes it owes; the dispatch
+    /// recovery; web view, then the first load.
+    private func openStack(from: State, lockRequestsAtStart: Int, closeRequestsAtStart: Int, laneEpochAtStart: Int?) async {
         guard let bundle else { return }
         do {
             let resolver = try bundle.makeResolver()
@@ -246,7 +297,52 @@ public final class DeskSession {
             }
             let connections = ConnectionRegistry()
             let drafts = DraftBindingRegistry()
-            let hostProtocol = DeskHostProtocol(store: store, connections: connections, drafts: drafts, info: info, events: sink)
+            let lane = participantLaneForThisRun()
+            // A lane made just now has seen no lock from before this unlock.
+            let laneEpoch = laneEpochAtStart ?? lane?.lockEpoch
+            let hostProtocol = lane?.makeHost(store: store, connections: connections, drafts: drafts, info: info, events: sink)
+                ?? DeskHostProtocol(store: store, connections: connections, drafts: drafts, info: info, events: sink)
+            if let lane {
+                guard closeRequests == closeRequestsAtStart else {
+                    // As below: nothing is shown and the store goes at once.
+                    store.close()
+                    log("desk.open.abandoned", "reason=\(abandonReason)")
+                    return
+                }
+                do {
+                    // The stack's own host, store, registry and sink (Codex S7).
+                    try await lane.attach(host: hostProtocol, store: store, connections: connections, sink: sink)
+                } catch {
+                    store.close()
+                    if closeRequests != closeRequestsAtStart {
+                        // The close or quit that came meanwhile refused it.
+                        log("desk.open.abandoned", "reason=\(abandonReason)")
+                        return
+                    }
+                    log("desk.open.failed", "reason=participants-attach")
+                    state = .unavailable(Message.couldNotOpen)
+                    return
+                }
+                if closeRequests != closeRequestsAtStart {
+                    // The window closed, or the app began quitting, during
+                    // the attach: the attached stack goes as that close or
+                    // quit takes it, then its store; nothing is unlocked.
+                    await Self.closeUnshown(hostProtocol, lane: lane, quitting: quitRequested)
+                    store.close()
+                    log("desk.open.abandoned", "reason=\(abandonReason)")
+                    return
+                }
+                // Attached first, then unlocked (S10 reading 1; S9 ruling c):
+                // the writes the lane held for this folder go through this
+                // stack. Only after the owner's check, and only if no lock
+                // came since it began.
+                if from != .closed, let laneEpoch { await lane.unlock(ifNoLockSince: laneEpoch) }
+                // Those writes, one bounded pass, before the dispatch
+                // recovery's store work below (S9 ruling c). A lock that
+                // came during the open keeps the lane locked: then nothing
+                // is attempted (Codex Q32).
+                await lane.reconcileBeforeStoreWork()
+            }
             if await hostProtocol.outstandingMutation != nil {
                 let kind: String
                 do {
@@ -258,13 +354,15 @@ public final class DeskSession {
             }
             if closeRequests != closeRequestsAtStart {
                 // The window closed while the Desk was opening: nothing is
-                // shown, and the store's writer lock is released at once.
+                // shown, and the store's writer lock is released at once. An
+                // attached stack goes first, as any close or quit takes it.
+                if let lane { await Self.closeUnshown(hostProtocol, lane: lane, quitting: quitRequested) }
                 store.close()
-                log("desk.open.abandoned", "reason=window-closed")
+                log("desk.open.abandoned", "reason=\(abandonReason)")
                 return
             }
             let host = DeskWebViewHost(hostProtocol: hostProtocol, resolver: resolver, eventSink: sink,
-                                       frame: CGRect(x: 0, y: 0, width: 1100, height: 700))
+                                       frame: CGRect(x: 0, y: 0, width: 1100, height: 700), participantLane: lane)
             wire(host)
             self.store = store
             self.hostProtocol = hostProtocol
@@ -274,7 +372,8 @@ public final class DeskSession {
                 // and nothing is loaded.
                 state = .locked
                 log("desk.locked", "reason=while-opening")
-                await host.lock()
+                // That lock request locked the lane already (`beginLock`).
+                await host.lock(laneLockedByCaller: true)
                 return
             }
             host.load()
@@ -285,6 +384,25 @@ public final class DeskSession {
             log("desk.open.failed", "reason=\(kind)")
             state = .unavailable(message)
         }
+    }
+
+    /// Why an open was abandoned, for the run log.
+    private var abandonReason: String { quitRequested ? "quit" : "window-closed" }
+
+    /// The run's one lane, made by the factory the first time it is needed.
+    private func participantLaneForThisRun() -> (any DeskParticipantLane)? {
+        if participantLane == nil, let makeParticipantLane { participantLane = makeParticipantLane() }
+        return participantLane
+    }
+
+    /// A stack attached to the lane but never shown, let go in the close
+    /// order (section 14, S10 reading 1), as a quit when the app is quitting.
+    private static func closeUnshown(_ hostProtocol: DeskHostProtocol, lane: any DeskParticipantLane, quitting: Bool) async {
+        lane.beginShutdown(quitting: quitting)
+        await hostProtocol.revokeForShutdown()
+        _ = await lane.finishShutdown(quitting: quitting)
+        await hostProtocol.closeStore()
+        await lane.detach()
     }
 
     private func wire(_ host: DeskWebViewHost) {
@@ -311,20 +429,26 @@ public final class DeskSession {
     /// window hides the page and shows the overlay, before the host's lock
     /// step. A lock while closed means the next reopen asks the owner.
     public func lock(reason: DeskLockReason) async {
-        if let host = beginLock(reason: reason) { await host.lock() }
+        if let host = beginLock(reason: reason) { await host.lock(laneLockedByCaller: true) }
     }
 
     /// The same lock, for lock signals and the menu: the visible part
     /// happens now, without waiting for the main queue (an alert shown from
     /// a task holds it), and the host's lock step follows in a task.
     public func lockNow(reason: DeskLockReason) {
-        if let host = beginLock(reason: reason) { Task { await host.lock() } }
+        if let host = beginLock(reason: reason) { Task { await host.lock(laneLockedByCaller: true) } }
     }
 
     /// The synchronous part of a lock; returns the host whose own lock step
-    /// is still to run.
+    /// is still to run (with `laneLockedByCaller`: this locked the lane).
     private func beginLock(reason: DeskLockReason) -> DeskWebViewHost? {
         lockRequests += 1
+        // The lane's lock first, now, in every state (section 14, S10
+        // reading 1): whatever delays the host's own step (`lockNow(reason:)`
+        // runs it in a task an alert can hold up) never delays the stop.
+        // The only lane lock for this request: the host's step does not
+        // repeat it (S11 reading 3, as changed by the follow-through).
+        participantLane?.lockNow()
         switch state {
         case .open:
             state = .locked
@@ -346,10 +470,33 @@ public final class DeskSession {
     /// lock is released) and drops every reference to the stack. Open
     /// becomes `closed`; locked becomes `lockedNoStack`. An unlock still
     /// asking the owner, or still opening, ends without opening anything.
-    public func close() async {
+    ///
+    /// With a participant lane: the lane's `beginShutdown(quitting:)` at
+    /// once, the host's close in the lane's order (revoke, the lane's
+    /// finish within its one bound, the store), then the lane's detach
+    /// (section 14, S10 reading 1). `quitting` is the app's quit. A second
+    /// close while one runs waits for it.
+    public func close(quitting: Bool = false) async {
         closeRequests += 1
+        if quitting { quitRequested = true }
         guard let host else { return }
-        await host.close()
+        if let lane = participantLane {
+            if let closing = closingStack, closing.host === host {
+                await closing.done.value
+            } else {
+                // The host repeats it, which changes nothing.
+                lane.beginShutdown(quitting: quitting)
+                let done = Task { @MainActor in
+                    await host.close(quitting: quitting)
+                    await lane.detach()
+                }
+                closingStack = (host, done)
+                await done.value
+                if closingStack?.host === host { closingStack = nil }
+            }
+        } else {
+            await host.close()
+        }
         guard self.host === host else { return }
         store?.close()
         self.host = nil

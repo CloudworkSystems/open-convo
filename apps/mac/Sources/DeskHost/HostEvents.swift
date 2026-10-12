@@ -34,18 +34,25 @@ public enum HostEvent: Equatable, Sendable {
     /// becomes ready again; unlock requires a fresh document and bootstrap.
     case hostConnection(connectionId: String, generation: Int, state: HostConnectionState, reason: HostConnectionReason)
 
+    /// One participant event (participant contract section 8), nested under
+    /// `event` because v1 details already use `type`. The event is JSON here
+    /// because its Swift type lives in ParticipantProcess, which depends on
+    /// this module; that module builds the exact event object.
+    case participantEvent(connectionId: String, generation: Int, event: JSONValue)
+
     public var type: String {
         switch self {
         case .dictationFinal: return "dictation.final"
         case .dictationReceipt: return "dictation.receipt"
         case .hostConnection: return "host.connection"
+        case .participantEvent: return "participant.event"
         }
     }
 
     public var connectionId: String {
         switch self {
         case .dictationFinal(let connectionId, _, _, _, _), .dictationReceipt(let connectionId, _, _, _, _),
-             .hostConnection(let connectionId, _, _, _):
+             .hostConnection(let connectionId, _, _, _), .participantEvent(let connectionId, _, _):
             return connectionId
         }
     }
@@ -53,7 +60,7 @@ public enum HostEvent: Equatable, Sendable {
     public var generation: Int {
         switch self {
         case .dictationFinal(_, let generation, _, _, _), .dictationReceipt(_, let generation, _, _, _),
-             .hostConnection(_, let generation, _, _):
+             .hostConnection(_, let generation, _, _), .participantEvent(_, let generation, _):
             return generation
         }
     }
@@ -77,6 +84,8 @@ public enum HostEvent: Equatable, Sendable {
         case .hostConnection(_, _, let state, let reason):
             detail["state"] = .string(state.rawValue)
             detail["reason"] = .string(reason.rawValue)
+        case .participantEvent(_, _, let event):
+            detail["event"] = event
         }
         return .object(detail)
     }
@@ -84,8 +93,12 @@ public enum HostEvent: Equatable, Sendable {
 
 /// Receives host events. Called from inside the protocol actor on whichever
 /// thread runs it (never assume the main thread); a sink that talks to
-/// `WKWebView` must hop to the main thread itself. Delivery is one-way: the
-/// sink cannot refuse, and `dictation.final` text is handed over exactly once.
+/// `WKWebView` must hop to the main thread itself, asynchronously: `push`
+/// returns promptly and never waits on the main thread, since the
+/// participant lane's `lockNow()` and `beginShutdown(quitting:)` run there
+/// and wait for a participant push already under way to return (contract
+/// section 8, S10 reading). Delivery is one-way: the sink cannot refuse,
+/// and `dictation.final` text is handed over exactly once.
 public protocol HostEventSink: Sendable {
     func push(_ event: HostEvent)
 }

@@ -125,7 +125,7 @@ async function samplePage() {
 async function enterDesk(page, query = '') {
   await page.goto(`${origin}/${query}`);
   await page.bringToFront();
-  await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+  await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
   await expect(page.getByText('Sample workspace saved in this browser', { exact: true })).toBeVisible();
 }
 
@@ -190,7 +190,7 @@ test('legacy diagnostic URLs clear only the retired flag, preserve browser work 
     await expect(composer).toHaveValue(draft);
     assert.deepEqual(await page.evaluate(() => history.state), legacyHistoryState);
 
-    await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).focus();
+    await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).focus();
     await page.clock.fastForward(10_000);
     await expect.poll(documentRequests, { message: 'A saved idle tab must resume the ordinary automatic update behavior.' }).toBe(documentsBeforeUpdate + 1);
     await expect(composer).toHaveValue(draft);
@@ -291,7 +291,7 @@ test('hosted inline stylesheet renders a fixed overlay with its intended positio
       document.getElementById('annotation-overlay-fixture').remove();
       document.getElementById('annotation-overlay-fixture-style').remove();
     });
-    const navigation = page.getByRole('button', { name: 'Cloudwork Nexus', exact: true });
+    const navigation = page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true });
     await navigation.hover();
     await expect(navigation).toHaveCSS('cursor', 'pointer');
     assert.deepEqual(await savedBrowserWork(page), before, 'An injected visual overlay must not change the saved workspace.');

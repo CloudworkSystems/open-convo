@@ -108,6 +108,11 @@ Strategy and interview files, `docs/reviews`, `docs/sessions`, session audits,
 - Whether the in-progress True Convo branches (native host proof, build 8
   trial, participant wiring) get finished here or restarted fresh.
 
+- Before the repo goes public: start its public history fresh or scrub it, since
+  early commits contain the owner's name in code comments.
+- Codex's live-conversation candidate (True Convo branch
+  `codex/live-conversation-main-resolution`, 11 Desk files beyond `c527e36`) is
+  not reviewed or merged. Port it with step 3 once reviewed.
 - Where the review copy of the Desk lives. The owner reviews the app by
   annotating it inside an inline browser (Codex's in-app browser so far), and the
   Desk's update check (`src/app/preview-updates.ts`, `desk-build.json`) reloads
@@ -123,3 +128,4 @@ Strategy and interview files, `docs/reviews`, `docs/sessions`, session audits,
 | 2026-10-12 | Clarity library → `packages/clarity` | `cloudwork_systems/true_convo/open-convo` (src, tests, contracts, fixtures, scripts) | cloudwork_systems `3afa8144` | Owner's name in test actors and one fixture (now "owner"); `session-view-controls` test (it read a separate Studio app by relative path); `status` script (checked docs not moved); all docs and workbench receipts held back pending review. 47/47 tests and 4 proofs pass. |
 | 2026-10-12 | Conversation Desk → `apps/desk` | True Convo `apps/desk` (committed files only) | True Convo `78ebb50` | README, PRODUCT.md, review docs, `.openai` hosting target, ChatGPT-site publish scripts and their tests, Mac preview launcher and its tests. Roadmap content rewritten as the Open Convo roadmap (same card IDs except `first-run-guide`); evidence links now point at this repo. Owner name removed from comments. Typecheck, build, 541/541 unit tests, 231 browser tests across 24 files and 4 native-proof tests pass. Awaiting Codex review. |
 | 2026-10-12 | Mac app → `apps/mac` | True Convo `apps/true-convo-mac` (committed files only) | True Convo `78ebb50` | BUILD-PLAN.md (project history, owner's name and business notes), RELEASING.md (names the owner's signing certificate and release history), LICENSE (license is still the owner's decision). Source and tests unchanged. On the Mac: `swift build` passes; `swift test` passes 116 XCTest (37 skipped, mostly needing the packaged Desk) and 279 Swift Testing tests. |
+| 2026-10-12 | Desk and Mac app brought up to date | True Convo GitHub `main` (`apps/desk`, `apps/true-convo-mac`) | True Convo `c527e36` | The first ports came from the Mac's older local copy (`78ebb50`); this applies the 3 days of reviewed work on GitHub (`78ebb50..c527e36`, 147 files): native host and storage proof, participant coordinator, paid-usage controls, test identity. Same files left behind as before. Privacy fix across `apps/mac` and `packages/clarity`: owner's name in comments and AI instructions now "the owner", owner's surname in a dictation test replaced with an invented one, memory steward's personal name now "Memory Steward". Earlier commits in this private repo still contain those words. On the Mac: library 47/47, Desk typecheck and 559/559, `swift build` passes, `swift test` 129 XCTest (37 skipped) and 692 Swift Testing tests pass. |

@@ -240,14 +240,19 @@ final class HostHarness {
     let host: DeskHostProtocol
     let connection: HostConnection
 
+    /// `participants` makes a participant host (test-only; Codex Q1).
+    /// `prepareStore` runs on the fresh store before the host is built, so
+    /// a participant host registers its identity index after it.
     init(executor: MutationExecutor = BackgroundMutationExecutor(), fileManager: FileManager = .default,
          seed: WorkspaceSeed = .inventedRevisionZero(), ledgerCapacity: Int = ProofStore.defaultLedgerCapacity,
-         faults: AtomicWriteFaults? = nil, withSink: Bool = true) throws {
+         faults: AtomicWriteFaults? = nil, withSink: Bool = true, participants: ParticipantHostConfiguration? = nil,
+         drafts: DraftBindingRegistry = DraftBindingRegistry(), prepareStore: ((ProofStore) throws -> Void)? = nil) throws {
         fixture = try DeskHostFixture()
         store = try fixture.makeStore(seed: seed, ledgerCapacity: ledgerCapacity, fileManager: fileManager, faults: faults)
-        drafts = DraftBindingRegistry()
+        try prepareStore?(store)
+        self.drafts = drafts
         host = DeskHostProtocol(store: store, connections: connections, drafts: drafts, info: Self.info, events: withSink ? sink : nil,
-                                executor: executor)
+                                executor: executor, participants: participants)
         connection = connections.issue()
     }
 

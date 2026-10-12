@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import AVFoundation
 import Speech
+import TrueConvoIdentity
 
 final class FirstRunChecklistWindowController: NSWindowController {
     private let textView = NSTextView()
@@ -48,7 +49,8 @@ final class FirstRunChecklistWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "True Convo First Run"
+        // "True Convo First Run" in the real app; True Convo Test names itself.
+        window.title = "\(AppIdentity.current.displayName) First Run"
         window.center()
         super.init(window: window)
         buildContent()
@@ -242,7 +244,7 @@ final class FirstRunChecklistWindowController: NSWindowController {
 
     private static func report() -> String {
         [
-            "True Convo First-Run Checklist",
+            "\(AppIdentity.current.displayName) First-Run Checklist",
             "",
             "1. Confirm basic readiness",
             "   \(statusLine("Microphone permission", microphoneStatus()))",

@@ -8,18 +8,20 @@ import Testing
 /// `ParticipantProcess`, only `@testable import` reaches `.available`.
 struct InventedAvailability: AvailabilityChecking {
     func check() async -> ParticipantAvailability { .available }
+    func recheck() async -> ParticipantAvailability { .available }
 }
 
 @Suite("Pinned command line, environment, folder, availability, log")
 struct ParticipantLaunchTests {
-    @Test("The pinned argv, exactly, with the build's model")
+    @Test("The pinned argv, exactly, with the build's model: --strict-mcp-config, never --mcp-config")
     func pinnedArguments() {
         let arguments = ParticipantCommandLine.arguments(model: "invented-pinned-model")
         #expect(arguments == ["-p", "--safe-mode", "--restricted", "--disable-slash-commands", "--tools", "",
-                              "--no-session-persistence", "--output-format", "stream-json", "--verbose",
-                              "--include-partial-messages", "--model", "invented-pinned-model"])
+                              "--strict-mcp-config", "--no-session-persistence", "--output-format", "stream-json",
+                              "--verbose", "--include-partial-messages", "--model", "invented-pinned-model"])
         #expect(!arguments.contains("--bare"))
         #expect(!arguments.contains("--fallback-model"))
+        #expect(!arguments.contains("--mcp-config"), "no MCP configuration at all, not even an empty one")
         #expect(ParticipantCommandLine.pinnedCLIVersion == "2.1.283")
         #expect(CLICommandLineRule.isPinned(arguments))
     }
@@ -30,6 +32,9 @@ struct ParticipantLaunchTests {
         #expect(!CLICommandLineRule.isPinned(["--bare"] + pinned))
         #expect(!CLICommandLineRule.isPinned(pinned + ["--fallback-model", "invented"]))
         #expect(!CLICommandLineRule.isPinned(pinned.filter { $0 != "--restricted" }))
+        #expect(!CLICommandLineRule.isPinned(pinned.filter { $0 != "--strict-mcp-config" }))
+        #expect(!CLICommandLineRule.isPinned(Array(pinned.dropLast(2)) + ["--mcp-config", #"{"mcpServers":{}}"#]
+                                             + Array(pinned.suffix(2))))
         #expect(!CLICommandLineRule.isPinned(Array(pinned.dropLast())))
         #expect(!CLICommandLineRule.isPinned([]))
         for model in ["", " ", "-p", "--bare", "a\tb", "a\u{85}b", String(repeating: "m", count: 257)] {
@@ -41,7 +46,7 @@ struct ParticipantLaunchTests {
         }
     }
 
-    @Test("Only HOME, USER, TMPDIR, LANG and LC_ALL pass; PATH is fixed")
+    @Test("Only HOME, USER, TMPDIR, LANG and LC_ALL pass; PATH and answer 10's four switches are fixed")
     func environmentAllowList() {
         let source = [
             "HOME": "/invented/home", "USER": "invented", "TMPDIR": "/invented/tmp/", "LANG": "en_US.UTF-8",
@@ -49,21 +54,36 @@ struct ParticipantLaunchTests {
             "ANTHROPIC_API_KEY": "invented-not-a-key", "ANTHROPIC_AUTH_TOKEN": "invented",
             "ANTHROPIC_BASE_URL": "http://invented.invalid", "CLAUDE_CODE_USE_BEDROCK": "1",
             "CLAUDE_CODE_USE_VERTEX": "1", "HTTPS_PROXY": "http://invented.invalid", "SHELL": "/bin/zsh",
-            "__CF_USER_TEXT_ENCODING": "0x0:0x0:0x0", "DYLD_INSERT_LIBRARIES": "/invented.dylib"
+            "__CF_USER_TEXT_ENCODING": "0x0:0x0:0x0", "DYLD_INSERT_LIBRARIES": "/invented.dylib",
+            // Different values for the fixed switches: overridden, never inherited.
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "0", "DISABLE_AUTOUPDATER": "",
+            "CLAUDE_CODE_DISABLE_ATTACHMENTS": "0", "ENABLE_CLAUDEAI_MCP_SERVERS": "true"
         ]
         #expect(ParticipantEnvironment.build(from: source) == [
             "HOME=/invented/home", "USER=invented", "TMPDIR=/invented/tmp/", "LANG=en_US.UTF-8",
-            "LC_ALL=en_US.UTF-8", "PATH=/usr/bin:/bin:/usr/sbin:/sbin"
-        ])
-        #expect(ParticipantEnvironment.build(from: ["HOME": "", "USER": "a\u{0}b"]) == ["PATH=/usr/bin:/bin:/usr/sbin:/sbin"])
+            "LC_ALL=en_US.UTF-8"
+        ] + Invented.fixedEnvironment)
+        #expect(ParticipantEnvironment.build(from: ["HOME": "", "USER": "a\u{0}b"]) == Invented.fixedEnvironment)
+        #expect(ParticipantEnvironment.build(from: [:]) == Invented.fixedEnvironment, "set even when the app has none")
+        #expect(CLIEnvironmentRule.fixed.map { "\($0.name)=\($0.value)" } == Invented.fixedEnvironment)
     }
 
-    @Test("The supervisor's second pass keeps the first value and drops what the runtime added")
+    @Test("The fixed names are never passed through, and each is set exactly once")
+    func fixedEnvironmentNames() {
+        let fixedNames = CLIEnvironmentRule.fixed.map(\.name)
+        #expect(fixedNames == ["PATH", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "DISABLE_AUTOUPDATER",
+                               "CLAUDE_CODE_DISABLE_ATTACHMENTS", "ENABLE_CLAUDEAI_MCP_SERVERS"])
+        #expect(Set(fixedNames).isDisjoint(with: CLIEnvironmentRule.passedNames))
+        let names = CLIEnvironmentRule.apply(to: Invented.conflictingFixedValues + Invented.fixedEnvironment)
+            .map { entry in String(entry.prefix { $0 != "=" }) }
+        #expect(names == fixedNames, "each fixed name once, in order, however often it came in")
+    }
+
+    @Test("The supervisor's second pass keeps the first value, drops what the runtime added and resets the fixed values")
     func supervisorEnvironmentRule() {
         let entries = ["__CF_USER_TEXT_ENCODING=0x1F7:0x0:0x0", "HOME=/invented/home", "HOME=/invented/second",
-                       "PATH=/invented", "USER=invented", "NOEQUALS", "LANG="]
-        #expect(CLIEnvironmentRule.apply(to: entries) == ["HOME=/invented/home", "USER=invented",
-                                                          "PATH=/usr/bin:/bin:/usr/sbin:/sbin"])
+                       "USER=invented", "NOEQUALS", "LANG="] + Invented.conflictingFixedValues
+        #expect(CLIEnvironmentRule.apply(to: entries) == ["HOME=/invented/home", "USER=invented"] + Invented.fixedEnvironment)
     }
 
     @Test("The working folder is new, empty, this user's and mode 0700")

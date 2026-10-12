@@ -86,21 +86,55 @@ public enum StderrReason: String, Sendable, CaseIterable {
 ///   after the first unemitted byte, before the buffer passes 16,384 bytes,
 ///   on the result, or before any terminal. Input plus output stays within
 ///   262,144 bytes and the projected run within 785,408, else
-///   `reply-too-long` after the longest prefix that fits. A success result
+///   `reply-too-long` after the longest prefix that fits, decided when the
+///   accepted text that cannot fit arrives. A success result
 ///   ends the text: a text delta after it fails `process-error`.
 /// - Exactly one terminal, decided once and emitted when the supervisor
 ///   reports the group's end (`cleared`, `uncleared`, or the supervisor lost).
+/// - Overflow observation (section 17), apart from the terminal: once per
+///   run, with any `paid-overflow` end; for a rate-limit line failing the
+///   overflow rule before init (which still ends `process-error`); for such
+///   a line complete in stdout after another end was decided (which keeps
+///   its terminal); or conservatively when stdout cannot be read to its EOF
+///   (a bound, the spawner's limit, a failed read, or no EOF at all).
 public struct StreamJSONReader {
     public enum Output: Equatable, Sendable {
         case started
         case text(String)
         case terminal(ParticipantTerminal, groupCleared: Bool?)
+        /// Paid overflow may have been in use (section 17): a confirmation
+        /// that paid usage is off ends. Not an event and never on the wire;
+        /// it changes no text, sequence or terminal. At most once per run:
+        /// with a `paid-overflow` decision; for a rate-limit message failing
+        /// the overflow rule before init (the run still ends
+        /// `process-error`); for such a message in a complete stdout line
+        /// after another decision (later lines are read only for this,
+        /// within the line and stdout bounds, until it is seen); or,
+        /// conservatively, when reading must stop before stdout's EOF (a
+        /// bound passed, the spawner's stdout limit, a failed read, or the
+        /// updates finishing without that EOF). Nothing more is read from
+        /// stdout once it is out.
+        case overflowObserved
         /// Native decided to end the run: write `stop` to the supervisor.
         case sendStop
         /// A terminal recorded `groupCleared: false` and the group has since cleared.
         case groupClearedAfterTerminal
+        /// After a terminal recorded `groupCleared: false` (uncleared), a
+        /// cleanup retry (a `stop` while uncleared: one SIGKILL and a 2 s
+        /// probe) cannot clear the group now: the supervisor reported
+        /// `uncleared` again (members left), or it was lost (nothing can be
+        /// signalled; cleanup waits for both pipes' EOF, which a failed
+        /// read never gives, and when the loss finds both already at EOF,
+        /// `cleanupReleased` comes instead).
+        /// `groupCleared` stays false and nothing is recorded; it lets a
+        /// waiting Stop answer `cleanup-pending`. The supervisor's periodic
+        /// re-probe never reports; its one other repeat is the last report as
+        /// it exits after the app is gone, which only a test seam keeping the
+        /// app alive sees.
+        case cleanupRetryUncleared
         /// The group is confirmed gone, or ownership is lost (supervisor gone
-        /// and both output pipes at EOF): the busy guard may lift.
+        /// and both output pipes at a real EOF, not a failed read): the busy
+        /// guard may lift.
         case cleanupReleased
     }
 
@@ -139,12 +173,15 @@ public struct StreamJSONReader {
 
     public private(set) var initPassed = false
     public private(set) var overflowPassed = false
+    /// `overflowObserved` went out; stdout is no longer read.
+    public private(set) var overflowObserved = false
     public private(set) var terminal: ParticipantTerminal?
     /// Null until a terminal; then true, false, or null when nothing ran.
     public private(set) var groupCleared: Bool?
     public private(set) var cleanupReleased = false
     /// The control socket closed before `cleared`: the group can no longer be
-    /// signalled, and ownership ends only when both output pipes reach EOF.
+    /// signalled, and ownership ends only when both output pipes reach EOF
+    /// (never after a failed read on either).
     public private(set) var supervisorLost = false
     /// UTF-8 bytes of text emitted so far.
     public private(set) var emittedTextBytes = 0
@@ -154,8 +191,12 @@ public struct StreamJSONReader {
     private var spawnedAt: UInt64?
     private var lastStdoutAt: UInt64?
     private var line: [UInt8] = []
+    /// Read to a real EOF: no process holds a write end any more.
     private var stdoutEOF = false
     private var stderrEOF = false
+    /// Reading ended on a failed read: not EOF, and no proof about writers.
+    private var stdoutFailed = false
+    private var stderrFailed = false
     private var stderrKept: [UInt8] = []
     private var blockTypes: [Int: String] = [:]
     private var held = ""
@@ -164,6 +205,8 @@ public struct StreamJSONReader {
     private var heldOverran = false
     private var pending = ""
     private var pendingBytes = 0
+    /// `escapedWidth` summed over `pending`, without its quotes.
+    private var pendingEscapedBytes = 0
     private var pendingSince: UInt64?
     /// `preparedBytes` + 3 + Σ(escaped string bytes + 3) + 64, so far.
     private var projectedBytes: Int
@@ -219,6 +262,10 @@ public struct StreamJSONReader {
             if groupState == .unknown {
                 groupState = .uncleared
                 groupStateAt = now
+            } else if groupState == .uncleared, terminal != nil, !spawnFailed {
+                // Only after a terminal with `groupCleared: false`: a spawn
+                // failure has no group to retry.
+                out.append(.cleanupRetryUncleared)
             }
         }
         settle(now: now, into: &out)
@@ -227,10 +274,14 @@ public struct StreamJSONReader {
 
     /// The control socket closed. Before `cleared` (and after a spawn), the
     /// supervisor is lost: the run ends now with `groupCleared: false`, never
-    /// later set true, and cleanup stays pending until both pipes reach EOF.
+    /// later set true, and cleanup stays pending until both pipes reach EOF
+    /// (for good, after a failed read on either).
+    /// After an uncleared terminal, no cleanup retry can finish: unless
+    /// cleanup is released at once, this is `cleanupRetryUncleared`.
     public mutating func controlClosed(now: UInt64) -> [Output] {
         var out: [Output] = []
         guard groupState != .cleared, !spawnFailed, !cleanupReleased else { return out }
+        let afterUnclearedTerminal = terminal != nil && groupState == .uncleared
         supervisorLost = true
         groupState = .lost
         groupStateAt = now
@@ -244,6 +295,9 @@ public struct StreamJSONReader {
             emitTerminal(groupCleared: false, into: &out)
         }
         releaseIfPipesClosed(into: &out)
+        // A Stop may be waiting on a retry the lost supervisor will never
+        // answer; exactly one of these two lets it answer.
+        if afterUnclearedTerminal, !cleanupReleased { out.append(.cleanupRetryUncleared) }
         return out
     }
 
@@ -264,60 +318,108 @@ public struct StreamJSONReader {
         return out
     }
 
+    /// Until a decision, every line is read. After one, accepted text is
+    /// already out and later output is dropped, but complete lines are still
+    /// read for an overflow signal alone (section 17), within the same
+    /// bounds, until `overflowObserved`; then nothing more is read.
     public mutating func consumeStdout(_ bytes: Data, now: UInt64) -> [Output] {
         var out: [Output] = []
         lastStdoutAt = now
         stdoutBytes += bytes.count
-        guard decision == nil else { return out }   // ended: keep draining, read nothing
+        guard !overflowObserved else { return out }   // keep draining, read nothing
+        let decidedBefore = decision != nil
         guard stdoutBytes <= limits.maxStdoutBytes else {
             end(.processError, now: now, into: &out)
+            observeOverflow(into: &out)   // the rest cannot be read
             return out
         }
         var start = bytes.startIndex
-        while start < bytes.endIndex, decision == nil {
+        while start < bytes.endIndex, !overflowObserved {
             if let newline = bytes[start...].firstIndex(of: 0x0A) {
                 guard line.count + (newline - start) <= limits.maxLineBytes else {
                     end(.processError, now: now, into: &out)
+                    observeOverflow(into: &out)   // this line cannot be read
                     return out
                 }
                 line.append(contentsOf: bytes[start..<newline])
                 let complete = line
                 line.removeAll(keepingCapacity: true)
-                handleLine(complete, now: now, into: &out)
+                if decision == nil {
+                    handleLine(complete, now: now, into: &out)
+                } else {
+                    inspectForOverflow(complete, into: &out)
+                }
                 start = newline + 1
             } else {
                 guard line.count + (bytes.endIndex - start) <= limits.maxLineBytes else {
                     end(.processError, now: now, into: &out)
+                    observeOverflow(into: &out)
                     return out
                 }
                 line.append(contentsOf: bytes[start...])
                 start = bytes.endIndex
             }
         }
-        settle(now: now, into: &out)
+        if !decidedBefore { settle(now: now, into: &out) }
         return out
     }
 
-    /// The spawner's stdout bound was reached.
+    /// The spawner's stdout bound was reached: bytes past it are dropped
+    /// unread, so overflow is observed conservatively.
     public mutating func stdoutLimitReached(now: UInt64) -> [Output] {
         var out: [Output] = []
         end(.processError, now: now, into: &out)
+        observeOverflow(into: &out)
         return out
     }
 
+    /// stdout reached EOF: a last line without its newline is complete.
     public mutating func stdoutClosed(now: UInt64) -> [Output] {
         var out: [Output] = []
-        if !stdoutEOF {
+        if !stdoutEOF, !stdoutFailed {
             stdoutEOF = true
-            if decision == nil, !line.isEmpty {
+            if !overflowObserved, !line.isEmpty {
                 // A last line without its newline.
                 let last = line
                 line.removeAll()
-                handleLine(last, now: now, into: &out)
+                if decision == nil {
+                    handleLine(last, now: now, into: &out)
+                } else {
+                    inspectForOverflow(last, into: &out)
+                }
             }
         }
         settle(now: now, into: &out)
         releaseIfPipesClosed(into: &out)
+        return out
+    }
+
+    /// Reading stdout failed before its EOF (a `read` error other than
+    /// EINTR; section 17). Not EOF: a buffered partial line is never read
+    /// as complete, and since what followed it was never read, overflow is
+    /// observed conservatively, once. Otherwise stdout counts as done for
+    /// the terminal: a decided run keeps its terminal, text and sequence,
+    /// and an undecided one is decided by the existing rules with that
+    /// line unread. For cleanup it never counts: a closed read end proves
+    /// no writer gone, so a lost supervisor's cleanup is never released by
+    /// the pipes.
+    public mutating func stdoutReadFailed(now: UInt64) -> [Output] {
+        var out: [Output] = []
+        if !stdoutEOF, !stdoutFailed {
+            stdoutFailed = true
+            observeOverflow(into: &out)   // drops the partial line unread
+        }
+        settle(now: now, into: &out)
+        return out
+    }
+
+    /// The run's updates are about to finish (its process events have ended;
+    /// after a failed read, not proof the CLI exited). If stdout's EOF never
+    /// arrived, what it still held was never read, so overflow is observed
+    /// conservatively. Changes nothing else.
+    public mutating func updatesFinishing() -> [Output] {
+        var out: [Output] = []
+        if !stdoutEOF { observeOverflow(into: &out) }
         return out
     }
 
@@ -329,9 +431,16 @@ public struct StreamJSONReader {
 
     public mutating func stderrClosed(now: UInt64) -> [Output] {
         var out: [Output] = []
-        stderrEOF = true
+        if !stderrFailed { stderrEOF = true }
         releaseIfPipesClosed(into: &out)
         return out
+    }
+
+    /// Reading stderr failed before its EOF. Its kept bytes stay as read;
+    /// a lost supervisor's cleanup is never released by the pipes now.
+    public mutating func stderrReadFailed(now: UInt64) -> [Output] {
+        if !stderrEOF { stderrFailed = true }
+        return []
     }
 
     /// Timers: coalescing, the three timeouts and the exit-decision grace.
@@ -382,7 +491,11 @@ public struct StreamJSONReader {
         case "system":
             if message["subtype"] == .string("init") { handleInit(message, now: now, into: &out) }
         case "rate_limit_event":
-            guard initPassed else { return end(.processError, now: now, into: &out) }
+            guard initPassed else {
+                // Out of order, so `process-error`; an overflow signal in it still counts.
+                if Self.signalsOverflow(message) { observeOverflow(into: &out) }
+                return end(.processError, now: now, into: &out)
+            }
             handleRateLimit(message, now: now, into: &out)
         case "stream_event":
             guard initPassed else { return end(.processError, now: now, into: &out) }
@@ -423,19 +536,45 @@ public struct StreamJSONReader {
         }
     }
 
+    /// What one rate-limit message's `rate_limit_info` says under the overflow rule.
+    private enum OverflowReading: Equatable {
+        /// No `overageStatus` and no true flag: says nothing; text stays held.
+        case silent
+        /// `overageStatus` `rejected` with `isUsingOverage` and `overageInUse` not true.
+        case passes
+        /// A flag not "not true", or any other `overageStatus`: paid overflow.
+        case overflow
+    }
+
+    private static func overflowReading(_ info: [String: JSONValue]) -> OverflowReading {
+        // "Not true": absent or false. Anything else counts as true.
+        func notTrue(_ value: JSONValue?) -> Bool { value == nil || value == .bool(false) }
+        guard notTrue(info["isUsingOverage"]), notTrue(info["overageInUse"]) else { return .overflow }
+        switch info["overageStatus"] {
+        case nil: return .silent
+        case .string("rejected")?: return .passes
+        default: return .overflow
+        }
+    }
+
+    /// A rate-limit message whose `rate_limit_info` fails the overflow rule:
+    /// the one predicate `handleRateLimit` ends `paid-overflow` on.
+    private static func signalsOverflow(_ message: [String: JSONValue]) -> Bool {
+        guard message["type"] == .string("rate_limit_event"),
+              case .object(let info)? = message["rate_limit_info"] else { return false }
+        return overflowReading(info) == .overflow
+    }
+
     private mutating func handleRateLimit(_ message: [String: JSONValue], now: UInt64, into out: inout [Output]) {
         guard case .object(let info)? = message["rate_limit_info"] else {
             return end(.processError, now: now, into: &out)
         }
-        // "Not true": absent or false. Anything else counts as true.
-        func notTrue(_ value: JSONValue?) -> Bool { value == nil || value == .bool(false) }
-        guard notTrue(info["isUsingOverage"]), notTrue(info["overageInUse"]) else {
-            return end(.paidOverflow, now: now, into: &out)
-        }
-        switch info["overageStatus"] {
-        case nil:
+        switch Self.overflowReading(info) {
+        case .overflow:
+            end(.paidOverflow, now: now, into: &out)
+        case .silent:
             break   // Says nothing about overflow; text stays held.
-        case .string("rejected")?:
+        case .passes:
             if !overflowPassed {
                 overflowPassed = true
                 let released = held
@@ -446,9 +585,15 @@ public struct StreamJSONReader {
                 accept(released, now: now, into: &out)
                 if overran { end(.replyTooLong, now: now, into: &out) }
             }
-        default:
-            end(.paidOverflow, now: now, into: &out)
         }
+    }
+
+    /// After a decision: reads one complete line only for an overflow
+    /// signal. Anything else, readable or not, changes nothing.
+    private mutating func inspectForOverflow(_ bytes: [UInt8], into out: inout [Output]) {
+        guard let value = try? JSONValue.decode(Data(bytes)), case .object(let message) = value,
+              Self.signalsOverflow(message) else { return }
+        observeOverflow(into: &out)
     }
 
     private mutating func handleStreamEvent(_ message: [String: JSONValue], now: UInt64, into out: inout [Output]) {
@@ -528,6 +673,15 @@ public struct StreamJSONReader {
     }
 
     /// Adds accepted text to the buffer, emitting before it would pass 16,384 bytes.
+    ///
+    /// A scalar that can no longer fit the bounds (input plus output, or the
+    /// projected run) ends the run when it arrives, not at the next flush:
+    /// the buffer before it, which fits, is emitted as the longest prefix
+    /// that fits, then `reply-too-long` (vector #48: both at the delta's
+    /// millisecond). The run has then ended: a Stop, a paid-overflow signal
+    /// or an exit that arrives after that delta, even within the 250 ms the
+    /// old flush-time rule waited, leaves the reason `reply-too-long`; a
+    /// later overflow signal is still observed (`overflowObserved`).
     private mutating func accept(_ text: String, now: UInt64, into out: inout [Output]) {
         for scalar in text.unicodeScalars {
             guard decision == nil else { return }
@@ -535,10 +689,22 @@ public struct StreamJSONReader {
             if pendingBytes + size > limits.maxEventTextBytes {
                 guard emitPending(into: &out) else { return end(.replyTooLong, now: now, into: &out) }
             }
+            let escapedSize = Self.escapedWidth(scalar)
+            // The same tests `emitPending` cuts by: its quotes count 2.
+            if pendingBytes + size > outputBudget || 2 + pendingEscapedBytes + escapedSize > projectedRoom {
+                emitPending(into: &out)
+                return end(.replyTooLong, now: now, into: &out)
+            }
             if pendingSince == nil { pendingSince = now }
             pending.unicodeScalars.append(scalar)
             pendingBytes += size
+            pendingEscapedBytes += escapedSize
         }
+    }
+
+    /// Escaped bytes one more text event may still add to the projected run.
+    private var projectedRoom: Int {
+        limits.maxProjectedRunBytes - projectedBytes - 3
     }
 
     /// Emits the buffer as one text event, or its longest scalar-aligned
@@ -550,9 +716,10 @@ public struct StreamJSONReader {
         let text = pending
         pending = ""
         pendingBytes = 0
+        pendingEscapedBytes = 0
         pendingSince = nil
         let byteRoom = outputBudget
-        let projectedRoom = limits.maxProjectedRunBytes - projectedBytes - 3
+        let projectedRoom = self.projectedRoom
         var bytes = 0
         var escaped = 2
         var cut = text.unicodeScalars.endIndex
@@ -583,6 +750,7 @@ public struct StreamJSONReader {
         if overflowPassed { emitPending(into: &out) }
         pending = ""
         pendingBytes = 0
+        pendingEscapedBytes = 0
         pendingSince = nil
         held = ""
         heldBytes = 0
@@ -614,14 +782,23 @@ public struct StreamJSONReader {
 
     /// Native decided to end the run: emit accepted text, drop the rest, and
     /// have the supervisor run the stop sequence. The terminal follows the
-    /// group's end.
+    /// group's end. A partial line is kept: later lines are still read for
+    /// an overflow signal. A `paid-overflow` end is itself an observation.
     private mutating func end(_ reason: ParticipantFailureReason, now: UInt64, into out: inout [Output]) {
         guard decision == nil else { return }
         decision = .failed(reason)
+        if reason == .paidOverflow { observeOverflow(into: &out) }
         emitAccepted(into: &out)
-        line.removeAll()
         if groupState == .unknown { out.append(.sendStop) }
         settle(now: now, into: &out)
+    }
+
+    /// Emits `overflowObserved` once; stdout is no longer read after it.
+    private mutating func observeOverflow(into out: inout [Output]) {
+        guard !overflowObserved else { return }
+        overflowObserved = true
+        line.removeAll()
+        out.append(.overflowObserved)
     }
 
     /// Decides from the exit once stdout has drained (or cannot), and emits
@@ -632,9 +809,11 @@ public struct StreamJSONReader {
         if decision == nil, groupState != .lost {
             // Bytes written before the exit may still be in the pipe: wait for
             // EOF, unless members survive (they may hold it open) or the grace
-            // after `cleared` is over.
+            // after `cleared` is over. A failed read ends the wait as EOF
+            // would: nothing more will be read.
             let graceOver = groupState == .cleared && now >= groupStateAt + limits.exitDecisionGraceMillis
-            if exitStatus != nil, stdoutEOF || groupState == .uncleared || graceOver {
+            let stdoutDone = stdoutEOF || stdoutFailed
+            if exitStatus != nil, stdoutDone || groupState == .uncleared || graceOver {
                 decision = exitStatus == 0 && successResult ? .completed : .failed(.processError)
                 emitAccepted(into: &out)
             } else if exitStatus == nil, groupState == .uncleared || graceOver {
@@ -667,6 +846,7 @@ public struct StreamJSONReader {
         out.append(.cleanupReleased)
     }
 
+    /// Only a real EOF on both pipes: a failed read leaves them unproven.
     private mutating func releaseIfPipesClosed(into out: inout [Output]) {
         if groupState == .lost, stdoutEOF, stderrEOF { release(into: &out) }
     }

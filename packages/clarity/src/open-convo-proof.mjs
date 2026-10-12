@@ -34,8 +34,8 @@ export const openConvoProof = Object.freeze({
     {
       name: "TrueConvo Session jargon clarity and explicit teaching",
       owner: "Open Convo product proof",
-      status: "protected local clarity routes and guarded owner-private Wong storage",
-      evidence: "Wait—what? and Make this clear use protected desktop local-model routes. Selected TCA text exposes separate clarity and preferred-term symbols. Both explicit teaching paths write a narrow owner-private Wong preference with exact-version Tune and 24-hour Undo. A protected Session reply retrieves only exact-term or server-topic matches and displays a use receipt. The desktop and touch browser checks pass without mandatory tooltips.",
+      status: "protected local clarity routes and guarded owner-private Memory Steward storage",
+      evidence: "Wait—what? and Make this clear use protected desktop local-model routes. Selected TCA text exposes separate clarity and preferred-term symbols. Both explicit teaching paths write a narrow owner-private Memory Steward preference with exact-version Tune and 24-hour Undo. A protected Session reply retrieves only exact-term or server-topic matches and displays a use receipt. The desktop and touch browser checks pass without mandatory tooltips.",
       next: "Choose production owner identity and encrypted device sync, then test whether narrow retrieval should extend beyond the local Session route without widening scope.",
     },
     {
@@ -59,7 +59,7 @@ export const openConvoProof = Object.freeze({
       "The browser carries only opaque clarity and Wait references plus minimal display fields. Complete temporary repairs remain in process-local server memory and are not cross-device memory.",
       "The clarity API uses a per-launch bearer capability, independent anti-CSRF value, exact loopback authority, and server-derived session identity. This proves local custody but is not OS-backed human authentication.",
       "Wait—what? writes no memory. Only explicit Remember how I speak or Remember preferred term or spelling actions may write one guarded canonical owner-private preference; passive promotion, shared scope, raw conversation storage, and device sync remain blocked.",
-      "The normal Session Focus reference enables no model or memory actions. The opt-in local mode connects clarity to a local model, explicit teaching to Wong, and narrow matching preferences to a local Session reply with a visible receipt. Its responsive touch view is not a native iOS application, desktop widget, or device sync.",
+      "The normal Session Focus reference enables no model or memory actions. The opt-in local mode connects clarity to a local model, explicit teaching to Memory Steward, and narrow matching preferences to a local Session reply with a visible receipt. Its responsive touch view is not a native iOS application, desktop widget, or device sync.",
       "Scenario checks clarity behavior with synthetic data only; it is not product code, behavior authority, memory, or a private-conversation route.",
     ],
     continuityStatus: [
@@ -173,7 +173,7 @@ export const openConvoProof = Object.freeze({
     {
       lane: "Cloudwork Nexus Session Focus V0 plus imported LiteLLM/Ollama route and Scenario workbench",
       decision: "wrap",
-      treatment: "Port the Open Convo clarity and temporary follow-up actions, wrap the replaceable local gateway, keep Scenario test-only, and allow only explicit owner-private Wong preference writes; no shipping, shared-memory, or cloud promotion.",
+      treatment: "Port the Open Convo clarity and temporary follow-up actions, wrap the replaceable local gateway, keep Scenario test-only, and allow only explicit owner-private Memory Steward preference writes; no shipping, shared-memory, or cloud promotion.",
     },
     {
       lane: "Matt Pocock Skills v1.2 wait-what source and video",
@@ -198,8 +198,8 @@ export const openConvoProof = Object.freeze({
     "Three-action jargon clarity proof: npm run jargon:proof",
     "Three-action jargon clarity proof receipt: workbench/receipts/2026-08-06-trueconvo-three-action-jargon-clarity-proof.md",
     "Session-view jargon controls proof: npm run tca-session-focus-v0:jargon:prove from ../cloudwork_nexus",
-    "Guarded Wong preference store proof: npm run check:communication-preferences from ../tca_brain",
-    "Live Wait and Wong connection receipt: workbench/receipts/2026-08-06-trueconvo-live-wait-wong-connection-proof.md",
+    "Guarded Memory Steward preference store proof: npm run check:communication-preferences from ../tca_brain",
+    "Live Wait and Memory Steward connection receipt: workbench/receipts/2026-08-06-trueconvo-live-wait-wong-connection-proof.md",
     "Preferred-term and narrow retrieval receipt: workbench/receipts/2026-08-06-tca-session-preferred-terms-and-retrieval-proof.md",
     "Owner identity and sync ceiling: docs/TCA_OWNER_IDENTITY_AND_SYNC_BOUNDARY.md",
     "Session-view control reference: ../cloudwork_nexus/tools/tca-studio-session-focus-v0/static/index.html",
@@ -209,7 +209,7 @@ export const openConvoProof = Object.freeze({
   nextImplementationSlice: [
     "Use the candidate-memory card proof as the first Open Convo-owned continuity contract.",
     "Choose how the shipping TrueConvo Desktop app proves the human owner before minting a revocable device credential and the already-proved per-launch local capability.",
-    "Design encrypted, versioned, owner-revocable sync before claiming that iOS, Widget, and Desktop share live sessions or Wong preferences.",
+    "Design encrypted, versioned, owner-revocable sync before claiming that iOS, Widget, and Desktop share live sessions or Memory Steward preferences.",
     "Run the three Scenario clarity families through more approved real local-model candidates; the current two-model one-prompt comparison is useful evidence, not a production explanation-model choice.",
     "Next, map a source card and scoped retrieval fixture into the same owner-visible boundary.",
     "After the contracts are visible, choose the customer-facing onboarding -> brain orientation -> founder-agent chat -> PRD/spec path.",

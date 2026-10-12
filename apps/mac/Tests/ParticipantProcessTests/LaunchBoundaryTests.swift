@@ -6,10 +6,13 @@ import Testing
 
 /// Starts the real supervisor directly, the way any process could, without
 /// the spawner's checks: the five descriptors, `cliArguments` after the fake
-/// CLI's path, and `directory` as its working folder. Waits for it to exit
-/// and returns its exit code and control lines. The lifeline stays open
-/// throughout, so the supervisor never takes the test for gone.
-func runSupervisorDirectly(folder: FakeCLIFolder, cliArguments: [String], directory: String) throws
+/// CLI's path, and `directory` as its working folder. Its environment is
+/// `environment` exactly as written when given (no app-side pass), else the
+/// app's allow-list over the folder's. Waits for it to exit and returns its
+/// exit code and control lines. The lifeline stays open throughout, so the
+/// supervisor never takes the test for gone.
+func runSupervisorDirectly(folder: FakeCLIFolder, cliArguments: [String], directory: String,
+                           environment: [String]? = nil) throws
     -> (exitCode: Int32?, control: [String]) {
     let stdin = try DescriptorPipe.make()
     let stdout = try DescriptorPipe.make()
@@ -35,7 +38,8 @@ func runSupervisorDirectly(folder: FakeCLIFolder, cliArguments: [String], direct
     }
     let words = [Products.supervisor, String(getpid()), folder.cliPath] + cliArguments
     let argv: [UnsafeMutablePointer<CChar>?] = words.map { strdup($0) } + [nil]
-    let envp: [UnsafeMutablePointer<CChar>?] = ParticipantEnvironment.build(from: folder.environment).map { strdup($0) } + [nil]
+    let entries = environment ?? ParticipantEnvironment.build(from: folder.environment)
+    let envp: [UnsafeMutablePointer<CChar>?] = entries.map { strdup($0) } + [nil]
     defer {
         argv.forEach { free($0) }
         envp.forEach { free($0) }
@@ -75,6 +79,8 @@ extension ProcessSuites {
             ["--bare"] + pinned,
             pinned + ["--fallback-model", "invented-other"],
             pinned.filter { $0 != "--safe-mode" },
+            pinned.filter { $0 != "--strict-mcp-config" },
+            Array(pinned.dropLast(2)) + ["--mcp-config", #"{"mcpServers":{}}"#] + Array(pinned.suffix(2)),
             Array(pinned.dropLast()) + ["--bare"],
             Array(pinned.dropLast()) + [""],
             Array(pinned.dropLast(2)),
@@ -121,6 +127,22 @@ extension ProcessSuites {
             let record = try await folder.waitForCLIRecord()
             #expect(record["argv"] as? [String] == Self.pinned)
             #expect(record["cwd"] as? String == realPath(work.path))
+        }
+
+        @Test("Handed other values for the fixed names directly, with no app-side pass, the supervisor's own pass still gives the CLI the fixed values")
+        func supervisorSetsFixedEnvironment() async throws {
+            let folder = try FakeCLIFolder(.lines(Invented.passingStream(["invented"])))
+            defer { folder.clean() }
+            let work = try ParticipantWorkingFolder.create(under: folder.workParent)
+            let allowed = folder.environment
+            let passed = ["HOME=\(allowed["HOME"]!)", "USER=invented-user", "TMPDIR=\(allowed["TMPDIR"]!)", "LANG=en_US.UTF-8"]
+            let handed = passed + Invented.conflictingFixedValues + ["ANTHROPIC_API_KEY=invented-not-a-key"]
+            let result = try runSupervisorDirectly(folder: folder, cliArguments: Self.pinned, directory: work.path,
+                                                   environment: handed)
+            #expect(result.control == ["spawned", "exit 0", "cleared"])
+            #expect(result.exitCode == 0)
+            let record = try await folder.waitForCLIRecord()
+            #expect(record["env"] as? [String] == passed + Invented.fixedEnvironment)
         }
 
         @Test("A working folder renamed and replaced after it was made is refused at the spawn; nothing starts")

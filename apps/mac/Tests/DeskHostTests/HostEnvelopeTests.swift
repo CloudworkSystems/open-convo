@@ -184,13 +184,126 @@ struct HostEnvelopeTests {
         let ok = HostResponse.ok(echo, ["revision": .number(1), "record": .object(["revision": .number(1)])])
         #expect(try HostResponse(validating: JSONValue.decode(ok.canonicalData())) == ok)
         #expect(ok.record == ["revision": .number(1)])
-        #expect(HostRefusal.allCases.count == 24, "the fixed reason enum has exactly the agreed values")
+        #expect(HostRefusal.allCases.count == 32, "the fixed reason enum has exactly the agreed values: v1's 24 and the participant 8")
         #expect(HostRefusal.allCases.map(\.rawValue).sorted() == [
-            "binding-stale", "duplicate-delivery", "invalid-identity", "invalid-revision", "locked", "malformed-envelope",
-            "mutation-outstanding", "payload-mismatch", "payload-too-large", "revision-mismatch", "revision-not-advanced",
-            "stale-generation", "store-corrupt", "store-locked", "store-missing", "text-too-large", "unknown-binding",
-            "unknown-connection", "unknown-delivery", "unknown-field", "unknown-handle", "unknown-operation", "unknown-request",
-            "unsupported-version"
+            "binding-stale", "duplicate-delivery", "duplicate-run", "invalid-identity", "invalid-revision", "locked",
+            "malformed-envelope", "mutation-outstanding", "participant-busy", "participant-changed", "participant-unavailable",
+            "payload-mismatch", "payload-too-large", "revision-mismatch", "revision-not-advanced", "run-mismatch", "run-not-found",
+            "run-not-prepared", "stale-generation", "store-corrupt", "store-locked", "store-missing", "text-too-large",
+            "unknown-binding", "unknown-connection", "unknown-delivery", "unknown-field", "unknown-handle", "unknown-operation",
+            "unknown-request", "unknown-run", "unsupported-version"
         ])
+    }
+
+    static let participantNames = ["participant.availability", "participant.start", "participant.stop", "participant.status", "participant.events"]
+
+    @Test("The seven stay the advertised list; a participant host lists twelve in the contract's order")
+    func advertisedLists() {
+        #expect(HostOperation.advertised.map(\.rawValue) == [
+            "host.capabilities", "workspace.read", "workspace.commitProof", "dictation.bindDraft", "dictation.unbindDraft",
+            "workspace.reconcile", "dictation.receipt"
+        ])
+        #expect(HostOperation.participantAdvertised.map(\.rawValue) == HostOperation.advertised.map(\.rawValue) + Self.participantNames)
+        #expect(HostOperation.allCases.filter(\.isParticipant).map(\.rawValue) == Self.participantNames)
+        #expect(HostOperation.advertised.allSatisfy { !$0.isParticipant })
+    }
+
+    @Test("Without the flag a participant name is an unknown operation, at the same step and with the same echo, extra envelope key or not",
+          arguments: HostEnvelopeTests.participantNames)
+    func participantNamesRefusedByDefault(name: String) throws {
+        let requestId = UUID().canonicalString
+        let overrides = ["requestId": "\"\(requestId)\"", "operation": "\"\(name)\"", "generation": "3"]
+        let expected = HostRequestRejection(.unknownOperation, echo: HostEcho(requestId: requestId, connectionId: "invented-connection",
+                                                                              generation: 3, operation: name))
+        for data in [envelopeJSON(overrides), envelopeJSON(overrides, extra: ["path": "\"/Users/someone\""])] {
+            #expect(throws: expected) { try HostRequest.decode(data) }
+            #expect(throws: expected) { try HostRequest.decode(data, acceptsParticipant: false) }
+            #expect(throws: expected) { try HostRequest(validating: JSONValue.decode(data)) }
+            #expect(throws: DecodingError.self) { try JSONDecoder().decode(HostRequest.self, from: data) }
+        }
+    }
+
+    @Test("With the flag a participant name decodes; the envelope's own checks still apply after it",
+          arguments: HostEnvelopeTests.participantNames)
+    func participantNamesDecodeWhenAccepted(name: String) throws {
+        let requestId = UUID()
+        let data = envelopeJSON(["requestId": "\"\(requestId.canonicalString)\"", "operation": "\"\(name)\"",
+                                 "payload": "{\"runId\":\"\(UUID().canonicalString)\"}"])
+        let request = try HostRequest.decode(data, acceptsParticipant: true)
+        #expect(request.operation.rawValue == name)
+        #expect(request.operation.isParticipant)
+        #expect(request.requestId == requestId)
+        #expect(request.payload.keys.sorted() == ["runId"])
+        #expect(try HostRequest.decode(request.canonicalData(), acceptsParticipant: true) == request)
+        #expect(try HostRequest(validating: request.jsonValue, acceptsParticipant: true) == request)
+        let encoded = try JSONEncoder().encode(request)
+        #expect(throws: DecodingError.self, "Decodable is a v1 reader and never accepts a participant name") {
+            try JSONDecoder().decode(HostRequest.self, from: encoded)
+        }
+
+        let extra = envelopeJSON(["operation": "\"\(name)\""], extra: ["path": "\"/Users/someone\""])
+        let extraEcho = try #require(Self.echo(of: extra))
+        #expect(throws: HostRequestRejection(.unknownField, echo: extraEcho)) { try HostRequest.decode(extra, acceptsParticipant: true) }
+        let listPayload = envelopeJSON(["operation": "\"\(name)\"", "payload": "[]"])
+        let listEcho = try #require(Self.echo(of: listPayload))
+        #expect(throws: HostRequestRejection(.malformedEnvelope, echo: listEcho)) { try HostRequest.decode(listPayload, acceptsParticipant: true) }
+    }
+
+    @Test("The flag changes nothing for the seven v1 operations, refusals included", arguments: HostOperation.advertised)
+    func flagLeavesV1Alone(operation: HostOperation) throws {
+        let name = "\"\(operation.rawValue)\""
+        let accepted = envelopeJSON(["operation": name])
+        #expect(try HostRequest.decode(accepted, acceptsParticipant: true) == HostRequest.decode(accepted))
+        let refused: [(HostRefusal, Data)] = [
+            (.unknownField, envelopeJSON(["operation": name], extra: ["path": "\"/Users/someone\""])),
+            (.malformedEnvelope, envelopeJSON(["operation": name, "payload": "[]"])),
+            (.unsupportedVersion, envelopeJSON(["operation": name, "v": "2"])),
+            (.malformedEnvelope, envelopeJSON(["operation": name], dropping: ["generation"])),
+            (.invalidIdentity, envelopeJSON(["operation": name, "requestId": "\"not-a-uuid\""]))
+        ]
+        for (reason, data) in refused {
+            let off = Self.decoded(data, acceptsParticipant: false)
+            #expect(off.rejection?.refusal == reason)
+            #expect(Self.decoded(data, acceptsParticipant: true) == off, "\(reason.rawValue)")
+        }
+    }
+
+    @Test("The flag changes nothing for a name no host knows, extra envelope key or not")
+    func flagLeavesUnknownNamesAlone() {
+        for name in ["host.shutdown", "participant.unknown", "Participant.start", "participant.start ", "participant", ""] {
+            let operation = "\"\(name)\""
+            for data in [envelopeJSON(["operation": operation]), envelopeJSON(["operation": operation], extra: ["path": "\"/tmp\""])] {
+                let off = Self.decoded(data, acceptsParticipant: false)
+                #expect(off.rejection?.refusal == .unknownOperation, "\(name)")
+                #expect(off.rejection?.echo.operation == name)
+                #expect(Self.decoded(data, acceptsParticipant: true) == off, "\(name)")
+            }
+        }
+    }
+
+    /// The byte path's answer, success or refusal, as one comparable value.
+    private static func decoded(_ data: Data, acceptsParticipant: Bool) -> Result<HostRequest, HostRequestRejection> {
+        do {
+            return .success(try HostRequest.decode(data, acceptsParticipant: acceptsParticipant))
+        } catch let rejection as HostRequestRejection {
+            return .failure(rejection)
+        } catch {
+            Issue.record("a refusal is always a HostRequestRejection: \(error)")
+            return .failure(HostRequestRejection(.malformedEnvelope))
+        }
+    }
+
+    /// The echo a refused envelope carries, read the way the decoder reads it.
+    private static func echo(of data: Data) -> HostEcho? {
+        guard let fields = try? JSONValue.decode(data).objectValue else { return nil }
+        return HostEcho(requestId: fields["requestId"]?.stringValue ?? "", connectionId: fields["connectionId"]?.stringValue ?? "",
+                        generation: fields["generation"]?.safeIntegerValue ?? 0, operation: fields["operation"]?.stringValue ?? "")
+    }
+}
+
+private extension Result where Failure == HostRequestRejection {
+    var rejection: HostRequestRejection? {
+        if case .failure(let rejection) = self { return rejection }
+        return nil
     }
 }

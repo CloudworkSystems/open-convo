@@ -140,6 +140,17 @@ public final class SheetUnsavedWorkPrompt: DeskUnsavedWorkPrompting {
 /// overlay with Unlock…, and a banner when the page's process stopped.
 /// Not restorable. Closing asks first when the page holds unsaved work or
 /// cannot say; a lock dismisses an open question as Keep.
+///
+/// Section 17's paid-usage controls (plan F4) appear only when `paidUsage`
+/// is given, which the app never does yet: a second native row with the
+/// confirmation's state line, "Check Claude" (section 5's local checks; it
+/// works before unlock) and "Confirm paid usage is off…", which opens the
+/// native statement sheet and then the owner's LocalAuthentication request.
+/// A confirmation, and an end while the Desk is open, then make the Desk's
+/// web view first responder, so the page reads availability again (Codex F0
+/// answer 14). A Desk lock or close dismisses the statement and abandons a
+/// pending request (quit reaches it through the session's close; F7's quit
+/// path calls the owner too).
 @MainActor
 public final class DeskWindowController: NSWindowController, NSWindowDelegate {
     public static let windowIdentifier = NSUserInterfaceItemIdentifier("trueconvo.desk")
@@ -169,12 +180,39 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
     private var closingNow = false
     private var closeInProgress = false
 
+    /// Section 17's controls, only with `paidUsage` (nil otherwise: nothing
+    /// is built or shown).
+    let paidUsage: DeskPaidUsageControlling?
+    let statement: DeskPaidUsageStatementPrompting?
+    private(set) var paidUsageRow: NSView?
+    let paidUsageLine = NSTextField(wrappingLabelWithString: "")
+    let paidUsageResult = NSTextField(wrappingLabelWithString: "")
+    let checkClaudeButton = NSButton(title: DeskPaidUsageWording.checkButton, target: nil, action: nil)
+    let confirmPaidUsageButton = NSButton(title: DeskPaidUsageWording.confirmButton, target: nil, action: nil)
+    private(set) var checkingClaude = false
+    /// From the Confirm press to the attempt's result: the statement, then
+    /// the owner's attempt. Confirm stays off throughout (Codex F4-2).
+    private(set) var confirmFlowActive = false
+    /// The confirmation was active at the last change the window saw: a
+    /// change out of it refreshes the page (Codex F4-6).
+    private var paidUsageWasActive = false
+    /// The already-focused page's one pending re-focus.
+    private(set) var refocus: Task<Void, Never>?
+    /// The session state the window last showed: a change out of `open`
+    /// abandons a pending confirmation.
+    private var shownState: DeskSession.State?
+    /// Formats a confirmation's time for the state line (local, short).
+    var formatTime: (Date) -> String = { DateFormatter.localizedString(from: $0, dateStyle: .none, timeStyle: .short) }
+
     public init(session: DeskSession, verifier: DeskUnlockVerifier, prompt: DeskUnsavedWorkPrompting? = nil,
-                log: @escaping DeskSession.Log = { _, _ in }) {
+                log: @escaping DeskSession.Log = { _, _ in }, paidUsage: DeskPaidUsageControlling? = nil,
+                statement: DeskPaidUsageStatementPrompting? = nil) {
         self.session = session
         self.verifier = verifier
         self.prompt = prompt ?? SheetUnsavedWorkPrompt()
         self.log = log
+        self.paidUsage = paidUsage
+        self.statement = paidUsage == nil ? nil : (statement ?? SheetPaidUsageStatement())
         let window = DeskWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 760),
                                 styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: true)
         window.identifier = Self.windowIdentifier
@@ -197,6 +235,8 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
             guard let self, let window = self.window else { return false }
             return await self.prompt.ask(.leavePage, reason: reason, in: window)
         }
+        paidUsage?.onChange = { [weak self] in self?.paidUsageChanged() }
+        if case .active? = paidUsage?.state { paidUsageWasActive = true }
         render()
     }
 
@@ -249,6 +289,104 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
         session.host?.reload()
     }
 
+    @objc func checkClaudePressed(_ sender: Any?) {
+        Task { await checkClaude() }
+    }
+
+    @objc func confirmPaidUsagePressed(_ sender: Any?) {
+        Task { await confirmPaidUsage() }
+    }
+
+    // MARK: Paid usage (section 17)
+
+    /// "Check Claude": section 5's local checks only, shown as one line. It
+    /// needs no open Desk, store or Keychain.
+    @discardableResult
+    func checkClaude() async -> DeskClaudeCheck? {
+        guard let paidUsage, !checkingClaude else { return nil }
+        checkingClaude = true
+        paidUsageResult.stringValue = DeskPaidUsageWording.checking
+        renderPaidUsage()
+        let check = await paidUsage.checkClaude()
+        checkingClaude = false
+        paidUsageResult.stringValue = DeskPaidUsageWording.checkLine(check)
+        renderPaidUsage()
+        return check
+    }
+
+    /// "Confirm paid usage is off…": the statement sheet first (The owner
+    /// checks claude.ai Settings > Usage himself), then the owner's own
+    /// LocalAuthentication request. Only with the Desk open. A confirmation
+    /// makes the page read availability again (`refreshPageAvailability`).
+    @discardableResult
+    func confirmPaidUsage() async -> DeskPaidUsageConfirmResult? {
+        guard let paidUsage, let statement, let window, session.state == .open, !confirmFlowActive, !paidUsage.isConfirming else {
+            return nil
+        }
+        confirmFlowActive = true
+        defer {
+            confirmFlowActive = false
+            renderPaidUsage()
+        }
+        renderPaidUsage()
+        let proceed = await statement.ask(in: window)
+        guard proceed, session.state == .open else { return nil }
+        paidUsageResult.stringValue = DeskPaidUsageWording.confirming
+        renderPaidUsage()
+        // No suspension between the open-Desk check above and the owner's
+        // attempt beginning inside `confirm()`: a Desk lock or close from
+        // here on abandons it (Codex F4-2).
+        let result = await paidUsage.confirm()
+        paidUsageResult.stringValue = DeskPaidUsageWording.resultLine(result) ?? ""
+        if result == .confirmed { refreshPageAvailability() }
+        return result
+    }
+
+    /// The owner's change, on the main thread: the row is redrawn, and when
+    /// the confirmation stops being active (an end, a run limit) while the
+    /// Desk is open the page reads availability again, so Send and the
+    /// native line agree (Codex F4-6). It grants nothing: the page's read
+    /// answers unavailable.
+    func paidUsageChanged() {
+        renderPaidUsage()
+        guard let paidUsage else { return }
+        var active = false
+        if case .active = paidUsage.state { active = true }
+        let ended = paidUsageWasActive && !active
+        paidUsageWasActive = active
+        if ended { refreshPageAvailability() }
+    }
+
+    /// How long an already-focused page stays unfocused before it is focused
+    /// again (`refreshPageAvailability`).
+    static let refocusDelayNanoseconds: UInt64 = 100_000_000
+
+    /// Codex F0 answer 14: after a confirmation, the Desk's web view becomes
+    /// first responder, so the page gets a focus event and reads
+    /// availability again (it never grants anything or starts a run by
+    /// itself). Already first responder: it resigns now and becomes first
+    /// responder again once, 100 ms later, unless the Desk closed or locked
+    /// or something else took the focus meanwhile. WebKit sends focus
+    /// changes to the page once per run-loop turn, so a resign and a focus in
+    /// the same turn would cancel out and the page would see nothing.
+    func refreshPageAvailability() {
+        refocus?.cancel()
+        refocus = nil
+        guard session.state == .open, let window, let webView = embeddedWebView, !webView.isHidden else { return }
+        guard window.firstResponder === webView else {
+            window.makeFirstResponder(webView)
+            return
+        }
+        window.makeFirstResponder(nil)
+        refocus = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: Self.refocusDelayNanoseconds)
+            guard let self, !Task.isCancelled, self.session.state == .open, let window = self.window,
+                  let current = self.embeddedWebView, current === webView, !webView.isHidden,
+                  window.firstResponder == nil || window.firstResponder === window else { return }
+            window.makeFirstResponder(webView)
+        }
+    }
+
     // MARK: Closing
 
     public func windowShouldClose(_ sender: NSWindow) -> Bool {
@@ -270,6 +408,9 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
                 return
             }
         }
+        // A pending confirmation's result is discarded once the window goes.
+        statement?.dismiss()
+        paidUsage?.abandonPendingConfirmation()
         await session.close()
         closingNow = true
         window?.close()
@@ -335,18 +476,62 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
             lockedStack.widthAnchor.constraint(lessThanOrEqualTo: lockedOverlay.widthAnchor, constant: -40)
         ])
 
-        let column = NSStackView(views: [strip, stoppedBanner, pageContainer])
+        var rows: [NSView] = [strip]
+        if paidUsage != nil {
+            let row = buildPaidUsageRow()
+            paidUsageRow = row
+            rows.append(row)
+        }
+        rows += [stoppedBanner, pageContainer]
+        let column = NSStackView(views: rows)
         column.orientation = .vertical
         column.alignment = .leading
         column.spacing = 0
         column.distribution = .fill
         pin(column, in: content)
-        for view in [strip, stoppedBanner, pageContainer] {
+        for view in rows {
             view.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true
         }
         pageContainer.setContentHuggingPriority(.defaultLow, for: .vertical)
         pageContainer.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         pin(lockedOverlay, in: pageContainer)
+    }
+
+    /// Section 17's row: the state line and the last check or attempt's
+    /// line, then Check Claude and Confirm paid usage is off….
+    private func buildPaidUsageRow() -> NSView {
+        paidUsageLine.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .medium)
+        paidUsageResult.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        paidUsageResult.textColor = .secondaryLabelColor
+        for button in [checkClaudeButton, confirmPaidUsageButton] {
+            button.target = self
+            button.bezelStyle = .rounded
+            button.setContentHuggingPriority(.required, for: .horizontal)
+        }
+        checkClaudeButton.action = #selector(checkClaudePressed(_:))
+        confirmPaidUsageButton.action = #selector(confirmPaidUsagePressed(_:))
+        let texts = NSStackView(views: [paidUsageLine, paidUsageResult])
+        texts.orientation = .vertical
+        texts.alignment = .leading
+        texts.spacing = 2
+        texts.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let row = NSStackView(views: [texts, checkClaudeButton, confirmPaidUsageButton])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.edgeInsets = NSEdgeInsets(top: 4, left: 12, bottom: 6, right: 12)
+        return row
+    }
+
+    /// The paid-usage row as of now (nothing without `paidUsage`).
+    func renderPaidUsage() {
+        guard let paidUsage else { return }
+        paidUsageLine.stringValue = DeskPaidUsageWording.stateLine(paidUsage.state, time: formatTime)
+        paidUsageResult.isHidden = paidUsageResult.stringValue.isEmpty
+        let busy = checkingClaude || confirmFlowActive || paidUsage.isConfirming
+        checkClaudeButton.isEnabled = !busy
+        var canConfirm = session.state == .open && !busy
+        if case .active = paidUsage.state { canConfirm = false }
+        confirmPaidUsageButton.isEnabled = canConfirm
     }
 
     private func pin(_ view: NSView, in container: NSView) {
@@ -378,6 +563,13 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
     /// before the host's own lock step runs.
     func render() {
         let state = session.state
+        if shownState == .open, state != .open {
+            // A Desk lock, close or quit: the statement is answered Cancel
+            // and a pending confirmation's result is discarded.
+            statement?.dismiss()
+            paidUsage?.abandonPendingConfirmation()
+        }
+        shownState = state
         stripLabel.stringValue = "Invented data only · not private · key: \(session.keyCustody ?? "not opened yet")"
         noticeLabel.stringValue = session.displayedNotice ?? ""
         noticeLabel.isHidden = session.displayedNotice == nil
@@ -411,6 +603,7 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
                 prompt.dismissAsKeep()
             }
         }
+        renderPaidUsage()
         onStateChange?()
     }
 }

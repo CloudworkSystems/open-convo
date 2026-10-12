@@ -141,7 +141,7 @@ async function navigate(page, name) {
     if (await navigator.getAttribute('aria-current') !== 'page') await navigator.click();
     return;
   }
-  const label = name === 'NEXUS' ? 'Cloudwork Nexus' : name;
+  const label = name === 'NEXUS' ? 'CLOUDWORK NEXUS' : name;
   const mobileMenu = page.getByRole('button', { name: 'Open navigation', exact: true });
   if (await mobileMenu.isVisible()) {
     await mobileMenu.click();

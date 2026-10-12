@@ -47,8 +47,8 @@ extension ProcessSuites {
             let environment = live.folder.environment
             #expect(record["env"] as? [String] == [
                 "HOME=\(environment["HOME"]!)", "USER=invented-user", "TMPDIR=\(environment["TMPDIR"]!)",
-                "LANG=en_US.UTF-8", "PATH=/usr/bin:/bin:/usr/sbin:/sbin"
-            ])
+                "LANG=en_US.UTF-8"
+            ] + Invented.fixedEnvironment)
             #expect(record["cwd"] as? String == realPath(live.workingFolder.path))
             #expect(record["stdin"] as? String == LiveRun.input)
             #expect(record["fds"] as? [Int] == [0, 1, 2], "the CLI inherits only stdin, stdout and stderr")
@@ -98,7 +98,7 @@ extension ProcessSuites {
             await live.finish(group: cli)
         }
 
-        @Test("An unsanitized launch environment: the supervisor itself and the CLI both start with only the allow-list")
+        @Test("An unsanitized launch environment: the supervisor itself and the CLI both start with only the allow-list and the fixed values")
         func unsanitizedEnvironment() async throws {
             // Invented values only. None is a real key, library or folder.
             let live = try LiveRun(.lines([Invented.initLine(), Invented.rateLimit()], then: ["hang": true])) { folder in
@@ -107,10 +107,10 @@ extension ProcessSuites {
                     "DYLD_FALLBACK_LIBRARY_PATH=/invented/lib", "DYLD_FRAMEWORK_PATH=/invented/frameworks",
                     "HOME=\(allowed["HOME"]!)", "HOME=/invented/second-home", "USER=invented-user",
                     "TMPDIR=\(allowed["TMPDIR"]!)", "LANG=en_US.UTF-8", "LC_ALL=",
-                    "PATH=/invented/bin:/usr/bin", "ANTHROPIC_API_KEY=invented-not-a-key",
+                    "ANTHROPIC_API_KEY=invented-not-a-key",
                     "ANTHROPIC_BASE_URL=http://invented.invalid", "CLAUDE_CODE_USE_BEDROCK=1",
                     "MallocStackLogging=1", "INVENTED_APP_VARIABLE=invented", "NOT-AN-ENTRY"
-                ]
+                ] + Invented.conflictingFixedValues
             }
             let cli = try await live.folder.waitForPid("cli.pid")
             try await live.collector.wait(seconds: 10, for: "started") { $0.events.contains { $0.type == .started } }
@@ -118,8 +118,8 @@ extension ProcessSuites {
             let environment = live.folder.environment
             let expected = [
                 "HOME=\(environment["HOME"]!)", "USER=invented-user", "TMPDIR=\(environment["TMPDIR"]!)",
-                "LANG=en_US.UTF-8", "PATH=/usr/bin:/bin:/usr/sbin:/sbin"
-            ]
+                "LANG=en_US.UTF-8"
+            ] + Invented.fixedEnvironment
             let supervisor = try #require(Processes.initialEnvironment(of: live.process.supervisorProcessID),
                                           "the supervisor's start environment could be read")
             #expect(supervisor == expected, "the supervisor process itself starts with only the allow-list")
@@ -234,6 +234,8 @@ extension ProcessSuites {
             let cli = try await folder.waitForPid("cli.pid")
             let stopped = await Processes.waitUntil(seconds: 6) { !Processes.isRunning(cli) && !Processes.isRunning(supervisor) }
             #expect(stopped != nil, "the overflow message stopped the CLI though no one holds the run")
+            // The processes can be gone before the terminal reaches the collector.
+            try await collector.wait(seconds: 5, for: "terminal") { $0.terminal != nil }
             #expect(collector.events.map(\.type) == [.started, .failed])
             #expect(collector.terminal?.reason == "paid-overflow")
             let freed = await Processes.waitUntil(seconds: 5) { weakRun == nil }
@@ -280,38 +282,48 @@ extension ProcessSuites {
 
         @Test("Supervisor loss: SIGKILL only the supervisor; failed process-error, owned until the pipes close")
         func supervisorLoss() async throws {
-            var scenario = FakeCLIFolder.Scenario.lines([Invented.initLine(), Invented.rateLimit(), Invented.messageStart,
-                                                         Invented.blockStart(0), Invented.textDelta("before")],
-                                                        then: ["hang": true])
-            scenario.child = "ignore-term"
-            let live = try LiveRun(scenario)
-            let cli = try await live.folder.waitForPid("cli.pid")
-            let child = try await live.folder.waitForPid("child.pid")
-            try await live.collector.wait(seconds: 10, for: "text") { $0.events.contains { $0.type == .text } }
-
-            let supervisor = live.process.supervisorProcessID
-            _ = kill(supervisor, SIGKILL)
-            let lostAfter = try await live.collector.wait(seconds: 5, for: "terminal") { $0.terminal != nil }
-            #expect(live.collector.terminal?.type == .failed)
-            #expect(live.collector.terminal?.reason == "process-error")
-            #expect(live.run.snapshot.groupCleared == false)
-            try await Task.sleep(nanoseconds: 500_000_000)
-            #expect(live.run.snapshot.cleanup == .owned, "the CLI still holds its pipes")
-            #expect(Processes.isRunning(cli) && Processes.isRunning(child), "nothing signalled the group")
-            #expect(live.log.entries.contains { $0.kind == .supervisorLost })
-
-            // The test, not native, kills the fake by its own recorded ids.
-            let killed = ContinuousClock.now
-            _ = kill(cli, SIGKILL)
-            _ = kill(child, SIGKILL)
-            let released = try await live.collector.wait(seconds: 5, for: "release") { $0.released }
-            #expect(live.run.snapshot.groupCleared == false, "never later set true")
-            let empty = await Processes.waitUntil(seconds: 10) { Processes.members(cli).isEmpty }
-            #expect(empty != nil)
-            #expect(!Processes.isRunning(supervisor))
-            measured("supervisor-loss", [("terminal", lostAfter), ("released-after-kill", released),
-                                         ("group-empty", Processes.elapsed(since: killed))])
-            await live.finish(group: cli)
+            try await LiveRun.supervisorLoss(.built)
         }
+    }
+}
+
+/// Supervisor loss (contract section 11), shared by `Live` (this build's
+/// supervisor) and `PackagedSupervisorTests` (the helper inside a packaged
+/// True Convo Test.app).
+extension LiveRun {
+    static func supervisorLoss(_ supervisor: SupervisorUnderTest) async throws {
+        var scenario = FakeCLIFolder.Scenario.lines([Invented.initLine(), Invented.rateLimit(), Invented.messageStart,
+                                                     Invented.blockStart(0), Invented.textDelta("before")],
+                                                    then: ["hang": true])
+        scenario.child = "ignore-term"
+        let live = try LiveRun(scenario, supervisorPath: supervisor.path)
+        let cli = try await live.folder.waitForPid("cli.pid")
+        let child = try await live.folder.waitForPid("child.pid")
+        try await live.collector.wait(seconds: 10, for: "text") { $0.events.contains { $0.type == .text } }
+
+        let supervisorPid = live.process.supervisorProcessID
+        Processes.expectProgram(supervisorPid, is: supervisor.path)
+        _ = kill(supervisorPid, SIGKILL)
+        let lostAfter = try await live.collector.wait(seconds: 5, for: "terminal") { $0.terminal != nil }
+        #expect(live.collector.terminal?.type == .failed)
+        #expect(live.collector.terminal?.reason == "process-error")
+        #expect(live.run.snapshot.groupCleared == false)
+        try await Task.sleep(nanoseconds: 500_000_000)
+        #expect(live.run.snapshot.cleanup == .owned, "the CLI still holds its pipes")
+        #expect(Processes.isRunning(cli) && Processes.isRunning(child), "nothing signalled the group")
+        #expect(live.log.entries.contains { $0.kind == .supervisorLost })
+
+        // The test, not native, kills the fake by its own recorded ids.
+        let killed = ContinuousClock.now
+        _ = kill(cli, SIGKILL)
+        _ = kill(child, SIGKILL)
+        let released = try await live.collector.wait(seconds: 5, for: "release") { $0.released }
+        #expect(live.run.snapshot.groupCleared == false, "never later set true")
+        let empty = await Processes.waitUntil(seconds: 10) { Processes.members(cli).isEmpty }
+        #expect(empty != nil)
+        #expect(!Processes.isRunning(supervisorPid))
+        measured("\(supervisor.label)supervisor-loss",
+                 [("terminal", lostAfter), ("released-after-kill", released), ("group-empty", Processes.elapsed(since: killed))])
+        await live.finish(group: cli)
     }
 }

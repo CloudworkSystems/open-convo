@@ -67,6 +67,56 @@ struct DeskHostProtocolTests {
         #expect(detail?["reason"] == .string("ready"))
     }
 
+    @Test("S10's split close: revokeForShutdown pushes revoked (shutdown) to every live connection, invalidates them, revokes recording tokens and refuses new recordings, and leaves the store open for the participant lane's writes; closeStore then locks and closes the store, pushing nothing; close() is exactly those two, unchanged for its callers")
+    func splitClose() async throws {
+        let harness = try HostHarness()
+        defer { harness.clean() }
+        let second = harness.connections.issue()
+        let earlier = await harness.host.beginRecording()
+        await harness.host.revokeForShutdown()
+        let revoked = harness.sink.connectionEvents
+        #expect(revoked == [harness.connection, second].sorted { $0.id < $1.id }.map {
+            .hostConnection(connectionId: $0.id, generation: 0, state: .revoked, reason: .shutdown)
+        }, "\(revoked)")
+        #expect(await harness.host.handle(harness.readRequest()).reason == .unknownConnection)
+        #expect(await harness.host.handle(harness.readRequest(connection: second)).reason == .unknownConnection)
+        #expect(await harness.host.deliverFinal(earlier, text: "invented earlier text") == .dropped(.revoked))
+        let later = await harness.host.beginRecording()
+        #expect(await harness.host.deliverFinal(later, text: "invented later text") == .dropped(.revoked), "no recording is taken")
+        #expect(!harness.store.isLocked && !harness.store.publishedRuns.closed, "the store stays open for the lane's terminal writes")
+        #expect(try harness.store.read().revision == 0)
+
+        await harness.host.closeStore()
+        #expect(throws: ProofStoreError.closed) { try harness.store.read() }
+        #expect(harness.store.publishedRuns.closed && harness.store.isLocked)
+        #expect(harness.sink.connectionEvents == revoked, "closing the store pushes nothing")
+        #expect(harness.sink.finalTexts.isEmpty)
+        await harness.host.revokeForShutdown()
+        #expect(harness.sink.connectionEvents == revoked, "a repeat has nothing left to revoke")
+
+        // close() is the two halves, as every existing caller had it.
+        let whole = try HostHarness()
+        defer { whole.clean() }
+        await whole.host.close()
+        #expect(whole.sink.connectionEvents == [.hostConnection(connectionId: whole.connection.id, generation: 0, state: .revoked, reason: .shutdown)])
+        #expect(await whole.host.handle(whole.readRequest()).reason == .unknownConnection)
+        #expect(throws: ProofStoreError.closed) { try whole.store.read() }
+        #expect(whole.store.publishedRuns.closed)
+    }
+
+    @Test("The vectors' issue-connection test hook: issueConnection(adopting:) registers the fixed id in the current generation and pushes ready for it, as issueConnection() does for a random one")
+    func issueConnectionAdopting() async throws {
+        let harness = try HostHarness()
+        defer { harness.clean() }
+        await harness.host.beginGeneration()
+        let fixed = "51000000-0000-4000-8000-0000000000e1"
+        let adopted = await harness.host.issueConnection(adopting: fixed)
+        #expect(adopted == HostConnection(id: fixed, generation: 1))
+        #expect(harness.sink.connectionEvents.last == .hostConnection(connectionId: fixed, generation: 1, state: .ready, reason: .ready))
+        #expect(await harness.host.handle(harness.readRequest(connection: adopted)).outcome == .ok)
+        #expect(harness.connections.validConnections() == (1, [fixed]))
+    }
+
     @Test("Unknown operations and fields are refused through the byte path and the typed path; payload defects get their fixed reasons")
     func unknownOpsAndFields() async throws {
         let harness = try HostHarness()
@@ -772,6 +822,366 @@ struct DeskHostProtocolTests {
         #expect(await missingHost.handle(HostRequest(requestId: UUID(), connectionId: missingConnection.id, generation: 0, operation: .capabilities, payload: [:]))
                     .capabilities?["store"] == .string("missing"))
         #expect(!fixture.files.fileExists(atPath: first.stateURL.path))
+    }
+
+    static let participantOperations: [HostOperation] = [
+        .participantAvailability, .participantStart, .participantStop, .participantStatus, .participantEvents
+    ]
+
+    @Test("A host without participants answers every participant name as an unknown one, before the connection check, byte for byte as before")
+    func participantNamesOffByDefault() async throws {
+        let harness = try HostHarness()
+        defer { harness.clean() }
+        #expect(!harness.host.acceptsParticipant, "the one switch both transports read is off")
+        for operation in Self.participantOperations {
+            let typed = harness.request(operation, payload: ["workspaceHandle": .string(harness.handle)])
+            let typedReply = await harness.host.handle(typed)
+            #expect(typedReply == .refused(.unknownOperation, echo: typed.echo), "\(operation.rawValue)")
+            let staleTyped = harness.request(operation, generation: harness.connection.generation + 1)
+            #expect(await harness.host.handle(staleTyped) == .refused(.unknownOperation, echo: staleTyped.echo),
+                    "a typed name is refused before the connection check too, as on the byte path")
+            let guessedTyped = HostRequest(requestId: UUID(), connectionId: "guessed", generation: 7, operation: operation,
+                                           payload: ["text": .string(String(repeating: "x", count: ProofLimits.textItemBytes + 1))])
+            #expect(await harness.host.handle(guessedTyped) == .refused(.unknownOperation, echo: guessedTyped.echo),
+                    "and before the text-item check")
+
+            let requestId = UUID().canonicalString
+            let overrides = ["requestId": "\"\(requestId)\"", "connectionId": "\"\(harness.connection.id)\"",
+                             "operation": "\"\(operation.rawValue)\""]
+            let echo = HostEcho(requestId: requestId, connectionId: harness.connection.id, generation: 0, operation: operation.rawValue)
+            let expected = HostResponse.refused(.unknownOperation, echo: echo).canonicalData()
+            #expect(await harness.host.handle(data: envelopeJSON(overrides)).canonicalData() == expected)
+            #expect(await harness.host.handle(data: envelopeJSON(overrides, extra: ["path": "\"/tmp\""])).canonicalData() == expected,
+                    "the name is refused before the envelope keys are checked")
+            let stale = await harness.host.handle(data: envelopeJSON(overrides.merging(["connectionId": "\"guessed\"", "generation": "7"]) { $1 }))
+            #expect(stale.reason == .unknownOperation, "the name is refused before the connection check")
+        }
+        #expect(await harness.host.handle(harness.request(.capabilities)).capabilities?["operations"]
+                == .array(HostOperation.advertised.map { .string($0.rawValue) }))
+        #expect(try harness.store.read().revision == 0)
+    }
+
+    @Test("A participant host lists the twelve operations in the contract's order and decodes their names; until a lane is wired they still refuse")
+    func participantHostCapabilities() async throws {
+        let fixture = try DeskHostFixture()
+        defer { fixture.clean() }
+        let store = try fixture.makeStore()
+        defer { store.close() }
+        let pin = try #require(ParticipantPin(id: "claude-code", label: "Claude Code", model: "invented-pinned-model", executionHost: "this-mac"))
+        let connections = ConnectionRegistry()
+        let host = DeskHostProtocol(store: store, connections: connections, drafts: DraftBindingRegistry(), info: HostHarness.info,
+                                    participants: ParticipantHostConfiguration(pin: pin, inputBound: ParticipantLimits.firstTrialInputBound))
+        #expect(host.acceptsParticipant)
+        let connection = await host.issueConnection()
+        func request(_ operation: HostOperation, _ payload: [String: JSONValue] = [:]) -> HostRequest {
+            HostRequest(requestId: UUID(), connectionId: connection.id, generation: connection.generation, operation: operation, payload: payload)
+        }
+
+        let response = await host.handle(request(.capabilities))
+        #expect(response.outcome == .ok)
+        let capabilities = try #require(response.capabilities)
+        #expect(Set(capabilities.keys) == ["contractVersion", "hostBuild", "appVersion", "store", "lock", "operations", "workspaceHandle", "limits"])
+        #expect(capabilities["operations"] == .array([
+            "host.capabilities", "workspace.read", "workspace.commitProof", "dictation.bindDraft", "dictation.unbindDraft",
+            "workspace.reconcile", "dictation.receipt", "participant.availability", "participant.start", "participant.stop",
+            "participant.status", "participant.events"
+        ].map { .string($0) }))
+        #expect(capabilities["contractVersion"] == .number(1))
+        #expect(capabilities["limits"] == ProofLimits.capabilitiesValue, "capability keys and limits are unchanged")
+
+        for operation in Self.participantOperations {
+            let typed = request(operation)
+            #expect(await host.handle(typed) == .refused(.unknownOperation, echo: typed.echo), "\(operation.rawValue)")
+            let stale = HostRequest(requestId: UUID(), connectionId: connection.id, generation: connection.generation + 1,
+                                    operation: operation, payload: [:])
+            #expect(await host.handle(stale).reason == .staleGeneration, "a known name passes the shared v1 preflight first")
+            let base = ["connectionId": "\"\(connection.id)\"", "operation": "\"\(operation.rawValue)\""]
+            let decoded = await host.handle(data: envelopeJSON(base))
+            #expect(decoded.reason == .unknownOperation, "decoded, then refused by the defence: no lane is wired")
+            #expect(decoded.operation == operation.rawValue)
+            #expect(await host.handle(data: envelopeJSON(base, extra: ["path": "\"/tmp\""])).reason == .unknownField,
+                    "an accepted name reaches the envelope-key check")
+        }
+        #expect(await host.handle(request(.workspaceRead, ["workspaceHandle": .string(store.workspaceHandle)])).outcome == .ok,
+                "v1 operations are served as before")
+        await host.close()
+    }
+
+    // MARK: One request-identity space (participant contract section 3; Codex Q20, Q22)
+
+    @Test("On a participant host, a start's id registered by hand in the shared index, starting or recorded, is payload-mismatch for commit, bind and unbind and unknown to reconcile; nothing is held, bound or claimed")
+    func startIdsInTheSharedIndex() async throws {
+        let configuration = ParticipantHostConfiguration(pin: IdentityInvented.pin)
+        let identities = configuration.identities
+        let harness = try HostHarness(participants: configuration)
+        defer { harness.clean() }
+        let starting = UUID(), recorded = UUID()
+        #expect(identities.claimStarting(starting, payloadHash: "starting-hash") == .claimed)
+        #expect(identities.claimStarting(recorded, payloadHash: "recorded-hash") == .claimed)
+        identities.recordStart(recorded)
+        let bindingId = try await harness.bind(expectedRevision: 0)
+
+        for (label, id) in [("starting", starting), ("recorded", recorded)] {
+            #expect(await harness.commit("under a start id", expectedRevision: 0, requestId: id).reason == .payloadMismatch, "\(label) commit")
+            #expect(await harness.host.outstandingMutation == nil, "\(label): no barrier was taken")
+            #expect(await harness.host.handle(harness.bindRequest(requestId: id)).reason == .payloadMismatch, "\(label) bind")
+            #expect(await harness.host.handle(harness.unbindRequest(bindingId: bindingId, requestId: id)).reason == .payloadMismatch,
+                    "\(label) unbind")
+            let reconcile = await harness.host.handle(harness.reconcileRequest(target: id))
+            #expect(reconcile.outcome == .unknown, "\(label) reconcile: unknown, never not-dispatched")
+            #expect(reconcile.fields.isEmpty)
+        }
+        #expect(try harness.store.read().revision == 0)
+        #expect(harness.drafts.activeBindingCount == 1)
+        #expect(harness.drafts.binding(bindingId) != nil, "the refused unbinds touched nothing")
+        #expect(identities.claimStarting(starting, payloadHash: "other") == .starting(payloadHash: "starting-hash"),
+                "the refusals left the start's claim as it was")
+        #expect(identities.claimStarting(recorded, payloadHash: "other") == .recorded(payloadHash: "recorded-hash"))
+
+        // Released by authority (nothing was written), the id is an ordinary fresh mutation.
+        identities.releaseStarting(starting)
+        #expect(await harness.commit("fresh", expectedRevision: 0, requestId: starting).revision == 1)
+        #expect(identities.claimStarting(starting, payloadHash: "starting-hash") == .v1Identity, "now a commit's identity")
+        #expect(await harness.host.handle(harness.unbindRequest(bindingId: bindingId)).outcome == .ok)
+    }
+
+    @Test("Codex Q22's order on a participant host: a different workspace holder answers mutation-outstanding before a start's id is checked; bind, unbind and reconcile under a start's id stay outside the barrier")
+    func startIdOrderBesideTheBarrier() async throws {
+        let configuration = ParticipantHostConfiguration(pin: IdentityInvented.pin)
+        let identities = configuration.identities
+        let executor = GatedExecutor()
+        let harness = try HostHarness(executor: executor, participants: configuration)
+        defer { harness.clean() }
+        let startId = UUID()
+        #expect(identities.claimStarting(startId, payloadHash: "start-hash") == .claimed)
+        let bindingId = try await harness.bind(expectedRevision: 0)
+
+        let holderId = UUID()
+        let host = harness.host
+        let holderRequest = harness.commitRequest(expectedRevision: 0, record: inventedRecord("held", revision: 1), requestId: holderId)
+        let held = Task { await host.handle(holderRequest) }
+        await executor.gate.waitForArrival()
+        #expect(identities.claimStarting(holderId, payloadHash: "start-hash") == .v1Identity, "the start lane sees the barrier holder")
+
+        #expect(await harness.commit("under the start id", expectedRevision: 0, requestId: startId).reason == .mutationOutstanding,
+                "another holder first")
+        #expect(await harness.host.handle(harness.bindRequest(requestId: startId)).reason == .payloadMismatch, "outside the barrier")
+        #expect(await harness.host.handle(harness.unbindRequest(bindingId: bindingId, requestId: startId)).reason == .payloadMismatch)
+        #expect(await harness.host.handle(harness.reconcileRequest(target: startId)).outcome == .unknown)
+        #expect(await harness.host.handle(harness.bindRequest()).outcome == .ok, "an ordinary bind still proceeds under the barrier")
+
+        await executor.gate.open()
+        #expect(await held.value.revision == 1)
+        #expect(await harness.host.outstandingMutation == nil)
+        #expect(identities.claimStarting(holderId, payloadHash: "start-hash") == .v1Identity, "the durable result keeps it a commit's")
+        #expect(await harness.commit("under the start id", expectedRevision: 1, requestId: startId).reason == .payloadMismatch,
+                "with the barrier free, the start's id")
+        #expect(try harness.store.read().revision == 1)
+    }
+
+    @Test("A start that claims a commit's id after the commit's start-id check, while the commit waits inside its delivery check, wins: the commit loses the barrier claim and is payload-mismatch, holding, dispatching and saving nothing, and the start's claim is unchanged (Codex Q22)")
+    func commitLosesTheBarrierClaim() async throws {
+        let probe = FlushRetryProbe()
+        let draftsLock = DraftLockHolder()
+        let configuration = ParticipantHostConfiguration(pin: IdentityInvented.pin)
+        let identities = configuration.identities
+        let harness = try HostHarness(faults: probe, participants: configuration,
+                                      drafts: DraftBindingRegistry(makeDeliveryId: { draftsLock.makeDeliveryId() }))
+        defer { harness.clean() }
+        _ = try await harness.bind(expectedRevision: 0)
+        guard case .delivered(let deliveryId, _, _, _) = await harness.deliver("invented words") else {
+            Issue.record("expected a pending delivery")
+            return
+        }
+
+        // An unrelated result whose folder flush fails leaves the store
+        // unsynced, so the commit's first durable read, its exact-replay
+        // lookup before the start-id check, retries the flush and says so.
+        let unrelated = UUID()
+        probe.failFlushes(of: [1])
+        #expect(throws: ProofStoreError.undetermined(requestId: unrelated)) {
+            try IdentityInvented.commit(unrelated, on: harness.store, revision: 1)
+        }
+        probe.armRetrySignal()
+        // Another thread holds the draft registry's lock, which the
+        // delivery check needs after the start-id check and the store's
+        // delivery evidence.
+        draftsLock.arm()
+        let drafts = harness.drafts
+        Thread { _ = drafts.makeDeliveryId() }.start()
+        try #require(await waitOffPool(draftsLock.entered, seconds: 30), "the draft registry's lock is held")
+        defer { draftsLock.release.signal() }
+
+        let commitId = UUID()
+        let request = harness.commitRequest(expectedRevision: 0, record: inventedRecord("lost the claim", revision: 1),
+                                            deliveryId: deliveryId, requestId: commitId)
+        let host = harness.host
+        let answered = Box<Bool>()
+        let commit = Task {
+            let reply = await host.handle(request)
+            answered.value = true
+            return reply
+        }
+        try #require(await waitOffPool(probe.retried, seconds: 30), "the commit's replay lookup ran on the actor")
+        // From here the actor runs the start-id check and the delivery
+        // check without suspending, and stops at the draft registry's lock.
+        try await Task.sleep(nanoseconds: 200_000_000)
+        #expect(identities.claimStarting(commitId, payloadHash: "start-hash") == .claimed, "the start claims the id the commit already checked")
+        // Had the commit not passed its start-id check yet, that check
+        // would now refuse it without the draft lock, and it would answer.
+        try await Task.sleep(nanoseconds: 300_000_000)
+        let waitedPastTheCheck = answered.value != true
+        draftsLock.release.signal()
+        let reply = await commit.value
+
+        #expect(waitedPastTheCheck, "the commit was inside its delivery check, past the start-id check, when the start claimed")
+        #expect(!draftsLock.releasedByTimeout)
+        #expect(reply == .refused(.payloadMismatch, echo: request.echo), "the barrier claim refuses it")
+        #expect(await host.outstandingMutation == nil, "nothing is held")
+        #expect(try harness.store.dispatchReceipt(for: commitId) == nil, "nothing was dispatched")
+        #expect(try harness.store.terminalResult(for: commitId) == nil)
+        #expect(harness.drafts.pendingDelivery(deliveryId) != nil, "the delivery is still pending, unsaved")
+        #expect(identities.claimStarting(commitId, payloadHash: "other") == .starting(payloadHash: "start-hash"),
+                "the start's claim is unchanged")
+        #expect(await host.handle(harness.reconcileRequest(target: commitId)).outcome == .unknown, "a start's id, never not-dispatched")
+    }
+
+    @Test("On a participant host, a start the store's published copy still reserves after a non-authoritative reload dropped it from memory before the host registered is payload-mismatch for commit, bind and unbind and unknown to reconcile; only the authoritative re-read frees it (Codex Q5's overlay)")
+    func publishedReservationOverlay() async throws {
+        let configuration = ParticipantHostConfiguration(pin: IdentityInvented.pin)
+        let identities = configuration.identities
+        let harness = try HostHarness(participants: configuration) { store in
+            try IdentityInvented.prepare(1, on: store, revision: 1)
+            try store.recordStart(runId: IdentityInvented.runId(1), IdentityInvented.start(1))
+            try IdentityInvented.dropStartOnDisk(1, store: store)
+        }
+        defer { harness.clean() }
+        let startId = IdentityInvented.startId(1)
+        #expect(harness.store.publishedRuns.reservedStartRequestIds.contains(startId.canonicalString), "the published copy keeps reserving it")
+        #expect(!identities.isStartId(startId), "memory, and so the index, no longer shows it")
+        let bindingId = try await harness.bind(expectedRevision: 1)
+
+        #expect(await harness.commit("under a start id", expectedRevision: 1, requestId: startId).reason == .payloadMismatch)
+        #expect(await harness.host.outstandingMutation == nil)
+        #expect(await harness.host.handle(harness.bindRequest(expectedRevision: 1, requestId: startId)).reason == .payloadMismatch)
+        #expect(await harness.host.handle(harness.unbindRequest(bindingId: bindingId, requestId: startId)).reason == .payloadMismatch)
+        let reconcile = await harness.host.handle(harness.reconcileRequest(target: startId))
+        #expect(reconcile.outcome == .unknown, "unknown, never not-dispatched")
+        #expect(try harness.store.dispatchReceipt(for: startId) == nil)
+        #expect(try harness.store.read().revision == 1)
+        #expect(harness.drafts.activeBindingCount == 1)
+
+        // The authoritative re-read no longer shows the start: released, the id is an ordinary fresh mutation.
+        #expect(try harness.store.rereadRuns().entry(for: IdentityInvented.runId(1))?.start == nil)
+        #expect(!harness.store.publishedRuns.reservedStartRequestIds.contains(startId.canonicalString))
+        #expect(await harness.commit("fresh", expectedRevision: 1, requestId: startId).revision == 2)
+        #expect(identities.claimStarting(startId, payloadHash: "h") == .v1Identity, "now a commit's identity")
+    }
+
+    @Test("The workspace lane's identities reach the start lane through the shared index: binds and unbinds while replayable, durable results and the barrier; refused requests and forgotten binds claim nothing")
+    func workspaceIdentitiesReachTheStartLane() async throws {
+        let configuration = ParticipantHostConfiguration(pin: IdentityInvented.pin)
+        let identities = configuration.identities
+        let harness = try HostHarness(participants: configuration)
+        defer { harness.clean() }
+        func startClaim(_ id: UUID) -> RequestIdentityIndex.StartClaim {
+            let claim = identities.claimStarting(id, payloadHash: "probe")
+            if claim == .claimed { identities.releaseStarting(id) }
+            return claim
+        }
+
+        let bindId = UUID()
+        let bindingId = try #require(await harness.host.handle(harness.bindRequest(requestId: bindId)).bindingId)
+        #expect(startClaim(bindId) == .v1Identity, "a bind result")
+        let unbindId = UUID()
+        #expect(await harness.host.handle(harness.unbindRequest(bindingId: bindingId, requestId: unbindId)).outcome == .ok)
+        #expect(startClaim(unbindId) == .v1Identity, "an unbind result")
+        let refusedUnbind = UUID()
+        #expect(await harness.host.handle(harness.unbindRequest(bindingId: bindingId, requestId: refusedUnbind)).reason == .unknownBinding)
+        #expect(startClaim(refusedUnbind) == .claimed, "a refusal leaves no identity")
+
+        let committed = UUID()
+        #expect(await harness.commit("committed", expectedRevision: 0, requestId: committed).revision == 1)
+        #expect(startClaim(committed) == .v1Identity, "a durable result, reported by the store")
+        let conflicted = UUID()
+        #expect(await harness.commit("stale", expectedRevision: 0, requestId: conflicted).outcome == .conflict)
+        #expect(startClaim(conflicted) == .v1Identity, "a conflict is a durable result too")
+        let undelivered = UUID()
+        let refusedCommit = await harness.host.handle(harness.commitRequest(expectedRevision: 1, record: inventedRecord("x", revision: 2),
+                                                                            deliveryId: UUID(), requestId: undelivered))
+        #expect(refusedCommit.reason == .unknownDelivery)
+        #expect(startClaim(undelivered) == .claimed, "refused before dispatch: no identity, no barrier")
+        #expect(await harness.host.outstandingMutation == nil)
+
+        // A new document forgets the bind results, in the index too.
+        await harness.host.beginGeneration()
+        let fresh = await harness.host.issueConnection()
+        #expect(startClaim(bindId) == .claimed, "a forgotten bind id is free")
+        #expect(identities.claimStarting(bindId, payloadHash: "start-hash") == .claimed)
+        #expect(await harness.host.handle(harness.bindRequest(expectedRevision: 1, requestId: bindId, connection: fresh)).reason == .payloadMismatch,
+                "and once a start claims it, a bind under it is a changed payload")
+        #expect(harness.drafts.activeBindingCount == 0)
+    }
+
+    @Test("Bind results past capacity leave the index as they leave the host's replay table")
+    func evictedBindsLeaveTheIndex() async throws {
+        let configuration = ParticipantHostConfiguration(pin: IdentityInvented.pin)
+        let identities = configuration.identities
+        let harness = try HostHarness(ledgerCapacity: 2, participants: configuration)
+        defer { harness.clean() }
+        let ids = [UUID(), UUID(), UUID()]
+        for id in ids { #expect(await harness.host.handle(harness.bindRequest(requestId: id)).outcome == .ok) }
+        #expect(identities.claimStarting(ids[0], payloadHash: "h") == .claimed, "the oldest was forgotten")
+        #expect(identities.claimStarting(ids[1], payloadHash: "h") == .v1Identity)
+        #expect(identities.claimStarting(ids[2], payloadHash: "h") == .v1Identity)
+    }
+
+    @Test("A host without participants refuses a recorded start's id for commit, bind and unbind and answers reconcile unknown from the store's reservations; its v1 answers are otherwise unchanged")
+    func unconfiguredHostReadsStoreReservations() async throws {
+        let harness = try HostHarness()
+        defer { harness.clean() }
+        #expect(!harness.host.acceptsParticipant)
+        try IdentityInvented.prepare(1, on: harness.store, revision: 1)
+        try harness.store.recordStart(runId: IdentityInvented.runId(1), IdentityInvented.start(1))
+        let startId = IdentityInvented.startId(1)
+        let bindingId = try await harness.bind(expectedRevision: 1)
+
+        #expect(await harness.commit("under a start id", expectedRevision: 1, requestId: startId).reason == .payloadMismatch)
+        #expect(await harness.host.handle(harness.bindRequest(expectedRevision: 1, requestId: startId)).reason == .payloadMismatch)
+        #expect(await harness.host.handle(harness.unbindRequest(bindingId: bindingId, requestId: startId)).reason == .payloadMismatch)
+        #expect(await harness.host.handle(harness.reconcileRequest(target: startId)).outcome == .unknown)
+        #expect(harness.drafts.activeBindingCount == 1)
+        #expect(try harness.store.read().revision == 1)
+        #expect(await harness.commit("plain", expectedRevision: 1).revision == 2)
+        #expect(await harness.host.handle(harness.unbindRequest(bindingId: bindingId)).outcome == .ok)
+    }
+
+    @Test("validConnections reads the generation and its live ids together, never one generation's ids with another's number")
+    func validConnectionsArePaired() throws {
+        let connections = ConnectionRegistry()
+        _ = connections.adopt(id: "g0-a")
+        let first = connections.validConnections()
+        #expect(first.generation == 0 && first.ids == ["g0-a"])
+        connections.advanceGeneration()
+        let advanced = connections.validConnections()
+        #expect(advanced.generation == 1 && advanced.ids.isEmpty, "a new generation revokes every connection")
+
+        let done = DispatchSemaphore(value: 0)
+        Thread {
+            for _ in 0..<2_000 {
+                let generation = connections.advanceGeneration()
+                _ = connections.adopt(id: "g\(generation)-a")
+                _ = connections.adopt(id: "g\(generation)-b")
+            }
+            done.signal()
+        }.start()
+        var mismatches: [String] = []
+        while done.wait(timeout: .now()) == .timedOut {
+            let (generation, ids) = connections.validConnections()
+            if let stray = ids.first(where: { !$0.hasPrefix("g\(generation)-") }) { mismatches.append("\(generation): \(stray)") }
+        }
+        #expect(mismatches.isEmpty, "\(mismatches.prefix(5))")
+        #expect(connections.validConnections().generation == 2_001)
     }
 }
 

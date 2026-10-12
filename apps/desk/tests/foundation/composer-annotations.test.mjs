@@ -86,7 +86,7 @@ async function isolatedPage(options = {}) {
 async function enter(page) {
   await page.goto(origin);
   await expect(page.getByText('Sample workspace saved in this browser', { exact: true })).toBeVisible();
-  const nexus = page.getByRole('button', { name: 'Cloudwork Nexus', exact: true });
+  const nexus = page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true });
   if (!await nexus.isVisible()) await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
   await nexus.click();
   await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toBeVisible();

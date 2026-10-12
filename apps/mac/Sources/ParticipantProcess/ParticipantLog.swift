@@ -1,5 +1,6 @@
 import Foundation
 import os
+import TrueConvoIdentity
 
 /// What a participant log entry is about.
 public enum ParticipantLogKind: String, Sendable, CaseIterable {
@@ -12,11 +13,24 @@ public enum ParticipantLogKind: String, Sendable, CaseIterable {
     case stopSent = "stop-sent"
     case stdinClosed = "stdin-closed"
     case stdoutClosed = "stdout-closed"
+    /// Reading stdout failed before EOF; the reason is the errno's fixed class.
+    case stdoutReadFailed = "stdout-read-failed"
     case stderrClosed = "stderr-closed"
+    /// Reading stderr failed before EOF; the reason is the errno's fixed class.
+    case stderrReadFailed = "stderr-read-failed"
     case event
     case groupCleared = "group-cleared"
     case groupUncleared = "group-uncleared"
     case cleanupReleased = "cleanup-released"
+    /// Paid overflow may have been in use (section 17's observation): no
+    /// event, and the terminal keeps its own reason.
+    case overflowObserved = "overflow-observed"
+    /// The launcher could not remove a run's working folder; it may remain.
+    case workingFolderNotRemoved = "working-folder-not-removed"
+    /// A spawned run's terminal or cleanup write found another terminal, or
+    /// no entry, in the store: never replaced or retried, so every start
+    /// stays busy until the app quits (Codex Q31). Logged once per run.
+    case writeConflict = "write-conflict"
 }
 
 /// A fixed reason a log entry may carry. Only these enums' raw values ever
@@ -25,12 +39,14 @@ public enum ParticipantLogReason: Equatable, Sendable {
     case stop(ParticipantStopReason)
     case failure(ParticipantFailureReason)
     case stderr(StderrReason)
+    case readFailure(ParticipantReadFailure)
 
     public var rawValue: String {
         switch self {
         case .stop(let reason): return reason.rawValue
         case .failure(let reason): return reason.rawValue
         case .stderr(let reason): return reason.rawValue
+        case .readFailure(let failure): return failure.rawValue
         }
     }
 }
@@ -80,7 +96,8 @@ public protocol ParticipantLogSink: Sendable {
 
 /// The app's log: unified logging, one line per entry.
 public struct SystemParticipantLog: ParticipantLogSink {
-    private static let logger = Logger(subsystem: "com.trueconvo.voice-cursor", category: "participant")
+    /// `com.trueconvo.voice-cursor`, or the test copy's own subsystem.
+    private static let logger = Logger(subsystem: AppIdentity.current.logSubsystem, category: "participant")
 
     public init() {}
 

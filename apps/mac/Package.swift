@@ -16,6 +16,16 @@ let package = Package(
         .executable(name: "DeskBundleManifest", targets: ["DeskBundleManifest"])
     ],
     targets: [
+        // Which copy is running (the real app or "True Convo Test") and every
+        // name that follows from it. Pure Foundation; read by the app, the
+        // Desk window kit and the participant log.
+        .target(name: "TrueConvoIdentity"),
+        .testTarget(
+            name: "TrueConvoIdentityTests",
+            // VoiceCursorCore only so a test can run the real launch sweep
+            // (TemporaryAudioStore) against an invented, linked archive.
+            dependencies: ["TrueConvoIdentity", "VoiceCursorCore"]
+        ),
         .target(name: "VoiceCursorCore"),
         .testTarget(
             name: "VoiceCursorCoreTests",
@@ -65,7 +75,15 @@ let package = Package(
         // App side: spawner, control client, stream reader, run driver.
         .target(
             name: "ParticipantProcess",
-            dependencies: ["DeskHost", "ParticipantSupervisorCore"]
+            dependencies: ["DeskHost", "ParticipantSupervisorCore", "TrueConvoIdentity"]
+        ),
+        // The participant lane behind HostRouter (contract sections 3-10):
+        // one launch-scoped coordinator actor. INACTIVE: only the test target
+        // depends on it, nothing in Sources constructs it, and linking it
+        // constructs nothing (Codex Q1, Q19).
+        .target(
+            name: "ParticipantCoordinator",
+            dependencies: ["DeskHost", "ParticipantProcess"]
         ),
         // Test-only helpers, never bundled: a fake CLI, a host that plays the
         // app (so a test can SIGKILL it), a supervisor test build that can
@@ -92,20 +110,38 @@ let package = Package(
             dependencies: ["ParticipantProcess"],
             path: "Sources/ParticipantTestFakes/AvailabilityProbe"
         ),
+        // Section 17's owner as the Desk window's native controls see it
+        // (plan F4). INACTIVE: only the test target depends on it, so the app
+        // links neither it nor ParticipantProcess; the window shows the
+        // controls only when given them, and the app gives none.
+        .target(
+            name: "ParticipantDeskControls",
+            dependencies: ["DeskWindowKit", "ParticipantProcess"]
+        ),
         .testTarget(
             name: "ParticipantProcessTests",
-            dependencies: ["ParticipantProcess", "ParticipantSupervisorCore", "DeskHost"]
+            // DeskHostWebKit and DeskWindowKit only so tests can drive the real
+            // coordinator through the WebKit glue and the Desk session (plan
+            // S11's end-to-end proof); the app and those targets still never
+            // depend on the coordinator.
+            dependencies: ["ParticipantProcess", "ParticipantSupervisorCore", "DeskHost", "ParticipantCoordinator",
+                           "DeskHostWebKit", "DeskWindowKit", "ParticipantDeskControls"],
+            // Byte copy of the shared participant vectors (apps/desk/tests/fixtures);
+            // ParticipantVectorTests fails if the two ever differ. cli-2.1.283:
+            // invented streams in the shapes PREDICTED for Claude Code 2.1.283
+            // (F1; its README), which StreamConformanceTests replays.
+            resources: [.copy("Fixtures/native-participant-v1.json"), .copy("Fixtures/cli-2.1.283")]
         ),
         // The Desk window for the Mac app (invented data only): its folders,
         // the bundled Desk's location, one Desk session per app run, lock
         // signals, owner verification, the window and quitting.
         .target(
             name: "DeskWindowKit",
-            dependencies: ["DeskHost", "DeskHostWebKit"]
+            dependencies: ["DeskHost", "DeskHostWebKit", "TrueConvoIdentity"]
         ),
         .testTarget(
             name: "DeskWindowKitTests",
-            dependencies: ["DeskWindowKit", "DeskHost", "DeskHostWebKit"]
+            dependencies: ["DeskWindowKit", "DeskHost", "DeskHostWebKit", "TrueConvoIdentity"]
         ),
         .executableTarget(
             name: "DeskBundleManifest",
@@ -113,7 +149,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "VoiceCursorMac",
-            dependencies: ["VoiceCursorCore", "CorrectionMemory", "DeskHost", "DeskHostWebKit", "DeskWindowKit"]
+            dependencies: ["VoiceCursorCore", "CorrectionMemory", "DeskHost", "DeskHostWebKit", "DeskWindowKit", "TrueConvoIdentity"]
         ),
         .executableTarget(
             name: "VoiceCursorPolicyCheck",

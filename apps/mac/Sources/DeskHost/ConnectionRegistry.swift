@@ -46,6 +46,18 @@ public final class ConnectionRegistry: @unchecked Sendable {
         return connections.sorted()
     }
 
+    /// The current generation and the connections valid for it, read
+    /// together under one lock: a push goes to each connection valid for
+    /// the current generation at push time (participant contract section
+    /// 8), and the pair can never mix a generation with another
+    /// generation's ids, as reading `currentGeneration` and
+    /// `activeConnections` separately could.
+    public func validConnections() -> (generation: Int, ids: [String]) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (generation, connections.sorted())
+    }
+
     /// Registers a caller-chosen id in the current generation. Test hook for
     /// replaying shared vectors; the app host only ever uses `issue()`.
     func adopt(id: String) -> HostConnection {

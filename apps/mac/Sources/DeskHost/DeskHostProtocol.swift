@@ -122,6 +122,17 @@ public enum DispatchRecovery: Equatable, Sendable {
 ///   `not-dispatched` the same id is a fresh mutation. Terminal results are
 ///   remembered durably by identity for as long as the store exists, so a
 ///   changed payload under any known id stays refused.
+///
+/// Request identity across lanes (participant contract section 3; Codex
+/// Q20, Q22): a participant host claims through its configuration's
+/// `RequestIdentityIndex`, the one space it shares with the participant
+/// lane. It wires the store to report there, takes the barrier through
+/// `claimHolder` and each bind or unbind id through `claimEphemeral`, each
+/// before any await and atomically against a start's claim, and releases
+/// them as it releases its own. Every host also reads the store's published
+/// start reservations (Codex Q5's overlay); a v1 host has no index and reads
+/// only those. They hold nothing for a store without runs, so a host
+/// without participants answers as before.
 public actor DeskHostProtocol {
     private struct Holder: Equatable {
         let requestId: UUID
@@ -132,12 +143,24 @@ public actor DeskHostProtocol {
     }
 
     private let store: ProofStore
-    private let connections: ConnectionRegistry
+    /// Read by `HostRouter` for the participant lane's v1 preflight, which
+    /// never enters this actor.
+    nonisolated let connections: ConnectionRegistry
     private let drafts: DraftBindingRegistry
     private let executor: MutationExecutor
     private let info: HostInfo
     private let events: HostEventSink?
     private let clock: @Sendable () -> Date
+    /// The participant gate: nil is a v1 host, byte for byte. Nothing in the
+    /// app passes one until the page codec for the longer list is bundled.
+    private let participants: ParticipantHostConfiguration?
+    /// Whether this host decodes `participant.*`: true exactly when it was
+    /// built with `participants`. The one switch every decoder reads, the
+    /// byte path here and the WebKit object path alike, so capabilities and
+    /// both transports can never disagree.
+    public nonisolated let acceptsParticipant: Bool
+    /// The participant configuration's identity space; nil on a v1 host.
+    private let identities: RequestIdentityIndex?
     /// The request holding the workspace barrier, with its payload hash: in
     /// flight, finished without a connection to answer, or restored from a
     /// receipt-only entry.
@@ -157,10 +180,12 @@ public actor DeskHostProtocol {
 
     /// `events` may be nil only for a read-only host: without a sink nothing
     /// can be pushed, so `deliverFinal` holds the text instead of consuming
-    /// the binding, and lifecycle events go nowhere.
+    /// the binding, and lifecycle events go nowhere. `participants` makes a
+    /// participant host: capabilities lists the twelve operations, and the
+    /// byte path and the WebKit object path decode `participant.*`.
     public init(store: ProofStore, connections: ConnectionRegistry, drafts: DraftBindingRegistry, info: HostInfo,
                 events: HostEventSink? = nil, executor: MutationExecutor = BackgroundMutationExecutor(),
-                clock: @escaping @Sendable () -> Date = { Date() }) {
+                clock: @escaping @Sendable () -> Date = { Date() }, participants: ParticipantHostConfiguration? = nil) {
         self.store = store
         self.connections = connections
         self.drafts = drafts
@@ -168,15 +193,49 @@ public actor DeskHostProtocol {
         self.events = events
         self.executor = executor
         self.clock = clock
+        self.participants = participants
+        self.acceptsParticipant = participants != nil
+        let identities = participants?.identities
+        self.identities = identities
+        // The store reports first, so the index knows every stored id
+        // before this host claims anything through it.
+        if let identities { store.setIdentityObserver(identities) }
         if let restored = store.unresolvedDispatch, let receipt = try? store.dispatchReceipt(for: restored) {
             holder = Holder(requestId: restored, payloadHash: receipt.payloadHash, dispatcher: nil)
+            // A receipt's id is never a start's (section 15's load
+            // invariants), so this claim holds; the receipt reserves it too.
+            _ = identities?.claimHolder(restored)
         }
     }
 
     // MARK: Host lifecycle
 
+    /// Whether `id` is a live connection of the current generation, as v1's
+    /// preflight checks it, read without entering this actor. The WebKit
+    /// glue reads it on the main thread when an answer is ready (stale-reply
+    /// suppression, participant contract section 3, S11): a reply to a
+    /// request admitted on a connection that is no longer valid is not
+    /// delivered.
+    public nonisolated func checkConnection(_ id: String, generation: Int) -> ConnectionCheck {
+        connections.check(id, generation: generation)
+    }
+
     /// The request holding the workspace barrier, if any.
     public var outstandingMutation: UUID? { holder?.requestId }
+
+    /// Whether this is a participant host over exactly `store` and
+    /// `connections`, built with `configuration`: the same identity space
+    /// (`===`, so both lanes claim through one index: Codex Q20, Q22) and
+    /// the same pin and input bound. The participant lane checks this when
+    /// it attaches a Desk stack, so it never answers beside a host that
+    /// claims through another index or checks another pin. False for a v1
+    /// host.
+    public nonisolated func isParticipantHost(store: ProofStore, connections: ConnectionRegistry,
+                                              configuration: ParticipantHostConfiguration) -> Bool {
+        guard let participants else { return false }
+        return self.store === store && self.connections === connections
+            && participants.identities === configuration.identities && participants == configuration
+    }
 
     /// Explicit invented-store recovery, for the app host only (there is no
     /// page operation for it). A dispatch receipt with no terminal result
@@ -211,6 +270,19 @@ public actor DeskHostProtocol {
     public func issueConnection() -> HostConnection {
         releaseOrphanedBarrier()
         let connection = connections.issue()
+        push(.hostConnection(connectionId: connection.id, generation: connection.generation, state: .ready, reason: .ready))
+        return connection
+    }
+
+    /// `issueConnection()` with a caller-chosen id, for the shared vectors'
+    /// `issue-connection` action (contract section 19): the fixed id a case
+    /// names is registered in the current generation and `ready` pushed for
+    /// it. Reachable only through `@testable import`; the app host only
+    /// ever uses `issueConnection()`.
+    @discardableResult
+    func issueConnection(adopting id: String) -> HostConnection {
+        releaseOrphanedBarrier()
+        let connection = connections.adopt(id: id)
         push(.hostConnection(connectionId: connection.id, generation: connection.generation, state: .ready, reason: .ready))
         return connection
     }
@@ -250,9 +322,31 @@ public actor DeskHostProtocol {
         store.unlockStore()
     }
 
+    /// Window close or quit: `revokeForShutdown()`, then `closeStore()`.
+    /// Unchanged for every existing caller. A participant host's app calls
+    /// the two halves itself, in the contract's order (section 14, S10
+    /// reading 1): the lane's `beginShutdown(quitting:)` first (its push
+    /// suspension must come before `revoked`), then `revokeForShutdown()`,
+    /// the lane's `finishShutdown(quitting:)` (it stops every group and
+    /// writes their terminals), `closeStore()`, and the lane's detach.
     public func close() {
+        revokeForShutdown()
+        closeStore()
+    }
+
+    /// The first half of `close()`: every connection is told `revoked`
+    /// (`shutdown`) and invalidated, every binding, pending delivery and
+    /// held text dropped, every recording token revoked, and no recording
+    /// is taken from here. The store stays open, so the participant lane
+    /// can still write its terminals before `closeStore()`.
+    public func revokeForShutdown() {
         revokeAll(state: .revoked, reason: .shutdown)
         closed = true
+    }
+
+    /// The second half of `close()`: the store is locked and closed (its
+    /// writer lock released), never to be used again.
+    public func closeStore() {
         store.lockStore()
         store.close()
     }
@@ -355,7 +449,7 @@ public actor DeskHostProtocol {
     public func handle(data: Data) async -> HostResponse {
         let request: HostRequest
         do {
-            request = try HostRequest.decode(data)
+            request = try HostRequest.decode(data, acceptsParticipant: acceptsParticipant)
         } catch let rejection as HostRequestRejection {
             return .refused(rejection.refusal, echo: rejection.echo)
         } catch {
@@ -370,21 +464,11 @@ public actor DeskHostProtocol {
     /// here either way.
     public func handle(_ request: HostRequest) async -> HostResponse {
         let echo = request.echo
-        // The byte path refuses depth before parsing. A decoded request from
-        // the WebKit glue or a test is held to the same limit here, before
-        // any walk over its payload (hash, size, text scan): the envelope
-        // root is one container above the payload.
-        guard JSONValue.object(request.payload).nestingDepth < JSONValue.maxNestingDepth else {
-            return .refused(.malformedEnvelope, echo: echo)
-        }
-        switch connections.check(request.connectionId, generation: request.generation) {
-        case .staleGeneration: return .refused(.staleGeneration, echo: echo)
-        case .unknownConnection: return .refused(.unknownConnection, echo: echo)
-        case .valid: break
-        }
-        guard JSONValue.object(request.payload).longestTextItemBytes <= ProofLimits.textItemBytes else {
-            return .refused(.textTooLarge, echo: echo)
-        }
+        // A host without participants knows no participant name, so a typed
+        // one is refused first, as the byte path refuses it while decoding:
+        // never a connection or payload answer that would show it was read.
+        if !acceptsParticipant, request.operation.isParticipant { return .refused(.unknownOperation, echo: echo) }
+        if let refusal = HostPreflight.check(request, connections: connections) { return .refused(refusal, echo: echo) }
         switch request.operation {
         case .capabilities: return capabilities(request)
         case .workspaceRead: return read(request)
@@ -393,6 +477,12 @@ public actor DeskHostProtocol {
         case .dictationBindDraft: return bind(request)
         case .dictationUnbindDraft: return unbind(request)
         case .dictationReceipt: return receipt(request)
+        // `HostRouter` hands the participant lane to its own handler before
+        // this actor, so it never waits behind the store lock or the
+        // barrier. Reaching here is a routing mistake: answer as an unknown
+        // name.
+        case .participantAvailability, .participantStart, .participantStop, .participantStatus, .participantEvents:
+            return .refused(.unknownOperation, echo: echo)
         }
     }
 
@@ -407,7 +497,8 @@ public actor DeskHostProtocol {
             "appVersion": .string(info.appVersion),
             "store": .string(store.status.rawValue),
             "lock": .string(store.isLocked ? "locked" : "unlocked"),
-            "operations": .array(HostOperation.advertised.map { .string($0.rawValue) }),
+            "operations": .array((acceptsParticipant ? HostOperation.participantAdvertised : HostOperation.advertised)
+                .map { .string($0.rawValue) }),
             "workspaceHandle": .string(store.workspaceHandle),
             "limits": ProofLimits.capabilitiesValue
         ])])
@@ -437,9 +528,24 @@ public actor DeskHostProtocol {
         }
     }
 
+    private static let commitKeys: Set<String> = ["workspaceHandle", "expectedRevision", "record", "dictationDeliveryId"]
+    /// A participant host also reads `participantRun` (section 6); a host
+    /// without participants refuses it as an unknown field, as v1 does.
+    private static let participantCommitKeys = commitKeys.union(["participantRun"])
+
+    /// After v1's checks through exact replay (the holder,
+    /// `mutation-outstanding` and the durable results), any host refuses a
+    /// start's id (section 3, Codex Q22). On a participant host, section 6
+    /// then runs before the delivery check (Codex Q6): the claim beside a
+    /// delivery, the attempted `conversationRuns` shape, then the claim's
+    /// steps 1-7 (`ParticipantPrepare.check`). Steps 8 and 9 run inside the
+    /// store's commit, before its dispatch receipt. A participant host then
+    /// takes the barrier through its identity index, before the first
+    /// await: a start that claimed the id in between makes it
+    /// `payload-mismatch`, exactly as if the start had come first.
     private func commit(_ request: HostRequest) async -> HostResponse {
         let echo = request.echo
-        guard let fields = PayloadFields(request.payload, allowed: ["workspaceHandle", "expectedRevision", "record", "dictationDeliveryId"]) else {
+        guard let fields = PayloadFields(request.payload, allowed: acceptsParticipant ? Self.participantCommitKeys : Self.commitKeys) else {
             return .refused(.unknownField, echo: echo)
         }
         if let refusal = checkHandle(fields) { return .refused(refusal, echo: echo) }
@@ -472,10 +578,27 @@ public actor DeskHostProtocol {
         } catch {
             return .refused(Self.refusal(for: error), echo: echo)
         }
+        // A start's id, still `starting`, recorded, or reserved because
+        // its write is not yet confirmed, is never a workspace mutation
+        // (section 3, Codex Q22): after the holder and exact replay, before
+        // any new mutation check. The barrier claim below and the store,
+        // under its lock, check again.
+        if isStartRequestId(request.requestId) { return .refused(.payloadMismatch, echo: echo) }
+        var participantCheck: ParticipantCommitCheck?
+        if let participants {
+            switch ParticipantPrepare.check(record: record, claim: fields.value("participantRun"), hasDeliveryId: fields.has("dictationDeliveryId"),
+                                            pin: participants.pin, inputBound: participants.inputBound) {
+            case .refused(let reason): return .refused(reason, echo: echo)
+            case .passed(let check): participantCheck = check
+            }
+        }
         if let deliveryId, let refusal = checkDelivery(deliveryId, request: request, expectedRevision: expectedRevision) {
             return .refused(refusal, echo: echo)
         }
 
+        // One atomic step against the start lane (Codex Q22): a start that
+        // claimed this id since the check above wins, and nothing is held.
+        if let identities, !identities.claimHolder(request.requestId) { return .refused(.payloadMismatch, echo: echo) }
         holder = Holder(requestId: request.requestId, payloadHash: request.payloadHash,
                         dispatcher: HostConnection(id: request.connectionId, generation: request.generation))
         // `holder == nil` can coexist with a stale marker: a `reconcile`
@@ -483,7 +606,8 @@ public actor DeskHostProtocol {
         // that store work is finished and the marker is taken over here.
         inFlight = request.requestId
         let attempt = CommitAttempt(requestId: request.requestId, payloadHash: request.payloadHash, expectedRevision: expectedRevision,
-                                    recordRevision: recordRevision, record: record, deliveryId: deliveryId)
+                                    recordRevision: recordRevision, record: record, deliveryId: deliveryId,
+                                    preparedRun: participantCheck?.preparedRun, attemptedRunIds: participantCheck?.attemptedRunIds)
         let store = store
         let now = clock()
         let result: Result<CommitOutcome, Error>
@@ -512,6 +636,14 @@ public actor DeskHostProtocol {
             // `not-dispatched`; `unknown` is reserved for a held barrier.
             releaseBarrier(request.requestId)
             return .refused(Self.refusal(for: error), echo: echo)
+        case .success(.payloadMismatch):
+            // Refused before any write (a durable result under other bytes,
+            // or a start's id): nothing applied and no result exists for
+            // `releaseOrphanedBarrier` to find, so, like the failures above,
+            // the barrier is free and the refusal terminal whether or not the
+            // connection survived.
+            releaseBarrier(request.requestId)
+            return .refused(.payloadMismatch, echo: echo)
         case .success(let proven):
             outcome = proven
         }
@@ -533,6 +665,8 @@ public actor DeskHostProtocol {
         case .replayed(let entry):
             return Self.response(for: entry, echo: echo)
         case .payloadMismatch:
+            // Answered above, before the connection check; kept for the
+            // exhaustive switch.
             return .refused(.payloadMismatch, echo: echo)
         }
     }
@@ -540,7 +674,9 @@ public actor DeskHostProtocol {
     /// Only a request's own completion releases its barrier; a reconcile may
     /// already have released it and a later mutation may hold it now.
     private func releaseBarrier(_ requestId: UUID) {
-        if holder?.requestId == requestId { holder = nil }
+        guard holder?.requestId == requestId else { return }
+        holder = nil
+        identities?.releaseHolder(requestId)
     }
 
     /// A holder whose result is durable but whose dispatching connection has
@@ -560,6 +696,7 @@ public actor DeskHostProtocol {
               connections.check(dispatcher.id, generation: dispatcher.generation) != .valid,
               (try? store.terminalResult(for: holder.requestId)) != nil else { return }
         self.holder = nil
+        identities?.releaseHolder(holder.requestId)
     }
 
     /// A bind or unbind under the barrier holder's id is a changed payload
@@ -574,13 +711,44 @@ public actor DeskHostProtocol {
         ephemeralReplays[entry.requestId] = entry
         ephemeralOrder.append(entry.requestId)
         if ephemeralOrder.count > store.ledgerCapacity {
-            ephemeralReplays.removeValue(forKey: ephemeralOrder.removeFirst())
+            let evicted = ephemeralOrder.removeFirst()
+            ephemeralReplays.removeValue(forKey: evicted)
+            identities?.forgetEphemerals([evicted])
         }
     }
 
     private func forgetEphemerals() {
+        identities?.forgetEphemerals(ephemeralReplays.keys)
         ephemeralReplays.removeAll()
         ephemeralOrder.removeAll()
+    }
+
+    /// Whether the id is a start's (section 3): one the shared index holds
+    /// on a participant host (`starting` or recorded), or one the store's
+    /// published copy reserves, recorded or unconfirmed. Every host reads
+    /// the copy (Codex Q5's overlay): it keeps a reservation that memory no
+    /// longer shows after a non-authoritative reload before the host
+    /// registered, so such an id never reads as `not-dispatched`. The copy
+    /// is empty for a store without runs, and reading it takes only the
+    /// store's `snapshotLock`, never its writer lock.
+    private func isStartRequestId(_ requestId: UUID) -> Bool {
+        if identities?.isStartId(requestId) == true { return true }
+        return isPublishedStart(requestId)
+    }
+
+    private func isPublishedStart(_ requestId: UUID) -> Bool {
+        store.publishedRuns.reservedStartRequestIds.contains(requestId.canonicalString)
+    }
+
+    /// A bind or unbind under a start's id is a changed payload (section 3),
+    /// checked beside `checkLedgerReuse` and outside the barrier, against
+    /// the published reservations on every host. A participant host then
+    /// claims the id, atomically against a start's claim (Codex Q22); a
+    /// request refused after this releases it.
+    private func claimEphemeral(_ request: HostRequest) -> HostRefusal? {
+        if isPublishedStart(request.requestId) { return .payloadMismatch }
+        guard let identities else { return nil }
+        return identities.claimEphemeral(request.requestId) ? nil : .payloadMismatch
     }
 
     /// A commit that names a delivery must match the delivery the host
@@ -623,6 +791,7 @@ public actor DeskHostProtocol {
         if let replayed = replay(ephemeralReplays[request.requestId], for: request) { return replayed }
         if let refusal = holderRefusal(for: request) { return .refused(refusal, echo: echo) }
         if let refusal = checkLedgerReuse(request) { return .refused(refusal, echo: echo) }
+        if let refusal = claimEphemeral(request) { return .refused(refusal, echo: echo) }
         // Ephemeral: not gated by the durable barrier.
 
         let target = DraftTarget(workspaceHandle: store.workspaceHandle, sessionId: sessionId, expectedRevision: expectedRevision,
@@ -641,7 +810,10 @@ public actor DeskHostProtocol {
         if let replayed = replay(ephemeralReplays[request.requestId], for: request) { return replayed }
         if let refusal = holderRefusal(for: request) { return .refused(refusal, echo: echo) }
         if let refusal = checkLedgerReuse(request) { return .refused(refusal, echo: echo) }
+        if let refusal = claimEphemeral(request) { return .refused(refusal, echo: echo) }
         guard drafts.unbind(bindingId: bindingId, connectionId: request.connectionId, generation: request.generation) else {
+            // A refusal leaves no identity (section 3).
+            identities?.forgetEphemerals([request.requestId])
             return .refused(.unknownBinding, echo: echo)
         }
         rememberEphemeral(ReplayEntry(requestId: request.requestId, operation: .dictationUnbindDraft, payloadHash: request.payloadHash, outcome: .ok))
@@ -654,6 +826,14 @@ public actor DeskHostProtocol {
     /// holder once a terminal result exists. `not-dispatched` is answered
     /// only when no evidence names the id, and identity evidence is never
     /// evicted, so that answer is proof within this store's history.
+    ///
+    /// A `participant.start` id joins the same identity space (participant
+    /// contract section 3) but is never a workspace mutation: its id is
+    /// always `unknown` here, never `not-dispatched`, whether its start is
+    /// recorded, only reserved because its write is not yet confirmed
+    /// (Codex Q5), or still `starting` in memory where no store holds it
+    /// yet (the participant host's identity index). A store without runs
+    /// reserves nothing, so a host without participants answers as before.
     private func reconcile(_ request: HostRequest) -> HostResponse {
         let echo = request.echo
         guard let fields = PayloadFields(request.payload, allowed: ["workspaceHandle", "targetRequestId"]) else {
@@ -661,6 +841,7 @@ public actor DeskHostProtocol {
         }
         if let refusal = checkHandle(fields) { return .refused(refusal, echo: echo) }
         guard let target = fields.canonicalUUIDv4("targetRequestId") else { return .refused(.invalidIdentity, echo: echo) }
+        if isStartRequestId(target) { return .unknown(echo) }
         guard store.status == .ready else { return .unknown(echo) }
         let entry: ReplayEntry?
         let receipt: DispatchReceipt?
@@ -756,6 +937,15 @@ public actor DeskHostProtocol {
         return .object(fields)
     }
 
+    /// The workspace lane's mapping. `replayExists` is v1's changed payload:
+    /// here it only ever comes from a commit or delivery identity. A start's
+    /// `replayExists` (`ProofStore.recordStart` under a known id) must never
+    /// be answered through this: the participant lane decides a start's
+    /// identity first, through `RequestIdentityIndex.claimStarting` and the
+    /// durable `publishedRuns` (section 7 step 4: a durably recorded start
+    /// replays its `ok`, a reserved or `starting` one is `unknown`), so it
+    /// owns its own mapping when starts arrive. `duplicateRun` and
+    /// `unknownRun` are a preparing commit's steps 8 and 9 (section 6).
     private static func refusal(for error: Error) -> HostRefusal {
         switch error as? ProofStoreError {
         case .locked, .closed: return .storeLocked
@@ -763,8 +953,31 @@ public actor DeskHostProtocol {
         case .replayExists: return .payloadMismatch
         case .unknownDelivery: return .unknownDelivery
         case .duplicateDelivery: return .duplicateDelivery
+        case .duplicateRun: return .duplicateRun
+        case .unknownRun: return .unknownRun
         default: return .storeCorrupt
         }
+    }
+}
+
+/// The checks every request passes after its envelope, in v1's order:
+/// nesting depth, then connection and generation, then the longest text
+/// item. Shared so the participant lane refuses exactly as v1 does without
+/// going through `DeskHostProtocol`.
+public enum HostPreflight {
+    public static func check(_ request: HostRequest, connections: ConnectionRegistry) -> HostRefusal? {
+        // The byte path refuses depth before parsing. A decoded request from
+        // the WebKit glue or a test is held to the same limit here, before
+        // any walk over its payload (hash, size, text scan): the envelope
+        // root is one container above the payload.
+        guard JSONValue.object(request.payload).nestingDepth < JSONValue.maxNestingDepth else { return .malformedEnvelope }
+        switch connections.check(request.connectionId, generation: request.generation) {
+        case .staleGeneration: return .staleGeneration
+        case .unknownConnection: return .unknownConnection
+        case .valid: break
+        }
+        guard JSONValue.object(request.payload).longestTextItemBytes <= ProofLimits.textItemBytes else { return .textTooLarge }
+        return nil
     }
 }
 
@@ -778,6 +991,7 @@ private struct PayloadFields {
     }
 
     func has(_ key: String) -> Bool { fields[key] != nil }
+    func value(_ key: String) -> JSONValue? { fields[key] }
     func opaque(_ key: String) -> String? { fields[key]?.opaqueStringValue }
     func recordId(_ key: String) -> String? { fields[key]?.recordIdValue }
     func canonicalUUIDv4(_ key: String) -> UUID? { fields[key]?.canonicalUUIDv4Value }

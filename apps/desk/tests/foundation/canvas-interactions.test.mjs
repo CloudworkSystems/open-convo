@@ -39,7 +39,7 @@ after(async () => {
 async function fixture(init) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } }); if (init) await init(context);
   const page = await context.newPage(); const errors = []; page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto(origin); await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click(); await page.getByRole('button', { name: 'Cloudwork Canvas', exact: true }).click();
+  await page.goto(origin); await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click(); await page.getByRole('button', { name: 'Cloudwork Canvas', exact: true }).click();
   await expect(page.locator('.canvas-save-status')).not.toContainText('Loading');
   const item = page.locator('.canvas-item').first(); return { context, page, item, button: item.locator('button.canvas-node'), errors };
 }

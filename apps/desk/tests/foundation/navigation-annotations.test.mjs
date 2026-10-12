@@ -97,7 +97,7 @@ async function saved(page) {
 }
 async function enter(page) {
   await page.goto(origin);
-  await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+  await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
   await page.getByRole('navigation', { name: 'Nexus views', exact: true }).getByRole('button', { name: 'Nexus Navigator', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Nexus Navigator', exact: true })).toBeVisible();
   await saved(page);
@@ -107,7 +107,7 @@ const bytes = (page) => readNativeRecordRaw(page, storageKey);
 const tabSelection = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('true-convo:desk:synthetic:tab-view:v1')).selection);
 
 async function openRoadmap(page) {
-  await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+  await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
   await page.getByRole('navigation', { name: 'Nexus views', exact: true }).getByRole('button', { name: 'Roadmap', exact: true }).click();
 }
 
@@ -121,7 +121,7 @@ test('the four Nexus choices share the main header without a duplicate module ti
     await expect(header.locator('h1')).toHaveCount(1);
     await expect(page.getByText("Make room for what's next.", { exact: true })).toHaveCount(0);
     await expect(page.getByRole('combobox', { name: 'Session domain', exact: true })).toHaveCount(0);
-    await expect(header.getByText('Cloudwork Nexus', { exact: true })).toHaveCount(0);
+    await expect(header.getByText('CLOUDWORK NEXUS', { exact: true })).toHaveCount(0);
     await expect(header.locator('.primary-module-heading')).toHaveCount(0);
     for (const name of ['Nexus Navigator', 'Cloudwork Canvas', 'Cloudwork Atlas', 'Roadmap']) {
       const headingBounds = await header.locator('.desk-heading').boundingBox();
@@ -372,7 +372,7 @@ test('sidebar refiling preserves a session and sidebar selection returns every m
       else await page.getByRole('button', { name: route, exact: true }).click();
       await session.click();
       await expect(page.getByRole('heading', { name: 'Nexus Navigator', exact: true })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Cloudwork Nexus', exact: true })).toHaveAttribute('aria-current', 'page');
+      await expect(page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true })).toHaveAttribute('aria-current', 'page');
       await expect(composer).toHaveValue('Invented unfinished draft carried with the session.');
       assert.equal(await bytes(page), preserved);
     }
@@ -456,7 +456,7 @@ test('domain note edits recover after navigation and reload without changing ses
     await note.fill('Collect related invented ideas and refine their shared purpose later.');
     await saved(page);
     await openRoadmap(page);
-    await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+    await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
   await page.getByRole('navigation', { name: 'Nexus views', exact: true }).getByRole('button', { name: 'Nexus Navigator', exact: true }).click();
     await expect(note).toHaveValue('Collect related invented ideas and refine their shared purpose later.');
     await page.reload();

@@ -18,6 +18,16 @@ import Foundation
 /// - Serves `host.capabilities`, `workspace.read`, `workspace.commitProof`,
 ///   `workspace.reconcile`, `dictation.bindDraft`, `dictation.unbindDraft` and
 ///   `dictation.receipt`.
+/// - Knows the participant wire (`docs/desk-native-participant-contract.md`):
+///   five `participant.*` names, eight more refusal reasons, the
+///   `participant.event` push and the id, pin, limit and timestamp rules in
+///   `ParticipantWire.swift`. All of it is off: a host lists and decodes the
+///   participant names only when given a `ParticipantHostConfiguration`,
+///   which nothing in the app builds yet. With one, `HostRouter` sends
+///   `participant.*` to a `ParticipantLane` ahead of the workspace actor,
+///   and both lanes claim request ids through the configuration's one
+///   `RequestIdentityIndex`; nothing in the app builds a router with a
+///   lane either.
 /// - Pushes `dictation.final`, `dictation.receipt` and `host.connection`
 ///   events to the page through an injectable sink (`HostEvent`).
 /// - Keeps one file-backed proof store with an atomic compare-and-commit, a

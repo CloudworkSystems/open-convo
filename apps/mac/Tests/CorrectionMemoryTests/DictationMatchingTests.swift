@@ -39,10 +39,10 @@ struct DictationMatchingTests {
             try CorrectionPolicy.automaticDecision(for: "Conroe is great", in: scope(notes), lessons: [conroe])
                 == .apply(lessonIDs: [conroe.id], updatedDraft: "Convo is great")
         )
-        let hawks = try lesson("hawks", "halks", scope(notes))
+        let marlo = try lesson("marlo", "marlowe", scope(notes))
         #expect(
-            try CorrectionPolicy.automaticDecision(for: "Hawks called hawks", in: scope(notes), lessons: [hawks])
-                == .apply(lessonIDs: [hawks.id], updatedDraft: "Halks called halks")
+            try CorrectionPolicy.automaticDecision(for: "Marlo called marlo", in: scope(notes), lessons: [marlo])
+                == .apply(lessonIDs: [marlo.id], updatedDraft: "Marlowe called marlowe")
         )
     }
 
@@ -87,13 +87,13 @@ struct DictationMatchingTests {
     @Test("Independent lessons all apply in one dictation")
     func independentLessonsAllApply() throws {
         let first = try lesson("conroe", "Convo", scope(notes))
-        let second = try lesson("hawks", "Halks", scope(notes))
+        let second = try lesson("marlo", "Marlowe", scope(notes))
         #expect(
             try CorrectionPolicy.automaticDecision(
-                for: "tell hawks about conroe",
+                for: "tell marlo about conroe",
                 in: scope(notes),
                 lessons: [first, second]
-            ) == .apply(lessonIDs: [second.id, first.id], updatedDraft: "tell Halks about Convo")
+            ) == .apply(lessonIDs: [second.id, first.id], updatedDraft: "tell Marlowe about Convo")
         )
     }
 
@@ -116,11 +116,11 @@ struct DictationMatchingTests {
         let store = try CorrectionLessonStore(directory: directory)
         let everywhere = try CorrectionScope.anyApplication(localeIdentifier: "en-US")
         let first = try store.remember(CorrectionPhrasePair(sourcePhrase: "conroe", replacementPhrase: "Convo"), in: everywhere)
-        let second = try store.remember(CorrectionPhrasePair(sourcePhrase: "hawks", replacementPhrase: "Halks"), in: everywhere)
+        let second = try store.remember(CorrectionPhrasePair(sourcePhrase: "marlo", replacementPhrase: "Marlowe"), in: everywhere)
 
         let reopened = try CorrectionLessonStore(directory: directory)
-        let outcome = try reopened.applySavedCorrection(to: "hawks and conroe", in: scope(mail))
-        #expect(outcome.updatedDraft == "Halks and Convo")
+        let outcome = try reopened.applySavedCorrection(to: "marlo and conroe", in: scope(mail))
+        #expect(outcome.updatedDraft == "Marlowe and Convo")
         #expect(Set(outcome.appliedLessons.map(\.id)) == [first.id, second.id])
 
         let reopenedAgain = try CorrectionLessonStore(directory: directory)

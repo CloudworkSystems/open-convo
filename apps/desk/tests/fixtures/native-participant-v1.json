@@ -1,5 +1,5 @@
 {
-  "description": "Invented cross-language vectors for the one-participant extension of the v1 Desk/native wire, revision 3 (docs/desk-native-participant-contract.md section 19 defines the keys). Records and page runs were produced by the renderer domain code at Codex candidate 2e1f37d; every embedded record passes its validateState except two deliberately malformed request records (cases \"workspace.commitProof malformed conversationRuns (element without runId)\" and \"workspace.commitProof prepare refused: the new run already carries a reason (deliberately malformed record)\"). inputHash is computed by native from the record. The available availability seed and pin seed are test-target fakes only: a shipping host answers overflow-unverified until an owner attestation is separately approved. pageCases marked requires need the named renderer change. These vectors do not prove a connected host, a CLI run, process cleanup or a subscription login.",
+  "description": "Invented cross-language vectors for the one-participant extension of the v1 Desk/native wire, revision 3 (docs/desk-native-participant-contract.md section 19 defines the keys). Records and page runs were produced by the renderer domain code at Codex candidate 2e1f37d, except the Mac commit slice's additions named below; every record cases 1-105 embed passes its validateState except two deliberately malformed request records (cases \"workspace.commitProof malformed conversationRuns (element without runId)\" and \"workspace.commitProof prepare refused: the new run already carries a reason (deliberately malformed record)\"). Cases 106 and 107 and records.legacy-runs-r6 are not renderer output: they were derived by hand in the Mac commit slice (Codex answers Q8 and Q9, contract section 19), case 106's request record from records.prepared-r5 and deliberately malformed (a number among its inputChunks), records.legacy-runs-r6 and case 107's request record from records.running-r6. records.legacy-runs-r6 is a deliberately legacy seed record whose conversationRuns holds malformed siblings; case 107's request record passes validateState. inputHash is computed by native from the record. The available availability seed and pin seed are test-target fakes only: a shipping host answers overflow-unverified until an owner attestation is separately approved. pageCases marked requires need the named renderer change. These vectors do not prove a connected host, a CLI run, process cleanup or a subscription login.",
   "context": {
     "connectionId": "51000000-0000-4000-8000-000000000001",
     "documentGeneration": 2,
@@ -504,6 +504,88 @@
           "phase": "prepared",
           "createdAt": "2026-10-09T00:01:00.000Z",
           "updatedAt": "2026-10-09T00:01:00.000Z"
+        }
+      ]
+    },
+    "legacy-runs-r6": {
+      "schemaVersion": 2,
+      "revision": 6,
+      "updatedAt": "2026-10-09T00:01:01.250Z",
+      "goals": [
+        {
+          "id": "A1000000-0000-1000-8000-000000000001",
+          "title": "Invented proof folder",
+          "nextStep": "Try an invented draft.",
+          "createdAt": "2026-10-09T00:00:00.000Z",
+          "updatedAt": "2026-10-09T00:00:00.000Z"
+        }
+      ],
+      "sessions": [
+        {
+          "id": "52abcdef-0000-4000-8abc-000000000001",
+          "goalId": "A1000000-0000-1000-8000-000000000001",
+          "title": "Invented proof session",
+          "createdAt": "2026-10-09T00:00:00.000Z",
+          "updatedAt": "2026-10-09T00:00:00.000Z"
+        }
+      ],
+      "messages": [],
+      "drafts": {
+        "52abcdef-0000-4000-8abc-000000000001": ""
+      },
+      "goalDrafts": {
+        "A1000000-0000-1000-8000-000000000001": {
+          "nextStep": null,
+          "workTitle": ""
+        }
+      },
+      "workItems": [],
+      "notes": [],
+      "activity": [],
+      "selection": {
+        "goalId": "A1000000-0000-1000-8000-000000000001",
+        "sessionId": "52abcdef-0000-4000-8abc-000000000001",
+        "route": "sessions"
+      },
+      "preferences": {
+        "theme": "system"
+      },
+      "capabilities": {
+        "mode": "synthetic",
+        "provider": "runtime-selected",
+        "native": "unavailable"
+      },
+      "conversationRuns": [
+        {
+          "phase": "prepared"
+        },
+        {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000000001",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000001",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000001",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000001",
+          "participant": {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "Invented question: \"two plus two?\"\nReply in one line. 😀"
+          ],
+          "outputChunks": [
+            "Four. "
+          ],
+          "lastSequence": 2,
+          "phase": "running",
+          "createdAt": "2026-10-09T00:01:00.000Z",
+          "updatedAt": "2026-10-09T00:01:01.250Z"
+        },
+        "invented legacy note",
+        {
+          "runId": 7,
+          "phase": "prepared"
         }
       ]
     }
@@ -11894,6 +11976,219 @@
           "groupCleared": null
         }
       ]
+    },
+    {
+      "name": "workspace.commitProof prepare refused: a non-string input chunk is text-too-large (deliberately malformed record)",
+      "seed": {
+        "record": "base-r4",
+        "runs": [],
+        "memory": null
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000009401",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "workspace.commitProof",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "expectedRevision": 4,
+          "record": {
+            "schemaVersion": 2,
+            "revision": 5,
+            "updatedAt": "2026-10-09T00:01:00.000Z",
+            "goals": [
+              {
+                "id": "A1000000-0000-1000-8000-000000000001",
+                "title": "Invented proof folder",
+                "nextStep": "Try an invented draft.",
+                "createdAt": "2026-10-09T00:00:00.000Z",
+                "updatedAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "sessions": [
+              {
+                "id": "52abcdef-0000-4000-8abc-000000000001",
+                "goalId": "A1000000-0000-1000-8000-000000000001",
+                "title": "Invented proof session",
+                "createdAt": "2026-10-09T00:00:00.000Z",
+                "updatedAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "messages": [],
+            "drafts": {
+              "52abcdef-0000-4000-8abc-000000000001": ""
+            },
+            "goalDrafts": {
+              "A1000000-0000-1000-8000-000000000001": {
+                "nextStep": null,
+                "workTitle": ""
+              }
+            },
+            "workItems": [],
+            "notes": [],
+            "activity": [],
+            "selection": {
+              "goalId": "A1000000-0000-1000-8000-000000000001",
+              "sessionId": "52abcdef-0000-4000-8abc-000000000001",
+              "route": "sessions"
+            },
+            "preferences": {
+              "theme": "system"
+            },
+            "capabilities": {
+              "mode": "synthetic",
+              "provider": "runtime-selected",
+              "native": "unavailable"
+            },
+            "conversationRuns": [
+              {
+                "version": 1,
+                "runId": "71abcdef-0000-4000-8abc-000000000001",
+                "sessionId": "52abcdef-0000-4000-8abc-000000000001",
+                "userMessageId": "72abcdef-0000-4000-8abc-000000000001",
+                "assistantMessageId": "73abcdef-0000-4000-8abc-000000000001",
+                "participant": {
+                  "id": "claude-code",
+                  "label": "Claude Code",
+                  "model": "invented-pinned-model",
+                  "executionHost": "this-mac"
+                },
+                "inputChunks": [
+                  "Invented question: \"two plus two?\"\nReply in one line. 😀",
+                  42
+                ],
+                "outputChunks": [],
+                "lastSequence": 0,
+                "phase": "prepared",
+                "createdAt": "2026-10-09T00:01:00.000Z",
+                "updatedAt": "2026-10-09T00:01:00.000Z"
+              }
+            ]
+          },
+          "participantRun": {
+            "runId": "71abcdef-0000-4000-8abc-000000000001",
+            "sessionId": "52abcdef-0000-4000-8abc-000000000001",
+            "userMessageId": "72abcdef-0000-4000-8abc-000000000001",
+            "assistantMessageId": "73abcdef-0000-4000-8abc-000000000001",
+            "participantId": "claude-code",
+            "createdAt": "2026-10-09T00:01:00.000Z"
+          }
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000009401",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "workspace.commitProof",
+        "outcome": "refused",
+        "reason": "text-too-large"
+      },
+      "afterRuns": []
+    },
+    {
+      "name": "workspace.commitProof repairs a legacy committed record: its malformed conversationRuns is read leniently, so a kept run is not introduced",
+      "seed": {
+        "record": "legacy-runs-r6",
+        "runs": [],
+        "memory": null
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000009402",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "workspace.commitProof",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "expectedRevision": 6,
+          "record": {
+            "schemaVersion": 2,
+            "revision": 7,
+            "updatedAt": "2026-10-09T00:02:00.000Z",
+            "goals": [
+              {
+                "id": "A1000000-0000-1000-8000-000000000001",
+                "title": "Invented proof folder",
+                "nextStep": "Try an invented draft.",
+                "createdAt": "2026-10-09T00:00:00.000Z",
+                "updatedAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "sessions": [
+              {
+                "id": "52abcdef-0000-4000-8abc-000000000001",
+                "goalId": "A1000000-0000-1000-8000-000000000001",
+                "title": "Invented proof session",
+                "createdAt": "2026-10-09T00:00:00.000Z",
+                "updatedAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "messages": [],
+            "drafts": {
+              "52abcdef-0000-4000-8abc-000000000001": ""
+            },
+            "goalDrafts": {
+              "A1000000-0000-1000-8000-000000000001": {
+                "nextStep": null,
+                "workTitle": ""
+              }
+            },
+            "workItems": [],
+            "notes": [],
+            "activity": [],
+            "selection": {
+              "goalId": "A1000000-0000-1000-8000-000000000001",
+              "sessionId": "52abcdef-0000-4000-8abc-000000000001",
+              "route": "sessions"
+            },
+            "preferences": {
+              "theme": "system"
+            },
+            "capabilities": {
+              "mode": "synthetic",
+              "provider": "runtime-selected",
+              "native": "unavailable"
+            },
+            "conversationRuns": [
+              {
+                "version": 1,
+                "runId": "71abcdef-0000-4000-8abc-000000000001",
+                "sessionId": "52abcdef-0000-4000-8abc-000000000001",
+                "userMessageId": "72abcdef-0000-4000-8abc-000000000001",
+                "assistantMessageId": "73abcdef-0000-4000-8abc-000000000001",
+                "participant": {
+                  "id": "claude-code",
+                  "label": "Claude Code",
+                  "model": "invented-pinned-model",
+                  "executionHost": "this-mac"
+                },
+                "inputChunks": [
+                  "Invented question: \"two plus two?\"\nReply in one line. 😀"
+                ],
+                "outputChunks": [
+                  "Four. "
+                ],
+                "lastSequence": 2,
+                "phase": "running",
+                "createdAt": "2026-10-09T00:01:00.000Z",
+                "updatedAt": "2026-10-09T00:01:01.250Z"
+              }
+            ]
+          }
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000009402",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "workspace.commitProof",
+        "outcome": "ok",
+        "revision": 7
+      },
+      "afterRuns": []
     }
   ],
   "pageCases": [
@@ -12386,7 +12681,7 @@
         },
         "status": "terminal",
         "startAllowed": false,
-        "cleanup": "none"
+        "cleanup": "cleared"
       }
     },
     {
@@ -12496,7 +12791,7 @@
         },
         "status": "terminal",
         "startAllowed": false,
-        "cleanup": "none"
+        "cleanup": "cleared"
       }
     },
     {
@@ -12892,6 +13187,15 @@
             "terminal": null,
             "groupCleared": null,
             "unknownReason": null
+          }
+        },
+        {
+          "events": {
+            "events": [],
+            "more": false,
+            "lastSequence": 0,
+            "lost": null,
+            "terminal": null
           }
         }
       ],

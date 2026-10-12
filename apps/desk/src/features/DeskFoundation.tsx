@@ -107,6 +107,17 @@ export function DeskFoundation(props: DeskFoundationProps) {
     setLayoutWarning(runtime.layout.save(next));
     if (value.mode) setRailRevealed(false);
   };
+  const navigationCovered = () => !!document.fullscreenElement
+    || !!document.querySelector('[role="dialog"], dialog[open], .canvas-expanded');
+  const navigationHoverAllowed = (event: { buttons: number; pointerType: string }) => !event.buttons
+    && event.pointerType !== 'touch' && !railMenuOpen.current
+    && window.matchMedia('(min-width: 1000px)').matches && !navigationCovered();
+  const revealNavigation = () => {
+    setRailRevealed(true);
+    requestAnimationFrame(() => {
+      if (!navigationCovered()) rail.current?.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
+    });
+  };
   const openDomain = (id: string) => { props.onGoalSelect(id); props.onRouteChange('sessions'); props.onNexusViewChange('navigator'); };
   const restoreFocus = (origin: HTMLElement | null, fallback?: string) => {
     if (origin && rail.current?.contains(origin) && (layout.mode === 'hover' || layout.mode === 'hidden')) setRailRevealed(true);
@@ -204,20 +215,34 @@ export function DeskFoundation(props: DeskFoundationProps) {
   useEffect(() => {
     const keyboard = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.altKey || event.code !== 'Backslash') return;
-      if (document.querySelector('[role="dialog"], dialog[open]')) return;
+      if (navigationCovered()) return;
       event.preventDefault();
-      if (layout.mode === 'hover' || layout.mode === 'hidden') {
+      if (window.matchMedia('(max-width: 999px)').matches) setNavigationOpen(true);
+      else if (layout.mode === 'hover' || layout.mode === 'hidden') {
         if (railRevealed) { setRailRevealed(false); document.getElementById('desk-main')?.focus(); }
-        else { setRailRevealed(true); requestAnimationFrame(() => rail.current?.querySelector<HTMLElement>('button')?.focus({ preventScroll: true })); }
+        else revealNavigation();
       } else changeLayout({ mode: layout.mode === 'expanded' ? 'icons' : 'expanded' });
     };
     window.addEventListener('keydown', keyboard);
     return () => window.removeEventListener('keydown', keyboard);
   }, [layout, railRevealed]);
   useEffect(() => {
-    if (!railRevealed || (layout.mode !== 'hover' && layout.mode !== 'hidden')) return;
-    const outside = (event: PointerEvent) => {
-      if (railMenuOpen.current || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+    if (layout.mode !== 'hidden' && (!railRevealed || layout.mode !== 'hover')) return;
+    const pointerMoved = (event: PointerEvent) => {
+      if (!navigationHoverAllowed(event)) return;
+      if (!railRevealed) {
+        // A page overlay may receive the movement instead of the invisible
+        // edge's enter event. Use the same full-height hit area without
+        // opening navigation during touch gestures, drags or covered views.
+        const bounds = edge.current?.getBoundingClientRect();
+        if (bounds?.width
+          && event.clientX >= bounds.left && event.clientX < bounds.right
+          && event.clientY >= bounds.top && event.clientY < bounds.bottom) setRailRevealed(true);
+        return;
+      }
+      // The resize handle extends outside the rail border. Its outer half is
+      // still navigation, and captured drags must finish before hover can hide it.
+      if (event.target instanceof Node && rail.current?.contains(event.target)) return;
       const bounds = rail.current?.getBoundingClientRect();
       // Opening motion must not treat a pointer headed into the full rail as
       // outside simply because its visible edge has not reached that point yet.
@@ -226,8 +251,9 @@ export function DeskFoundation(props: DeskFoundationProps) {
         if (rail.current?.contains(document.activeElement)) document.getElementById('desk-main')?.focus();
       }
     };
-    document.addEventListener('pointermove', outside);
-    return () => document.removeEventListener('pointermove', outside);
+    // Observe the edge before a page overlay can stop the event bubbling.
+    document.addEventListener('pointermove', pointerMoved, true);
+    return () => document.removeEventListener('pointermove', pointerMoved, true);
   }, [layout.mode, layout.railWidth, railRevealed]);
   const navigationProps = {
     state, readOnly,
@@ -261,9 +287,9 @@ export function DeskFoundation(props: DeskFoundationProps) {
   };
   const routeTitle = nexusActive
     ? nexusView === 'navigator' ? 'Nexus Navigator' : nexusView === 'canvas' ? 'Cloudwork Canvas' : nexusView === 'atlas' ? 'Cloudwork Atlas' : 'Roadmap'
-    : state.selection.route === 'memory' ? 'CONTINUITY'
+    : state.selection.route === 'memory' ? 'Memories'
       : state.selection.route === 'setup' ? 'Workspace setup' : 'DATA';
-  const moduleTitle = state.selection.route === 'memory' ? 'Cloudwork Continuity' : 'Cloudwork Data';
+  const moduleTitle = state.selection.route === 'memory' ? 'Memories' : 'Cloudwork Data';
   const panelProps = {
     goal, session, sessions: state.sessions, activity: state.activity,
     onSessionSelect: props.onSessionSelect,
@@ -282,19 +308,21 @@ export function DeskFoundation(props: DeskFoundationProps) {
         '--inspector-width': `${inspectorWidth}px`,
       } as CSSProperties}>
         <button ref={edge} type="button" className="rail-edge" aria-label="Reveal navigation" title="Reveal navigation"
-          onMouseEnter={() => layout.mode === 'hidden' && setRailRevealed(true)}
-          onMouseLeave={(event) => {
+          onPointerEnter={(event) => layout.mode === 'hidden' && navigationHoverAllowed(event) && setRailRevealed(true)}
+          onPointerLeave={(event) => {
+            if (!navigationHoverAllowed(event) || event.relatedTarget instanceof Node && rail.current?.contains(event.relatedTarget)) return;
             const bounds = rail.current?.getBoundingClientRect();
-            if (layout.mode === 'hidden' && !railMenuOpen.current && !document.querySelector('[role="dialog"][aria-modal="true"]') && bounds && (event.clientX > layout.railWidth || event.clientY < bounds.top || event.clientY > bounds.bottom)) setRailRevealed(false);
+            if (layout.mode === 'hidden' && bounds && (event.clientX > layout.railWidth || event.clientY < bounds.top || event.clientY > bounds.bottom)) setRailRevealed(false);
           }}
           onFocus={() => layout.mode === 'hidden' && setRailRevealed(true)}
-          onClick={() => { setRailRevealed(true); requestAnimationFrame(() => rail.current?.querySelector<HTMLElement>('button')?.focus({ preventScroll: true })); }} />
-        <aside ref={rail} className="desktop-navigation" aria-label="Navigation rail" inert={layout.mode === 'hidden' && !railRevealed}
-          onMouseEnter={() => (layout.mode === 'hover' || layout.mode === 'hidden') && setRailRevealed(true)}
-          onMouseLeave={(event) => {
+          onClick={revealNavigation} />
+        <aside ref={rail} id="desktop-navigation" className="desktop-navigation" aria-label="Navigation rail" inert={layout.mode === 'hidden' && !railRevealed}
+          onPointerEnter={(event) => (layout.mode === 'hover' || layout.mode === 'hidden') && navigationHoverAllowed(event) && setRailRevealed(true)}
+          onPointerLeave={(event) => {
+            if (!navigationHoverAllowed(event) || event.relatedTarget instanceof Node && rail.current?.contains(event.relatedTarget)) return;
             const bounds = rail.current?.getBoundingClientRect();
             const outside = !event.relatedTarget || bounds && (event.clientX < 0 || event.clientX > layout.railWidth || event.clientY < bounds.top || event.clientY > bounds.bottom);
-            if (outside && (layout.mode === 'hover' || layout.mode === 'hidden') && !railMenuOpen.current && !document.querySelector('[role="dialog"][aria-modal="true"]')) { setRailRevealed(false); if (rail.current?.contains(document.activeElement)) document.getElementById('desk-main')?.focus(); }
+            if (outside && (layout.mode === 'hover' || layout.mode === 'hidden')) { setRailRevealed(false); if (rail.current?.contains(document.activeElement)) document.getElementById('desk-main')?.focus(); }
           }}
           onFocus={() => (layout.mode === 'hover' || layout.mode === 'hidden') && setRailRevealed(true)}
           onBlur={(event) => { if ((layout.mode === 'hover' || layout.mode === 'hidden') && !railMenuOpen.current && !document.querySelector('[role="dialog"][aria-modal="true"]') && !event.currentTarget.contains(event.relatedTarget as Node | null) && !event.currentTarget.matches(':hover')) setRailRevealed(false); }}
@@ -311,6 +339,9 @@ export function DeskFoundation(props: DeskFoundationProps) {
           <header className="desk-header">
             <div className="desk-heading">
               <button type="button" className="icon-button mobile-menu" onClick={() => setNavigationOpen(true)} aria-label="Open navigation" aria-haspopup="dialog" aria-expanded={navigationOpen}><Icon name="menu" size={21} /></button>
+              {layout.mode === 'hidden' && !railRevealed && <button type="button" className="text-button hidden-navigation-recovery"
+                aria-label="Show navigation" title="Show navigation (⌘ / Ctrl + \)" aria-controls="desktop-navigation" aria-expanded={railRevealed}
+                onClick={revealNavigation}><Icon name="menu" size={18} /><span>Navigation</span></button>}
               <div>{!nexusActive && <span className="primary-module-heading">{moduleTitle}</span>}
                 <h1 className="sr-only">{routeTitle}</h1>
                 {nexusActive && <nav className="nexus-view-tabs" aria-label="Nexus views">

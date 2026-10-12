@@ -39,15 +39,37 @@ public enum ParticipantCleanupState: Equatable, Sendable {
     /// No terminal yet, or a terminal with the group not confirmed gone.
     case owned
     /// The group is confirmed gone, or ownership is lost (supervisor gone and
-    /// both output pipes at EOF). Nothing of the run blocks a start.
+    /// both output pipes at EOF; a failed read is not EOF, so after one this
+    /// never comes from the pipes). Nothing of the run blocks a start.
     case released
 }
 
 public enum ParticipantRunUpdate: Equatable, Sendable {
+    /// `started` or `text`.
     case event(ParticipantEvent)
+    /// The run's one terminal event (`completed`, `stopped` or `failed`)
+    /// with the `groupCleared` recorded with it, in one update: true once
+    /// the group is confirmed gone, false when it is not (uncleared, or the
+    /// supervisor lost; never later true then), null when nothing ran.
+    case terminal(ParticipantEvent, groupCleared: Bool?)
     /// A terminal recorded `groupCleared: false`; the group has since cleared.
     case groupCleared
+    /// After an uncleared terminal, a cleanup retry (a `stop()`) cannot clear
+    /// the group now: the retry ended with members left, or the supervisor
+    /// was lost while an output pipe was not at EOF (a loss that finds both
+    /// pipes at EOF gives `cleanupReleased` instead). Nothing changes and
+    /// nothing new is recorded; a Stop waiting on the retry can answer.
+    case cleanupRetryUncleared
     case cleanupReleased
+    /// Paid overflow may have been in use (section 17): the owner of a
+    /// confirmation that paid usage is off ends it. A paid-overflow end; an
+    /// overflow signal before init (the end stays `process-error`) or read
+    /// after another end (which keeps its terminal); or stdout that could
+    /// not be read to its EOF (a bound, or a failed read). Not an event: no
+    /// sequence, never on the wire, no change to any terminal; logged as
+    /// `overflow-observed`. At most once per run, before or after the
+    /// terminal, and always before the updates finish.
+    case overflowObserved
 }
 
 /// What a status read sees, from memory only.
@@ -59,14 +81,16 @@ public struct ParticipantRunSnapshot: Equatable, Sendable {
 }
 
 /// One run: a spawned supervisor and CLI, read through `StreamJSONReader`,
-/// numbered into participant events. Every input is handled on one serial
-/// queue; `stop()` writes `stop` to the supervisor before it touches anything
-/// else.
+/// numbered into participant events by `ParticipantRunCore`. Every input is
+/// handled on one serial queue; `stop()` writes `stop` to the supervisor
+/// before it touches anything else.
 ///
-/// A run keeps itself alive until its process has ended (every pipe and the
-/// control socket closed and the supervisor reaped), so the rules only it
-/// enforces (the timeouts, paid overflow, reply-too-long) still stop the CLI
-/// if its owner lets go of it early.
+/// A run keeps itself alive until its process events have ended (each output
+/// pipe at EOF or its read failed, the control socket closed and the
+/// supervisor reaped), so the rules only it enforces (the timeouts, paid
+/// overflow, reply-too-long) still stop the CLI if its owner lets go of it
+/// early. A failed read is not EOF and does not prove the CLI exited: the
+/// updates can then finish with cleanup still pending.
 public final class ParticipantRun: @unchecked Sendable {
     public let updates: AsyncStream<ParticipantRunUpdate>
 
@@ -76,13 +100,8 @@ public final class ParticipantRun: @unchecked Sendable {
     private let log: ParticipantLogSink
     private let queue = DispatchQueue(label: "participant-run")
     private let continuation: AsyncStream<ParticipantRunUpdate>.Continuation
-    private var reader: StreamJSONReader
+    private var core: ParticipantRunCore
     private var timer: DispatchSourceTimer?
-    private var sequence = 0
-    private var lastAtMillis: Int64
-    private var terminalEvent: ParticipantEvent?
-    private var groupCleared: Bool?
-    private var released = false
 
     public init(identity: ParticipantRunIdentity, process: SpawnedParticipant,
                 configuration: StreamJSONReader.Configuration,
@@ -92,15 +111,14 @@ public final class ParticipantRun: @unchecked Sendable {
         self.process = process
         self.clock = clock
         self.log = log
-        self.reader = StreamJSONReader(configuration: configuration)
-        self.lastAtMillis = identity.createdAtMillis
+        self.core = ParticipantRunCore(identity: identity, configuration: configuration)
         var continuation: AsyncStream<ParticipantRunUpdate>.Continuation!
         self.updates = AsyncStream(bufferingPolicy: .unbounded) { continuation = $0 }
         self.continuation = continuation
         log.record(ParticipantLogEntry(runId: identity.runId, kind: .supervisorSpawned))
 
-        // Strong on purpose: the run lives while its process does (see above),
-        // and is freed once the events end.
+        // Strong on purpose: the run lives while its process events do (see
+        // above), and is freed once they end.
         let events = process.events
         Task.detached { [self, queue] in
             for await event in events {
@@ -113,139 +131,74 @@ public final class ParticipantRun: @unchecked Sendable {
     /// User Stop, lock, window close or quit; also the cleanup retry once a
     /// terminal exists. Writes `stop` first, from memory only, then lets the
     /// reader record the decision.
-    public func stop() {
+    ///
+    /// Returns whether that write reached the supervisor's control socket:
+    /// false once the socket is closed (the supervisor is gone, so nothing
+    /// can be signalled and no retry is possible). True means only that the
+    /// local write succeeded, never that the CLI, its group or the provider
+    /// stopped; the updates say what happened.
+    @discardableResult
+    public func stop() -> Bool {
         let sent = process.sendStop()
         queue.async { [self] in
-            if sent { log.record(ParticipantLogEntry(runId: identity.runId, kind: .stopSent)) }
-            apply(reader.stopRequested(now: clock.monotonicMillis()))
+            perform(core.stopRequested(stopSent: sent, monotonic: clock.monotonicMillis(), wall: clock.wallMillis()))
+            rearmTimer()
         }
+        return sent
     }
 
     public var snapshot: ParticipantRunSnapshot {
-        queue.sync {
-            ParticipantRunSnapshot(lastSequence: sequence, terminal: terminalEvent,
-                                   groupCleared: groupCleared, cleanup: released ? .released : .owned)
-        }
+        queue.sync { core.snapshot }
     }
 
     // MARK: Inputs
 
     private func handle(_ event: ParticipantProcessEvent) {
-        let now = clock.monotonicMillis()
+        perform(core.process(event, monotonic: clock.monotonicMillis(), wall: clock.wallMillis()))
         switch event {
-        case .control(let message):
-            switch message {
-            case .spawned:
-                log.record(ParticipantLogEntry(runId: identity.runId, kind: .cliSpawned))
-            case .spawnFailed:
-                log.record(ParticipantLogEntry(runId: identity.runId, kind: .cliSpawnFailed))
-            case .exit(let status):
-                let decoded = ParticipantWaitStatus.decode(status)
-                log.record(ParticipantLogEntry(runId: identity.runId, kind: .cliExited,
-                                               exitCode: decoded.exitCode, signal: decoded.signal))
-            case .cleared:
-                log.record(ParticipantLogEntry(runId: identity.runId, kind: .groupCleared))
-            case .uncleared:
-                log.record(ParticipantLogEntry(runId: identity.runId, kind: .groupUncleared))
-            }
-            apply(reader.supervisor(message, now: now))
-        case .controlClosed:
-            let outputs = reader.controlClosed(now: now)
-            if reader.supervisorLost {
-                log.record(ParticipantLogEntry(runId: identity.runId, kind: .supervisorLost))
-            }
-            apply(outputs)
-        case .stdout(let bytes):
-            apply(reader.consumeStdout(bytes, now: now))
-        case .stdoutLimitReached:
-            apply(reader.stdoutLimitReached(now: now))
-        case .stdoutClosed(let total):
-            log.record(ParticipantLogEntry(runId: identity.runId, kind: .stdoutClosed, byteCount: total))
-            apply(reader.stdoutClosed(now: now))
-        case .stderr(let bytes):
-            reader.consumeStderr(bytes)
-        case .stderrClosed(let total):
-            log.record(ParticipantLogEntry(runId: identity.runId, kind: .stderrClosed, byteCount: total,
-                                           reason: .stderr(reader.stderrReason)))
-            apply(reader.stderrClosed(now: now))
-        case .stdinClosed(let written, _):
-            log.record(ParticipantLogEntry(runId: identity.runId, kind: .stdinClosed, byteCount: written))
-        case .supervisorExited(let status):
-            let decoded = ParticipantWaitStatus.decode(status)
-            log.record(ParticipantLogEntry(runId: identity.runId, kind: .supervisorExited,
-                                           exitCode: decoded.exitCode, signal: decoded.signal))
+        case .control, .controlClosed, .stdout, .stdoutLimitReached, .stdoutClosed, .stdoutReadFailed,
+             .stderrClosed, .stderrReadFailed:
+            rearmTimer()
+        case .stderr, .stdinClosed, .supervisorExited:
+            break   // the reader's deadlines cannot have moved
         }
     }
 
     private func processEnded() {
         timer?.cancel()
         timer = nil
+        // Anything the core still owes (section 17's observation) goes out
+        // before the updates finish.
+        perform(core.updatesFinishing(wall: clock.wallMillis()))
         continuation.finish()
     }
 
     private func tick() {
-        apply(reader.tick(now: clock.monotonicMillis()))
+        perform(core.tick(monotonic: clock.monotonicMillis(), wall: clock.wallMillis()))
+        rearmTimer()
     }
 
     // MARK: Outputs
 
-    private func apply(_ outputs: [StreamJSONReader.Output]) {
-        for output in outputs {
-            switch output {
-            case .started:
-                emit(.started)
-            case .text(let text):
-                emit(.text, text: text)
-            case .terminal(let terminal, let cleared):
-                groupCleared = cleared
-                terminalEvent = emit(terminal.type, reason: terminal.reason)
-                if let reason = terminalReason(terminal) {
-                    log.record(ParticipantLogEntry(runId: identity.runId, kind: .event, eventType: terminal.type,
-                                                   sequence: sequence, reason: reason))
-                }
+    /// Carries out the core's effects in order: yields, native's own `stop`
+    /// writes and log entries.
+    private func perform(_ effects: [ParticipantRunCore.Effect]) {
+        for effect in effects {
+            switch effect {
+            case .update(let update):
+                continuation.yield(update)
             case .sendStop:
                 if process.sendStop() {
                     log.record(ParticipantLogEntry(runId: identity.runId, kind: .stopSent))
                 }
-            case .groupClearedAfterTerminal:
-                groupCleared = true
-                continuation.yield(.groupCleared)
-            case .cleanupReleased:
-                released = true
-                log.record(ParticipantLogEntry(runId: identity.runId, kind: .cleanupReleased))
-                continuation.yield(.cleanupReleased)
+            case .log(let entry):
+                log.record(entry)
             }
-        }
-        rearmTimer()
-    }
-
-    @discardableResult
-    private func emit(_ type: ParticipantEventType, text: String? = nil, reason: String? = nil) -> ParticipantEvent {
-        sequence += 1
-        lastAtMillis = max(clock.wallMillis(), lastAtMillis, identity.createdAtMillis)
-        let event = ParticipantEvent(runId: identity.runId, sessionId: identity.sessionId, sequence: sequence,
-                                     at: ParticipantTimestamp.format(millis: lastAtMillis),
-                                     type: type, text: text, reason: reason)
-        if type != .stopped, type != .failed, type != .completed {
-            log.record(ParticipantLogEntry(runId: identity.runId, kind: .event, eventType: type, sequence: sequence,
-                                           byteCount: text.map { $0.utf8.count }))
-        } else if type == .completed {
-            log.record(ParticipantLogEntry(runId: identity.runId, kind: .event, eventType: type, sequence: sequence))
-        }
-        continuation.yield(.event(event))
-        return event
-    }
-
-    private func terminalReason(_ terminal: ParticipantTerminal) -> ParticipantLogReason? {
-        switch terminal {
-        case .completed: return nil
-        case .stopped(let reason): return .stop(reason)
-        case .failed(let reason): return .failure(reason)
         }
     }
 
     private func rearmTimer() {
-        guard let deadline = reader.nextDeadline() else {
+        guard let deadline = core.nextDeadline() else {
             timer?.cancel()
             timer = nil
             return

@@ -91,7 +91,7 @@ const workspaceBytes = (page) => readRecordRaw(page, workspaceKey, workspaceKey)
 async function enter(page, mobile = false) {
   await page.goto(origin);
   if (mobile) await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
-  await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+  await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
   await expect(page.getByText('Sample workspace saved in this browser', { exact: true })).toBeVisible();
   if (mobile) await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
   await page.getByRole('button', { name: 'User options', exact: true }).click();

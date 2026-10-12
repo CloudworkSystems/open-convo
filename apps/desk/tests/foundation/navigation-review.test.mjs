@@ -85,7 +85,7 @@ async function saved(page) {
 }
 async function enter(page) {
   await page.goto(origin);
-  await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+  await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Nexus Navigator', exact: true })).toBeVisible();
   await saved(page);
 }

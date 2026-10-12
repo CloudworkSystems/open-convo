@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import AVFoundation
 import Speech
+import TrueConvoIdentity
 
 enum LiveTestGuide {
     static var url: URL {
@@ -212,7 +213,9 @@ enum LiveTestGuide {
             "npm run hermes:acceptance-prep",
             "```",
             "",
-            "That command builds, installs, launches, and resets the Hermes live-safety marker only after the launched app logs the installed executable hash.",
+            AppIdentity.current.isTest
+                ? "Not in True Convo Test: that command builds, installs and launches the real True Convo over your installed copy. Skip this pass in the test copy."
+                : "That command builds, installs, launches, and resets the Hermes live-safety marker only after the launched app logs the installed executable hash.",
             "",
             "1. Keep Hermes focused in the active message box.",
             "2. Type this deliberately wrong word: deecay",

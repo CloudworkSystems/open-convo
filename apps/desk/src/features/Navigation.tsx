@@ -9,7 +9,7 @@ type RowMenu = { kind: 'domain' | 'session'; id: string; title: string; x: numbe
 export type SessionRevealRequest = { sessionId: string; goalId: string | null; token: number };
 
 const routes: { route: DeskRoute; label: string; icon: IconName }[] = [
-  { route: 'sessions', label: 'Cloudwork Nexus', icon: 'desk' },
+  { route: 'sessions', label: 'CLOUDWORK NEXUS', icon: 'desk' },
   { route: 'memory', label: 'CONTINUITY', icon: 'memory' },
   { route: 'data', label: 'DATA', icon: 'data' },
 ];

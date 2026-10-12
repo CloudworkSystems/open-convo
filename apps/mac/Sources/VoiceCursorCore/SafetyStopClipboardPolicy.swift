@@ -2,20 +2,20 @@ import Foundation
 
 /// Where the finished text goes after a safety stop (a click, another key,
 /// or a different app in front kept it from being typed), and what to tell
-/// Patrick. Pure rules, so the policy check can prove them.
+/// The owner. Pure rules, so the policy check can prove them.
 public enum SafetyStopClipboardPolicy {
     public enum Fallback: Equatable {
         /// Nothing was typed. The text goes on the clipboard, and the note
         /// says to press Cmd+V.
         case clipboardNothingTyped
-        /// Nothing was typed, and Patrick copied or cut something during the
+        /// Nothing was typed, and the owner copied or cut something during the
         /// dictation, so his clipboard is left alone.
         case clipboardKeptNothingTyped
         /// Live words are already in the app. The full version goes on the
         /// clipboard, and the note never says to paste (that would add the
         /// dictation a second time).
         case liveWordsKeptFullVersionOnClipboard
-        /// Live words are already in the app, and Patrick copied or cut
+        /// Live words are already in the app, and the owner copied or cut
         /// something during the dictation, so his clipboard is left alone.
         case liveWordsKeptClipboardKept
 

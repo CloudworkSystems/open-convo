@@ -299,6 +299,31 @@ public final class DeskWebViewHost: NSObject {
     public let messageHandler: HostMessageHandler
     public let eventSink: WebKitHostEventSink
     public let schemeHandler: DeskAssetSchemeHandler
+    /// The launch's participant lane, given only with a participant host
+    /// (plan S11; inactive: the app gives none). The message handler hands
+    /// it `participant.*`, and each of its lifecycle steps comes before the
+    /// host's own (participant contract section 14, S10 reading 1):
+    /// `lockNow()` before the lock step, `unlock(ifNoLockSince:)` after the
+    /// unlock step, and `beginShutdown(quitting:)` before the close step,
+    /// which then runs the host's `revokeForShutdown()`, the lane's
+    /// `finishShutdown(quitting:)` and the host's `closeStore()`. Without a
+    /// lane, lock, unlock and close are exactly as before.
+    ///
+    /// With a lane the transport also drops what has gone stale (Codex's
+    /// S10 carried requirement 3): the message handler drops an answer whose
+    /// asking connection is gone by the time it is ready, or whose request
+    /// came before a lock, window close or quit began (the lane's
+    /// `lifecycleEpoch` moved, or this host is locked or closed), and the
+    /// event sink delivers a participant event only to the live document's
+    /// own valid connection while this host is neither locked nor closed
+    /// (`deliversParticipantEvent(connectionId:generation:)`).
+    public let participantLane: (any ParticipantLane)?
+    /// The lane's `unlock(ifNoLockSince:)` the last unlock step queued, for
+    /// the app to wait on before it loads a fresh document (S9 ruling c:
+    /// the page's first commit then finds the lane unlocked, so the writes
+    /// it held go first). Never awaited inside the step. Nil without a lane.
+    /// `unlock(laneEpoch:)` also returns the one it queued, if any.
+    public private(set) var laneUnlock: Task<Void, Never>?
     public private(set) var currentConnection: HostConnection?
     public private(set) var isClosed = false
     /// Set by `lock()` before anything else happens; cleared only by the
@@ -463,12 +488,16 @@ public final class DeskWebViewHost: NSObject {
     /// has queued its step.
     private(set) var lifecycleStepsQueued = 0
 
-    public init(hostProtocol: DeskHostProtocol, resolver: AssetResolver, eventSink: WebKitHostEventSink, frame: CGRect = .zero) {
+    /// `participantLane` goes with a participant `hostProtocol` and only
+    /// with one (`HostMessageHandler` stops on any other pairing).
+    public init(hostProtocol: DeskHostProtocol, resolver: AssetResolver, eventSink: WebKitHostEventSink, frame: CGRect = .zero,
+                participantLane: (any ParticipantLane)? = nil) {
         self.hostProtocol = hostProtocol
         self.eventSink = eventSink
+        self.participantLane = participantLane
         schemeHandler = DeskAssetSchemeHandler(resolver: resolver)
         messageHandler = HostMessageHandler(hostProtocol: hostProtocol, expectedScheme: resolver.manifest.scheme,
-                                            expectedHost: resolver.manifest.host)
+                                            expectedHost: resolver.manifest.host, participantLane: participantLane)
 
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
@@ -492,7 +521,17 @@ public final class DeskWebViewHost: NSObject {
         webView.navigationDelegate = self
         webView.uiDelegate = self
         messageHandler.attach(to: webView)
-        eventSink.attach(to: webView)
+        if participantLane == nil {
+            eventSink.attach(to: webView)
+        } else {
+            messageHandler.deliversAnswers = { [weak self] in
+                guard let self else { return false }
+                return !self.isClosed && !self.isLocked
+            }
+            eventSink.attach(to: webView) { [weak self] connectionId, generation in
+                self?.deliversParticipantEvent(connectionId: connectionId, generation: generation) ?? false
+            }
+        }
         // WebKit changes both on the main thread.
         settledDocumentObservations = [
             webView.observe(\.url) { [weak self] view, _ in MainActor.assumeIsolated { self?.recordSettledDocument(of: view) } },
@@ -520,9 +559,25 @@ public final class DeskWebViewHost: NSObject {
     }
 
     public func lock() async {
+        await lock(laneLockedByCaller: false)
+    }
+
+    /// The same lock, for an owner that already ran the lane's `lockNow()`
+    /// for this same lock request, synchronously, before this call (the
+    /// Desk session does, in every state: section 14, S11 reading 3). Then
+    /// the lane is not locked a second time here, so its epoch moves once
+    /// per lock request: an unlock whose owner check began after this
+    /// request is refused only by a lock requested after that, even when
+    /// this host step runs later, in a task (S11 reading 4).
+    public func lock(laneLockedByCaller: Bool) async {
         guard !isClosed else { return }
         isLocked = true
         lockEpoch += 1
+        // The lane's lock first, here and now (section 14, S10 reading 1):
+        // its runs are sent `stop` and its pushes end before v1's `locked`,
+        // with no await before it and no step queued for it. A caller that
+        // locked it already did so before calling.
+        if !laneLockedByCaller { participantLane?.lockNow() }
         // No reload after a content-process termination, now or after the
         // unlock: unlock requires a fresh document from the app.
         terminationReloadPending = false
@@ -549,27 +604,65 @@ public final class DeskWebViewHost: NSObject {
     /// bootstrapped here; the caller loads a fresh document afterwards.
     /// Idempotent: with nothing locked, or once a newer `lock()` was
     /// requested, the step does nothing, and a later `unlock()` still works.
+    /// With a lane, its unlock is judged by the epoch read at this call's
+    /// entry (see `unlock(laneEpoch:)`).
     public func unlock() async {
-        guard !isClosed else { return }
+        await unlock(laneEpoch: nil)
+    }
+
+    /// The same unlock. With a lane, once the step reopened the store it
+    /// queues the lane's `unlock(ifNoLockSince:)` and returns it (never
+    /// awaited here). `laneEpoch` is the lane's lock epoch read when the
+    /// owner check for this unlock began (the Desk session passes it); nil
+    /// reads it here, at this call's entry, for a caller whose check is its
+    /// own business. The lane then unlocks only if no lock came anywhere
+    /// from that read through the host's step and the lane's own unlock
+    /// (S11 reading 4).
+    @discardableResult
+    public func unlock(laneEpoch: Int?) async -> Task<Void, Never>? {
+        guard !isClosed else { return nil }
         let epoch = lockEpoch
-        await serialized { [self] in
+        // The lane applies its unlock only if no `lockNow()` came since this
+        // (`unlock(ifNoLockSince:)`).
+        let laneEpoch = laneEpoch ?? participantLane?.lockEpoch
+        return await serialized { [self] () -> Task<Void, Never>? in
             await checkpoint(.unlockStepStarted)
-            guard answersNewestLock(epoch) else { return }
+            guard answersNewestLock(epoch) else { return nil }
             // Revoke whatever could have been issued while locked (nothing,
             // by the policy; this is the guarantee, not the expectation) and
             // make every envelope of the locked document stale.
             await hostProtocol.beginGeneration()
             currentConnection = nil
             await checkpoint(.unlockStepRevoked)
-            guard answersNewestLock(epoch) else { return }
+            guard answersNewestLock(epoch) else { return nil }
             await hostProtocol.unlock()
             await checkpoint(.unlockStepReopened)
             // A lock requested during that hop wins: its own step runs next
             // and locks the store again, and the host stays marked locked.
             // Nothing suspends between this check and clearing the flag.
-            guard answersNewestLock(epoch) else { return }
+            guard answersNewestLock(epoch) else { return nil }
             isLocked = false
+            // Then the lane's unlock (S10 reading 1), queued and never
+            // awaited here: this step gains no hop, and a lock requested
+            // after `laneEpoch` was read, before or after this point, still
+            // wins in the lane, by its epoch.
+            guard let participantLane, let laneEpoch else { return nil }
+            let queued = Task.detached { await participantLane.unlock(ifNoLockSince: laneEpoch) }
+            laneUnlock = queued
+            return queued
         }
+    }
+
+    /// Whether a participant event for this connection may be delivered to
+    /// the view now (the sink asks on the main thread, at delivery): the
+    /// host is open and unlocked, it is the current connection, the live
+    /// document holds it, and it is still valid for the current generation.
+    /// Anything else is a push for a document that is gone or not yet
+    /// committed, dropped rather than handed to whatever the view shows.
+    func deliversParticipantEvent(connectionId: String, generation: Int) -> Bool {
+        guard !isClosed, !isLocked, let currentConnection, currentConnection.id == connectionId,
+              currentConnection.generation == generation, documentConnection == currentConnection else { return false }
+        return hostProtocol.checkConnection(connectionId, generation: generation) == .valid
     }
 
     /// Whether an unlock requested at `epoch` may still act: the host is
@@ -578,12 +671,31 @@ public final class DeskWebViewHost: NSObject {
         !isClosed && isLocked && lockEpoch == epoch
     }
 
-    public func close() async {
+    /// Window close (`quitting` false) or the app's quit (true; it matters
+    /// only with a participant lane). With a lane: the lane's
+    /// `beginShutdown(quitting:)` at once, then one step running the host's
+    /// `revokeForShutdown()`, the lane's `finishShutdown(quitting:)` (at
+    /// most the one overall bound, Codex Q33) and the host's `closeStore()`,
+    /// in that order (section 14, S10 reading 1). The lane's detach is its
+    /// owner's, after this returns. Without a lane, exactly
+    /// `DeskHostProtocol.close()`.
+    public func close(quitting: Bool = false) async {
         guard !isClosed else { return }
         isClosed = true
+        // The lane's step first, with no await before it: its pushes end
+        // before v1's `revoked`, every run is sent `stop`, and its one bound
+        // begins.
+        participantLane?.beginShutdown(quitting: quitting)
         webView.stopLoading()
+        let participantLane = self.participantLane
         await serialized { [self] in
-            await hostProtocol.close()
+            guard let participantLane else {
+                await hostProtocol.close()
+                return
+            }
+            await hostProtocol.revokeForShutdown()
+            _ = await participantLane.finishShutdown(quitting: quitting)
+            await hostProtocol.closeStore()
         }
         // Let the `revoked` push reach the page before the handler goes.
         await Self.settleMainQueue()

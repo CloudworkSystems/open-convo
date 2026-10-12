@@ -96,7 +96,7 @@ async function saved(page) {
 }
 async function enter(page) {
   await page.goto(origin);
-  await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+  await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toBeVisible();
   await saved(page);
 }
@@ -120,7 +120,7 @@ test('one Sessions heading and permanent Ungrouped folder preserve null-linked s
   try {
     await enter(page);
     await expect(rail(page).getByRole('heading', { name: 'SESSIONS', exact: true })).toHaveCount(1);
-    assert.deepEqual(await rail(page).getByRole('navigation', { name: 'Modules', exact: true }).getByRole('button').allTextContents(), ['Cloudwork Nexus', 'CONTINUITY', 'DATA']);
+    assert.deepEqual(await rail(page).getByRole('navigation', { name: 'Modules', exact: true }).getByRole('button').allTextContents(), ['CLOUDWORK NEXUS', 'CONTINUITY', 'DATA']);
     const initial = await stored(page);
     const ungrouped = rail(page).getByRole('region', { name: 'Ungrouped sessions', exact: true });
     const folder = ungrouped.getByRole('button', { name: 'Ungrouped sessions', exact: true });

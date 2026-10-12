@@ -161,6 +161,37 @@ struct ProofStoreTests {
         #expect(fixture.keys.heldKeyCount == 1, "no key is regenerated")
     }
 
+    @Test("A state file naming a participant operation in its ledger or receipts opens as corrupt, as it did before the names existed")
+    func participantOperationInStateIsCorrupt() throws {
+        for section in ["ledger", "receipts"] {
+            let fixture = try DeskHostFixture()
+            defer { fixture.clean() }
+            let store = try fixture.makeStore()
+            #expect(try store.commit(attempt(hash: "h", expected: 0, revision: 1)) == .committed(revision: 1))
+            store.close()
+            var state = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: store.stateURL)) as? [String: Any])
+            var entries = try #require(state[section] as? [[String: Any]])
+            #expect(entries.count == 1)
+            #expect(entries.first?["operation"] as? String == "workspace.commitProof")
+
+            // The same file rewritten unchanged still opens: only the name matters.
+            try JSONSerialization.data(withJSONObject: state).write(to: store.stateURL)
+            let control = try fixture.makeStore()
+            #expect(control.status == .ready, "\(section): the rewrite alone is harmless")
+            control.close()
+
+            entries[0]["operation"] = "participant.start"
+            state[section] = entries
+            let edited = try JSONSerialization.data(withJSONObject: state)
+            try edited.write(to: store.stateURL)
+            let reopened = try fixture.makeStore()
+            defer { reopened.close() }
+            #expect(reopened.status == .corrupt, "\(section)")
+            #expect(throws: ProofStoreError.corrupt) { try reopened.read() }
+            #expect(try Data(contentsOf: store.stateURL) == edited, "the file is left untouched")
+        }
+    }
+
     @Test("An established store whose state file is gone opens as missing and is never re-provisioned")
     func missingStateIsReportedNotReprovisioned() throws {
         let fixture = try DeskHostFixture()

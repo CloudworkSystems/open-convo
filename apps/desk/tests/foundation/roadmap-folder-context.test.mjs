@@ -86,7 +86,7 @@ const createForm = (page) => page.getByRole('form', { name: 'Create a suggested 
 
 async function enter(page) {
   await page.goto(origin);
-  await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+  await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Nexus Navigator', exact: true })).toBeVisible();
   await expect(page.getByText('Sample workspace saved in this browser', { exact: true })).toBeVisible();
 }

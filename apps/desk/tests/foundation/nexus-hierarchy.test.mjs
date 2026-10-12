@@ -88,7 +88,7 @@ const views = ['Nexus Navigator', 'Cloudwork Canvas', 'Cloudwork Atlas', 'Roadma
 const choices = (page) => page.getByRole('navigation', { name: 'Nexus views', exact: true });
 async function enter(page) {
   await page.goto(origin);
-  await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+  await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toBeVisible();
   await expect(page.getByText('Sample workspace saved in this browser', { exact: true })).toBeVisible();
 }
@@ -98,7 +98,7 @@ test('Nexus keeps all four subviews together and preserves session and Roadmap d
   try {
     await enter(page);
     const modules = page.getByRole('navigation', { name: 'Modules', exact: true });
-    await expect(modules.getByRole('button', { name: 'Cloudwork Nexus', exact: true })).toHaveAttribute('aria-current', 'page');
+    await expect(modules.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true })).toHaveAttribute('aria-current', 'page');
     await expect(modules.getByRole('button', { name: 'Roadmap', exact: true })).toHaveCount(0);
     assert.deepEqual(await choices(page).getByRole('button').allTextContents(), views);
     await expect(page.locator('.desk-header .primary-module-heading')).toHaveCount(0);
@@ -142,10 +142,10 @@ test('a saved legacy Work route opens the Nexus Roadmap without rewriting its wo
     await expect(choices(page).getByRole('button', { name: 'Roadmap', exact: true })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('heading', { name: 'Roadmap', exact: true })).toBeVisible();
     await expect(page.getByRole('textbox', { name: 'Card title', exact: true })).toBeEnabled();
-    await expect(page.getByRole('navigation', { name: 'Modules', exact: true }).getByRole('button', { name: 'Cloudwork Nexus', exact: true })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('navigation', { name: 'Modules', exact: true }).getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true })).toHaveAttribute('aria-current', 'page');
     assert.equal(await readNativeRecordRaw(page), durable);
     assert.equal(await page.evaluate((key) => sessionStorage.getItem(key), tabKey), legacyView);
-    await page.getByRole('navigation', { name: 'Modules', exact: true }).getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+    await page.getByRole('navigation', { name: 'Modules', exact: true }).getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
     await expect(choices(page).getByRole('button', { name: 'Roadmap', exact: true })).toHaveAttribute('aria-current', 'page');
     const promoted = await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key)), tabKey);
     assert.equal(promoted.selection.route, 'sessions');

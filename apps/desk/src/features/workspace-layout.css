@@ -11,6 +11,7 @@
 .nexus-view-tabs button { font-size: 16px; font-weight: 500; letter-spacing: -.02em; padding: 6px 9px; gap: 6px; }
 .nexus-view-tabs svg { width: 17px; height: 17px; }
 .workspace-header-tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.hidden-navigation-recovery { flex-shrink: 0; border: 1px solid var(--tca-border-default); border-radius: 7px; padding: 7px 9px; }
 .right-rail-toggle svg { transform: scaleX(-1); }
 .primitives-trigger { font-size: 11px; max-width: 82px; line-height: 1.4; }
 .conversation-layout .conversation-heading { padding-right: 0; }
@@ -19,6 +20,7 @@
 }
 @media (max-width: 999px) {
   .desk-layout.details-visible { grid-template-columns: minmax(0, 1fr); }
+  .hidden-navigation-recovery { display: none; }
 }
 @media (max-width: 599px) {
   .desk-header { padding: 16px 14px; align-items: flex-start; }

@@ -26,18 +26,25 @@ public struct ParticipantAvailability: Equatable, Sendable {
     }
 
     /// Not public: no module outside this one can answer "available". The
-    /// test target reaches it with `@testable import` for its fake; nothing
-    /// in this module uses it until an approved overflow check exists
-    /// (contract section 17).
+    /// test target reaches it with `@testable import` for its fake. In this
+    /// module only section 17's owner uses it (`PaidUsageConfirmationOwner`,
+    /// plan F4, inactive), when the local checks pass and match an active
+    /// confirmation; a source scan holds that it is the one use.
     static let available = ParticipantAvailability(available: true, reason: nil)
 }
 
-/// Where availability comes from. It is injected; the only implementation
-/// outside the test target is `ShippingAvailability`, and only this module
-/// (and, through `@testable import`, the test target) can make an answer
-/// that says available.
+/// Where availability comes from. It is injected; the implementations
+/// outside the test target are `ShippingAvailability` and section 5's local
+/// checks (F3, which never answer available on their own), and only this
+/// module (and, through `@testable import`, the test target) can make an
+/// answer that says available.
 public protocol AvailabilityChecking: Sendable {
+    /// May reuse a recent answer (section 5: up to 30 s).
     func check() async -> ParticipantAvailability
+    /// A start's recheck (section 7 step 13): never a reused answer. Every
+    /// checker implements it, with no default, so a wrapper can never
+    /// quietly answer a start with a reused check (Codex F3-9).
+    func recheck() async -> ParticipantAvailability
 }
 
 /// The shipping answer until an approved way to confirm paid overflow is off
@@ -48,6 +55,10 @@ public struct ShippingAvailability: AvailabilityChecking {
     public init() {}
 
     public func check() async -> ParticipantAvailability {
+        .unavailable(.overflowUnverified)
+    }
+
+    public func recheck() async -> ParticipantAvailability {
         .unavailable(.overflowUnverified)
     }
 }

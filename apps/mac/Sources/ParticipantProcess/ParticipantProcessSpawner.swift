@@ -47,6 +47,12 @@ public struct ParticipantProcessLimits: Equatable, Sendable {
 /// are independent: a control message can overtake stdout bytes written
 /// earlier, which is why the reader waits for stdout EOF before trusting an
 /// exit.
+///
+/// Each output pipe's reading ends exactly once: with `…Closed` at a real
+/// EOF (`read` returned 0, so no process holds a write end any more), or
+/// with `…ReadFailed` when `read` failed with anything but EINTR. A failed
+/// read is never EOF: the app closes its read end, which proves nothing
+/// about the writers, and bytes may still be in the pipe unread.
 public enum ParticipantProcessEvent: Equatable, Sendable {
     case control(SupervisorMessage)
     /// The control socket reached EOF: the supervisor exited or was lost.
@@ -54,13 +60,60 @@ public enum ParticipantProcessEvent: Equatable, Sendable {
     case stdout(Data)
     /// Bytes past `ParticipantProcessLimits.stdoutBytes` are being dropped.
     case stdoutLimitReached
+    /// stdout reached EOF.
     case stdoutClosed(totalBytes: Int)
+    /// Reading stdout failed before EOF; only a fixed class of the errno is kept.
+    case stdoutReadFailed(totalBytes: Int, failure: ParticipantReadFailure)
     /// At most `ParticipantProcessLimits.stderrBytes` in total.
     case stderr(Data)
+    /// stderr reached EOF.
     case stderrClosed(totalBytes: Int)
+    /// Reading stderr failed before EOF; only a fixed class of the errno is kept.
+    case stderrReadFailed(totalBytes: Int, failure: ParticipantReadFailure)
     case stdinClosed(writtenBytes: Int, complete: Bool)
     /// The supervisor's own wait status, after the app reaped it.
     case supervisorExited(status: Int32)
+}
+
+/// A fixed class for the errno of a failed pipe read. Only this reaches a
+/// log: never the errno's text.
+public enum ParticipantReadFailure: String, Equatable, Sendable, CaseIterable {
+    case badDescriptor = "bad-descriptor"
+    case io = "io-error"
+    case wouldBlock = "would-block"
+    case invalid
+    case other
+
+    public init(errno code: Int32) {
+        switch code {
+        case EBADF: self = .badDescriptor
+        case EIO: self = .io
+        case EAGAIN: self = .wouldBlock
+        case EINVAL: self = .invalid
+        default: self = .other
+        }
+    }
+}
+
+/// One of the CLI's two output pipes, as the spawner's readers drain them.
+enum ParticipantOutputPipe: Sendable {
+    case stdout
+    case stderr
+}
+
+/// How the stdout and stderr readers call `read(2)`. Production always uses
+/// `.system`; only a test (internal, through `@testable`) replaces it, to
+/// inject a failure that then goes through the reader thread and the
+/// process events exactly as a real one would.
+struct ParticipantPipeRead: Sendable {
+    /// Reads into `buffer`: the bytes read (above 0), 0 at EOF, or -1 with
+    /// the errno.
+    let read: @Sendable (ParticipantOutputPipe, Int32, UnsafeMutableRawBufferPointer) -> (count: Int, error: Int32)
+
+    static let system = ParticipantPipeRead { _, descriptor, buffer in
+        let count = Darwin.read(descriptor, buffer.baseAddress, buffer.count)
+        return (count, count < 0 ? errno : 0)
+    }
 }
 
 public enum ParticipantSpawnError: Error, Equatable {
@@ -81,9 +134,12 @@ public enum ParticipantSpawnError: Error, Equatable {
 /// the control socket. It keeps the lifeline's write end, close-on-exec, so
 /// it closes when the app process ends, and closes its copies of the CLI's
 /// pipe ends once the supervisor is spawned, so EOF on its read ends means no
-/// process holds a write end.
+/// process holds a write end. A failed read is reported apart from EOF and
+/// means no such thing.
 public struct ParticipantProcessSpawner: Sendable {
     public var limits: ParticipantProcessLimits
+    /// Test seam: the readers' `read` call. Always `.system` outside tests.
+    var pipeRead = ParticipantPipeRead.system
 
     public init(limits: ParticipantProcessLimits = ParticipantProcessLimits()) {
         self.limits = limits
@@ -155,7 +211,7 @@ public struct ParticipantProcessSpawner: Sendable {
             supervisorProcessID: pid,
             stdinWrite: cliStdin.write, stdoutRead: cliStdout.read, stderrRead: cliStderr.read,
             lifelineWrite: lifeline.write, control: control.app,
-            input: launch.input, limits: limits)
+            input: launch.input, limits: limits, pipeRead: pipeRead)
     }
 
     private func spawnSupervisor(path: String, arguments: [String], environment: [String],
@@ -309,7 +365,8 @@ public final class SpawnedParticipant: @unchecked Sendable {
     private let remainingSources = SourceCounter(count: 5)
 
     init(supervisorProcessID: pid_t, stdinWrite: Int32, stdoutRead: Int32, stderrRead: Int32,
-         lifelineWrite: Int32, control controlDescriptor: Int32, input: Data, limits: ParticipantProcessLimits) {
+         lifelineWrite: Int32, control controlDescriptor: Int32, input: Data, limits: ParticipantProcessLimits,
+         pipeRead: ParticipantPipeRead = .system) {
         self.supervisorProcessID = supervisorProcessID
         self.control = GuardedDescriptor(controlDescriptor)
         self.lifeline = GuardedDescriptor(lifelineWrite)
@@ -324,12 +381,16 @@ public final class SpawnedParticipant: @unchecked Sendable {
             if remainingSources.finishOne() { continuation!.finish() }
         }
 
-        Self.startReader(name: "participant-stdout", descriptor: stdoutRead, keep: limits.stdoutBytes,
-                         chunk: limits.readChunk, yield: yield, done: done,
-                         data: { .stdout($0) }, limit: .stdoutLimitReached, closed: { .stdoutClosed(totalBytes: $0) })
-        Self.startReader(name: "participant-stderr", descriptor: stderrRead, keep: limits.stderrBytes,
-                         chunk: limits.readChunk, yield: yield, done: done,
-                         data: { .stderr($0) }, limit: nil, closed: { .stderrClosed(totalBytes: $0) })
+        Self.startReader(.stdout, name: "participant-stdout", descriptor: stdoutRead, keep: limits.stdoutBytes,
+                         chunk: limits.readChunk, read: pipeRead, yield: yield, done: done,
+                         data: { .stdout($0) }, limit: .stdoutLimitReached,
+                         closed: { .stdoutClosed(totalBytes: $0) },
+                         failed: { .stdoutReadFailed(totalBytes: $0, failure: $1) })
+        Self.startReader(.stderr, name: "participant-stderr", descriptor: stderrRead, keep: limits.stderrBytes,
+                         chunk: limits.readChunk, read: pipeRead, yield: yield, done: done,
+                         data: { .stderr($0) }, limit: nil,
+                         closed: { .stderrClosed(totalBytes: $0) },
+                         failed: { .stderrReadFailed(totalBytes: $0, failure: $1) })
         Self.startControlReader(control: control, yield: yield, done: done)
         Self.startStdinWriter(descriptor: stdinWrite, input: input, yield: yield, done: done)
         Self.startReaper(pid: supervisorProcessID, lifeline: lifeline, yield: yield, done: done)
@@ -381,20 +442,26 @@ public final class SpawnedParticipant: @unchecked Sendable {
 
     // MARK: Threads
 
-    private static func startReader(name: String, descriptor: Int32, keep: Int, chunk: Int,
+    /// Drains one output pipe until EOF (`closed`) or a failed read
+    /// (`failed`, with the errno's fixed class); EINTR is retried.
+    private static func startReader(_ pipe: ParticipantOutputPipe, name: String, descriptor: Int32, keep: Int,
+                                    chunk: Int, read: ParticipantPipeRead,
                                     yield: @escaping @Sendable (ParticipantProcessEvent) -> Void,
                                     done: @escaping @Sendable () -> Void,
                                     data: @escaping @Sendable (Data) -> ParticipantProcessEvent,
                                     limit: ParticipantProcessEvent?,
-                                    closed: @escaping @Sendable (Int) -> ParticipantProcessEvent) {
+                                    closed: @escaping @Sendable (Int) -> ParticipantProcessEvent,
+                                    failed: @escaping @Sendable (Int, ParticipantReadFailure) -> ParticipantProcessEvent) {
         let thread = Thread {
             var buffer = [UInt8](repeating: 0, count: chunk)
             var total = 0
             var kept = 0
             var limitReported = false
+            var failure: ParticipantReadFailure?
             while true {
-                let count = read(descriptor, &buffer, buffer.count)
-                if count > 0 {
+                let result = buffer.withUnsafeMutableBytes { read.read(pipe, descriptor, $0) }
+                if result.count > 0 {
+                    let count = min(result.count, buffer.count)
                     total += count
                     let room = max(0, keep - kept)
                     if room > 0 {
@@ -408,11 +475,14 @@ public final class SpawnedParticipant: @unchecked Sendable {
                     }
                     continue
                 }
-                if count < 0, errno == EINTR { continue }
+                if result.count == 0 { break }   // EOF: no process holds a write end
+                if result.error == EINTR { continue }
+                // Not EOF: reading stops here, and nothing is known of the writers.
+                failure = ParticipantReadFailure(errno: result.error)
                 break
             }
             _ = close(descriptor)
-            yield(closed(total))
+            yield(failure.map { failed(total, $0) } ?? closed(total))
             done()
         }
         thread.name = name

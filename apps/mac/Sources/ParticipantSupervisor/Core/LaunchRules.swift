@@ -3,7 +3,10 @@ import Darwin
 /// The CLI's command line (contract section 11), shared by the app, which
 /// builds it, and the supervisor, which spawns nothing else: exactly these
 /// arguments after the binary path, then the build's pinned model. `--bare`
-/// and `--fallback-model` never appear.
+/// and `--fallback-model` never appear. `--strict-mcp-config` (Codex F0
+/// answer 10) is passed with no `--mcp-config` at all, so no MCP server
+/// configuration is read; `--mcp-config` never appears (its `'{}'` form is
+/// fatal in 2.1.283).
 public enum CLICommandLineRule {
     /// Every argument before the model value, in order.
     public static let fixedArguments = [
@@ -12,6 +15,7 @@ public enum CLICommandLineRule {
         "--restricted",
         "--disable-slash-commands",
         "--tools", "",
+        "--strict-mcp-config",
         "--no-session-persistence",
         "--output-format", "stream-json",
         "--verbose",

@@ -201,7 +201,7 @@ export function UserOptions({ page, theme, layout, onTheme, onLayout, onClose, o
           ['expanded', 'Expanded', 'Keep the full rail visible with titles.'],
           ['icons', 'Icons only', 'Keep a compact rail visible. Titles appear as tooltips.'],
           ['hover', 'Expand on hover', 'Show icons, then expand when you hover or use the keyboard.'],
-          ['hidden', 'Hide completely', 'Show no icons. Reveal the rail from the left edge or with ⌘ / Ctrl + \\.'],
+          ['hidden', 'Hide completely', 'Show no rail icons. Use Navigation in the header, the left edge, or ⌘ / Ctrl + \\.'],
         ] as const).map(([value, label, description]) => <label className="rail-setting" key={value}>
           <input type="radio" name="navigation-rail" checked={layout.mode === value} onChange={() => onLayout({ mode: value })} />
           <span><strong>{label}</strong><span>{description}</span></span>

@@ -30,6 +30,18 @@ enum Products {
     }
 }
 
+/// The supervisor program a process test runs: this build's own product, or
+/// the helper inside a packaged True Convo Test.app (`PackagedSupervisorTests`).
+/// The shared parent-death and supervisor-loss bodies take one, so both tiers
+/// run the same code.
+struct SupervisorUnderTest: Sendable {
+    let path: String
+    /// Put before each `[measure]` label, so the tiers' timings can be told apart.
+    let label: String
+
+    static var built: SupervisorUnderTest { SupervisorUnderTest(path: Products.supervisor, label: "") }
+}
+
 enum ProcessTestError: Error, CustomStringConvertible {
     case missingProduct(String)
     case timeout(String)
@@ -53,6 +65,18 @@ enum ProcessTestError: Error, CustomStringConvertible {
 /// and `is_error`.
 enum Invented {
     static let model = "invented-pinned-model"
+    /// The fixed end of the CLI's environment, written out here rather than
+    /// read from `CLIEnvironmentRule`: `PATH`, then Codex F0 answer 10's four
+    /// switches, whatever the app's own environment holds.
+    static let fixedEnvironment = [
+        "PATH=/usr/bin:/bin:/usr/sbin:/sbin", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1", "DISABLE_AUTOUPDATER=1",
+        "CLAUDE_CODE_DISABLE_ATTACHMENTS=1", "ENABLE_CLAUDEAI_MCP_SERVERS=false"
+    ]
+    /// Different values an app's environment might carry for those names.
+    static let conflictingFixedValues = [
+        "PATH=/invented/bin:/usr/bin", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=0", "DISABLE_AUTOUPDATER=",
+        "CLAUDE_CODE_DISABLE_ATTACHMENTS=0", "ENABLE_CLAUDEAI_MCP_SERVERS=true"
+    ]
     static let expectation = ParticipantInitExpectation(
         model: model, slashCommands: ["invented-command"], skills: [],
         plugins: .array([]), apiKeySource: "none")
@@ -128,6 +152,14 @@ struct FakeCLIFolder {
         var leaveGroup = false
         var readStdin = true
         var steps: [[String: Any]] = []
+        /// A predicted 2.1.283 stream, written before `steps` (FakeCLI, F1).
+        var stream: String?
+        /// The `auth status` variant the fake answers with (F1).
+        var authStatus: String?
+        /// The version `--version` reports; the fake defaults to 2.1.283.
+        var version: String?
+        /// How long the "slow" `auth status` sleeps; the fake defaults to 6 s.
+        var slowMs: Int?
 
         static func lines(_ lines: [String], then end: [String: Any] = ["exit": 0], delayMs: Int = 0) -> Scenario {
             var scenario = Scenario()
@@ -154,9 +186,13 @@ struct FakeCLIFolder {
         }
         cliPath = fake.appendingPathComponent("claude").path
         try files.createSymbolicLink(atPath: cliPath, withDestinationPath: Products.fakeCLI)
-        let object: [String: Any] = ["sigterm": scenario.sigterm, "child": scenario.child.map { $0 as Any } ?? NSNull(),
+        var object: [String: Any] = ["sigterm": scenario.sigterm, "child": scenario.child.map { $0 as Any } ?? NSNull(),
                                      "leaveGroup": scenario.leaveGroup, "readStdin": scenario.readStdin,
                                      "steps": scenario.steps]
+        if let stream = scenario.stream { object["stream"] = stream }
+        if let authStatus = scenario.authStatus { object["authStatus"] = authStatus }
+        if let version = scenario.version { object["version"] = version }
+        if let slowMs = scenario.slowMs { object["slowMs"] = slowMs }
         try JSONSerialization.data(withJSONObject: object).write(to: fake.appendingPathComponent("scenario.json"))
     }
 
@@ -221,6 +257,22 @@ enum Processes {
         let size = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, Int32(MemoryLayout<proc_bsdinfo>.size))
         guard size == Int32(MemoryLayout<proc_bsdinfo>.size) else { return false }
         return info.pbi_status != UInt32(SZOMB)
+    }
+
+    /// The program file a running process was started from (`proc_pidpath`,
+    /// symbolic links resolved), or nil when the probe fails.
+    static func executablePath(of pid: pid_t) -> String? {
+        // PROC_PIDPATHINFO_MAXSIZE, which Swift does not import: 4 * MAXPATHLEN.
+        var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
+        guard pid > 0, proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return nil }
+        return String(cString: buffer)
+    }
+
+    /// Records an issue unless `pid` was started from the program at `path`:
+    /// the supervisor a run started is the one the test meant to run.
+    static func expectProgram(_ pid: pid_t, is path: String) {
+        let running = executablePath(of: pid)
+        #expect(running == realPath(path), "process \(pid) runs \(running ?? "an unknown program"), not \(realPath(path))")
     }
 
     static func groupOf(_ pid: pid_t) -> pid_t? {
@@ -320,7 +372,7 @@ final class UpdateCollector: @unchecked Sendable {
     private var items: [ParticipantRunUpdate] = []
     private var finished = false
 
-    init(_ run: ParticipantRun) {
+    init(_ run: any ParticipantRunning) {
         let updates = run.updates
         Task.detached { [self] in
             for await update in updates { append(update) }
@@ -346,13 +398,30 @@ final class UpdateCollector: @unchecked Sendable {
         return finished
     }
 
+    /// Every event in order, the terminal included.
     var events: [ParticipantEvent] {
-        updates.compactMap { if case .event(let event) = $0 { return event } else { return nil } }
+        updates.compactMap { update in
+            switch update {
+            case .event(let event), .terminal(let event, _): return event
+            default: return nil
+            }
+        }
     }
 
+    /// The terminal update's event.
     var terminal: ParticipantEvent? {
-        events.first { [.completed, .stopped, .failed].contains($0.type) }
+        terminalUpdate?.event
     }
+
+    /// The one terminal update: its event and the `groupCleared` it carried.
+    var terminalUpdate: (event: ParticipantEvent, groupCleared: Bool?)? {
+        for update in updates {
+            if case .terminal(let event, let cleared) = update { return (event, cleared) }
+        }
+        return nil
+    }
+
+    var retriesUncleared: Int { updates.filter { $0 == .cleanupRetryUncleared }.count }
 
     var released: Bool { updates.contains(.cleanupReleased) }
 
@@ -393,17 +462,20 @@ struct LiveRun {
 
     /// `rawEnvironment`, when given, is handed to the spawner as the launch's
     /// environment exactly as written, without `ParticipantEnvironment.build`.
+    /// `spawner` lets a test inject its pipe-read seam (R1-f).
     init(_ scenario: FakeCLIFolder.Scenario, supervisorPath: String = Products.supervisor,
          missingCLI: Bool = false, limits: StreamJSONReaderLimits = .contract,
-         rawEnvironment: ((FakeCLIFolder) -> [String])? = nil) throws {
+         spawner: ParticipantProcessSpawner = ParticipantProcessSpawner(),
+         rawEnvironment: ((FakeCLIFolder) -> [String])? = nil,
+         expectation: ParticipantInitExpectation = Invented.expectation) throws {
         folder = try FakeCLIFolder(scenario)
         workingFolder = try ParticipantWorkingFolder.create(under: folder.workParent)
         var launch = Self.launch(folder: folder, workingFolder: workingFolder,
                                  supervisorPath: supervisorPath, missingCLI: missingCLI)
         if let rawEnvironment { launch.environment = rawEnvironment(folder) }
-        process = try ParticipantProcessSpawner().spawn(launch)
+        process = try spawner.spawn(launch)
         log = RecordingLog()
-        run = Self.makeRun(process: process, limits: limits, log: log)
+        run = Self.makeRun(process: process, limits: limits, log: log, expectation: expectation)
         collector = UpdateCollector(run)
     }
 
@@ -420,12 +492,12 @@ struct LiveRun {
     }
 
     static func makeRun(process: SpawnedParticipant, limits: StreamJSONReaderLimits = .contract,
-                        log: ParticipantLogSink) -> ParticipantRun {
+                        log: ParticipantLogSink, expectation: ParticipantInitExpectation = Invented.expectation) -> ParticipantRun {
         ParticipantRun(
             identity: ParticipantRunIdentity(runId: "51000000-0000-4000-8000-0000000000aa",
                                              sessionId: "invented-session-id", createdAtMillis: 1_700_000_000_000),
             process: process,
-            configuration: StreamJSONReader.Configuration(expectedInit: Invented.expectation,
+            configuration: StreamJSONReader.Configuration(expectedInit: expectation,
                                                           inputBytes: Self.input.utf8.count,
                                                           preparedBytes: 2_048, limits: limits),
             log: log)

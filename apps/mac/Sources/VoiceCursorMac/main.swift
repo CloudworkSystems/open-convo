@@ -11,6 +11,7 @@ import ServiceManagement
 import Speech
 import CorrectionMemory
 import DeskWindowKit
+import TrueConvoIdentity
 import VoiceCursorCore
 
 enum DictationProvider: String, CaseIterable {
@@ -379,8 +380,10 @@ struct ModelPreset {
 }
 
 enum Settings {
+    // `com.trueconvo.voice-cursor` for the real app (and `swift run`); True
+    // Convo Test has its own domain, so it never reads or changes these.
     private static let defaults =
-        UserDefaults(suiteName: "com.trueconvo.voice-cursor") ?? .standard
+        UserDefaults(suiteName: AppIdentity.current.settingsDomain) ?? .standard
 
     /// When the most recent real dictation (not a typed correction or a
     /// reprocessed copy) was saved. Shown in the menu so a quiet app is noticed.
@@ -693,8 +696,8 @@ enum Settings {
 
 /// Saved fixes ("remember this correction"). Backed by the CorrectionMemory
 /// engine brought over from Beta Zero. This exists for words a speech engine
-/// can never hear right ("Halks" and "Hawks" sound the same), so the fix is
-/// taught by typing. Fixes apply in every app (Patrick's choice, 2026-09-27).
+/// can never hear right ("Marlowe" and "Marlo" sound the same), so the fix is
+/// taught by typing. Fixes apply in every app (The owner's choice, 2026-09-27).
 /// A finished dictation gets them once, counting uses (that rewrites the
 /// lessons file). Finalized segments pasted live and reprocessed archive text
 /// get a no-write preview. Live partial text never gets them.
@@ -1046,7 +1049,7 @@ struct ProcessingContext: Codable {
                 cloudProvider: nil,
                 harvestUse: "local-transcript-and-review-evidence",
                 trainingEligibility: "eligible-after-human-review",
-                trainingPromotionBoundary: "Local-only session. Convo Engine may review this material as a future private STT adaptation candidate, but must not train or personalize until Patrick approves promotion."
+                trainingPromotionBoundary: "Local-only session. Convo Engine may review this material as a future private STT adaptation candidate, but must not train or personalize until the owner approves promotion."
             )
         case "local-whisper":
             return ProcessingContext(
@@ -1055,7 +1058,7 @@ struct ProcessingContext: Codable {
                 cloudProvider: nil,
                 harvestUse: "local-audio-transcript-and-review-evidence",
                 trainingEligibility: "eligible-after-human-review",
-                trainingPromotionBoundary: "Local transcription session. Retained local audio may support future private STT adaptation after human review and explicit Patrick approval."
+                trainingPromotionBoundary: "Local transcription session. Retained local audio may support future private STT adaptation after human review and explicit the owner approval."
             )
         case "openai-realtime":
             return ProcessingContext(
@@ -1064,7 +1067,7 @@ struct ProcessingContext: Codable {
                 cloudProvider: "OpenAI",
                 harvestUse: "local-transcript-packet-review-only",
                 trainingEligibility: "not-private-training-material",
-                trainingPromotionBoundary: "Cloud-processed session. Keep as a local transcript/content packet, but do not use as private voice-training material unless Patrick later approves a cloud-processed training exception."
+                trainingPromotionBoundary: "Cloud-processed session. Keep as a local transcript/content packet, but do not use as private voice-training material unless the owner later approves a cloud-processed training exception."
             )
         case "openai-cloud":
             return ProcessingContext(
@@ -1073,7 +1076,7 @@ struct ProcessingContext: Codable {
                 cloudProvider: "OpenAI",
                 harvestUse: "local-transcript-packet-review-only",
                 trainingEligibility: "not-private-training-material",
-                trainingPromotionBoundary: "Cloud-processed audio transcription. Keep as local review evidence, but do not use as private voice-training material unless Patrick later approves a cloud-processed training exception."
+                trainingPromotionBoundary: "Cloud-processed audio transcription. Keep as local review evidence, but do not use as private voice-training material unless the owner later approves a cloud-processed training exception."
             )
         case "groq-cloud":
             return ProcessingContext(
@@ -1082,7 +1085,7 @@ struct ProcessingContext: Codable {
                 cloudProvider: "Groq",
                 harvestUse: "local-transcript-packet-review-only",
                 trainingEligibility: "not-private-training-material",
-                trainingPromotionBoundary: "Cloud-processed audio transcription. Keep as local review evidence, but do not use as private voice-training material unless Patrick later approves a cloud-processed training exception."
+                trainingPromotionBoundary: "Cloud-processed audio transcription. Keep as local review evidence, but do not use as private voice-training material unless the owner later approves a cloud-processed training exception."
             )
         default:
             return ProcessingContext(
@@ -1277,7 +1280,9 @@ struct ProviderReadiness {
 }
 
 enum KeychainStore {
-    private static let service = "com.trueconvo.voice-cursor"
+    // The real app's service, or True Convo Test's own: the test copy never
+    // reads, saves over or deletes the real app's keys.
+    private static let service = AppIdentity.current.keychainService
 
     static func read(_ account: String) -> String? {
         var query = baseQuery(account)
@@ -1335,8 +1340,10 @@ enum KeychainStore {
 enum Archive {
     private static let writeLock = NSLock()
 
+    // `~/.tca-dictate` for the real app (and `swift run`), `~/.tca-dictate-test`
+    // for True Convo Test. Every archive path below starts here.
     static var root: URL {
-        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".tca-dictate")
+        AppIdentity.current.archiveRoot(home: FileManager.default.homeDirectoryForCurrentUser)
     }
 
     static var recordings: URL {
@@ -1688,11 +1695,11 @@ enum Archive {
             "",
             "## Reuse Rules",
             "",
-            "- Preserve concrete names, dates, offers, prices, claims, and commitments exactly unless Patrick asks you to rewrite them.",
+            "- Preserve concrete names, dates, offers, prices, claims, and commitments exactly unless the owner asks you to rewrite them.",
             "- Separate transcript evidence from your interpretation.",
             "- Ask before turning rough dictation into public-facing claims, guarantees, legal wording, pricing, or customer promises.",
             "- If the transcript is unclear, say what is uncertain instead of smoothing over it.",
-            "- Cloud-processed sessions are content/review packets only unless Patrick explicitly approves a later training exception.",
+            "- Cloud-processed sessions are content/review packets only unless the owner explicitly approves a later training exception.",
             "",
             "## Suggested Content Work",
             "",
@@ -2025,7 +2032,7 @@ enum Archive {
             "",
             "- Start with the newest rows and open the content packet for anything worth turning into content.",
             "- Treat transcript text as captured speech, not polished copy.",
-            "- Preserve concrete names, dates, offers, prices, claims, and commitments exactly unless Patrick asks you to rewrite them.",
+            "- Preserve concrete names, dates, offers, prices, claims, and commitments exactly unless the owner asks you to rewrite them.",
             "- Use the suggested content work in each packet for memos, outlines, scripts, posts, task lists, and follow-up prompts.",
             "- Cloud-processed rows are usable as local content packets, but they are not private voice-training material by default.",
             "",
@@ -2073,7 +2080,7 @@ enum Archive {
             "- Convert useful dictation into a rough memo, outline, email draft, short post, or script.",
             "- Compare reprocessed versions when multiple provider/model outputs exist for the same source audio.",
             "- Create follow-up prompts for Codex, ChatGPT, Claude, or an editor before polishing.",
-            "- Route only local/private rows toward future voice-engine training review unless Patrick explicitly approves a cloud-processed exception.",
+            "- Route only local/private rows toward future voice-engine training review unless the owner explicitly approves a cloud-processed exception.",
             "",
         ]
 
@@ -2092,7 +2099,7 @@ enum Archive {
             "History: \(history.path)",
             "Correction pairs JSONL: \(correctionPairsJSONL.path)",
             "",
-            "This inbox is local-only. It collects selected-text correction pairs captured while Patrick uses True Convo, so Convo Engine can later review, filter, and use them for speech-to-text adaptation work.",
+            "This inbox is local-only. It collects selected-text correction pairs captured while the owner uses True Convo, so Convo Engine can later review, filter, and use them for speech-to-text adaptation work.",
             "",
             "## How To Use",
             "",
@@ -2102,7 +2109,7 @@ enum Archive {
             "- Treat these as candidate training/adaptation pairs, not automatic model updates.",
             "- Keep false captures out of future training data; a highlighted selection can be accidental.",
             "- Prefer pairs with retained audio because those can support future local model tuning.",
-            "- Cloud-processed correction rows stay review-only unless Patrick explicitly approves a cloud-processed training exception.",
+            "- Cloud-processed correction rows stay review-only unless the owner explicitly approves a cloud-processed training exception.",
             "",
             "## Review Workflow",
             "",
@@ -2229,7 +2236,7 @@ enum Archive {
             "",
             "## Reuse Rules",
             "",
-            "- Preserve concrete names, dates, offers, prices, claims, and commitments exactly unless Patrick asks you to rewrite them.",
+            "- Preserve concrete names, dates, offers, prices, claims, and commitments exactly unless the owner asks you to rewrite them.",
             "- Separate transcript evidence from your interpretation.",
             "- Ask before turning rough dictation into public-facing claims, guarantees, legal wording, pricing, or customer promises.",
             "- If a transcript is unclear, say what is uncertain instead of smoothing over it.",
@@ -3248,7 +3255,7 @@ enum Archive {
             "",
             "### Convo Engine Review Note",
             "",
-            "Treat this as a correction pair: the selected text is what Patrick marked as wrong or undesirable, and the spoken replacement is the preferred wording for future speech-to-text adaptation.",
+            "Treat this as a correction pair: the selected text is what the owner marked as wrong or undesirable, and the spoken replacement is the preferred wording for future speech-to-text adaptation.",
             "",
             "This is review evidence, not automatic training data. Convo Engine must reject bad captures before anything is promoted.",
         ]
@@ -3498,6 +3505,12 @@ enum AudioDeviceInfo {
     static func applySelectedInputIfNeeded() -> Bool {
         let uid = Settings.audioInputDeviceUID
         guard uid != systemDefaultUID else { return true }
+        // True Convo Test never changes the Mac's default microphone; it
+        // records from whatever input the Mac already uses.
+        guard AppIdentity.current.mayChangeSystemDefaultInput else {
+            RunLog.write("audio-input.apply.skipped", "reason=test-copy uid=\(uid)")
+            return true
+        }
         guard let device = inputDevices().first(where: { $0.uid == uid }) else {
             RunLog.write("audio-input.apply.failed", "reason=missing uid=\(uid)")
             return false
@@ -3511,6 +3524,10 @@ enum AudioDeviceInfo {
     }
 
     static func selectInputDevice(uid: String) -> Bool {
+        guard uid == systemDefaultUID || AppIdentity.current.mayChangeSystemDefaultInput else {
+            RunLog.write("audio-input.select.refused", "reason=test-copy")
+            return false
+        }
         Settings.audioInputDeviceUID = uid
         return applySelectedInputIfNeeded()
     }
@@ -3748,7 +3765,7 @@ enum TextInjector {
     private static var pendingKeyboardFinalReconcile: PendingKeyboardFinalReconcile?
     private static var pendingKeyboardFinalReconcileGuardReason: String?
     /// The clipboard's change count when the dictation started, moved past
-    /// True Convo's own writes. If it moves, Patrick copied or cut something.
+    /// True Convo's own writes. If it moves, the owner copied or cut something.
     private static var clipboardChangeCountAtDictationStart: Int?
     private static var sawCopyOrCutDuringDictation = false
     private static var pendingCorrectionSelection: PendingCorrectionSelection?
@@ -4299,7 +4316,7 @@ enum TextInjector {
         sawCopyOrCutDuringDictation = true
     }
 
-    /// Whether Patrick copied or cut something since this dictation started.
+    /// Whether the owner copied or cut something since this dictation started.
     static var clipboardChangedDuringDictation: Bool {
         SafetyStopClipboardPolicy.clipboardChangedDuringDictation(
             changeCountAtStart: clipboardChangeCountAtDictationStart,
@@ -4309,7 +4326,7 @@ enum TextInjector {
     }
 
     /// True Convo's own clipboard write during a dictation (the paste
-    /// fallback) is not Patrick's copy; move the start mark past it.
+    /// fallback) is not the owner's copy; move the start mark past it.
     private static func noteOwnClipboardWrite() {
         guard clipboardChangeCountAtDictationStart != nil else { return }
         clipboardChangeCountAtDictationStart = NSPasteboard.general.changeCount
@@ -5238,7 +5255,7 @@ enum TextInjector {
         (text as NSString).length
     }
 
-    /// Puts dictated text on the clipboard for Patrick to paste. It stays on
+    /// Puts dictated text on the clipboard for the owner to paste. It stays on
     /// this Mac (no Universal Clipboard), and clipboard managers are asked
     /// not to keep it (nspasteboard.org transient and concealed markers).
     static func writePrivateClipboardText(_ text: String) {
@@ -7160,7 +7177,7 @@ final class DictationController {
     /// A safety stop (a click, another key, or a different app in front) kept
     /// the finished text from being typed. Nothing is dropped: it is in
     /// history and in the menu's Copy Last Dictation. It goes on the clipboard
-    /// unless Patrick copied or cut something during the dictation. When live
+    /// unless the owner copied or cut something during the dictation. When live
     /// words are already in the app, the note never says to paste, which
     /// would add the dictation twice.
     private func deliverAfterSafetyStop(
@@ -8121,6 +8138,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let personalCorrectionsSubmenu = NSMenu(title: "Saved Fixes")
     private var isComparingProviders = false
     private var workspaceActivationObserver: NSObjectProtocol?
+    /// True Convo Test only: watches the running-app list for the real app.
+    private var runningApplicationsObservation: NSKeyValueObservation?
+    /// True Convo Test only: the bundle ids seen in the running-app list at
+    /// the last check, so the real app is warned about once per start.
+    private var lastRunningBundleIdentifiers: [String?] = []
+    private var realAppWarningShowing = false
     private var cursorTargetLockedForDictation = false
     private var persistentPillActive = false
     private var hotKeySuppressedUntil = Date.distantPast
@@ -8325,6 +8348,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Apple On-Device (New) already chosen: load its model now so the
         // first dictation after launch doesn't wait for it. Never downloads.
         prepareAppleSpeechAnalyzerIfPicked(Settings.provider, onlyIfInstalled: true)
+        watchForRealAppIfTestCopy()
+    }
+
+    // MARK: True Convo Test next to the real app
+
+    /// True Convo Test only: warn when the real True Convo is running, at
+    /// launch and whenever it starts later, because both answer the same
+    /// dictation key. The warning only asks the owner to quit it from its own
+    /// menu bar icon; nothing here ever quits, signals or changes the real
+    /// app. The real app returns at once and never looks at other apps.
+    ///
+    /// "Starts later" watches `NSWorkspace.runningApplications` with
+    /// key-value observing, as Apple recommends. The launch notification
+    /// (`didLaunchApplicationNotification`) is not posted for menu-bar-only
+    /// apps (`LSUIElement`), and the real app is one, so it would never fire.
+    private func watchForRealAppIfTestCopy() {
+        guard AppIdentity.current.isTest else { return }
+        checkWhetherRealAppStarted(trigger: "launch")
+        runningApplicationsObservation = NSWorkspace.shared.observe(\.runningApplications, options: []) { [weak self] _, _ in
+            DispatchQueue.main.async {
+                self?.checkWhetherRealAppStarted(trigger: "real-app-started")
+            }
+        }
+    }
+
+    /// Compares the running-app list with the last one seen and warns once
+    /// when the real app has appeared in it. Reads bundle ids only.
+    private func checkWhetherRealAppStarted(trigger: String) {
+        let running = NSWorkspace.shared.runningApplications.map(\.bundleIdentifier)
+        let started = AppIdentity.current.shouldWarnRealAppStarted(before: lastRunningBundleIdentifiers, after: running)
+        lastRunningBundleIdentifiers = running
+        guard started else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.showRealAppRunningWarning(trigger: trigger)
+        }
+    }
+
+    private func showRealAppRunningWarning(trigger: String) {
+        guard !realAppWarningShowing else { return }
+        realAppWarningShowing = true
+        defer { realAppWarningShowing = false }
+        RunLog.write("test-copy.real-app-running.warned", "trigger=\(trigger)")
+        let alert = NSAlert()
+        alert.messageText = RealAppRunningWarning.title
+        alert.informativeText = RealAppRunningWarning.message
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: RealAppRunningWarning.okButton)
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -8433,7 +8505,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // A click in the menu bar (our own icon, the macOS mic
             // indicator, any status item) can never move the text
             // cursor in the target app, so it must not suppress the
-            // paste. Patrick hit exactly this: clicking the system
+            // paste. The owner hit exactly this: clicking the system
             // mic indicator to stop cost him his transcript.
             if Self.isMenuBarClick(NSEvent.mouseLocation) {
                 RunLog.write("external-pointer.ignored", "reason=menu-bar-click")
@@ -8462,12 +8534,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func buildMenu() {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        // True Convo Test's icon carries the word "Test", so it needs the room.
+        let item = NSStatusBar.system.statusItem(
+            withLength: AppIdentity.current.isTest ? NSStatusItem.variableLength : NSStatusItem.squareLength
+        )
         configureStatusItemButton(item.button)
 
         let menu = NSMenu()
         menu.delegate = self
         mainMenu = menu
+        if AppIdentity.current.isTest {
+            let testHeader = NSMenuItem(title: "True Convo Test (test copy)", action: nil, keyEquivalent: "")
+            testHeader.isEnabled = false
+            testHeader.toolTip = "This is the test copy. It keeps its own settings, keys, archive (~/.tca-dictate-test) and Desk folder, and never changes your real True Convo."
+            menu.addItem(testHeader)
+        }
         statusMenuItem.isEnabled = false
         menu.addItem(statusMenuItem)
         lastDictationMenuItem.isEnabled = false
@@ -8503,7 +8584,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         openAtLoginMenuItem.action = #selector(toggleOpenAtLogin)
         openAtLoginMenuItem.target = self
         openAtLoginMenuItem.toolTip = "Start True Convo automatically when you log in, so dictation is always ready. Off until you turn it on."
-        menu.addItem(openAtLoginMenuItem)
+        // True Convo Test never offers to start at login.
+        if AppIdentity.current.mayRegisterLoginItem {
+            menu.addItem(openAtLoginMenuItem)
+        }
 
         let correctionOnceTopItem = NSMenuItem(title: "Correct Selected Text Once", action: #selector(correctSelectedTextOnce), keyEquivalent: "")
         correctionOnceTopItem.target = self
@@ -8675,12 +8759,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         audioInputMenu.addItem(systemDefaultInputItem)
         audioInputItems.append(systemDefaultInputItem)
         audioInputMenu.addItem(NSMenuItem.separator())
-        for device in AudioDeviceInfo.inputDevices() {
-            let item = NSMenuItem(title: device.name, action: #selector(selectAudioInput(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = device.uid
-            audioInputMenu.addItem(item)
-            audioInputItems.append(item)
+        if AppIdentity.current.mayChangeSystemDefaultInput {
+            for device in AudioDeviceInfo.inputDevices() {
+                let item = NSMenuItem(title: device.name, action: #selector(selectAudioInput(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = device.uid
+                audioInputMenu.addItem(item)
+                audioInputItems.append(item)
+            }
+        } else {
+            // Picking an input here would change the Mac's default microphone
+            // for every app, so the test copy only shows what the Mac uses.
+            let note = NSMenuItem(title: "True Convo Test uses the Mac's current input", action: nil, keyEquivalent: "")
+            note.isEnabled = false
+            note.toolTip = "To use another microphone, choose it in System Settings > Sound > Input. True Convo Test never changes it."
+            audioInputMenu.addItem(note)
         }
         audioInputMenuItems = audioInputItems
         audioInputItem.submenu = audioInputMenu
@@ -9172,7 +9265,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// The typed correction path. For words a speech engine can never hear
-    /// right (Halks vs Hawks), speaking the fix is hopeless — the user types
+    /// right (Marlowe vs Marlo), speaking the fix is hopeless — the user types
     /// it once, the pair is archived for Convo Engine, and optionally becomes
     /// a standing personal auto-correction.
     private func correctSelectedTextAfterHotKeyRelease(attempt: Int = 0) {
@@ -9260,7 +9353,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         field.frame = NSRect(x: 0, y: 0, width: 300, height: 24)
         let checkbox = NSButton(checkboxWithTitle: "Always auto-correct this from now on", target: nil, action: nil)
         // On by default: most corrections are unambiguous (names, product words).
-        // Patrick unticks it for contextual homophones — 'peaked' can be a real
+        // The owner unticks it for contextual homophones — 'peaked' can be a real
         // word in one sentence and a mistake in the next.
         checkbox.state = .on
         let stack = NSStackView(views: [field, checkbox])
@@ -9368,6 +9461,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func refreshOpenAtLoginMenuItem() {
+        guard AppIdentity.current.mayRegisterLoginItem else { return }
         switch SMAppService.mainApp.status {
         case .enabled:
             openAtLoginMenuItem.title = "Open at Login"
@@ -9385,6 +9479,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func toggleOpenAtLogin() {
+        // The item is not in True Convo Test's menu; refused here as well.
+        guard AppIdentity.current.mayRegisterLoginItem else {
+            RunLog.write("login-item.refused", "reason=test-copy")
+            return
+        }
         let service = SMAppService.mainApp
         if service.status == .requiresApproval {
             RunLog.write("login-item.approval.opened")
@@ -10166,7 +10265,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @MainActor
     private var deskSession: DeskSession? {
         if let deskSessionStorage { return deskSessionStorage }
-        guard deskBundle != nil, let paths = DeskPaths.standard() else { return nil }
+        guard deskBundle != nil, let paths = DeskPaths.standard(identity: AppIdentity.current) else { return nil }
         let session = DeskSession(paths: paths, bundle: deskBundle, info: DeskSession.hostInfo(), log: { RunLog.write($0, $1) })
         deskSessionStorage = session
         return session
@@ -10519,7 +10618,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let appURL = Bundle.main.bundleURL
         NSWorkspace.shared.activateFileViewerSelecting([appURL])
         RunLog.write("permission.app.revealed", "path=\(appURL.path)")
-        updateStatus("Revealed True Convo.app")
+        updateStatus("Revealed \(AppIdentity.current.appBundleName)")
     }
 
     @objc private func copyCurrentAppPath() {
@@ -10532,12 +10631,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func showAccessibilityInstructions() {
         let alert = NSAlert()
-        alert.messageText = "Enable Accessibility for this exact True Convo app"
-        alert.informativeText = [
-            "Finder is highlighting the app that is currently running.",
-            "In System Settings > Privacy & Security > Accessibility, add or enable that exact app.",
-            "If you see older entries (Convo Cursor, Voice Cursor, or an earlier True Convo), remove them first, then add the highlighted app and relaunch True Convo."
-        ].joined(separator: "\n\n")
+        if AppIdentity.current.isTest {
+            alert.messageText = "Enable Accessibility for True Convo Test"
+            alert.informativeText = [
+                "Finder is highlighting True Convo Test, the app that is currently running.",
+                "In System Settings > Privacy & Security > Accessibility, add or enable True Convo Test.",
+                "Leave the True Convo entry exactly as it is: that is your real app. If an older True Convo Test entry is there, remove only that one, then add the highlighted app and relaunch True Convo Test."
+            ].joined(separator: "\n\n")
+        } else {
+            alert.messageText = "Enable Accessibility for this exact True Convo app"
+            alert.informativeText = [
+                "Finder is highlighting the app that is currently running.",
+                "In System Settings > Privacy & Security > Accessibility, add or enable that exact app.",
+                "If you see older entries (Convo Cursor, Voice Cursor, or an earlier True Convo), remove them first, then add the highlighted app and relaunch True Convo."
+            ].joined(separator: "\n\n")
+        }
         alert.alertStyle = .informational
         alert.addButton(withTitle: "Open Settings")
         alert.runModal()
@@ -10677,7 +10785,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         guard let application,
               !application.isTerminated,
-              application.bundleIdentifier != Bundle.main.bundleIdentifier
+              application.bundleIdentifier != Bundle.main.bundleIdentifier,
+              // True Convo Test also skips the real app's windows; the real
+              // app skips only itself, as before.
+              !AppIdentity.current.isOtherTrueConvoCopy(bundleIdentifier: application.bundleIdentifier)
         else {
             return
         }
@@ -10712,12 +10823,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func configureStatusItemButton(_ button: NSStatusBarButton?) {
         guard let button else { return }
-        button.title = ""
+        let name = AppIdentity.current.displayName
+        button.title = AppIdentity.current.isTest ? "Test" : ""
         button.image = statusItemImage()
-        button.imagePosition = .imageOnly
+        button.imagePosition = AppIdentity.current.isTest ? .imageLeft : .imageOnly
         button.toolTip = controller.isRecording
-            ? "True Convo is recording"
-            : controller.isBusy ? "True Convo is finishing transcription" : "True Convo"
+            ? "\(name) is recording"
+            : controller.isBusy ? "\(name) is finishing transcription" : name
     }
 
     private func statusItemImage() -> NSImage? {
@@ -10728,7 +10840,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return image
         }
         if #available(macOS 11.0, *),
-           let image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "True Convo") {
+           let image = NSImage(systemSymbolName: "waveform", accessibilityDescription: AppIdentity.current.displayName) {
             image.size = NSSize(width: 18, height: 18)
             image.isTemplate = true
             return image
@@ -10736,6 +10848,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return nil
     }
 }
+
+// True Convo Test only: refuse an archive folder that is not its own, and
+// quit, before anything (even the run log) reads or writes it.
+TestArchiveLaunchCheck.quitIfTestArchiveIsNotItsOwn()
 
 OpenAIRealtimeSmoke.runIfRequested()
 

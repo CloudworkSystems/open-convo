@@ -1,8 +1,38 @@
 #!/usr/bin/env bash
 # Build and assemble "True Convo.app" in dist/.
 #
-#   scripts/package_app.sh            build dist/True Convo.app (ad-hoc signed)
-#   scripts/package_app.sh --install  also swap it into ~/Applications
+#   scripts/package_app.sh                  build dist/True Convo.app (ad-hoc signed)
+#   scripts/package_app.sh --install        also swap it into ~/Applications
+#   scripts/package_app.sh --test-identity  build dist/True Convo Test.app instead
+#
+# Test copy (--test-identity): "True Convo Test.app", bundle id
+# com.trueconvo.voice-cursor.test, program "True Convo Test", Services entry
+# "Correct With True Convo Test" on port "True Convo Test". The app reads that
+# bundle id and keeps its own settings, Keychain items, archive
+# (~/.tca-dictate-test) and Desk folder, so it can sit next to the real app in
+# the same macOS account. Only the copied Info.plist in dist is changed, never
+# Packaging/Info.plist, and the names are read back before signing. It is
+# always ad-hoc signed and never installed, quit or opened by this script: it
+# refuses --install and TRUE_CONVO_SIGN_IDENTITY, and it deletes and replaces
+# only dist/True Convo Test.app. If it stops for any reason after it starts
+# making that app and before signing it, it removes the half-made app (and
+# nothing else). Without the option, nothing here changes.
+#
+# The test copy also carries the participant supervisor helper, still
+# inactive (contract section 11): it is built in its own scratch folder,
+# .build/test-identity (git-ignored), separate from the release build's
+# .build/release; it refuses unless the whole checkout is clean (git status
+# --porcelain --untracked-files=all, whatever git's own settings say, and no
+# tracked file marked assume-unchanged or skip-worktree; ignored files are
+# excluded) and records that commit as TCSourceCommit in the copied
+# Info.plist; it copies ParticipantSupervisor into Contents/MacOS (0755); the
+# bundle may hold no other program file (Mach-O) and no link; it signs the
+# helper ad hoc with the identifier
+# com.trueconvo.voice-cursor.test.participant-supervisor, then the app
+# without --deep (which would re-sign the helper and drop that identifier),
+# and checks both signatures and both identifiers (a failing codesign -dv
+# read-back counts as a failed check). If signing or a check fails, the
+# signed app is removed too.
 #
 # Desk window (invented data): set TRUE_CONVO_WITH_DESK=1 to bundle the Desk,
 # built offline from this checkout's clean apps/desk (it refuses local
@@ -11,8 +41,8 @@
 # by this script; apps/desk or an old apps/desk/native-dist that is a symbolic
 # link, or not a plain folder of this user's, is refused before anything is
 # built. Without it the app has no Desk and its menu item says so. A Desk
-# build is a Test Account trial build: the script refuses to combine it with
-# --install or TRUE_CONVO_SIGN_IDENTITY.
+# build is a trial build: the script refuses to combine it with --install or
+# TRUE_CONVO_SIGN_IDENTITY. To try it next to the real app, add --test-identity.
 #
 # Every build (with or without the Desk) deletes the old app in dist/ and
 # assembles the new one there, so dist, and the app folders it replaces, must
@@ -31,6 +61,18 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_NAME="True Convo"
 EXECUTABLE_NAME="True Convo"
 BUNDLE_ID="com.trueconvo.voice-cursor"
+# The test copy's names. They must match AppIdentity.test in
+# Sources/TrueConvoIdentity (a unit test checks these lines).
+TEST_APP_NAME="True Convo Test"
+TEST_EXECUTABLE_NAME="True Convo Test"
+TEST_BUNDLE_ID="com.trueconvo.voice-cursor.test"
+TEST_SERVICES_MENU_ITEM="Correct With True Convo Test"
+TEST_SERVICES_PORT_NAME="True Convo Test"
+# The test copy's own build folder (inside the git-ignored .build) and its
+# participant supervisor helper.
+TEST_BUILD_DIR="${ROOT_DIR}/.build/test-identity"
+SUPERVISOR_NAME="ParticipantSupervisor"
+TEST_SUPERVISOR_IDENTIFIER="com.trueconvo.voice-cursor.test.participant-supervisor"
 APP_DIR="${ROOT_DIR}/dist/${APP_NAME}.app"
 CONTENTS_DIR="${APP_DIR}/Contents"
 MACOS_DIR="${CONTENTS_DIR}/MacOS"
@@ -47,15 +89,38 @@ DESK_MANIFEST_TOOL="${ROOT_DIR}/.build/release/DeskBundleManifest"
 WITH_DESK="${TRUE_CONVO_WITH_DESK:-0}"
 
 INSTALL=0
+TEST_IDENTITY=0
 for arg in "$@"; do
   case "${arg}" in
     --install) INSTALL=1 ;;
+    --test-identity) TEST_IDENTITY=1 ;;
     *) echo "Unknown option: ${arg}" >&2; exit 2 ;;
   esac
 done
 
+if [[ "${TEST_IDENTITY}" -eq 1 ]]; then
+  if [[ "${INSTALL}" -eq 1 ]]; then
+    echo "Test copy: --test-identity never installs. This script would quit and move apps in ~/Applications; it never does that for the test copy. Nothing was built or changed." >&2
+    exit 2
+  fi
+  if [[ "${SIGN_IDENTITY}" != "-" ]]; then
+    echo "Test copy: --test-identity is always ad-hoc signed; run it without TRUE_CONVO_SIGN_IDENTITY. Nothing was built or changed." >&2
+    exit 2
+  fi
+  APP_NAME="${TEST_APP_NAME}"
+  EXECUTABLE_NAME="${TEST_EXECUTABLE_NAME}"
+  BUNDLE_ID="${TEST_BUNDLE_ID}"
+  APP_DIR="${ROOT_DIR}/dist/${APP_NAME}.app"
+  CONTENTS_DIR="${APP_DIR}/Contents"
+  MACOS_DIR="${CONTENTS_DIR}/MacOS"
+  RESOURCES_DIR="${CONTENTS_DIR}/Resources"
+  BINARY_SRC="${TEST_BUILD_DIR}/release/VoiceCursorMac"
+  DESK_MANIFEST_TOOL="${TEST_BUILD_DIR}/release/DeskBundleManifest"
+  SUPERVISOR_SRC="${TEST_BUILD_DIR}/release/${SUPERVISOR_NAME}"
+fi
+
 if [[ "${WITH_DESK}" == "1" ]] && [[ "${INSTALL}" -eq 1 || "${SIGN_IDENTITY}" != "-" ]]; then
-  echo "Desk: a Desk build is for the Test Account trial only. It is never installed in ~/Applications or signed with a Developer ID; run it without --install and without TRUE_CONVO_SIGN_IDENTITY." >&2
+  echo "Desk: a Desk build is a trial build only. It is never installed in ~/Applications or signed with a Developer ID; run it without --install and without TRUE_CONVO_SIGN_IDENTITY." >&2
   exit 2
 fi
 
@@ -75,13 +140,212 @@ refuse_unless_plain_folder() {
 }
 
 # Checks where the app is assembled, before anything is built and again right
-# before the old app is deleted: dist and the app folders it replaces.
+# before the old app is deleted: dist and the app folders it replaces. The
+# test copy replaces only dist/True Convo Test.app.
 output_preflight() {
   local name
   refuse_unless_plain_folder "" "${ROOT_DIR}/dist" "dist"
+  if [[ "${TEST_IDENTITY}" -eq 1 ]]; then
+    refuse_unless_plain_folder "" "${APP_DIR}" "dist/${APP_NAME}.app"
+    return
+  fi
   for name in "${APP_NAME}.app" "Convo Cursor.app" "Voice Cursor.app"; do
     refuse_unless_plain_folder "" "${ROOT_DIR}/dist/${name}" "dist/${name}"
   done
+}
+
+# Test copy only: gives the copied Info.plist the test copy's names. The two
+# permission prompts name "True Convo Test" too, so they can be told apart.
+apply_test_identity_plist() {
+  local plist="$1" key value
+  plutil -replace CFBundleIdentifier -string "${TEST_BUNDLE_ID}" "${plist}"
+  plutil -replace CFBundleName -string "${TEST_APP_NAME}" "${plist}"
+  plutil -replace CFBundleDisplayName -string "${TEST_APP_NAME}" "${plist}"
+  plutil -replace CFBundleExecutable -string "${TEST_EXECUTABLE_NAME}" "${plist}"
+  plutil -replace NSServices.0.NSMenuItem.default -string "${TEST_SERVICES_MENU_ITEM}" "${plist}"
+  plutil -replace NSServices.0.NSPortName -string "${TEST_SERVICES_PORT_NAME}" "${plist}"
+  for key in NSMicrophoneUsageDescription NSSpeechRecognitionUsageDescription; do
+    if ! value="$(plutil -extract "${key}" raw -o - "${plist}" 2>/dev/null)"; then
+      rm -rf "${APP_DIR}"
+      echo "Test copy: ${key} is missing from Info.plist. Removed dist/${APP_NAME}.app; nothing was signed." >&2
+      exit 1
+    fi
+    plutil -replace "${key}" -string "${value/#True Convo /${TEST_APP_NAME} }" "${plist}"
+  done
+  plutil -insert TCSourceCommit -string "${SOURCE_COMMIT}" "${plist}"
+}
+
+# Test copy only: reads every name back, and checks that both permission
+# prompts start with "True Convo Test ". A test-named app carrying the real
+# bundle id would share the real app's settings, keys and archive, so any
+# mismatch removes dist/True Convo Test.app and stops (exit 1).
+verify_test_identity_plist() {
+  local plist="$1" pair key expected actual
+  for key in NSMicrophoneUsageDescription NSSpeechRecognitionUsageDescription; do
+    actual="$(plutil -extract "${key}" raw -o - "${plist}" 2>/dev/null || true)"
+    if [[ "${actual}" != "${TEST_APP_NAME} "* ]]; then
+      rm -rf "${APP_DIR}"
+      echo "Test copy: ${key} does not start with \"${TEST_APP_NAME} \". Removed dist/${APP_NAME}.app; nothing was signed." >&2
+      exit 1
+    fi
+  done
+  for pair in \
+    "CFBundleIdentifier=${TEST_BUNDLE_ID}" \
+    "CFBundleName=${TEST_APP_NAME}" \
+    "CFBundleDisplayName=${TEST_APP_NAME}" \
+    "CFBundleExecutable=${TEST_EXECUTABLE_NAME}" \
+    "NSServices.0.NSMenuItem.default=${TEST_SERVICES_MENU_ITEM}" \
+    "NSServices.0.NSPortName=${TEST_SERVICES_PORT_NAME}" \
+    "TCSourceCommit=${SOURCE_COMMIT}"; do
+    key="${pair%%=*}"
+    expected="${pair#*=}"
+    actual="$(plutil -extract "${key}" raw -o - "${plist}" 2>/dev/null || true)"
+    if [[ "${actual}" != "${expected}" ]]; then
+      rm -rf "${APP_DIR}"
+      echo "Test copy: ${key} reads \"${actual}\", not \"${expected}\". Removed dist/${APP_NAME}.app; nothing was signed." >&2
+      exit 1
+    fi
+  done
+  if [[ ! -x "${MACOS_DIR}/${TEST_EXECUTABLE_NAME}" ]]; then
+    rm -rf "${APP_DIR}"
+    echo "Test copy: Contents/MacOS/${TEST_EXECUTABLE_NAME} is missing. Removed dist/${APP_NAME}.app; nothing was signed." >&2
+    exit 1
+  fi
+}
+
+# Test copy only: the exit trap from the moment this run starts making
+# dist/True Convo Test.app until it is about to be signed. If the script stops
+# in between, for any reason (a failing plutil, cp or Desk step), it removes
+# that half-made app and nothing else, so no test-named app with the real
+# app's Info.plist is left behind. A Desk build's temporary folder, when there
+# is one, is removed as before. From signing until every signature and
+# identifier check has passed, a failure removes the signed app the same way,
+# so no test copy whose helper failed a check is left behind.
+TEST_COPY_UNSIGNED=0
+TEST_COPY_SIGNING=0
+remove_unsigned_test_copy() {
+  local status=$?
+  if [[ "${status}" -ne 0 ]] && [[ -e "${APP_DIR}" || -L "${APP_DIR}" ]]; then
+    if [[ "${TEST_COPY_UNSIGNED}" -eq 1 ]]; then
+      rm -rf "${APP_DIR}"
+      echo "Test copy: packaging stopped before signing (exit ${status}). Removed dist/${APP_NAME}.app; nothing was signed." >&2
+    elif [[ "${TEST_COPY_SIGNING}" -eq 1 ]]; then
+      rm -rf "${APP_DIR}"
+      echo "Test copy: packaging stopped while signing or checking the signatures (exit ${status}). Removed dist/${APP_NAME}.app." >&2
+    fi
+  fi
+}
+
+# Test copy only, before anything is built and again right before signing:
+# the whole checkout must be clean and still at the same commit, so
+# TCSourceCommit names the tracked source that was built. Untracked files are
+# always listed (--untracked-files=all overrides a status.showUntrackedFiles
+# setting), and a tracked file git is told to treat as unchanged
+# (assume-unchanged or skip-worktree, which hide its local changes from git
+# status) is refused too. Ignored files, such as .build, dist and
+# apps/desk/node_modules, are not checked, so the commit does not cover them.
+# Argument: what to say after the refusal.
+SOURCE_COMMIT=""
+test_copy_source_check() {
+  local after="$1" changes listed hidden commit
+  if ! changes="$(git --no-optional-locks -C "${ROOT_DIR}" status --porcelain --untracked-files=all --ignore-submodules=none)" \
+    || ! listed="$(git --no-optional-locks -C "${ROOT_DIR}" ls-files -v -- ':/')" \
+    || ! commit="$(git --no-optional-locks -C "${ROOT_DIR}" rev-parse --verify HEAD)" || [[ -z "${commit}" ]]; then
+    echo "Test copy: could not read this checkout's git status; refusing to package. ${after}" >&2
+    exit 1
+  fi
+  if [[ -n "${changes}" ]]; then
+    echo "Test copy: the checkout has local changes or untracked files; refusing to package them. Save or set them aside first. ${after}" >&2
+    exit 1
+  fi
+  # git ls-files -v: a lowercase tag is assume-unchanged, S is skip-worktree.
+  hidden="$(printf '%s\n' "${listed}" | grep -E '^([a-z]|S) ' || true)"
+  if [[ -n "${hidden}" ]]; then
+    echo "Test copy: git is told to treat some tracked files as unchanged (assume-unchanged or skip-worktree), so their local changes would not show; refusing to package. Clear those marks first. ${after}" >&2
+    exit 1
+  fi
+  if [[ -n "${SOURCE_COMMIT}" && "${commit}" != "${SOURCE_COMMIT}" ]]; then
+    echo "Test copy: the checkout moved from ${SOURCE_COMMIT} to ${commit} while packaging; refusing. ${after}" >&2
+    exit 1
+  fi
+  SOURCE_COMMIT="${commit}"
+}
+
+# Test copy only: copies the release ParticipantSupervisor from the test
+# copy's build folder into Contents/MacOS (0755).
+copy_test_copy_supervisor() {
+  if [[ -L "${SUPERVISOR_SRC}" || ! -f "${SUPERVISOR_SRC}" || ! -x "${SUPERVISOR_SRC}" ]]; then
+    rm -rf "${APP_DIR}"
+    echo "Test copy: ${SUPERVISOR_NAME} is missing from .build/test-identity/release (or is not a plain program file). Removed dist/${APP_NAME}.app; nothing was signed." >&2
+    exit 1
+  fi
+  cp "${SUPERVISOR_SRC}" "${MACOS_DIR}/${SUPERVISOR_NAME}"
+  chmod 755 "${MACOS_DIR}/${SUPERVISOR_NAME}"
+}
+
+# Test copy only, right before signing: Contents/MacOS holds exactly the
+# program and ParticipantSupervisor, nothing in the bundle is a link, and no
+# other file anywhere in it is a program file (Mach-O, by its first four
+# bytes). Test-only products (ParticipantFakeCLI, ParticipantTestHost,
+# ParticipantPausingSupervisor, ParticipantAvailabilityProbe), the
+# DeskBundleManifest packaging tool or any other program are refused.
+check_test_copy_programs() {
+  local found expected path relative magic
+  found="$(cd "${MACOS_DIR}" && ls -A | LC_ALL=C sort | tr '\n' '|')"
+  expected="$(printf '%s\n' "${TEST_EXECUTABLE_NAME}" "${SUPERVISOR_NAME}" | LC_ALL=C sort | tr '\n' '|')"
+  if [[ "${found}" != "${expected}" ]]; then
+    rm -rf "${APP_DIR}"
+    echo "Test copy: Contents/MacOS holds \"${found}\", not exactly \"${expected}\". Removed dist/${APP_NAME}.app; nothing was signed." >&2
+    exit 1
+  fi
+  if [[ -n "$(find "${APP_DIR}" -type l -print)" ]]; then
+    rm -rf "${APP_DIR}"
+    echo "Test copy: the app holds a symbolic link. Removed dist/${APP_NAME}.app; nothing was signed." >&2
+    exit 1
+  fi
+  while IFS= read -r -d '' path; do
+    magic="$(head -c 4 "${path}" | od -An -tx1 | tr -d ' \n')"
+    case "${magic}" in
+      feedface|cefaedfe|feedfacf|cffaedfe|cafebabe|bebafeca|cafebabf|bfbafeca)
+        relative="${path#"${APP_DIR}/"}"
+        if [[ "${relative}" != "Contents/MacOS/${TEST_EXECUTABLE_NAME}" && "${relative}" != "Contents/MacOS/${SUPERVISOR_NAME}" ]]; then
+          rm -rf "${APP_DIR}"
+          echo "Test copy: ${relative} is a program file (Mach-O); the test copy may hold only Contents/MacOS/${TEST_EXECUTABLE_NAME} and Contents/MacOS/${SUPERVISOR_NAME}. Removed dist/${APP_NAME}.app; nothing was signed." >&2
+          exit 1
+        fi
+        ;;
+    esac
+  done < <(find "${APP_DIR}" -type f -print0)
+}
+
+# Test copy only: ad hoc signs the helper with its own identifier, then the
+# app without --deep (--deep would re-sign the helper and replace that
+# identifier), verifies both, and reads both identifiers back. A read-back
+# whose codesign -dv fails is refused before its output is read, whatever it
+# printed (Codex F2-M1): an Identifier line from a failed display is not
+# evidence.
+sign_test_copy() {
+  local helper="${MACOS_DIR}/${SUPERVISOR_NAME}" pair path expected actual display status
+  codesign --force --timestamp=none --sign - --identifier "${TEST_SUPERVISOR_IDENTIFIER}" "${helper}"
+  codesign --force --timestamp=none --sign - "${APP_DIR}"
+  codesign --verify --strict "${helper}"
+  codesign --verify --deep --strict "${APP_DIR}"
+  for pair in "${helper}=${TEST_SUPERVISOR_IDENTIFIER}" "${APP_DIR}=${TEST_BUNDLE_ID}"; do
+    path="${pair%=*}"
+    expected="${pair##*=}"
+    status=0
+    display="$(codesign -dv "${path}" 2>&1)" || status=$?
+    if [[ "${status}" -ne 0 ]]; then
+      echo "Test copy: could not read the signature of ${path#"${ROOT_DIR}/"} (codesign -dv exited ${status}); refusing." >&2
+      exit 1
+    fi
+    actual="$(printf '%s\n' "${display}" | sed -n 's/^Identifier=//p')"
+    if [[ "${actual}" != "${expected}" ]]; then
+      echo "Test copy: ${path#"${ROOT_DIR}/"} is signed with identifier \"${actual}\", not \"${expected}\"." >&2
+      exit 1
+    fi
+  done
+  echo "Test copy: ${SUPERVISOR_NAME} signed ad hoc as ${TEST_SUPERVISOR_IDENTIFIER} (bundled, still inactive)."
 }
 
 # Checks the Desk source before anything is built, and again right before the
@@ -99,7 +363,7 @@ desk_preflight() {
     exit 1
   fi
   if [[ ! -d "${DESK_DIR}/node_modules" ]]; then
-    echo "Desk: apps/desk/node_modules is missing. This script never fetches; installing it needs the network and Patrick's OK." >&2
+    echo "Desk: apps/desk/node_modules is missing. This script never fetches; installing it needs the network and the owner's OK." >&2
     exit 1
   fi
 }
@@ -107,6 +371,12 @@ desk_preflight() {
 output_preflight
 if [[ "${WITH_DESK}" == "1" ]]; then
   desk_preflight
+fi
+if [[ "${TEST_IDENTITY}" -eq 1 ]]; then
+  # The build folder is never a link, so the build never writes elsewhere.
+  refuse_unless_plain_folder "Test copy: " "${ROOT_DIR}/.build" ".build"
+  refuse_unless_plain_folder "Test copy: " "${TEST_BUILD_DIR}" ".build/test-identity"
+  test_copy_source_check "Nothing was built or changed."
 fi
 
 if [[ "${SIGN_IDENTITY}" != "-" ]]; then
@@ -120,8 +390,13 @@ if [[ "${SIGN_IDENTITY}" != "-" ]]; then
   fi
 fi
 
-echo "Building release binary (low priority, 2 jobs)..."
-nice -n 10 swift build -c release -j 2 --package-path "${ROOT_DIR}"
+if [[ "${TEST_IDENTITY}" -eq 1 ]]; then
+  echo "Test copy: building release binaries in .build/test-identity (low priority, 2 jobs)..."
+  nice -n 10 swift build -c release -j 2 --package-path "${ROOT_DIR}" --scratch-path "${TEST_BUILD_DIR}"
+else
+  echo "Building release binary (low priority, 2 jobs)..."
+  nice -n 10 swift build -c release -j 2 --package-path "${ROOT_DIR}"
+fi
 
 echo "Generating app icon..."
 swift "${ROOT_DIR}/scripts/generate_app_icon.swift" "${ICONSET_DIR}" "${TRUE_CONVO_ICON_SRC}" >/dev/null
@@ -129,13 +404,25 @@ iconutil -c icns "${ICONSET_DIR}" -o "${ICON_SRC}"
 
 echo "Assembling ${APP_DIR}..."
 output_preflight
-rm -rf "${APP_DIR}" "${ROOT_DIR}/dist/Convo Cursor.app" "${ROOT_DIR}/dist/Voice Cursor.app"
+if [[ "${TEST_IDENTITY}" -eq 1 ]]; then
+  rm -rf "${APP_DIR}"
+  TEST_COPY_UNSIGNED=1
+  trap remove_unsigned_test_copy EXIT
+else
+  rm -rf "${APP_DIR}" "${ROOT_DIR}/dist/Convo Cursor.app" "${ROOT_DIR}/dist/Voice Cursor.app"
+fi
 mkdir -p "${MACOS_DIR}" "${RESOURCES_DIR}"
 cp "${BINARY_SRC}" "${MACOS_DIR}/${EXECUTABLE_NAME}"
 cp "${INFO_PLIST}" "${CONTENTS_DIR}/Info.plist"
 cp "${ICON_SRC}" "${RESOURCES_DIR}/AppIcon.icns"
 cp "${TRUE_CONVO_ICON_SRC}" "${RESOURCES_DIR}/TrueConvoIcon.png"
 chmod 755 "${MACOS_DIR}/${EXECUTABLE_NAME}"
+if [[ "${TEST_IDENTITY}" -eq 1 ]]; then
+  copy_test_copy_supervisor
+  echo "Test copy: setting bundle id ${TEST_BUNDLE_ID} and the name \"${TEST_APP_NAME}\" in the copied Info.plist..."
+  apply_test_identity_plist "${CONTENTS_DIR}/Info.plist"
+  verify_test_identity_plist "${CONTENTS_DIR}/Info.plist"
+fi
 plutil -lint "${CONTENTS_DIR}/Info.plist"
 
 if [[ "${WITH_DESK}" == "1" ]]; then
@@ -146,6 +433,9 @@ if [[ "${WITH_DESK}" == "1" ]]; then
   DESK_TMP_ROOT="${TMPDIR:-/tmp}"
   DESK_BUILD_OUT="$(mktemp -d "${DESK_TMP_ROOT%/}/true-convo-desk-build.XXXXXXXX")"
   trap 'rm -rf "${DESK_BUILD_OUT}"' EXIT
+  if [[ "${TEST_IDENTITY}" -eq 1 ]]; then
+    trap 'remove_unsigned_test_copy; rm -rf "${DESK_BUILD_OUT}"' EXIT
+  fi
   chmod 700 "${DESK_BUILD_OUT}"
   (cd "${DESK_DIR}" && npm_config_offline=true npm run build:native-proof -- --outDir "${DESK_BUILD_OUT}")
   # The output folder itself (-mindepth 0) as well as everything in it.
@@ -170,12 +460,26 @@ if [[ "${SIGN_IDENTITY}" == "-" ]]; then
 else
   echo "Signing for this Mac with Developer ID certificate ${SIGN_IDENTITY:0:8}..."
 fi
-codesign --force --deep --timestamp=none --sign "${SIGN_IDENTITY}" "${APP_DIR}"
-codesign --verify --deep --strict "${APP_DIR}"
+if [[ "${TEST_IDENTITY}" -eq 1 ]]; then
+  verify_test_identity_plist "${CONTENTS_DIR}/Info.plist"
+  check_test_copy_programs
+  test_copy_source_check "Nothing was signed."
+  TEST_COPY_UNSIGNED=0
+  TEST_COPY_SIGNING=1
+  sign_test_copy
+else
+  codesign --force --deep --timestamp=none --sign "${SIGN_IDENTITY}" "${APP_DIR}"
+  codesign --verify --deep --strict "${APP_DIR}"
+fi
 if [[ "${WITH_DESK}" == "1" ]]; then
   "${DESK_MANIFEST_TOOL}" --verify "${RESOURCES_DIR}/Desk" "${RESOURCES_DIR}/desk-manifest.json"
 fi
+TEST_COPY_SIGNING=0
 echo "Packaged ${APP_DIR}"
+if [[ "${TEST_IDENTITY}" -eq 1 ]]; then
+  echo "Test copy: source commit ${SOURCE_COMMIT} (TCSourceCommit)."
+  echo "Test copy: bundle id ${TEST_BUNDLE_ID}, ad-hoc signed. Not installed, not opened. Copy it to ~/Applications/${APP_NAME}.app to try it next to True Convo."
+fi
 
 if [[ "${INSTALL}" -eq 0 ]]; then
   exit 0

@@ -1,6 +1,10 @@
 import Foundation
 
-/// The seven v1 operations. Anything else is `unknown-operation`.
+/// The seven v1 operations, then the five participant operations
+/// (`docs/desk-native-participant-contract.md` section 2). Anything else is
+/// `unknown-operation`, and so is a participant name unless the decoder was
+/// asked to accept it: the pinned page codec refuses a capabilities list it
+/// does not know, so page and host gain these together or not at all.
 public enum HostOperation: String, Codable, CaseIterable, Sendable {
     case capabilities = "host.capabilities"
     case workspaceRead = "workspace.read"
@@ -9,13 +13,38 @@ public enum HostOperation: String, Codable, CaseIterable, Sendable {
     case dictationUnbindDraft = "dictation.unbindDraft"
     case workspaceReconcile = "workspace.reconcile"
     case dictationReceipt = "dictation.receipt"
+    case participantAvailability = "participant.availability"
+    case participantStart = "participant.start"
+    case participantStop = "participant.stop"
+    case participantStatus = "participant.status"
+    case participantEvents = "participant.events"
 
     /// The list `host.capabilities` advertises: the five current page
-    /// operations first, then the two read-only extensions.
+    /// operations first, then the two read-only extensions. A host without
+    /// participants lists exactly these.
     public static let advertised: [HostOperation] = [
         .capabilities, .workspaceRead, .workspaceCommitProof, .dictationBindDraft, .dictationUnbindDraft,
         .workspaceReconcile, .dictationReceipt
     ]
+
+    /// The list a participant host advertises, in the contract's order: the
+    /// seven, then the five participant operations. The page enables
+    /// participants only when all five are listed.
+    public static let participantAdvertised: [HostOperation] = advertised + [
+        .participantAvailability, .participantStart, .participantStop, .participantStatus, .participantEvents
+    ]
+
+    /// The participant lane. These never touch the workspace barrier; a
+    /// host without participants refuses them as unknown names.
+    public var isParticipant: Bool {
+        switch self {
+        case .participantAvailability, .participantStart, .participantStop, .participantStatus, .participantEvents:
+            return true
+        case .capabilities, .workspaceRead, .workspaceCommitProof, .dictationBindDraft, .dictationUnbindDraft,
+             .workspaceReconcile, .dictationReceipt:
+            return false
+        }
+    }
 }
 
 public enum HostOutcome: String, Codable, Sendable {
@@ -31,8 +60,9 @@ public enum HostOutcome: String, Codable, Sendable {
     case unknown
 }
 
-/// The fixed reason enum from the v1 agreement. Never free text, never
-/// private content. Twenty-four values; adding one is a contract change.
+/// The fixed reason enum: v1's twenty-four, then the participant contract's
+/// eight (section 12). Never free text, never private content. Thirty-two
+/// values; adding one is a contract change.
 public enum HostRefusal: String, Codable, CaseIterable, Sendable {
     case unknownConnection = "unknown-connection"
     case staleGeneration = "stale-generation"
@@ -71,6 +101,27 @@ public enum HostRefusal: String, Codable, CaseIterable, Sendable {
     /// request holds the barrier; nothing is released.
     case unknownRequest = "unknown-request"
     case locked = "locked"
+    /// A commit's `participantRun` names a run its record lacks, or holds
+    /// twice.
+    case runNotFound = "run-not-found"
+    /// Commit: the run is not in its exact prepared form. Start: the run was
+    /// stopped before it started.
+    case runNotPrepared = "run-not-prepared"
+    /// The claim, ids, participant or input hash differ from the record,
+    /// the run entry or the pin at prepare.
+    case runMismatch = "run-mismatch"
+    /// The run or message ids are already known, or another request started
+    /// or is starting the run.
+    case duplicateRun = "duplicate-run"
+    /// Never prepared (a preparing commit not yet durable included), or
+    /// introduced without its claim.
+    case unknownRun = "unknown-run"
+    /// Availability failed at start.
+    case participantUnavailable = "participant-unavailable"
+    /// Another run is starting or live, or any run is `cleanup-pending`.
+    case participantBusy = "participant-busy"
+    /// The run was prepared for a participant identity native no longer pins.
+    case participantChanged = "participant-changed"
 }
 
 /// Correlation fields echoed back on every reply, refused envelopes included.
@@ -135,7 +186,11 @@ public struct HostRequest: Equatable, Sendable {
     }
 
     /// Strict envelope validation with precise refusal reasons.
-    public init(validating value: JSONValue) throws {
+    /// `acceptsParticipant` is true only for a participant host. While it is
+    /// false a `participant.*` name is refused exactly as an unknown name is,
+    /// at the same step (before the envelope-key check) and with the same
+    /// echo, so a v1 host answers byte for byte as before.
+    public init(validating value: JSONValue, acceptsParticipant: Bool = false) throws {
         guard case .object(let fields) = value else { throw HostRequestRejection(.malformedEnvelope) }
         var echo = HostEcho()
         if let requestId = fields["requestId"]?.stringValue, requestId.utf8.count <= Self.maxEchoedStringBytes {
@@ -162,7 +217,8 @@ public struct HostRequest: Equatable, Sendable {
         guard let generation = fields["generation"]?.safeIntegerValue else {
             throw HostRequestRejection(.malformedEnvelope, echo: echo)
         }
-        guard let operationName = fields["operation"]?.stringValue, let operation = HostOperation(rawValue: operationName) else {
+        guard let operationName = fields["operation"]?.stringValue, let operation = HostOperation(rawValue: operationName),
+              acceptsParticipant || !operation.isParticipant else {
             throw HostRequestRejection(.unknownOperation, echo: echo)
         }
         guard Set(fields.keys).isSubset(of: Self.envelopeKeys) else {
@@ -179,8 +235,9 @@ public struct HostRequest: Equatable, Sendable {
     /// is refused cheaply, with nothing echoed. The UTF-8 check here is not
     /// the one that keeps the parser honest: ASCII in UTF-16 is valid UTF-8
     /// byte for byte, so `JSONValue.decode` refuses the NUL bytes such input
-    /// carries before it scans or parses anything.
-    public static func decode(_ data: Data) throws -> HostRequest {
+    /// carries before it scans or parses anything. `acceptsParticipant` is
+    /// as for `init(validating:acceptsParticipant:)`.
+    public static func decode(_ data: Data, acceptsParticipant: Bool = false) throws -> HostRequest {
         guard data.count <= ProofLimits.envelopeBytes else { throw HostRequestRejection(.payloadTooLarge) }
         guard String(data: data, encoding: .utf8) != nil else { throw HostRequestRejection(.malformedEnvelope) }
         let value: JSONValue
@@ -189,7 +246,7 @@ public struct HostRequest: Equatable, Sendable {
         } catch {
             throw HostRequestRejection(.malformedEnvelope)
         }
-        return try HostRequest(validating: value)
+        return try HostRequest(validating: value, acceptsParticipant: acceptsParticipant)
     }
 
     public var jsonValue: JSONValue {
@@ -208,6 +265,10 @@ public struct HostRequest: Equatable, Sendable {
     public func canonicalData() -> Data { jsonValue.canonicalData() }
 }
 
+/// `Decodable` is a v1 reader: it never accepts a participant name, so a
+/// participant request encodes but does not decode back through `Codable`.
+/// A participant host reads requests with `decode(_:acceptsParticipant:)` or
+/// `init(validating:acceptsParticipant:)`, never through a `Decoder`.
 extension HostRequest: Codable {
     public init(from decoder: Decoder) throws {
         let value = try JSONValue(from: decoder)

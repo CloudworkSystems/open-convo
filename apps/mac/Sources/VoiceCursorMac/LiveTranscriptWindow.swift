@@ -79,7 +79,7 @@ indirect enum DictationOutcome {
     }
 
     /// Shown when the safety stop kept text from being pasted and put it on
-    /// the clipboard instead (Patrick's choice: keep the stop, say so clearly).
+    /// the clipboard instead (The owner's choice: keep the stop, say so clearly).
     static let clipboardNote = "Saved to clipboard — press Cmd+V to paste"
 
     /// Shown even if the pill was hidden: text that went nowhere visible, any

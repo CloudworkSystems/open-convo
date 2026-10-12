@@ -4,7 +4,7 @@ import Foundation
 /// silence (for example "Thank you for watching these videos"), so a silent
 /// recording must never be pasted or copied.
 ///
-/// Evidence, 2026-09-27: Patrick's real dictations peaked around -38 to -42 dBFS
+/// Evidence, 2026-09-27: the owner's real dictations peaked around -38 to -42 dBFS
 /// per second; the silent one never rose above -45 dBFS even in a single sample,
 /// and Apple's live listener heard no words during it.
 ///

@@ -150,14 +150,14 @@ async function setAppearance(page, theme) {
 async function enterDesk(page) {
   await page.goto(origin);
   await expect(page.getByText('Sample preview · sample data only', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+  await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
   await page.getByRole('navigation', { name: 'Nexus views', exact: true }).getByRole('button', { name: 'Nexus Navigator', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toBeVisible();
   await expect(page.getByRole('status').filter({ hasText: 'Sample workspace saved in this browser' })).toBeVisible();
 }
 
 async function openRoadmap(page) {
-  await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+  await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
   await page.getByRole('navigation', { name: 'Nexus views', exact: true }).getByRole('button', { name: 'Roadmap', exact: true }).click();
 }
 
@@ -271,14 +271,14 @@ test('desktop foundation creates goals, preserves drafts and keeps demo messages
     await openManualWork(page);
     await expect(page.getByRole('button', { name: 'Open Invented worksheet draft', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'CONTINUITY', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'CONTINUITY', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Memories', exact: true })).toBeVisible();
     await expect(page.getByText('Invented-data preview · unencrypted browser storage. No AI memory or learning is connected.', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'DATA', exact: true }).click();
     await expect(page.getByRole('main')).toContainText('no encryption or lock');
     await expect(page.getByRole('button', { name: /Lock workspace/ })).toBeDisabled();
     await expect(page.getByRole('button', { name: /Encrypted transfer/ })).toBeDisabled();
     await expect(page.getByRole('button', { name: /Manage Trash/ })).toBeDisabled();
-    await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+    await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
   await page.getByRole('navigation', { name: 'Nexus views', exact: true }).getByRole('button', { name: 'Nexus Navigator', exact: true }).click();
     await page.evaluate(() => document.fonts.ready);
     await page.screenshot({ path: join(screenshots, 'desktop.png'), fullPage: true });
@@ -296,7 +296,7 @@ test('mobile navigation is keyboard operable and the conversation fits the viewp
     const drawer = page.getByRole('dialog', { name: 'Navigation', exact: true });
     await expect(drawer).toBeVisible();
     await expect(drawer.getByRole('navigation', { name: 'Session folders', exact: true })).toBeVisible();
-    await drawer.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+    await drawer.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
     await expect(drawer).not.toBeVisible();
     await expect(page.getByRole('textbox', { name: 'Your message' })).toBeVisible();
     await open.click();
@@ -441,7 +441,7 @@ test('domain-scoped Work and intent drafts survive switches, panel changes and r
     assert.deepEqual((await readNativeRecord(page, storageKey)).workItems
       .find((item) => item.id === createdWork.id), createdWork, 'The shared board preserves the original folder ownership and work identity.');
     await goals.selectOption(firstGoal);
-    await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+    await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
   await page.getByRole('navigation', { name: 'Nexus views', exact: true }).getByRole('button', { name: 'Nexus Navigator', exact: true }).click();
     await expect(page.locator('.session-link[aria-current="true"]')).toHaveCount(0);
     await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toHaveCount(0);
@@ -452,7 +452,7 @@ test('domain-scoped Work and intent drafts survive switches, panel changes and r
     await page.getByRole('button', { name: 'Show session details', exact: true }).click();
     await expect(intent).toHaveValue('Unsubmitted grouping intent for the first domain.');
     await openRoadmap(page);
-    await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+    await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
   await page.getByRole('navigation', { name: 'Nexus views', exact: true }).getByRole('button', { name: 'Nexus Navigator', exact: true }).click();
     await expect(intent).toHaveValue('Unsubmitted grouping intent for the first domain.');
     await goals.selectOption(secondGoal);
@@ -531,7 +531,7 @@ test('per-tab navigation, appearance and selection preserve shared work and each
     await page.reload();
     await other.reload();
     await expect(page.getByRole('heading', { name: 'Roadmap', exact: true })).toBeVisible();
-    await expect(other.getByRole('heading', { name: 'CONTINUITY', exact: true })).toBeVisible();
+    await expect(other.getByRole('heading', { name: 'Memories', exact: true })).toBeVisible();
     assert.equal(await domainPicker(page).inputValue(), firstGoal);
     assert.equal(await domainPicker(other).inputValue(), secondGoal);
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
@@ -542,7 +542,7 @@ test('per-tab navigation, appearance and selection preserve shared work and each
 
     // View changes must not strand the other tab. A genuine edit still saves
     // to its chosen session and produces the usual conflict in the stale tab.
-    await other.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+    await other.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
     const composer = other.getByRole('textbox', { name: 'Your message', exact: true });
     await expect(composer).toBeEnabled();
     await composer.fill('Invented edit after both tabs changed their views.');
@@ -617,7 +617,7 @@ test('blocked tab-view storage warns about screen resets while shared drafts kee
     await setAppearance(page, 'light');
     await openRoadmap(page);
     await expect(page.getByRole('heading', { name: 'Roadmap', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+    await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
   await page.getByRole('navigation', { name: 'Nexus views', exact: true }).getByRole('button', { name: 'Nexus Navigator', exact: true }).click();
     assert.equal(await readNativeRecordRaw(page, storageKey), sharedBytes);
     await expect(page.getByRole('alert', { name: 'Save recovery' })).not.toBeVisible();
@@ -629,7 +629,7 @@ test('blocked tab-view storage warns about screen resets while shared drafts kee
     await expect(page.getByRole('status').filter({ hasText: 'Sample workspace saved in this browser' })).toBeVisible();
     await expect(warning).toBeVisible();
     await page.reload();
-    await page.getByRole('button', { name: 'Cloudwork Nexus', exact: true }).click();
+    await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
   await page.getByRole('navigation', { name: 'Nexus views', exact: true }).getByRole('button', { name: 'Nexus Navigator', exact: true }).click();
     await expect(composer).toHaveValue('Invented work retained despite blocked tab-view storage.');
     await expect(page.getByRole('alert', { name: 'Save recovery' })).not.toBeVisible();
@@ -679,7 +679,7 @@ test('rail modes, drag snapping and keyboard resizing persist without changing s
     await expect.poll(async () => (await rail.boundingBox()).width).toBe(64);
     await expect(page.getByRole('button', { name: 'Expand navigation', exact: true })).toHaveAttribute('aria-expanded', 'false');
     assert.notEqual(await page.getByRole('button', { name: 'Expand navigation', exact: true }).innerHTML(), openIcon);
-    await expect(rail.getByRole('button', { name: 'Cloudwork Nexus', exact: true })).toBeVisible();
+    await expect(rail.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true })).toBeVisible();
     await expect(rail.locator('.brand-copy')).not.toBeVisible();
     await page.getByRole('button', { name: 'Expand navigation', exact: true }).click();
     const divider = page.getByRole('separator', { name: 'Navigation width', exact: true });
