@@ -8,6 +8,7 @@ __pycache__/
 .build/
 DerivedData/
 dist/
+native-dist/
 *.xcarchive
 *.dSYM/
 *.app/
