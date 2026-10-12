@@ -36,6 +36,18 @@ reads from and writes to `CloudworkSystems/open-convo`.
 - Claude pulls from GitHub, builds the changes on a branch named after the
   session and opens a pull request. Codex may review that pull request on
   GitHub. The owner merges it with GitHub's button.
+- **How far review goes depends on what the pull request contains.**
+  - *Any pull request that changes code* follows the code path below, even
+    when it also changes docs.
+  - *Plans and other docs* get one Codex review round. Claude writes its P1
+    findings into the plan as requirements for the code that follows, and the
+    owner merges. Later rounds on a plan are optional, not a merge condition;
+    build-level detail belongs in the code pull requests.
+  - *Code* is reviewed until Codex finishes with a 👍 on the pull request.
+    Claude fixes every P1 and P2, or explains in the pull request why one does
+    not apply. Only the owner decides to merge with findings still open.
+  - A green "Ready to merge" button means no conflicts, not approval. Claude
+    tells the owner in chat when a pull request is ready to merge.
 - `Start Desk.command` pulls the latest `main` before starting, and the running
   Desk refreshes itself when files change, so the inline browser shows the latest
   version. A normal browser is only for a second look.
