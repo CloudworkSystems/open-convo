@@ -19,6 +19,18 @@
 - Log each move in `PLAN.md`: source path, True Convo commit, what was removed.
 - Never write to, merge into or push the True Convo folder.
 
+## Review Loop (Codex Annotates, Claude Builds)
+
+- The owner names each piece of work once and uses the same name for the Codex
+  session and the Claude session, for example `OC-261012-desk-navigator`.
+- The owner annotates the running Desk in Codex's inline browser. Codex saves the
+  annotations as plain notes in `docs/annotations/<session-name>.md` without
+  changing code.
+- Claude reads that file, builds the changes and replies under the same name.
+- The Desk reloads itself when a newer build is available, so the inline browser
+  and a normal browser both show the latest version. A normal browser is only for
+  a second look, not for annotating.
+
 ## Limits
 
 - Write every file as if this repo were public: no secrets, keys, private records,
