@@ -54,10 +54,15 @@ and the Desk from it.
 
 Each one ends with something the owner can try on the Mac.
 
-1. **Desk side of dictation.** Wire `dictation-draft.ts` into the Desk: capture
-   and bind at recording start, unbind on any change, handle `dictation.final`,
-   commit, and send the receipt. Tested in the browser against a stand-in for
-   the Mac, so it can be reviewed before any Mac code changes.
+1. **Desk side of dictation.** Wire `dictation-draft.ts` into the Desk. The Mac
+   sends the Desk no "recording started" signal: `beginRecording()` only
+   captures whatever binding already exists. So the Desk keeps the binding
+   current *before* recording: bind whenever the composer is focused and
+   unlocked, rebind when the selection or session changes, unbind on blur,
+   lock or navigation. Then handle `dictation.final`, commit, and send the
+   receipt. Tested in the browser against a stand-in that behaves like the real
+   Mac side (captures only an existing binding), so the stand-in can't hide this
+   gap. (Revised after Codex's third review.)
    *Owner tries:* in the review copy, a simulated dictation lands in the draft,
    not sent.
 2. **Mac side switch-on.** Change `DeskDictationPolicy` so an open, focused Desk
