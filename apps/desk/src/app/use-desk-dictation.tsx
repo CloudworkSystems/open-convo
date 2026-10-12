@@ -100,8 +100,9 @@ export function useDeskDictation(access: DeskDictationAccess): DeskDictationView
       }, () => keep({ deliveryId: final.deliveryId, text: final.text, state: 'save-failed' }));
     });
     // The host's receipt is the durable confirmation; text is released only then or on a saved reply.
+    // A receipt after Retry also settles an earlier failed save of the same delivery.
     const offReceipt = lane.onReceipt((deliveryId) => setRetained((items) =>
-      items.filter((item) => item.deliveryId !== deliveryId || item.state !== 'saving')));
+      items.filter((item) => item.deliveryId !== deliveryId || item.state === 'not-placed')));
     return () => { offFinal(); offReceipt(); };
   }, [lane]);
 

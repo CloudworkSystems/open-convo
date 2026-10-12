@@ -290,13 +290,15 @@ export function Conversation({
         ><span /></div>
         {unplaced.length > 0 && <div className="dictation-held" role="status" aria-live="polite">
           {unplaced.map((item) => <div className="dictation-held-item" key={item.deliveryId}>
-            <p><strong>{item.state === 'save-failed' ? 'Dictated words were not saved.' : 'Dictated words were not placed in your draft.'}</strong>
-              {' '}They are kept here until you choose what to do.</p>
+            {item.state === 'save-failed'
+              ? <p><strong>Dictated words are in your draft but not saved yet.</strong>{' '}Use Retry save above. A copy is kept here.</p>
+              : <p><strong>Dictated words were not placed in your draft.</strong>{' '}They are kept here until you choose what to do.</p>}
             <blockquote className="dictation-held-text">{item.text}</blockquote>
             <div className="dictation-held-actions">
               <button type="button" className="secondary-button" onClick={() => { void navigator.clipboard?.writeText(item.text).catch(() => {}); }}>Copy</button>
-              <button type="button" className="secondary-button" disabled={readOnly || !session}
-                onClick={() => insertDictated(item.deliveryId, item.text)}>Insert at cursor</button>
+              {/* Already in the draft after a failed save: inserting again would duplicate it. */}
+              {item.state === 'not-placed' && <button type="button" className="secondary-button" disabled={readOnly || !session}
+                onClick={() => insertDictated(item.deliveryId, item.text)}>Insert at cursor</button>}
               <button type="button" className="secondary-button" onClick={() => dictation?.dismiss(item.deliveryId)}>Dismiss</button>
             </div>
           </div>)}

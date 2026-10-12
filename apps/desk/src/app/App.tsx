@@ -58,6 +58,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
   const savedRevision = useRef<number | null>(null);
   const savedState = useRef<DeskState | null>(null);
   const writeProblem = useRef<Problem | null>(null);
+  const unresolvedDelivery = useRef<WorkspaceSaveOptions | null>(null);
   const tail = useRef<Promise<void>>(Promise.resolve());
   const pending = useRef(0);
   const saveEpoch = useRef(0);
@@ -90,10 +91,14 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
     if (!writeProblem.current) setSaveStatus({ kind: 'saving', message: nativeProof ? 'Saving the invented native workspace…' : 'Saving sample workspace…' });
     const operation = tail.current.then(async (): Promise<WorkspaceAttemptResult> => {
       if (!isCurrent()) return { kind: 'unavailable', error: 'The workspace connection is closed.' };
-      if (writeProblem.current) return { kind: 'blocked', error: 'This update has not been sent because an earlier save needs attention.' };
+      if (writeProblem.current) {
+        if (options?.dictationDeliveryId) unresolvedDelivery.current = options;
+        return { kind: 'blocked', error: 'This update has not been sent because an earlier save needs attention.' };
+      }
       const result = await repository.save(captured, savedRevision.current, options);
       if (!isCurrent()) return { kind: 'unavailable', error: 'The workspace connection closed before save confirmation.' };
       if (result.kind === 'saved') {
+        if (unresolvedDelivery.current?.dictationDeliveryId === options?.dictationDeliveryId) unresolvedDelivery.current = null;
         savedRevision.current = result.state.revision;
         savedState.current = result.state;
         notifyRunSave.current(result.state);
@@ -101,6 +106,8 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
           setSaveStatus({ kind: 'saved', message: savedMessage });
         }
       } else {
+        // A dictation save that did not land keeps its delivery identity for Retry.
+        if (options?.dictationDeliveryId) unresolvedDelivery.current = options;
         setWriteProblem({ kind: result.kind, message: result.error });
       }
       return result;
@@ -349,7 +356,8 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
       if (!isCurrent() || !stateRef.current || writeProblem.current?.kind !== 'failed') return;
       writeProblem.current = null;
       setProblem(null);
-      save(stateRef.current);
+      // Retry carries a failed dictation's delivery identity, so the host completes that delivery.
+      save(stateRef.current, unresolvedDelivery.current ?? undefined);
       await tail.current;
     } finally {
       retrying.current = false;
