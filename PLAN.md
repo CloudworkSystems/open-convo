@@ -5,6 +5,13 @@
 On October 12, 2026, the owner froze True Convo and made Open Convo the active
 product repo. True Convo stays private as the reference and parts library.
 
+## What the Product Is
+
+One desktop app. The full Desk is its home; it shrinks down to a heads-up display
+and dictation that works wherever the cursor is in any Mac app. The Mac app
+(step 3) and the Desk (step 2) become the same application, not two products.
+An iOS app that works the same way on iPhone comes later.
+
 ## Proposed Move Order
 
 Each step is a fresh copy with a private-content check (see AGENTS.md). The
@@ -35,12 +42,13 @@ Strategy and interview files, `docs/reviews`, `docs/sessions`, session audits,
 - Whether the in-progress True Convo branches (native host proof, build 8
   trial, participant wiring) get finished here or restarted fresh.
 
-- Whether Open Convo gets a hosted preview. The Desk still contains the hosted
-  preview-update code (`src/app/preview-updates.ts`, the `desk-build.json` build
-  step) and two tests that need a hosted build (`tests/cloud-preview.test.mjs`,
-  `tests/annotation-styles.test.mjs`). True Convo's publish pipeline stayed
-  behind, so those two tests are not wired to any npm script and fail without a
-  hosted build. Keep and rewire, or remove, once this is decided.
+- Where the review copy of the Desk lives. The owner reviews the app by
+  annotating it inside an inline browser (Codex's in-app browser so far), and the
+  Desk's update check (`src/app/preview-updates.ts`, `desk-build.json`) reloads
+  that copy when a newer build is put up. Keep this feature. ChatGPT Sites
+  hosting stays behind; pick a host that does not tie users to ChatGPT. The two
+  tests that need a hosted build (`tests/cloud-preview.test.mjs`,
+  `tests/annotation-styles.test.mjs`) get rewired once that host is chosen.
 
 ## Move Log
 
