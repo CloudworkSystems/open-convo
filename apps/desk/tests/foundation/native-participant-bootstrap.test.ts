@@ -277,7 +277,8 @@ for (const state of ['locked', 'revoked'] as const) {
     if (initialized.kind !== 'ready') return;
     const runtime = initialized.runtime;
     await waiting;
-    assert.equal(h.events.listeners.size, 3);
+    // Workspace transport, participant transport and port, dictation transport and lane.
+    assert.equal(h.events.listeners.size, 5);
     let invalidations = 0;
     runtime.subscribeInvalidation(() => { invalidations++; });
     revoke(h.events, state);

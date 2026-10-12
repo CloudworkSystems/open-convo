@@ -6,6 +6,7 @@ import './composer.css';
 import { ParticipantPicker } from './ParticipantPicker';
 import type { ParticipantChoice } from '../domain/participant-choices';
 import type { ParticipantIdentity } from '../domain/conversation-run-types';
+import { useDeskDictationView } from '../app/use-desk-dictation';
 
 const MIN_DRAFT_HEIGHT = 78;
 const MIN_MESSAGES_HEIGHT = 120;
@@ -55,6 +56,28 @@ export function Conversation({
   const composer = useRef<HTMLFormElement>(null);
   const draftField = useRef<HTMLTextAreaElement>(null);
   const composing = useRef(false);
+  const dictation = useDeskDictationView();
+  const reportDraftSelection = (field: HTMLTextAreaElement, focused: boolean) => {
+    if (!dictation || !session) return;
+    dictation.reportComposer(session.id, focused && !readOnly ? { start: field.selectionStart, end: field.selectionEnd } : null);
+  };
+  const unplaced = dictation?.retained.filter((item) => item.state !== 'saving') ?? [];
+  const insertDictated = (deliveryId: string, text: string) => {
+    const field = draftField.current;
+    if (!field || !session || readOnly) return;
+    const start = field.selectionStart;
+    const value = field.value.slice(0, start) + text + field.value.slice(field.selectionEnd);
+    onDraftChange(session.id, value);
+    dictation?.dismiss(deliveryId);
+    requestAnimationFrame(() => { if (field.isConnected && field === draftField.current) field.setSelectionRange(start + text.length, start + text.length); });
+  };
+  // Put the caret after text that dictation just placed in this draft.
+  useEffect(() => {
+    const caret = dictation?.caret;
+    const field = draftField.current;
+    if (!caret || !field || caret.sessionId !== session?.id || document.activeElement !== field) return;
+    requestAnimationFrame(() => { if (field.isConnected) field.setSelectionRange(caret.position, caret.position); });
+  }, [dictation?.caret?.nonce]);
   const drag = useRef<{ pointerId: number; y: number; height: number } | null>(null);
   const [draftHeight, setDraftHeight] = useState(90);
   const [maxDraftHeight, setMaxDraftHeight] = useState(220);
@@ -265,6 +288,23 @@ export function Conversation({
               : draftHeight + (event.key === 'ArrowUp' ? 20 : -20));
           }}
         ><span /></div>
+        {unplaced.length > 0 && <div className="dictation-held" role="status" aria-live="polite">
+          {unplaced.map((item) => <div className="dictation-held-item" key={item.deliveryId}>
+            {item.state === 'save-failed'
+              ? <p><strong>Dictated words are in your draft but not saved yet.</strong>{' '}{item.reason === 'retry' ? 'Use Retry save above.'
+                : item.reason === 'reconcile' ? 'Use Reconcile original save above.'
+                : 'Copy them before reloading the saved copy.'} A copy is kept here.</p>
+              : <p><strong>Dictated words were not placed in your draft.</strong>{' '}They are kept here until you choose what to do.</p>}
+            <blockquote className="dictation-held-text">{item.text}</blockquote>
+            <div className="dictation-held-actions">
+              <button type="button" className="secondary-button" onClick={() => { void navigator.clipboard?.writeText(item.text).catch(() => {}); }}>Copy</button>
+              {/* Already in the draft after a failed save: inserting again would duplicate it. */}
+              {item.state === 'not-placed' && <button type="button" className="secondary-button" disabled={readOnly || !session}
+                onClick={() => insertDictated(item.deliveryId, item.text)}>Insert at cursor</button>}
+              <button type="button" className="secondary-button" onClick={() => dictation?.dismiss(item.deliveryId)}>Dismiss</button>
+            </div>
+          </div>)}
+        </div>}
         <label className="sr-only" htmlFor="message-draft">
           Your message
         </label>
@@ -278,6 +318,9 @@ export function Conversation({
           rows={3}
           aria-describedby={participantSendBlockedReason ? 'message-shortcuts send-blocked-reason' : 'message-shortcuts'}
           onChange={(event) => session && onDraftChange(session.id, event.target.value)}
+          onFocus={(event) => reportDraftSelection(event.currentTarget, true)}
+          onSelect={(event) => reportDraftSelection(event.currentTarget, document.activeElement === event.currentTarget)}
+          onBlur={(event) => reportDraftSelection(event.currentTarget, false)}
           onCompositionStart={() => { composing.current = true; }}
           onCompositionEnd={() => { composing.current = false; }}
           onKeyDown={(event) => {
@@ -295,7 +338,8 @@ export function Conversation({
           }}
         />
         <div className="composer-actions">
-          <span className="composer-hint shortcut-hint" id="message-shortcuts">Enter to send · Ctrl / ⌘ / Shift + Enter for a new line</span>
+          <span className="composer-hint shortcut-hint" id="message-shortcuts">Enter to send · Ctrl / ⌘ / Shift + Enter for a new line
+            {dictation?.status === 'ready' && <span className="dictation-ready"> · Dictation ready</span>}</span>
           <>{participantChoices !== undefined || session?.participantChoice ? <ParticipantPicker key={session?.id}
             choices={participantChoices ?? []} selected={session?.participantChoice}
             error={participantChoiceError} confirmation={participantConfirmation}

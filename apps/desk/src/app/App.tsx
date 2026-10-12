@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { WorkspaceLoadResult, WorkspaceSaveResult } from '../adapters/workspace-repository';
+import type { WorkspaceLoadResult, WorkspaceSaveOptions, WorkspaceSaveResult } from '../adapters/workspace-repository';
 import { DeskRuntimeContext, type DeskRuntime } from './runtime';
 import { sameParticipantIdentity } from '../domain/participant-choices';
 import { applyCommand, isViewCommand } from '../domain/commands';
@@ -9,6 +9,7 @@ import { DeskFoundation } from '../features/DeskFoundation';
 import { parsePreviewBuild, retireAnnotationDiagnostics, watchPreviewUpdates } from './preview-updates';
 import type { PreviewUpdateNotice } from './preview-updates';
 import { useConversationRuns, type WorkspaceAttemptResult } from './use-conversation-runs';
+import { DeskDictationContext, useDeskDictation } from './use-desk-dictation';
 
 type SaveStatus = { kind: 'saved' | 'saving' | 'error' | 'memory'; message: string };
 type Problem = { kind: 'failed' | 'conflict' | 'unknown' | 'unavailable'; message: string };
@@ -57,6 +58,10 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
   const savedRevision = useRef<number | null>(null);
   const savedState = useRef<DeskState | null>(null);
   const writeProblem = useRef<Problem | null>(null);
+  // A dictation save that has not landed: `sent` means the host may already have its commit.
+  // Dictated words held only in this page (unplaced or unsaved) count as unsaved work.
+  const keptDictation = useRef(false);
+  const unresolvedDelivery = useRef<{ options: WorkspaceSaveOptions; sent: boolean } | null>(null);
   const tail = useRef<Promise<void>>(Promise.resolve());
   const pending = useRef(0);
   const saveEpoch = useRef(0);
@@ -80,7 +85,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
     setSaveStatus({ kind: 'error', message: nativeProof ? 'Changes kept for this visit · native save needs attention' : 'Changes kept in this tab · save needs attention' });
   }
 
-  function save(snapshot: DeskState): Promise<WorkspaceAttemptResult> {
+  function save(snapshot: DeskState, options?: WorkspaceSaveOptions): Promise<WorkspaceAttemptResult> {
     // Each queued attempt owns an immutable snapshot. A successful older write
     // must never mark a newer visible draft as saved.
     const captured = structuredClone(snapshot);
@@ -89,10 +94,14 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
     if (!writeProblem.current) setSaveStatus({ kind: 'saving', message: nativeProof ? 'Saving the invented native workspace…' : 'Saving sample workspace…' });
     const operation = tail.current.then(async (): Promise<WorkspaceAttemptResult> => {
       if (!isCurrent()) return { kind: 'unavailable', error: 'The workspace connection is closed.' };
-      if (writeProblem.current) return { kind: 'blocked', error: 'This update has not been sent because an earlier save needs attention.' };
-      const result = await repository.save(captured, savedRevision.current);
+      if (writeProblem.current) {
+        if (options?.dictationDeliveryId) unresolvedDelivery.current = { options, sent: false };
+        return { kind: 'blocked', error: 'This update has not been sent because an earlier save needs attention.' };
+      }
+      const result = await repository.save(captured, savedRevision.current, options);
       if (!isCurrent()) return { kind: 'unavailable', error: 'The workspace connection closed before save confirmation.' };
       if (result.kind === 'saved') {
+        if (unresolvedDelivery.current?.options.dictationDeliveryId === options?.dictationDeliveryId) unresolvedDelivery.current = null;
         savedRevision.current = result.state.revision;
         savedState.current = result.state;
         notifyRunSave.current(result.state);
@@ -100,6 +109,8 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
           setSaveStatus({ kind: 'saved', message: savedMessage });
         }
       } else {
+        // A dictation save that did not land keeps its delivery identity for Retry.
+        if (options?.dictationDeliveryId) unresolvedDelivery.current = { options, sent: true };
         setWriteProblem({ kind: result.kind, message: result.error });
       }
       return result;
@@ -155,6 +166,20 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
     save, error: setCommandError,
   });
   notifyRunSave.current = runs.confirmSaved;
+
+  const dictation = useDeskDictation({ runtime, state, settleSignal: saveStatus,
+    current: () => stateRef.current,
+    settled: () => pending.current === 0 && stateRef.current !== null && stateRef.current.revision === savedRevision.current,
+    blocked: () => writeProblem.current !== null || !isCurrent(),
+    present: (next) => {
+      stateRef.current = next;
+      setState(next);
+      setCommandError('');
+      setViewWarning(tabView.save(next));
+    },
+    save: (next, options) => save(next, options),
+  });
+  keptDictation.current = dictation.retained.length > 0;
 
   useEffect(() => {
     let active = true;
@@ -212,7 +237,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
       // Valid legacy bytes are read-only until a deliberate content save.
     })();
     const leaving = (event: BeforeUnloadEvent) => {
-      if (writeProblem.current || pending.current > 0 || runs.hasUnconfirmed()) {
+      if (writeProblem.current || pending.current > 0 || runs.hasUnconfirmed() || keptDictation.current) {
         event.preventDefault();
         event.returnValue = '';
       }
@@ -335,7 +360,8 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
       if (!isCurrent() || !stateRef.current || writeProblem.current?.kind !== 'failed') return;
       writeProblem.current = null;
       setProblem(null);
-      save(stateRef.current);
+      // Retry carries a failed dictation's delivery identity, so the host completes that delivery.
+      save(stateRef.current, unresolvedDelivery.current?.options);
       await tail.current;
     } finally {
       retrying.current = false;
@@ -363,11 +389,22 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
         setWriteProblem({ kind: 'conflict', message: 'The native result does not match this visit. Keep the attempted work while resolving the difference.' });
         return;
       }
+      // The reconciled original carried any sent delivery, so it is complete; a blocked one never reached the host.
+      if (unresolvedDelivery.current?.sent) {
+        // Reconciliation brings no receipt, so release the delivery's binding here.
+        const deliveryId = unresolvedDelivery.current.options.dictationDeliveryId;
+        if (deliveryId) {
+          runtime.dictation?.release(deliveryId);
+          // No receipt follows reconciliation, so settle the kept copy here too.
+          dictation.dismiss(deliveryId);
+        }
+        unresolvedDelivery.current = null;
+      }
       writeProblem.current = null;
       setProblem(null);
       notifyRunSave.current(result.state);
       if (visible.revision === result.state.revision) setSaveStatus({ kind: 'saved', message: savedMessage });
-      else save(visible); // Original outcome is now known; only now save subsequent retained edits.
+      else save(visible, unresolvedDelivery.current?.options); // Original outcome is now known; only now save subsequent retained edits.
     } catch {
       setWriteProblem({ kind: 'unknown', message: 'The original save is still unconfirmed. No replacement request was sent.' });
     } finally {
@@ -420,6 +457,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
       )}
       {runs.otherRunControls}
       <div className="workspace-wrap">
+        <DeskDictationContext.Provider value={dictation}>
         <DeskFoundation
           state={state}
           saveStatus={saveStatus}
@@ -471,6 +509,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
           onThemeChange={(theme) => dispatch({ type: 'set-theme', theme })}
           onNexusViewChange={(view) => dispatch({ type: 'set-nexus-view', view })}
         />
+        </DeskDictationContext.Provider>
       </div>
     </div>
   );

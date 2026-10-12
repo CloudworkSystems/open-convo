@@ -4,6 +4,7 @@ import { NativeProofRepository } from '../adapters/native-proof-repository';
 import { createWKHostTransport } from '../adapters/wk-host-transport';
 import { NativeParticipantConnection } from '../adapters/native-participant-port';
 import { NATIVE_PARTICIPANT_OPERATIONS } from '../adapters/native-participant-codec';
+import { NativeDictationLane } from '../adapters/native-dictation';
 import { createNativeProofRuntime, type DeskRuntime, type RuntimeLifecycle } from './runtime';
 
 const participantHostOperations = [
@@ -52,6 +53,10 @@ export async function initializeNativeProof(
   let participantCodec: NativeProofCodec | undefined;
   let participantClient: NativeHostClient<NativeProofRequest, NativeProofResult> | undefined;
   let participants: NativeParticipantConnection | undefined;
+  let dictationTransport: ReturnType<typeof createWKHostTransport> | undefined;
+  let dictationCodec: NativeProofCodec | undefined;
+  let dictationClient: NativeHostClient<NativeProofRequest, NativeProofResult> | undefined;
+  let dictation: NativeDictationLane | undefined;
   const lifecycle: RuntimeLifecycle = {
     isActive: () => active,
     subscribeInvalidation(listener) {
@@ -62,6 +67,10 @@ export async function initializeNativeProof(
     revoke() {
       if (!active) return;
       active = false;
+      dictation?.revoke();
+      dictationClient?.revoke();
+      dictationCodec?.revoke();
+      dictationTransport?.dispose();
       participants?.dispose();
       participantClient?.revoke();
       participantCodec?.revoke();
@@ -128,9 +137,27 @@ export async function initializeNativeProof(
         onRevoked: () => lifecycle.revoke(),
       });
     }
+    if (capabilities.operations.includes('dictation.bindDraft') && capabilities.operations.includes('dictation.unbindDraft')) {
+      // Its own client, so binding never waits behind (or blocks) a workspace save.
+      dictationTransport = createWKHostTransport(environment.bootstrap, environment.postMessage, environment.events);
+      const dictationSelected = dictationTransport;
+      const dictationObserved: NativeHostTransport = {
+        send: (wire) => dictationSelected.send(wire),
+        listen: (receive, revoked) => dictationSelected.listen(receive, () => { lifecycle.revoke(); revoked(); }),
+      };
+      dictationCodec = new NativeProofCodec(dictationSelected.context, maxRetainedRequests);
+      dictationClient = new NativeHostClient(dictationObserved, dictationCodec, {
+        ...dictationSelected.context, maxRetainedRequests,
+        timeoutMs: options.timeoutMs ?? 10_000, maxWireBytes: NATIVE_PROOF_LIMITS.envelopeBytes,
+      });
+      dictation = new NativeDictationLane({ client: dictationClient, context: dictationSelected.context,
+        workspaceHandle: capabilities.workspaceHandle, events: environment.events, requestId,
+        onRevoked: () => lifecycle.revoke() });
+    }
     repository = new NativeProofRepository(client, capabilities.workspaceHandle, requestId, () => lifecycle.revoke(),
       { participants: supportsParticipants });
-    const runtime = createNativeProofRuntime(repository, lifecycle, { createId: requestId, nativeParticipants: participants });
+    const runtime = createNativeProofRuntime(repository, lifecycle, { createId: requestId, nativeParticipants: participants,
+      dictation });
     if (!active || !runtime.isActive()) { runtime.revoke(); return unavailable(); }
     // Availability must not delay opening saved work. Later checks are tied to
     // focus/visibility, Send, picker actions and explicit Start, never an idle page timer.
