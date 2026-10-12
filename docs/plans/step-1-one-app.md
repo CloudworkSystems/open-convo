@@ -118,3 +118,21 @@ Each one ends with something the owner can try on the Mac.
    shrink button in the Desk, one toggle shortcut) as a starting point.
 2. **Answered October 12:** the step 1 build replaces today's True Convo app and
    keeps its permissions.
+
+## Requirements Carried Into PR 1 (Codex's Fifth Review)
+
+These are build-level details. PR 1 must meet them, and Codex checks them again
+on the actual code.
+
+- **Confirmed binding before recording.** Binding is asynchronous, so the Mac
+  can read a missing or stale target if dictation starts right after the owner
+  clicks into the draft. Add a readiness check or start handshake: recording
+  into the Desk begins only once the Mac has confirmed the current binding. The
+  browser stand-in reproduces that delay.
+- **Failed deliveries survive a lock, reload or crash.** Keeping rejected text
+  only on the Desk page can still lose it. The Mac keeps each final's text until
+  the Desk confirms it was saved, and otherwise moves it to the held-text path
+  from PR 2.
+- **Rebind after every relevant revision**, not only on selection or session
+  changes, coordinated with the Desk's save queue, so unrelated updates don't
+  send every dictation to the fallback.
