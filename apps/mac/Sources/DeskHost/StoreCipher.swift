@@ -22,6 +22,9 @@ struct StoreCipher: Sendable {
     static let header = Data("TCDESK1\n".utf8)
     static let nonceLength = 12
     static let tagLength = 16
+    /// AES-256: exactly 32 bytes. CryptoKit would accept 16 or 24 and run
+    /// AES-128 or AES-192, so any other length is refused here.
+    static let keyLength = 32
 
     enum Purpose: Sendable {
         case state
@@ -40,12 +43,15 @@ struct StoreCipher: Sendable {
         case unreadable
         /// The cipher could not seal (never expected).
         case sealFailed
+        /// The key is not 32 bytes.
+        case wrongKeyLength
     }
 
     let workspaceId: UUID
     private let key: SymmetricKey
 
-    init(material: Data, workspaceId: UUID) {
+    init(material: Data, workspaceId: UUID) throws {
+        guard material.count == Self.keyLength else { throw Failure.wrongKeyLength }
         key = SymmetricKey(data: material)
         self.workspaceId = workspaceId
     }

@@ -46,7 +46,7 @@ struct StoreEncryptionTests {
 
     @Test("Every write uses a fresh nonce, so the same state never seals to the same bytes")
     func freshNonce() throws {
-        let cipher = StoreCipher(material: Data(repeating: 1, count: 32), workspaceId: UUID())
+        let cipher = try StoreCipher(material: Data(repeating: 1, count: 32), workspaceId: UUID())
         let plain = Data("{\"invented\":true}".utf8)
         let a = try cipher.seal(plain, as: .state)
         let b = try cipher.seal(plain, as: .state)
@@ -115,9 +115,36 @@ struct StoreEncryptionTests {
         }
     }
 
+    @Test("Only a 32-byte key builds the cipher; a store given another length refuses before writing")
+    func keyLengthEnforced() throws {
+        for length in [0, 16, 24, 31, 33, 64] {
+            #expect(throws: StoreCipher.Failure.wrongKeyLength) { try StoreCipher(material: Data(count: length), workspaceId: UUID()) }
+        }
+        #expect(throws: Never.self) { try StoreCipher(material: Data(count: 32), workspaceId: UUID()) }
+
+        // Fresh store: refused before any file is written.
+        let fixture = try DeskHostFixture()
+        defer { fixture.clean() }
+        let short = FixedKeyProvider(material: Data(repeating: 4, count: 16))
+        #expect(throws: ProofStoreError.keyRefused) { try ProofStore(directory: fixture.storeDirectory, keys: short) }
+        #expect(!FileManager.default.fileExists(atPath: fixture.storeDirectory.appendingPathComponent("state.json").path))
+        #expect(!FileManager.default.fileExists(atPath: fixture.storeDirectory.appendingPathComponent("workspace.json").path))
+
+        // Existing store: refused, its files untouched.
+        let good = FixedKeyProvider(material: Data(repeating: 4, count: 32))
+        let store = try ProofStore(directory: fixture.storeDirectory, keys: good)
+        let before = try Data(contentsOf: store.stateURL)
+        store.close()
+        #expect(throws: ProofStoreError.keyRefused) { try ProofStore(directory: fixture.storeDirectory, keys: short) }
+        #expect(try Data(contentsOf: store.stateURL) == before)
+        let reopened = try ProofStore(directory: fixture.storeDirectory, keys: good)
+        #expect(reopened.status == .ready, "the refused open released the lock")
+        reopened.close()
+    }
+
     @Test("Opening under a purpose other than the one sealed fails")
     func purposeIsBound() throws {
-        let cipher = StoreCipher(material: Data(repeating: 3, count: 32), workspaceId: UUID())
+        let cipher = try StoreCipher(material: Data(repeating: 3, count: 32), workspaceId: UUID())
         let id = UUID()
         let sealed = try cipher.seal(Data("{}".utf8), as: .attempted(id))
         #expect(throws: StoreCipher.Failure.unreadable) { try cipher.open(sealed, as: .state) }

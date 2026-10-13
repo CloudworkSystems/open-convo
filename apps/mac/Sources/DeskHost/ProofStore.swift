@@ -552,7 +552,11 @@ public final class ProofStore: @unchecked Sendable {
                 let key: StoreKey
                 do { key = try keys.createKey(for: workspaceId) } catch { throw ProofStoreError.keyRefused }
                 keyCustody = key.custody
-                cipher = StoreCipher(material: key.material, workspaceId: workspaceId)
+                // A key that is not 32 bytes would run a weaker AES; refused
+                // before anything is written.
+                do { cipher = try StoreCipher(material: key.material, workspaceId: workspaceId) } catch {
+                    throw ProofStoreError.keyRefused
+                }
                 self.workspaceId = workspaceId
                 workspaceHandle = seed.workspaceHandle ?? "ws-" + workspaceId.canonicalString
                 let marker = Marker(formatVersion: Self.formatVersion, workspaceId: workspaceId, workspaceHandle: workspaceHandle)
@@ -588,7 +592,9 @@ public final class ProofStore: @unchecked Sendable {
                 // An existing store with no key refuses. Nothing is regenerated.
                 guard let key = try keys.existingKey(for: marker.workspaceId) else { throw ProofStoreError.keyMissing }
                 keyCustody = key.custody
-                cipher = StoreCipher(material: key.material, workspaceId: marker.workspaceId)
+                do { cipher = try StoreCipher(material: key.material, workspaceId: marker.workspaceId) } catch {
+                    throw ProofStoreError.keyRefused
+                }
                 workspaceId = marker.workspaceId
                 workspaceHandle = marker.workspaceHandle
                 switch PathNode.inspect(stateURL.path) {
