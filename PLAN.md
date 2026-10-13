@@ -111,6 +111,10 @@ has tried it. Each step ends with something the owner can try.
   first; export plus one-click publish to the person's own free host, after a
   preview and approval. Replaces the creator beta's one-page website. Plan:
   [docs/design-notes/site-engine.md](docs/design-notes/site-engine.md).
+- **Visibility Agent**: the checkup as an agent plus AI visibility, for users
+  and for the owner's agency work, the owner's businesses first; ongoing watch
+  later. Plan:
+  [docs/design-notes/visibility-agent.md](docs/design-notes/visibility-agent.md).
 
 ## Moving Pieces From True Convo
 
