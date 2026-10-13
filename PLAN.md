@@ -64,7 +64,9 @@ has tried it. Each step ends with something the owner can try.
    answers from outside the conversation and never receives the main assistant's
    system prompt, instructions or project rules, which is why its explanations
    read more plainly. The owner highlights any part of a reply and right-clicks
-   for it. Connect `packages/clarity` to the Desk:
+   for it. Owner decision (October 13): the outsider runs on a **local model**,
+   so the highlighted text never leaves the Mac. Connect `packages/clarity` to
+   the Desk:
    Wait—what? on any assistant reply, select-a-phrase corrections, saved wording
    lessons that shape later replies, with Undo. *Finish line:* the owner uses
    Wait—what? and a correction in a real conversation and sees the next reply
