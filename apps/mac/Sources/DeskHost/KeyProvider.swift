@@ -9,10 +9,11 @@ import Foundation
 ///   saved work and nothing falls back to plaintext or browser storage;
 /// - key material never appears in a response, a log or a file.
 ///
-/// The proof store itself still writes plaintext invented JSON. The next slice
-/// replaces `InventedInMemoryKeyProvider` with a non-synchronizable Keychain
-/// item (never copied to iCloud, never exposed to JavaScript) behind this same
-/// protocol, and the plaintext store becomes ciphertext under its own review.
+/// The proof store itself still writes plaintext invented JSON.
+/// `KeychainKeyProvider` (step 2, PR 1) is the real custody behind this same
+/// protocol: a this-device-only Keychain item, never copied to iCloud, never
+/// exposed to JavaScript. The Desk keeps `InventedInMemoryKeyProvider` until
+/// step 2, PR 2 switches it over together with encrypting the store.
 public protocol KeyProvider: Sendable {
     /// The key for an existing store, or nil when none is held.
     func existingKey(for storeId: UUID) throws -> StoreKey?
