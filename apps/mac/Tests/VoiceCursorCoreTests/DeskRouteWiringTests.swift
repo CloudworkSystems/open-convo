@@ -59,6 +59,25 @@ struct DeskRouteWiringTests {
         #expect(release.contains("if !controller.isRecording, controller.cancelPendingDeskStart() {"))
     }
 
+    @Test("Pill and Desk switching keeps lingering outcomes and treats every way back to the Desk alike")
+    func pillDeskSwitchWiring() throws {
+        let source = try source()
+        let shrink = try body("private func showPillAfterShrink()", in: source)
+        let outcomeCheck = try #require(shrink.range(of: "if liveTranscriptWindow.isShowingOutcome {"))
+        let ready = try #require(shrink.range(of: "liveTranscriptWindow.showReady()", options: .backwards))
+        #expect(outcomeCheck.lowerBound < ready.lowerBound, "a lingering outcome is never replaced by the ready pill")
+        #expect(shrink.contains("settleAfterOutcome(returnToReady: true)"))
+        let menu = try body("@objc private func openDeskFromMenu()", in: source)
+        #expect(menu.contains("hideIdlePillForDesk()"))
+        #expect(source.contains("deskMenuItem.action = hasDesk ? #selector(openDeskFromMenu) : nil"))
+        let hide = try body("private func hideIdlePillForDesk()", in: source)
+        #expect(hide.contains("liveTranscriptWindow.settleAfterOutcome(returnToReady: false)"),
+                "a lingering outcome hides when it ends, never returning over the Desk")
+        for wrapper in ["private func showDeskFromPill()", "@objc private func toggleDeskAndPill()"] {
+            #expect(try body(wrapper, in: source).contains("hideIdlePillForDesk()"), "\(wrapper)")
+        }
+    }
+
     @Test("Hiding the persistent pill calls off a pending Desk start in either phase")
     func hidingPersistentPillCancelsPendingDeskStart() throws {
         let source = try source()

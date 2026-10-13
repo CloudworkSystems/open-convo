@@ -171,3 +171,55 @@ final class DeskRecordingRouteTests: XCTestCase {
         await session.close()
     }
 }
+
+/// Step 1, PR 3: Shrink to Pill hides the Desk window and changes nothing
+/// else; showing the Desk again brings back the same page.
+@MainActor
+final class DeskShrinkToPillTests: XCTestCase {
+    private var folder: DeskTestFolder!
+
+    override func setUp() async throws {
+        _ = NSApplication.shared
+        folder = try DeskTestFolder()
+    }
+
+    override func tearDown() async throws {
+        folder.clean()
+    }
+
+    func testShrinkHidesTheWindowAndKeepsTheDeskAsItWas() async throws {
+        let session = makeSession(folder, bundle: try anyDeskBundle(folder))
+        session.unsavedWorkCheck = { nil }
+        let made = DeskWindowController(session: session, verifier: StubUnlockVerifier(.verified), prompt: FakePrompt())
+        XCTAssertTrue(made.shrinkButton.isHidden, "hidden until the app wires the pill")
+        var shrinks = 0
+        made.onShrinkToPill = { shrinks += 1 }
+        XCTAssertFalse(made.shrinkButton.isHidden)
+
+        made.shrinkToPill()
+        XCTAssertEqual(shrinks, 0, "nothing to shrink while the window is not showing")
+
+        await session.unlock(verifier: StubUnlockVerifier(.verified))
+        let host = try XCTUnwrap(session.host)
+        made.window?.orderFront(nil)
+        XCTAssertTrue(made.isShowing)
+        made.shrinkToPill()
+        XCTAssertEqual(shrinks, 1)
+        XCTAssertFalse(made.isShowing, "the window is hidden")
+        XCTAssertEqual(session.state, .open, "shrinking neither locks nor closes the Desk")
+        XCTAssertTrue(session.host === host)
+        XCTAssertFalse(host.isClosed)
+
+        made.window?.orderFront(nil)
+        XCTAssertTrue(made.isShowing)
+        XCTAssertTrue(session.host === host, "the same page comes back, draft and all")
+
+        await session.lock(reason: .lockButton)
+        made.shrinkToPill()
+        XCTAssertEqual(session.state, .locked, "a locked Desk stays locked when shrunk")
+        XCTAssertEqual(shrinks, 2)
+
+        await session.close()
+        made.window?.delegate = nil
+    }
+}

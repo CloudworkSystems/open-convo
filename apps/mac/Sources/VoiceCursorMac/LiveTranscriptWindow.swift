@@ -494,11 +494,23 @@ final class DecibelMeterView: NSView {
     }
 }
 
+/// The pill never becomes key, so its button takes the first click.
+private final class FirstClickButton: NSButton {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
 final class LiveTranscriptWindowController: NSWindowController, NSWindowDelegate {
     private let backgroundView = PillBackgroundView()
     private let logoImageView = NSImageView()
     private let decibelMeterView = DecibelMeterView()
     private let statusLabel = NSTextField(labelWithString: "")
+    /// Step 1, PR 3: brings the Desk back where it was left. Shown only
+    /// when the app wires it (a build with a Desk).
+    private let deskButton = FirstClickButton()
+    /// Called when the Desk button is clicked. Setting it shows the button.
+    var onDeskButton: (() -> Void)? {
+        didSet { deskButton.isHidden = onDeskButton == nil }
+    }
     private var latestTranscript = ""
     private var hideWorkItem: DispatchWorkItem?
     private var hiddenAfterStop = false
@@ -510,21 +522,24 @@ final class LiveTranscriptWindowController: NSWindowController, NSWindowDelegate
     private var outcomeWorkItem: DispatchWorkItem?
     private var settleToReadyAfterOutcome = false
     private var isProgrammaticFrameChange = false
-    private static let baseWindowWidth: CGFloat = 148
+    private static let baseWindowWidth: CGFloat = 170
 
     private var hasActiveOutcome: Bool {
         Date() < outcomeExpiresAt
     }
 
+    /// Whether an outcome or note is still lingering on the pill.
+    var isShowingOutcome: Bool { hasActiveOutcome }
+
     init() {
         let window = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 148, height: 42),
+            contentRect: NSRect(x: 0, y: 0, width: 170, height: 42),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
         window.title = ""
-        window.minSize = NSSize(width: 148, height: 42)
+        window.minSize = NSSize(width: 170, height: 42)
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = true
@@ -779,9 +794,31 @@ final class LiveTranscriptWindowController: NSWindowController, NSWindowDelegate
         statusLabel.isHidden = true
         contentView.addSubview(statusLabel)
 
+        deskButton.translatesAutoresizingMaskIntoConstraints = false
+        deskButton.isBordered = false
+        deskButton.bezelStyle = .regularSquare
+        deskButton.imagePosition = .imageOnly
+        deskButton.image = NSImage(systemSymbolName: "macwindow", accessibilityDescription: "Open the Desk")
+        deskButton.contentTintColor = NSColor.white.withAlphaComponent(0.85)
+        deskButton.toolTip = "Open the Desk where you left it (\(DeskSwitchPolicy.shortcutLabel))"
+        deskButton.setAccessibilityLabel("Open the Desk")
+        deskButton.target = self
+        deskButton.action = #selector(deskButtonPressed(_:))
+        deskButton.isHidden = true
+        contentView.addSubview(deskButton)
+
+        // The meter and words end before the Desk button when it shows.
+        let trailingEdge = deskButton.leadingAnchor
+        NSLayoutConstraint.activate([
+            deskButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
+            deskButton.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            deskButton.widthAnchor.constraint(equalToConstant: 20),
+            deskButton.heightAnchor.constraint(equalToConstant: 20),
+        ])
+
         NSLayoutConstraint.activate([
             statusLabel.leadingAnchor.constraint(equalTo: logoImageView.trailingAnchor, constant: 8),
-            statusLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12),
+            statusLabel.trailingAnchor.constraint(equalTo: trailingEdge, constant: -6),
             statusLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
         ])
 
@@ -797,10 +834,15 @@ final class LiveTranscriptWindowController: NSWindowController, NSWindowDelegate
             logoImageView.heightAnchor.constraint(equalToConstant: 22),
 
             decibelMeterView.leadingAnchor.constraint(equalTo: logoImageView.trailingAnchor, constant: 8),
-            decibelMeterView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -10),
+            decibelMeterView.trailingAnchor.constraint(equalTo: trailingEdge, constant: -6),
             decibelMeterView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
             decibelMeterView.heightAnchor.constraint(equalToConstant: 22),
         ])
+    }
+
+    @objc private func deskButtonPressed(_ sender: Any?) {
+        RunLog.write("pill.desk-button.pressed")
+        onDeskButton?()
     }
 
     private func loadLogo() -> NSImage? {
@@ -850,9 +892,9 @@ final class LiveTranscriptWindowController: NSWindowController, NSWindowDelegate
 
     private func resizeWindowToFitLabel() {
         let textWidth = statusLabel.attributedStringValue.size().width
-        // logo inset 8 + logo 22 + gap 8 + text + trailing 12, capped so a long
-        // status can't turn the pill into a banner.
-        let desired = min(max(Self.baseWindowWidth, 50 + textWidth + 14), 300)
+        // logo inset 8 + logo 22 + gap 8 + text + gap 6 + Desk button 20 +
+        // trailing 8, capped so a long status can't turn the pill into a banner.
+        let desired = min(max(Self.baseWindowWidth, 50 + textWidth + 34), 320)
         setWindowWidth(desired)
     }
 
