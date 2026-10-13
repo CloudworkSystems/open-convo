@@ -43,6 +43,23 @@ public enum DeskSwitchPolicy {
         choice == .off ? "Shortcut off" : choice.label
     }
 
+    /// The shortcut actually turned on. macOS only lets the app watch Right
+    /// Option in other apps once Accessibility is granted, so until then the
+    /// double-tap choice falls back to the four-key shortcut, which works
+    /// everywhere without that permission. The owner's choice is kept and
+    /// takes over as soon as Accessibility is on.
+    public static func active(_ choice: DeskSwitchShortcut, accessibilityGranted: Bool) -> DeskSwitchShortcut {
+        choice == .doubleTapRightOption && !accessibilityGranted ? .controlOptionCommandT : choice
+    }
+
+    /// The label for what is actually on: a fallback says why, so the owner
+    /// is never told to double-tap a key that does nothing in other apps.
+    public static func shortcutDescription(_ choice: DeskSwitchShortcut, accessibilityGranted: Bool) -> String {
+        let on = active(choice, accessibilityGranted: accessibilityGranted)
+        guard on != choice else { return shortcutDescription(choice) }
+        return "\(shortcutDescription(on)) until Accessibility is on"
+    }
+
     /// The four-key shortcut's label (kept as a choice in the menu).
     public static let shortcutLabel = "Control+Option+Cmd+T"
 }

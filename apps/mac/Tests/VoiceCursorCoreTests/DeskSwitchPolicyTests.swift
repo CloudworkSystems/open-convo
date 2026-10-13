@@ -42,6 +42,19 @@ struct DeskSwitchPolicyTests {
         #expect(DeskSwitchPolicy.shortcutDescription(.doubleTapRightOption) == "Double-Tap Right Option")
     }
 
+    @Test("Without Accessibility, double-tap falls back to the four-key shortcut and says so")
+    func accessibilityFallback() {
+        #expect(DeskSwitchPolicy.active(.doubleTapRightOption, accessibilityGranted: true) == .doubleTapRightOption)
+        #expect(DeskSwitchPolicy.active(.doubleTapRightOption, accessibilityGranted: false) == .controlOptionCommandT,
+                "other apps' key events never reach the app without Accessibility")
+        #expect(DeskSwitchPolicy.active(.controlOptionCommandT, accessibilityGranted: false) == .controlOptionCommandT)
+        #expect(DeskSwitchPolicy.active(.off, accessibilityGranted: false) == .off)
+        #expect(DeskSwitchPolicy.shortcutDescription(.doubleTapRightOption, accessibilityGranted: true) == "Double-Tap Right Option")
+        #expect(DeskSwitchPolicy.shortcutDescription(.doubleTapRightOption, accessibilityGranted: false)
+                == "Control+Option+Cmd+T until Accessibility is on")
+        #expect(DeskSwitchPolicy.shortcutDescription(.off, accessibilityGranted: false) == "Shortcut off")
+    }
+
     /// Feeds inputs in order; the result of the last one.
     private func feed(_ tap: inout ModifierDoubleTap, _ inputs: ModifierDoubleTap.Input...) -> Bool {
         var last = false

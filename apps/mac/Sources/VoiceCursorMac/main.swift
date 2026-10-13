@@ -8213,6 +8213,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var deskSwitchGlobalMonitor: Any?
     private var deskSwitchLocalMonitor: Any?
     private var deskSwitchDoubleTap = ModifierDoubleTap()
+    /// Whether Accessibility was granted when the shortcut was last turned
+    /// on (nil before the first time); a change turns it on again.
+    private var deskSwitchAppliedTrust: Bool?
     private var deskSwitchMenuItems: [NSMenuItem] = []
     private var externalShortcutMonitor: Any?
     private let statusMenuItem = NSMenuItem(title: "Idle", action: nil, keyEquivalent: "")
@@ -8334,6 +8337,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ) { [weak self] notification in
             let application = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
             self?.rememberCursorTarget(application)
+            self?.refreshDeskSwitchIfTrustChanged()
         }
         buildMenu()
         controller.onStatus = { [weak self] text in
@@ -9971,13 +9975,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// turns the others off.
     private func applyDeskSwitchShortcut() {
         let choice = Settings.deskSwitchShortcut
+        let trusted = AXIsProcessTrusted()
+        deskSwitchAppliedTrust = trusted
+        let active = DeskSwitchPolicy.active(choice, accessibilityGranted: trusted)
         deskSwitchHotKey = nil
         if let deskSwitchGlobalMonitor { NSEvent.removeMonitor(deskSwitchGlobalMonitor) }
         if let deskSwitchLocalMonitor { NSEvent.removeMonitor(deskSwitchLocalMonitor) }
         deskSwitchGlobalMonitor = nil
         deskSwitchLocalMonitor = nil
         deskSwitchDoubleTap = ModifierDoubleTap()
-        switch choice {
+        switch active {
         case .controlOptionCommandT:
             deskSwitchHotKey = HotKey(
                 id: 3,
@@ -10001,8 +10008,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .off:
             break
         }
-        liveTranscriptWindow.deskShortcutLabel = DeskSwitchPolicy.shortcutDescription(choice)
-        RunLog.write("desk.switch.shortcut", "choice=\(choice.rawValue)")
+        liveTranscriptWindow.deskShortcutLabel = DeskSwitchPolicy.shortcutDescription(choice, accessibilityGranted: trusted)
+        RunLog.write("desk.switch.shortcut", "choice=\(choice.rawValue) active=\(active.rawValue) accessibility=\(trusted)")
+    }
+
+    /// Accessibility can be granted or taken away while the app runs; when
+    /// it changes, turn the chosen shortcut on again (double-tap once
+    /// granted, the four-key fallback once taken away).
+    private func refreshDeskSwitchIfTrustChanged() {
+        guard let applied = deskSwitchAppliedTrust, applied != AXIsProcessTrusted() else { return }
+        applyDeskSwitchShortcut()
     }
 
     /// Right Option going down or up feeds the tap recognizer; any other key
@@ -11097,8 +11112,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for item in deskSwitchMenuItems {
             item.state = (item.representedObject as? String) == Settings.deskSwitchShortcut.rawValue ? .on : .off
         }
-        let deskSwitchChoice = Settings.deskSwitchShortcut
-        switchDeskMenuItem.title = "Switch Desk and Pill (\(DeskSwitchPolicy.shortcutDescription(deskSwitchChoice)))"
+        refreshDeskSwitchIfTrustChanged()
+        let deskSwitchLabel = DeskSwitchPolicy.shortcutDescription(
+            Settings.deskSwitchShortcut,
+            accessibilityGranted: deskSwitchAppliedTrust ?? AXIsProcessTrusted()
+        )
+        switchDeskMenuItem.title = "Switch Desk and Pill (\(deskSwitchLabel))"
         for item in insertionTimingMenuItems {
             item.state = (item.representedObject as? String) == InsertionTiming.current.rawValue ? .on : .off
         }
