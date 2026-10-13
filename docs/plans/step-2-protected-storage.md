@@ -32,9 +32,11 @@ it after step 1. Owner decisions are recorded at the end.
    recordings live under `~/.tca-dictate` (`~/.tca-dictate-test` for the test
    app); saved word fixes are an owner-only (0600) file written by
    `CorrectionMemory/LocalDataBoundary.swift`. Neither is encrypted.
-5. **Installing the Desk is blocked on purpose.** `apps/mac/scripts/package_app.sh`
-   refuses to install or sign any build that contains the Desk. That block lifts
-   only when this step's finish line is met (step 1, PR 4).
+5. **The Desk can now be installed before its storage is protected.** Step 1,
+   PR 4 (#13) let `apps/mac/scripts/package_app.sh` install a Desk build from a
+   clean checkout, with the owner's approval. Until this step lands, the
+   installed Desk keeps plaintext, invented-data storage: real private material
+   stays out of it, and the Desk should say so plainly.
 
 ## Proposed Pull Requests, in Order
 
@@ -68,7 +70,8 @@ with invented data in True Convo Test before anything touches the real app.
 5. **Kill-and-reopen proof, then the owner's real trial.** A scripted proof in
    True Convo Test: quit, force-kill, sleep, lock, restart and reopen with
    invented data. Then the owner holds one real conversation and it survives a
-   restart. Meeting this lifts the install block for step 1, PR 4.
+   restart. Meeting this is what makes the installed Desk safe for real private
+   material.
 
 ## Requirements Carried From the Durable-Agents Note
 
