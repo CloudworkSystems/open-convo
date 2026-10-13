@@ -366,13 +366,13 @@ struct ParticipantCoordinatorStartTests {
             try store.recordStart(runId: Self.runId(1), record)
             // The folder loses the start; a non-authoritative reload makes
             // memory match it before the host (and the index) exist.
-            var state = try #require(try JSONValue.decode(Data(contentsOf: store.stateURL)).objectValue)
+            var state = try #require(try JSONValue.decode(store.plainStateForTesting()).objectValue)
             var runs = try #require({ () -> [JSONValue]? in if case .array(let list)? = state["runs"] { return list }; return nil }())
             var entry = try #require(runs[0].objectValue)
             entry["start"] = .null
             runs[0] = .object(entry)
             state["runs"] = .array(runs)
-            try JSONEncoder().encode(JSONValue.object(state)).write(to: store.stateURL)
+            try JSONEncoder().encode(JSONValue.object(state)).writePlainState(to: store)
             _ = try store.withdrawUnresolvedDispatch(UUID())
         }
         defer { world.clean() }
@@ -564,9 +564,9 @@ struct ParticipantCoordinatorStartTests {
         #expect(await Self.send(world, .participantStart, Self.start(), id: Self.id(1)).outcome == .unknown)
         // The rename never reached the folder after all.
         faults.disarm()
-        var state = try #require(try JSONValue.decode(Data(contentsOf: world.store.stateURL)).objectValue)
+        var state = try #require(try JSONValue.decode(world.store.plainStateForTesting()).objectValue)
         state["runs"] = .array(seeded)
-        try JSONEncoder().encode(JSONValue.object(state)).write(to: world.store.stateURL)
+        try JSONEncoder().encode(JSONValue.object(state)).writePlainState(to: world.store)
 
         let status = await Self.send(world, .participantStatus, Self.read())
         #expect(status.fields["state"] == .string("not-dispatched"))
@@ -589,9 +589,9 @@ struct ParticipantCoordinatorStartTests {
             #expect(await Self.send(world, .participantStart, Self.start(), id: Self.id(1)).outcome == .unknown)
             faults.disarm()
             if !found {
-                var state = try #require(try JSONValue.decode(Data(contentsOf: world.store.stateURL)).objectValue)
+                var state = try #require(try JSONValue.decode(world.store.plainStateForTesting()).objectValue)
                 state["runs"] = .array(seeded)
-                try JSONEncoder().encode(JSONValue.object(state)).write(to: world.store.stateURL)
+                try JSONEncoder().encode(JSONValue.object(state)).writePlainState(to: world.store)
             }
             let stop = await Self.send(world, .participantStop, Self.read())
             #expect(stop.fields["state"] == .string("exited"), "\(found): \(stop.jsonValue)")

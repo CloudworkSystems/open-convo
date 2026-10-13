@@ -32,7 +32,7 @@ struct ProofStoreTests {
         #expect(fixture.files.fileExists(atPath: store.stateURL.path))
         #expect(fixture.files.fileExists(atPath: store.markerURL.path))
         #expect(fixture.files.fileExists(atPath: store.lockURL.path))
-        let state = String(decoding: try Data(contentsOf: store.stateURL), as: UTF8.self)
+        let state = String(decoding: try store.plainStateForTesting(), as: UTF8.self)
         #expect(!state.contains("material"))
         #expect(throws: ProofStoreError.invalidSeed) {
             try ProofStore(directory: fixture.directory.appendingPathComponent("bad"), keys: fixture.keys, seed: WorkspaceSeed(record: ["x": .null]))
@@ -109,7 +109,7 @@ struct ProofStoreTests {
         }
         #expect(current == 1)
         #expect(attempted.lastPathComponent == "\(loserId.canonicalString).json")
-        let retained = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: attempted))
+        let retained = try JSONDecoder().decode(JSONValue.self, from: store.plainAttemptedForTesting(loserId))
         #expect(retained.objectValue?["record"] == .object(loser.record))
         #expect(retained.objectValue?["expectedRevision"] == .number(0))
         #expect(retained.objectValue?["currentRevision"] == .number(1))
@@ -134,11 +134,15 @@ struct ProofStoreTests {
         #expect(throws: ProofStoreError.keyMissing) { try fixture.makeStore() }
         #expect(fixture.keys.heldKeyCount == 0)
         #expect(try Data(contentsOf: fixture.storeDirectory.appendingPathComponent("state.json")) == stateBefore)
-        // The refused opener released the writer lock, so a holder with the key can still open.
+        // The refused opener released the writer lock, so another opener gets
+        // in; a newly made key cannot open the state sealed under the lost
+        // one, which reads as corrupt and is left exactly as it was.
         _ = try fixture.keys.createKey(for: workspaceId)
         let reopened = try fixture.makeStore()
         defer { reopened.close() }
-        #expect(try reopened.read().revision == 1)
+        #expect(reopened.status == .corrupt)
+        #expect(throws: ProofStoreError.corrupt) { try reopened.read() }
+        #expect(try Data(contentsOf: reopened.stateURL) == stateBefore)
     }
 
     @Test("An established store whose state is unreadable opens as corrupt: reads and writes refuse, the file is left untouched")
@@ -149,7 +153,7 @@ struct ProofStoreTests {
         let handle = store.workspaceHandle
         store.close()
         let garbage = Data("{\"formatVersion\": \"nope\"".utf8)
-        try garbage.write(to: store.stateURL)
+        try garbage.writePlainState(to: store)
         let corrupt = try fixture.makeStore()
         defer { corrupt.close() }
         #expect(corrupt.status == .corrupt)
@@ -157,7 +161,7 @@ struct ProofStoreTests {
         #expect(throws: ProofStoreError.corrupt) { try corrupt.read() }
         #expect(throws: ProofStoreError.corrupt) { try corrupt.commit(attempt(hash: "h", expected: 0, revision: 1)) }
         #expect(throws: ProofStoreError.corrupt) { try corrupt.ledgerEntry(for: UUID()) }
-        #expect(try Data(contentsOf: store.stateURL) == garbage)
+        #expect(try store.plainStateForTesting() == garbage)
         #expect(fixture.keys.heldKeyCount == 1, "no key is regenerated")
     }
 
@@ -169,13 +173,13 @@ struct ProofStoreTests {
             let store = try fixture.makeStore()
             #expect(try store.commit(attempt(hash: "h", expected: 0, revision: 1)) == .committed(revision: 1))
             store.close()
-            var state = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: store.stateURL)) as? [String: Any])
+            var state = try #require(JSONSerialization.jsonObject(with: store.plainStateForTesting()) as? [String: Any])
             var entries = try #require(state[section] as? [[String: Any]])
             #expect(entries.count == 1)
             #expect(entries.first?["operation"] as? String == "workspace.commitProof")
 
             // The same file rewritten unchanged still opens: only the name matters.
-            try JSONSerialization.data(withJSONObject: state).write(to: store.stateURL)
+            try JSONSerialization.data(withJSONObject: state).writePlainState(to: store)
             let control = try fixture.makeStore()
             #expect(control.status == .ready, "\(section): the rewrite alone is harmless")
             control.close()
@@ -183,12 +187,12 @@ struct ProofStoreTests {
             entries[0]["operation"] = "participant.start"
             state[section] = entries
             let edited = try JSONSerialization.data(withJSONObject: state)
-            try edited.write(to: store.stateURL)
+            try edited.writePlainState(to: store)
             let reopened = try fixture.makeStore()
             defer { reopened.close() }
             #expect(reopened.status == .corrupt, "\(section)")
             #expect(throws: ProofStoreError.corrupt) { try reopened.read() }
-            #expect(try Data(contentsOf: store.stateURL) == edited, "the file is left untouched")
+            #expect(try store.plainStateForTesting() == edited, "the file is left untouched")
         }
     }
 
@@ -252,7 +256,7 @@ struct ProofStoreTests {
         let reopened = try fixture.makeStore()
         defer { reopened.close() }
         #expect(try reopened.delivery(for: deliveryId)?.commitRequestId == commitId)
-        #expect(!String(decoding: try Data(contentsOf: reopened.stateURL), as: UTF8.self).contains("\"text\""))
+        #expect(!String(decoding: try reopened.plainStateForTesting(), as: UTF8.self).contains("\"text\""))
     }
 
     @Test("A commit whose second write fails withdraws its receipt; a failed write-ahead receipt dispatches nothing")
@@ -280,12 +284,12 @@ struct ProofStoreTests {
         let store = try fixture.makeStore()
         #expect(try store.commit(attempt(hash: "h", expected: 0, revision: 1)) == .committed(revision: 1))
         store.close()
-        var state = try JSONDecoder.iso.decode(JSONValue.self, from: Data(contentsOf: store.stateURL)).objectValue!
+        var state = try JSONDecoder.iso.decode(JSONValue.self, from: store.plainStateForTesting()).objectValue!
         let inFlight = UUID()
         let receipt = JSONValue.object(["requestId": .string(inFlight.uuidString), "operation": .string("workspace.commitProof"),
                                         "payloadHash": .string("crashed"), "dispatchedAt": .string("2026-10-09T00:00:00Z")])
         state["receipts"] = .array((state["receipts"]?.arrayValue ?? []) + [receipt])
-        try JSONEncoder().encode(JSONValue.object(state)).write(to: store.stateURL)
+        try JSONEncoder().encode(JSONValue.object(state)).writePlainState(to: store)
         let reopened = try fixture.makeStore()
         #expect(reopened.status == .ready)
         #expect(reopened.unresolvedDispatch == inFlight)
@@ -296,7 +300,7 @@ struct ProofStoreTests {
         let second = JSONValue.object(["requestId": .string(UUID().uuidString), "operation": .string("workspace.commitProof"),
                                        "payloadHash": .string("also"), "dispatchedAt": .string("2026-10-09T00:00:00Z")])
         state["receipts"] = .array((state["receipts"]?.arrayValue ?? []) + [second])
-        try JSONEncoder().encode(JSONValue.object(state)).write(to: store.stateURL)
+        try JSONEncoder().encode(JSONValue.object(state)).writePlainState(to: store)
         let inconsistent = try fixture.makeStore()
         defer { inconsistent.close() }
         #expect(inconsistent.status == .corrupt, "two unresolved dispatches cannot both be the one in flight")
@@ -353,12 +357,12 @@ struct ProofStoreTests {
         let resolved = UUID()
         #expect(try store.commit(attempt(resolved, hash: "h", expected: 0, revision: 1)) == .committed(revision: 1))
         store.close()
-        var state = try JSONDecoder.iso.decode(JSONValue.self, from: Data(contentsOf: store.stateURL)).objectValue!
+        var state = try JSONDecoder.iso.decode(JSONValue.self, from: store.plainStateForTesting()).objectValue!
         let inFlight = UUID()
         let receipt = JSONValue.object(["requestId": .string(inFlight.uuidString), "operation": .string("workspace.commitProof"),
                                         "payloadHash": .string("crashed"), "dispatchedAt": .string("2026-10-09T00:00:00Z")])
         state["receipts"] = .array((state["receipts"]?.arrayValue ?? []) + [receipt])
-        try JSONEncoder().encode(JSONValue.object(state)).write(to: store.stateURL)
+        try JSONEncoder().encode(JSONValue.object(state)).writePlainState(to: store)
 
         let reopened = try fixture.makeStore()
         #expect(reopened.unresolvedDispatch == inFlight)
@@ -381,12 +385,12 @@ struct ProofStoreTests {
         again.close()
 
         // A committed record that names the id while the ledger lacks it cannot come from this store's own writes.
-        var contradictory = try JSONDecoder.iso.decode(JSONValue.self, from: Data(contentsOf: store.stateURL)).objectValue!
+        var contradictory = try JSONDecoder.iso.decode(JSONValue.self, from: store.plainStateForTesting()).objectValue!
         var workspace = contradictory["workspace"]?.objectValue ?? [:]
         workspace["requestId"] = .string(inFlight.uuidString)
         contradictory["workspace"] = .object(workspace)
         contradictory["receipts"] = .array((contradictory["receipts"]?.arrayValue ?? []) + [receipt])
-        try JSONEncoder().encode(JSONValue.object(contradictory)).write(to: store.stateURL)
+        try JSONEncoder().encode(JSONValue.object(contradictory)).writePlainState(to: store)
         let suspect = try fixture.makeStore()
         defer { suspect.close() }
         #expect(suspect.unresolvedDispatch == inFlight)
@@ -431,16 +435,16 @@ struct ProofStoreTests {
         let edited = Data("""
         {"formatVersion":3,"ledger":[],"receipts":[],"identities":[],"deliveries":[],"workspace":{"revision":\(revision),"record":{"revision":6},"workspaceId":"\(workspaceId.uuidString)","workspaceHandle":"\(handle)"}}
         """.utf8)
-        try edited.write(to: store.stateURL)
+        try edited.writePlainState(to: store)
         let corrupt = try fixture.makeStore()
         #expect(corrupt.status == .corrupt)
-        #expect(try Data(contentsOf: store.stateURL) == edited)
+        #expect(try store.plainStateForTesting() == edited)
         corrupt.close()
         // The same file with a consistent in-range revision opens, so the refusal is the bound, not the hand-written shape.
         let sane = Data("""
         {"formatVersion":3,"ledger":[],"receipts":[],"identities":[],"deliveries":[],"workspace":{"revision":9007199254740991,"record":{"revision":9007199254740991},"workspaceId":"\(workspaceId.uuidString)","workspaceHandle":"\(handle)"}}
         """.utf8)
-        try sane.write(to: store.stateURL)
+        try sane.writePlainState(to: store)
         let reopened = try fixture.makeStore()
         defer { reopened.close() }
         #expect(reopened.status == .ready)

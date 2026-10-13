@@ -562,7 +562,7 @@ struct ParticipantCoordinatorStopTests {
         // Another terminal for the run reaches the folder.
         let other: JSONValue = .object(["type": .string("failed"), "sequence": .number(2), "at": .string("2026-10-09T00:01:01.200Z"),
                                         "reason": .string("process-error")])
-        var state = try #require(try JSONValue.decode(Data(contentsOf: world.store.stateURL)).objectValue)
+        var state = try #require(try JSONValue.decode(world.store.plainStateForTesting()).objectValue)
         guard case .array(var runs)? = state["runs"], var entry = runs.first?.objectValue else {
             Issue.record("no runs")
             return
@@ -571,7 +571,7 @@ struct ParticipantCoordinatorStopTests {
         entry["groupCleared"] = .bool(false)
         runs[0] = .object(entry)
         state["runs"] = .array(runs)
-        try JSONEncoder().encode(JSONValue.object(state)).write(to: world.store.stateURL)
+        try JSONEncoder().encode(JSONValue.object(state)).writePlainState(to: world.store)
         _ = try world.store.rereadRuns()
         #expect(try await Self.busy(world))
         #expect(await Self.writesReturned(world))
@@ -600,7 +600,7 @@ struct ParticipantCoordinatorStopTests {
     /// `pendingTerminalNeverReplacesAnother`). Returns the entry as written.
     static func substitute(_ world: VectorWorld, terminal: JSONValue, groupCleared: JSONValue, run: Int = 1) throws
         -> [String: JSONValue] {
-        var state = try #require(try JSONValue.decode(Data(contentsOf: world.store.stateURL)).objectValue)
+        var state = try #require(try JSONValue.decode(world.store.plainStateForTesting()).objectValue)
         guard case .array(var runs)? = state["runs"],
               let index = runs.firstIndex(where: { $0.objectValue?["runId"] == .string(Start.runId(run)) }),
               var entry = runs[index].objectValue else {
@@ -611,7 +611,7 @@ struct ParticipantCoordinatorStopTests {
         entry["groupCleared"] = groupCleared
         runs[index] = .object(entry)
         state["runs"] = .array(runs)
-        try JSONEncoder().encode(JSONValue.object(state)).write(to: world.store.stateURL)
+        try JSONEncoder().encode(JSONValue.object(state)).writePlainState(to: world.store)
         _ = try world.store.rereadRuns()
         #expect((world.store.publishedRuns.entry(for: Start.runId(run))?.terminal?.jsonValue ?? .null) == terminal, "re-read as written")
         return try Start.entry(world, run: run)
@@ -623,7 +623,7 @@ struct ParticipantCoordinatorStopTests {
     /// authoritatively: the run's entry gone from the folder (the same
     /// invented-folder fault).
     static func remove(_ world: VectorWorld, run: Int = 1) throws {
-        var state = try #require(try JSONValue.decode(Data(contentsOf: world.store.stateURL)).objectValue)
+        var state = try #require(try JSONValue.decode(world.store.plainStateForTesting()).objectValue)
         let runId = JSONValue.string(Start.runId(run))
         guard case .array(let runs)? = state["runs"], case .array(let identities)? = state["identities"] else {
             Issue.record("no runs or identities")
@@ -637,7 +637,7 @@ struct ParticipantCoordinatorStopTests {
         for key in ["ledger", "receipts"] {
             if case .array(let list)? = state[key] { state[key] = .array(list.filter(unnamed)) }
         }
-        try JSONEncoder().encode(JSONValue.object(state)).write(to: world.store.stateURL)
+        try JSONEncoder().encode(JSONValue.object(state)).writePlainState(to: world.store)
         _ = try world.store.rereadRuns()
         #expect(world.store.publishedRuns.entry(for: Start.runId(run)) == nil, "re-read with no entry")
     }
@@ -1420,7 +1420,7 @@ struct ParticipantCoordinatorStopTests {
         #expect(await Self.writesReturned(world))
         let ended = try await Self.ask(world, .participantStatus, Start.read(1))
 
-        try Data("{invented damaged state".utf8).write(to: world.store.stateURL)
+        try Data("{invented damaged state".utf8).writePlainState(to: world.store)
         _ = try? world.store.rereadRuns()
         #expect(world.store.publishedRuns.status == .corrupt)
 

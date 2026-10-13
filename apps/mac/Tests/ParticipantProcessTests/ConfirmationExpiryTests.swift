@@ -389,9 +389,9 @@ struct ReleasedStartIdTests {
     /// The start record's rename never reached the folder after all.
     static func loseTheRecord(_ world: VectorWorld, seeded: [JSONValue]) throws {
         try #require(world.faults).disarm()
-        var state = try #require(try JSONValue.decode(Data(contentsOf: world.store.stateURL)).objectValue)
+        var state = try #require(try JSONValue.decode(world.store.plainStateForTesting()).objectValue)
         state["runs"] = .array(seeded)
-        try JSONEncoder().encode(JSONValue.object(state)).write(to: world.store.stateURL)
+        try JSONEncoder().encode(JSONValue.object(state)).writePlainState(to: world.store)
     }
 
     static func isStartId(_ world: VectorWorld, _ id: String) throws -> Bool {

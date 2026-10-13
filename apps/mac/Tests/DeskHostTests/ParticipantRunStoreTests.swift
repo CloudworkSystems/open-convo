@@ -64,7 +64,7 @@ private func prepare(_ run: ParticipantPreparedRun?, requestId: UUID, expected: 
 }
 
 private func diskState(_ store: ProofStore) throws -> [String: JSONValue] {
-    try #require(try JSONValue.decode(Data(contentsOf: store.stateURL)).objectValue)
+    try #require(try JSONValue.decode(store.plainStateForTesting()).objectValue)
 }
 
 private func diskRuns(_ store: ProofStore) throws -> [JSONValue] {
@@ -73,7 +73,7 @@ private func diskRuns(_ store: ProofStore) throws -> [JSONValue] {
 
 private func writeState(_ state: [String: JSONValue], to store: ProofStore) throws -> Data {
     let data = try JSONEncoder().encode(JSONValue.object(state))
-    try data.write(to: store.stateURL)
+    try data.writePlainState(to: store)
     return data
 }
 
@@ -219,7 +219,7 @@ struct ParticipantRunStoreTests {
         let corrupt = try fixture.makeStore()
         defer { corrupt.close() }
         #expect(corrupt.status == .corrupt)
-        #expect(try Data(contentsOf: store.stateURL) == nulled)
+        #expect(try store.plainStateForTesting() == nulled)
     }
 
     @Test("Each section 15 load invariant, broken alone, makes the whole store corrupt; the file is left untouched", arguments: RunInvariantBreak.allCases)
@@ -336,7 +336,7 @@ struct ParticipantRunStoreTests {
         #expect(throws: ProofStoreError.corrupt) { try reopened.refreshPublishedRuns() }
         #expect(throws: ProofStoreError.corrupt) { try reopened.recordStart(runId: Invented.runId(3), Invented.start(3)) }
         #expect(reopened.publishedRuns.status == .corrupt && reopened.publishedRuns.runs.isEmpty && !reopened.publishedRuns.durable)
-        #expect(try Data(contentsOf: store.stateURL) == edited, "never repaired or overwritten")
+        #expect(try store.plainStateForTesting() == edited, "never repaired or overwritten")
     }
 
     @Test("The value types refuse what sections 6 and 8 forbid: completed before sequence 2, inputBytes outside 1-262,144, preparedBytes outside 1-785,408")
@@ -364,7 +364,7 @@ struct ParticipantRunStoreTests {
         let fixture = try DeskHostFixture()
         defer { fixture.clean() }
         let store = try fixture.makeStore(faults: faults)
-        let before = try Data(contentsOf: store.stateURL)
+        let before = try store.plainStateForTesting()
         for text in ["a1000000-0000-1000-8000-000000000001", "a5000000-0000-5000-8000-000000000001"] {
             let id = try #require(UUID(uuidString: text))
             faults.arm([:])
@@ -372,7 +372,7 @@ struct ParticipantRunStoreTests {
                 try store.commit(prepare(Invented.prepared(1), requestId: id, expected: 0, revision: 1))
             }
             #expect(faults.log.isEmpty, "\(text): refused before the receipt")
-            #expect(try Data(contentsOf: store.stateURL) == before)
+            #expect(try store.plainStateForTesting() == before)
             #expect(try store.terminalResult(for: id) == nil)
         }
         // A plain commit under such an id is unchanged from before runs existed.
@@ -509,11 +509,11 @@ struct ParticipantRunStoreTests {
         let store = try fixture.makeStore(faults: faults)
         defer { store.close() }
         #expect(try store.commit(prepare(Invented.prepared(1), requestId: Invented.requestId(1), expected: 0, revision: 1)) == .committed(revision: 1))
-        let before = try Data(contentsOf: store.stateURL)
+        let before = try store.plainStateForTesting()
         let published = store.publishedRuns
         faults.arm([0: stage])
         #expect(throws: ProofStoreError.startNotApplied) { try store.recordStart(runId: Invented.runId(1), Invented.start(1)) }
-        #expect(try Data(contentsOf: store.stateURL) == before, "\(stage): the old file is intact")
+        #expect(try store.plainStateForTesting() == before, "\(stage): the old file is intact")
         #expect(store.publishedRuns == published)
         #expect(try store.refreshPublishedRuns().entry(for: Invented.runId(1))?.start == nil, "memory did not adopt it")
         #expect(!store.publishedRuns.reservedStartRequestIds.contains(Invented.startId(1)), "a definite failure reserves nothing")
@@ -541,7 +541,7 @@ struct ParticipantRunStoreTests {
         #expect(snapshot.reservedStartRequestIds == [Invented.startId(1)], "but its id is reserved")
 
         faults.failFlushRetries = true
-        let beforeSecond = try Data(contentsOf: store.stateURL)
+        let beforeSecond = try store.plainStateForTesting()
         #expect(throws: ProofStoreError.startNotApplied) { try store.recordStart(runId: Invented.runId(2), Invented.start(2)) }
         #expect(throws: ProofStoreError.startNotApplied, "the reserved id is visible on run 1, not on run 2") {
             try store.recordStart(runId: Invented.runId(2), Invented.start(2, requestId: Invented.startId(1)))
@@ -553,7 +553,7 @@ struct ParticipantRunStoreTests {
         #expect(throws: ProofStoreError.replacedUnsynced(EIO), "a commit under the reserved start id answers nothing durable") {
             try store.commit(prepare(nil, requestId: startUUID, expected: 2, revision: 3))
         }
-        #expect(try Data(contentsOf: store.stateURL) == beforeSecond, "nothing of the second start or the commit was written")
+        #expect(try store.plainStateForTesting() == beforeSecond, "nothing of the second start or the commit was written")
         #expect(throws: ProofStoreError.replacedUnsynced(EIO)) { try store.read() }
         #expect(throws: ProofStoreError.replacedUnsynced(EIO)) { try store.refreshPublishedRuns() }
         #expect(store.publishedRuns == snapshot)
@@ -652,10 +652,10 @@ struct ParticipantRunStoreTests {
             try store.recordStart(runId: Invented.runId(n), Invented.start(n))
         }
         let completed = Invented.terminal("completed", 3, nil)
-        let before = try Data(contentsOf: store.stateURL)
+        let before = try store.plainStateForTesting()
         faults.arm([0: .rename])
         #expect(throws: ProofStoreError.writeFailed(EIO)) { try store.recordTerminal(runId: Invented.runId(1), completed, groupCleared: true) }
-        #expect(try Data(contentsOf: store.stateURL) == before)
+        #expect(try store.plainStateForTesting() == before)
         #expect(store.publishedRuns.entry(for: Invented.runId(1))?.terminal == nil)
 
         faults.arm([0: .directoryFlush])
@@ -665,7 +665,7 @@ struct ParticipantRunStoreTests {
         #expect(store.publishedRuns.uncertain)
 
         faults.failFlushRetries = true
-        let pending = try Data(contentsOf: store.stateURL)
+        let pending = try store.plainStateForTesting()
         // A change the visible state does not hold was definitely not applied.
         #expect(throws: ProofStoreError.writeFailed(EIO)) {
             try store.recordTerminal(runId: Invented.runId(2), Invented.terminal("failed", 2, "timeout"), groupCleared: true)
@@ -683,7 +683,7 @@ struct ParticipantRunStoreTests {
         #expect(throws: ProofStoreError.replacedUnsynced(EIO), "groupCleared:true is already visible") {
             try store.markGroupCleared(runId: Invented.runId(1))
         }
-        #expect(try Data(contentsOf: store.stateURL) == pending)
+        #expect(try store.plainStateForTesting() == pending)
         #expect(store.publishedRuns.entry(for: Invented.runId(1))?.terminal == nil)
 
         faults.failFlushRetries = false
@@ -779,7 +779,7 @@ struct ParticipantRunStoreTests {
         #expect(store.publishedRuns.status == .corrupt && store.publishedRuns.runs.isEmpty)
         #expect(store.publishedRuns.reservedStartRequestIds.contains(Invented.startId(1)), "an unreadable folder releases no reservation")
         #expect(throws: ProofStoreError.corrupt) { try store.rereadRuns() }
-        #expect(try Data(contentsOf: store.stateURL) == broken, "left for a person")
+        #expect(try store.plainStateForTesting() == broken, "left for a person")
     }
 
     @Test("rereadRuns releases a start's reservation once the durable folder no longer shows that start, and the id can then be recorded")
@@ -958,7 +958,7 @@ struct ParticipantRunStoreTests {
         #expect(missing.publishedRuns.lookup(runId: Invented.runId(9)) == .unproven)
         missing.close()
 
-        try Data("{".utf8).write(to: store.stateURL)
+        try Data("{".utf8).writePlainState(to: store)
         let corrupt = try fixture.makeStore()
         defer { corrupt.close() }
         #expect(corrupt.publishedRuns.status == .corrupt && !corrupt.publishedRuns.durable)

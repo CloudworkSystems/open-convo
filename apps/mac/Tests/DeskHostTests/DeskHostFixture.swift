@@ -364,3 +364,9 @@ func envelopeJSON(_ overrides: [String: String] = [:], dropping: Set<String> = [
     let body = fields.keys.sorted().map { "\"\($0)\":\(fields[$0]!)" }.joined(separator: ",")
     return Data("{\(body)}".utf8)
 }
+
+extension Data {
+    /// Seals these bytes as `store`'s state and writes them in place: a
+    /// hand-edited or damaged state that still opens under the store's key.
+    func writePlainState(to store: ProofStore) throws { try store.writePlainStateForTesting(self) }
+}

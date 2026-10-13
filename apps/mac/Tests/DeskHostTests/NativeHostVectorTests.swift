@@ -127,7 +127,7 @@ struct NativeHostVectorTests {
         #expect(try reopened.delivery(for: deliveryId)?.commitRequestId == commitRequestId)
         #expect(try reopened.delivery(for: deliveryId)?.revision == 4)
         // The page's own saved draft legitimately holds the words; the host's delivery receipts never do.
-        let state = try JSONValue.decode(Data(contentsOf: reopened.stateURL)).objectValue
+        let state = try JSONValue.decode(reopened.plainStateForTesting()).objectValue
         let deliveries = String(decoding: (state?["deliveries"] ?? .null).canonicalData(), as: UTF8.self)
         #expect(deliveries.lowercased().contains(deliveryId.canonicalString))
         #expect(!deliveries.contains("invented dictation"), "delivery receipts carry identities only")

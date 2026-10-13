@@ -98,7 +98,7 @@ struct RecordingTokenTests {
         #expect(harness.sink.finalTexts == ["A's words", "C first"], "nothing else was pushed anywhere")
         #expect(harness.drafts.heldDeliveries.map(\.text) == ["B's words", "C second", "words without a target", "C first", "D's words", "E's words"],
                 "C's pushed but unsaved text was set aside when its document went away")
-        let state = String(decoding: try Data(contentsOf: harness.store.stateURL), as: UTF8.self)
+        let state = String(decoding: try harness.store.plainStateForTesting(), as: UTF8.self)
         #expect(!state.contains("words"), "no dictated text reaches the store")
     }
 
@@ -136,7 +136,7 @@ struct RecordingTokenTests {
         #expect(deliveredGeneration == generation)
         #expect(harness.sink.finalTexts == ["new words"], "only the new recording's text was ever pushed")
         #expect(harness.drafts.heldDeliveries.map(\.text) == ["late after lock", "while locked", "old words"])
-        let state = String(decoding: try Data(contentsOf: harness.store.stateURL), as: UTF8.self)
+        let state = String(decoding: try harness.store.plainStateForTesting(), as: UTF8.self)
         #expect(!state.contains("words"), "held text is never written to the store")
     }
 
@@ -146,7 +146,7 @@ struct RecordingTokenTests {
         defer { harness.clean() }
         _ = try await harness.bind(expectedRevision: 0, sessionId: Self.sessionA)
         let token = await harness.host.beginRecording()
-        let stateBefore = try Data(contentsOf: harness.store.stateURL)
+        let stateBefore = try harness.store.plainStateForTesting()
         await harness.host.close()
         #expect(await harness.host.deliverFinal(token, text: "late after close") == .dropped(.revoked))
         #expect(await harness.host.deliverFinal(await harness.host.beginRecording(), text: "after close") == .dropped(.revoked))
@@ -154,7 +154,7 @@ struct RecordingTokenTests {
         #expect(harness.drafts.pendingDeliveries.isEmpty)
         #expect(harness.drafts.activeBindingCount == 0)
         #expect(harness.sink.finals.isEmpty)
-        #expect(try Data(contentsOf: harness.store.stateURL) == stateBefore, "close wrote nothing")
+        #expect(try harness.store.plainStateForTesting() == stateBefore, "close wrote nothing")
     }
 
     @Test("N8: without an event sink a final is held, the binding is not consumed, no delivery record is written, and the held text is handed to the app once")
@@ -176,7 +176,7 @@ struct RecordingTokenTests {
         #expect(await harness.host.handle(harness.commitRequest(expectedRevision: 0, record: inventedRecord("x", revision: 1), deliveryId: held.deliveryId)).reason == .unknownDelivery)
         #expect(harness.drafts.takeHeldDelivery(held.deliveryId) == held, "the only copy is handed over once")
         #expect(harness.drafts.takeHeldDelivery(held.deliveryId) == nil)
-        #expect(!String(decoding: try Data(contentsOf: harness.store.stateURL), as: UTF8.self).contains("without a sink"))
+        #expect(!String(decoding: try harness.store.plainStateForTesting(), as: UTF8.self).contains("without a sink"))
         // A read-only host still answers requests; it just cannot push.
         #expect(await harness.host.handle(harness.readRequest()).outcome == .ok)
         #expect(harness.sink.all.isEmpty)
