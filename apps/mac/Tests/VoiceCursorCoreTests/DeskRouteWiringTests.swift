@@ -77,4 +77,14 @@ struct DeskRouteWiringTests {
             #expect(try body(wrapper, in: source).contains("hideIdlePillForDesk()"), "\(wrapper)")
         }
     }
+
+    @Test("Hiding the persistent pill calls off a pending Desk start in either phase")
+    func hidingPersistentPillCancelsPendingDeskStart() throws {
+        let source = try source()
+        let cancel = try body("private func cancelPendingDeskStart(reason: String)", in: source)
+        #expect(cancel.contains("if deskStartPending { deskStartReleased = true }"), "still asking the host")
+        #expect(cancel.contains("controller.cancelPendingDeskStart()"), "waiting for a permission answer")
+        let toggle = try body("private func togglePersistentPill()", in: source)
+        #expect(toggle.components(separatedBy: "cancelPendingDeskStart(reason: \"persistent-pill-hidden\")").count - 1 == 2)
+    }
 }

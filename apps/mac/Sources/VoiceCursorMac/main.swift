@@ -9236,6 +9236,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if controller.isBusy {
             persistentPillActive = false
             controller.stopIdleMonitor()
+            cancelPendingDeskStart(reason: "persistent-pill-hidden")
             liveTranscriptWindow.hideNow()
             updateStatus("Hiding after final transcript")
             RunLog.write("persistent-pill.deactivated", "reason=busy")
@@ -9244,6 +9245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if persistentPillActive {
             persistentPillActive = false
             controller.stopIdleMonitor()
+            cancelPendingDeskStart(reason: "persistent-pill-hidden")
             liveTranscriptWindow.hideNow()
             updateStatus("True Convo hidden")
             RunLog.write("persistent-pill.deactivated", "reason=hotkey")
@@ -9392,9 +9394,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// A Desk recording is being started (the host is asked for the
     /// confirmed draft binding first). A second press meanwhile is ignored.
     private var deskStartPending = false
-    /// The dictation key was let go while a hold-to-record Desk start was
-    /// still asking the host: that start is called off.
+    /// A Desk start still asking the host was called off: the hold-to-record
+    /// key was let go, or the persistent pill was hidden.
     private var deskStartReleased = false
+
+    /// Calls off a Desk start in either pending phase: still asking the host
+    /// for the draft binding, or waiting for a permission answer. Nothing
+    /// records after this (Codex P1 on #9: hiding the persistent pill).
+    private func cancelPendingDeskStart(reason: String) {
+        if deskStartPending { deskStartReleased = true }
+        if controller.cancelPendingDeskStart() {
+            RunLog.write("dictation.desk.start.cancelled", "reason=\(reason)")
+        }
+    }
 
     /// The Desk route (step 1, PR 2b). No cursor target is remembered or
     /// locked, nothing is typed, pasted, copied or sent, and nothing goes to
