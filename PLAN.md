@@ -47,11 +47,18 @@ has tried it. Each step ends with something the owner can try.
    invented data first. Saves survive crashes, full disks and two windows
    editing at once. *Finish line:* kill-and-reopen tests pass and the owner's
    real conversation survives a restart.
-3. **One real conversation.** One approved model route using an existing
-   subscription, no paid fallback. Replies stream in, Stop works, safe retry,
-   and the session reopens later without retelling. The app shows which model
-   receives what before Send. *Finish line:* the owner holds a real conversation,
-   quits, reopens and continues it.
+3. **One real conversation, local first.** The first route is a local model
+   through Ollama on the owner's Mac, chosen with a model picker; no paid
+   fallback. Replies stream in, Stop works, safe retry, and the session reopens
+   later without retelling. The app shows which model receives what before
+   Send, and each cloud model and host needs the owner's one-time approval.
+   Model choice is rules only for now (the owner's default plus a
+   per-conversation choice). The building session tests two or three local chat
+   models on the Mac and the owner picks by feel. Claude through Claude Code is
+   the second route, off until approved. *Finish line:* the owner holds a real
+   conversation, quits, reopens and continues it. Profiles, harnesses, billing
+   and adapter order:
+   [docs/design-notes/agent-profiles-and-adapters.md](docs/design-notes/agent-profiles-and-adapters.md).
 4. **Clarity tools in the conversation.** Design rules from the owner: the
    explainer is an outsider. Like the old Codex "More detail" right-click, it
    answers from outside the conversation and never receives the main assistant's
@@ -73,7 +80,11 @@ has tried it. Each step ends with something the owner can try.
 
 ### After the Top Five
 
-6. Claude and Codex visible together in one session, with scoped delegation.
+- **First-run guide** (ordinary code, no AI): checks the computer, sets up a
+  local model or a cloud model. Needed before anyone else installs.
+
+6. Agents working together: the Pi harness for agent profiles, the model-based
+   dispatcher, Claude and Codex visible in one session, scoped delegation.
 7. Navigator search and sorting; Related and Revisit-when reminders.
 8. Reading the owner's real old sessions on the Mac, read-only.
 9. First creator beta: worksheet, website export, encrypted transfer between devices.
