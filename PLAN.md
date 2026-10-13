@@ -97,10 +97,28 @@ has tried it. Each step ends with something the owner can try.
    dispatcher, Claude and Codex visible in one session, scoped delegation.
 7. Navigator search and sorting; Related and Revisit-when reminders.
 8. Reading the owner's real old sessions on the Mac, read-only.
-9. First creator beta: worksheet, website export, encrypted transfer between devices.
+9. First creator beta: worksheet, Site Engine's first site, encrypted transfer between devices.
 10. Business features: one-change card, business messaging, phone handoff.
 11. Canvas/Atlas knowledge view, browser annotations, family and shared spaces.
 12. iOS app; later the OS shell.
+
+### Modules Planned (Order Within Each Decided)
+
+- **Convo Engine** (voice): ramble-to-polished-piece, then Write Mode, then a
+  Voicebox adapter for speech. Plan:
+  [docs/design-notes/convo-engine.md](docs/design-notes/convo-engine.md).
+- **Site Engine**: builds sites for True Convo users, the owner's businesses
+  first; export plus one-click publish to the person's own free host, after a
+  preview and approval. Replaces the creator beta's one-page website. Plan:
+  [docs/design-notes/site-engine.md](docs/design-notes/site-engine.md).
+- **Capabilities layer and Nexus primitives**: primitives (what you ask for),
+  dispatcher (who handles it), capabilities (the tools: Jev/Decisions judge,
+  EmbeddingGemma search, Jeff checks, Impeccable design, ScrollCraft scroll).
+  Plan: [docs/design-notes/capabilities-and-primitives.md](docs/design-notes/capabilities-and-primitives.md).
+- **Visibility Agent**: the checkup as an agent plus AI visibility, for users
+  and for the owner's agency work, the owner's businesses first; ongoing watch
+  later. Plan:
+  [docs/design-notes/visibility-agent.md](docs/design-notes/visibility-agent.md).
 
 ## Moving Pieces From True Convo
 
