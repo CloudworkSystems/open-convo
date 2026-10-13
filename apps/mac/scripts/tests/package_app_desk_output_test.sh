@@ -27,10 +27,11 @@
 # Byte-identity proof: the default (release) runs are also made with the
 # script as it was before the test copy existed (BASELINE_REV, read from git,
 # or BASELINE_SCRIPT), and the two outputs must match exactly: plain, Desk and
-# old-apps builds, --install into an invented Applications folder, and two
-# refusals. The one allowed difference is the reworded Desk-with---install
-# refusal, which no longer names the retired Test Account. Move BASELINE_REV
-# forward only when a change to the default output is intended.
+# old-apps builds, --install into an invented Applications folder, and a
+# refusal. The Desk-with---install refusal is gone on purpose (step 1, PR 4:
+# a Desk build may now be installed from a clean checkout), so it is checked
+# on its own below (case 32), not compared. Move BASELINE_REV forward only
+# when a change to the default output is intended.
 set -euo pipefail
 export LC_ALL=C
 
@@ -522,19 +523,18 @@ outcome() {
 }
 # Variants: plain, Desk and old-apps builds; --install into an invented
 # Applications folder holding old apps (with pgrep, pkill and open stand-ins);
-# the Desk build refused with --install; and a signing fingerprint refused
-# because the stand-in Keychain lookup finds no certificate.
+# and a signing fingerprint refused because the stand-in Keychain lookup finds
+# no certificate.
 if [[ ! -s "${BASELINE}" ]]; then
   not_ok "before and after: could not read package_app.sh at ${BASELINE_REV} (set BASELINE_SCRIPT)"
 else
-  for variant in plain desk old-apps install desk-install-refused signing-refused lint-fails desk-link-refused; do
+  for variant in plain desk old-apps install signing-refused lint-fails desk-link-refused; do
     with_desk=0
     extra=()
     expected_status=0
     case "${variant}" in
       desk) with_desk=1 ;;
       install) SCRIPT_ARGS=(--install) ;;
-      desk-install-refused) with_desk=1; SCRIPT_ARGS=(--install); expected_status=2 ;;
       signing-refused) extra=(TRUE_CONVO_SIGN_IDENTITY=0123456789abcdef0123456789abcdef01234567); expected_status=2 ;;
       # A release run that fails partway keeps what it made, exactly as before:
       # the test copy's cleanup never runs for the real app's build.
@@ -547,7 +547,7 @@ else
       if [[ "${variant}" == "old-apps" ]]; then
         make_apps_target "${WORK}/same-${variant}-${side}/repo/apps/true-convo-mac/dist"
       fi
-      if [[ "${variant}" == "install" || "${variant}" == "desk-install-refused" ]]; then
+      if [[ "${variant}" == "install" ]]; then
         make_apps_target "${WORK}/same-${variant}-${side}/home/Applications"
       fi
       run_package "same-${variant}-${side}" TRUE_CONVO_WITH_DESK="${with_desk}" ${extra[@]+"${extra[@]}"}
@@ -555,19 +555,8 @@ else
     done
     SCRIPT_ARGS=()
     check "before and after (${variant} release run): exit ${expected_status}" grep -qx "status ${expected_status}" "${WORK}/same-${variant}-after.outcome"
-    if [[ "${variant}" == "desk-install-refused" ]]; then
-      # The one deliberate wording change in a release run: this refusal no
-      # longer names the retired Test Account. Everything else is identical.
-      check "before and after (${variant} release run): the old message named the Test Account" \
-        grep -qF "Desk: a Desk build is for the Test Account trial only." "${WORK}/same-${variant}-before.outcome"
-      sed 's/Desk: a Desk build is for the Test Account trial only\./Desk: a Desk build is a trial build only./' \
-        "${WORK}/same-${variant}-before.outcome" > "${WORK}/same-${variant}-before-reworded.outcome"
-      check "before and after (${variant} release run): identical apart from that one reworded phrase" \
-        cmp -s "${WORK}/same-${variant}-before-reworded.outcome" "${WORK}/same-${variant}-after.outcome"
-    else
-      check "before and after (${variant} release run): identical app, Info.plist, files, commands and messages" \
-        cmp -s "${WORK}/same-${variant}-before.outcome" "${WORK}/same-${variant}-after.outcome"
-    fi
+    check "before and after (${variant} release run): identical app, Info.plist, files, commands and messages" \
+      cmp -s "${WORK}/same-${variant}-before.outcome" "${WORK}/same-${variant}-after.outcome"
   done
   check "before and after (install release run): it did install, back up and open (so the comparison covers it)" \
     eval 'ran same-install-after open && [ -f "${WORK}/same-install-after/home/Applications/True Convo.app/Contents/Info.plist" ] && grep -qF "install-backups/<time>/True Convo.app/Contents/CANARY.txt" "${WORK}/same-install-after.outcome"'
@@ -1216,6 +1205,63 @@ for linked in .build/test-identity .build; do
   check "linked ${linked}: nothing was built" eval "! swift_ran ${name}"
   check "linked ${linked}: the target is unchanged" [ "$(tree_state "${TARGET}")" == "${BEFORE}" ]
 done
+
+# 32. Desk install (step 1, PR 4). A clean checkout installs the Desk build
+#     into the invented Applications folder, backed up and opened by the
+#     stand-ins, with TCSourceCommit naming the checkout's commit. A dirty
+#     checkout, or one that changes while packaging, is refused and nothing
+#     is signed, installed, quit or opened.
+make_case desk-install
+make_apps_target "${WORK}/desk-install/home/Applications"
+DESK_INSTALL_COMMIT="$(git -C "${WORK}/desk-install/repo" rev-parse HEAD)"
+SCRIPT_ARGS=(--install)
+run_package desk-install
+SCRIPT_ARGS=()
+INSTALLED="${WORK}/desk-install/home/Applications/True Convo.app"
+check "Desk install: packaged and installed (exit 0)" [ "${STATUS}" -eq 0 ]
+check "Desk install: the installed app carries the Desk" [ -f "${INSTALLED}/Contents/Resources/Desk/index.html" ]
+check "Desk install: TCSourceCommit names the checkout's commit" \
+  [ "$(/usr/bin/plutil -extract TCSourceCommit raw -o - "${INSTALLED}/Contents/Info.plist" 2>/dev/null)" == "${DESK_INSTALL_COMMIT}" ]
+check "Desk install: TCDeskSourceCommit is there too" /usr/bin/plutil -extract TCDeskSourceCommit raw -o - "${INSTALLED}/Contents/Info.plist"
+check "Desk install: the old app was backed up and the new one opened" \
+  eval 'ran desk-install open && [ -n "$(find "${WORK}/desk-install/repo/apps/true-convo-mac/dist/install-backups" -name CANARY.txt -path "*True Convo.app*" -print)" ]'
+check "Desk install: says which commit it installed" said desk-install "Desk install: source commit ${DESK_INSTALL_COMMIT} (TCSourceCommit)."
+check "Desk install: no trial-build refusal any more" eval '! said desk-install "trial build"'
+
+make_case desk-install-dirty
+make_apps_target "${WORK}/desk-install-dirty/home/Applications"
+APPS_BEFORE_DIRTY="$(tree_state "${WORK}/desk-install-dirty/home/Applications")"
+printf 'invented untracked file\n' > "${WORK}/desk-install-dirty/repo/INVENTED-UNTRACKED.txt"
+SCRIPT_ARGS=(--install)
+run_package desk-install-dirty
+SCRIPT_ARGS=()
+check "Desk install, dirty checkout: refused (exit 1)" [ "${STATUS}" -eq 1 ]
+check "Desk install, dirty checkout: plain message" said desk-install-dirty "Desk install: the checkout has local changes or untracked files; refusing to package them. Save or set them aside first. Nothing was built, signed or installed."
+check "Desk install, dirty checkout: nothing built, signed, quit or opened" \
+  eval '! swift_ran desk-install-dirty && ! ran desk-install-dirty codesign && ! ran desk-install-dirty pkill && ! ran desk-install-dirty open'
+check "Desk install, dirty checkout: the invented Applications folder is untouched" [ "$(tree_state "${WORK}/desk-install-dirty/home/Applications")" == "${APPS_BEFORE_DIRTY}" ]
+
+make_case desk-install-changed
+make_apps_target "${WORK}/desk-install-changed/home/Applications"
+APPS_BEFORE_CHANGED="$(tree_state "${WORK}/desk-install-changed/home/Applications")"
+SCRIPT_ARGS=(--install)
+run_package desk-install-changed STUB_SWIFT_DIRTY="${WORK}/desk-install-changed/repo/INVENTED-DURING-BUILD.txt"
+SCRIPT_ARGS=()
+check "Desk install, changed while packaging: refused (exit 1)" [ "${STATUS}" -eq 1 ]
+check "Desk install, changed while packaging: plain message" said desk-install-changed "Desk install: the checkout has local changes or untracked files; refusing to package them. Save or set them aside first. Nothing was signed or installed."
+check "Desk install, changed while packaging: nothing signed, quit or opened" \
+  eval '! ran desk-install-changed codesign && ! ran desk-install-changed pkill && ! ran desk-install-changed open'
+check "Desk install, changed while packaging: the invented Applications folder is untouched" [ "$(tree_state "${WORK}/desk-install-changed/home/Applications")" == "${APPS_BEFORE_CHANGED}" ]
+
+make_case desk-signed
+run_package desk-signed TRUE_CONVO_SIGN_IDENTITY=0123456789abcdef0123456789abcdef01234567
+check "Desk build with a signing identity: no trial-build refusal; it reaches the Keychain check (exit 2, no certificate)" \
+  eval '[ "${STATUS}" -eq 2 ] && ran desk-signed security && said desk-signed "No valid Developer ID Application certificate" && ! said desk-signed "trial build"'
+
+make_case desk-plain-no-commit
+run_package desk-plain-no-commit
+check "Desk build without --install or signing: unchanged, no TCSourceCommit" \
+  eval '[ "${STATUS}" -eq 0 ] && ! /usr/bin/plutil -extract TCSourceCommit raw -o - "${WORK}/desk-plain-no-commit/repo/apps/true-convo-mac/dist/True Convo.app/Contents/Info.plist" >/dev/null 2>&1'
 
 # 21. Unknown options are still refused.
 make_case unknown-option

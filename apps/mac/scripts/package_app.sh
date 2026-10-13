@@ -40,9 +40,17 @@
 # anything). The build writes only into a fresh private temporary folder made
 # by this script; apps/desk or an old apps/desk/native-dist that is a symbolic
 # link, or not a plain folder of this user's, is refused before anything is
-# built. Without it the app has no Desk and its menu item says so. A Desk
-# build is a trial build: the script refuses to combine it with --install or
-# TRUE_CONVO_SIGN_IDENTITY. To try it next to the real app, add --test-identity.
+# built. Without it the app has no Desk and its menu item says so. To try it
+# next to the real app, add --test-identity.
+#
+# Desk install (step 1, PR 4; the owner approved replacing today's True Convo
+# with the Desk build on October 12): a Desk build may be installed with
+# --install or signed with TRUE_CONVO_SIGN_IDENTITY. Such a build must come
+# from a reviewed commit: the whole checkout must be clean (the same check as
+# the test copy) before anything is built and again right before signing, at
+# the same commit, which the app records as TCSourceCommit. Otherwise it
+# refuses and nothing is signed or installed. Running it is the owner's call
+# each time; this script never runs on its own.
 #
 # Every build (with or without the Desk) deletes the old app in dist/ and
 # assembles the new one there, so dist, and the app folders it replaces, must
@@ -119,9 +127,10 @@ if [[ "${TEST_IDENTITY}" -eq 1 ]]; then
   SUPERVISOR_SRC="${TEST_BUILD_DIR}/release/${SUPERVISOR_NAME}"
 fi
 
-if [[ "${WITH_DESK}" == "1" ]] && [[ "${INSTALL}" -eq 1 || "${SIGN_IDENTITY}" != "-" ]]; then
-  echo "Desk: a Desk build is a trial build only. It is never installed in ~/Applications or signed with a Developer ID; run it without --install and without TRUE_CONVO_SIGN_IDENTITY." >&2
-  exit 2
+# A Desk build that leaves dist: installed, or signed with a Developer ID.
+DESK_INSTALL=0
+if [[ "${WITH_DESK}" == "1" && "${TEST_IDENTITY}" -eq 0 ]] && [[ "${INSTALL}" -eq 1 || "${SIGN_IDENTITY}" != "-" ]]; then
+  DESK_INSTALL=1
 fi
 
 # Refuses (exit 1) unless the path is absent or a plain folder of this user's.
@@ -236,36 +245,38 @@ remove_unsigned_test_copy() {
   fi
 }
 
-# Test copy only, before anything is built and again right before signing:
-# the whole checkout must be clean and still at the same commit, so
-# TCSourceCommit names the tracked source that was built. Untracked files are
+# The test copy and a Desk install, before anything is built and again right
+# before signing: the whole checkout must be clean and still at the same
+# commit, so TCSourceCommit names the tracked source that was built. Untracked files are
 # always listed (--untracked-files=all overrides a status.showUntrackedFiles
 # setting), and a tracked file git is told to treat as unchanged
 # (assume-unchanged or skip-worktree, which hide its local changes from git
 # status) is refused too. Ignored files, such as .build, dist and
 # apps/desk/node_modules, are not checked, so the commit does not cover them.
-# Argument: what to say after the refusal.
+# Arguments: the message prefix ("Test copy: " or "Desk install: "), then what
+# to say after the refusal.
 SOURCE_COMMIT=""
-test_copy_source_check() {
-  local after="$1" changes listed hidden commit
+test_copy_source_check() { source_check "Test copy: " "$1"; }
+source_check() {
+  local prefix="$1" after="$2" changes listed hidden commit
   if ! changes="$(git --no-optional-locks -C "${ROOT_DIR}" status --porcelain --untracked-files=all --ignore-submodules=none)" \
     || ! listed="$(git --no-optional-locks -C "${ROOT_DIR}" ls-files -v -- ':/')" \
     || ! commit="$(git --no-optional-locks -C "${ROOT_DIR}" rev-parse --verify HEAD)" || [[ -z "${commit}" ]]; then
-    echo "Test copy: could not read this checkout's git status; refusing to package. ${after}" >&2
+    echo "${prefix}could not read this checkout's git status; refusing to package. ${after}" >&2
     exit 1
   fi
   if [[ -n "${changes}" ]]; then
-    echo "Test copy: the checkout has local changes or untracked files; refusing to package them. Save or set them aside first. ${after}" >&2
+    echo "${prefix}the checkout has local changes or untracked files; refusing to package them. Save or set them aside first. ${after}" >&2
     exit 1
   fi
   # git ls-files -v: a lowercase tag is assume-unchanged, S is skip-worktree.
   hidden="$(printf '%s\n' "${listed}" | grep -E '^([a-z]|S) ' || true)"
   if [[ -n "${hidden}" ]]; then
-    echo "Test copy: git is told to treat some tracked files as unchanged (assume-unchanged or skip-worktree), so their local changes would not show; refusing to package. Clear those marks first. ${after}" >&2
+    echo "${prefix}git is told to treat some tracked files as unchanged (assume-unchanged or skip-worktree), so their local changes would not show; refusing to package. Clear those marks first. ${after}" >&2
     exit 1
   fi
   if [[ -n "${SOURCE_COMMIT}" && "${commit}" != "${SOURCE_COMMIT}" ]]; then
-    echo "Test copy: the checkout moved from ${SOURCE_COMMIT} to ${commit} while packaging; refusing. ${after}" >&2
+    echo "${prefix}the checkout moved from ${SOURCE_COMMIT} to ${commit} while packaging; refusing. ${after}" >&2
     exit 1
   fi
   SOURCE_COMMIT="${commit}"
@@ -378,6 +389,9 @@ if [[ "${TEST_IDENTITY}" -eq 1 ]]; then
   refuse_unless_plain_folder "Test copy: " "${TEST_BUILD_DIR}" ".build/test-identity"
   test_copy_source_check "Nothing was built or changed."
 fi
+if [[ "${DESK_INSTALL}" -eq 1 ]]; then
+  source_check "Desk install: " "Nothing was built, signed or installed."
+fi
 
 if [[ "${SIGN_IDENTITY}" != "-" ]]; then
   if [[ ! "${SIGN_IDENTITY}" =~ ^[0-9A-Fa-f]{40}$ ]]; then
@@ -451,6 +465,11 @@ if [[ "${WITH_DESK}" == "1" ]]; then
   /usr/libexec/PlistBuddy -c "Add :TCDeskSourceCommit string ${DESK_COMMIT}" "${CONTENTS_DIR}/Info.plist"
   plutil -lint "${CONTENTS_DIR}/Info.plist"
   echo "Desk: included (source commit ${DESK_COMMIT})"
+  if [[ "${DESK_INSTALL}" -eq 1 ]]; then
+    /usr/libexec/PlistBuddy -c "Add :TCSourceCommit string ${SOURCE_COMMIT}" "${CONTENTS_DIR}/Info.plist"
+    plutil -lint "${CONTENTS_DIR}/Info.plist"
+    echo "Desk install: source commit ${SOURCE_COMMIT} (TCSourceCommit)."
+  fi
 else
   echo "Desk: not included"
 fi
@@ -468,6 +487,9 @@ if [[ "${TEST_IDENTITY}" -eq 1 ]]; then
   TEST_COPY_SIGNING=1
   sign_test_copy
 else
+  if [[ "${DESK_INSTALL}" -eq 1 ]]; then
+    source_check "Desk install: " "Nothing was signed or installed."
+  fi
   codesign --force --deep --timestamp=none --sign "${SIGN_IDENTITY}" "${APP_DIR}"
   codesign --verify --deep --strict "${APP_DIR}"
 fi
