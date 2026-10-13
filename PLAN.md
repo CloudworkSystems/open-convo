@@ -46,7 +46,10 @@ has tried it. Each step ends with something the owner can try.
    encrypted, with keys in Keychain; lock, restart and crash recovery tested with
    invented data first. Saves survive crashes, full disks and two windows
    editing at once. *Finish line:* kill-and-reopen tests pass and the owner's
-   real conversation survives a restart.
+   real conversation survives a restart. Scope and pull requests:
+   [docs/plans/step-2-protected-storage.md](docs/plans/step-2-protected-storage.md).
+   Owner decisions: a recovery key ships in this step, and dictation history
+   and saved word fixes are protected along with the Desk.
 3. **One real conversation.** One approved model route using an existing
    subscription, no paid fallback. Replies stream in, Stop works, safe retry,
    and the session reopens later without retelling. The app shows which model
