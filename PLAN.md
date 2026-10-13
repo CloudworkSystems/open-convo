@@ -102,6 +102,12 @@ has tried it. Each step ends with something the owner can try.
 11. Canvas/Atlas knowledge view, browser annotations, family and shared spaces.
 12. iOS app; later the OS shell.
 
+### Modules Planned (Order Within Each Decided)
+
+- **Convo Engine** (voice): ramble-to-polished-piece, then Write Mode, then a
+  Voicebox adapter for speech. Plan:
+  [docs/design-notes/convo-engine.md](docs/design-notes/convo-engine.md).
+
 ## Moving Pieces From True Convo
 
 1. **Correction and clarity library. Done October 12.** (`packages/clarity`)
