@@ -18,9 +18,9 @@ import Security
 ///   (`unavailable`), never repaired or replaced;
 /// - key material never appears in a response, a log, a file or an error.
 ///
-/// Nothing in the app uses this provider yet: the Desk switches to it in the
-/// next pull request, together with encrypting the store, so a real key never
-/// guards plaintext.
+/// Nothing in the app uses this provider yet. The store's files are
+/// ciphertext since step 2, PR 2; the Desk switches to this provider (and
+/// reopens its store across restarts) in step 2, PR 2b.
 public final class KeychainKeyProvider: KeyProvider, @unchecked Sendable {
     public static let custody = "keychain-this-device-only"
     /// Key size in bytes (256-bit, for AES-GCM or ChaChaPoly).

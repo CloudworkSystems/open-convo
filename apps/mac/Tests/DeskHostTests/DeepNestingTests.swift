@@ -232,14 +232,14 @@ struct DeepNestingTests {
         let handle = store.workspaceHandle
         store.close()
         let hostile = Data(("{\"formatVersion\":1,\"workspace\":" + Self.nestedArrays(600) + "}").utf8)
-        try hostile.write(to: store.stateURL)
+        try hostile.writePlainState(to: store)
 
         let reopened = try Self.onStack(Self.actorStackBytes) { Result { try fixture.makeStore() } }.get()
         defer { reopened.close() }
         #expect(reopened.status == .corrupt)
         #expect(reopened.workspaceHandle == handle, "the handle survives through the marker")
         #expect(throws: ProofStoreError.corrupt) { try reopened.read() }
-        #expect(try Data(contentsOf: store.stateURL) == hostile, "nothing was written back")
+        #expect(try store.plainStateForTesting() == hostile, "nothing was written back")
 
         let connections = ConnectionRegistry()
         let host = DeskHostProtocol(store: reopened, connections: connections, drafts: DraftBindingRegistry(), info: HostHarness.info)
@@ -414,13 +414,13 @@ struct DeepNestingTests {
         store.close()
         let deepField = "\"\(Self.blindingKey)\":" + Self.nestedObjects(510)
         let hostileState = Self.bytes("{\"formatVersion\":1,\(deepField),\"workspace\":{}}", as: .utf16LittleEndian, bom: false)
-        try hostileState.write(to: store.stateURL)
+        try hostileState.writePlainState(to: store)
 
         let reopened = try Self.onStack(Self.actorStackBytes) { Result { try fixture.makeStore() } }.get()
         #expect(reopened.status == .corrupt)
         #expect(reopened.workspaceHandle == handle, "the handle survives through the marker")
         #expect(throws: ProofStoreError.corrupt) { try reopened.read() }
-        #expect(try Data(contentsOf: store.stateURL) == hostileState, "nothing was written back")
+        #expect(try store.plainStateForTesting() == hostileState, "nothing was written back")
         reopened.close()
 
         // The marker the store wrote, with the deep field added and re-encoded.

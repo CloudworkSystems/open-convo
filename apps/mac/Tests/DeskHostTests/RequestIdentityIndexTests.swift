@@ -39,14 +39,14 @@ enum IdentityInvented {
     /// authoritative for starts: memory then no longer shows the start,
     /// while the published copy keeps reserving it (Codex Q5).
     static func dropStartOnDisk(_ n: Int, store: ProofStore) throws {
-        var state = try #require(try JSONValue.decode(Data(contentsOf: store.stateURL)).objectValue)
+        var state = try #require(try JSONValue.decode(store.plainStateForTesting()).objectValue)
         var runs = try #require(state["runs"]?.arrayValue)
         let index = try #require(runs.firstIndex { $0.objectValue?["runId"] == .string(runId(n)) })
         var entry = try #require(runs[index].objectValue)
         entry["start"] = .null
         runs[index] = .object(entry)
         state["runs"] = .array(runs)
-        try JSONEncoder().encode(JSONValue.object(state)).write(to: store.stateURL)
+        try JSONEncoder().encode(JSONValue.object(state)).writePlainState(to: store)
         #expect(try store.withdrawUnresolvedDispatch(UUID()) == .nothingToWithdraw, "a recovery re-read of the hand-edited folder")
     }
 

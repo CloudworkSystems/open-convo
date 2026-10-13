@@ -257,7 +257,8 @@ struct DeskHostProtocolTests {
         #expect(committed.revision == 3)
         #expect(committed.record == winner)
         let retained = harness.store.attemptedDirectory.appendingPathComponent("\(loserId.canonicalString).json")
-        let attempt = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: retained))
+        #expect(FileManager.default.fileExists(atPath: retained.path))
+        let attempt = try JSONDecoder().decode(JSONValue.self, from: harness.store.plainAttemptedForTesting(loserId))
         #expect(attempt.objectValue?["record"] == .object(loser))
 
         let rebased = await harness.host.handle(harness.commitRequest(expectedRevision: 3, record: inventedRecord("loser", revision: 4), connection: other))
@@ -654,7 +655,7 @@ struct DeskHostProtocolTests {
         #expect(harness.drafts.binding(bindingId)?.deliveryId == deliveryId)
         #expect(harness.drafts.pendingDeliveries.map(\.deliveryId) == [deliveryId])
         #expect(try harness.store.delivery(for: deliveryId)?.isSaved == false, "the receipt is written before the text moves")
-        #expect(!String(decoding: try Data(contentsOf: harness.store.stateURL), as: UTF8.self).contains("Submit now"))
+        #expect(!String(decoding: try harness.store.plainStateForTesting(), as: UTF8.self).contains("Submit now"))
         #expect(!String(reflecting: harness.drafts.pendingDeliveries).contains("Submit now"))
         let uncorrelated = await harness.host.handle(harness.receiptRequest(deliveryId: deliveryId))
         #expect(uncorrelated.outcome == .unknown)
@@ -779,7 +780,7 @@ struct DeskHostProtocolTests {
         #expect(harness.drafts.pendingDeliveries.isEmpty)
         #expect(harness.drafts.activeBindingCount == 0)
         #expect(harness.sink.finalTexts == ["private words one", "private words two"])
-        let state = String(decoding: try Data(contentsOf: harness.store.stateURL), as: UTF8.self)
+        let state = String(decoding: try harness.store.plainStateForTesting(), as: UTF8.self)
         #expect(!state.contains("private words"))
     }
 
@@ -790,7 +791,7 @@ struct DeskHostProtocolTests {
         let first = try fixture.makeStore()
         let handle = first.workspaceHandle
         first.close()
-        try Data("{not json".utf8).write(to: first.stateURL)
+        try Data("{not json".utf8).writePlainState(to: first)
         let corrupt = try fixture.makeStore()
         defer { corrupt.close() }
         let connections = ConnectionRegistry()
@@ -811,7 +812,7 @@ struct DeskHostProtocolTests {
             "workspaceHandle": .string(handle), "sessionId": .string(UUID().canonicalString), "expectedRevision": .number(0),
             "expectedText": .string("x"), "selection": .object(["start": .number(0), "end": .number(0)])
         ])).reason == .storeCorrupt)
-        #expect(try Data(contentsOf: first.stateURL) == Data("{not json".utf8), "nothing was replaced")
+        #expect(try first.plainStateForTesting() == Data("{not json".utf8), "nothing was replaced")
         await host.close()
 
         try fixture.files.removeItem(at: first.stateURL)

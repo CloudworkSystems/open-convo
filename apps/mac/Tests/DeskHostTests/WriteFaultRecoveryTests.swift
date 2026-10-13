@@ -8,7 +8,7 @@ import Testing
 @Suite("Write faults, recovery and link safety")
 struct WriteFaultRecoveryTests {
     private func diskState(_ store: ProofStore) throws -> [String: JSONValue] {
-        try #require(try JSONValue.decode(Data(contentsOf: store.stateURL)).objectValue)
+        try #require(try JSONValue.decode(store.plainStateForTesting()).objectValue)
     }
 
     private func diskRevision(_ store: ProofStore) throws -> Int? {
@@ -31,20 +31,20 @@ struct WriteFaultRecoveryTests {
         defer { fixture.clean() }
         let store = try fixture.makeStore(faults: faults)
         defer { store.close() }
-        let before = try Data(contentsOf: store.stateURL)
+        let before = try store.plainStateForTesting()
         let record = DeliveryRecord(deliveryId: UUID(), bindingId: UUID(), connectionId: "c", generation: 0,
                                     sessionId: "52abcdef-0000-4000-8abc-000000000001", expectedRevision: 0, pushedAt: Date())
         faults.arm([0: stage])
         #expect(throws: ProofStoreError.writeFailed(EIO)) { try store.recordPendingDelivery(record) }
-        #expect(try Data(contentsOf: store.stateURL) == before, "\(stage): the old file is intact")
+        #expect(try store.plainStateForTesting() == before, "\(stage): the old file is intact")
         #expect(try store.delivery(for: record.deliveryId) == nil, "\(stage): memory did not adopt a write that never became visible")
         let leftovers = try fixture.files.contentsOfDirectory(atPath: fixture.storeDirectory.path).filter { $0.contains(".tmp-") }
         #expect(leftovers.isEmpty, "\(stage): no temp file is left behind")
 
         faults.arm([0: .directoryFlush])
         #expect(throws: ProofStoreError.replacedUnsynced(EIO)) { try store.recordPendingDelivery(record) }
-        #expect(try Data(contentsOf: store.stateURL) != before, "the rename happened: the new file is visible")
-        #expect(String(decoding: try Data(contentsOf: store.stateURL), as: UTF8.self).lowercased().contains(record.deliveryId.canonicalString))
+        #expect(try store.plainStateForTesting() != before, "the rename happened: the new file is visible")
+        #expect(String(decoding: try store.plainStateForTesting(), as: UTF8.self).lowercased().contains(record.deliveryId.canonicalString))
         faults.failFlushRetries = true
         #expect(throws: ProofStoreError.replacedUnsynced(EIO)) { try store.delivery(for: record.deliveryId) }
         #expect(try store.visibleWorkspace().revision == 0, "the visible read serves what the folder shows")
@@ -142,12 +142,12 @@ struct WriteFaultRecoveryTests {
         store.close()
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        var state = try #require(try decoder.decode(JSONValue.self, from: Data(contentsOf: store.stateURL)).objectValue)
+        var state = try #require(try decoder.decode(JSONValue.self, from: store.plainStateForTesting()).objectValue)
         let inFlight = UUID()
         let receipt = JSONValue.object(["requestId": .string(inFlight.uuidString), "operation": .string("workspace.commitProof"),
                                         "payloadHash": .string("crashed"), "dispatchedAt": .string("2026-10-09T00:00:00Z")])
         state["receipts"] = .array((state["receipts"]?.arrayValue ?? []) + [receipt])
-        try JSONEncoder().encode(JSONValue.object(state)).write(to: store.stateURL)
+        try JSONEncoder().encode(JSONValue.object(state)).writePlainState(to: store)
         let reopened = try fixture.makeStore()
         defer { reopened.close() }
         #expect(reopened.unresolvedDispatch == inFlight, "memory holds a receipt with no result")
@@ -167,18 +167,18 @@ struct WriteFaultRecoveryTests {
             "requestId": .string(inFlight.uuidString), "payloadHash": .string("crashed"), "outcome": .string("ok"), "revision": .number(5)
         ])])
         let newerBytes = try JSONEncoder().encode(JSONValue.object(newer))
-        try newerBytes.write(to: store.stateURL)
+        try newerBytes.writePlainState(to: store)
         #expect(try reopened.read().revision == 1, "memory is stale on purpose")
         #expect(try reopened.withdrawUnresolvedDispatch(inFlight) == .alreadyResolved, "the folder shows the commit applied")
-        #expect(try Data(contentsOf: store.stateURL) == newerBytes, "recovery wrote nothing over the newer state")
+        #expect(try store.plainStateForTesting() == newerBytes, "recovery wrote nothing over the newer state")
         #expect(try reopened.read().revision == 5, "memory now matches the folder")
         #expect(try reopened.terminalResult(for: inFlight)?.revision == 5)
         #expect(reopened.unresolvedDispatch == nil)
 
-        try Data("{not state".utf8).write(to: store.stateURL)
+        try Data("{not state".utf8).writePlainState(to: store)
         #expect(throws: ProofStoreError.corrupt) { try reopened.withdrawUnresolvedDispatch(inFlight) }
         #expect(reopened.status == .corrupt)
-        #expect(try Data(contentsOf: store.stateURL) == Data("{not state".utf8), "nothing was replaced")
+        #expect(try store.plainStateForTesting() == Data("{not state".utf8), "nothing was replaced")
         #expect(throws: ProofStoreError.corrupt) { try reopened.read() }
     }
 
@@ -266,7 +266,7 @@ struct WriteFaultRecoveryTests {
         let store = try fixture.makeStore()
         let handle = store.workspaceHandle
         store.close()
-        let real = try Data(contentsOf: store.stateURL)
+        let real = try store.plainStateForTesting()
         let elsewhere = fixture.directory.appendingPathComponent("elsewhere.json")
         try real.write(to: elsewhere)
         try fixture.files.removeItem(at: store.stateURL)

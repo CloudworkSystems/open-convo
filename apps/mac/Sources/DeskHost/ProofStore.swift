@@ -396,6 +396,9 @@ public final class ProofStore: @unchecked Sendable {
     public let lockURL: URL
     public let attemptedDirectory: URL
     public let keyCustody: String
+    /// Seals and opens this store's files (step 2, PR 2). Holds the key; never
+    /// printed, logged or encoded.
+    let cipher: StoreCipher
     public let ledgerCapacity: Int
     public let workspaceId: UUID
     public let workspaceHandle: String
@@ -549,6 +552,11 @@ public final class ProofStore: @unchecked Sendable {
                 let key: StoreKey
                 do { key = try keys.createKey(for: workspaceId) } catch { throw ProofStoreError.keyRefused }
                 keyCustody = key.custody
+                // A key that is not 32 bytes would run a weaker AES; refused
+                // before anything is written.
+                do { cipher = try StoreCipher(material: key.material, workspaceId: workspaceId) } catch {
+                    throw ProofStoreError.keyRefused
+                }
                 self.workspaceId = workspaceId
                 workspaceHandle = seed.workspaceHandle ?? "ws-" + workspaceId.canonicalString
                 let marker = Marker(formatVersion: Self.formatVersion, workspaceId: workspaceId, workspaceHandle: workspaceHandle)
@@ -584,6 +592,9 @@ public final class ProofStore: @unchecked Sendable {
                 // An existing store with no key refuses. Nothing is regenerated.
                 guard let key = try keys.existingKey(for: marker.workspaceId) else { throw ProofStoreError.keyMissing }
                 keyCustody = key.custody
+                do { cipher = try StoreCipher(material: key.material, workspaceId: marker.workspaceId) } catch {
+                    throw ProofStoreError.keyRefused
+                }
                 workspaceId = marker.workspaceId
                 workspaceHandle = marker.workspaceHandle
                 switch PathNode.inspect(stateURL.path) {
@@ -591,7 +602,7 @@ public final class ProofStore: @unchecked Sendable {
                     state = nil
                     statusValue = .missing
                 case .regular(links: 1):
-                    if let loaded = Self.loadState(at: stateURL, marker: marker, capacity: ledgerCapacity) {
+                    if let loaded = Self.loadState(at: stateURL, marker: marker, capacity: ledgerCapacity, cipher: cipher) {
                         state = loaded
                         statusValue = .ready
                         // The folder shows this state, but whether the flush
@@ -641,8 +652,12 @@ public final class ProofStore: @unchecked Sendable {
 
     deinit { close() }
 
-    private static func loadState(at url: URL, marker: Marker, capacity: Int) -> State? {
-        guard let data = try? Data(contentsOf: url), let loaded = try? boundedDecode(State.self, from: data) else { return nil }
+    private static func loadState(at url: URL, marker: Marker, capacity: Int, cipher: StoreCipher) -> State? {
+        // A file that does not open under this store's key and purpose
+        // (wrong key, another store's file, a flipped byte, a truncation,
+        // plaintext) reads as corrupt: reported, never reset or rewritten.
+        guard let sealed = try? Data(contentsOf: url), let data = try? cipher.open(sealed, as: .state),
+              let loaded = try? boundedDecode(State.self, from: data) else { return nil }
         // A hand-edited or damaged file must not serve a revision the Desk
         // cannot represent, a foreign workspace, or a record that disagrees
         // with its own revision.
@@ -1267,7 +1282,7 @@ public final class ProofStore: @unchecked Sendable {
             publishUnavailable(.missing)
             throw ProofStoreError.missing
         case .regular(links: 1):
-            guard let loaded = Self.loadState(at: stateURL, marker: marker, capacity: ledgerCapacity) else { fallthrough }
+            guard let loaded = Self.loadState(at: stateURL, marker: marker, capacity: ledgerCapacity, cipher: cipher) else { fallthrough }
             state = loaded
             reportIdentities(loaded, releasingStarts: authoritative)
             return loaded
@@ -1439,7 +1454,7 @@ public final class ProofStore: @unchecked Sendable {
     private func persist(_ next: State) throws {
         if let current = state, next.workspace.revision < current.workspace.revision { throw ProofStoreError.corrupt }
         do {
-            try AtomicFile.write(try Self.encoder.encode(next), to: stateURL, files: files, faults: faults)
+            try AtomicFile.write(try cipher.seal(Self.encoder.encode(next), as: .state), to: stateURL, files: files, faults: faults)
             state = next
             unsynced = false
             reportIdentities(next)
@@ -1477,7 +1492,8 @@ public final class ProofStore: @unchecked Sendable {
         let retained = Attempt(requestId: attempt.requestId, expectedRevision: attempt.expectedRevision, currentRevision: currentRevision,
                                attemptedAt: now, record: attempt.record)
         do {
-            try AtomicFile.write(try Self.encoder.encode(retained), to: url, files: files, faults: faults)
+            try AtomicFile.write(try cipher.seal(Self.encoder.encode(retained), as: .attempted(attempt.requestId)), to: url,
+                                 files: files, faults: faults)
         } catch let failure as AtomicWriteError {
             throw failure.stage == .target ? ProofStoreError.unsafeFile : ProofStoreError.writeFailed(failure.code)
         }

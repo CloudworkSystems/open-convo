@@ -53,8 +53,10 @@ import Foundation
 ///   under the user's home. The caller passes the proof folder in.
 /// - It never resets an established store: missing or unreadable state is
 ///   reported as `store-missing` / `store-corrupt` and left in place.
-/// - It never encrypts. Key custody is a placeholder (`KeyProvider`); see that
-///   file for the Keychain slice that replaces it.
+/// - It never writes the store's state or attempted records in the clear:
+///   both are AES-GCM ciphertext under the store's key (`StoreCipher`).
+///   The Desk's key is still the in-memory placeholder (`KeyProvider`); the
+///   Keychain provider (`KeychainKeyProvider`) takes over in a later step.
 /// - It never types, pastes or presses Return. A recording captures its
 ///   draft at start (`beginRecording`); its final text is pushed once, as
 ///   literal text, to that captured draft only, or held natively when no

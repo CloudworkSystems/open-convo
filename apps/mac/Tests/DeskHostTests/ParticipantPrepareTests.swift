@@ -143,7 +143,7 @@ private final class PrepareHost {
     }
 
     var diskState: [String: JSONValue] {
-        get throws { try #require(try JSONValue.decode(Data(contentsOf: store.stateURL)).objectValue) }
+        get throws { try #require(try JSONValue.decode(store.plainStateForTesting()).objectValue) }
     }
 }
 
@@ -696,12 +696,12 @@ struct ParticipantPrepareTests {
         let host = DeskHostProtocol(store: store, connections: connections, drafts: DraftBindingRegistry(), info: HostHarness.info,
                                     executor: executor, participants: ParticipantHostConfiguration(pin: Prep.pin))
         let connection = connections.issue()
-        let before = try Data(contentsOf: store.stateURL)
+        let before = try store.plainStateForTesting()
         for defect in defects {
             #expect(await commit(host, connection, id: UUID(), defect.fields).reason == defect.alone, "\(defect.label) alone")
             #expect(await commit(host, connection, id: startUUID, defect.fields).reason == .payloadMismatch, "\(defect.label) under a start id")
         }
-        #expect(try Data(contentsOf: store.stateURL) == before, "nothing written")
+        #expect(try store.plainStateForTesting() == before, "nothing written")
         #expect(await host.outstandingMutation == nil)
 
         // Any host: one without participants refuses its own checks first
@@ -728,9 +728,9 @@ struct ParticipantPrepareTests {
         let reserved = DeskHostProtocol(store: reopened, connections: again, drafts: DraftBindingRegistry(), info: HostHarness.info,
                                         participants: ParticipantHostConfiguration(pin: Prep.pin))
         let reservedConnection = again.issue()
-        let unsynced = try Data(contentsOf: reopened.stateURL)
+        let unsynced = try reopened.plainStateForTesting()
         #expect(await commit(reserved, reservedConnection, id: startUUID, defects[0].fields).reason == .payloadMismatch)
-        #expect(try Data(contentsOf: reopened.stateURL) == unsynced)
+        #expect(try reopened.plainStateForTesting() == unsynced)
     }
 
     @Test("A commit the store refuses as payload-mismatch frees the barrier even when its connection was revoked meanwhile")

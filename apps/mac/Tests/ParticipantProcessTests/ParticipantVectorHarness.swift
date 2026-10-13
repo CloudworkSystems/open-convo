@@ -466,12 +466,11 @@ final class VectorWorld {
         let directory = folder.appendingPathComponent("proof", isDirectory: true)
         let workspaceSeed = WorkspaceSeed(workspaceHandle: vectors.context.workspaceHandle, record: record)
         let first = try ProofStore(directory: directory, keys: keys, seed: workspaceSeed)
-        let stateURL = first.stateURL
         first.close()
-        seededPrepareIds = try Self.writeRuns(diskRuns, to: stateURL)
+        seededPrepareIds = try Self.writeRuns(diskRuns, to: first)
         switch seed["store"] {
         case nil: break
-        case .string("corrupt")?: try Data("{invented damaged state".utf8).write(to: stateURL)
+        case .string("corrupt")?: try Data("{invented damaged state".utf8).writePlainState(to: first)
         default: throw VectorHarnessError.unsupported("#\(number) store seed")
         }
         let own = faults == nil ? VectorFaults() : nil
@@ -769,7 +768,7 @@ final class VectorWorld {
     /// named one. The open store then re-reads the folder authoritatively,
     /// as a later open would.
     private func override(record: JSONValue?, runs: JSONValue?, number: Int) throws {
-        guard var state = try JSONValue.decode(Data(contentsOf: store.stateURL)).objectValue else {
+        guard var state = try JSONValue.decode(store.plainStateForTesting()).objectValue else {
             throw VectorHarnessError.unsupported("#\(number) an unreadable state.json cannot take a later seed")
         }
         if let runs {
@@ -804,7 +803,7 @@ final class VectorWorld {
             workspace["revision"] = .number(Double(revision))
             state["workspace"] = .object(workspace)
         }
-        try JSONEncoder().encode(JSONValue.object(state)).write(to: store.stateURL)
+        try JSONEncoder().encode(JSONValue.object(state)).writePlainState(to: store)
         do {
             _ = try store.rereadRuns()
         } catch {
@@ -815,11 +814,11 @@ final class VectorWorld {
     /// Replaces `state.json`'s runs list as the folder would show it, the
     /// rest of the file kept.
     private func rewriteRuns(_ runs: [JSONValue]) throws {
-        guard var state = try JSONValue.decode(Data(contentsOf: store.stateURL)).objectValue else {
+        guard var state = try JSONValue.decode(store.plainStateForTesting()).objectValue else {
             throw VectorHarnessError.fixture("an unreadable state.json cannot take seeded runs")
         }
         state["runs"] = .array(runs)
-        try JSONEncoder().encode(JSONValue.object(state)).write(to: store.stateURL)
+        try JSONEncoder().encode(JSONValue.object(state)).writePlainState(to: store)
     }
 
     /// What a step's checks compare against: the folder as the case request
@@ -1063,9 +1062,9 @@ final class VectorWorld {
     /// store's `state.json`. The identity's payload hash is invented and
     /// deterministic: SHA-256 of a label naming the id, which no request's
     /// canonical payload produces. Returns the seeded prepare ids.
-    static func writeRuns(_ runs: [JSONValue], to stateURL: URL) throws -> Set<String> {
+    static func writeRuns(_ runs: [JSONValue], to store: ProofStore) throws -> Set<String> {
         guard !runs.isEmpty else { return [] }
-        guard var state = try JSONValue.decode(Data(contentsOf: stateURL)).objectValue,
+        guard var state = try JSONValue.decode(store.plainStateForTesting()).objectValue,
               case .array(var identities)? = state["identities"] else { throw VectorHarnessError.fixture("unreadable fresh state") }
         var prepareIds = Set<String>()
         for run in runs {
@@ -1081,7 +1080,7 @@ final class VectorWorld {
         }
         state["identities"] = .array(identities)
         state["runs"] = .array(runs)
-        try JSONEncoder().encode(JSONValue.object(state)).write(to: stateURL)
+        try JSONEncoder().encode(JSONValue.object(state)).writePlainState(to: store)
         return prepareIds
     }
 
@@ -1099,7 +1098,7 @@ final class VectorWorld {
     /// no `runs` key, which reads as the empty list. Nil when there is no
     /// readable state (a `store: corrupt` seed).
     func runsOnDisk() throws -> [JSONValue]? {
-        guard let data = try? Data(contentsOf: store.stateURL), let state = (try? JSONValue.decode(data))?.objectValue else { return nil }
+        guard let data = try? store.plainStateForTesting(), let state = (try? JSONValue.decode(data))?.objectValue else { return nil }
         switch state["runs"] {
         case nil: return []
         case .array(let runs)?: return runs
@@ -1108,12 +1107,14 @@ final class VectorWorld {
     }
 
     /// `state.json`'s bytes, or nil when it is absent.
-    func stateBytes() -> Data? { try? Data(contentsOf: store.stateURL) }
+    func stateBytes() -> Data? { (try? store.plainStateForTesting()) ?? (try? Data(contentsOf: store.stateURL)) }
 
     /// Every file in the store's folder, by relative path, with its bytes:
     /// `state.json` (record, ledger, identities, receipts, runs), the
     /// workspace marker, the lock file, kept attempted records and any
-    /// leftover temporary file.
+    /// leftover temporary file. `state.json` is taken as its plaintext when
+    /// it opens under the store's key (its ciphertext changes on every
+    /// write, even of the same state), else as its raw bytes.
     func folderSnapshot() throws -> [String: Data] {
         let root = storeDirectory.standardizedFileURL.resolvingSymlinksInPath()
         guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey]) else {
@@ -1122,7 +1123,9 @@ final class VectorWorld {
         var files: [String: Data] = [:]
         for case let url as URL in walker where try url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true {
             let path = url.standardizedFileURL.resolvingSymlinksInPath().path
-            files[String(path.dropFirst(root.path.count))] = try Data(contentsOf: url)
+            let raw = try Data(contentsOf: url)
+            let isState = url.standardizedFileURL.resolvingSymlinksInPath() == store.stateURL.standardizedFileURL.resolvingSymlinksInPath()
+            files[String(path.dropFirst(root.path.count))] = isState ? ((try? store.plainStateForTesting()) ?? raw) : raw
         }
         return files
     }
@@ -1602,4 +1605,10 @@ final class CountingExecutor: MutationExecutor, @unchecked Sendable {
             }.start()
         }
     }
+}
+
+extension Data {
+    /// Seals these bytes as `store`'s state and writes them in place: a
+    /// hand-edited or damaged state that still opens under the store's key.
+    func writePlainState(to store: ProofStore) throws { try store.writePlainStateForTesting(self) }
 }

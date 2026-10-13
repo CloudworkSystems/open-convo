@@ -56,6 +56,12 @@ with invented data in True Convo Test before anything touches the real app.
    wrong key is reported and refuses to open; it never silently resets. Tests:
    wrong key, flipped byte, truncated file, crash mid-write, full disk,
    read-only folder, two windows.
+   *As built (October 13):* split in two. **PR 2** encrypts the store's
+   state and attempted records (AES-256-GCM, fresh nonce per write, each file
+   bound to its store and role) while the Desk keeps its in-memory key, so a
+   real key never guards plaintext. **PR 2b** switches the Desk to the
+   Keychain key and lets it reopen its store after a restart. The workspace
+   marker stays plaintext: it holds only ids and the format version.
 3. **Recovery key.** At store creation the app makes one recovery key, shows it
    once with guided saving (the owner confirms a few characters back), and keeps
    only a copy of the store key wrapped by it. The app never stores the recovery
