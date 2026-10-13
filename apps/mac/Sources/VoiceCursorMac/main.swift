@@ -3922,7 +3922,14 @@ enum TextInjector {
         livePreviewKeyboardContinuationBase = nil
         livePreviewKeyboardContinuationFragment = nil
         livePreviewCorrectionReplacementArmed = pendingCorrectionSelection != nil
-        guard allowed else { return }
+        guard allowed else {
+            // A Desk recording: whatever an earlier start left behind (a
+            // capture that failed after its preview began) is cleared, so no
+            // partial can ever reach that old outside target.
+            livePreviewAcceptsPartials = false
+            clearLivePreviewState()
+            return
+        }
         guard Settings.liveInsertApplePartials else { return }
         guard Settings.completionAction == .autoPaste || Settings.completionAction == .autoSubmit else { return }
         let decision = livePreviewDecision()
@@ -5803,6 +5810,11 @@ final class DictationController {
 
     /// Set by `start(deskRoute:)` for this recording; nil for every other.
     private var deskRoute: DeskRoute?
+    /// Counts starts. A start that waits for a permission answer goes on
+    /// only if no later start came meanwhile, so a later start can never
+    /// change an earlier one's route or start a second capture (Codex P1
+    /// on #9).
+    private var startAttempt = 0
 
     /// Whether the recording now running or finishing is a Desk recording.
     var isDeskRecording: Bool { deskRoute != nil && isBusy }
@@ -5830,6 +5842,8 @@ final class DictationController {
     func start(deskRoute: DeskRoute? = nil) {
         guard !isBusy, !recordingProcesses.isClosed else { return }
         self.deskRoute = deskRoute
+        startAttempt += 1
+        let attempt = startAttempt
         stopIdleMonitor()
 
         let language = Settings.language
@@ -5847,7 +5861,7 @@ final class DictationController {
         }
         if currentProvider.isLiveStreamingProvider {
             ensureMicrophonePermission { [weak self] allowed in
-                guard let self, allowed else { return }
+                guard let self, allowed, self.isCurrentStart(attempt) else { return }
                 self.startCapture(
                     recognizer: nil,
                     language: language,
@@ -5861,7 +5875,7 @@ final class DictationController {
             // Apple's new engine doesn't use SFSpeechRecognizer, so it skips
             // the older engine's recognizer check and Speech Recognition request.
             ensureMicrophonePermission { [weak self] allowed in
-                guard let self, allowed else { return }
+                guard let self, allowed, self.isCurrentStart(attempt) else { return }
                 self.startCapture(
                     recognizer: nil,
                     language: language,
@@ -5875,7 +5889,7 @@ final class DictationController {
         self.recognizer = recognizer
         ensureMicrophonePermission { [weak self] allowed in
             guard let self else { return }
-            guard allowed else { return }
+            guard allowed, self.isCurrentStart(attempt) else { return }
             guard let recognizer else {
                 if self.currentProvider.isPostStopProvider {
                     self.startRecordOnlyFallback(language: language, reason: "speech-recognizer-unavailable")
@@ -5904,8 +5918,17 @@ final class DictationController {
                 return
             }
 
-            self.requestSpeechPermission(recognizer: recognizer, language: language)
+            self.requestSpeechPermission(recognizer: recognizer, language: language, attempt: attempt)
         }
+    }
+
+    /// Whether `attempt` is still the latest start and nothing is running.
+    private func isCurrentStart(_ attempt: Int) -> Bool {
+        guard attempt == startAttempt, !isBusy else {
+            RunLog.write("dictation.start.superseded", "attempt=\(attempt) latest=\(startAttempt) busy=\(isBusy)")
+            return false
+        }
+        return true
     }
 
     func startIdleMonitor() {
@@ -6079,7 +6102,7 @@ final class DictationController {
         }
     }
 
-    private func requestSpeechPermission(recognizer: SFSpeechRecognizer, language: String) {
+    private func requestSpeechPermission(recognizer: SFSpeechRecognizer, language: String, attempt: Int) {
         guard !recordingProcesses.isClosed else { return }
         onStatus("Requesting speech permission")
         RunLog.write("permission.speech.requested")
@@ -6087,6 +6110,7 @@ final class DictationController {
         SFSpeechRecognizer.requestAuthorization { [weak self] status in
             DispatchQueue.main.async {
                 guard let self, !self.recordingProcesses.isClosed else { return }
+                guard self.isCurrentStart(attempt) else { return }
                 switch status {
                 case .authorized:
                     RunLog.write("permission.speech.granted")
@@ -6206,6 +6230,10 @@ final class DictationController {
         fallbackReason: String?
     ) {
         guard !recordingProcesses.isClosed else { return }
+        guard !isBusy else {
+            RunLog.write("dictation.start.ignored", "reason=capture-already-running")
+            return
+        }
         do {
             try Archive.ensureDirectories()
             // This recording's choice is fixed before selecting or opening its
@@ -6412,7 +6440,7 @@ final class DictationController {
                 }
                 let combinedText = self.combinedTranscript()
                 self.latestTranscript = combinedText
-                TextInjector.updateLivePreview(combinedText)
+                if self.deskRoute == nil { TextInjector.updateLivePreview(combinedText) }
                 self.scheduleAutoStopIfNeeded(for: combinedText)
                 self.onTranscript(combinedText)
                 self.onStatus(combinedText.isEmpty ? "Listening" : combinedText)
@@ -6470,7 +6498,7 @@ final class DictationController {
         currentRecognitionTranscript = normalized
         latestTranscript = normalized
         if audioEngine.isRunning {
-            TextInjector.updateLivePreview(normalized)
+            if deskRoute == nil { TextInjector.updateLivePreview(normalized) }
             scheduleAutoStopIfNeeded(for: normalized)
         }
         onTranscript(normalized)
