@@ -37,6 +37,109 @@ public enum DeskSwitchPolicy {
         !dictationBusy && !pillShowingOutcome && !pillKeptOnScreen
     }
 
-    /// The shortcut's label, shown in the menu.
+    /// How the menu item and the pill button name the current choice; Off
+    /// is named too, so a disabled shortcut never looks like a missing one.
+    public static func shortcutDescription(_ choice: DeskSwitchShortcut) -> String {
+        choice == .off ? "Shortcut off" : choice.label
+    }
+
+    /// The shortcut actually turned on. macOS only lets the app watch Right
+    /// Option in other apps once Accessibility is granted, so until then the
+    /// double-tap choice falls back to the four-key shortcut, which works
+    /// everywhere without that permission. The owner's choice is kept and
+    /// takes over as soon as Accessibility is on.
+    public static func active(_ choice: DeskSwitchShortcut, accessibilityGranted: Bool) -> DeskSwitchShortcut {
+        choice == .doubleTapRightOption && !accessibilityGranted ? .controlOptionCommandT : choice
+    }
+
+    /// The label for what is actually on: a fallback says why, so the owner
+    /// is never told to double-tap a key that does nothing in other apps.
+    public static func shortcutDescription(_ choice: DeskSwitchShortcut, accessibilityGranted: Bool) -> String {
+        let on = active(choice, accessibilityGranted: accessibilityGranted)
+        guard on != choice else { return shortcutDescription(choice) }
+        return "\(shortcutDescription(on)) until Accessibility is on"
+    }
+
+    /// The four-key shortcut's label (kept as a choice in the menu).
     public static let shortcutLabel = "Control+Option+Cmd+T"
+}
+
+/// Which shortcut switches between the pill and the Desk (the owner chose
+/// double-tapping Right Option on October 13: the four-key shortcut was too
+/// far to reach). Chosen in the menu; stored by raw value.
+public enum DeskSwitchShortcut: String, CaseIterable, Sendable {
+    case doubleTapRightOption = "double-tap-right-option"
+    case controlOptionCommandT = "control-option-command-t"
+    case off = "off"
+
+    public static let defaultChoice: DeskSwitchShortcut = .doubleTapRightOption
+
+    public var label: String {
+        switch self {
+        case .doubleTapRightOption: return "Double-Tap Right Option"
+        case .controlOptionCommandT: return DeskSwitchPolicy.shortcutLabel
+        case .off: return "Off"
+        }
+    }
+
+    /// A stored value that is missing or unknown falls back to the default.
+    public static func stored(_ raw: String?) -> DeskSwitchShortcut {
+        raw.flatMap(DeskSwitchShortcut.init(rawValue:)) ?? defaultChoice
+    }
+}
+
+/// Recognizes a double tap of one modifier key (Right Option): press and
+/// release, then press and release again, quickly, with nothing else in
+/// between. Holding the key to type (Option+letter), pressing another key or
+/// modifier, or pausing too long never counts. Pure, so tests drive it with
+/// invented times.
+public struct ModifierDoubleTap: Sendable {
+    public enum Input: Equatable, Sendable {
+        /// The watched modifier went down or up.
+        case down(TimeInterval)
+        case up(TimeInterval)
+        /// Any other key, or another modifier changing.
+        case other
+    }
+
+    /// The longest a press may be held and still count as a tap.
+    public let maxHold: TimeInterval
+    /// The longest gap between the first release and the second press.
+    public let maxGap: TimeInterval
+
+    private enum State: Equatable, Sendable {
+        case idle
+        case firstDown(TimeInterval)
+        case firstTapped(TimeInterval)
+        case secondDown(TimeInterval)
+    }
+    private var state: State = .idle
+
+    public init(maxHold: TimeInterval = 0.3, maxGap: TimeInterval = 0.35) {
+        self.maxHold = maxHold
+        self.maxGap = maxGap
+    }
+
+    /// Feeds one input; true exactly when it completes a double tap (on the
+    /// second release).
+    public mutating func handle(_ input: Input) -> Bool {
+        switch (state, input) {
+        case (_, .other):
+            state = .idle
+        case (.idle, .down(let t)):
+            state = .firstDown(t)
+        case (.firstDown(let pressed), .up(let t)):
+            state = t - pressed <= maxHold ? .firstTapped(t) : .idle
+        case (.firstTapped(let released), .down(let t)):
+            state = t - released <= maxGap ? .secondDown(t) : .firstDown(t)
+        case (.secondDown(let pressed), .up(let t)):
+            state = .idle
+            return t - pressed <= maxHold
+        case (_, .down(let t)):
+            state = .firstDown(t)
+        case (_, .up):
+            state = .idle
+        }
+        return false
+    }
 }

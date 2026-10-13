@@ -511,6 +511,12 @@ final class LiveTranscriptWindowController: NSWindowController, NSWindowDelegate
     var onDeskButton: (() -> Void)? {
         didSet { deskButton.isHidden = onDeskButton == nil }
     }
+    /// The Desk switch shortcut, as the tooltip names it ("Shortcut off" when off).
+    var deskShortcutLabel: String? {
+        didSet {
+            deskButton.toolTip = deskShortcutLabel.map { "Open the Desk where you left it (\($0))" } ?? "Open the Desk where you left it"
+        }
+    }
     private var latestTranscript = ""
     private var hideWorkItem: DispatchWorkItem?
     private var hiddenAfterStop = false
@@ -800,7 +806,7 @@ final class LiveTranscriptWindowController: NSWindowController, NSWindowDelegate
         deskButton.imagePosition = .imageOnly
         deskButton.image = NSImage(systemSymbolName: "macwindow", accessibilityDescription: "Open the Desk")
         deskButton.contentTintColor = NSColor.white.withAlphaComponent(0.85)
-        deskButton.toolTip = "Open the Desk where you left it (\(DeskSwitchPolicy.shortcutLabel))"
+        deskButton.toolTip = "Open the Desk where you left it"
         deskButton.setAccessibilityLabel("Open the Desk")
         deskButton.target = self
         deskButton.action = #selector(deskButtonPressed(_:))
