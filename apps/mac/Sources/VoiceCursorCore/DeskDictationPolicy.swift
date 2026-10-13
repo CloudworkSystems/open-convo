@@ -4,14 +4,16 @@ import Foundation
 /// front. Pure rules, so the policy check and the unit tests can prove them
 /// without AppKit.
 ///
-/// Build 9 shows the Desk but cannot dictate into it yet. Today a dictation
-/// started from one of True Convo's own windows targets the last outside
-/// app (`rememberCursorTarget` skips our own bundle), so pressing the
-/// dictation key in the Desk could type, paste or press Return in an app
-/// the person is not looking at. The rule closes that: with the Desk
-/// focused every entry is refused before any cursor target is remembered.
-/// With the Desk not focused (another app, or Scratchpad or Settings in
-/// front) nothing changes.
+/// A dictation started from one of True Convo's own windows would target
+/// the last outside app (`rememberCursorTarget` skips our own bundle), so
+/// with the Desk focused the outside path is never taken. Step 1, PR 2b:
+/// a dictation with the open Desk focused takes the Desk's own route
+/// (`deskDraft`): nothing is typed, pasted, copied or sent anywhere, and
+/// its words reach the Desk draft only through the host's `deliverFinal`.
+/// It starts only once the Desk has a confirmed draft binding
+/// (`deskStart`). Corrections, and a locked or unavailable Desk, are still
+/// refused. With the Desk not focused (another app, or Scratchpad or
+/// Settings in front) nothing changes.
 public enum DeskDictationPolicy {
     /// What the Desk window can do right now.
     public enum DeskAvailability: Equatable, Sendable, CaseIterable {
@@ -42,8 +44,9 @@ public enum DeskDictationPolicy {
 
     /// Why a start in the Desk was refused.
     public enum DeskRefusal: Equatable, Sendable, CaseIterable {
-        /// Dictation into the Desk comes in a later build.
-        case notInThisBuild
+        /// No draft is ready for dictation: the cursor is not in a Desk
+        /// draft, or its binding is not confirmed yet.
+        case noDraftReady
         case locked
         case unavailable
         /// Corrections never run in the Desk.
@@ -53,7 +56,7 @@ public enum DeskDictationPolicy {
         /// any text.
         public var logName: String {
             switch self {
-            case .notInThisBuild: return "not-in-this-build"
+            case .noDraftReady: return "no-draft-ready"
             case .locked: return "locked"
             case .unavailable: return "unavailable"
             case .correctionNotInDesk: return "correction-not-in-desk"
@@ -64,6 +67,8 @@ public enum DeskDictationPolicy {
     public enum StartDecision: Equatable, Sendable {
         /// Today's path: the outside app under the cursor.
         case externalCursor
+        /// The Desk's own route: the words go only to the Desk draft.
+        case deskDraft
         /// Refused: nothing is recorded, typed, pasted or copied.
         case refuseDesk(DeskRefusal)
     }
@@ -76,7 +81,8 @@ public enum DeskDictationPolicy {
     }
 
     /// The one decision every entry point asks before remembering a cursor
-    /// target. In this build any Desk focus refuses.
+    /// target. With the Desk focused, only a dictation into an open Desk
+    /// may start, and only by the Desk's route.
     public static func decide(_ entry: DictationEntry, focus: DeskFocus) -> StartDecision {
         switch focus {
         case .notFocused:
@@ -84,10 +90,47 @@ public enum DeskDictationPolicy {
         case .focused(let availability):
             if entry.isCorrection { return .refuseDesk(.correctionNotInDesk) }
             switch availability {
-            case .open: return .refuseDesk(.notInThisBuild)
+            case .open: return .deskDraft
             case .locked: return .refuseDesk(.locked)
             case .unavailable: return .refuseDesk(.unavailable)
             }
+        }
+    }
+
+    /// The Desk route's second check, once the host answered: a recording
+    /// starts only with a confirmed draft binding, and only if the open Desk
+    /// still holds the focus (it may have locked, or lost the focus, while
+    /// the host was asked).
+    public static func deskStart(hasConfirmedDraft: Bool, focusNow: DeskFocus) -> StartDecision {
+        switch decide(.dictation, focus: focusNow) {
+        case .deskDraft:
+            return hasConfirmedDraft ? .deskDraft : .refuseDesk(.noDraftReady)
+        case .refuseDesk(let refusal):
+            return .refuseDesk(refusal)
+        case .externalCursor:
+            // The Desk lost the focus meanwhile: nothing starts; the next
+            // press decides again from scratch.
+            return .refuseDesk(.noDraftReady)
+        }
+    }
+
+    /// Where a Desk recording's words ended up, as the host reported it.
+    public enum DeskDelivery: Equatable, Sendable {
+        /// Handed to the draft the recording started in.
+        case sentToDraft
+        /// Kept by the Mac, in memory only, in the Desk window's row.
+        case setAside
+        /// Not kept: the Desk closed, or the words could not be kept.
+        case notKept
+    }
+
+    /// The pill's words for a Desk recording's outcome. Never claims a
+    /// paste, typing or Return: none happen on this route.
+    public static func pillMessage(for delivery: DeskDelivery) -> String {
+        switch delivery {
+        case .sentToDraft: return "Added to your Desk draft ✓"
+        case .setAside: return "Kept in the Desk window — the draft wasn't ready"
+        case .notKept: return "Not kept — the Desk closed before the words arrived"
         }
     }
 

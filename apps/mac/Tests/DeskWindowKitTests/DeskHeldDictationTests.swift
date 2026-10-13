@@ -126,3 +126,48 @@ final class DeskHeldDictationTests: XCTestCase {
         try await waitUntil("the row to hide") { made.heldRow.isHidden }
     }
 }
+
+/// Step 1, PR 2b: the Desk route's session calls. The test page binds no
+/// draft, so a recording has no confirmed draft and its words are set aside;
+/// after a close they reach no stack.
+@MainActor
+final class DeskRecordingRouteTests: XCTestCase {
+    private var folder: DeskTestFolder!
+
+    override func setUp() async throws {
+        _ = NSApplication.shared
+        folder = try DeskTestFolder()
+    }
+
+    override func tearDown() async throws {
+        folder.clean()
+    }
+
+    func testRecordingWithoutDraftSetsWordsAsideAndCloseDropsLaterWords() async throws {
+        let session = makeSession(folder, bundle: try anyDeskBundle(folder))
+        session.unsavedWorkCheck = { nil }
+        let locked = await session.beginDeskRecording()
+        XCTAssertNil(locked, "no recording while the Desk is not open")
+        await session.unlock(verifier: StubUnlockVerifier(.verified))
+        XCTAssertEqual(session.state, .open)
+
+        let begun = await session.beginDeskRecording()
+        let recording = try XCTUnwrap(begun)
+        XCTAssertFalse(recording.hasConfirmedDraft, "no draft bound: the app refuses to record")
+        let delivery = await session.deliverDeskFinal(recording, text: "invented words")
+        guard case .held(let held)? = delivery else { return XCTFail("expected held, got \(String(describing: delivery))") }
+        XCTAssertEqual(held.reason, .noBinding)
+        XCTAssertEqual(session.heldDictation.map(\.text), ["invented words"], "set aside in the Desk window, never elsewhere")
+
+        let begunLater = await session.beginDeskRecording()
+        let later = try XCTUnwrap(begunLater)
+        await session.close()
+        let afterClose = await session.deliverDeskFinal(later, text: "late words")
+        XCTAssertNil(afterClose, "a closed stack takes no words")
+        await session.unlock(verifier: StubUnlockVerifier(.verified))
+        XCTAssertTrue(session.heldDictation.isEmpty, "a reopened stack never receives an earlier stack's words")
+        let stale = await session.deliverDeskFinal(later, text: "stale words")
+        XCTAssertNil(stale, "a recording begun in an earlier stack never reaches the new one")
+        await session.close()
+    }
+}

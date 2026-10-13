@@ -125,7 +125,14 @@ Each one ends with something the owner can try on the Mac.
    and shows set-aside words as a row in the Desk window with Copy and
    Dismiss, plus a short note on the pill. A locked Desk shows only how many,
    never the words, and closing the window with set-aside words asks first.
-   **2b** switches dictation on with the separate Desk route.
+   **2b** switches dictation on with the separate Desk route. A Desk
+   recording starts only once the host confirms the draft binding (otherwise
+   the pill says to click into a draft first). It skips everything the
+   outside route does: no cursor target, live typing, paste, Return,
+   clipboard, history entry, kept audio or "Copy Last Dictation". Its words
+   reach the Desk only through `deliverFinal`, and the pill says where they
+   went. Outside clicks and keys never stop a Desk recording, since nothing
+   is typed anywhere.
 
 ## Requirements Carried Into PR 1 (Codex's Fifth Review)
 

@@ -342,12 +342,21 @@ expect(
     "meter level converts back to dBFS"
 )
 
-// Desk window, build 9 (2026-10-09): with the Desk focused, nothing starts and
-// nothing goes to the last outside app; with it not focused, nothing changes.
+// Desk window, build 9 (2026-10-09), and step 1 PR 2b (2026-10-12): with the
+// Desk focused nothing goes to the last outside app; a dictation into the open
+// Desk takes the Desk's own route, and only with a confirmed draft; with it
+// not focused, nothing changes.
 let deskFocused = DeskDictationPolicy.focus(deskWindowHoldsFocus: true, availability: .open)
 expect(
-    DeskDictationPolicy.decide(.dictation, focus: deskFocused) == .refuseDesk(.notInThisBuild),
-    "Desk focused: dictation refused, never the old cursor target"
+    DeskDictationPolicy.decide(.dictation, focus: deskFocused) == .deskDraft,
+    "Desk focused and open: dictation takes the Desk route, never the old cursor target"
+)
+expect(
+    DeskDictationPolicy.deskStart(hasConfirmedDraft: true, focusNow: deskFocused) == .deskDraft
+        && DeskDictationPolicy.deskStart(hasConfirmedDraft: false, focusNow: deskFocused) == .refuseDesk(.noDraftReady)
+        && DeskDictationPolicy.deskStart(hasConfirmedDraft: true, focusNow: .focused(.locked)) == .refuseDesk(.locked)
+        && DeskDictationPolicy.deskStart(hasConfirmedDraft: true, focusNow: .notFocused) == .refuseDesk(.noDraftReady),
+    "Desk route: records only with a confirmed draft and the open Desk still focused"
 )
 expect(
     DeskDictationPolicy.decide(.typedCorrection, focus: deskFocused) == .refuseDesk(.correctionNotInDesk)

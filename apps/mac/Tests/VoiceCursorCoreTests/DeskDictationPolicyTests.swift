@@ -5,23 +5,42 @@ import Testing
 struct DeskDictationPolicyTests {
     typealias Policy = DeskDictationPolicy
 
-    @Test("With the Desk focused, every entry is refused in every Desk state")
-    func deskFocusedRefusesEveryEntry() {
+    @Test("With the Desk focused, only a dictation into an open Desk starts, by the Desk route; everything else is refused")
+    func deskFocusedDecisions() {
         for entry in Policy.DictationEntry.allCases {
             for availability in Policy.DeskAvailability.allCases {
                 let decision = Policy.decide(entry, focus: .focused(availability))
-                guard case .refuseDesk(let refusal) = decision else {
-                    Issue.record("\(entry) in a \(availability) Desk was not refused: \(decision)")
-                    continue
-                }
                 if entry.isCorrection {
-                    #expect(refusal == .correctionNotInDesk, "\(entry) in a \(availability) Desk")
+                    #expect(decision == .refuseDesk(.correctionNotInDesk), "\(entry) in a \(availability) Desk")
                 } else {
-                    let expected: Policy.DeskRefusal = availability == .open ? .notInThisBuild
-                        : availability == .locked ? .locked : .unavailable
-                    #expect(refusal == expected, "\(entry) in a \(availability) Desk")
+                    let expected: Policy.StartDecision = availability == .open ? .deskDraft
+                        : .refuseDesk(availability == .locked ? .locked : .unavailable)
+                    #expect(decision == expected, "\(entry) in a \(availability) Desk")
                 }
+                #expect(decision != .externalCursor, "never the outside path with the Desk focused")
             }
+        }
+    }
+
+    @Test("A Desk recording starts only with a confirmed draft and the open Desk still focused")
+    func deskStartNeedsConfirmedDraft() {
+        #expect(Policy.deskStart(hasConfirmedDraft: true, focusNow: .focused(.open)) == .deskDraft)
+        #expect(Policy.deskStart(hasConfirmedDraft: false, focusNow: .focused(.open)) == .refuseDesk(.noDraftReady))
+        #expect(Policy.deskStart(hasConfirmedDraft: true, focusNow: .focused(.locked)) == .refuseDesk(.locked))
+        #expect(Policy.deskStart(hasConfirmedDraft: true, focusNow: .focused(.unavailable)) == .refuseDesk(.unavailable))
+        #expect(Policy.deskStart(hasConfirmedDraft: true, focusNow: .notFocused) == .refuseDesk(.noDraftReady),
+                "the Desk lost the focus while the host was asked: nothing starts, never the outside path")
+        #expect(Policy.DeskRefusal.noDraftReady.logName == "no-draft-ready")
+    }
+
+    @Test("Desk outcomes never claim a paste, typing or Return")
+    func deskOutcomeWording() {
+        #expect(Policy.pillMessage(for: .sentToDraft) == "Added to your Desk draft ✓")
+        #expect(Policy.pillMessage(for: .setAside).contains("Desk window"))
+        #expect(Policy.pillMessage(for: .notKept).hasPrefix("Not kept"))
+        for delivery in [Policy.DeskDelivery.sentToDraft, .setAside, .notKept] {
+            let message = Policy.pillMessage(for: delivery).lowercased()
+            #expect(!message.contains("paste") && !message.contains("sent") && !message.contains("clipboard"))
         }
     }
 

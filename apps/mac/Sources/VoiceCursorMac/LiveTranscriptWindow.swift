@@ -44,6 +44,9 @@ indirect enum DictationOutcome {
     /// back a paste, typing or Return meant for the outside app (Desk
     /// window, build 9). Shown instead of an outcome that claimed it.
     case deskInFront(DeskDictationPolicy.ShieldNote)
+    /// A Desk recording (step 1, PR 2b): where its words went. Nothing was
+    /// pasted, typed, copied or sent.
+    case desk(DeskDictationPolicy.DeskDelivery)
 
     var pillMessage: String {
         switch self {
@@ -62,6 +65,7 @@ indirect enum DictationOutcome {
         case .noSpeech: return "No speech heard"
         case .engineProblem(let message): return message
         case .deskInFront(let note): return note.pillMessage
+        case .desk(let delivery): return DeskDictationPolicy.pillMessage(for: delivery)
         }
     }
 
@@ -75,6 +79,9 @@ indirect enum DictationOutcome {
         case .savedNotPasted(false), .liveWordsKept(false): return "it's in Copy Last Dictation"
         case .archivedOnly, .noSpeech, .engineProblem, .partialText: return "saved in history"
         case .deskInFront(let note): return note.partialDeliveryNote
+        case .desk(.sentToDraft): return "added to your Desk draft"
+        case .desk(.setAside): return "kept in the Desk window"
+        case .desk(.notKept): return "not kept; the Desk closed"
         }
     }
 
@@ -86,15 +93,17 @@ indirect enum DictationOutcome {
     /// time True Convo replaced what was on the clipboard, and partial text.
     var mustBeSeen: Bool {
         switch self {
-        case .savedNotPasted, .liveWordsKept(true), .partialText, .deskInFront: return true
+        case .savedNotPasted, .liveWordsKept(true), .partialText, .deskInFront, .desk(.setAside), .desk(.notKept): return true
         default: return false
         }
     }
 
     var tone: OutcomeTone {
         switch self {
-        case .inserted, .insertedAndSubmitted, .copiedToClipboard, .archivedOnly:
+        case .inserted, .insertedAndSubmitted, .copiedToClipboard, .archivedOnly, .desk(.sentToDraft):
             return .success
+        case .desk(.setAside), .desk(.notKept):
+            return .warning
         case .pasteUnconfirmed:
             return .warning
         case .noSpeech:
@@ -130,6 +139,12 @@ indirect enum DictationOutcome {
             return "outcome=partial-text delivered=(\(delivered.logDetail))"
         case .deskInFront(let note):
             return "outcome=desk-in-front \(note.logDetail)"
+        case .desk(let delivery):
+            switch delivery {
+            case .sentToDraft: return "outcome=desk-sent-to-draft"
+            case .setAside: return "outcome=desk-set-aside"
+            case .notKept: return "outcome=desk-not-kept"
+            }
         }
     }
 
