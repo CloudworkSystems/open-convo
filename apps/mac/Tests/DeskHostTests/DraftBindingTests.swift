@@ -106,6 +106,44 @@ struct DraftBindingTests {
         #expect(registry.pendingDeliveries.isEmpty && registry.activeBindingCount == 0)
         #expect(changes.value == 3, "the app is told each time words are set aside")
     }
+
+    /// Codex P1 on #7, round 2: a commit that finishes after its words were
+    /// set aside takes them out of the set-aside list.
+    @Test("A save confirmed after a set-aside forgets the set-aside words")
+    func saveAfterSetAside() {
+        let registry = DraftBindingRegistry()
+        let changes = Counter()
+        registry.onHeldChange = { changes.increment() }
+        let binding = registry.bind(connectionId: "c1", generation: 0, target: target)
+        let id = registry.makeDeliveryId()
+        #expect(registry.reservePending(PendingDelivery(deliveryId: id, bindingId: binding.bindingId, connectionId: "c1",
+                                                        generation: 0, target: target, pushedAt: Date())))
+        registry.retainUntilSaved(HeldDelivery(deliveryId: id, generation: 0, reason: .notSaved, text: "words", heldAt: Date()))
+        registry.invalidateAll(keepingWords: true)
+        #expect(registry.heldDeliveries.map(\.text) == ["words"])
+        registry.completePending(id)
+        #expect(registry.heldDeliveries.isEmpty, "saved words are not offered again")
+        #expect(!registry.keepsUnsavedWords)
+        #expect(changes.value == 2, "set aside, then forgotten")
+    }
+
+    /// Codex P2 on #7, round 2: a batch set aside together keeps its order.
+    @Test("Words set aside together stay oldest first")
+    func setAsideOrder() {
+        let registry = DraftBindingRegistry()
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let texts = (0..<12).map { "words \($0)" }
+        for (index, text) in texts.enumerated() {
+            let binding = registry.bind(connectionId: "c1", generation: 0, target: target)
+            let id = registry.makeDeliveryId()
+            let at = start.addingTimeInterval(Double(index))
+            #expect(registry.reservePending(PendingDelivery(deliveryId: id, bindingId: binding.bindingId, connectionId: "c1",
+                                                            generation: 0, target: target, pushedAt: at)))
+            registry.retainUntilSaved(HeldDelivery(deliveryId: id, generation: 0, reason: .notSaved, text: text, heldAt: at))
+        }
+        registry.invalidateAll(keepingWords: true)
+        #expect(registry.heldDeliveries.map(\.text) == texts)
+    }
 }
 
 final class Counter: @unchecked Sendable {

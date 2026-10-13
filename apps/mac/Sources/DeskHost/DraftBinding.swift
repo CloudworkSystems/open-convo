@@ -204,11 +204,18 @@ public final class DraftBindingRegistry: @unchecked Sendable {
     }
 
     /// The durable commit saved this delivery; it is pending no longer.
+    /// Also takes it out of the set-aside words: an unbind, navigation or
+    /// lock while its commit was running may have set it aside already, and
+    /// saved words must not be offered again.
     public func completePending(_ id: UUID) {
         lock.lock()
-        defer { lock.unlock() }
         pending.removeValue(forKey: id)
         retained.removeValue(forKey: id)
+        let before = held.count
+        held.removeAll { $0.deliveryId == id }
+        let changed = held.count != before
+        lock.unlock()
+        if changed { onHeldChange?() }
     }
 
     /// Keep pushed text until its commit is confirmed (`completePending`).
@@ -225,16 +232,16 @@ public final class DraftBindingRegistry: @unchecked Sendable {
         onHeldChange?()
     }
 
-    /// Moves retained text for these deliveries to held. Caller holds the lock.
+    /// Moves retained text for these deliveries to held, oldest first
+    /// whatever order the ids came in. Caller holds the lock.
     private func setAsideLocked(_ ids: [UUID]) -> Bool {
-        var moved = false
+        var kept: [HeldDelivery] = []
         for id in ids {
             pending.removeValue(forKey: id)
-            guard let kept = retained.removeValue(forKey: id) else { continue }
-            held.append(kept)
-            moved = true
+            if let one = retained.removeValue(forKey: id) { kept.append(one) }
         }
-        return moved
+        held.append(contentsOf: kept.sorted { $0.heldAt < $1.heldAt })
+        return !kept.isEmpty
     }
 
     /// Hands a held text to the app once and forgets it.
@@ -264,8 +271,8 @@ public final class DraftBindingRegistry: @unchecked Sendable {
         lock.lock()
         let hadHeld = !held.isEmpty || !retained.isEmpty
         if keepingWords {
-            _ = setAsideLocked(Array(pending.keys))
-            held.append(contentsOf: retained.values.sorted { $0.heldAt < $1.heldAt })
+            // Every retained text, in one oldest-first batch.
+            _ = setAsideLocked(Array(retained.keys))
         } else {
             held.removeAll()
         }

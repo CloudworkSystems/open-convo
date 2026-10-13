@@ -253,6 +253,7 @@ public actor DeskHostProtocol {
     /// write fails); the barrier then stays.
     public func recoverUnresolvedDispatch() throws -> DispatchRecovery {
         releaseOrphanedBarrier()
+        forgetSavedWords()
         guard let holder else { return .nothingOutstanding }
         if inFlight == holder.requestId { return .inFlight(holder.requestId) }
         switch try store.withdrawUnresolvedDispatch(holder.requestId) {
@@ -269,6 +270,7 @@ public actor DeskHostProtocol {
     /// `host.connection` `ready` for the new connection.
     public func issueConnection() -> HostConnection {
         releaseOrphanedBarrier()
+        forgetSavedWords()
         let connection = connections.issue()
         push(.hostConnection(connectionId: connection.id, generation: connection.generation, state: .ready, reason: .ready))
         return connection
@@ -652,6 +654,10 @@ public actor DeskHostProtocol {
         case .success(let proven):
             outcome = proven
         }
+        // The words are on disk: whatever happened to the connection while
+        // the commit ran (an unbind, navigation or lock may have set them
+        // aside), they are never offered again as unsaved.
+        if let deliveryId, case .committed = outcome { drafts.completePending(deliveryId) }
         // The result is on disk, but there is no valid connection to tell:
         // the barrier holds until the result reaches one, or until a fresh
         // document, recovery or the next save finds it orphaned.
@@ -660,7 +666,6 @@ public actor DeskHostProtocol {
         switch outcome {
         case .committed(let revision):
             if let deliveryId {
-                drafts.completePending(deliveryId)
                 push(.dictationReceipt(connectionId: request.connectionId, generation: request.generation, deliveryId: deliveryId,
                                        commitRequestId: request.requestId, revision: revision))
             }
@@ -859,6 +864,7 @@ public actor DeskHostProtocol {
         let targetField = JSONValue.string(target.canonicalString)
         if let entry {
             releaseBarrier(target)
+            forgetSavedWords()
             return .ok(echo, ["targetRequestId": targetField, "original": Self.original(entry)])
         }
         if let entry = ephemeralReplays[target] {
@@ -884,11 +890,25 @@ public actor DeskHostProtocol {
         }
         guard let evidence else { return .refused(.unknownDelivery, echo: echo) }
         guard case .saved(let commitRequestId, let revision) = evidence else { return .unknown(echo) }
+        drafts.completePending(deliveryId)
         return .ok(echo, [
             "deliveryId": .string(deliveryId.canonicalString),
             "commitRequestId": .string(commitRequestId.canonicalString),
             "revision": .number(Double(revision))
         ])
+    }
+
+    /// Words kept in memory whose commit the store shows saved (one that
+    /// finished after its connection went, or was recovered) are forgotten,
+    /// so saved words are never offered again. A store that cannot answer
+    /// leaves them kept: offering saved words twice is better than losing
+    /// unsaved ones.
+    func forgetSavedWords() {
+        let ids = drafts.heldDeliveries.map(\.deliveryId) + drafts.pendingDeliveries.map(\.deliveryId)
+        for id in ids {
+            guard case .saved? = try? store.deliveryEvidence(for: id) else { continue }
+            drafts.completePending(id)
+        }
     }
 
     // MARK: Helpers
