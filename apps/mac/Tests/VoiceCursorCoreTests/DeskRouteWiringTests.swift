@@ -70,6 +70,9 @@ struct DeskRouteWiringTests {
         let menu = try body("@objc private func openDeskFromMenu()", in: source)
         #expect(menu.contains("hideIdlePillForDesk()"))
         #expect(source.contains("deskMenuItem.action = hasDesk ? #selector(openDeskFromMenu) : nil"))
+        let hide = try body("private func hideIdlePillForDesk()", in: source)
+        #expect(hide.contains("liveTranscriptWindow.settleAfterOutcome(returnToReady: false)"),
+                "a lingering outcome hides when it ends, never returning over the Desk")
         for wrapper in ["private func showDeskFromPill()", "@objc private func toggleDeskAndPill()"] {
             #expect(try body(wrapper, in: source).contains("hideIdlePillForDesk()"), "\(wrapper)")
         }

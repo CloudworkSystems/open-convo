@@ -10558,10 +10558,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// lingers on it, and when the owner keeps the pill on screen.
     @MainActor
     private func hideIdlePillForDesk() {
+        let pillKeptOnScreen = Settings.pillBehavior == .persistent && persistentPillActive
+        // An outcome still lingering finishes, then the pill hides rather
+        // than coming back over the Desk (Codex P2 on #10, round 4).
+        if liveTranscriptWindow.isShowingOutcome, !controller.isBusy, !pillKeptOnScreen {
+            liveTranscriptWindow.settleAfterOutcome(returnToReady: false)
+        }
         guard DeskSwitchPolicy.hidesPillWhenShowingDesk(
             dictationBusy: controller.isBusy,
             pillShowingOutcome: liveTranscriptWindow.isShowingOutcome,
-            pillKeptOnScreen: Settings.pillBehavior == .persistent && persistentPillActive
+            pillKeptOnScreen: pillKeptOnScreen
         ) else { return }
         liveTranscriptWindow.hideNow()
     }
