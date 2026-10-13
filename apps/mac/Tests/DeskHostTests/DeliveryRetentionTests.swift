@@ -30,4 +30,26 @@ struct DeliveryRetentionTests {
         #expect(harness.drafts.heldDeliveries.isEmpty, "saved words are not offered again")
         #expect(!harness.drafts.keepsUnsavedWords)
     }
+
+    /// Codex P1 on #7, round 3: an exact resend that finds the saved result
+    /// forgets the words too (as after an undetermined write).
+    @Test("An exact resend of a saved commit forgets the set-aside words")
+    func exactResendForgetsSavedWords() async throws {
+        let harness = try HostHarness()
+        defer { harness.clean() }
+        let host = harness.host
+        #expect(await host.handle(harness.bindRequest()).outcome == .ok)
+        guard case .delivered(let deliveryId, _, _, _) = await harness.deliver("invented words") else {
+            Issue.record("the final should be pushed")
+            return
+        }
+        let commit = harness.commitRequest(expectedRevision: 0, record: inventedRecord("dictated", revision: 1), deliveryId: deliveryId)
+        #expect(await host.handle(commit).outcome == .ok)
+        // Stand in for words set aside while the first answer was lost.
+        harness.drafts.hold(HeldDelivery(deliveryId: deliveryId, generation: harness.connection.generation, reason: .notSaved,
+                                         text: "invented words", heldAt: Date()))
+        #expect(harness.drafts.keepsUnsavedWords)
+        #expect(await host.handle(commit).outcome == .ok, "the exact resend gets the saved result")
+        #expect(harness.drafts.heldDeliveries.isEmpty, "saved words are not offered again")
+    }
 }
