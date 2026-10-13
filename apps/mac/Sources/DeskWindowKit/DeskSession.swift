@@ -1,6 +1,7 @@
 import DeskHost
 import DeskHostWebKit
 import Foundation
+import TrueConvoIdentity
 import WebKit
 
 /// Why the app asks before the Desk's page is closed, left or quit: it
@@ -43,9 +44,14 @@ public enum DeskLockReason: String, Sendable, CaseIterable {
 /// - `unavailable(message)`: the Desk cannot open (no Desk in this build,
 ///   its key is gone, another copy holds the store, an unsafe folder).
 ///
-/// The made-up key lives only in memory (`InventedInMemoryKeyProvider`):
-/// after a quit, the next run starts a fresh invented Desk in a new folder
-/// and says why; earlier folders are left exactly as they were.
+/// Two ways to keep the store (`Storage`):
+/// - `perRunInMemory` (tests and the default): the made-up key lives only in
+///   memory (`InventedInMemoryKeyProvider`), so after a quit the next run
+///   starts a fresh invented Desk in a new `run-` folder and says why.
+/// - `kept` (the app, step 2, PR 2b): one `kept-store` folder whose key is in
+///   this Mac's Keychain; every run reopens it. A missing key refuses to open
+///   and nothing is regenerated.
+/// Earlier folders are left exactly as they were either way.
 ///
 /// Logging is identifiers only: states, reasons, kinds, URL scheme and
 /// host. Never page content, never a host event's detail.
@@ -86,6 +92,7 @@ public final class DeskSession {
     /// Plain words shown in the window.
     public enum Message {
         public static let keyMissing = "This invented Desk can't open: its made-up key is gone. Nothing was replaced."
+        public static let keychainKeyMissing = "The Desk can't open: its key is missing from this Mac's Keychain. Nothing was replaced."
         public static let secondWriter = "The Desk is open in another copy of True Convo."
         public static let bundleMissing = "The Desk isn't in this build of True Convo."
         public static let bundleUnreadable = "The Desk in this build can't be read, so it stays closed."
@@ -93,13 +100,40 @@ public final class DeskSession {
         public static let couldNotOpen = "The invented Desk couldn't open. Nothing was replaced."
         public static let notUnlocked = "Not unlocked. The Desk stays locked."
         public static let quitNote = "Earlier invented Desks can't reopen after quitting; their made-up key lived only in memory."
+        public static let earlierVersionsNote = "Invented Desks from earlier versions can't reopen; their made-up key lived only in memory. This Desk's key is in the Keychain."
     }
 
     public let paths: DeskPaths
     public let bundle: DeskBundleLocation?
     public let info: HostInfo
-    /// The run's one key provider. Never replaced; gone with the process.
+    /// How the store is kept.
+    public enum Storage: Sendable {
+        /// A new `run-` folder per app run under an in-memory made-up key.
+        case perRunInMemory
+        /// The one `kept-store` folder, reopened every run, under `keys`
+        /// (the app passes its Keychain provider).
+        case kept(any KeyProvider)
+
+        /// The kept store under this Mac's Keychain, scoped to `identity`
+        /// (True Convo and True Convo Test never share a key).
+        public static func keychain(identity: AppIdentity) -> Storage {
+            .kept(KeychainKeyProvider(service: KeychainKeyProvider.service(appKeychainService: identity.keychainService)))
+        }
+    }
+
+    public let storage: Storage
+    /// The run's in-memory key provider (`perRunInMemory`). Never replaced;
+    /// gone with the process.
     let keys = InventedInMemoryKeyProvider()
+    /// The provider the store opens with.
+    var storeKeys: any KeyProvider {
+        if case .kept(let keys) = storage { return keys }
+        return keys
+    }
+    var keepsStore: Bool {
+        if case .kept = storage { return true }
+        return false
+    }
     let log: Log
 
     public private(set) var state: State {
@@ -130,7 +164,10 @@ public final class DeskSession {
     public let earlierRunsExisted: Bool
     /// The quit note, after a relaunch: it stays for the whole run, next to
     /// any passing notice.
-    public var standingNote: String? { earlierRunsExisted ? Message.quitNote : nil }
+    public var standingNote: String? {
+        guard earlierRunsExisted else { return nil }
+        return keepsStore ? Message.earlierVersionsNote : Message.quitNote
+    }
     /// What the window's notice line shows: the standing note, then the
     /// passing notice.
     public var displayedNotice: String? {
@@ -165,9 +202,10 @@ public final class DeskSession {
     /// `makeParticipantLane` is called at most once per session (one per
     /// app run); nil, the default and the app's choice, keeps the Desk a v1
     /// host.
-    public init(paths: DeskPaths, bundle: DeskBundleLocation?, info: HostInfo, log: @escaping Log = { _, _ in },
-                makeParticipantLane: (@MainActor () -> any DeskParticipantLane)? = nil) {
+    public init(paths: DeskPaths, bundle: DeskBundleLocation?, info: HostInfo, storage: Storage = .perRunInMemory,
+                log: @escaping Log = { _, _ in }, makeParticipantLane: (@MainActor () -> any DeskParticipantLane)? = nil) {
         self.paths = paths
+        self.storage = storage
         self.bundle = bundle
         self.info = info
         self.log = log
@@ -288,12 +326,17 @@ public final class DeskSession {
             if let runFolder {
                 try paths.validateRunFolder(runFolder)
                 folder = runFolder
+            } else if keepsStore {
+                let existed = paths.keptStoreFolderExists()
+                folder = try paths.openKeptStoreFolder()
+                runFolder = folder
+                log("desk.kept-store.opened", existed ? "existing" : "new")
             } else {
                 folder = try paths.makeRunFolder()
                 runFolder = folder
                 log("desk.run-folder.created", "name=\(folder.lastPathComponent)")
             }
-            let store = try ProofStore(directory: folder, keys: keys, seed: .inventedRevisionZero())
+            let store = try ProofStore(directory: folder, keys: storeKeys, seed: .inventedRevisionZero())
             let log = self.log
             let sink = WebKitHostEventSink { event in
                 // Identities only: never the event's detail (a dictation
@@ -393,7 +436,7 @@ public final class DeskSession {
             state = .open
             log("desk.opened", "from=\(from.logName) store=\(store.status.rawValue)")
         } catch {
-            let (message, kind) = Self.describe(error)
+            let (message, kind) = Self.describe(error, keepsStore: keepsStore)
             log("desk.open.failed", "reason=\(kind)")
             state = .unavailable(message)
         }
@@ -625,9 +668,10 @@ public final class DeskSession {
         }
     }
 
-    static func describe(_ error: Error) -> (message: String, kind: String) {
+    static func describe(_ error: Error, keepsStore: Bool = false) -> (message: String, kind: String) {
         switch error {
-        case ProofStoreError.keyMissing: return (Message.keyMissing, "key-missing")
+        case ProofStoreError.keyMissing: return (keepsStore ? Message.keychainKeyMissing : Message.keyMissing, "key-missing")
+        case KeyProviderError.unavailable: return (Message.couldNotOpen, "key-unavailable")
         case ProofStoreError.secondWriter: return (Message.secondWriter, "second-writer")
         case is DeskPaths.Failure: return (Message.unsafeFolder, "unsafe-folder")
         case is DeskBundleScanner.ScanError, is BundleManifestError: return (Message.bundleUnreadable, "bundle")

@@ -60,8 +60,12 @@ with invented data in True Convo Test before anything touches the real app.
    state and attempted records (AES-256-GCM, fresh nonce per write, each file
    bound to its store and role) while the Desk keeps its in-memory key, so a
    real key never guards plaintext. **PR 2b** switches the Desk to the
-   Keychain key and lets it reopen its store after a restart. The workspace
-   marker stays plaintext: it holds only ids and the format version.
+   Keychain key and lets it reopen its store after a restart: one
+   `kept-store/` folder inside the Desk's base folder, made on the first
+   unlock. Builds before it only ever made and opened `run-` folders, so they
+   never touch it; earlier run folders are left exactly as they were. The
+   workspace marker stays plaintext: it holds only ids and the format version.
+   The Desk still shows "invented data only" until PR 5's proof and trial.
 3. **Recovery key.** At store creation the app makes one recovery key, shows it
    once with guided saving (the owner confirms a few characters back), and keeps
    only a copy of the store key wrapped by it. The app never stores the recovery

@@ -142,6 +142,39 @@ struct StoreEncryptionTests {
         reopened.close()
     }
 
+    @Test("A state file left without its marker (provisioning cut off) is set aside, never deleted, and the store starts fresh")
+    func interruptedProvisioningRecovers() throws {
+        let fixture = try DeskHostFixture()
+        defer { fixture.clean() }
+        let first = try fixture.makeStore()
+        let firstId = first.workspaceId
+        let orphan = try Data(contentsOf: first.stateURL)
+        first.close()
+        // The crash: state.json was published, workspace.json never was.
+        try FileManager.default.removeItem(at: first.markerURL)
+
+        let fresh = try fixture.makeStore()
+        defer { fresh.close() }
+        #expect(fresh.status == .ready)
+        #expect(fresh.workspaceId != firstId, "a new store")
+        let names = try FileManager.default.contentsOfDirectory(atPath: fixture.storeDirectory.path)
+        let aside = names.filter { $0.hasPrefix(ProofStore.unprovisionedStatePrefix) }
+        #expect(aside.count == 1)
+        #expect(try Data(contentsOf: fixture.storeDirectory.appendingPathComponent(aside[0])) == orphan, "kept byte for byte")
+    }
+
+    @Test("Without a marker, anything but a plain state file is still refused")
+    func orphanThatIsNotAFileRefuses() throws {
+        let fixture = try DeskHostFixture()
+        defer { fixture.clean() }
+        let first = try fixture.makeStore()
+        first.close()
+        try FileManager.default.removeItem(at: first.markerURL)
+        try FileManager.default.removeItem(at: first.stateURL)
+        try FileManager.default.createDirectory(at: first.stateURL, withIntermediateDirectories: false)
+        #expect(throws: ProofStoreError.corruptState) { try fixture.makeStore() }
+    }
+
     @Test("Opening under a purpose other than the one sealed fails")
     func purposeIsBound() throws {
         let cipher = try StoreCipher(material: Data(repeating: 3, count: 32), workspaceId: UUID())

@@ -55,8 +55,8 @@ import Foundation
 ///   reported as `store-missing` / `store-corrupt` and left in place.
 /// - It never writes the store's state or attempted records in the clear:
 ///   both are AES-GCM ciphertext under the store's key (`StoreCipher`).
-///   The Desk's key is still the in-memory placeholder (`KeyProvider`); the
-///   Keychain provider (`KeychainKeyProvider`) takes over in a later step.
+///   The app's Desk takes its key from the Keychain (`KeychainKeyProvider`);
+///   tests use the in-memory placeholder behind the same `KeyProvider`.
 /// - It never types, pastes or presses Return. A recording captures its
 ///   draft at start (`beginRecording`); its final text is pushed once, as
 ///   literal text, to that captured draft only, or held natively when no

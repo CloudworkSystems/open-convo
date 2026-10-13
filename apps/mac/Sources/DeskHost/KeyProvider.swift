@@ -11,8 +11,9 @@ import Foundation
 /// The proof store encrypts its state and attempted records under the key
 /// (`StoreCipher`, step 2, PR 2). `KeychainKeyProvider` (step 2, PR 1) is the
 /// real custody behind this same protocol: a this-device-only Keychain item,
-/// never copied to iCloud, never exposed to JavaScript. The Desk keeps
-/// `InventedInMemoryKeyProvider` until step 2, PR 2b switches it over.
+/// never copied to iCloud, never exposed to JavaScript. The app's Desk uses
+/// it since step 2, PR 2b; `InventedInMemoryKeyProvider` remains for tests
+/// and the per-run storage.
 public protocol KeyProvider: Sendable {
     /// The key for an existing store, or nil when none is held.
     func existingKey(for storeId: UUID) throws -> StoreKey?

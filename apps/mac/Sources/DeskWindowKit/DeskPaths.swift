@@ -13,6 +13,12 @@ import TrueConvoIdentity
 /// folder lives only in that run's memory, so a folder from an earlier run
 /// can never be opened again; it is left exactly as it was.
 ///
+/// Since step 2, PR 2b, the app keeps one store instead: `kept-store/`,
+/// mode 0700, made on the first unlock and opened again on every later run.
+/// Its files are ciphertext under a key in this Mac's Keychain. Builds
+/// before it only ever made and opened `run-` folders, so they never touch
+/// it. Run folders from those builds stay exactly as they were.
+///
 /// The Application Support folder is resolved once per use (so system
 /// aliases above it, such as `/var` for `/private/var`, are fine). Below it,
 /// `com.trueconvo.voice-cursor`, `desk-invented-proof` and each run folder
@@ -48,6 +54,19 @@ public struct DeskPaths: Equatable, Sendable {
     public static let markerText = """
     Invented data only.
 
+    True Convo's Desk window keeps made-up proof data here. The kept-store
+    folder is encrypted under a key in this Mac's Keychain and reopens on every
+    run. Folders named run-... come from earlier versions: each one's made-up
+    key lived only in that run's memory, so they cannot be opened again.
+    Nothing here is real or private, and nothing here is deleted automatically.
+
+    """
+    /// The marker's words before the kept store (step 1). A marker that
+    /// still reads exactly this is brought up to date when the kept store is
+    /// first used; one with any other words is left alone.
+    static let previousMarkerText = """
+    Invented data only.
+
     True Convo's Desk window keeps made-up proof data here, one folder per app
     run. Each folder's made-up key lived only in that run's memory, so a folder
     from an earlier run cannot be opened again. Nothing here is real or
@@ -55,6 +74,8 @@ public struct DeskPaths: Equatable, Sendable {
 
     """
     public static let runFolderPrefix = "run-"
+    /// The one store folder kept across runs (step 2, PR 2b).
+    public static let keptStoreFolderName = "kept-store"
 
     /// The user's Application Support folder (or an invented one in tests).
     public let applicationSupport: URL
@@ -147,9 +168,37 @@ public struct DeskPaths: Equatable, Sendable {
         throw Failure.cannotCreate("run", EEXIST)
     }
 
-    /// A run folder made earlier in this run is still a plain private
-    /// folder directly inside the base, reached through no link.
+    /// The store folder kept across runs: made (0700) on first use, opened
+    /// as it is afterwards, never replaced or emptied. Like a run folder it
+    /// must be a plain private folder directly inside the base, reached
+    /// through no link; the path returned has just been walked again to the
+    /// very folder that was checked.
+    public func openKeptStoreFolder() throws -> URL {
+        let base = try openBaseForWriting()
+        try Self.makePrivate(base)
+        Self.refreshPreviousMarker(in: base)
+        guard let store = try Self.openChild(Self.keptStoreFolderName, in: base, label: "store", creating: true) else {
+            throw Failure.cannotCreate("store", ENOENT)
+        }
+        let again = try openRunFolder(named: Self.keptStoreFolderName)
+        guard again.identity == store.identity else { throw Failure.notAFolder("store") }
+        return again.url
+    }
+
+    /// Whether the kept store folder is there. Reads only.
+    public func keptStoreFolderExists() -> Bool {
+        guard let base = try? openBase(creating: false) else { return false }
+        return Self.entryNames(in: base).contains(Self.keptStoreFolderName)
+    }
+
+    /// A run folder made earlier in this run (or the kept store folder) is
+    /// still a plain private folder directly inside the base, reached
+    /// through no link.
     public func validateRunFolder(_ folder: URL) throws {
+        if folder.lastPathComponent == Self.keptStoreFolderName {
+            _ = try openRunFolder(named: Self.keptStoreFolderName, expectedPath: folder.path)
+            return
+        }
         let name = folder.lastPathComponent
         guard name.hasPrefix(Self.runFolderPrefix), !name.contains("/") else { throw Failure.notAFolder("run") }
         _ = try openRunFolder(named: name, expectedPath: folder.path)
@@ -285,6 +334,36 @@ public struct DeskPaths: Equatable, Sendable {
         defer { close(descriptor) }
         let bytes = Array(markerText.utf8)
         guard write(descriptor, bytes, bytes.count) == bytes.count else { throw Failure.cannotCreate("marker", errno) }
+    }
+
+    /// Replaces a marker that still holds exactly the step 1 words with the
+    /// current ones: written to a fresh private file beside it, then renamed
+    /// over it, all through the open base. Best effort: if anything is off
+    /// (not a plain file, other words, a failed write) the marker is left as
+    /// it is and the Desk opens anyway; nothing is deleted.
+    static func refreshPreviousMarker(in base: OpenFolder) {
+        let reader = openat(base.descriptor, markerFileName, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+        guard reader >= 0 else { return }
+        var info = Darwin.stat()
+        let old = Array(previousMarkerText.utf8)
+        guard fstat(reader, &info) == 0, info.st_mode & S_IFMT == S_IFREG, Int(info.st_size) == old.count else {
+            close(reader)
+            return
+        }
+        var bytes = [UInt8](repeating: 0, count: old.count + 1)
+        let count = read(reader, &bytes, bytes.count)
+        close(reader)
+        guard count == old.count, Array(bytes.prefix(count)) == old else { return }
+
+        var generator = SystemRandomNumberGenerator()
+        let temporary = ".\(markerFileName).\(String(format: "%08x", UInt32.random(in: .min ... .max, using: &generator)))"
+        let writer = openat(base.descriptor, temporary, O_CREAT | O_EXCL | O_WRONLY | O_NOFOLLOW | O_CLOEXEC, 0o600)
+        guard writer >= 0 else { return }
+        let fresh = Array(markerText.utf8)
+        let wrote = write(writer, fresh, fresh.count) == fresh.count && fsync(writer) == 0
+        close(writer)
+        guard wrote else { return }
+        _ = renameat(base.descriptor, temporary, base.descriptor, markerFileName)
     }
 
     /// The names in an open folder, read through that folder itself.
