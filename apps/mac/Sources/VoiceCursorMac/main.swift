@@ -10595,7 +10595,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var deskSession: DeskSession? {
         if let deskSessionStorage { return deskSessionStorage }
         guard deskBundle != nil, let paths = DeskPaths.standard(identity: AppIdentity.current) else { return nil }
-        let session = DeskSession(paths: paths, bundle: deskBundle, info: DeskSession.hostInfo(), log: { RunLog.write($0, $1) })
+        // Step 2, PR 2b: one kept store, reopened every run, under a key in
+        // this Mac's Keychain (scoped to this copy's identity, so True Convo
+        // and True Convo Test never share it).
+        let session = DeskSession(paths: paths, bundle: deskBundle, info: DeskSession.hostInfo(), storage: .keychain(identity: .current),
+                                  log: { RunLog.write($0, $1) })
         deskSessionStorage = session
         return session
     }
