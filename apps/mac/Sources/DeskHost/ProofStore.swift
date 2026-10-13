@@ -550,7 +550,11 @@ public final class ProofStore: @unchecked Sendable {
                 guard let revision = seed.record["revision"]?.safeIntegerValue else { throw ProofStoreError.invalidSeed }
                 let workspaceId = UUID()
                 let key: StoreKey
-                do { key = try keys.createKey(for: workspaceId) } catch { throw ProofStoreError.keyRefused }
+                // A Keychain that can't be reached stays `unavailable`, so the
+                // caller can tell it apart from a refused key.
+                do { key = try keys.createKey(for: workspaceId) } catch KeyProviderError.unavailable {
+                    throw KeyProviderError.unavailable
+                } catch { throw ProofStoreError.keyRefused }
                 keyCustody = key.custody
                 // A key that is not 32 bytes would run a weaker AES; refused
                 // before anything is written.

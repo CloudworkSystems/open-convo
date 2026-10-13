@@ -78,6 +78,18 @@ final class DeskKeptStoreTests: XCTestCase {
         XCTAssertTrue(logs.all.contains("desk.open.failed reason=key-missing"))
     }
 
+    func testUnreachableKeychainOnFirstOpenIsReportedAsSuch() async throws {
+        let logs = DeskLogCollector()
+        let desk = try newRun(.kept(UnreachableKeychain()), logs: logs)
+        await desk.unlock(verifier: StubUnlockVerifier(.verified))
+        XCTAssertEqual(desk.state, .unavailable(DeskSession.Message.couldNotOpen))
+        XCTAssertNil(desk.store)
+        XCTAssertTrue(logs.all.contains("desk.open.failed reason=key-unavailable"), "\(logs.all)")
+        let store = folder.base.appendingPathComponent(DeskPaths.keptStoreFolderName)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: store.path), ["proof.lock"],
+                       "no state or marker was written; only the writer lock, which is taken before the key")
+    }
+
     func testEarlierRunFoldersAreLeftAndNamedOnce() async throws {
         let older = try newRun(.perRunInMemory)
         await older.unlock(verifier: StubUnlockVerifier(.verified))
@@ -134,4 +146,10 @@ final class DeskKeptStoreTests: XCTestCase {
         let text = try String(contentsOf: main, encoding: .utf8)
         XCTAssertTrue(text.contains("storage: .keychain(identity: .current)"), "the app's Desk keeps its store under the Keychain")
     }
+}
+
+/// A Keychain that can be neither read nor written.
+private struct UnreachableKeychain: KeyProvider {
+    func existingKey(for storeId: UUID) throws -> StoreKey? { throw KeyProviderError.unavailable }
+    func createKey(for storeId: UUID) throws -> StoreKey { throw KeyProviderError.unavailable }
 }
