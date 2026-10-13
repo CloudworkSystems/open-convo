@@ -40,6 +40,37 @@ A one-page site for one of the owner's businesses (owner picks which), built
 from its public-facts sheet, previewed in the Desk, exported, and published to
 the owner's own hosting account after approval.
 
+## Open Questions (Decide When Site Engine's Turn Comes)
+
+The owner chose to settle these later, once the Desk and real conversations
+exist to react to. Suggested starting answers are noted, not decided.
+
+1. **Kinds of sites.** Suggested: one-page first; end state multi-page plus a
+   blog fed by Convo Engine. Booking and selling are later add-ons (payments,
+   calendars, customer data).
+2. **How the design is chosen.** Templates, the person's brand kit,
+   AI-generated options, or a mix.
+3. **How people edit.** By conversation ("change our hours to 9 to 5"),
+   clicking on the page, marking it up as the owner does in Codex, or all three.
+4. **How the public-facts sheet is filled.** An interview, importing an
+   existing site or Google listing (shared with the Visibility Agent), dictation.
+5. **Forms and booking.** Where contact-form messages go (for example, the
+   business's space in True Convo).
+
+Defaults unless the owner says otherwise:
+
+- Custom domains: guided steps to connect a domain bought from any registrar;
+  True Convo never sells domains.
+- Search and AI visibility built in: titles, structured data, sitemap.
+- Every site works on phones and passes basic accessibility checks.
+- Analytics off unless the person turns on a privacy-friendly option.
+- The builder produces plain website files, so export always works; the tools
+  that build them are the building session's choice.
+- Several sites per person, one per business.
+
+Decided now because it touches the core: each business's public-facts sheet
+lives in that business's own memory space (step 5).
+
 ## Rules
 
 - Build from the public-facts sheet only; the privacy gate blocks anything else.
