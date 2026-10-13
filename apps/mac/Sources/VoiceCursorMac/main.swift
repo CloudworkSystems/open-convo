@@ -3913,7 +3913,8 @@ enum TextInjector {
         RunLog.write("cursor-focus.captured", describe(element))
     }
 
-    static func beginLivePreviewIfNeeded() {
+    /// `allowed: false` (a Desk recording) resets the state and starts nothing.
+    static func beginLivePreviewIfNeeded(allowed: Bool = true) {
         livePreviewRequiresFinalPaste = false
         livePreviewGuardReason = nil
         externalFinalPasteGuardReason = nil
@@ -3921,6 +3922,14 @@ enum TextInjector {
         livePreviewKeyboardContinuationBase = nil
         livePreviewKeyboardContinuationFragment = nil
         livePreviewCorrectionReplacementArmed = pendingCorrectionSelection != nil
+        guard allowed else {
+            // A Desk recording: whatever an earlier start left behind (a
+            // capture that failed after its preview began) is cleared, so no
+            // partial can ever reach that old outside target.
+            livePreviewAcceptsPartials = false
+            clearLivePreviewState()
+            return
+        }
         guard Settings.liveInsertApplePartials else { return }
         guard Settings.completionAction == .autoPaste || Settings.completionAction == .autoSubmit else { return }
         let decision = livePreviewDecision()
@@ -5791,6 +5800,25 @@ final class DictationController {
     var onFinalizationFinished: () -> Void = {}
     var onIdleWakeDetected: () -> Void = {}
 
+    /// A Desk recording (step 1, PR 2b): its words go only to the Desk.
+    /// Nothing is typed live, pasted, copied, sent with Return, written to
+    /// history or kept as audio, and it is not the menu's last dictation;
+    /// the final text is handed to `deliver` once, which says where it went.
+    struct DeskRoute {
+        let deliver: @MainActor (String) async -> DictationOutcome
+    }
+
+    /// Set by `start(deskRoute:)` for this recording; nil for every other.
+    private var deskRoute: DeskRoute?
+    /// Counts starts. A start that waits for a permission answer goes on
+    /// only if no later start came meanwhile, so a later start can never
+    /// change an earlier one's route or start a second capture (Codex P1
+    /// on #9).
+    private var startAttempt = 0
+
+    /// Whether the recording now running or finishing is a Desk recording.
+    var isDeskRecording: Bool { deskRoute != nil && isBusy }
+
     var isRecording: Bool {
         audioEngine.isRunning
     }
@@ -5811,8 +5839,11 @@ final class DictationController {
         }
     }
 
-    func start() {
+    func start(deskRoute: DeskRoute? = nil) {
         guard !isBusy, !recordingProcesses.isClosed else { return }
+        self.deskRoute = deskRoute
+        startAttempt += 1
+        let attempt = startAttempt
         stopIdleMonitor()
 
         let language = Settings.language
@@ -5830,7 +5861,7 @@ final class DictationController {
         }
         if currentProvider.isLiveStreamingProvider {
             ensureMicrophonePermission { [weak self] allowed in
-                guard let self, allowed else { return }
+                guard let self, allowed, self.isCurrentStart(attempt) else { return }
                 self.startCapture(
                     recognizer: nil,
                     language: language,
@@ -5844,7 +5875,7 @@ final class DictationController {
             // Apple's new engine doesn't use SFSpeechRecognizer, so it skips
             // the older engine's recognizer check and Speech Recognition request.
             ensureMicrophonePermission { [weak self] allowed in
-                guard let self, allowed else { return }
+                guard let self, allowed, self.isCurrentStart(attempt) else { return }
                 self.startCapture(
                     recognizer: nil,
                     language: language,
@@ -5858,7 +5889,7 @@ final class DictationController {
         self.recognizer = recognizer
         ensureMicrophonePermission { [weak self] allowed in
             guard let self else { return }
-            guard allowed else { return }
+            guard allowed, self.isCurrentStart(attempt) else { return }
             guard let recognizer else {
                 if self.currentProvider.isPostStopProvider {
                     self.startRecordOnlyFallback(language: language, reason: "speech-recognizer-unavailable")
@@ -5887,8 +5918,29 @@ final class DictationController {
                 return
             }
 
-            self.requestSpeechPermission(recognizer: recognizer, language: language)
+            self.requestSpeechPermission(recognizer: recognizer, language: language, attempt: attempt)
         }
+    }
+
+    /// A Desk start still waiting for a permission answer is called off (the
+    /// hold-to-record key was let go): its callback will not start capture.
+    /// Returns whether one was pending. Outside starts are left as they are.
+    @discardableResult
+    func cancelPendingDeskStart() -> Bool {
+        guard !isBusy, deskRoute != nil else { return false }
+        startAttempt += 1
+        deskRoute = nil
+        RunLog.write("dictation.desk.start.cancelled", "reason=key-released-before-capture")
+        return true
+    }
+
+    /// Whether `attempt` is still the latest start and nothing is running.
+    private func isCurrentStart(_ attempt: Int) -> Bool {
+        guard attempt == startAttempt, !isBusy else {
+            RunLog.write("dictation.start.superseded", "attempt=\(attempt) latest=\(startAttempt) busy=\(isBusy)")
+            return false
+        }
+        return true
     }
 
     func startIdleMonitor() {
@@ -6062,7 +6114,7 @@ final class DictationController {
         }
     }
 
-    private func requestSpeechPermission(recognizer: SFSpeechRecognizer, language: String) {
+    private func requestSpeechPermission(recognizer: SFSpeechRecognizer, language: String, attempt: Int) {
         guard !recordingProcesses.isClosed else { return }
         onStatus("Requesting speech permission")
         RunLog.write("permission.speech.requested")
@@ -6070,6 +6122,7 @@ final class DictationController {
         SFSpeechRecognizer.requestAuthorization { [weak self] status in
             DispatchQueue.main.async {
                 guard let self, !self.recordingProcesses.isClosed else { return }
+                guard self.isCurrentStart(attempt) else { return }
                 switch status {
                 case .authorized:
                     RunLog.write("permission.speech.granted")
@@ -6189,15 +6242,20 @@ final class DictationController {
         fallbackReason: String?
     ) {
         guard !recordingProcesses.isClosed else { return }
+        guard !isBusy else {
+            RunLog.write("dictation.start.ignored", "reason=capture-already-running")
+            return
+        }
         do {
             try Archive.ensureDirectories()
             // This recording's choice is fixed before selecting or opening its
             // file. Later Settings changes apply only to future recordings.
-            let retainAudioAtStart = Settings.dictationPreferences.retainAudioForHarvest
+            // A Desk recording never keeps its audio (decision A: memory only).
+            let retainAudioAtStart = Settings.dictationPreferences.retainAudioForHarvest && deskRoute == nil
             sessionId = "voice-cursor-\(Int(Date().timeIntervalSince1970 * 1000))"
             startedAt = Date()
             sessionLanguage = language
-            sessionTargetBundleID = TextInjector.targetApplication?.bundleIdentifier
+            sessionTargetBundleID = deskRoute == nil ? TextInjector.targetApplication?.bundleIdentifier : nil
             latestTranscript = ""
             finalizedTranscriptSegments = []
             currentRecognitionTranscript = ""
@@ -6218,7 +6276,9 @@ final class DictationController {
             // is created for it and none is kept, whatever Retain Audio says.
             recordingURL = currentProvider == .appleSpeechAnalyzer ? nil : try Archive.captureRecordingURL(for: sessionId, retain: retainAudioAtStart)
             TextInjector.beginDictationSession()
-            TextInjector.beginLivePreviewIfNeeded()
+            // A Desk recording resets the live preview's state but never
+            // starts it: nothing is typed anywhere while it runs.
+            TextInjector.beginLivePreviewIfNeeded(allowed: deskRoute == nil)
             let inputApplied = AudioDeviceInfo.applySelectedInputIfNeeded()
 
             let inputNode = audioEngine.inputNode
@@ -6392,7 +6452,7 @@ final class DictationController {
                 }
                 let combinedText = self.combinedTranscript()
                 self.latestTranscript = combinedText
-                TextInjector.updateLivePreview(combinedText)
+                if self.deskRoute == nil { TextInjector.updateLivePreview(combinedText) }
                 self.scheduleAutoStopIfNeeded(for: combinedText)
                 self.onTranscript(combinedText)
                 self.onStatus(combinedText.isEmpty ? "Listening" : combinedText)
@@ -6450,7 +6510,7 @@ final class DictationController {
         currentRecognitionTranscript = normalized
         latestTranscript = normalized
         if audioEngine.isRunning {
-            TextInjector.updateLivePreview(normalized)
+            if deskRoute == nil { TextInjector.updateLivePreview(normalized) }
             scheduleAutoStopIfNeeded(for: normalized)
         }
         onTranscript(normalized)
@@ -6548,6 +6608,7 @@ final class DictationController {
         guard !Settings.liveInsertApplePartials else { return }
         guard currentProvider == .appleLocal, currentCaptureMode == .appleLive else { return }
         guard Settings.completionAction == .autoPaste || Settings.completionAction == .autoSubmit else { return }
+        guard deskRoute == nil else { return }
 
         let text = SavedCorrections.preview(
             cleaned,
@@ -6747,7 +6808,9 @@ final class DictationController {
         let modelAtStop = modelName(for: provider)
         let captureMode = currentCaptureMode
         let language = sessionLanguage
-        let completionActionAtStop = Settings.completionAction
+        let deskRouteAtStop = deskRoute
+        // A Desk recording inserts nothing: its words go only to the Desk.
+        let completionActionAtStop = deskRouteAtStop == nil ? Settings.completionAction : .archiveOnly
         let stopProcessingStartedAt = Date()
         let firstPartialAt = self.firstPartialAt
         let firstFinalAt = self.firstFinalAt
@@ -6765,12 +6828,14 @@ final class DictationController {
         RunLog.write("dictation.stop.requested", "id=\(id) provider=\(provider.rawValue) durationMs=\(durationMs)")
 
         TextInjector.freezeLivePreviewPartials()
-        let livePreviewStopResult = TextInjector.commitLivePreviewForImmediateStop(
-            suppressDelayedInsertIfNoLiveText: provider.isPostStopProvider
-        )
-        let guardedFinalPasteAtStop = TextInjector.hasExternalFinalPasteGuard
-        let correctionBuilder = TextInjector.consumeCorrectionContextBuilder()
-        let targetContext = TextInjector.currentTargetContext()
+        // A Desk recording never started a live preview: nothing to commit.
+        let livePreviewStopResult: TextInjector.LivePreviewCompletionResult = deskRouteAtStop == nil
+            ? TextInjector.commitLivePreviewForImmediateStop(suppressDelayedInsertIfNoLiveText: provider.isPostStopProvider)
+            : .inactive
+        let guardedFinalPasteAtStop = deskRouteAtStop == nil && TextInjector.hasExternalFinalPasteGuard
+        let correctionBuilderAtStop = TextInjector.consumeCorrectionContextBuilder()
+        let correctionBuilder = deskRouteAtStop == nil ? correctionBuilderAtStop : nil
+        let targetContext = deskRouteAtStop == nil ? TextInjector.currentTargetContext() : nil
         RunLog.write(
             "cursor-target.archived",
             targetContext.map { "id=\(id) \($0.logDetail)" } ?? "id=\(id) target=missing"
@@ -6787,7 +6852,7 @@ final class DictationController {
         // flush the converter, and finish. It is finished, not cancelled.
         let activeSpeechAnalyzerEngine = speechAnalyzerEngine
         speechAnalyzerEngine = nil
-        let finalizesInBackground = livePreviewStopResult != .inactive || guardedFinalPasteAtStop
+        let finalizesInBackground = deskRouteAtStop == nil && (livePreviewStopResult != .inactive || guardedFinalPasteAtStop)
         if finalizesInBackground {
             isProcessing = true
             onStatus("Finishing dictation")
@@ -6994,7 +7059,9 @@ final class DictationController {
                 return (result: TextInjector.LivePreviewCompletionResult.inactive, finalPasteGuardReason: finalPasteGuardReason)
             }
             let livePreviewResult = livePreviewOutcome.result
-            let finalPasteGuardReason = livePreviewOutcome.finalPasteGuardReason
+            // A Desk recording pastes nothing, so no outside input can have
+            // made a paste unsafe: no safety-stop clipboard fallback.
+            let finalPasteGuardReason = deskRouteAtStop == nil ? livePreviewOutcome.finalPasteGuardReason : nil
             let livePreviewInjected = livePreviewResult.insertedOrCommitted
             // Words already typed into the app before the finish: live typing
             // or live-pasted Apple segments.
@@ -7041,18 +7108,30 @@ final class DictationController {
                 target: targetContext,
                 correction: correction
             )
-            do {
-                try Archive.append(entry)
-                RunLog.write(
-                    "archive.session.wrote",
-                    "id=\(id) transcript=\(Archive.transcriptURL(for: id).path) packet=\(Archive.contentPacketURL(for: id).path) audio=\(retainedAudioPath ?? "none")"
-                )
-            } catch {
-                RunLog.write("archive.session.failed", "id=\(id) error=\(error.localizedDescription)")
+            if deskRouteAtStop == nil {
+                do {
+                    try Archive.append(entry)
+                    RunLog.write(
+                        "archive.session.wrote",
+                        "id=\(id) transcript=\(Archive.transcriptURL(for: id).path) packet=\(Archive.contentPacketURL(for: id).path) audio=\(retainedAudioPath ?? "none")"
+                    )
+                } catch {
+                    RunLog.write("archive.session.failed", "id=\(id) error=\(error.localizedDescription)")
+                }
+            } else {
+                // Desk words stay in memory only (owner decision A).
+                RunLog.write("archive.session.skipped", "id=\(id) reason=desk-recording")
+            }
+            // A Desk recording's words go to the Desk, once, and nowhere else.
+            let deskOutcome: DictationOutcome?
+            if let deskRouteAtStop, !cleanedText.isEmpty {
+                deskOutcome = await deskRouteAtStop.deliver(cleanedText)
+            } else {
+                deskOutcome = nil
             }
 
             await MainActor.run {
-                if !cleanedText.isEmpty {
+                if !cleanedText.isEmpty, deskRouteAtStop == nil {
                     self.lastDictationText = cleanedText
                 }
                 if finalizesInBackground {
@@ -7140,7 +7219,9 @@ final class DictationController {
                     RunLog.write("completion.archive-only", "id=\(id) hasText=\(!cleanedText.isEmpty)")
                 }
                 self.isProcessing = false
-                if let safetyStopOutcome {
+                if let deskOutcome {
+                    self.onStatus(deskOutcome.pillMessage)
+                } else if let safetyStopOutcome {
                     self.onStatus(safetyStopOutcome.pillMessage)
                 } else {
                     self.onStatus(speechEngineProblemStatus ?? self.statusText(for: completionAction, hasText: !cleanedText.isEmpty, injected: injected))
@@ -7148,6 +7229,8 @@ final class DictationController {
                 var outcome: DictationOutcome
                 if cleanedText.isEmpty {
                     outcome = speechEngineNoTextOutcome ?? .noSpeech
+                } else if let deskOutcome {
+                    outcome = deskOutcome
                 } else if let safetyStopOutcome {
                     outcome = safetyStopOutcome
                 } else if shouldPasteAtStop || livePreviewInjected || livePasted {
@@ -8159,8 +8242,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var quitAskedAboutDesk = false
     private let deskMenuItem = NSMenuItem(title: "Desk (invented data)…", action: nil, keyEquivalent: "")
     private let lockDeskMenuItem = NSMenuItem(title: "Lock Desk", action: nil, keyEquivalent: "")
-    private static let deskDictationRefusal = "Dictation into the Desk comes in the next build. Click another app to dictate there."
-    private static let deskCorrectionRefusal = "Corrections aren't available in the Desk."
+    private static func deskRefusalMessage(_ refusal: DeskDictationPolicy.DeskRefusal) -> String {
+        switch refusal {
+        case .noDraftReady: return "Click into a Desk draft first, then dictate."
+        case .locked: return "The Desk is locked. Unlock it to dictate into it."
+        case .unavailable: return "The Desk isn't available, so nothing was recorded."
+        case .correctionNotInDesk: return "Corrections aren't available in the Desk."
+        }
+    }
     // What the Desk shield held back since the current dictation (or typed
     // correction) began, and that dictation's own outcome once it came: the
     // pill never claims a paste, typing or Return the shield stopped.
@@ -8439,6 +8528,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// reuse it. The menu-bar exemption and key handling apply to global
     /// events only; the Desk becoming key takes the pointer path.
     private func handleInputOutsideDictationTarget(_ source: OutsideInput) {
+        if controller.isDeskRecording {
+            // A Desk recording types nothing anywhere, so input elsewhere can
+            // never collide with it. Only the dictation key's global fallback
+            // (stopping it) still applies.
+            if case .globalEvent(let event) = source, event.type == .keyDown,
+               Settings.hotKeyShortcut.matches(keyCode: event.keyCode,
+                                               modifiers: event.modifierFlags.intersection(.deviceIndependentFlagsMask)) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+                    guard let self, self.controller.isRecording else { return }
+                    RunLog.write("hotkey.fallback-global.stop", "shortcut=\(Settings.hotKeyShortcut.label) route=desk")
+                    self.stopDictation()
+                    self.refreshDictationControls()
+                }
+            }
+            return
+        }
         guard case .globalEvent(let event) = source else {
             if !self.controller.isRecording {
                 if TextInjector.cancelPendingFinalReconcileForExternalInput(reason: "post-stop-external-pointer") {
@@ -9182,6 +9287,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func handleHotKeyReleased() {
         TextInjector.markHotKeyReleased()
         guard Settings.hotKeyMode == .holdToRecord else { return }
+        if deskStartPending { deskStartReleased = true }
+        // A Desk start may still be waiting for a permission answer: let go
+        // now, it never starts (Codex P1 on #9).
+        if !controller.isRecording, controller.cancelPendingDeskStart() {
+            settlePillAfterRefusedStart()
+        }
         if controller.isRecording {
             stopDictation()
         }
@@ -9200,16 +9311,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             return
         }
-        // Desk window in front: refused before any cursor target is
-        // remembered, so nothing goes to the last outside app.
-        if case .refuseDesk(let refusal) = DeskDictationPolicy.decide(requireCorrection ? .correctionOnce : .dictation, focus: deskFocus()) {
+        // Desk window in front: never the outside path. A dictation into the
+        // open Desk takes the Desk's own route; anything else is refused
+        // before any cursor target is remembered.
+        switch DeskDictationPolicy.decide(requireCorrection ? .correctionOnce : .dictation, focus: deskFocus()) {
+        case .refuseDesk(let refusal):
             refuseInDesk(refusal, event: "dictation.start.refused")
-            if Settings.pillBehavior == .persistent, persistentPillActive {
-                liveTranscriptWindow.showReady()
-            } else {
-                liveTranscriptWindow.hideNow()
-            }
+            settlePillAfterRefusedStart()
             return
+        case .deskDraft:
+            startDeskDictation()
+            return
+        case .externalCursor:
+            break
         }
         rememberCursorTarget(NSWorkspace.shared.frontmostApplication, force: true)
         TextInjector.rememberFocusedElement()
@@ -9233,6 +9347,70 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             updateStatus(correctionFeedback.statusText)
         }
         controller.start()
+    }
+
+    private func settlePillAfterRefusedStart() {
+        if Settings.pillBehavior == .persistent, persistentPillActive {
+            liveTranscriptWindow.showReady()
+        } else {
+            liveTranscriptWindow.hideNow()
+        }
+    }
+
+    /// A Desk recording is being started (the host is asked for the
+    /// confirmed draft binding first). A second press meanwhile is ignored.
+    private var deskStartPending = false
+    /// The dictation key was let go while a hold-to-record Desk start was
+    /// still asking the host: that start is called off.
+    private var deskStartReleased = false
+
+    /// The Desk route (step 1, PR 2b). No cursor target is remembered or
+    /// locked, nothing is typed, pasted, copied or sent, and nothing goes to
+    /// history; the final words reach the Desk draft only through the
+    /// host's `deliverFinal`. Recording starts only once the host confirms
+    /// the draft binding the owner clicked into.
+    private func startDeskDictation() {
+        guard !deskStartPending, !controller.isBusy, let session = deskSessionStorage else { return }
+        deskStartPending = true
+        deskStartReleased = false
+        TextInjector.clearCorrectionContext()
+        liveTranscriptWindow.showPendingStart()
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let recording = await session.beginDeskRecording()
+            self.deskStartPending = false
+            let decision = DeskDictationPolicy.deskStart(hasConfirmedDraft: recording?.hasConfirmedDraft ?? false,
+                                                         focusNow: self.deskFocus())
+            guard case .deskDraft = decision, let recording else {
+                self.settlePillAfterRefusedStart()
+                if case .refuseDesk(let refusal) = decision {
+                    self.refuseInDesk(refusal, event: "dictation.desk.start.refused")
+                    self.liveTranscriptWindow.showBriefNote(Self.deskRefusalMessage(refusal), seconds: 3)
+                }
+                return
+            }
+            if self.deskStartReleased {
+                RunLog.write("dictation.desk.start.cancelled", "reason=key-released")
+                self.settlePillAfterRefusedStart()
+                return
+            }
+            guard !self.controller.isBusy else { return }
+            RunLog.write("dictation.desk.started", "route=desk-draft")
+            self.controller.start(deskRoute: DictationController.DeskRoute { [weak self, weak session] text in
+                guard let self, let session else { return .desk(.notKept) }
+                return await self.deliverToDesk(recording, text: text, session: session)
+            })
+        }
+    }
+
+    /// Hands a Desk recording's words to the Desk and says where they went.
+    private func deliverToDesk(_ recording: DeskSession.DeskRecording, text: String, session: DeskSession) async -> DictationOutcome {
+        guard let delivery = await session.deliverDeskFinal(recording, text: text) else { return .desk(.notKept) }
+        switch delivery {
+        case .delivered: return .desk(.sentToDraft)
+        case .held: return .desk(.setAside)
+        case .dropped: return .desk(.notKept)
+        }
     }
 
     private func stopDictation(hidePill: Bool = true) {
@@ -10351,7 +10529,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// is targeted. Logs identifiers only.
     private func refuseInDesk(_ refusal: DeskDictationPolicy.DeskRefusal, event: String) {
         RunLog.write(event, "reason=desk-\(refusal.logName)")
-        let message = refusal == .correctionNotInDesk ? Self.deskCorrectionRefusal : Self.deskDictationRefusal
+        let message = Self.deskRefusalMessage(refusal)
         updateStatus(message)
         onMainThread(()) { deskWindowController?.showNotice(message) }
         TextInjector.clearCorrectionContext()

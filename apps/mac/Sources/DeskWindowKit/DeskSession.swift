@@ -450,6 +450,48 @@ public final class DeskSession {
         return taken
     }
 
+    // MARK: Dictation into the Desk (step 1, PR 2b)
+
+    /// One Desk recording: the host's token and the stack that issued it, so
+    /// its words never reach another stack (after a close and reopen).
+    public struct DeskRecording: Sendable {
+        let token: RecordingToken
+        let host: DeskHostProtocol
+        /// Whether the host confirmed a draft binding at the start.
+        public var hasConfirmedDraft: Bool { token.target != nil }
+    }
+
+    /// Begins a Desk recording: captures the draft binding confirmed right
+    /// now, if any. Nil unless the Desk is open.
+    public func beginDeskRecording() async -> DeskRecording? {
+        guard state == .open, let hostProtocol else { return nil }
+        let token = await hostProtocol.beginRecording()
+        guard state == .open, self.hostProtocol === hostProtocol else { return nil }
+        return DeskRecording(token: token, host: hostProtocol)
+    }
+
+    /// Hands a Desk recording's final words to the stack that began it:
+    /// pushed to its draft, or set aside in memory (a lock, a draft that
+    /// went away). Nil when that stack is gone: a close drops the words
+    /// (owner decision A).
+    public func deliverDeskFinal(_ recording: DeskRecording, text: String) async -> FinalDelivery? {
+        guard let hostProtocol, hostProtocol === recording.host else {
+            log("desk.dictation.final", "result=stack-gone")
+            return nil
+        }
+        let delivery = await hostProtocol.deliverFinal(recording.token, text: text)
+        log("desk.dictation.final", "result=\(Self.logName(delivery))")
+        return delivery
+    }
+
+    static func logName(_ delivery: FinalDelivery) -> String {
+        switch delivery {
+        case .delivered: return "delivered"
+        case .held(let held): return "held reason=\(held.reason)"
+        case .dropped(let reason): return "dropped reason=\(reason.rawValue)"
+        }
+    }
+
     /// Test seam: the open stack's registry.
     var draftRegistry: DraftBindingRegistry? { drafts }
 
