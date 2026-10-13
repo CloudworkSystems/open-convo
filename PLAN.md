@@ -77,7 +77,11 @@ has tried it. Each step ends with something the owner can try.
    for content creation.
 5. **Chosen memory on real storage.** Remember, correct, forget and Undo on the
    protected store; memory candidates wait for the owner's approval; forgotten
-   items leave AI use immediately, with a 30-day Trash. *Finish line:* the owner
+   items leave AI use immediately, with a 30-day Trash. Owner decision
+   (October 13): memory lives in **separate spaces** (Personal, one per
+   business, later Family). A memory applies only in its own space unless the
+   owner shares it. Sensitive details need an explicit Save, and saving never
+   permits cloud use without separate approval. *Finish line:* the owner
    teaches, corrects and forgets something real and sees it respected.
 
 ### After the Top Five
