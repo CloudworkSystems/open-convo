@@ -804,7 +804,7 @@ final class LiveTranscriptWindowController: NSWindowController, NSWindowDelegate
         deskButton.isBordered = false
         deskButton.bezelStyle = .regularSquare
         deskButton.imagePosition = .imageOnly
-        deskButton.image = NSImage(systemSymbolName: "macwindow", accessibilityDescription: "Open the Desk")
+        deskButton.image = NSImage(systemSymbolName: "viewfinder", accessibilityDescription: "Open the Desk")
         deskButton.contentTintColor = NSColor.white.withAlphaComponent(0.85)
         deskButton.toolTip = "Open the Desk where you left it"
         deskButton.setAccessibilityLabel("Open the Desk")
