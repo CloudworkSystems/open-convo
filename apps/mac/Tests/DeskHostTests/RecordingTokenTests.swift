@@ -96,13 +96,14 @@ struct RecordingTokenTests {
         #expect(harness.drafts.binding(e)?.deliveryId == nil)
         #expect(harness.drafts.binding(f)?.deliveryId == nil, "F, the other live draft, is never a fallback target")
         #expect(harness.sink.finalTexts == ["A's words", "C first"], "nothing else was pushed anywhere")
-        #expect(harness.drafts.heldDeliveries.map(\.text) == ["B's words", "C second", "words without a target", "D's words", "E's words"])
+        #expect(harness.drafts.heldDeliveries.map(\.text) == ["B's words", "C second", "words without a target", "C first", "D's words", "E's words"],
+                "C's pushed but unsaved text was set aside when its document went away")
         let state = String(decoding: try Data(contentsOf: harness.store.stateURL), as: UTF8.self)
         #expect(!state.contains("words"), "no dictated text reaches the store")
     }
 
-    @Test("N7: after lock the recording token is revoked and a late final is dropped with nothing held; a token issued while locked is dropped too; after unlock and a new document the old token never becomes the new generation's held or delivered text")
-    func lateFinalAfterLockIsDropped() async throws {
+    @Test("N7: a late final after lock is held in memory, never pushed; a recording started while locked is held too; after unlock and a new document the old recording is held, never the new generation's delivered text")
+    func lateFinalAfterLockIsHeld() async throws {
         let harness = try HostHarness()
         defer { harness.clean() }
         _ = try await harness.bind(expectedRevision: 0, sessionId: Self.sessionA)
@@ -110,33 +111,33 @@ struct RecordingTokenTests {
         #expect(token.target != nil)
         await harness.host.lock()
         let late = await harness.host.deliverFinal(token, text: "late after lock")
-        #expect(late == .dropped(.revoked))
-        #expect(harness.drafts.heldDeliveries.isEmpty, "nothing is held after a lock")
+        guard case .held(let heldLate) = late else { Issue.record("expected held, got \(late)"); return }
+        #expect(heldLate.reason == .locked)
         #expect(harness.drafts.pendingDeliveries.isEmpty)
-        #expect(harness.sink.finals.isEmpty)
+        #expect(harness.sink.finals.isEmpty, "nothing is pushed while locked")
         let whileLocked = await harness.host.beginRecording()
         #expect(whileLocked.target == nil)
-        #expect(await harness.host.deliverFinal(whileLocked, text: "while locked") == .dropped(.revoked))
-        #expect(harness.drafts.heldDeliveries.isEmpty)
+        let lockedOutcome = await harness.host.deliverFinal(whileLocked, text: "while locked")
+        #expect(lockedOutcome.isHeld)
 
         await harness.host.unlock()
-        #expect(await harness.host.deliverFinal(token, text: "after unlock") == .dropped(.revoked), "unlock does not revive a revoked token")
-        #expect(await harness.host.deliverFinal(whileLocked, text: "after unlock") == .dropped(.revoked), "a recording started under lock stays revoked")
         let generation = await harness.host.beginGeneration()
         let fresh = await harness.host.issueConnection()
         let newBinding = try await harness.bind(expectedRevision: 0, sessionId: Self.sessionB, connection: fresh)
         let newToken = await harness.host.beginRecording()
         #expect(newToken.target?.bindingId == newBinding)
-        #expect(await harness.host.deliverFinal(token, text: "old words") == .dropped(.revoked), "an old token is stale after a new generation")
-        #expect(harness.drafts.heldDeliveries.isEmpty, "the old recording never becomes the new generation's held text")
-        #expect(harness.drafts.binding(newBinding)?.deliveryId == nil, "and never its delivered text")
+        let old = await harness.host.deliverFinal(token, text: "old words")
+        #expect(old.isHeld, "an old recording is held, never delivered to the new document")
+        #expect(harness.drafts.binding(newBinding)?.deliveryId == nil, "and never becomes its delivered text")
         let delivered = await harness.host.deliverFinal(newToken, text: "new words")
         guard case .delivered(_, let bindingId, let connectionId, let deliveredGeneration) = delivered else { Issue.record("expected delivery, got \(delivered)"); return }
         #expect(bindingId == newBinding)
         #expect(connectionId == fresh.id)
         #expect(deliveredGeneration == generation)
         #expect(harness.sink.finalTexts == ["new words"], "only the new recording's text was ever pushed")
-        #expect(harness.drafts.heldDeliveries.isEmpty)
+        #expect(harness.drafts.heldDeliveries.map(\.text) == ["late after lock", "while locked", "old words"])
+        let state = String(decoding: try Data(contentsOf: harness.store.stateURL), as: UTF8.self)
+        #expect(!state.contains("words"), "held text is never written to the store")
     }
 
     @Test("N7: after close a late final is dropped and nothing is retained, in memory or on disk")

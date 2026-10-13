@@ -50,7 +50,7 @@ public enum DropReason: String, Equatable, Sendable {
 /// What became of final dictation handed to `DeskHostProtocol.deliverFinal`.
 public enum FinalDelivery: Equatable, Sendable {
     /// Pushed once to the bound page as `dictation.final`. The host keeps the
-    /// identities only; the page's commit with `dictationDeliveryId` saves it.
+    /// text in memory until the page's commit with `dictationDeliveryId` saves it.
     case delivered(deliveryId: UUID, bindingId: UUID, connectionId: String, generation: Int)
     /// Kept natively (see `HeldDelivery.reason`). Never pasted or typed.
     case held(HeldDelivery)
@@ -253,6 +253,7 @@ public actor DeskHostProtocol {
     /// write fails); the barrier then stays.
     public func recoverUnresolvedDispatch() throws -> DispatchRecovery {
         releaseOrphanedBarrier()
+        forgetSavedWords()
         guard let holder else { return .nothingOutstanding }
         if inFlight == holder.requestId { return .inFlight(holder.requestId) }
         switch try store.withdrawUnresolvedDispatch(holder.requestId) {
@@ -269,6 +270,7 @@ public actor DeskHostProtocol {
     /// `host.connection` `ready` for the new connection.
     public func issueConnection() -> HostConnection {
         releaseOrphanedBarrier()
+        forgetSavedWords()
         let connection = connections.issue()
         push(.hostConnection(connectionId: connection.id, generation: connection.generation, state: .ready, reason: .ready))
         return connection
@@ -357,7 +359,7 @@ public actor DeskHostProtocol {
             push(.hostConnection(connectionId: id, generation: generation, state: state, reason: reason))
         }
         connections.invalidateAll()
-        drafts.invalidateAll()
+        drafts.invalidateAll(keepingWords: state == .locked)
         forgetEphemerals()
         lifecycle += 1
     }
@@ -391,12 +393,13 @@ public actor DeskHostProtocol {
     private static let revokedLifecycle = -1
 
     /// Final dictation from the native recorder, for the recording `token`
-    /// names. The lifecycle is checked first: after a lock or close the token
-    /// is revoked and the text is dropped, nothing retained. Otherwise the
+    /// names. After close the text is dropped. After a lock (now, or since
+    /// the recording began) it is held in memory for the owner. Otherwise the
     /// text goes to the captured binding only: if that binding is still
     /// present, undelivered, on its own valid connection in its own document,
-    /// the delivery is recorded durably (identities only), then the text is
-    /// pushed once as `dictation.final` and not kept. If no draft was bound
+    /// the delivery is recorded durably (identities only), the text is kept
+    /// in memory until its commit is confirmed, and it is pushed once as
+    /// `dictation.final`. If no draft was bound
     /// at recording start, or the captured one was unbound, consumed, or its
     /// connection or document changed, the text is held natively and
     /// surfaced through `DraftBindingRegistry.heldDeliveries`; it is never
@@ -404,9 +407,11 @@ public actor DeskHostProtocol {
     /// event sink nothing can be pushed, so the text is held and the binding
     /// is left untouched.
     public func deliverFinal(_ token: RecordingToken, text: String) -> FinalDelivery {
-        guard token.lifecycle == lifecycle else { return .dropped(.revoked) }
-        if closed || store.isLocked { return .dropped(.locked) }
+        // Close drops everything. A lock (now, or since the recording began)
+        // keeps the owner's words as held text in memory (owner decision A).
+        if closed { return .dropped(.revoked) }
         let now = clock()
+        if token.lifecycle != lifecycle || store.isLocked { return hold(text, for: token, reason: .locked, at: now) }
         guard text.utf8.count <= ProofLimits.textItemBytes else { return hold(text, for: token, reason: .textTooLarge, at: now) }
         guard let target = token.target else { return hold(text, for: token, reason: .noBinding, at: now) }
         let generation = connections.currentGeneration
@@ -429,16 +434,18 @@ public actor DeskHostProtocol {
         let pending = PendingDelivery(deliveryId: deliveryId, bindingId: binding.bindingId, connectionId: binding.connectionId,
                                       generation: generation, target: binding.target, pushedAt: now)
         guard drafts.reservePending(pending) else { return hold(text, for: token, reason: .targetChanged, at: now) }
+        // Kept in memory until the page's commit is confirmed; set aside as held
+        // if the binding is released, its document goes, or the Desk locks first.
+        drafts.retainUntilSaved(HeldDelivery(deliveryId: deliveryId, generation: generation, reason: .notSaved, text: text, heldAt: now))
         events.push(.dictationFinal(connectionId: binding.connectionId, generation: generation, bindingId: binding.bindingId,
                                     deliveryId: deliveryId, text: text))
         return .delivered(deliveryId: deliveryId, bindingId: binding.bindingId, connectionId: binding.connectionId, generation: generation)
     }
 
-    /// Held text is memory the host keeps for the owner; never after a lock
-    /// or close, and never for a token those revoked.
+    /// Held text is memory the host keeps for the owner, through a lock;
+    /// never after close, and never on disk.
     private func hold(_ text: String, for token: RecordingToken, reason: HeldReason, at now: Date) -> FinalDelivery {
-        guard token.lifecycle == lifecycle else { return .dropped(.revoked) }
-        if closed || store.isLocked { return .dropped(.locked) }
+        if closed { return .dropped(.revoked) }
         let held = HeldDelivery(deliveryId: drafts.makeDeliveryId(), generation: token.generation, reason: reason, text: text, heldAt: now)
         drafts.hold(held)
         return .held(held)
@@ -647,6 +654,10 @@ public actor DeskHostProtocol {
         case .success(let proven):
             outcome = proven
         }
+        // The words are on disk: whatever happened to the connection while
+        // the commit ran (an unbind, navigation or lock may have set them
+        // aside), they are never offered again as unsaved.
+        if let deliveryId, case .committed = outcome { drafts.completePending(deliveryId) }
         // The result is on disk, but there is no valid connection to tell:
         // the barrier holds until the result reaches one, or until a fresh
         // document, recovery or the next save finds it orphaned.
@@ -655,7 +666,6 @@ public actor DeskHostProtocol {
         switch outcome {
         case .committed(let revision):
             if let deliveryId {
-                drafts.completePending(deliveryId)
                 push(.dictationReceipt(connectionId: request.connectionId, generation: request.generation, deliveryId: deliveryId,
                                        commitRequestId: request.requestId, revision: revision))
             }
@@ -854,6 +864,7 @@ public actor DeskHostProtocol {
         let targetField = JSONValue.string(target.canonicalString)
         if let entry {
             releaseBarrier(target)
+            forgetSavedWords()
             return .ok(echo, ["targetRequestId": targetField, "original": Self.original(entry)])
         }
         if let entry = ephemeralReplays[target] {
@@ -879,11 +890,25 @@ public actor DeskHostProtocol {
         }
         guard let evidence else { return .refused(.unknownDelivery, echo: echo) }
         guard case .saved(let commitRequestId, let revision) = evidence else { return .unknown(echo) }
+        drafts.completePending(deliveryId)
         return .ok(echo, [
             "deliveryId": .string(deliveryId.canonicalString),
             "commitRequestId": .string(commitRequestId.canonicalString),
             "revision": .number(Double(revision))
         ])
+    }
+
+    /// Words kept in memory whose commit the store shows saved (one that
+    /// finished after its connection went, or was recovered) are forgotten,
+    /// so saved words are never offered again. A store that cannot answer
+    /// leaves them kept: offering saved words twice is better than losing
+    /// unsaved ones.
+    func forgetSavedWords() {
+        let ids = drafts.heldDeliveries.map(\.deliveryId) + drafts.pendingDeliveries.map(\.deliveryId)
+        for id in ids {
+            guard case .saved? = try? store.deliveryEvidence(for: id) else { continue }
+            drafts.completePending(id)
+        }
     }
 
     // MARK: Helpers

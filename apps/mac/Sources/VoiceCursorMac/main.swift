@@ -10300,6 +10300,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self.handleInputOutsideDictationTarget(.deskBecameKey)
             }
             windowController.onStateChange = { [weak self] in self?.refreshDeskMenuItems() }
+            // Set-aside dictation: the pill says where the words went; the
+            // words themselves are only in the Desk window's row.
+            var heldShown = 0
+            windowController.onHeldDictationChange = { [weak self] count in
+                defer { heldShown = count }
+                guard let self, count > heldShown else { return }
+                self.liveTranscriptWindow.showBriefNote("Words kept in the Desk window", seconds: 3)
+            }
             deskWindowController = windowController
         }
         RunLog.write("desk.window.open", "state=\(session.state.logName)")

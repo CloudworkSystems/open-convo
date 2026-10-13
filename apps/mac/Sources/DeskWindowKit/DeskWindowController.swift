@@ -176,6 +176,19 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
     let unlockButton = NSButton(title: "Unlock…", target: nil, action: nil)
     let stoppedBanner = NSView()
     let reloadButton = NSButton(title: "Reload", target: nil, action: nil)
+    /// Set-aside dictation: words the Desk could not place, kept in memory.
+    let heldRow = NSView()
+    let heldLabel = NSTextField(wrappingLabelWithString: "")
+    let heldCopyButton = NSButton(title: "Copy", target: nil, action: nil)
+    let heldDismissButton = NSButton(title: "Dismiss", target: nil, action: nil)
+    /// Puts text on the clipboard (a seam for tests).
+    var copyToClipboard: (String) -> Void = { text in
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+    /// Called after the set-aside dictation changes, with how many are kept
+    /// (for the app's pill and menu).
+    public var onHeldDictationChange: (@MainActor (Int) -> Void)?
     private(set) var embeddedWebView: WKWebView?
     private var closingNow = false
     private var closeInProgress = false
@@ -231,6 +244,11 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
             self.stoppedBanner.isHidden = self.session.state != .open
         }
         session.onPageStarted = { [weak self] in self?.stoppedBanner.isHidden = true }
+        session.onHeldDictationChange = { [weak self] in
+            guard let self else { return }
+            self.renderHeld()
+            self.onHeldDictationChange?(self.session.heldDictation.count)
+        }
         session.confirmLeavingUnsavedWork = { [weak self] _, reason in
             guard let self, let window = self.window else { return false }
             return await self.prompt.ask(.leavePage, reason: reason, in: window)
@@ -278,6 +296,20 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
 
     @objc func lockPressed(_ sender: Any?) {
         Task { await session.lock(reason: .lockButton) }
+    }
+
+    /// Copies the oldest set-aside dictation; it stays until dismissed.
+    @objc func heldCopyPressed(_ sender: Any?) {
+        guard session.state == .open, let oldest = session.heldDictation.first else { return }
+        copyToClipboard(oldest.text)
+        log("desk.dictation.held.copied", "count=\(session.heldDictation.count)")
+        heldLabel.stringValue = Self.heldLine(count: session.heldDictation.count, open: true, copied: true)
+    }
+
+    /// Forgets the oldest set-aside dictation.
+    @objc func heldDismissPressed(_ sender: Any?) {
+        guard let oldest = session.heldDictation.first else { return }
+        _ = session.takeHeldDictation(oldest.deliveryId)
     }
 
     @objc func unlockPressed(_ sender: Any?) {
@@ -482,7 +514,24 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
             paidUsageRow = row
             rows.append(row)
         }
-        rows += [stoppedBanner, pageContainer]
+        heldLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        for button in [heldCopyButton, heldDismissButton] {
+            button.target = self
+            button.bezelStyle = .rounded
+            button.setContentHuggingPriority(.required, for: .horizontal)
+        }
+        heldCopyButton.action = #selector(heldCopyPressed(_:))
+        heldDismissButton.action = #selector(heldDismissPressed(_:))
+        heldLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let heldStack = NSStackView(views: [heldLabel, heldCopyButton, heldDismissButton])
+        heldStack.orientation = .horizontal
+        heldStack.alignment = .centerY
+        heldStack.edgeInsets = NSEdgeInsets(top: 4, left: 12, bottom: 4, right: 12)
+        pin(heldStack, in: heldRow)
+        heldRow.wantsLayer = true
+        heldRow.layer?.backgroundColor = NSColor.systemOrange.withAlphaComponent(0.18).cgColor
+        heldRow.isHidden = true
+        rows += [heldRow, stoppedBanner, pageContainer]
         let column = NSStackView(views: rows)
         column.orientation = .vertical
         column.alignment = .leading
@@ -604,6 +653,25 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
             }
         }
         renderPaidUsage()
+        renderHeld()
         onStateChange?()
+    }
+
+    /// The set-aside dictation row: hidden when nothing is kept. A locked
+    /// Desk shows only how many, never the words, and its buttons are off.
+    func renderHeld() {
+        let count = session.heldDictation.count
+        let open = session.state == .open
+        heldRow.isHidden = count == 0
+        heldLabel.stringValue = count == 0 ? "" : Self.heldLine(count: count, open: open, copied: false)
+        heldCopyButton.isEnabled = open && count > 0
+        heldDismissButton.isEnabled = open && count > 0
+    }
+
+    static func heldLine(count: Int, open: Bool, copied: Bool) -> String {
+        let what = count == 1 ? "1 dictation" : "\(count) dictations"
+        guard open else { return "\(what) set aside. Unlock to copy. Kept in memory only, lost if True Convo quits." }
+        if copied { return "Copied the oldest of \(what). Paste it where you want, then Dismiss it." }
+        return "\(what) set aside: the Desk couldn't place the words. Kept in memory only, lost if True Convo quits."
     }
 }
