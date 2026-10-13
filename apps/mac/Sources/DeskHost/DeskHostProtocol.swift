@@ -575,13 +575,21 @@ public actor DeskHostProtocol {
             if inFlight == holder.requestId { return .unknown(echo) }
             guard let entry = try? store.terminalResult(for: request.requestId) else { return .unknown(echo) }
             releaseBarrier(request.requestId)
+            // An exact resend that finds the result: saved words go too.
+            if deliveryId != nil { forgetSavedWords() }
             return Self.response(for: entry, echo: echo)
         }
         releaseOrphanedBarrier()
         guard holder == nil else { return .refused(.mutationOutstanding, echo: echo) }
-        if let replayed = replay(ephemeralReplays[request.requestId], for: request) { return replayed }
+        if let replayed = replay(ephemeralReplays[request.requestId], for: request) {
+            if deliveryId != nil { forgetSavedWords() }
+            return replayed
+        }
         do {
-            if let replayed = replay(try store.terminalResult(for: request.requestId), for: request) { return replayed }
+            if let replayed = replay(try store.terminalResult(for: request.requestId), for: request) {
+                if deliveryId != nil { forgetSavedWords() }
+                return replayed
+            }
         } catch {
             return .refused(Self.refusal(for: error), echo: echo)
         }
