@@ -546,7 +546,20 @@ public final class ProofStore: @unchecked Sendable {
         do {
             switch PathNode.inspect(markerURL.path) {
             case .absent:
-                guard PathNode.inspect(stateURL.path) == .absent else { throw ProofStoreError.corruptState }
+                switch PathNode.inspect(stateURL.path) {
+                case .absent:
+                    break
+                case .regular(links: 1):
+                    // A state file with no marker: provisioning was cut off
+                    // between the two writes (state first, marker last), so
+                    // this store was never established and nothing was ever
+                    // committed to it. The file is set aside under a new name,
+                    // never deleted or overwritten, and the store is
+                    // provisioned fresh.
+                    try Self.setAsideUnprovisionedState(stateURL, in: self.directory)
+                default:
+                    throw ProofStoreError.corruptState
+                }
                 guard let revision = seed.record["revision"]?.safeIntegerValue else { throw ProofStoreError.invalidSeed }
                 let workspaceId = UUID()
                 let key: StoreKey
@@ -655,6 +668,19 @@ public final class ProofStore: @unchecked Sendable {
     }
 
     deinit { close() }
+
+    /// The prefix of a state file set aside after an interrupted first
+    /// provisioning (`state.unprovisioned-<uuid>.json`).
+    static let unprovisionedStatePrefix = "state.unprovisioned-"
+
+    /// Renames an orphan `state.json` to a fresh name in the same folder,
+    /// refusing to replace anything already there (RENAME_EXCL).
+    private static func setAsideUnprovisionedState(_ stateURL: URL, in directory: URL) throws {
+        let aside = directory.appendingPathComponent("\(unprovisionedStatePrefix)\(UUID().canonicalString).json")
+        guard renamex_np(stateURL.path, aside.path, UInt32(RENAME_EXCL)) == 0 else {
+            throw ProofStoreError.writeFailed(errno)
+        }
+    }
 
     private static func loadState(at url: URL, marker: Marker, capacity: Int, cipher: StoreCipher) -> State? {
         // A file that does not open under this store's key and purpose
