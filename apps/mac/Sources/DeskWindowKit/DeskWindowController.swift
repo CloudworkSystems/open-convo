@@ -169,6 +169,14 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
     let stripLabel = NSTextField(labelWithString: "")
     let noticeLabel = NSTextField(wrappingLabelWithString: "")
     let lockButton = NSButton(title: "Lock", target: nil, action: nil)
+    /// Step 1, PR 3: hides the Desk window and leaves the pill showing. The
+    /// Desk stays as it was; shown only once the app wires the pill.
+    let shrinkButton = NSButton(title: "Shrink to Pill", target: nil, action: nil)
+    /// Called after the window was hidden by Shrink to Pill (the app shows
+    /// the pill). Setting it shows the button.
+    public var onShrinkToPill: (@MainActor () -> Void)? {
+        didSet { shrinkButton.isHidden = onShrinkToPill == nil }
+    }
     let pageContainer = NSView()
     let lockedOverlay = NSView()
     let lockedTitle = NSTextField(labelWithString: "Locked")
@@ -293,6 +301,23 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
     }
 
     // MARK: Actions
+
+    @objc func shrinkPressed(_ sender: Any?) {
+        shrinkToPill()
+    }
+
+    /// Hides the Desk window without closing or locking anything: an open
+    /// Desk keeps its page and draft, a locked one stays locked. Nothing
+    /// happens when the window is not showing.
+    public func shrinkToPill() {
+        guard let window, window.isVisible else { return }
+        log("desk.window.shrunk", "state=\(session.state.logName)")
+        window.orderOut(nil)
+        onShrinkToPill?()
+    }
+
+    /// Whether the Desk window is on screen (shown, not shrunk or closed).
+    public var isShowing: Bool { window?.isVisible ?? false }
 
     @objc func lockPressed(_ sender: Any?) {
         Task { await session.lock(reason: .lockButton) }
@@ -469,7 +494,13 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
         texts.orientation = .vertical
         texts.alignment = .leading
         texts.spacing = 2
-        let strip = NSStackView(views: [texts, lockButton])
+        shrinkButton.target = self
+        shrinkButton.action = #selector(shrinkPressed(_:))
+        shrinkButton.bezelStyle = .rounded
+        shrinkButton.toolTip = "Hide the Desk and keep the pill. The Desk stays as it is; the pill's Desk button brings it back."
+        shrinkButton.setContentHuggingPriority(.required, for: .horizontal)
+        shrinkButton.isHidden = true
+        let strip = NSStackView(views: [texts, shrinkButton, lockButton])
         strip.orientation = .horizontal
         strip.alignment = .centerY
         strip.edgeInsets = NSEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)

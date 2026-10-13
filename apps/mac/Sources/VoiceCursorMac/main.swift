@@ -193,6 +193,12 @@ enum HotKeyShortcut: String, CaseIterable {
     // Shortcut Key menu. Three modifiers so it collides with nothing in
     // Claude, Codex, or VS Code.
     case controlOptionCommandC = "control-option-command-c"
+    // Reserved for switching between the pill and the Desk (step 1, PR 3);
+    // excluded from the dictation Shortcut Key menu like the one above.
+    case controlOptionCommandT = "control-option-command-t"
+
+    /// The shortcuts kept for other jobs, never offered for dictation.
+    static let reserved: Set<HotKeyShortcut> = [.controlOptionCommandC, .controlOptionCommandT]
 
     var label: String {
         switch self {
@@ -202,6 +208,7 @@ enum HotKeyShortcut: String, CaseIterable {
         case .controlOptionD: return "Control+Option+D"
         case .controlOptionSpace: return "Control+Option+Space"
         case .controlOptionCommandC: return "Control+Option+Cmd+C"
+        case .controlOptionCommandT: return DeskSwitchPolicy.shortcutLabel
         }
     }
 
@@ -213,6 +220,8 @@ enum HotKeyShortcut: String, CaseIterable {
             return UInt32(kVK_Space)
         case .controlOptionCommandC:
             return UInt32(kVK_ANSI_C)
+        case .controlOptionCommandT:
+            return UInt32(kVK_ANSI_T)
         }
     }
 
@@ -226,7 +235,7 @@ enum HotKeyShortcut: String, CaseIterable {
             return UInt32(cmdKey | optionKey)
         case .controlOptionD, .controlOptionSpace:
             return UInt32(controlKey | optionKey)
-        case .controlOptionCommandC:
+        case .controlOptionCommandC, .controlOptionCommandT:
             return UInt32(controlKey | optionKey | cmdKey)
         }
     }
@@ -241,7 +250,7 @@ enum HotKeyShortcut: String, CaseIterable {
             return [.command, .option]
         case .controlOptionD, .controlOptionSpace:
             return [.control, .option]
-        case .controlOptionCommandC:
+        case .controlOptionCommandC, .controlOptionCommandT:
             return [.control, .option, .command]
         }
     }
@@ -8190,6 +8199,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private var hotKey: HotKey?
     private var correctionHotKey: HotKey?
+    /// Step 1, PR 3: switches between the pill and the Desk.
+    private var deskSwitchHotKey: HotKey?
     private var externalShortcutMonitor: Any?
     private let statusMenuItem = NSMenuItem(title: "Idle", action: nil, keyEquivalent: "")
     private let providerReadinessMenuItem = NSMenuItem(title: "Mode: Local Only (Apple On-Device) - Local only", action: nil, keyEquivalent: "")
@@ -8242,6 +8253,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var quitAskedAboutDesk = false
     private let deskMenuItem = NSMenuItem(title: "Desk (invented data)…", action: nil, keyEquivalent: "")
     private let lockDeskMenuItem = NSMenuItem(title: "Lock Desk", action: nil, keyEquivalent: "")
+    private let switchDeskMenuItem = NSMenuItem(title: "Switch Desk and Pill (\(DeskSwitchPolicy.shortcutLabel))", action: nil, keyEquivalent: "")
     private static func deskRefusalMessage(_ refusal: DeskDictationPolicy.DeskRefusal) -> String {
         switch refusal {
         case .noDraftReady: return "Click into a Desk draft first, then dictate."
@@ -8424,6 +8436,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 DispatchQueue.main.async { self?.correctSelectedTextAfterHotKeyRelease() }
             }
         )
+        // Pill and Desk, both directions (step 1, PR 3): one shortcut, and a
+        // Desk button on the pill. Only in a build with a Desk.
+        if deskBundle != nil {
+            deskSwitchHotKey = HotKey(
+                id: 3,
+                shortcut: .controlOptionCommandT,
+                onPressed: { [weak self] in
+                    DispatchQueue.main.async {
+                        MainActor.assumeIsolated { self?.toggleDeskAndPill() }
+                    }
+                },
+                onReleased: {}
+            )
+            liveTranscriptWindow.onDeskButton = { [weak self] in
+                MainActor.assumeIsolated { self?.showDeskFromPill() }
+            }
+        }
         // Right-click path for native apps (Notes, Mail, Safari, TextEdit):
         // "Correct With True Convo" in the Services menu.
         NSApp.servicesProvider = self
@@ -8669,6 +8698,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         lockDeskMenuItem.target = self
         lockDeskMenuItem.toolTip = "Hide the Desk at once. Unlocking asks for your Mac password or Touch ID again."
         menu.addItem(lockDeskMenuItem)
+        switchDeskMenuItem.target = self
+        switchDeskMenuItem.toolTip = "Shrink the Desk to the pill, or bring it back where you left it."
+        menu.addItem(switchDeskMenuItem)
         refreshDeskMenuItems()
         providerReadinessMenuItem.isEnabled = false
         menu.addItem(providerReadinessMenuItem)
@@ -8743,7 +8775,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let hotKeyShortcutItem = NSMenuItem(title: "Shortcut Key", action: nil, keyEquivalent: "")
         hotKeyShortcutItem.toolTip = "Choose the global shortcut that starts and stops True Convo."
         let hotKeyShortcutMenu = NSMenu()
-        hotKeyShortcutMenuItems = HotKeyShortcut.allCases.filter { $0 != .controlOptionCommandC }.map { shortcut in
+        hotKeyShortcutMenuItems = HotKeyShortcut.allCases.filter { !HotKeyShortcut.reserved.contains($0) }.map { shortcut in
             let item = NSMenuItem(title: shortcut.label, action: #selector(selectHotKeyShortcut(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = shortcut.rawValue
@@ -10478,6 +10510,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self.handleInputOutsideDictationTarget(.deskBecameKey)
             }
             windowController.onStateChange = { [weak self] in self?.refreshDeskMenuItems() }
+            windowController.onShrinkToPill = { [weak self] in self?.showPillAfterShrink() }
             // Set-aside dictation: the pill says where the words went; the
             // words themselves are only in the Desk window's row.
             var heldShown = 0
@@ -10491,6 +10524,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         RunLog.write("desk.window.open", "state=\(session.state.logName)")
         windowController.showDesk()
         refreshDeskMenuItems()
+    }
+
+    /// The switching shortcut and menu item: a Desk holding the focus
+    /// shrinks to the pill; otherwise the Desk comes back where it was left.
+    @MainActor
+    @objc private func toggleDeskAndPill() {
+        let holdsFocus = deskWindowController?.holdsFocus ?? false
+        switch DeskSwitchPolicy.toggle(hasDesk: deskBundle != nil, deskWindowHoldsFocus: holdsFocus) {
+        case .shrinkToPill:
+            RunLog.write("desk.switch", "to=pill via=shortcut")
+            deskWindowController?.shrinkToPill()
+        case .showDesk:
+            RunLog.write("desk.switch", "to=desk via=shortcut")
+            openDesk()
+        case .noDesk:
+            updateStatus("The Desk isn't in this build")
+        }
+    }
+
+    /// The pill's Desk button.
+    @MainActor
+    private func showDeskFromPill() {
+        guard case .showDesk = DeskSwitchPolicy.pillDeskButton(hasDesk: deskBundle != nil) else { return }
+        RunLog.write("desk.switch", "to=desk via=pill")
+        openDesk()
+    }
+
+    /// After Shrink to Pill: the pill shows, ready, unless a dictation is
+    /// running or finishing (its own state stays on the pill).
+    @MainActor
+    private func showPillAfterShrink() {
+        guard !controller.isBusy else { return }
+        liveTranscriptWindow.showReady()
     }
 
     @MainActor
@@ -10507,6 +10573,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let open = onMainThread(false) { deskSessionStorage?.isOpen ?? false }
         lockDeskMenuItem.action = open ? #selector(lockDesk) : nil
         lockDeskMenuItem.isEnabled = open
+        switchDeskMenuItem.action = hasDesk ? #selector(toggleDeskAndPill) : nil
+        switchDeskMenuItem.isEnabled = hasDesk
+        switchDeskMenuItem.isHidden = !hasDesk
     }
 
     /// Whether the Desk window holds the focus, and in what state. Not

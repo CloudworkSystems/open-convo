@@ -91,7 +91,12 @@ Each one ends with something the owner can try on the Mac.
    - In the pill: a small Desk button that opens the Desk where it was left.
    - In the Desk: a "shrink to pill" button that hides the Desk window and
      leaves the pill showing.
-   - One keyboard shortcut that toggles between them.
+   - One keyboard shortcut that toggles between them: Control+Option+Cmd+T,
+     kept off the dictation shortcut list (dictation uses D shortcuts, typed
+     corrections Control+Option+Cmd+C). Also in the menu as "Switch Desk and
+     Pill".
+   - Shrinking only hides the Desk window. An open Desk keeps its page and
+     draft, and a locked one stays locked.
    *Owner tries:* shrink the Desk to the pill, dictate into another app, click
    the pill's Desk button, and the Desk is back with its draft intact.
 4. **One build to install.** Today `package_app.sh` deliberately refuses to
