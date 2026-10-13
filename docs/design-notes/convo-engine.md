@@ -59,6 +59,55 @@ relabel the core. So:
    content. Voice cloning only of the owner's own voice or with the speaker's
    recorded consent.
 
+## Speech Output, Corrections, Cloning and Realism (Owner Questions, October 13)
+
+### True Convo Speaking (Text-to-Speech)
+
+Three levels, cheapest first:
+
+1. **Apple's built-in voices.** Free, local, on every Mac. The baseline from day
+   one; no extra install.
+2. **Apple Personal Voice.** The user reads a set of phrases once and the Mac
+   builds a voice like theirs, on-device. Apps may use it only with the user's
+   permission. A private route to "my own voice."
+3. **Voicebox engines** through the adapter: more expressive, clone from a short
+   sample.
+
+### How Saved Corrections Are Used
+
+1. **Fix after hearing (built).** `CorrectionMemory` swaps known mishearings
+   after transcription.
+2. **Hear it right the first time (next).** Saved fixes become a vocabulary list
+   given to the speech model before it listens (Whisper's prompt, Apple speech's
+   contextual strings), so known names and terms stop being misheard.
+3. **Train on the owner's voice (later).** Kept local recordings plus corrected
+   transcripts become training pairs to tune a local speech model to the owner's
+   accent and phrasing. Only local-only recordings are eligible, never ones a
+   cloud service processed (the Mac app already marks this). Needs hours of
+   audio, so it comes last.
+
+Separately, the writing model uses the clarity library's wording lessons, so it
+learns phrasing as well as words.
+
+### Cloning the Owner's Voice
+
+- A clean one-to-three-minute reading in a quiet room makes a better clone than
+  everyday dictations; stored recordings help the speech-model training above.
+- Recordings stay off by default and protected (step 2). Only the owner's own
+  voice, or a speaker with recorded consent, may be cloned.
+
+### Realism, Both Directions (Owner Decision: Both)
+
+- **In transcripts:** keep fillers ("um"), mark laughs and other non-speech
+  sounds, and record pause lengths and word timing. This preserves how the owner
+  actually talks and is the raw material for the next point and for writing in
+  their voice. Clean versions are produced from it on request; the original
+  stays.
+- **In True Convo's speech:** use engines that support expressive cues (pauses,
+  emphasis, breaths, laughs) and clone from an expressive sample, so output
+  carries the owner's cadence. Quality varies by engine; test candidates on the
+  owner's Mac and let the owner pick by ear.
+
 ## Rules
 
 - Local first: speech recognition and the rewrite model run on the Mac by
