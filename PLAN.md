@@ -50,17 +50,27 @@ has tried it. Each step ends with something the owner can try.
    [docs/plans/step-2-protected-storage.md](docs/plans/step-2-protected-storage.md).
    Owner decisions: a recovery key ships in this step, and dictation history
    and saved word fixes are protected along with the Desk.
-3. **One real conversation.** One approved model route using an existing
-   subscription, no paid fallback. Replies stream in, Stop works, safe retry,
-   and the session reopens later without retelling. The app shows which model
-   receives what before Send. *Finish line:* the owner holds a real conversation,
-   quits, reopens and continues it.
+3. **One real conversation, local first.** The first route is a local model
+   through Ollama on the owner's Mac, chosen with a model picker; no paid
+   fallback. Replies stream in, Stop works, safe retry, and the session reopens
+   later without retelling. The app shows which model receives what before
+   Send, and each cloud model and host needs the owner's one-time approval.
+   Model choice is rules only for now (the owner's default plus a
+   per-conversation choice). The building session tests two or three local chat
+   models on the Mac and the owner picks by feel. Step 3 finishes with the
+   local route only; Claude through Claude Code is the next adapter, built
+   right after step 3. *Finish line:* the owner holds a real
+   conversation, quits, reopens and continues it. Profiles, harnesses, billing
+   and adapter order:
+   [docs/design-notes/agent-profiles-and-adapters.md](docs/design-notes/agent-profiles-and-adapters.md).
 4. **Clarity tools in the conversation.** Design rules from the owner: the
    explainer is an outsider. Like the old Codex "More detail" right-click, it
    answers from outside the conversation and never receives the main assistant's
    system prompt, instructions or project rules, which is why its explanations
    read more plainly. The owner highlights any part of a reply and right-clicks
-   for it. Connect `packages/clarity` to the Desk:
+   for it. Owner decision (October 13): the outsider runs on a **local model**,
+   so the highlighted text never leaves the Mac. Connect `packages/clarity` to
+   the Desk:
    Wait—what? on any assistant reply, select-a-phrase corrections, saved wording
    lessons that shape later replies, with Undo. *Finish line:* the owner uses
    Wait—what? and a correction in a real conversation and sees the next reply
@@ -71,12 +81,20 @@ has tried it. Each step ends with something the owner can try.
    for content creation.
 5. **Chosen memory on real storage.** Remember, correct, forget and Undo on the
    protected store; memory candidates wait for the owner's approval; forgotten
-   items leave AI use immediately, with a 30-day Trash. *Finish line:* the owner
+   items leave AI use immediately, with a 30-day Trash. Owner decision
+   (October 13): memory lives in **separate spaces** (Personal, one per
+   business, later Family). A memory applies only in its own space unless the
+   owner shares it. Sensitive details need an explicit Save, and saving never
+   permits cloud use without separate approval. *Finish line:* the owner
    teaches, corrects and forgets something real and sees it respected.
 
 ### After the Top Five
 
-6. Claude and Codex visible together in one session, with scoped delegation.
+- **First-run guide** (ordinary code, no AI): checks the computer, sets up a
+  local model or a cloud model. Needed before anyone else installs.
+
+6. Agents working together: the Pi harness for agent profiles, the model-based
+   dispatcher, Claude and Codex visible in one session, scoped delegation.
 7. Navigator search and sorting; Related and Revisit-when reminders.
 8. Reading the owner's real old sessions on the Mac, read-only.
 9. First creator beta: worksheet, website export, encrypted transfer between devices.
