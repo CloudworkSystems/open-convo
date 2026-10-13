@@ -34,6 +34,12 @@ Living Sites") is broken and was never published, but two ideas carry over:
 - The same free host may also serve the Desk's private review copy (an open
   question in `PLAN.md`).
 
+## Design Capabilities (Owner Decision, October 13)
+
+Site Engine uses **Impeccable** (design audit and polish) and **ScrollCraft**
+(scroll-driven pages) as True Convo capabilities, not as AI-program skills. See
+`capabilities-and-primitives.md`.
+
 ## First Deliverable
 
 A one-page site for one of the owner's businesses (owner picks which), built
