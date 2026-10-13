@@ -10554,12 +10554,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// Back to the Desk: an idle pill steps aside (Codex P2 on #10). It
-    /// stays while a dictation runs or finishes, and when the owner keeps
-    /// the pill on screen (persistent pill on).
+    /// stays while a dictation runs or finishes, while an outcome still
+    /// lingers on it, and when the owner keeps the pill on screen.
     @MainActor
     private func hideIdlePillForDesk() {
         guard DeskSwitchPolicy.hidesPillWhenShowingDesk(
             dictationBusy: controller.isBusy,
+            pillShowingOutcome: liveTranscriptWindow.isShowingOutcome,
             pillKeptOnScreen: Settings.pillBehavior == .persistent && persistentPillActive
         ) else { return }
         liveTranscriptWindow.hideNow()

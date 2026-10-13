@@ -30,10 +30,11 @@ public enum DeskSwitchPolicy {
     }
 
     /// Showing the Desk hides an idle pill, so it does not float over the
-    /// Desk; it stays while a dictation runs or finishes, and when the
-    /// owner keeps the pill on screen.
-    public static func hidesPillWhenShowingDesk(dictationBusy: Bool, pillKeptOnScreen: Bool) -> Bool {
-        !dictationBusy && !pillKeptOnScreen
+    /// Desk. It stays while a dictation runs or finishes, while it still
+    /// shows an outcome (a warning such as set-aside words must be read),
+    /// and when the owner keeps the pill on screen.
+    public static func hidesPillWhenShowingDesk(dictationBusy: Bool, pillShowingOutcome: Bool, pillKeptOnScreen: Bool) -> Bool {
+        !dictationBusy && !pillShowingOutcome && !pillKeptOnScreen
     }
 
     /// The shortcut's label, shown in the menu.

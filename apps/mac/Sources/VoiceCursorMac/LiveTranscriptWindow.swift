@@ -528,6 +528,9 @@ final class LiveTranscriptWindowController: NSWindowController, NSWindowDelegate
         Date() < outcomeExpiresAt
     }
 
+    /// Whether an outcome or note is still lingering on the pill.
+    var isShowingOutcome: Bool { hasActiveOutcome }
+
     init() {
         let window = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 170, height: 42),

@@ -22,10 +22,12 @@ struct DeskSwitchPolicyTests {
         #expect(DeskSwitchPolicy.shortcutLabel == "Control+Option+Cmd+T")
     }
 
-    @Test("Showing the Desk hides an idle pill, never a busy or kept one")
+    @Test("Showing the Desk hides an idle pill, never a busy, kept or still-reporting one")
     func pillStepsAside() {
-        #expect(DeskSwitchPolicy.hidesPillWhenShowingDesk(dictationBusy: false, pillKeptOnScreen: false))
-        #expect(!DeskSwitchPolicy.hidesPillWhenShowingDesk(dictationBusy: true, pillKeptOnScreen: false))
-        #expect(!DeskSwitchPolicy.hidesPillWhenShowingDesk(dictationBusy: false, pillKeptOnScreen: true))
+        #expect(DeskSwitchPolicy.hidesPillWhenShowingDesk(dictationBusy: false, pillShowingOutcome: false, pillKeptOnScreen: false))
+        #expect(!DeskSwitchPolicy.hidesPillWhenShowingDesk(dictationBusy: true, pillShowingOutcome: false, pillKeptOnScreen: false))
+        #expect(!DeskSwitchPolicy.hidesPillWhenShowingDesk(dictationBusy: false, pillShowingOutcome: true, pillKeptOnScreen: false),
+                "an outcome still lingering (set-aside words, clipboard fallback) stays readable")
+        #expect(!DeskSwitchPolicy.hidesPillWhenShowingDesk(dictationBusy: false, pillShowingOutcome: false, pillKeptOnScreen: true))
     }
 }
