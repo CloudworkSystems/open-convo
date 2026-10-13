@@ -38,6 +38,8 @@ struct DeskSwitchPolicyTests {
         #expect(DeskSwitchShortcut.stored("off") == .off)
         #expect(DeskSwitchShortcut.stored("control-option-command-t") == .controlOptionCommandT)
         #expect(DeskSwitchShortcut.doubleTapRightOption.label == "Double-Tap Right Option")
+        #expect(DeskSwitchPolicy.shortcutDescription(.off) == "Shortcut off", "Off is named, never left blank")
+        #expect(DeskSwitchPolicy.shortcutDescription(.doubleTapRightOption) == "Double-Tap Right Option")
     }
 
     /// Feeds inputs in order; the result of the last one.

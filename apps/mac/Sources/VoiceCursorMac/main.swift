@@ -10001,7 +10001,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .off:
             break
         }
-        liveTranscriptWindow.deskShortcutLabel = choice == .off ? nil : choice.label
+        liveTranscriptWindow.deskShortcutLabel = DeskSwitchPolicy.shortcutDescription(choice)
         RunLog.write("desk.switch.shortcut", "choice=\(choice.rawValue)")
     }
 
@@ -11098,7 +11098,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             item.state = (item.representedObject as? String) == Settings.deskSwitchShortcut.rawValue ? .on : .off
         }
         let deskSwitchChoice = Settings.deskSwitchShortcut
-        switchDeskMenuItem.title = deskSwitchChoice == .off ? "Switch Desk and Pill" : "Switch Desk and Pill (\(deskSwitchChoice.label))"
+        switchDeskMenuItem.title = "Switch Desk and Pill (\(DeskSwitchPolicy.shortcutDescription(deskSwitchChoice)))"
         for item in insertionTimingMenuItems {
             item.state = (item.representedObject as? String) == InsertionTiming.current.rawValue ? .on : .off
         }

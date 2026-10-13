@@ -37,6 +37,12 @@ public enum DeskSwitchPolicy {
         !dictationBusy && !pillShowingOutcome && !pillKeptOnScreen
     }
 
+    /// How the menu item and the pill button name the current choice; Off
+    /// is named too, so a disabled shortcut never looks like a missing one.
+    public static func shortcutDescription(_ choice: DeskSwitchShortcut) -> String {
+        choice == .off ? "Shortcut off" : choice.label
+    }
+
     /// The four-key shortcut's label (kept as a choice in the menu).
     public static let shortcutLabel = "Control+Option+Cmd+T"
 }

@@ -511,7 +511,7 @@ final class LiveTranscriptWindowController: NSWindowController, NSWindowDelegate
     var onDeskButton: (() -> Void)? {
         didSet { deskButton.isHidden = onDeskButton == nil }
     }
-    /// The Desk switch shortcut's name for the button's tooltip; nil when off.
+    /// The Desk switch shortcut, as the tooltip names it ("Shortcut off" when off).
     var deskShortcutLabel: String? {
         didSet {
             deskButton.toolTip = deskShortcutLabel.map { "Open the Desk where you left it (\($0))" } ?? "Open the Desk where you left it"
