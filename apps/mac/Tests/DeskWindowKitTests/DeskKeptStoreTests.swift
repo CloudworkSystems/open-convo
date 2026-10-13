@@ -132,6 +132,22 @@ final class DeskKeptStoreTests: XCTestCase {
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: elsewhere.path), [], "nothing written through the link")
     }
 
+    func testAStep1MarkerIsBroughtUpToDateAndAnEditedOneIsLeft() throws {
+        let marker = folder.base.appendingPathComponent(DeskPaths.markerFileName)
+        try folder.paths.prepareBase()
+        try Data(DeskPaths.previousMarkerText.utf8).write(to: marker)
+        _ = try folder.paths.openKeptStoreFolder()
+        XCTAssertEqual(try String(contentsOf: marker, encoding: .utf8), DeskPaths.markerText)
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: folder.base.path).filter { $0.hasPrefix(".") }
+        XCTAssertEqual(leftovers, [], "no temporary file is left behind")
+
+        let edited = Data("Invented data only.\nThe owner's own words.\n".utf8)
+        try edited.write(to: marker)
+        _ = try folder.paths.openKeptStoreFolder()
+        XCTAssertEqual(try Data(contentsOf: marker), edited, "a marker with other words is left alone")
+        XCTAssertNotEqual(DeskPaths.previousMarkerText, DeskPaths.markerText)
+    }
+
     func testAppStorageIsTheKeychainScopedByIdentity() throws {
         for (identity, service) in [(AppIdentity.release, "com.trueconvo.voice-cursor.desk-store-key"),
                                     (AppIdentity.test, "com.trueconvo.voice-cursor.test.desk-store-key")] {

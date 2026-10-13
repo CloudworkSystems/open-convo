@@ -61,6 +61,18 @@ public struct DeskPaths: Equatable, Sendable {
     Nothing here is real or private, and nothing here is deleted automatically.
 
     """
+    /// The marker's words before the kept store (step 1). A marker that
+    /// still reads exactly this is brought up to date when the kept store is
+    /// first used; one with any other words is left alone.
+    static let previousMarkerText = """
+    Invented data only.
+
+    True Convo's Desk window keeps made-up proof data here, one folder per app
+    run. Each folder's made-up key lived only in that run's memory, so a folder
+    from an earlier run cannot be opened again. Nothing here is real or
+    private, and nothing here is deleted automatically.
+
+    """
     public static let runFolderPrefix = "run-"
     /// The one store folder kept across runs (step 2, PR 2b).
     public static let keptStoreFolderName = "kept-store"
@@ -164,6 +176,7 @@ public struct DeskPaths: Equatable, Sendable {
     public func openKeptStoreFolder() throws -> URL {
         let base = try openBaseForWriting()
         try Self.makePrivate(base)
+        Self.refreshPreviousMarker(in: base)
         guard let store = try Self.openChild(Self.keptStoreFolderName, in: base, label: "store", creating: true) else {
             throw Failure.cannotCreate("store", ENOENT)
         }
@@ -321,6 +334,36 @@ public struct DeskPaths: Equatable, Sendable {
         defer { close(descriptor) }
         let bytes = Array(markerText.utf8)
         guard write(descriptor, bytes, bytes.count) == bytes.count else { throw Failure.cannotCreate("marker", errno) }
+    }
+
+    /// Replaces a marker that still holds exactly the step 1 words with the
+    /// current ones: written to a fresh private file beside it, then renamed
+    /// over it, all through the open base. Best effort: if anything is off
+    /// (not a plain file, other words, a failed write) the marker is left as
+    /// it is and the Desk opens anyway; nothing is deleted.
+    static func refreshPreviousMarker(in base: OpenFolder) {
+        let reader = openat(base.descriptor, markerFileName, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+        guard reader >= 0 else { return }
+        var info = Darwin.stat()
+        let old = Array(previousMarkerText.utf8)
+        guard fstat(reader, &info) == 0, info.st_mode & S_IFMT == S_IFREG, Int(info.st_size) == old.count else {
+            close(reader)
+            return
+        }
+        var bytes = [UInt8](repeating: 0, count: old.count + 1)
+        let count = read(reader, &bytes, bytes.count)
+        close(reader)
+        guard count == old.count, Array(bytes.prefix(count)) == old else { return }
+
+        var generator = SystemRandomNumberGenerator()
+        let temporary = ".\(markerFileName).\(String(format: "%08x", UInt32.random(in: .min ... .max, using: &generator)))"
+        let writer = openat(base.descriptor, temporary, O_CREAT | O_EXCL | O_WRONLY | O_NOFOLLOW | O_CLOEXEC, 0o600)
+        guard writer >= 0 else { return }
+        let fresh = Array(markerText.utf8)
+        let wrote = write(writer, fresh, fresh.count) == fresh.count && fsync(writer) == 0
+        close(writer)
+        guard wrote else { return }
+        _ = renameat(base.descriptor, temporary, base.descriptor, markerFileName)
     }
 
     /// The names in an open folder, read through that folder itself.
