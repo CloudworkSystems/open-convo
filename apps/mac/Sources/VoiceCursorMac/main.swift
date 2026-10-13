@@ -5922,6 +5922,18 @@ final class DictationController {
         }
     }
 
+    /// A Desk start still waiting for a permission answer is called off (the
+    /// hold-to-record key was let go): its callback will not start capture.
+    /// Returns whether one was pending. Outside starts are left as they are.
+    @discardableResult
+    func cancelPendingDeskStart() -> Bool {
+        guard !isBusy, deskRoute != nil else { return false }
+        startAttempt += 1
+        deskRoute = nil
+        RunLog.write("dictation.desk.start.cancelled", "reason=key-released-before-capture")
+        return true
+    }
+
     /// Whether `attempt` is still the latest start and nothing is running.
     private func isCurrentStart(_ attempt: Int) -> Bool {
         guard attempt == startAttempt, !isBusy else {
@@ -9276,6 +9288,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         TextInjector.markHotKeyReleased()
         guard Settings.hotKeyMode == .holdToRecord else { return }
         if deskStartPending { deskStartReleased = true }
+        // A Desk start may still be waiting for a permission answer: let go
+        // now, it never starts (Codex P1 on #9).
+        if !controller.isRecording, controller.cancelPendingDeskStart() {
+            settlePillAfterRefusedStart()
+        }
         if controller.isRecording {
             stopDictation()
         }

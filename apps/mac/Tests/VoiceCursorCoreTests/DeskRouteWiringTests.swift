@@ -48,4 +48,14 @@ struct DeskRouteWiringTests {
         let capture = try body("private func startCapture(", in: source)
         #expect(capture.contains("guard !isBusy else {"))
     }
+
+    @Test("Letting go of the key while a Desk start waits for permission calls it off")
+    func releaseCancelsPendingDeskStart() throws {
+        let source = try source()
+        let cancel = try body("func cancelPendingDeskStart() -> Bool", in: source)
+        #expect(cancel.contains("guard !isBusy, deskRoute != nil else { return false }"))
+        #expect(cancel.contains("startAttempt += 1"), "the pending permission callback is superseded")
+        let release = try body("private func handleHotKeyReleased()", in: source)
+        #expect(release.contains("if !controller.isRecording, controller.cancelPendingDeskStart() {"))
+    }
 }
