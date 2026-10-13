@@ -472,6 +472,13 @@ enum Settings {
         }
     }
 
+    /// Step 1, PR 3 follow-up: how the owner switches between the pill and
+    /// the Desk. Default: double-tap Right Option.
+    static var deskSwitchShortcut: DeskSwitchShortcut {
+        get { DeskSwitchShortcut.stored(defaults.string(forKey: "deskSwitchShortcut")) }
+        set { defaults.set(newValue.rawValue, forKey: "deskSwitchShortcut") }
+    }
+
     static var pillBehavior: PillBehavior {
         get {
             PillBehavior(rawValue: defaults.string(forKey: "pillBehavior") ?? "") ?? .oneShot
@@ -8201,6 +8208,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var correctionHotKey: HotKey?
     /// Step 1, PR 3: switches between the pill and the Desk.
     private var deskSwitchHotKey: HotKey?
+    /// Double-tap Right Option: watchers for other apps (global) and for
+    /// True Convo's own windows (local), and the tap recognizer they feed.
+    private var deskSwitchGlobalMonitor: Any?
+    private var deskSwitchLocalMonitor: Any?
+    private var deskSwitchDoubleTap = ModifierDoubleTap()
+    private var deskSwitchMenuItems: [NSMenuItem] = []
     private var externalShortcutMonitor: Any?
     private let statusMenuItem = NSMenuItem(title: "Idle", action: nil, keyEquivalent: "")
     private let providerReadinessMenuItem = NSMenuItem(title: "Mode: Local Only (Apple On-Device) - Local only", action: nil, keyEquivalent: "")
@@ -8253,7 +8266,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var quitAskedAboutDesk = false
     private let deskMenuItem = NSMenuItem(title: "Desk (invented data)…", action: nil, keyEquivalent: "")
     private let lockDeskMenuItem = NSMenuItem(title: "Lock Desk", action: nil, keyEquivalent: "")
-    private let switchDeskMenuItem = NSMenuItem(title: "Switch Desk and Pill (\(DeskSwitchPolicy.shortcutLabel))", action: nil, keyEquivalent: "")
+    private let switchDeskMenuItem = NSMenuItem(title: "Switch Desk and Pill", action: nil, keyEquivalent: "")
     private static func deskRefusalMessage(_ refusal: DeskDictationPolicy.DeskRefusal) -> String {
         switch refusal {
         case .noDraftReady: return "Click into a Desk draft first, then dictate."
@@ -8439,16 +8452,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Pill and Desk, both directions (step 1, PR 3): one shortcut, and a
         // Desk button on the pill. Only in a build with a Desk.
         if deskBundle != nil {
-            deskSwitchHotKey = HotKey(
-                id: 3,
-                shortcut: .controlOptionCommandT,
-                onPressed: { [weak self] in
-                    DispatchQueue.main.async {
-                        MainActor.assumeIsolated { self?.toggleDeskAndPill() }
-                    }
-                },
-                onReleased: {}
-            )
+            applyDeskSwitchShortcut()
             liveTranscriptWindow.onDeskButton = { [weak self] in
                 MainActor.assumeIsolated { self?.showDeskFromPill() }
             }
@@ -8701,6 +8705,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         switchDeskMenuItem.target = self
         switchDeskMenuItem.toolTip = "Shrink the Desk to the pill, or bring it back where you left it."
         menu.addItem(switchDeskMenuItem)
+        if deskBundle != nil {
+            let deskSwitchItem = NSMenuItem(title: "Desk Switch Shortcut", action: nil, keyEquivalent: "")
+            deskSwitchItem.toolTip = "Choose how to switch between the pill and the Desk."
+            let deskSwitchMenu = NSMenu()
+            deskSwitchMenuItems = DeskSwitchShortcut.allCases.map { choice in
+                let item = NSMenuItem(title: choice.label, action: #selector(selectDeskSwitchShortcut(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = choice.rawValue
+                deskSwitchMenu.addItem(item)
+                return item
+            }
+            deskSwitchItem.submenu = deskSwitchMenu
+            menu.addItem(deskSwitchItem)
+        }
         refreshDeskMenuItems()
         providerReadinessMenuItem.isEnabled = false
         menu.addItem(providerReadinessMenuItem)
@@ -9939,6 +9957,68 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateStatus("Shortcut key: \(shortcut.label)")
     }
 
+    @objc private func selectDeskSwitchShortcut(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let choice = DeskSwitchShortcut(rawValue: raw)
+        else { return }
+        Settings.deskSwitchShortcut = choice
+        applyDeskSwitchShortcut()
+        refreshMenuState()
+        updateStatus("Desk switch: \(choice.label)")
+    }
+
+    /// Turns on the chosen way to switch between the pill and the Desk and
+    /// turns the others off.
+    private func applyDeskSwitchShortcut() {
+        let choice = Settings.deskSwitchShortcut
+        deskSwitchHotKey = nil
+        if let deskSwitchGlobalMonitor { NSEvent.removeMonitor(deskSwitchGlobalMonitor) }
+        if let deskSwitchLocalMonitor { NSEvent.removeMonitor(deskSwitchLocalMonitor) }
+        deskSwitchGlobalMonitor = nil
+        deskSwitchLocalMonitor = nil
+        deskSwitchDoubleTap = ModifierDoubleTap()
+        switch choice {
+        case .controlOptionCommandT:
+            deskSwitchHotKey = HotKey(
+                id: 3,
+                shortcut: .controlOptionCommandT,
+                onPressed: { [weak self] in
+                    DispatchQueue.main.async {
+                        MainActor.assumeIsolated { self?.toggleDeskAndPill() }
+                    }
+                },
+                onReleased: {}
+            )
+        case .doubleTapRightOption:
+            // Modifier changes and key presses only; never their characters.
+            deskSwitchGlobalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.flagsChanged, .keyDown]) { [weak self] event in
+                DispatchQueue.main.async { self?.feedDeskSwitchTap(event) }
+            }
+            deskSwitchLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged, .keyDown]) { [weak self] event in
+                self?.feedDeskSwitchTap(event)
+                return event
+            }
+        case .off:
+            break
+        }
+        liveTranscriptWindow.deskShortcutLabel = choice == .off ? nil : choice.label
+        RunLog.write("desk.switch.shortcut", "choice=\(choice.rawValue)")
+    }
+
+    /// Right Option going down or up feeds the tap recognizer; any other key
+    /// or modifier resets it. Two quick taps switch.
+    private func feedDeskSwitchTap(_ event: NSEvent) {
+        let input: ModifierDoubleTap.Input
+        if event.type == .flagsChanged, event.keyCode == UInt16(kVK_RightOption) {
+            input = event.modifierFlags.contains(.option) ? .down(event.timestamp) : .up(event.timestamp)
+        } else {
+            input = .other
+        }
+        guard deskSwitchDoubleTap.handle(input) else { return }
+        RunLog.write("desk.switch", "via=double-tap-right-option")
+        MainActor.assumeIsolated { toggleDeskAndPill() }
+    }
+
     @objc private func selectPillBehavior(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String,
               let behavior = PillBehavior(rawValue: raw)
@@ -11014,6 +11094,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for item in pillBehaviorMenuItems {
             item.state = (item.representedObject as? String) == Settings.pillBehavior.rawValue ? .on : .off
         }
+        for item in deskSwitchMenuItems {
+            item.state = (item.representedObject as? String) == Settings.deskSwitchShortcut.rawValue ? .on : .off
+        }
+        let deskSwitchChoice = Settings.deskSwitchShortcut
+        switchDeskMenuItem.title = deskSwitchChoice == .off ? "Switch Desk and Pill" : "Switch Desk and Pill (\(deskSwitchChoice.label))"
         for item in insertionTimingMenuItems {
             item.state = (item.representedObject as? String) == InsertionTiming.current.rawValue ? .on : .off
         }

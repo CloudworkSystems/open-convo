@@ -91,10 +91,13 @@ Each one ends with something the owner can try on the Mac.
    - In the pill: a small Desk button that opens the Desk where it was left.
    - In the Desk: a "shrink to pill" button that hides the Desk window and
      leaves the pill showing.
-   - One keyboard shortcut that toggles between them: Control+Option+Cmd+T,
-     kept off the dictation shortcut list (dictation uses D shortcuts, typed
-     corrections Control+Option+Cmd+C). Also in the menu as "Switch Desk and
-     Pill".
+   - One keyboard shortcut that toggles between them. Changed October 13
+     after the owner tried it: the default is now **double-tap Right Option**,
+     because Control+Option+Cmd+T was too far to reach. The menu's "Desk
+     Switch Shortcut" choice offers double-tap Right Option, the old four-key
+     shortcut, or off. A tap only counts if it is quick and nothing else is
+     pressed between the taps, so typing with Option never switches. Also in
+     the menu as "Switch Desk and Pill".
    - Shrinking only hides the Desk window. An open Desk keeps its page and
      draft, and a locked one stays locked.
    *Owner tries:* shrink the Desk to the pill, dictate into another app, click
