@@ -100,6 +100,10 @@ Each one ends with something the owner can try on the Mac.
    and installed once the owner approves; the owner approved replacing today's
    True Convo app on October 12. Signing and installing still happen only when
    the owner says so. (Added after Codex review.)
+   As built: a Desk build that is installed or Developer ID-signed must come
+   from a clean checkout. It is checked before building and again before
+   signing, at the same commit, which the app records as `TCSourceCommit`.
+   Other builds are byte-for-byte unchanged.
    *Owner tries:* the finish line above.
 
 ## Risks
