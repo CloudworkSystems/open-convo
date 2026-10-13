@@ -10571,7 +10571,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @MainActor
     private func showPillAfterShrink() {
         guard !controller.isBusy else { return }
+        // An outcome still lingering (a warning such as set-aside words)
+        // stays readable; the pill turns ready once it has had its time
+        // (Codex P2 on #10).
+        if liveTranscriptWindow.isShowingOutcome {
+            liveTranscriptWindow.settleAfterOutcome(returnToReady: true)
+            return
+        }
         liveTranscriptWindow.showReady()
+    }
+
+    /// The menu's Desk item: the same as the pill's Desk button, so an idle
+    /// pill steps aside however the Desk comes back (Codex P2 on #10).
+    @MainActor
+    @objc private func openDeskFromMenu() {
+        openDesk()
+        hideIdlePillForDesk()
     }
 
     @MainActor
@@ -10583,7 +10598,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func refreshDeskMenuItems() {
         let hasDesk = deskBundle != nil
         deskMenuItem.title = hasDesk ? "Desk (invented data)…" : "Desk (not in this build)"
-        deskMenuItem.action = hasDesk ? #selector(openDesk) : nil
+        deskMenuItem.action = hasDesk ? #selector(openDeskFromMenu) : nil
         deskMenuItem.isEnabled = hasDesk
         let open = onMainThread(false) { deskSessionStorage?.isOpen ?? false }
         lockDeskMenuItem.action = open ? #selector(lockDesk) : nil
