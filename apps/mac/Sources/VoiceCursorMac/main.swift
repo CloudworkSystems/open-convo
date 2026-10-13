@@ -9690,6 +9690,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refreshLastDictationMenuItem()
         refreshOpenAtLoginMenuItem()
         refreshDeskMenuItems()
+        refreshDeskSwitchMenuTitle()
+    }
+
+    /// Re-checks Accessibility (it may have changed while System Settings
+    /// stayed in front) and names the shortcut that is actually on.
+    private func refreshDeskSwitchMenuTitle() {
+        refreshDeskSwitchIfTrustChanged()
+        let label = DeskSwitchPolicy.shortcutDescription(
+            Settings.deskSwitchShortcut,
+            accessibilityGranted: deskSwitchAppliedTrust ?? AXIsProcessTrusted()
+        )
+        switchDeskMenuItem.title = "Switch Desk and Pill (\(label))"
     }
 
     private func refreshLastDictationMenuItem() {
@@ -11112,12 +11124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for item in deskSwitchMenuItems {
             item.state = (item.representedObject as? String) == Settings.deskSwitchShortcut.rawValue ? .on : .off
         }
-        refreshDeskSwitchIfTrustChanged()
-        let deskSwitchLabel = DeskSwitchPolicy.shortcutDescription(
-            Settings.deskSwitchShortcut,
-            accessibilityGranted: deskSwitchAppliedTrust ?? AXIsProcessTrusted()
-        )
-        switchDeskMenuItem.title = "Switch Desk and Pill (\(deskSwitchLabel))"
+        refreshDeskSwitchMenuTitle()
         for item in insertionTimingMenuItems {
             item.state = (item.representedObject as? String) == InsertionTiming.current.rawValue ? .on : .off
         }
