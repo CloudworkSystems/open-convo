@@ -57,8 +57,9 @@ has tried it. Each step ends with something the owner can try.
    Send, and each cloud model and host needs the owner's one-time approval.
    Model choice is rules only for now (the owner's default plus a
    per-conversation choice). The building session tests two or three local chat
-   models on the Mac and the owner picks by feel. Claude through Claude Code is
-   the second route, off until approved. *Finish line:* the owner holds a real
+   models on the Mac and the owner picks by feel. Step 3 finishes with the
+   local route only; Claude through Claude Code is the next adapter, built
+   right after step 3. *Finish line:* the owner holds a real
    conversation, quits, reopens and continues it. Profiles, harnesses, billing
    and adapter order:
    [docs/design-notes/agent-profiles-and-adapters.md](docs/design-notes/agent-profiles-and-adapters.md).

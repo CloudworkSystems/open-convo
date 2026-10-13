@@ -60,10 +60,23 @@ Vendor harnesses are used only where a subscription requires its own program.
 | Claude, plan usage | Claude Code (unmodified) | Owner's Claude plan | Each person signs in through Anthropic's own flow. True Convo never handles Claude credentials. |
 | Claude, API credits | Pi with an Anthropic API key | Max plan's monthly API credits ($200 on Max 20x) | Credits cover API use including the Agent SDK; they expire monthly, no rollover. Set a Console spending limit at the credit amount; True Convo shows a running total and stops near it. |
 | Claude, sign-in inside Pi | Pi | **Extra usage, billed per token** | Off. Not covered by plan usage or API credits. |
-| ChatGPT | Pi signed in with the owner's ChatGPT plan | Owner's ChatGPT plan | Pi supports it. OpenAI's rules for a shipped product are unverified. |
+| ChatGPT | Pi signed in with the owner's ChatGPT plan | Owner's ChatGPT plan | Pi supports it, but Pi stores sign-in tokens in a plain file (`~/.pi/agent/auth.json`). **Blocked** until those tokens can live in Keychain or the protected store (see Credentials). OpenAI's rules for a shipped product are unverified. |
 | OpenRouter | Pi with an OpenRouter key | Per use; some free models | Owner approval and a monthly cap |
 | Grok | Cursor's own agent, on the owner's Cursor plan | Owner's Cursor plan (unverified) | Cursor's agent supports scripts and lists Grok; whether automation uses the plan, and Cursor's rules, need checking first |
 | Meta Muse | True Convo's existing sealed bridge | Meta pay-per-use, $10/month cap | Heaviest; last |
+
+## Credentials With Pi (Requirement From Codex Review)
+
+Pi keeps API keys and sign-in tokens in `~/.pi/agent/auth.json`, a regular
+file. That breaks the rule that secrets live only in Keychain. So:
+
+- **API keys** (Anthropic credits, OpenRouter): True Convo reads the key from
+  Keychain and hands it to each Pi run directly (Pi's `--api-key` option or a
+  per-run environment variable). Nothing is written to `auth.json`, and a test
+  proves the file stays absent or unchanged.
+- **Sign-ins** (ChatGPT plan): not used until the tokens can be held in Keychain
+  or in step 2's encrypted store, for example through a Keychain-backed
+  credential adapter. Until then the ChatGPT-through-Pi route stays off.
 
 Rules that apply to every route: no paid overflow; subscription access is not
 permission for paid API use; every paid route has the owner's approval and a cap;
@@ -71,12 +84,13 @@ keys live in Keychain, never in files or logs.
 
 ## Adapter Order
 
-1. **Local models plus a model picker** (step 3's first real conversation).
-2. **Pi as the harness** when agents start doing work (step 6): local first, then
-   ChatGPT through the owner's plan, then Claude through the API credits.
-3. **Claude through Claude Code**, kept alongside Pi on purpose: it uses the
-   plan's included usage and brings Anthropic's own coding tools. True Convo's
-   runner for it is mostly built.
+1. **Local models plus a model picker.** Step 3 finishes with this route only.
+2. **Claude through Claude Code**, right after step 3, because True Convo's
+   runner for it is mostly built. Kept alongside Pi on purpose: it uses the
+   plan's included usage and brings Anthropic's own coding tools.
+3. **Pi as the harness** when agents start doing work (step 6): local first, then
+   Claude through the API credits, then ChatGPT once its sign-in can be stored
+   safely (see Credentials).
 4. **OpenRouter plus a model picker**, inside Pi.
 5. **Grok through Cursor's agent**, after checking Cursor's rules and billing.
 6. **Meta Muse.**
