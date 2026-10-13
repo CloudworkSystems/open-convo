@@ -10538,6 +10538,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .showDesk:
             RunLog.write("desk.switch", "to=desk via=shortcut")
             openDesk()
+            hideIdlePillForDesk()
         case .noDesk:
             updateStatus("The Desk isn't in this build")
         }
@@ -10549,6 +10550,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard case .showDesk = DeskSwitchPolicy.pillDeskButton(hasDesk: deskBundle != nil) else { return }
         RunLog.write("desk.switch", "to=desk via=pill")
         openDesk()
+        hideIdlePillForDesk()
+    }
+
+    /// Back to the Desk: an idle pill steps aside (Codex P2 on #10). It
+    /// stays while a dictation runs or finishes, and when the owner keeps
+    /// the pill on screen (persistent pill on).
+    @MainActor
+    private func hideIdlePillForDesk() {
+        guard DeskSwitchPolicy.hidesPillWhenShowingDesk(
+            dictationBusy: controller.isBusy,
+            pillKeptOnScreen: Settings.pillBehavior == .persistent && persistentPillActive
+        ) else { return }
+        liveTranscriptWindow.hideNow()
     }
 
     /// After Shrink to Pill: the pill shows, ready, unless a dictation is

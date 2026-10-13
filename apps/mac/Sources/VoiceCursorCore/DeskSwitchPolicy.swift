@@ -29,6 +29,13 @@ public enum DeskSwitchPolicy {
         hasDesk ? .showDesk : .noDesk
     }
 
+    /// Showing the Desk hides an idle pill, so it does not float over the
+    /// Desk; it stays while a dictation runs or finishes, and when the
+    /// owner keeps the pill on screen.
+    public static func hidesPillWhenShowingDesk(dictationBusy: Bool, pillKeptOnScreen: Bool) -> Bool {
+        !dictationBusy && !pillKeptOnScreen
+    }
+
     /// The shortcut's label, shown in the menu.
     public static let shortcutLabel = "Control+Option+Cmd+T"
 }

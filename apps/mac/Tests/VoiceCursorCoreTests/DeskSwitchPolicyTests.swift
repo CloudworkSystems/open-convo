@@ -21,4 +21,11 @@ struct DeskSwitchPolicyTests {
     func shortcutLabel() {
         #expect(DeskSwitchPolicy.shortcutLabel == "Control+Option+Cmd+T")
     }
+
+    @Test("Showing the Desk hides an idle pill, never a busy or kept one")
+    func pillStepsAside() {
+        #expect(DeskSwitchPolicy.hidesPillWhenShowingDesk(dictationBusy: false, pillKeptOnScreen: false))
+        #expect(!DeskSwitchPolicy.hidesPillWhenShowingDesk(dictationBusy: true, pillKeptOnScreen: false))
+        #expect(!DeskSwitchPolicy.hidesPillWhenShowingDesk(dictationBusy: false, pillKeptOnScreen: true))
+    }
 }
