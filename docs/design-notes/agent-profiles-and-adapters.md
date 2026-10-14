@@ -95,6 +95,34 @@ keys live in Keychain, never in files or logs.
 5. **Grok through Cursor's agent**, after checking Cursor's rules and billing.
 6. **Meta Muse.**
 
+## Borrowed From Scion (Step 6)
+
+Added October 14, 2026 by the planning session, at the owner's request.
+Scion is Google's experimental, open-source system for running teams of
+agents (Apache-2.0, pre-1.0). Its templates match our agent profiles, its
+harnesses match Pi and the vendor harnesses, and its hub matches our
+dispatcher. **Decision: borrow three ideas for step 6; do not adopt Scion as a
+dependency now.** It is still changing quickly, and its container-per-agent
+design is too heavy for typical 8 to 16 GB Macs. Its cloud runtimes
+(Kubernetes, Cloud Run) conflict with local first and stay out. Because of its
+license, Scion can be revisited later as an optional engine for power users.
+
+The three ideas, as requirements for step 6:
+
+1. **Each agent works in its own space.** An agent that changes files gets its
+   own Git worktree (a separate working copy of the project) or its own
+   folder, so two agents never edit the same files at once. The owner reviews
+   and merges an agent's work, the same way pull requests work today.
+   Containers are not required.
+2. **Agents can pass findings to each other.** A simple, logged message channel
+   between agents in one session, visible to the owner. Messages carry only
+   what the sending agent's permissions and the memory space rules allow, and
+   a message never sends anything to a cloud model or host the owner has not
+   approved.
+3. **One screen shows every agent.** The Desk gets a view listing each running
+   agent: its profile, model, what it is working on, its space, and a Stop
+   button. This is the design for "Claude and Codex visible in one session."
+
 ## Before Shipping to Other People
 
 - Anthropic: running Claude Code inside a product requires its Commercial Terms,
@@ -110,3 +138,4 @@ keys live in Keychain, never in files or logs.
 - Pi providers and sign-in: https://app.unpkg.com/@mariozechner/pi-coding-agent@0.73.1/files/docs/providers.md
 - Cursor CLI: https://cursor.com/en/cli
 - Codex CLI with local models: https://codex.danielvaughan.com/2026/05/03/codex-cli-gpt-oss-local-models-ollama-lm-studio-mlx-setup-guide/
+- Scion (GoogleCloudPlatform/scion) README, checked October 14, 2026: https://github.com/GoogleCloudPlatform/scion
