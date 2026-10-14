@@ -1,5 +1,17 @@
 import Foundation
 
+/// How the lessons file is kept on disk when it is protected (step 2, PR 4):
+/// the app seals it under the dictation archive's key. Without one, the file
+/// is the plain owner-only JSON it always was.
+public protocol LessonsFileProtection: Sendable {
+    /// The lessons JSON inside a stored file. A sealed file is opened; a file
+    /// written before protection is returned as it is. Throws when a sealed
+    /// file does not open, so damaged lessons are never read as empty.
+    func lessonsJSON(fromStored data: Data) throws -> Data
+    /// The bytes to store for the lessons JSON.
+    func storedBytes(forLessonsJSON json: Data) throws -> Data
+}
+
 /// The sole app-owned durable boundary for U2. It writes only the correction
 /// lesson array and never provides a location for audio, drafts, transcripts,
 /// logs, diagnostics, crash records, or handoffs.
@@ -10,11 +22,13 @@ public struct LocalDataBoundary {
     public let lessonsFileURL: URL
 
     private let fileManager: FileManager
+    private let protection: (any LessonsFileProtection)?
 
-    public init(directory: URL, fileManager: FileManager = .default) {
+    public init(directory: URL, fileManager: FileManager = .default, protection: (any LessonsFileProtection)? = nil) {
         self.directory = directory
         self.lessonsFileURL = directory.appendingPathComponent(Self.lessonsFileName, isDirectory: false)
         self.fileManager = fileManager
+        self.protection = protection
     }
 
     func readLessons() throws -> [CorrectionLesson] {
@@ -28,7 +42,8 @@ public struct LocalDataBoundary {
             throw LocalDataBoundaryError.lessonsPathIsNotARegularFile
         }
 
-        let data = try Data(contentsOf: lessonsFileURL)
+        let stored = try Data(contentsOf: lessonsFileURL)
+        let data = try protection?.lessonsJSON(fromStored: stored) ?? stored
         return try JSONDecoder().decode([CorrectionLesson].self, from: data)
     }
 
@@ -41,7 +56,8 @@ public struct LocalDataBoundary {
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        let data = try encoder.encode(lessons)
+        let json = try encoder.encode(lessons)
+        let data = try protection?.storedBytes(forLessonsJSON: json) ?? json
 
         let temporaryURL = directory.appendingPathComponent(
             ".\(Self.lessonsFileName).\(UUID().uuidString).tmp",

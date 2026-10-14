@@ -9,6 +9,7 @@ import Darwin
 import Security
 import ServiceManagement
 import Speech
+import ArchiveProtection
 import CorrectionMemory
 import DeskWindowKit
 import TrueConvoIdentity
@@ -737,8 +738,19 @@ enum SavedCorrections {
         lock.lock()
         defer { lock.unlock() }
         if openedStore == nil {
+            // Word fixes are sealed under the archive's key (step 2, PR 4);
+            // with the key missing they stay closed rather than go plain.
+            guard let seal = Archive.currentSeal() else {
+                RunLog.write("saved-fixes.open.failed", "error=archive-key-unavailable")
+                return nil
+            }
             do {
-                let store = try CorrectionLessonStore(directory: directory)
+                let protection = SealedLessonsFile(
+                    seal: seal,
+                    files: Archive.files,
+                    lessonsFile: directory.appendingPathComponent(LocalDataBoundary.lessonsFileName)
+                )
+                let store = try CorrectionLessonStore(directory: directory, protection: protection)
                 openedStore = store
                 importLegacyRules(into: store)
             } catch {
@@ -1424,6 +1436,85 @@ enum Archive {
         root.appendingPathComponent("voice-cursor.log")
     }
 
+    // MARK: Protected Words (step 2, PR 4)
+    //
+    // Every file below that carries dictated words (history, transcripts,
+    // content packets, the latest-* copies, the reports and handoffs built
+    // from them, and the saved word fixes) is written sealed under the
+    // archive's own Keychain key. There is no plaintext fallback: while the
+    // key is missing nothing new is saved. Files written before this step
+    // stay exactly as they are and are still read.
+
+    private static let protectionLock = NSLock()
+    private static var protectionStatus: ArchiveKeyCustody.Status?
+
+    static var files: ArchiveFiles { ArchiveFiles(root: root) }
+
+    /// The archive's seal: its key opened, or made on first use. Tried again
+    /// on every call until it is ready, so a key put back later is picked up.
+    static func currentSeal() -> ArchiveSeal? {
+        protectionLock.lock()
+        defer { protectionLock.unlock() }
+        if let seal = protectionStatus?.seal { return seal }
+        let status = ArchiveKeyCustody.openInKeychain(root: root, appKeychainService: AppIdentity.current.keychainService)
+        let kind = protectionKind(status)
+        if protectionStatus.map(protectionKind) != kind {
+            RunLog.write("archive.protection", "status=\(kind)")
+        }
+        protectionStatus = status
+        return status.seal
+    }
+
+    private static func protectionKind(_ status: ArchiveKeyCustody.Status) -> String {
+        switch status {
+        case .ready: return "ready"
+        case .keyMissing: return "key-missing"
+        case .unavailable(let problem): return problem.rawValue
+        }
+    }
+
+    /// Why new words can't be saved right now, in the owner's words, or nil.
+    static var protectionProblem: String? {
+        guard currentSeal() == nil else { return nil }
+        protectionLock.lock()
+        defer { protectionLock.unlock() }
+        if case .keyMissing = protectionStatus {
+            return "Dictation history is locked: its key is missing from this Mac's Keychain. New dictations still paste but aren't saved."
+        }
+        return "Dictation history can't be opened right now, so new dictations still paste but aren't saved."
+    }
+
+    struct WordsNotSaved: LocalizedError {
+        var errorDescription: String? { "the archive's key isn't available, so nothing was saved" }
+    }
+
+    static func requireSeal() throws -> ArchiveSeal {
+        guard let seal = currentSeal() else { throw WordsNotSaved() }
+        return seal
+    }
+
+    /// Writes words sealed, in one step. Never plaintext.
+    static func writeWords(_ text: String, to url: URL) throws {
+        try writeWords(Data(text.utf8), to: url)
+    }
+
+    static func writeWords(_ data: Data, to url: URL) throws {
+        try files.writeSealed(data, to: url, seal: requireSeal())
+    }
+
+    /// A word-bearing file: sealed and opened, or plaintext from before.
+    static func readWords(_ url: URL) -> ArchiveFiles.Read {
+        files.read(url, seal: currentSeal())
+    }
+
+    static func readWordsText(_ url: URL) -> String? {
+        readWords(url).data.map { String(decoding: $0, as: UTF8.self) }
+    }
+
+    /// History lines that could not be shown on the last read: sealed while
+    /// the key is missing, or damaged.
+    private(set) static var historyLinesNotShown = 0
+
     static func ensureDirectories() throws {
         try FileManager.default.createDirectory(at: recordings, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: transcripts, withIntermediateDirectories: true)
@@ -1518,23 +1609,31 @@ enum Archive {
         guard let data = try? Data(contentsOf: history),
               let text = String(data: data, encoding: .utf8)
         else {
+            historyLinesNotShown = 0
             return []
         }
 
         let decoder = JSONDecoder()
-        return text
+        let files = self.files
+        let seal = currentSeal()
+        var notShown = 0
+        let entries = text
             .split(whereSeparator: \.isNewline)
             .compactMap { line -> ArchiveEntry? in
-                guard let data = String(line).data(using: .utf8) else {
+                let read = files.readLine(line, in: history, seal: seal)
+                guard let data = read.data else {
+                    notShown += 1
                     return nil
                 }
                 return try? decoder.decode(ArchiveEntry.self, from: data)
             }
+        historyLinesNotShown = notShown
+        return entries
     }
 
     static func latestEntry() -> ArchiveEntry? {
         if FileManager.default.fileExists(atPath: latestSession.path),
-           let data = try? Data(contentsOf: latestSession),
+           let data = readWords(latestSession).data,
            let entry = try? JSONDecoder().decode(ArchiveEntry.self, from: data)
         {
             return entry
@@ -1563,8 +1662,11 @@ enum Archive {
             lines.removeFirst()
         }
         let decoder = JSONDecoder()
+        let files = self.files
+        let seal = currentSeal()
         for line in lines.reversed() {
-            guard let entry = try? decoder.decode(ArchiveEntry.self, from: Data(line.utf8)),
+            guard let data = files.readLine(line, in: history, seal: seal).data,
+                  let entry = try? decoder.decode(ArchiveEntry.self, from: data),
                   isRealDictation(entry)
             else { continue }
             let formatter = ISO8601DateFormatter()
@@ -1580,20 +1682,10 @@ enum Archive {
         defer { writeLock.unlock() }
 
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        // Sealed or not at all: with the key missing, nothing is written.
+        let seal = try requireSeal()
         let data = try JSONEncoder().encode(entry)
-        if !FileManager.default.fileExists(atPath: history.path) {
-            FileManager.default.createFile(atPath: history.path, contents: nil)
-        }
-        let handle = try FileHandle(forWritingTo: history)
-        do {
-            try handle.seekToEnd()
-            try handle.write(contentsOf: data)
-            try handle.write(contentsOf: Data("\n".utf8))
-            try handle.close()
-        } catch {
-            try? handle.close()
-            throw error
-        }
+        try files.appendSealedLine(data, to: history, seal: seal)
         if Archive.isRealDictation(entry) {
             Settings.lastDictationAt = Date()
         }
@@ -1604,7 +1696,7 @@ enum Archive {
 
     private static func shouldUpdateLatestPointers(for entry: ArchiveEntry) -> Bool {
         guard FileManager.default.fileExists(atPath: latestSession.path),
-              let data = try? Data(contentsOf: latestSession),
+              let data = readWords(latestSession).data,
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let latestTimestamp = object["timestamp"] as? String,
               let latestId = object["id"] as? String
@@ -1647,9 +1739,9 @@ enum Archive {
             "",
         ]
         let body = lines.joined(separator: "\n")
-        try body.write(to: url, atomically: true, encoding: .utf8)
+        try writeWords(body, to: url)
         if updateLatest {
-            try body.write(to: latestTranscript, atomically: true, encoding: .utf8)
+            try writeWords(body, to: latestTranscript)
         } else {
             RunLog.write("archive.latest.skipped", "kind=transcript id=\(entry.id) timestamp=\(entry.timestamp)")
         }
@@ -1735,14 +1827,14 @@ enum Archive {
     static func writeTimingReport() throws -> URL {
         try ensureDirectories()
         let body = timingReportBody(entries: readHistory())
-        try body.write(to: timingReport, atomically: true, encoding: .utf8)
+        try writeWords(body, to: timingReport)
         return timingReport
     }
 
     static func writeHarvestInbox() throws -> URL {
         try ensureDirectories()
         let body = harvestInboxBody(entries: readHistory())
-        try body.write(to: harvestInbox, atomically: true, encoding: .utf8)
+        try writeWords(body, to: harvestInbox)
         return harvestInbox
     }
 
@@ -1754,8 +1846,8 @@ enum Archive {
             .replacingOccurrences(of: ".", with: "-")
         let url = harvestBundles.appendingPathComponent("voice-cursor-harvest-\(safeTimestamp).md")
         let body = harvestBundleBody(entries: readHistory(), generatedAt: generatedAt, bundleURL: url)
-        try body.write(to: url, atomically: true, encoding: .utf8)
-        try body.write(to: latestHarvestBundle, atomically: true, encoding: .utf8)
+        try writeWords(body, to: url)
+        try writeWords(body, to: latestHarvestBundle)
         return url
     }
 
@@ -1779,7 +1871,7 @@ enum Archive {
         let entries = readHistory()
         try writeCorrectionPairsJSONL(entries: entries)
         let body = correctionInboxBody(entries: entries)
-        try body.write(to: correctionInbox, atomically: true, encoding: .utf8)
+        try writeWords(body, to: correctionInbox)
         let correctionCount = entries.filter { $0.correction != nil }.count
         RunLog.write("correction.handoff.refreshed", "pairs=\(correctionCount)")
     }
@@ -1787,21 +1879,21 @@ enum Archive {
     static func writeLiveProofSummary() throws -> URL {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let body = liveProofSummaryBody()
-        try body.write(to: liveProofSummary, atomically: true, encoding: .utf8)
+        try writeWords(body, to: liveProofSummary)
         return liveProofSummary
     }
 
     static func writeStartHereReport() throws -> URL {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let body = startHereReportBody()
-        try body.write(to: startHere, atomically: true, encoding: .utf8)
+        try writeWords(body, to: startHere)
         return startHere
     }
 
     static func writePhase2EvidenceReceipt() throws -> URL {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let body = phase2EvidenceReceiptBody()
-        try body.write(to: phase2EvidenceReceipt, atomically: true, encoding: .utf8)
+        try writeWords(body, to: phase2EvidenceReceipt)
         return phase2EvidenceReceipt
     }
 
@@ -1816,21 +1908,21 @@ enum Archive {
     static func writeHermesAcceptanceReport() throws -> URL {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let body = hermesAcceptanceReportBody()
-        try body.write(to: hermesAcceptance, atomically: true, encoding: .utf8)
+        try writeWords(body, to: hermesAcceptance)
         return hermesAcceptance
     }
 
     static func writeAppCompatibilityReport() throws -> URL {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let body = appCompatibilityReportBody()
-        try body.write(to: appCompatibility, atomically: true, encoding: .utf8)
+        try writeWords(body, to: appCompatibility)
         return appCompatibility
     }
 
     static func writeCrossAppTargetCoverageReport() throws -> URL {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let body = crossAppTargetCoverageReportBody()
-        try body.write(to: crossAppTargetCoverage, atomically: true, encoding: .utf8)
+        try writeWords(body, to: crossAppTargetCoverage)
         return crossAppTargetCoverage
     }
 
@@ -1893,7 +1985,7 @@ enum Archive {
         proof["proofs"] = proofs
 
         let data = try JSONSerialization.data(withJSONObject: proof, options: [.prettyPrinted, .sortedKeys])
-        try data.write(to: liveProof, options: .atomic)
+        try writeWords(data, to: liveProof)
         _ = try writeLiveProofSummary()
         RunLog.write("live-proof.recorded", "label=\(normalizedLabel) id=\(entry.id)")
         return liveProof
@@ -1904,7 +1996,7 @@ enum Archive {
         let packetPath = entry.contentPacketPath ?? contentPacketURL(for: entry.id).path
         let latestSessionObject = readJSONObject(latestSession)
         let latestSessionId = latestSessionObject?["id"] as? String
-        let packetText = (try? String(contentsOfFile: packetPath, encoding: .utf8)) ?? ""
+        let packetText = readWordsText(URL(fileURLWithPath: packetPath)) ?? ""
         let isRealtimeTarget = label == "realtime-target"
         let expectedInjected = label == "paste" || label == "live-paste" || isRealtimeTarget
         let expectedCaptureMode: String = label == "reprocess"
@@ -1945,7 +2037,7 @@ enum Archive {
             let correction = entry.correction
             let selected = correction?.selectedText.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let replacement = correction?.replacementText.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let jsonlText = (try? String(contentsOf: correctionPairsJSONL, encoding: .utf8)) ?? ""
+            let jsonlText = readWordsText(correctionPairsJSONL) ?? ""
             checks += [
                 proofCheck("correction metadata present", correction != nil, correction == nil ? "missing correction" : "present"),
                 proofCheck("selected text captured", !selected.isEmpty, selected.isEmpty ? "empty selected text" : selected),
@@ -2229,7 +2321,7 @@ enum Archive {
         }
 
         let body = lines.isEmpty ? "" : lines.joined(separator: "\n") + "\n"
-        try body.write(to: correctionPairsJSONL, atomically: true, encoding: .utf8)
+        try writeWords(body, to: correctionPairsJSONL)
     }
 
     private static func harvestBundleBody(entries: [ArchiveEntry], generatedAt: String, bundleURL: URL) -> String {
@@ -3035,7 +3127,7 @@ enum Archive {
     }
 
     private static func readJSONObject(_ url: URL) -> [String: Any]? {
-        guard let data = try? Data(contentsOf: url),
+        guard let data = readWords(url).data,
               let object = try? JSONSerialization.jsonObject(with: data),
               let dictionary = object as? [String: Any]
         else {
@@ -3305,9 +3397,9 @@ enum Archive {
         try ensureDirectories()
         let url = entry.contentPacketPath.map(URL.init(fileURLWithPath:)) ?? contentPacketURL(for: entry.id)
         let body = contentPacketBody(for: entry)
-        try body.write(to: url, atomically: true, encoding: .utf8)
+        try writeWords(body, to: url)
         if updateLatest {
-            try body.write(to: latestContentPacket, atomically: true, encoding: .utf8)
+            try writeWords(body, to: latestContentPacket)
             try writeLatestSessionFile(entry, contentPacketURL: url)
         } else {
             RunLog.write("archive.latest.skipped", "kind=packet id=\(entry.id) timestamp=\(entry.timestamp)")
@@ -3338,7 +3430,7 @@ enum Archive {
             "correction": entry.correction?.jsonObject ?? NSNull(),
         ]
         let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
-        try data.write(to: latestSession, options: .atomic)
+        try writeWords(data, to: latestSession)
     }
 
     static func finalizeAudio(_ wavURL: URL, format: ArchiveFormat, processes: RecordingProcessOwner? = nil) async throws -> URL {
@@ -5449,8 +5541,8 @@ enum ProviderComparisonReport {
             "",
         ]
 
-        try lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
-        try lines.joined(separator: "\n").write(to: Archive.latestProviderComparison, atomically: true, encoding: .utf8)
+        try Archive.writeWords(lines.joined(separator: "\n"), to: url)
+        try Archive.writeWords(lines.joined(separator: "\n"), to: Archive.latestProviderComparison)
         RunLog.write("provider-comparison.report.wrote", "source=\(source.id) path=\(url.path)")
         return url
     }
@@ -8328,6 +8420,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.setActivationPolicy(.accessory)
         Archive.sweepTemporaryAudio()
         RunLog.write("app.launch", BuildFingerprint.launchDetail())
+        // Opens the archive's key, or makes it on the first launch with this
+        // step, before anything is dictated (step 2, PR 4). A missing key is
+        // said once the menu is up.
+        if Archive.currentSeal() == nil {
+            DispatchQueue.main.async { [weak self] in
+                if let problem = Archive.protectionProblem { self?.updateStatus(problem) }
+            }
+        }
         RunLog.write("permission.accessibility.status", "trusted=\(TextInjector.canAutoPaste)")
         rememberCursorTarget(NSWorkspace.shared.frontmostApplication)
         workspaceActivationObserver = NSWorkspace.shared.notificationCenter.addObserver(
@@ -10185,8 +10285,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func copyLatestTranscript() {
-        guard FileManager.default.fileExists(atPath: Archive.latestTranscript.path),
-              let transcript = try? String(contentsOf: Archive.latestTranscript, encoding: .utf8)
+        guard let transcript = Archive.readWordsText(Archive.latestTranscript)
         else {
             updateStatus("No latest transcript yet")
             return
@@ -10198,8 +10297,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func copyLatestContentPacket() {
-        guard FileManager.default.fileExists(atPath: Archive.latestContentPacket.path),
-              let packet = try? String(contentsOf: Archive.latestContentPacket, encoding: .utf8)
+        guard let packet = Archive.readWordsText(Archive.latestContentPacket)
         else {
             updateStatus("No latest content packet yet")
             return
@@ -10214,8 +10312,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do {
             let url = try Archive.writeHarvestInbox()
             RunLog.write("harvest-inbox.open.requested", url.path)
-            NSWorkspace.shared.open(url)
-            updateStatus("Opened harvest inbox")
+            updateStatus(ArchiveFileOpener.open(url, title: "Harvest Inbox", missing: "Harvest Inbox is missing") ?? "Opened harvest inbox")
         } catch {
             RunLog.write("harvest-inbox.open.failed", error.localizedDescription)
             updateStatus("Harvest inbox failed")
@@ -10226,8 +10323,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do {
             let url = try Archive.writeCorrectionInbox()
             RunLog.write("correction-inbox.open.requested", url.path)
-            NSWorkspace.shared.open(url)
-            updateStatus("Opened correction inbox")
+            updateStatus(ArchiveFileOpener.open(url, title: "Correction Inbox", missing: "Correction Inbox is missing") ?? "Opened correction inbox")
         } catch {
             RunLog.write("correction-inbox.open.failed", error.localizedDescription)
             updateStatus("Correction inbox failed")
@@ -10238,8 +10334,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do {
             let url = try Archive.writeHarvestBundle()
             RunLog.write("harvest-bundle.open.requested", url.path)
-            NSWorkspace.shared.open(url)
-            updateStatus("Opened harvest bundle")
+            updateStatus(ArchiveFileOpener.open(url, title: "Harvest Bundle", missing: "Harvest Bundle is missing") ?? "Opened harvest bundle")
         } catch {
             RunLog.write("harvest-bundle.open.failed", error.localizedDescription)
             updateStatus("Harvest bundle failed")
@@ -10249,7 +10344,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func copyHarvestBundle() {
         do {
             let url = try Archive.writeHarvestBundle()
-            let bundle = try String(contentsOf: url, encoding: .utf8)
+            guard let bundle = Archive.readWordsText(url) else { throw Archive.WordsNotSaved() }
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(bundle, forType: .string)
             RunLog.write("harvest-bundle.copied", url.path)
@@ -10264,8 +10359,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do {
             let url = try Archive.writeTimingReport()
             RunLog.write("timing-report.open.requested", url.path)
-            NSWorkspace.shared.open(url)
-            updateStatus("Opened timing report")
+            updateStatus(ArchiveFileOpener.open(url, title: "Timing Report", missing: "Timing Report is missing") ?? "Opened timing report")
         } catch {
             RunLog.write("timing-report.open.failed", error.localizedDescription)
             updateStatus("Timing report failed")
@@ -10494,8 +10588,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     audioURL: audioURL,
                     outcomes: outcomes
                 )
-                NSWorkspace.shared.open(reportURL)
-                self.updateStatus("Provider comparison complete")
+                self.updateStatus(ArchiveFileOpener.open(reportURL, title: "Provider Comparison", missing: "Provider comparison is missing")
+                    ?? "Provider comparison complete")
             } catch {
                 RunLog.write("provider-comparison.report.failed", "source=\(latest.id) error=\(error.localizedDescription)")
                 self.updateStatus("Comparison report failed")
@@ -10549,8 +10643,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func latestAudioURL() -> URL? {
-        guard FileManager.default.fileExists(atPath: Archive.latestSession.path),
-              let data = try? Data(contentsOf: Archive.latestSession),
+        guard let data = Archive.readWords(Archive.latestSession).data,
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let audioPath = object["audioPath"] as? String,
               !audioPath.isEmpty
@@ -10562,12 +10655,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func openLatestFile(_ url: URL, missingStatus: String) {
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            updateStatus(missingStatus)
-            return
-        }
         RunLog.write("latest-file.open.requested", url.path)
-        NSWorkspace.shared.open(url)
+        let title = url.lastPathComponent == Archive.latestTranscript.lastPathComponent ? "Latest Transcript" : "Latest Content Packet"
+        if let problem = ArchiveFileOpener.open(url, title: title, missing: missingStatus) {
+            updateStatus(problem)
+        }
     }
 
     @objc private func openRunLog() {
@@ -10853,8 +10945,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do {
             let url = try Archive.writeStartHereReport()
             RunLog.write("start-here.open.requested", url.path)
-            NSWorkspace.shared.open(url)
-            updateStatus("Opened Start Here")
+            updateStatus(ArchiveFileOpener.open(url, title: "Start Here", missing: "Start Here is missing") ?? "Opened Start Here")
         } catch {
             RunLog.write("start-here.open.failed", error.localizedDescription)
             updateStatus("Start Here failed")
@@ -10865,8 +10956,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do {
             let url = try Archive.writePhase2EvidenceReceipt()
             RunLog.write("phase2-evidence-receipt.open.requested", url.path)
-            NSWorkspace.shared.open(url)
-            updateStatus("Opened Phase 2 evidence receipt")
+            updateStatus(ArchiveFileOpener.open(url, title: "Phase 2 Evidence Receipt", missing: "Phase 2 Evidence Receipt is missing") ?? "Opened Phase 2 evidence receipt")
         } catch {
             RunLog.write("phase2-evidence-receipt.open.failed", error.localizedDescription)
             updateStatus("Phase 2 receipt failed")
@@ -10877,8 +10967,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do {
             let url = try Archive.writeCrossAppTargetCoverageReport()
             RunLog.write("cross-app-target-coverage.open.requested", url.path)
-            NSWorkspace.shared.open(url)
-            updateStatus("Opened cross-app targets")
+            updateStatus(ArchiveFileOpener.open(url, title: "Cross-App Targets", missing: "Cross-App Targets is missing") ?? "Opened cross-app targets")
         } catch {
             RunLog.write("cross-app-target-coverage.open.failed", error.localizedDescription)
             updateStatus("Cross-app targets failed")
@@ -10889,8 +10978,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do {
             let url = try Archive.writeHermesAcceptanceReport()
             RunLog.write("hermes-acceptance.open.requested", url.path)
-            NSWorkspace.shared.open(url)
-            updateStatus("Opened Hermes Acceptance")
+            updateStatus(ArchiveFileOpener.open(url, title: "Hermes Acceptance", missing: "Hermes Acceptance is missing") ?? "Opened Hermes Acceptance")
         } catch {
             RunLog.write("hermes-acceptance.open.failed", error.localizedDescription)
             updateStatus("Hermes Acceptance failed")
@@ -10901,8 +10989,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do {
             let url = try Archive.writeAppCompatibilityReport()
             RunLog.write("app-compatibility.open.requested", url.path)
-            NSWorkspace.shared.open(url)
-            updateStatus("Opened app compatibility")
+            updateStatus(ArchiveFileOpener.open(url, title: "App Compatibility", missing: "App Compatibility is missing") ?? "Opened app compatibility")
         } catch {
             RunLog.write("app-compatibility.open.failed", error.localizedDescription)
             updateStatus("App compatibility failed")
@@ -10913,8 +11000,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do {
             let url = try Archive.writeLiveProofSummary()
             RunLog.write("live-proof-summary.open.requested", url.path)
-            NSWorkspace.shared.open(url)
-            updateStatus("Opened live proof summary")
+            updateStatus(ArchiveFileOpener.open(url, title: "Live Proof Summary", missing: "Live Proof Summary is missing") ?? "Opened live proof summary")
         } catch {
             RunLog.write("live-proof-summary.open.failed", error.localizedDescription)
             updateStatus("Live proof summary failed")
@@ -10950,8 +11036,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             _ = try Archive.recordLiveProof(label: label)
             let summary = try Archive.writeLiveProofSummary()
             RunLog.write("live-proof.menu-recorded", "label=\(label) summary=\(summary.path)")
-            NSWorkspace.shared.open(summary)
-            updateStatus("Recorded \(label) proof")
+            updateStatus(ArchiveFileOpener.open(summary, title: "Live Proof Summary", missing: "Live proof summary is missing") ?? "Recorded \(label) proof")
         } catch {
             RunLog.write("live-proof.record.failed", "label=\(label) error=\(error.localizedDescription)")
             updateStatus("Proof failed: \(error.localizedDescription)")

@@ -9,8 +9,9 @@ public final class CorrectionLessonStore {
 
     private let boundary: LocalDataBoundary
 
-    public init(directory: URL, fileManager: FileManager = .default) throws {
-        let boundary = LocalDataBoundary(directory: directory, fileManager: fileManager)
+    public init(directory: URL, fileManager: FileManager = .default,
+                protection: (any LessonsFileProtection)? = nil) throws {
+        let boundary = LocalDataBoundary(directory: directory, fileManager: fileManager, protection: protection)
         self.boundary = boundary
         self.storageURL = boundary.lessonsFileURL
         self.lessons = try boundary.readLessons()

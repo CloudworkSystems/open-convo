@@ -90,6 +90,24 @@ with invented data in True Convo Test before anything touches the real app.
    the same custody. Existing plaintext files are **left untouched** (the app
    already promises never to sweep or migrate the legacy archive); moving them in
    is a separate, opt-in, reversible step the owner approves later.
+   *As built (October 14):* split in three, on the owner's answers (words
+   first; app-only reading is fine; one recovery key for everything).
+   **PR 4** seals the words: the archive gets its own Keychain key
+   (`<app's Keychain service>.archive-key`, this-device-only, never
+   synchronized) named by a plaintext marker, `protected-archive.json`, under
+   the Desk store's custody rules (made only when there is no marker; a
+   missing key is reported, never replaced; no plaintext fallback). New
+   history lines, transcripts, content packets, the latest-* copies, the
+   reports and handoffs built from history, and the word-fix file are
+   AES-256-GCM, each bound to its path in the archive. Sealed files are
+   written as text that says what they are; the app shows them in its own
+   read-only window. Earlier per-session files and history lines stay
+   plaintext and are still read; files the app rewrites in place (the
+   latest-* copies, the reports, the word-fix file) become sealed on their
+   next write. While the key is missing, dictation still pastes but nothing
+   new is saved, and saved word fixes stay closed. **PR 4b** puts the
+   archive key under the same recovery key as the Desk. **PR 4c** seals kept
+   recordings.
 5. **Kill-and-reopen proof, then the owner's real trial.** A scripted proof in
    True Convo Test: quit, force-kill, sleep, lock, restart and reopen with
    invented data. Then the owner holds one real conversation and it survives a
