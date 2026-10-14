@@ -105,7 +105,11 @@ with invented data in True Convo Test before anything touches the real app.
    plaintext and are still read; files the app rewrites in place (the
    latest-* copies, the reports, the word-fix file) become sealed on their
    next write. While the key is missing, dictation still pastes but nothing
-   new is saved, and saved word fixes stay closed. **PR 4b** puts the
+   new is saved, and saved word fixes stay closed. Known limit, accepted by
+   the owner (Codex round 3 on #30): with the key missing, a history line
+   cut short at a four-character base64 boundary reads as "locked" instead
+   of "damaged"; it never opens or leaves the app, and with the key it reads
+   as damaged. **PR 4b** puts the
    archive key under the same recovery key as the Desk. **PR 4c** seals kept
    recordings.
 5. **Kill-and-reopen proof, then the owner's real trial.** A scripted proof in
