@@ -378,6 +378,19 @@ struct RecoveryCompanionTests {
         #expect(companion.calls == ["seal(desk copy absent)"])
     }
 
+    @Test("A companion that can't finish retiring makes the key read as not durable, so the owner makes another")
+    func unfinishedRetireIsNotDurable() throws {
+        let fixture = try DeskHostFixture()
+        defer { fixture.clean() }
+        let store = try fixture.makeStore()
+        defer { store.close() }
+        let companion = RecordingCompanion(copyURL: store.recoveryCopyURL)
+        companion.retireSucceeds = false
+        let made = try store.makeRecoveryKey(companion: companion)
+        #expect(!made.isDurable)
+        #expect(companion.calls == ["seal(desk copy absent)", "retire"])
+    }
+
     @Test("Derived keys and fingerprints depend on the secret and never repeat across keys")
     func derivedKeysAndFingerprints() throws {
         let a = try RecoveryKey.generate()
@@ -422,7 +435,8 @@ private final class RecordingCompanion: RecoveryCompanion, @unchecked Sendable {
         if refuses { throw CompanionRefusal() }
     }
     func discard(_ recovery: RecoveryKey) { note("discard", recovery) }
-    func retireAllBut(_ recovery: RecoveryKey) { note("retire", recovery) }
+    var retireSucceeds = true
+    func retireAllBut(_ recovery: RecoveryKey) -> Bool { note("retire", recovery); return retireSucceeds }
     func restore(with recovery: RecoveryKey) -> RecoveryCompanionRestore { note("restore", recovery); return .restored }
     var needsRecoveryKey: Bool { false }
 }

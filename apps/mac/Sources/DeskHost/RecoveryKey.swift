@@ -184,15 +184,18 @@ extension RecoveryKey {
 /// - `discard(_:)` takes back that copy when the Desk's own write then
 ///   fails, so a key nobody saw never counts;
 /// - `retireAllBut(_:)` drops copies under earlier keys once the Desk's new
-///   copy is durable, so a replaced recovery key stops working here too;
+///   copy is durable, so a replaced recovery key stops working here too,
+///   and records the new key as the one it pairs with. False when that
+///   didn't fully happen: the make then reads as not durable, so the owner
+///   is told to make another, which retries it;
 /// - `restore(with:)` puts the key back from the typed recovery key.
 public protocol RecoveryCompanion: Sendable {
     func seal(under recovery: RecoveryKey) throws
     func discard(_ recovery: RecoveryKey)
-    func retireAllBut(_ recovery: RecoveryKey)
+    func retireAllBut(_ recovery: RecoveryKey) -> Bool
     func restore(with recovery: RecoveryKey) -> RecoveryCompanionRestore
-    /// True when the companion has a key that no recovery copy covers yet,
-    /// so the owner should make a recovery key.
+    /// True when the companion holds a key that no recovery key it paired
+    /// with covers, so the owner should make a recovery key.
     var needsRecoveryKey: Bool { get }
 }
 

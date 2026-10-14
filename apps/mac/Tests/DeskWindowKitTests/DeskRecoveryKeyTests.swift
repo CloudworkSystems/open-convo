@@ -332,7 +332,7 @@ private final class FakeCompanion: RecoveryCompanion, @unchecked Sendable {
         lock.lock(); state.sealed.append(recovery.fingerprint); lock.unlock()
     }
     func discard(_ recovery: RecoveryKey) {}
-    func retireAllBut(_ recovery: RecoveryKey) { lock.lock(); state.retired.append(recovery.fingerprint); lock.unlock() }
+    func retireAllBut(_ recovery: RecoveryKey) -> Bool { lock.lock(); state.retired.append(recovery.fingerprint); lock.unlock(); return true }
     func restore(with recovery: RecoveryKey) -> RecoveryCompanionRestore {
         lock.lock(); state.restored.append(recovery.fingerprint); lock.unlock()
         return restoreAnswer

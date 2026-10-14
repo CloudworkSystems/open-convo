@@ -1230,7 +1230,7 @@ public final class ProofStore: @unchecked Sendable {
     /// key first; if it throws, nothing is replaced. If the Desk's write then
     /// fails before its rename, the companion's new copy is discarded; once
     /// the new copy is durable, the companion retires copies under earlier
-    /// keys.
+    /// keys; if it can't, the key comes back with `isDurable` false.
     public func makeRecoveryKey(companion: (any RecoveryCompanion)? = nil) throws -> MadeRecoveryKey {
         lock.lock()
         defer { lock.unlock() }
@@ -1246,7 +1246,11 @@ public final class ProofStore: @unchecked Sendable {
             companion?.discard(recovery)
             throw error
         }
-        if made.isDurable { companion?.retireAllBut(recovery) }
+        if made.isDurable, let companion, !companion.retireAllBut(recovery) {
+            // The Desk's copy is durable but the companion's rotation isn't
+            // complete: say so the same way, so the owner makes another.
+            return MadeRecoveryKey(key: recovery, isDurable: false)
+        }
         return made
     }
 

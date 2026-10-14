@@ -33,6 +33,7 @@ enum DurableFile {
             unlink(temporary.path)
             throw error
         }
+        if let failFlush = failFolderFlushForTesting, failFlush(url) { throw Failure(code: EIO) }
         try flushFolder(folder)
     }
 
@@ -57,6 +58,10 @@ enum DurableFile {
         try writeAll(record, to: descriptor)
         try flush(descriptor)
     }
+
+    /// Test seam: a folder flush after a rename that "fails" for these
+    /// targets, standing in for a disk that refuses it.
+    nonisolated(unsafe) static var failFolderFlushForTesting: ((URL) -> Bool)?
 
     static func flushFolder(_ folder: URL) throws {
         let descriptor = Darwin.open(folder.path, O_RDONLY | O_CLOEXEC)

@@ -61,7 +61,15 @@ public final class ArchiveRecovery: RecoveryCompanion, @unchecked Sendable {
         guard let id = archiveId(), let key = try keys.existingKey(for: id) else { return }
         let sealed = try Self.seal(key.material, under: recovery, archiveId: id)
         try prepareFolder()
-        try DurableFile.replace(copyURL(recovery), with: sealed)
+        do {
+            try DurableFile.replace(copyURL(recovery), with: sealed)
+        } catch {
+            // A rename that landed before a failed flush leaves the copy
+            // visible: take it back, since this key will never be shown
+            // (Codex P1 on #32).
+            unlink(copyURL(recovery).path)
+            throw error
+        }
     }
 
     public func discard(_ recovery: RecoveryKey) {
@@ -71,25 +79,51 @@ public final class ArchiveRecovery: RecoveryCompanion, @unchecked Sendable {
         try? DurableFile.flushFolder(folder)
     }
 
-    public func retireAllBut(_ recovery: RecoveryKey) {
+    public func retireAllBut(_ recovery: RecoveryKey) -> Bool {
         lock.lock()
         defer { lock.unlock() }
         let keep = copyURL(recovery).lastPathComponent
         let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
         // Only once the new copy is in place: otherwise the earlier copies
         // are the only way back.
-        guard names.contains(keep) else { return }
+        guard names.contains(keep) else { return false }
+        var allRetired = true
         for name in names where name.hasSuffix(".sealed") && name != keep {
-            unlink(folder.appendingPathComponent(name).path)
+            if unlink(folder.appendingPathComponent(name).path) != 0 && errno != ENOENT { allRetired = false }
         }
-        try? DurableFile.flushFolder(folder)
+        // A failed removal is reported, not hidden (Codex P2 on #32): the
+        // key isn't recorded as paired, so the Desk asks for another and
+        // the next make retries the removal.
+        guard allRetired, (try? DurableFile.flushFolder(folder)) != nil else { return false }
+        do {
+            try DurableFile.replace(pairedURL, with: Data((recovery.fingerprint + "\n").utf8))
+        } catch {
+            return false
+        }
+        return true
+    }
+
+    /// Names the recovery key the archive's copy is paired with: written
+    /// only after the Desk's own copy under it is durable and every earlier
+    /// copy is gone. A copy without it (one left by a failed make) never
+    /// counts as coverage.
+    var pairedURL: URL { folder.appendingPathComponent("paired", isDirectory: false) }
+
+    private func pairedCopyExists() -> Bool {
+        guard let data = try? Data(contentsOf: pairedURL), data.count <= 64 else { return false }
+        let fingerprint = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard fingerprint.count == 32, fingerprint.allSatisfy({ $0.isHexDigit }) else { return false }
+        return FileManager.default.fileExists(atPath: folder.appendingPathComponent("\(fingerprint).sealed").path)
     }
 
     public func restore(with recovery: RecoveryKey) -> RecoveryCompanionRestore {
         lock.lock()
         defer { lock.unlock() }
-        guard let id = archiveId(),
-              let sealed = try? Data(contentsOf: copyURL(recovery)) else { return .notCovered }
+        guard let id = archiveId() else { return .notCovered }
+        // A key still held is left alone whatever the typed key covers
+        // (Codex P2 on #32).
+        if (try? keys.existingKey(for: id)) != nil { return .alreadyHeld }
+        guard let sealed = try? Data(contentsOf: copyURL(recovery)) else { return .notCovered }
         guard let material = try? Self.open(sealed, under: recovery, archiveId: id) else { return .failed }
         do {
             _ = try keys.importKey(material, for: id)
@@ -105,8 +139,7 @@ public final class ArchiveRecovery: RecoveryCompanion, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard let id = archiveId(), (try? keys.existingKey(for: id)) != nil else { return false }
-        let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
-        return !names.contains { $0.hasSuffix(".sealed") }
+        return !pairedCopyExists()
     }
 
     /// Whether the archive's key is gone from this Mac (its marker names a
