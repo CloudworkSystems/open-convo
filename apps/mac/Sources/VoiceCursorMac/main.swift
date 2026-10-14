@@ -1384,7 +1384,15 @@ enum Archive {
     static var temporaryAudio: TemporaryAudioStore { TemporaryAudioStore(directory: temporaryRecordings) }
 
     static func captureRecordingURL(for sessionId: String, retain: Bool) throws -> URL {
-        if retain { return recordingURL(for: sessionId) }
+        if retain {
+            // Marked before anything is written, so a run that ends before
+            // the recording is sealed leaves it for the next launch to seal
+            // (step 2, PR 4c).
+            let url = recordingURL(for: sessionId)
+            try FileManager.default.createDirectory(at: recordings, withIntermediateDirectories: true)
+            try recordingsSeal.markPending(url)
+            return url
+        }
         return try temporaryAudio.recordingURL(sessionID: sessionId)
     }
 
@@ -1400,6 +1408,7 @@ enum Archive {
         guard url.standardizedFileURL.deletingLastPathComponent() == temporaryRecordings.standardizedFileURL else { return url }
         let retained = recordings.appendingPathComponent(url.lastPathComponent)
         guard !FileManager.default.fileExists(atPath: retained.path) else { throw VoiceCursorError.processFailed("An existing retained recording must not be replaced.") }
+        try recordingsSeal.markPending(retained)
         try FileManager.default.moveItem(at: url, to: retained)
         return retained
     }
@@ -1538,13 +1547,20 @@ enum Archive {
     /// Seals a final retained recording. Nil when it can't be sealed: the
     /// plaintext is removed then too, never kept readable.
     static func sealRecording(atPath path: String) -> String? {
-        switch recordingsSeal.seal(URL(fileURLWithPath: path), seal: currentSeal()) {
+        let recording = URL(fileURLWithPath: path)
+        let clearMarkers = {
+            recordingsSeal.clearPending(recording)
+            recordingsSeal.clearPending(recording.deletingPathExtension().appendingPathExtension("wav"))
+        }
+        switch recordingsSeal.seal(recording, seal: currentSeal()) {
         case .sealed(let url):
+            clearMarkers()
             return url.path
         case .sealedPlaintextLeft(let url):
             RunLog.write("archive.audio.plain-left", "name=\(URL(fileURLWithPath: path).lastPathComponent)")
             return url.path
         case .notSealed:
+            clearMarkers()
             RunLog.write("archive.audio.not-kept", "reason=not-sealed")
             return nil
         case .notSealedPlaintextLeft:
@@ -8480,6 +8496,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Opens the archive's key, or makes it on the first launch with this
         // step, before anything is dictated (step 2, PR 4). A missing key is
         // said once the menu is up.
+        // Kept recordings a previous run left unsealed are sealed now, or
+        // removed when there is no key (step 2, PR 4c).
+        let reconciled = Archive.recordingsSeal.reconcilePending(in: Archive.recordings, seal: Archive.currentSeal())
+        if reconciled > 0 { RunLog.write("archive.audio.unfinished-sealed", "count=\(reconciled)") }
         if Archive.currentSeal() == nil {
             DispatchQueue.main.async { [weak self] in
                 if let problem = Archive.protectionProblem { self?.updateStatus(problem) }

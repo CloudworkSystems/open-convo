@@ -139,7 +139,11 @@ with invented data in True Convo Test before anything touches the real app.
    sweep removes copies a crash left); a local transcriber's side files go
    there too and leave with it. Earlier recordings stay plaintext and are
    used as they are, told apart by the `.sealed` extension. The audio exists
-   in plaintext only while it is being recorded and converted.
+   in plaintext only while it is being recorded and converted; a marker in
+   `recordings/.pending/` is written before that starts and cleared once the
+   recording is sealed, so a run that ends in between leaves it for the next
+   launch to seal (or remove, with no key). Recordings with no marker are
+   never touched.
 5. **Kill-and-reopen proof, then the owner's real trial.** A scripted proof in
    True Convo Test: quit, force-kill, sleep, lock, restart and reopen with
    invented data. Then the owner holds one real conversation and it survives a

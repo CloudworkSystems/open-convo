@@ -102,6 +102,65 @@ public struct SealedRecordings: Sendable {
         return removed
     }
 
+    // MARK: Unfinished recordings (Codex round 2 on #34)
+    //
+    // A kept recording is plaintext from the moment it is captured until it
+    // is sealed. Before that, a marker `<recordings>/.pending/<name>` is
+    // written; it is cleared once the recording is sealed. A run that ends
+    // in between (quit, kill, crash) leaves the marker, and the next launch
+    // seals that recording, or removes it when there is no key. Recordings
+    // from before this step have no marker and are never touched.
+
+    public static let pendingFolderName = ".pending"
+
+    private func pendingMarker(for capture: URL) -> URL {
+        capture.deletingLastPathComponent()
+            .appendingPathComponent(Self.pendingFolderName, isDirectory: true)
+            .appendingPathComponent(capture.lastPathComponent, isDirectory: false)
+    }
+
+    /// Notes that `capture` will be a kept recording. Call before anything
+    /// is written there; a failure means it must not be kept.
+    public func markPending(_ capture: URL) throws {
+        let marker = pendingMarker(for: capture)
+        try FileManager.default.createDirectory(at: marker.deletingLastPathComponent(), withIntermediateDirectories: true,
+                                                attributes: [.posixPermissions: NSNumber(value: 0o700)])
+        try DurableFile.replace(marker, with: Data())
+    }
+
+    /// The recording made from `capture` is sealed (or gone): its marker
+    /// goes.
+    public func clearPending(_ capture: URL) {
+        let marker = pendingMarker(for: capture)
+        if unlink(marker.path) == 0 { try? DurableFile.flushFolder(marker.deletingLastPathComponent()) }
+    }
+
+    /// Seals, or with no seal removes, every recording a run left unfinished
+    /// in `folder`, including its converted form, then clears its marker.
+    /// A marker is kept when its recording could be neither sealed nor
+    /// removed, so the next launch tries again. Returns how many recordings
+    /// were handled.
+    @discardableResult
+    public func reconcilePending(in folder: URL, seal: ArchiveSeal?) -> Int {
+        let pending = folder.appendingPathComponent(Self.pendingFolderName, isDirectory: true)
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: pending.path)) ?? []
+        var handled = 0
+        for name in names where !name.hasPrefix(".") {
+            let capture = folder.appendingPathComponent(name, isDirectory: false)
+            let stem = capture.deletingPathExtension()
+            let candidates = Set([capture, stem.appendingPathExtension("wav"), stem.appendingPathExtension("flac")])
+            var settled = true
+            for candidate in candidates where FileManager.default.fileExists(atPath: candidate.path) {
+                switch self.seal(candidate, seal: seal) {
+                case .sealed, .notSealed: handled += 1
+                case .sealedPlaintextLeft, .notSealedPlaintextLeft: settled = false
+                }
+            }
+            if settled { clearPending(capture) }
+        }
+        return handled
+    }
+
     /// Removes the plaintext and flushes its folder, so a power loss can't
     /// bring it back (Codex P1 on #34). False when either step fails.
     private static func remove(_ url: URL) -> Bool {

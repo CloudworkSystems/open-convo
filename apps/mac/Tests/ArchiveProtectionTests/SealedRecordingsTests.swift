@@ -124,6 +124,42 @@ final class SealedRecordingsTests: XCTestCase {
         XCTAssertNil(recordings.data(of: sealed, seal: seal))
     }
 
+    func testAnUnfinishedRecordingIsSealedAtTheNextLaunch() throws {
+        let folder = root.appendingPathComponent("recordings")
+        let capture = folder.appendingPathComponent("s1.wav")
+        try recordings.markPending(capture)
+        try audio.write(to: capture)
+        let legacy = try plainRecording("legacy.wav")
+        XCTAssertEqual(recordings.reconcilePending(in: folder, seal: seal), 1)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: capture.path))
+        XCTAssertEqual(recordings.data(of: capture.appendingPathExtension("sealed"), seal: seal), audio)
+        XCTAssertEqual(try Data(contentsOf: legacy), audio, "a recording with no marker is never touched")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: folder.appendingPathComponent(".pending").path), [])
+    }
+
+    func testAnUnfinishedConvertedRecordingIsHandledAndWithoutAKeyRemoved() throws {
+        let folder = root.appendingPathComponent("recordings")
+        let capture = folder.appendingPathComponent("s2.wav")
+        try recordings.markPending(capture)
+        try audio.write(to: capture)
+        try audio.write(to: folder.appendingPathComponent("s2.flac"))
+        XCTAssertEqual(recordings.reconcilePending(in: folder, seal: nil), 2)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: capture.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folder.appendingPathComponent("s2.flac").path))
+        XCTAssertEqual(recordings.reconcilePending(in: folder, seal: nil), 0, "marker cleared")
+    }
+
+    func testAFinishedRecordingClearsItsMarker() throws {
+        let folder = root.appendingPathComponent("recordings")
+        let capture = folder.appendingPathComponent("s3.wav")
+        try recordings.markPending(capture)
+        try audio.write(to: capture)
+        guard case .sealed = recordings.seal(capture, seal: seal) else { return XCTFail("not sealed") }
+        recordings.clearPending(capture)
+        XCTAssertEqual(recordings.reconcilePending(in: folder, seal: seal), 0)
+        XCTAssertNotNil(recordings.data(of: capture.appendingPathExtension("sealed"), seal: seal))
+    }
+
     func testTheSweepRemovesOnlyLeftCopies() throws {
         try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
         let left = temporary.appendingPathComponent(SealedRecordings.openedCopyPrefix + "left", isDirectory: true)
