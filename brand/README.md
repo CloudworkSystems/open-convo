@@ -19,8 +19,9 @@ recorded here first.
 - `fonts/`: Atkinson Hyperlegible Next and JetBrains Mono, self-hosted (no
   font CDN), with `fonts.css` and each font's SIL Open Font License
   (`OFL-*.txt`). The licenses stay next to the fonts.
-- `logo/`: full logo, icon only, text only and grayscale, each with and without
-  padding and transparency, plus print SVG, PDF and EPS.
+- `logo/`: full logo, icon only and grayscale, each with and without padding
+  and transparency; text only, with and without padding (opaque only, no
+  transparent version yet); plus print SVG, PDF and EPS.
 - `ember-palette-preview.svg`: a swatch board of the palette.
 
 ## Palette Shape
