@@ -318,11 +318,13 @@ final class ArchiveHistoryWindowController: NSWindowController, NSTableViewDataS
         Task { @MainActor [weak self] in
             do {
                 let reprocessStartedAt = Date()
-                let result = try await TranscriptionService.transcribe(
-                    provider: provider,
-                    audioURL: audioURL,
-                    language: language
-                )
+                let result = try await Archive.withReadableAudio(audioURL) { readable in
+                    try await TranscriptionService.transcribe(
+                        provider: provider,
+                        audioURL: readable,
+                        language: language
+                    )
+                }
                 let transcriptionMs = milliseconds(between: reprocessStartedAt, and: Date())
                 // Saved fixes use the archived session's app and language,
                 // not today's settings.

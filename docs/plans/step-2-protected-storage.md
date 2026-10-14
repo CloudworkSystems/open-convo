@@ -131,6 +131,15 @@ with invented data in True Convo Test before anything touches the real app.
    is renamed into place but its folder flush fails, the visible note is
    not yet taken back, so a power loss right then could leave the Desk not
    asking for a new key; PR 4c removes the note on that failure.
+   *PR 4c as built:* a kept recording (only when the owner keeps audio) is
+   sealed as `<name>.sealed` once it is final, before its session is
+   listed, and its plaintext removed; with the key missing it isn't kept at
+   all. Reprocess and provider comparison get a short-lived owner-only copy
+   in the app's own temporary folder, removed when they finish (a launch
+   sweep removes copies a crash left); a local transcriber's side files go
+   there too and leave with it. Earlier recordings stay plaintext and are
+   used as they are, told apart by the `.sealed` extension. The audio exists
+   in plaintext only while it is being recorded and converted.
 5. **Kill-and-reopen proof, then the owner's real trial.** A scripted proof in
    True Convo Test: quit, force-kill, sleep, lock, restart and reopen with
    invented data. Then the owner holds one real conversation and it survives a

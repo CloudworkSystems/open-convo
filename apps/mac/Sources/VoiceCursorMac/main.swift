@@ -1521,6 +1521,51 @@ enum Archive {
     /// the key is missing, or damaged.
     private(set) static var historyLinesNotShown = 0
 
+    // MARK: Sealed Recordings (step 2, PR 4c)
+    //
+    // A retained recording is sealed as `<name>.sealed` once it is final and
+    // its plaintext removed (`SealedRecordings`). Reprocess and provider
+    // comparison get a short-lived owner-only copy that is removed when they
+    // finish. Recordings from before this step are used as they are.
+
+    static var recordingsSeal: SealedRecordings {
+        // Each app copy (True Convo, True Convo Test) has its own folder for
+        // readable copies, so one's launch sweep never touches the other's.
+        SealedRecordings(files: files, temporaryRoot: FileManager.default.temporaryDirectory
+            .appendingPathComponent(AppIdentity.current.keychainService + ".opened-audio", isDirectory: true))
+    }
+
+    /// Seals a final retained recording. Nil when it can't be sealed: the
+    /// plaintext is removed then too, never kept readable.
+    static func sealRecording(atPath path: String) -> String? {
+        switch recordingsSeal.seal(URL(fileURLWithPath: path), seal: currentSeal()) {
+        case .sealed(let url):
+            return url.path
+        case .sealedPlaintextLeft(let url):
+            RunLog.write("archive.audio.plain-left", "name=\(URL(fileURLWithPath: path).lastPathComponent)")
+            return url.path
+        case .notSealed:
+            RunLog.write("archive.audio.not-kept", "reason=not-sealed")
+            return nil
+        case .notSealedPlaintextLeft:
+            RunLog.write("archive.audio.not-kept", "reason=not-sealed plain-left")
+            return nil
+        }
+    }
+
+    static func recordingData(_ url: URL) -> Data? {
+        recordingsSeal.data(of: url, seal: currentSeal())
+    }
+
+    static func withReadableAudio<T>(_ url: URL, _ body: (URL) async throws -> T) async throws -> T {
+        try await recordingsSeal.withReadableCopy(of: url, seal: currentSeal(), body)
+    }
+
+    static func sweepOpenedAudio() {
+        let removed = recordingsSeal.sweepOpenedCopies()
+        if removed > 0 { RunLog.write("audio.opened-copies.swept", "count=\(removed)") }
+    }
+
     static func ensureDirectories() throws {
         try FileManager.default.createDirectory(at: recordings, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: transcripts, withIntermediateDirectories: true)
@@ -2117,7 +2162,7 @@ enum Archive {
             return (false, "missing audio path")
         }
         guard FileManager.default.fileExists(atPath: path),
-              let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+              let data = recordingData(URL(fileURLWithPath: path)),
               data.count > 12
         else {
             return (false, path)
@@ -7095,6 +7140,10 @@ final class DictationController {
                 if !retainAudioForHarvest { retainedAudioPath = nil }
                 self.finishOwnedRecording(url)
             }
+            // Step 2, PR 4c: a kept recording is sealed before it is listed.
+            if let path = retainedAudioPath {
+                retainedAudioPath = Archive.sealRecording(atPath: path)
+            }
             releasedRecording = true
             guard !Task.isCancelled, !self.recordingProcesses.isClosed else { return }
 
@@ -8426,6 +8475,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         Archive.sweepTemporaryAudio()
+        Archive.sweepOpenedAudio()
         RunLog.write("app.launch", BuildFingerprint.launchDetail())
         // Opens the archive's key, or makes it on the first launch with this
         // step, before anything is dictated (step 2, PR 4). A missing key is
@@ -10466,11 +10516,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task { @MainActor [weak self] in
             do {
                 let reprocessStartedAt = Date()
-                let result = try await TranscriptionService.transcribe(
-                    provider: provider,
-                    audioURL: audioURL,
-                    language: language
-                )
+                let result = try await Archive.withReadableAudio(audioURL) { readable in
+                    try await TranscriptionService.transcribe(
+                        provider: provider,
+                        audioURL: readable,
+                        language: language
+                    )
+                }
                 let transcriptionMs = milliseconds(between: reprocessStartedAt, and: Date())
                 let cleanedText = SavedCorrections.preview(
                     cleanedDictationText(result.text),
@@ -10565,12 +10617,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self.updateStatus("Comparing \(preset.label)")
                 let startedAt = Date()
                 do {
-                    let result = try await TranscriptionService.transcribe(
-                        provider: preset.provider,
-                        audioURL: audioURL,
-                        language: language,
-                        modelOverride: preset.model
-                    )
+                    let result = try await Archive.withReadableAudio(audioURL) { readable in
+                        try await TranscriptionService.transcribe(
+                            provider: preset.provider,
+                            audioURL: readable,
+                            language: language,
+                            modelOverride: preset.model
+                        )
+                    }
                     let elapsedMs = milliseconds(between: startedAt, and: Date())
                     let cleanedText = SavedCorrections.preview(
                         cleanedDictationText(result.text),
