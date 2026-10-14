@@ -72,6 +72,14 @@ with invented data in True Convo Test before anything touches the real app.
    key itself. A restore flow opens the store on a wiped Keychain or a
    replacement Mac when the owner types it in. Tests: restore succeeds, wrong
    recovery key refuses, recovery key never appears in any file or log.
+   *As built (October 13):* split in two. **PR 3** is the core: a 256-bit
+   recovery key written as 55 Crockford base32 characters with a checksum
+   (typos are caught before decryption), the store key sealed under it in
+   `recovery-key.sealed` (HKDF-SHA256 per store, AES-GCM, bound to the store
+   id), a new recovery key retiring the old copy, and a restore that hands
+   the store key back to the Keychain without ever replacing a held key.
+   **PR 3b** is the guided screens: show it once, confirm a few characters
+   back, and the restore flow in the app.
 4. **Protect dictation history and word fixes.** New dictation sessions,
    transcripts, kept recordings and the word-fix file are written encrypted under
    the same custody. Existing plaintext files are **left untouched** (the app

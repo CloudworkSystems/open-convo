@@ -49,10 +49,14 @@ struct StoreCipher: Sendable {
 
     let workspaceId: UUID
     private let key: SymmetricKey
+    /// The raw key, kept only to seal the recovery copy. Never printed,
+    /// logged, encoded or written in the clear.
+    let material: Data
 
     init(material: Data, workspaceId: UUID) throws {
         guard material.count == Self.keyLength else { throw Failure.wrongKeyLength }
         key = SymmetricKey(data: material)
+        self.material = material
         self.workspaceId = workspaceId
     }
 

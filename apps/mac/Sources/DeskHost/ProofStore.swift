@@ -1192,6 +1192,58 @@ public final class ProofStore: @unchecked Sendable {
                                             reservedStartRequestIds: published.reservedStartRequestIds, locked: locked, closed: true)
     }
 
+    // MARK: Recovery key (step 2, PR 3)
+
+    /// Where the store keeps its key's copy sealed under the recovery key.
+    public var recoveryCopyURL: URL { directory.appendingPathComponent(RecoveryCopy.fileName) }
+
+    /// Whether the store holds a recovery copy of its key.
+    public var hasRecoveryCopy: Bool { PathNode.inspect(recoveryCopyURL.path) == .regular(links: 1) }
+
+    /// Makes a fresh recovery key and atomically replaces the store's sealed
+    /// copy with one under it, so an earlier recovery key stops working. The
+    /// recovery key is returned to be shown once; it is never written,
+    /// logged or kept. Refused while the store is closed or locked.
+    public func makeRecoveryKey() throws -> RecoveryKey {
+        lock.lock()
+        defer { lock.unlock() }
+        if closed { throw ProofStoreError.closed }
+        if locked { throw ProofStoreError.locked }
+        let recovery = try RecoveryKey.generate()
+        let sealed = try RecoveryCopy.seal(storeKey: cipher.material, under: recovery, workspaceId: workspaceId)
+        do {
+            try AtomicFile.write(sealed, to: recoveryCopyURL, files: files, faults: faults)
+        } catch let failure as AtomicWriteError {
+            throw failure.stage == .target ? ProofStoreError.unsafeFile : ProofStoreError.writeFailed(failure.code)
+        }
+        return recovery
+    }
+
+    /// Opens a store's recovery copy with the typed recovery key and hands
+    /// the store key back to `keys` (a wiped Keychain, or a new Mac with the
+    /// folder restored). Holds the store's writer lock meanwhile, so no
+    /// writer has it open. A wrong key, a changed copy, a missing copy or an
+    /// unreadable marker refuses with nothing imported; `keys` refuses to
+    /// replace a key it already holds (`keyExists`). Returns the store's id.
+    @discardableResult
+    public static func restoreKey(directory: URL, recoveryKey: RecoveryKey, into keys: any KeyImporting) throws -> UUID {
+        let directory = directory.standardizedFileURL
+        guard PathNode.inspect(directory.path) == .directory else { throw RecoveryError.storeUnreadable }
+        let writerLock = try acquireWriterLock(at: directory.appendingPathComponent("proof.lock"))
+        defer { writerLock.release() }
+        let markerURL = directory.appendingPathComponent("workspace.json")
+        guard PathNode.inspect(markerURL.path) == .regular(links: 1),
+              let marker = try? boundedDecode(Marker.self, from: Data(contentsOf: markerURL)),
+              marker.formatVersion == formatVersion else { throw RecoveryError.storeUnreadable }
+        let copyURL = directory.appendingPathComponent(RecoveryCopy.fileName)
+        guard PathNode.inspect(copyURL.path) == .regular(links: 1), let sealed = try? Data(contentsOf: copyURL) else {
+            throw RecoveryError.noRecoveryCopy
+        }
+        let material = try RecoveryCopy.open(sealed, under: recoveryKey, workspaceId: marker.workspaceId)
+        _ = try keys.importKey(material, for: marker.workspaceId)
+        return marker.workspaceId
+    }
+
     // MARK: Internals
 
     private func readyState() throws -> State {

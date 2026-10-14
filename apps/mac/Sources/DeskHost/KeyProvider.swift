@@ -47,7 +47,7 @@ public enum KeyProviderError: Error, Equatable, Sendable {
 /// PLACEHOLDER. Holds invented keys in memory for the invented-data proof.
 /// Keys vanish with the process, so a reopened store in a new process refuses
 /// to open exactly as a real store with a missing Keychain item would.
-public final class InventedInMemoryKeyProvider: KeyProvider, @unchecked Sendable {
+public final class InventedInMemoryKeyProvider: KeyImporting, @unchecked Sendable {
     public static let custody = "invented-in-memory-placeholder"
 
     private let lock = NSLock()
@@ -67,6 +67,16 @@ public final class InventedInMemoryKeyProvider: KeyProvider, @unchecked Sendable
         guard keys[storeId] == nil else { throw KeyProviderError.keyExists }
         var generator = SystemRandomNumberGenerator()
         let material = Data((0..<32).map { _ in UInt8.random(in: .min ... .max, using: &generator) })
+        let key = StoreKey(storeId: storeId, material: material, custody: Self.custody)
+        keys[storeId] = key
+        return key
+    }
+
+    /// Takes back a recovered key; refuses to replace one it holds.
+    public func importKey(_ material: Data, for storeId: UUID) throws -> StoreKey {
+        lock.lock()
+        defer { lock.unlock() }
+        guard keys[storeId] == nil else { throw KeyProviderError.keyExists }
         let key = StoreKey(storeId: storeId, material: material, custody: Self.custody)
         keys[storeId] = key
         return key

@@ -21,7 +21,7 @@ import Security
 /// The app's Desk uses this provider since step 2, PR 2b
 /// (`DeskSession.Storage.keychain`), for the one store it reopens on every
 /// run; the store's files are ciphertext under it (step 2, PR 2).
-public final class KeychainKeyProvider: KeyProvider, @unchecked Sendable {
+public final class KeychainKeyProvider: KeyImporting, @unchecked Sendable {
     public static let custody = "keychain-this-device-only"
     /// Key size in bytes (256-bit, for AES-GCM or ChaChaPoly).
     public static let keyLength = 32
@@ -66,6 +66,28 @@ public final class KeychainKeyProvider: KeyProvider, @unchecked Sendable {
             SecRandomCopyBytes(kSecRandomDefault, Self.keyLength, buffer.baseAddress!)
         }
         guard status == errSecSuccess else { throw KeyProviderError.unavailable }
+        do {
+            try items.add(service: service, account: account, data: material)
+        } catch KeychainItemsError.duplicate {
+            throw KeyProviderError.keyExists
+        } catch {
+            throw KeyProviderError.unavailable
+        }
+        return StoreKey(storeId: storeId, material: material, custody: Self.custody)
+    }
+
+    /// Puts a recovered key back in the Keychain (this-device-only, never
+    /// synchronized). Refuses to replace an item that is already there.
+    public func importKey(_ material: Data, for storeId: UUID) throws -> StoreKey {
+        lock.lock()
+        defer { lock.unlock() }
+        guard material.count == Self.keyLength else { throw KeyProviderError.unavailable }
+        let account = storeId.uuidString
+        let present: Data?
+        do { present = try items.read(service: service, account: account) } catch {
+            throw KeyProviderError.unavailable
+        }
+        guard present == nil else { throw KeyProviderError.keyExists }
         do {
             try items.add(service: service, account: account, data: material)
         } catch KeychainItemsError.duplicate {
