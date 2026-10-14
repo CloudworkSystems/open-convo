@@ -8,14 +8,17 @@ import Foundation
 /// copy of its own key sealed under it (`recovery-key.sealed`), never the
 /// recovery key itself, so a wiped Keychain or a replacement Mac can open
 /// the store again when the owner types it in. The key is shown as 55
-/// characters of Crockford base32 in groups of five; the last two bytes are
-/// a checksum, so a mistyped key is caught before any decryption.
+/// characters of Crockford base32 in groups of five: 52 carry the secret
+/// (its four spare bits zero) and the last 3 are check symbols over GF(32),
+/// c_k = sum of v_i * a^(k(i+1)) for k = 1, 2, 3. Any single mistyped
+/// character changes c_1, so it is always caught before any decryption.
 ///
 /// Never printed, logged or written: `description` is redacted, and only
 /// `displayText` (for the one screen that shows it) spells it out.
 public struct RecoveryKey: Equatable, Sendable, CustomStringConvertible, CustomDebugStringConvertible {
     public static let secretLength = 32
-    static let checksumLength = 2
+    static let payloadCount = 52
+    static let checkCount = 3
     static let alphabet = Array("0123456789ABCDEFGHJKMNPQRSTVWXYZ")
     public static let characterCount = 55
     public static let groupLength = 5
@@ -41,15 +44,17 @@ public struct RecoveryKey: Equatable, Sendable, CustomStringConvertible, CustomD
 
     /// The key as the owner writes it down: 11 groups of 5, joined by dashes.
     public var displayText: String {
-        let chars = Self.encode(secret + Self.checksum(secret))
+        let payload = Self.encode(secret)
+        let values = payload.map { UInt8(Self.alphabet.firstIndex(of: $0)!) }
+        let chars = payload + Self.checkSymbols(values).map { Self.alphabet[Int($0)] }
         return stride(from: 0, to: chars.count, by: Self.groupLength).map { start in
             String(chars[start..<min(start + Self.groupLength, chars.count)])
         }.joined(separator: "-")
     }
 
     /// Reads a typed key: case, spaces and dashes don't matter, and O, I and
-    /// L read as 0, 1 and 1. Anything else, the wrong length or a failed
-    /// checksum is `malformedRecoveryKey`.
+    /// L read as 0, 1 and 1. Anything else, the wrong length, nonzero spare
+    /// bits or wrong check symbols is `malformedRecoveryKey`.
     public init(typed text: String) throws {
         var values: [UInt8] = []
         for character in text.uppercased() {
@@ -63,20 +68,49 @@ public struct RecoveryKey: Equatable, Sendable, CustomStringConvertible, CustomD
             }
         }
         guard values.count == Self.characterCount else { throw RecoveryError.malformedRecoveryKey }
-        let bytes = Self.decode(values, byteCount: Self.secretLength + Self.checksumLength)
-        // 55 characters carry 275 bits for 272: the last character's three
-        // spare bits must be zero, so only the one canonical spelling of
-        // each key is accepted and a typo there is caught too.
-        guard Self.encode(bytes).map({ Self.alphabet.firstIndex(of: $0).map(UInt8.init) }) == values.map(Optional.some) else {
+        let payload = Array(values.prefix(Self.payloadCount))
+        guard Array(values.suffix(Self.checkCount)) == Self.checkSymbols(payload) else { throw RecoveryError.malformedRecoveryKey }
+        let secret = Self.decode(payload, byteCount: Self.secretLength)
+        // 52 characters carry 260 bits for 256: the four spare bits must be
+        // zero, so each key has exactly one accepted spelling.
+        guard Self.encode(secret).map({ UInt8(Self.alphabet.firstIndex(of: $0)!) }) == payload else {
             throw RecoveryError.malformedRecoveryKey
         }
-        let secret = bytes.prefix(Self.secretLength)
-        guard bytes.suffix(Self.checksumLength) == Self.checksum(Data(secret)) else { throw RecoveryError.malformedRecoveryKey }
-        self.init(secret: Data(secret))
+        self.init(secret: secret)
     }
 
-    static func checksum(_ secret: Data) -> Data {
-        Data(SHA256.hash(data: Data("open-convo.recovery-check/v1".utf8) + secret).prefix(checksumLength))
+    // GF(32) with the primitive polynomial x^5 + x^2 + 1.
+    private static let gfExp: [UInt8] = {
+        var table = [UInt8](repeating: 0, count: 62)
+        var value = 1
+        for index in 0..<31 {
+            table[index] = UInt8(value)
+            table[index + 31] = UInt8(value)
+            value <<= 1
+            if value & 0x20 != 0 { value ^= 0b100101 }
+        }
+        return table
+    }()
+    private static let gfLog: [Int] = {
+        var table = [Int](repeating: 0, count: 32)
+        for index in 0..<31 { table[Int(gfExp[index])] = index }
+        return table
+    }()
+
+    static func gfMultiply(_ a: UInt8, _ b: UInt8) -> UInt8 {
+        guard a != 0, b != 0 else { return 0 }
+        return gfExp[(gfLog[Int(a)] + gfLog[Int(b)]) % 31]
+    }
+
+    /// c_k = sum over i of v_i * a^(k(i+1)), k = 1...3, in GF(32). A change
+    /// d != 0 at one position i moves c_1 by d * a^(i+1) != 0, so every
+    /// single-character substitution is detected.
+    static func checkSymbols(_ payload: [UInt8]) -> [UInt8] {
+        (1...checkCount).map { k in
+            payload.enumerated().reduce(UInt8(0)) { sum, element in
+                sum ^ gfMultiply(element.element, gfExp[(k * (element.offset + 1)) % 31])
+            }
+        }
     }
 
     static func encode(_ data: Data) -> [Character] {
@@ -123,7 +157,7 @@ public struct RecoveryKey: Equatable, Sendable, CustomStringConvertible, CustomD
 }
 
 public enum RecoveryError: Error, Equatable, Sendable {
-    /// The typed key is not a recovery key (wrong length, characters or checksum).
+    /// The typed key is not a recovery key (wrong length, characters or check symbols).
     case malformedRecoveryKey
     /// The store holds no recovery copy of its key.
     case noRecoveryCopy

@@ -409,6 +409,12 @@ public final class ProofStore: @unchecked Sendable {
         var workspaceHandle: String
     }
 
+    /// The marker checks the store's open and a recovery share: this
+    /// format, and a handle.
+    private static func isUsableMarker(_ marker: Marker) -> Bool {
+        marker.formatVersion == formatVersion && !marker.workspaceHandle.isEmpty
+    }
+
     private struct State: Codable {
         var formatVersion: Int
         var workspace: WorkspaceRecord
@@ -605,7 +611,7 @@ public final class ProofStore: @unchecked Sendable {
                 } catch {
                     throw ProofStoreError.corruptState
                 }
-                guard marker.formatVersion == Self.formatVersion, !marker.workspaceHandle.isEmpty else { throw ProofStoreError.corruptState }
+                guard Self.isUsableMarker(marker) else { throw ProofStoreError.corruptState }
                 // An existing store with no key refuses. Nothing is regenerated.
                 guard let key = try keys.existingKey(for: marker.workspaceId) else { throw ProofStoreError.keyMissing }
                 keyCustody = key.custody
@@ -1249,7 +1255,7 @@ public final class ProofStore: @unchecked Sendable {
         let markerURL = directory.appendingPathComponent("workspace.json")
         guard PathNode.inspect(markerURL.path) == .regular(links: 1),
               let marker = try? boundedDecode(Marker.self, from: Data(contentsOf: markerURL)),
-              marker.formatVersion == formatVersion else { throw RecoveryError.storeUnreadable }
+              isUsableMarker(marker) else { throw RecoveryError.storeUnreadable }
         let copyURL = directory.appendingPathComponent(RecoveryCopy.fileName)
         guard PathNode.inspect(copyURL.path) == .regular(links: 1), let sealed = try? Data(contentsOf: copyURL) else {
             throw RecoveryError.noRecoveryCopy

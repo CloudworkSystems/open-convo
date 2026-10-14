@@ -49,6 +49,43 @@ struct RecoveryKeyTests {
         #expect(accepted.isEmpty, "\(accepted)")
     }
 
+    @Test("Every single mistyped character, anywhere, is refused before decryption")
+    func everySingleSubstitutionCaught() throws {
+        // Includes Codex's example of a key a 16-bit hash checksum let through.
+        var keys = [try RecoveryKey(typed: RecoveryKey(secret: Data(repeating: 0, count: 31) + Data([1])).displayText)]
+        for _ in 0..<6 { keys.append(try RecoveryKey.generate()) }
+        for key in keys {
+            let chars = Array(key.displayText.filter { $0 != "-" })
+            #expect(chars.count == RecoveryKey.characterCount)
+            for position in chars.indices {
+                for other in RecoveryKey.alphabet where other != chars[position] {
+                    var typo = chars
+                    typo[position] = other
+                    #expect(throws: RecoveryError.malformedRecoveryKey, "position \(position)") { try RecoveryKey(typed: String(typo)) }
+                }
+            }
+        }
+    }
+
+    @Test("A marker the store itself would refuse (empty handle) refuses the restore and imports nothing")
+    func restoreChecksMarkerLikeOpen() throws {
+        let fixture = try DeskHostFixture()
+        defer { fixture.clean() }
+        let store = try fixture.makeStore()
+        let recovery = try store.makeRecoveryKey().key
+        let id = store.workspaceId
+        let markerURL = store.markerURL
+        store.close()
+        fixture.keys.forgetKey(for: id)
+        var marker = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: markerURL)) as? [String: Any])
+        marker["workspaceHandle"] = ""
+        try JSONSerialization.data(withJSONObject: marker).write(to: markerURL)
+        #expect(throws: RecoveryError.storeUnreadable) {
+            try ProofStore.restoreKey(directory: fixture.storeDirectory, recoveryKey: recovery, into: fixture.keys)
+        }
+        #expect(fixture.keys.heldKeyCount == 0)
+    }
+
     @Test("A copy renamed into place whose folder flush failed still hands back its key")
     func flushFailureKeepsKey() throws {
         let fixture = try DeskHostFixture()
