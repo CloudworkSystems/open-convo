@@ -80,10 +80,13 @@ public struct ArchiveSeal: Sendable {
     /// was damaged or cut short, so it is refused as damaged rather than
     /// passed on as plaintext from before this step. Those plaintext files
     /// are always valid UTF-8 Markdown or JSON, never a bare base64 line.
-    /// Caught: any `TCARCH` start, bytes that are not UTF-8, the header's
-    /// sentence anywhere, and at most two lines ending in a base64 line.
+    /// Caught: any `TCARCH` start, a file cut short anywhere inside the
+    /// header (even to its first byte), bytes that are not UTF-8, the
+    /// header's sentence anywhere, and at most two lines ending in a base64
+    /// line.
     public static func looksSealedFile(_ stored: Data) -> Bool {
         if stored.starts(with: Data(familyPrefix.utf8)) { return true }
+        if !stored.isEmpty, Data(fileHeader.utf8).starts(with: stored) { return true }
         guard let text = String(data: stored, encoding: .utf8) else { return true }
         if text.contains(headerSentence) { return true }
         let lines = text.split(separator: "\n")
@@ -104,7 +107,7 @@ public struct ArchiveSeal: Sendable {
     /// The shortest sealed body: nonce and tag alone, in base64.
     static let shortestBase64Body = 40
 
-    private static func isBase64Body<S: StringProtocol>(_ text: S) -> Bool {
+    static func isBase64Body<S: StringProtocol>(_ text: S) -> Bool {
         text.count >= shortestBase64Body && text.unicodeScalars.allSatisfy { scalar in
             switch scalar {
             case "A"..."Z", "a"..."z", "0"..."9", "+", "/", "=": return true
@@ -117,14 +120,28 @@ public struct ArchiveSeal: Sendable {
         Data((Self.fileHeader + (try sealedBase64(plaintext, purpose: purpose)) + "\n").utf8)
     }
 
-    public func openFile(_ stored: Data, purpose: String) throws -> Data {
-        let header = Data(Self.fileHeader.utf8)
-        guard stored.starts(with: header) else { throw Failure.unreadable }
+    /// The base64 body of a whole sealed file, or nil when the layout is
+    /// broken: the header, one base64 line long enough for nonce and tag,
+    /// exactly one newline. Checkable without the key, so a file cut short
+    /// reads as damaged rather than locked.
+    static func sealedBody(_ stored: Data) -> String? {
+        let header = Data(fileHeader.utf8)
+        guard stored.starts(with: header) else { return nil }
         var body = String(decoding: stored.dropFirst(header.count), as: UTF8.self)
-        // Exactly one trailing newline is the layout; nothing else may follow.
-        guard body.hasSuffix("\n") else { throw Failure.unreadable }
+        guard body.hasSuffix("\n") else { return nil }
         body.removeLast()
-        guard !body.contains("\n") else { throw Failure.unreadable }
+        guard isBase64Body(body), let combined = Data(base64Encoded: body),
+              combined.count >= nonceLength + tagLength else { return nil }
+        return body
+    }
+
+    /// Whether a sealed file's layout is whole (see `sealedBody`).
+    public static func hasWholeSealedLayout(_ stored: Data) -> Bool {
+        sealedBody(stored) != nil
+    }
+
+    public func openFile(_ stored: Data, purpose: String) throws -> Data {
+        guard let body = Self.sealedBody(stored) else { throw Failure.unreadable }
         return try open(base64: body, purpose: purpose)
     }
 
@@ -133,6 +150,15 @@ public struct ArchiveSeal: Sendable {
     /// Whether one history line (without its newline) is sealed.
     public static func isSealedLine<S: StringProtocol>(_ line: S) -> Bool {
         line.hasPrefix(linePrefix)
+    }
+
+    /// Whether a sealed line's layout is whole: the prefix, then one base64
+    /// body long enough for nonce and tag. Checkable without the key.
+    public static func hasWholeSealedLineLayout<S: StringProtocol>(_ line: S) -> Bool {
+        guard line.hasPrefix(linePrefix) else { return false }
+        let body = String(line).dropFirst(linePrefix.count)
+        guard isBase64Body(body), let combined = Data(base64Encoded: String(body)) else { return false }
+        return combined.count >= nonceLength + tagLength
     }
 
     /// One sealed history line, without a newline.

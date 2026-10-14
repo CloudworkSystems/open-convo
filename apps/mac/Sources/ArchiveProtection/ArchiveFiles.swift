@@ -73,7 +73,7 @@ public struct ArchiveFiles: Sendable {
         }
         guard ArchiveSeal.looksSealedFile(stored) else { return .plaintext(stored) }
         // A damaged header is damage, not plaintext from before (Codex P2).
-        guard ArchiveSeal.isSealedFile(stored) else { return .unreadable }
+        guard ArchiveSeal.hasWholeSealedLayout(stored) else { return .unreadable }
         guard let seal else { return .locked }
         guard let opened = try? seal.openFile(stored, purpose: purpose(of: url)) else { return .unreadable }
         return .opened(opened)
@@ -83,7 +83,7 @@ public struct ArchiveFiles: Sendable {
     /// newline.
     public func readLine<S: StringProtocol>(_ line: S, in url: URL, seal: ArchiveSeal?) -> Read {
         guard ArchiveSeal.looksSealedLine(line) else { return .plaintext(Data(line.utf8)) }
-        guard ArchiveSeal.isSealedLine(line) else { return .unreadable }
+        guard ArchiveSeal.hasWholeSealedLineLayout(line) else { return .unreadable }
         guard let seal else { return .locked }
         guard let opened = try? seal.openLine(line, purpose: purpose(of: url)) else { return .unreadable }
         return .opened(opened)

@@ -227,6 +227,11 @@ final class ArchiveFilesTests: XCTestCase {
         for cut in [1, 7, 20, header.count - 1, header.count] {
             damaged.append(stored.dropFirst(cut))
         }
+        // Cut short from the end: every length inside the header and a few
+        // past it (Codex round 2).
+        for length in 1...(header.count + 10) {
+            damaged.append(stored.prefix(length))
+        }
         for (number, bytes) in damaged.enumerated() {
             try bytes.write(to: url)
             XCTAssertEqual(files.read(url, seal: seal), .unreadable, "case \(number)")
@@ -256,6 +261,14 @@ final class ArchiveFilesTests: XCTestCase {
         for damaged in ["TCARCH2:" + bare, "TCARCH1;" + bare, bare, "CARCH1:" + bare.prefix(0) + bare] {
             XCTAssertEqual(files.readLine(damaged, in: url, seal: seal), .unreadable, damaged.prefix(10).description)
         }
+        for length in 1..<line.count {
+            let cut = String(line.prefix(length))
+            XCTAssertEqual(files.readLine(cut, in: url, seal: seal), .unreadable, "cut \(length)")
+            if length % 4 != 0 || length < 48 {
+                XCTAssertEqual(files.readLine(cut, in: url, seal: nil), .unreadable, "cut \(length), no key")
+            }
+        }
+        XCTAssertEqual(files.readLine(line, in: url, seal: nil), .locked)
         XCTAssertEqual(files.readLine("{\"id\":\"x\"}", in: url, seal: seal), .plaintext(Data("{\"id\":\"x\"}".utf8)))
     }
 
