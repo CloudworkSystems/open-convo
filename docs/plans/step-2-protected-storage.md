@@ -112,6 +112,25 @@ with invented data in True Convo Test before anything touches the real app.
    as damaged. **PR 4b** puts the
    archive key under the same recovery key as the Desk. **PR 4c** seals kept
    recordings.
+   *PR 4b as built:* the archive keeps one copy of its key per recovery key
+   (`recovery/<fingerprint>.sealed`, AES-256-GCM under a key derived from
+   the recovery key, bound to the archive's id). The Desk drives it: the
+   archive's copy is written before the Desk's copy is replaced (a refusal
+   replaces nothing and shows no key), taken back if the Desk's write then
+   fails, and earlier copies are retired once the Desk's new copy is
+   durable; only then is the new key recorded as paired (`recovery/paired`),
+   and only a paired copy that is the only copy counts as coverage. A
+   retirement that can't finish
+   makes the key read as not durable, so the owner is told to make another,
+   which retries it. Restoring the Desk with the recovery key also restores the
+   archive's key, and says so when that key doesn't cover dictation history.
+   The Desk asks for a new recovery key while the archive's key has no copy
+   (any key made before this PR). When only the archive's key is gone, the
+   menu shows "Restore Dictation History With Recovery Key…". Carried to
+   PR 4c by the owner's choice (Codex round 3 on #32): if the `paired` note
+   is renamed into place but its folder flush fails, the visible note is
+   not yet taken back, so a power loss right then could leave the Desk not
+   asking for a new key; PR 4c removes the note on that failure.
 5. **Kill-and-reopen proof, then the owner's real trial.** A scripted proof in
    True Convo Test: quit, force-kill, sleep, lock, restart and reopen with
    invented data. Then the owner holds one real conversation and it survives a

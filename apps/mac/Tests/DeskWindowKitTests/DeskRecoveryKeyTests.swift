@@ -63,10 +63,10 @@ final class DeskRecoveryKeyTests: XCTestCase {
         folder.clean()
     }
 
-    private func newRun(logs: DeskLogCollector = DeskLogCollector()) throws -> DeskSession {
+    private func newRun(logs: DeskLogCollector = DeskLogCollector(), companion: (any RecoveryCompanion)? = nil) throws -> DeskSession {
         let made = DeskSession(paths: folder.paths, bundle: try anyDeskBundle(folder),
                                info: HostInfo(appVersion: "0.0.0-test", hostBuild: "unit-desk-none"),
-                               storage: .kept(keychain), log: logs.log)
+                               storage: .kept(keychain), recoveryCompanion: companion, log: logs.log)
         sessions.append(made)
         return made
     }
@@ -161,6 +161,57 @@ final class DeskRecoveryKeyTests: XCTestCase {
         XCTAssertFalse(later.needsRecoveryKey, "its confirmed key still stands")
         XCTAssertFalse(logs.all.contains { $0.contains(text) || $0.contains(text.replacingOccurrences(of: "-", with: "")) },
                        "the key is never logged")
+    }
+
+    // MARK: The companion (step 2, PR 4b)
+
+    func testTheCompanionIsSealedAskedAndRestoredWithTheSameKey() async throws {
+        let companion = FakeCompanion()
+        companion.uncovered = true
+        let first = try newRun(companion: companion)
+        await first.unlock(verifier: StubUnlockVerifier(.verified))
+        let workspaceId = try XCTUnwrap(first.store?.workspaceId)
+        let made = try XCTUnwrap(first.makeRecoveryKey())
+        XCTAssertEqual(companion.sealed, [made.key.fingerprint])
+        XCTAssertEqual(companion.retiredAllBut, [made.key.fingerprint])
+        XCTAssertTrue(first.confirmRecoveryKey())
+        XCTAssertTrue(first.needsRecoveryKey, "the companion still asks for a key")
+        companion.uncovered = false
+        XCTAssertFalse(first.needsRecoveryKey)
+        await first.close()
+        keychain.forgetKey(for: workspaceId)
+
+        let later = try newRun(companion: companion)
+        await later.unlock(verifier: StubUnlockVerifier(.verified))
+        XCTAssertEqual(later.restore(typed: made.key.displayText), .restored)
+        XCTAssertEqual(companion.restoredWith, [made.key.fingerprint])
+        XCTAssertEqual(later.notice, DeskSession.Message.restored)
+    }
+
+    func testARestoreTheCompanionDoesntCoverSaysSo() async throws {
+        let companion = FakeCompanion()
+        companion.restoreAnswer = .notCovered
+        let first = try newRun(companion: companion)
+        await first.unlock(verifier: StubUnlockVerifier(.verified))
+        let workspaceId = try XCTUnwrap(first.store?.workspaceId)
+        let text = try XCTUnwrap(first.makeRecoveryKey()).key.displayText
+        await first.close()
+        keychain.forgetKey(for: workspaceId)
+
+        let later = try newRun(companion: companion)
+        await later.unlock(verifier: StubUnlockVerifier(.verified))
+        XCTAssertEqual(later.restore(typed: text), .restored)
+        XCTAssertEqual(later.notice, DeskSession.Message.restoredDeskOnly)
+        XCTAssertEqual(later.state, .lockedNoStack)
+    }
+
+    func testACompanionThatRefusesMeansNoKeyIsMade() async throws {
+        let companion = FakeCompanion()
+        companion.refuses = true
+        let desk = try newRun(companion: companion)
+        await desk.unlock(verifier: StubUnlockVerifier(.verified))
+        XCTAssertNil(desk.makeRecoveryKey())
+        XCTAssertFalse(try XCTUnwrap(desk.store).hasRecoveryCopy)
     }
 
     // MARK: The window
@@ -263,4 +314,28 @@ final class DeskRecoveryKeyTests: XCTestCase {
         XCTAssertTrue(controller.restoreButton.isHidden)
         XCTAssertEqual(controller.lockedTitle.stringValue, "Locked")
     }
+}
+
+private final class FakeCompanion: RecoveryCompanion, @unchecked Sendable {
+    private let lock = NSLock()
+    private var state = (sealed: [String](), retired: [String](), restored: [String]())
+    var uncovered = false
+    var refuses = false
+    var restoreAnswer: RecoveryCompanionRestore = .restored
+
+    var sealed: [String] { lock.lock(); defer { lock.unlock() }; return state.sealed }
+    var retiredAllBut: [String] { lock.lock(); defer { lock.unlock() }; return state.retired }
+    var restoredWith: [String] { lock.lock(); defer { lock.unlock() }; return state.restored }
+
+    func seal(under recovery: RecoveryKey) throws {
+        if refuses { throw RecoveryError.randomUnavailable }
+        lock.lock(); state.sealed.append(recovery.fingerprint); lock.unlock()
+    }
+    func discard(_ recovery: RecoveryKey) {}
+    func retireAllBut(_ recovery: RecoveryKey) -> Bool { lock.lock(); state.retired.append(recovery.fingerprint); lock.unlock(); return true }
+    func restore(with recovery: RecoveryKey) -> RecoveryCompanionRestore {
+        lock.lock(); state.restored.append(recovery.fingerprint); lock.unlock()
+        return restoreAnswer
+    }
+    var needsRecoveryKey: Bool { uncovered }
 }

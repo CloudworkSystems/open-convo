@@ -1225,13 +1225,36 @@ public final class ProofStore: @unchecked Sendable {
     /// returned (`isDurable` false if the flush failed), since it alone
     /// opens the copy the folder now shows. Refused while the store is
     /// closed or locked.
-    public func makeRecoveryKey() throws -> MadeRecoveryKey {
+    ///
+    /// `companion` (step 2, PR 4b) seals its own key under the new recovery
+    /// key first; if it throws, nothing is replaced. If the Desk's write then
+    /// fails before its rename, the companion's new copy is discarded; once
+    /// the new copy is durable, the companion retires copies under earlier
+    /// keys; if it can't, the key comes back with `isDurable` false.
+    public func makeRecoveryKey(companion: (any RecoveryCompanion)? = nil) throws -> MadeRecoveryKey {
         lock.lock()
         defer { lock.unlock() }
         if closed { throw ProofStoreError.closed }
         if locked { throw ProofStoreError.locked }
         let recovery = try RecoveryKey.generate()
         let sealed = try RecoveryCopy.seal(storeKey: cipher.material, under: recovery, workspaceId: workspaceId)
+        try companion?.seal(under: recovery)
+        let made: MadeRecoveryKey
+        do {
+            made = try writeRecoveryCopy(sealed, recovery: recovery)
+        } catch {
+            companion?.discard(recovery)
+            throw error
+        }
+        if made.isDurable, let companion, !companion.retireAllBut(recovery) {
+            // The Desk's copy is durable but the companion's rotation isn't
+            // complete: say so the same way, so the owner makes another.
+            return MadeRecoveryKey(key: recovery, isDurable: false)
+        }
+        return made
+    }
+
+    private func writeRecoveryCopy(_ sealed: Data, recovery: RecoveryKey) throws -> MadeRecoveryKey {
         do {
             try AtomicFile.write(sealed, to: recoveryCopyURL, files: files, faults: faults)
         } catch let failure as AtomicWriteError {

@@ -1450,6 +1450,12 @@ enum Archive {
 
     static var files: ArchiveFiles { ArchiveFiles(root: root) }
 
+    /// The archive key's recovery copies, under the Desk's recovery key
+    /// (step 2, PR 4b). One instance, so the Desk and the menu share its lock.
+    static let recovery: ArchiveRecovery = ArchiveRecovery.inKeychain(
+        root: root, appKeychainService: AppIdentity.current.keychainService
+    )
+
     /// The archive's seal: its key opened, or made on first use. Tried again
     /// on every call until it is ready, so a key put back later is picked up.
     static func currentSeal() -> ArchiveSeal? {
@@ -8331,6 +8337,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var insertionModeMenuItems: [NSMenuItem] = []
     private var finalRewriteMenuItems: [NSMenuItem] = []
     private var autoStopMenuItem: NSMenuItem?
+    private var restoreArchiveMenuItem: NSMenuItem?
     private var livePasteMenuItem: NSMenuItem?
     private var livePreviewMenuItem: NSMenuItem?
     private var spokenPunctuationMenuItem: NSMenuItem?
@@ -8800,6 +8807,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         copyLastDictationItem.target = self
         copyLastDictationItem.toolTip = "Put your last finished dictation on the clipboard, for example after a safety stop left your clipboard alone."
         menu.addItem(copyLastDictationItem)
+
+        // Shown only while dictation history's key is missing (step 2, PR 4b).
+        let restoreArchiveItem = NSMenuItem(title: "Restore Dictation History With Recovery Key…",
+                                            action: #selector(restoreDictationHistory), keyEquivalent: "")
+        restoreArchiveItem.target = self
+        restoreArchiveItem.toolTip = "Type the recovery key you wrote down for the Desk to put dictation history's key back on this Mac."
+        restoreArchiveItem.isHidden = true
+        menu.addItem(restoreArchiveItem)
+        restoreArchiveMenuItem = restoreArchiveItem
         deskMenuItem.target = self
         deskMenuItem.toolTip = "Open the Desk window. It holds made-up data only and starts locked; unlocking asks for your Mac password or Touch ID."
         menu.addItem(deskMenuItem)
@@ -9788,6 +9804,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         guard menu === mainMenu else { return }
         refreshLastDictationMenuItem()
+        restoreArchiveMenuItem?.isHidden = !Archive.recovery.keyIsMissing
         refreshOpenAtLoginMenuItem()
         refreshDeskMenuItems()
         refreshDeskSwitchMenuTitle()
@@ -10274,6 +10291,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         openLatestFile(Archive.latestContentPacket, missingStatus: "No latest content packet yet")
     }
 
+    /// Puts dictation history's key back from the recovery key the owner
+    /// wrote down for the Desk. Nothing is replaced on a refusal, and the
+    /// typed key is never logged.
+    @objc private func restoreDictationHistory() {
+        let alert = NSAlert()
+        alert.messageText = "Restore Dictation History"
+        alert.informativeText = "Type the recovery key you wrote down for the Desk. It puts dictation history's key back in this Mac's Keychain."
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 380, height: 24))
+        field.placeholderString = "XXXXX-XXXXX-XXXXX-…"
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Restore")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate(ignoringOtherApps: true)
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let typed = field.stringValue
+        field.stringValue = ""
+        let message: String
+        switch Archive.recovery.restore(typed: typed) {
+        case .malformed:
+            message = "That isn't a recovery key. Check it and try again."
+            RunLog.write("archive.recovery.restore", "outcome=malformed")
+        case .done(let outcome):
+            RunLog.write("archive.recovery.restore", "outcome=\(outcome.rawValue)")
+            switch outcome {
+            case .restored, .alreadyHeld: message = "Dictation history is unlocked."
+            case .notCovered: message = "That recovery key doesn't open dictation history. Check it, or use the newest one you wrote down."
+            case .failed: message = "That recovery key didn't open dictation history. Nothing was changed."
+            }
+        }
+        _ = Archive.currentSeal()
+        updateStatus(message)
+    }
+
     @objc private func copyLastDictation() {
         guard let text = controller.lastDictationText, !text.isEmpty else {
             updateStatus("No dictation yet since True Convo opened — see Archive History")
@@ -10690,7 +10741,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Step 2, PR 2b: one kept store, reopened every run, under a key in
         // this Mac's Keychain (scoped to this copy's identity, so True Convo
         // and True Convo Test never share it).
+        // Step 2, PR 4b: the Desk's one recovery key also covers the
+        // dictation archive's key.
         let session = DeskSession(paths: paths, bundle: deskBundle, info: DeskSession.hostInfo(), storage: .keychain(identity: .current),
+                                  recoveryCompanion: Archive.recovery,
                                   log: { RunLog.write($0, $1) })
         deskSessionStorage = session
         return session
