@@ -320,6 +320,113 @@ struct RecoveryKeyTests {
 }
 
 /// Fails the named stage once, for one target, with EIO.
+@Suite("Recovery key companion (step 2, PR 4b)")
+struct RecoveryCompanionTests {
+    @Test("The companion seals before the Desk's copy is replaced, then retires earlier copies once it is durable")
+    func sealsFirstThenRetires() throws {
+        let fixture = try DeskHostFixture()
+        defer { fixture.clean() }
+        let store = try fixture.makeStore()
+        defer { store.close() }
+        let companion = RecordingCompanion(copyURL: store.recoveryCopyURL)
+        let made = try store.makeRecoveryKey(companion: companion)
+        #expect(made.isDurable)
+        #expect(companion.calls == ["seal(desk copy absent)", "retire"])
+        #expect(companion.keys.first == made.key && companion.keys.last == made.key)
+    }
+
+    @Test("A companion that refuses stops the make: no copy is replaced and no key comes back")
+    func refusalReplacesNothing() throws {
+        let fixture = try DeskHostFixture()
+        defer { fixture.clean() }
+        let store = try fixture.makeStore()
+        defer { store.close() }
+        let first = try store.makeRecoveryKey()
+        let before = try Data(contentsOf: store.recoveryCopyURL)
+        let companion = RecordingCompanion(copyURL: store.recoveryCopyURL, refuses: true)
+        #expect(throws: CompanionRefusal.self) { try store.makeRecoveryKey(companion: companion) }
+        #expect(try Data(contentsOf: store.recoveryCopyURL) == before)
+        #expect(companion.calls == ["seal(desk copy present)"])
+        _ = first
+    }
+
+    @Test("When the Desk's write fails before its rename, the companion's new copy is discarded")
+    func deskFailureDiscards() throws {
+        let fixture = try DeskHostFixture()
+        defer { fixture.clean() }
+        let faults = OneShotFault()
+        let store = try fixture.makeStore(faults: faults)
+        defer { store.close() }
+        let companion = RecordingCompanion(copyURL: store.recoveryCopyURL)
+        faults.arm(.write, target: store.recoveryCopyURL)
+        #expect(throws: (any Error).self) { try store.makeRecoveryKey(companion: companion) }
+        #expect(companion.calls == ["seal(desk copy absent)", "discard"])
+        #expect(companion.keys.count == 2 && companion.keys[0] == companion.keys[1])
+    }
+
+    @Test("A flush failure after the rename keeps earlier companion copies (no retire)")
+    func unsyncedKeepsEarlierCopies() throws {
+        let fixture = try DeskHostFixture()
+        defer { fixture.clean() }
+        let faults = OneShotFault()
+        let store = try fixture.makeStore(faults: faults)
+        defer { store.close() }
+        let companion = RecordingCompanion(copyURL: store.recoveryCopyURL)
+        faults.arm(.directoryFlush, target: store.recoveryCopyURL)
+        let made = try store.makeRecoveryKey(companion: companion)
+        #expect(!made.isDurable)
+        #expect(companion.calls == ["seal(desk copy absent)"])
+    }
+
+    @Test("Derived keys and fingerprints depend on the secret and never repeat across keys")
+    func derivedKeysAndFingerprints() throws {
+        let a = try RecoveryKey.generate()
+        let b = try RecoveryKey.generate()
+        #expect(a.fingerprint.count == 32)
+        #expect(a.fingerprint == (try RecoveryKey(typed: a.displayText)).fingerprint)
+        #expect(a.fingerprint != b.fingerprint)
+        let raw = { (key: RecoveryKey, salt: String) in key.derivedKey(salt: Data(salt.utf8), info: "t").withUnsafeBytes { Data($0) } }
+        #expect(raw(a, "x") != raw(b, "x"))
+        #expect(raw(a, "x") != raw(a, "y"))
+        #expect(raw(a, "x") != a.wrappingKey(for: UUID()).withUnsafeBytes { Data($0) })
+    }
+}
+
+private struct CompanionRefusal: Error {}
+
+private final class RecordingCompanion: RecoveryCompanion, @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [String] = []
+    private var seen: [RecoveryKey] = []
+    let copyURL: URL
+    let refuses: Bool
+
+    init(copyURL: URL, refuses: Bool = false) {
+        self.copyURL = copyURL
+        self.refuses = refuses
+    }
+
+    var calls: [String] { lock.lock(); defer { lock.unlock() }; return recorded }
+    var keys: [RecoveryKey] { lock.lock(); defer { lock.unlock() }; return seen }
+
+    private func note(_ call: String, _ key: RecoveryKey?) {
+        lock.lock()
+        recorded.append(call)
+        if let key { seen.append(key) }
+        lock.unlock()
+    }
+
+    func seal(under recovery: RecoveryKey) throws {
+        let present = FileManager.default.fileExists(atPath: copyURL.path)
+        note("seal(desk copy \(present ? "present" : "absent"))", recovery)
+        if refuses { throw CompanionRefusal() }
+    }
+    func discard(_ recovery: RecoveryKey) { note("discard", recovery) }
+    func retireAllBut(_ recovery: RecoveryKey) { note("retire", recovery) }
+    func restore(with recovery: RecoveryKey) -> RecoveryCompanionRestore { note("restore", recovery); return .restored }
+    var needsRecoveryKey: Bool { false }
+}
+
 private final class OneShotFault: AtomicWriteFaults, @unchecked Sendable {
     private let lock = NSLock()
     private var armed: (AtomicWriteStage, URL)?

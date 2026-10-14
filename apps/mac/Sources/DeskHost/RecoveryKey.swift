@@ -156,6 +156,58 @@ public struct RecoveryKey: Equatable, Sendable, CustomStringConvertible, CustomD
     }
 }
 
+extension RecoveryKey {
+    /// A key derived from the recovery key for another holder of a recovery
+    /// copy (the dictation archive, step 2, PR 4b): HKDF-SHA256 of the
+    /// secret with the holder's own salt and label, so it says nothing about
+    /// the Desk's wrapping key or the secret.
+    public func derivedKey(salt: Data, info: String) -> SymmetricKey {
+        HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: secret), salt: salt,
+                               info: Data(info.utf8), outputByteCount: 32)
+    }
+
+    /// A non-secret name for this recovery key (32 hex characters, HKDF of
+    /// the secret), so a holder can keep one copy per recovery key and find
+    /// the one a typed key opens. It reveals nothing usable about the key.
+    public var fingerprint: String {
+        let derived = HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: secret), salt: Data(),
+                                             info: Data("open-convo.recovery-fingerprint/v1".utf8), outputByteCount: 16)
+        return derived.withUnsafeBytes { Data($0) }.map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+/// Something else the one recovery key must also bring back (step 2,
+/// PR 4b: the dictation archive's key). The Desk store drives it:
+/// - `seal(under:)` runs inside `makeRecoveryKey` before the Desk's copy is
+///   replaced, so no recovery key is ever shown that doesn't open both; if
+///   it throws, nothing is replaced and no key is shown;
+/// - `discard(_:)` takes back that copy when the Desk's own write then
+///   fails, so a key nobody saw never counts;
+/// - `retireAllBut(_:)` drops copies under earlier keys once the Desk's new
+///   copy is durable, so a replaced recovery key stops working here too;
+/// - `restore(with:)` puts the key back from the typed recovery key.
+public protocol RecoveryCompanion: Sendable {
+    func seal(under recovery: RecoveryKey) throws
+    func discard(_ recovery: RecoveryKey)
+    func retireAllBut(_ recovery: RecoveryKey)
+    func restore(with recovery: RecoveryKey) -> RecoveryCompanionRestore
+    /// True when the companion has a key that no recovery copy covers yet,
+    /// so the owner should make a recovery key.
+    var needsRecoveryKey: Bool { get }
+}
+
+public enum RecoveryCompanionRestore: String, Equatable, Sendable {
+    /// The key is back.
+    case restored
+    /// The key was never gone; nothing changed.
+    case alreadyHeld
+    /// This recovery key has no copy here (made before it covered this, or
+    /// nothing to cover).
+    case notCovered
+    /// The copy did not open, or the key store refused; nothing changed.
+    case failed
+}
+
 public enum RecoveryError: Error, Equatable, Sendable {
     /// The typed key is not a recovery key (wrong length, characters or check symbols).
     case malformedRecoveryKey

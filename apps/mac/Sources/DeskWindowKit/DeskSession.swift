@@ -94,6 +94,7 @@ public final class DeskSession {
         public static let keyMissing = "This invented Desk can't open: its made-up key is gone. Nothing was replaced."
         public static let keychainKeyMissing = "The Desk can't open: its key is missing from this Mac's Keychain. Nothing was replaced."
         public static let restored = "The Desk's key is back in this Mac's Keychain. Unlock to open it."
+        public static let restoredDeskOnly = "The Desk's key is back in this Mac's Keychain. Unlock to open it. This recovery key doesn't cover dictation history, so that stays locked."
         public static let secondWriter = "The Desk is open in another copy of True Convo."
         public static let bundleMissing = "The Desk isn't in this build of True Convo."
         public static let bundleUnreadable = "The Desk in this build can't be read, so it stays closed."
@@ -123,6 +124,9 @@ public final class DeskSession {
     }
 
     public let storage: Storage
+    /// What the one recovery key also brings back (step 2, PR 4b: the
+    /// dictation archive's key). Nil keeps the recovery key the Desk's alone.
+    public let recoveryCompanion: (any RecoveryCompanion)?
     /// The run's in-memory key provider (`perRunInMemory`). Never replaced;
     /// gone with the process.
     let keys = InventedInMemoryKeyProvider()
@@ -204,8 +208,10 @@ public final class DeskSession {
     /// app run); nil, the default and the app's choice, keeps the Desk a v1
     /// host.
     public init(paths: DeskPaths, bundle: DeskBundleLocation?, info: HostInfo, storage: Storage = .perRunInMemory,
+                recoveryCompanion: (any RecoveryCompanion)? = nil,
                 log: @escaping Log = { _, _ in }, makeParticipantLane: (@MainActor () -> any DeskParticipantLane)? = nil) {
         self.paths = paths
+        self.recoveryCompanion = recoveryCompanion
         self.storage = storage
         self.bundle = bundle
         self.info = info
@@ -244,7 +250,7 @@ public final class DeskSession {
     /// confirmed as written down: the window asks for one.
     public var needsRecoveryKey: Bool {
         guard keepsStore, state == .open, let store else { return false }
-        return !store.recoveryCopyConfirmed
+        return !store.recoveryCopyConfirmed || (recoveryCompanion?.needsRecoveryKey ?? false)
     }
 
     /// Makes a new recovery key (retiring any earlier one) to show once.
@@ -253,7 +259,7 @@ public final class DeskSession {
     public func makeRecoveryKey() -> ProofStore.MadeRecoveryKey? {
         guard keepsStore, state == .open, let store else { return nil }
         do {
-            let made = try store.makeRecoveryKey()
+            let made = try store.makeRecoveryKey(companion: recoveryCompanion)
             log("desk.recovery-key.made", "durable=\(made.isDurable)")
             onChange?()
             return made
@@ -301,11 +307,18 @@ public final class DeskSession {
             return .failed
         }
         let outcome: RestoreOutcome
+        var companionRestore: RecoveryCompanionRestore?
         do {
             let recovery = try RecoveryKey(typed: text)
             let folder = try paths.openKeptStoreFolder()
             try ProofStore.restoreKey(directory: folder, recoveryKey: recovery, into: keys)
             outcome = .restored
+            // The same key brings back the companion's key, when it covers it.
+            if let companion = recoveryCompanion {
+                let extra = companion.restore(with: recovery)
+                log("desk.recovery-key.companion-restore", "outcome=\(extra.rawValue)")
+                companionRestore = extra
+            }
         } catch RecoveryError.malformedRecoveryKey {
             outcome = .malformed
         } catch RecoveryError.wrongRecoveryKey {
@@ -318,7 +331,8 @@ public final class DeskSession {
         log("desk.recovery-key.restore", "outcome=\(outcome)")
         if outcome == .restored {
             state = .lockedNoStack
-            post(notice: Message.restored)
+            post(notice: companionRestore == .notCovered || companionRestore == .failed
+                 ? Message.restoredDeskOnly : Message.restored)
         }
         return outcome
     }
