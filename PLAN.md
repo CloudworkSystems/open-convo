@@ -178,8 +178,9 @@ here moves until its trigger; each move is privacy-checked and logged below.
 - The Local Visibility Checkup template (`cloudwork_systems/louder_locally/customer-zero/local-visibility-checkup`),
   made generic (no business name or pricing) as the Visibility Agent's report
   template. Its `clients` folder never moves.
-- Sage's method (`cloudwork_systems/sage`), already rewritten as
-  `docs/design-notes/sage.md`; its catalog is used only as local seed data.
+- Sage's method (`cloudwork_systems/sage`), being rewritten as
+  `docs/design-notes/sage.md` (pull request #22, not yet merged); its catalog
+  is used only as local seed data.
 - The full illustration brief from the old brand record, when a surface needs it.
 - A license and attribution register, if one turns up; it belongs with the first
   release.
@@ -193,10 +194,9 @@ is named in the capabilities note).
 **Stays private:** Jeff (`tools/jeff`, `docs/2026-09-28-jeff-proposal.md`) until
 its legal review.
 
-**Business material, for a separate private business repo (created later, owner
-decision October 14):** CloudworkConnect (capability-pack model, pitches,
-website), Louder Locally (website, landing page), the content pilots and video
-engine, and the Sage guide as a possible CwC offering. Never in Open Convo.
+**Business material** stays in the old workspace until a separate private
+business repo is created (later, owner decision October 14). It never comes
+into Open Convo.
 
 **Leave behind:** `tools/agent-bridge` and `tools/glm-bridge` (the adapter plan
 replaces them); the old status checker, router, Shared Home and Studio; the
