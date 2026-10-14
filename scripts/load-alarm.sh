@@ -23,7 +23,7 @@ if [ "${load%.*}" -ge "$threshold" ]; then
   mkdir -p "$(dirname "$log")"
   {
     echo "=== $(date '+%Y-%m-%d %H:%M:%S') load=${load} (threshold ${threshold}, ${cores} cores)"
-    ps aux | sort -rk3 | head -6 | awk '{printf "  %s%% pid=%s %s\n", $3, $2, $11}'
+    ps aux | sed 1d | sort -k3,3nr | head -6 | awk '{printf "  %s%% pid=%s %s\n", $3, $2, $11}'
   } >> "$log"
   osascript -e "display notification \"1-minute load is ${load} on ${cores} cores. Check heavy sessions or local models before it snowballs.\" with title \"True Convo load alarm\" sound name \"Sosumi\"" 2>/dev/null
 fi
