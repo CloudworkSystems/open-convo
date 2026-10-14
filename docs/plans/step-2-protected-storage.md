@@ -143,7 +143,13 @@ with invented data in True Convo Test before anything touches the real app.
    `recordings/.pending/` is written before that starts and cleared once the
    recording is sealed, so a run that ends in between leaves it for the next
    launch to seal (or remove, with no key). Recordings with no marker are
-   never touched.
+   never touched. Owner's choice on Codex round 3 of #34 (merge, fix next):
+   the first `.pending` folder's own entry isn't yet flushed into
+   `recordings/`, so a power loss right then could drop the marker while
+   the audio survives; the next PR flushes it before capture begins.
+   Accepted, no change: a taken-back pairing note whose removal can't be
+   flushed could reappear after a power loss, but it would then be true
+   (the Desk's copy under that key is durable and earlier copies are gone).
 5. **Kill-and-reopen proof, then the owner's real trial.** A scripted proof in
    True Convo Test: quit, force-kill, sleep, lock, restart and reopen with
    invented data. Then the owner holds one real conversation and it survives a
