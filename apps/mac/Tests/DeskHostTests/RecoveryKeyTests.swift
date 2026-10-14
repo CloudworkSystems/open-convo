@@ -272,6 +272,39 @@ struct RecoveryKeyTests {
         #expect(later.recoveryCopyConfirmed)
     }
 
+    @Test("Checking confirmation while new keys are made never pairs a new copy with an old note")
+    func confirmationCheckIsAtomic() async throws {
+        let fixture = try DeskHostFixture()
+        defer { fixture.clean() }
+        let store = try fixture.makeStore()
+        defer { store.close() }
+        _ = try store.makeRecoveryKey()
+        try store.confirmRecoveryCopy()
+        #expect(store.recoveryCopyConfirmed)
+        // Each new key leaves the old note naming the old copy: once any
+        // remake has landed, no later check may say confirmed.
+        let wrongs = await withTaskGroup(of: Int.self) { group -> Int in
+            group.addTask {
+                for _ in 0..<40 { _ = try? store.makeRecoveryKey() }
+                return 0
+            }
+            group.addTask {
+                var wrong = 0
+                var sawRemake = false
+                for _ in 0..<400 {
+                    let before = (try? Data(contentsOf: store.recoveryCopyURL)) ?? Data()
+                    let confirmed = store.recoveryCopyConfirmed
+                    if sawRemake && confirmed { wrong += 1 }
+                    if before != ((try? Data(contentsOf: store.recoveryCopyURL)) ?? Data()) || !confirmed { sawRemake = true }
+                }
+                return wrong
+            }
+            return await group.reduce(0, +)
+        }
+        #expect(wrongs == 0)
+        #expect(!store.recoveryCopyConfirmed)
+    }
+
     @Test("The Keychain provider takes a recovered key back once and refuses to replace it")
     func keychainImport() throws {
         let items = FakeKeychainItems()

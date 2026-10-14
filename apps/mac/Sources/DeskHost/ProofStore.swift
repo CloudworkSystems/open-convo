@@ -1258,11 +1258,13 @@ public final class ProofStore: @unchecked Sendable {
     /// Whether the owner confirmed the recovery key whose copy is in place,
     /// with the note known to be on disk.
     public var recoveryCopyConfirmed: Bool {
+        // One critical section with `makeRecoveryKey` and
+        // `confirmRecoveryCopy`: the copy and the note are read together, so a
+        // new copy can't land between them.
         lock.lock()
+        defer { lock.unlock() }
         if confirmationUnsynced, !closed, flushFolderForConfirmation() { confirmationUnsynced = false }
-        let unsynced = confirmationUnsynced
-        lock.unlock()
-        guard !unsynced, hasRecoveryCopy, PathNode.inspect(recoveryConfirmationURL.path) == .regular(links: 1),
+        guard !confirmationUnsynced, hasRecoveryCopy, PathNode.inspect(recoveryConfirmationURL.path) == .regular(links: 1),
               let copy = try? Data(contentsOf: recoveryCopyURL),
               let noted = try? Data(contentsOf: recoveryConfirmationURL) else { return false }
         return noted == Self.confirmationNote(for: copy)
