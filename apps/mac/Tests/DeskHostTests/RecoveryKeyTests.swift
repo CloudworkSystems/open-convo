@@ -211,6 +211,26 @@ struct RecoveryKeyTests {
         #expect(scanned >= 3)
     }
 
+    @Test("Confirmation vouches for one copy only, holds nothing secret, and a new key reads as unconfirmed")
+    func confirmationNote() throws {
+        let fixture = try DeskHostFixture()
+        defer { fixture.clean() }
+        let store = try fixture.makeStore()
+        defer { store.close() }
+        #expect(!store.recoveryCopyConfirmed)
+        #expect(throws: RecoveryError.noRecoveryCopy) { try store.confirmRecoveryCopy() }
+        let first = try store.makeRecoveryKey().key
+        #expect(!store.recoveryCopyConfirmed)
+        try store.confirmRecoveryCopy()
+        #expect(store.recoveryCopyConfirmed)
+        let note = try Data(contentsOf: store.recoveryConfirmationURL)
+        #expect(note.range(of: first.secret) == nil)
+        #expect(note.range(of: Data(first.displayText.utf8)) == nil)
+        _ = try store.makeRecoveryKey()
+        #expect(!store.recoveryCopyConfirmed, "the note named the old copy")
+        #expect(try Data(contentsOf: store.recoveryConfirmationURL) == note, "nothing was deleted or rewritten")
+    }
+
     @Test("The Keychain provider takes a recovered key back once and refuses to replace it")
     func keychainImport() throws {
         let items = FakeKeychainItems()
