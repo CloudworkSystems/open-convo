@@ -231,6 +231,21 @@ struct RecoveryKeyTests {
         #expect(try Data(contentsOf: store.recoveryConfirmationURL) == note, "nothing was deleted or rewritten")
     }
 
+    @Test("A confirmation whose folder flush failed doesn't count until one flushes")
+    func unflushedConfirmation() throws {
+        let fixture = try DeskHostFixture()
+        defer { fixture.clean() }
+        let faults = OneShotFault()
+        let store = try fixture.makeStore(faults: faults)
+        defer { store.close() }
+        _ = try store.makeRecoveryKey()
+        faults.arm(.directoryFlush, target: store.recoveryConfirmationURL)
+        #expect(throws: ProofStoreError.replacedUnsynced(EIO)) { try store.confirmRecoveryCopy() }
+        #expect(!store.recoveryCopyConfirmed, "visible but not durable: not confirmed")
+        try store.confirmRecoveryCopy()
+        #expect(store.recoveryCopyConfirmed)
+    }
+
     @Test("The Keychain provider takes a recovered key back once and refuses to replace it")
     func keychainImport() throws {
         let items = FakeKeychainItems()

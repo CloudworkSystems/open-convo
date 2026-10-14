@@ -369,13 +369,15 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
         let check = RecoveryKeyCheck(displayText: text)
         var retry = false
         showing: while true {
-            guard await recoveryPrompt.show(text, durable: made.isDurable, in: window) else { return }
+            guard session.state == .open, await recoveryPrompt.show(text, durable: made.isDurable, in: window) else { return }
             while true {
                 guard session.state == .open else { return }
-                switch await recoveryPrompt.askBack(check, retry: retry, in: window) {
+                let answer = await recoveryPrompt.askBack(check, retry: retry, in: window)
+                guard session.state == .open else { return }
+                switch answer {
                 case .typed(let first, let second):
                     if check.matches(first, second) {
-                        session.confirmRecoveryKey()
+                        if !session.confirmRecoveryKey() { session.post(notice: DeskRecoveryWording.confirmNotSaved) }
                         return
                     }
                     retry = true
@@ -755,6 +757,11 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
             // and a pending confirmation's result is discarded.
             statement?.dismiss()
             paidUsage?.abandonPendingConfirmation()
+        }
+        if let shownState, shownState != state {
+            // A lock, close or other change ends any recovery dialog at once,
+            // so the key never stays on screen over a locked Desk.
+            recoveryPrompt.dismiss()
         }
         shownState = state
         stripLabel.stringValue = "Invented data only · not private · key: \(session.keyCustody ?? "not opened yet")"

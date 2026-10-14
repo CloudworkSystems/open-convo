@@ -1247,16 +1247,28 @@ public final class ProofStore: @unchecked Sendable {
     /// unconfirmed without anything being deleted.
     public var recoveryConfirmationURL: URL { directory.appendingPathComponent("recovery-key.confirmed") }
 
-    /// Whether the owner confirmed the recovery key whose copy is in place.
+    /// A confirmation note was renamed into place but its folder flush
+    /// failed: until a later confirmation flushes, it doesn't count (power
+    /// loss could bring back an older copy and an older matching note).
+    private var confirmationUnsynced = false
+
+    /// Whether the owner confirmed the recovery key whose copy is in place,
+    /// with the note known to be on disk.
     public var recoveryCopyConfirmed: Bool {
-        guard hasRecoveryCopy, PathNode.inspect(recoveryConfirmationURL.path) == .regular(links: 1),
+        lock.lock()
+        let unsynced = confirmationUnsynced
+        lock.unlock()
+        guard !unsynced, hasRecoveryCopy, PathNode.inspect(recoveryConfirmationURL.path) == .regular(links: 1),
               let copy = try? Data(contentsOf: recoveryCopyURL),
               let noted = try? Data(contentsOf: recoveryConfirmationURL) else { return false }
         return noted == Self.confirmationNote(for: copy)
     }
 
     /// Notes that the owner confirmed the recovery key whose copy is in
-    /// place now. Refused while closed or locked, or with no copy.
+    /// place now. Refused while closed or locked, or with no copy. A failed
+    /// folder flush throws `replacedUnsynced` and the confirmation doesn't
+    /// count until a later one flushes; the same flush makes the copy's own
+    /// rename durable too.
     public func confirmRecoveryCopy() throws {
         lock.lock()
         defer { lock.unlock() }
@@ -1267,8 +1279,12 @@ public final class ProofStore: @unchecked Sendable {
         }
         do {
             try AtomicFile.write(Self.confirmationNote(for: copy), to: recoveryConfirmationURL, files: files, faults: faults)
+            confirmationUnsynced = false
         } catch let failure as AtomicWriteError {
-            if failure.stage == .directoryFlush { return }
+            if failure.stage == .directoryFlush {
+                confirmationUnsynced = true
+                throw ProofStoreError.replacedUnsynced(failure.code)
+            }
             throw failure.stage == .target ? ProofStoreError.unsafeFile : ProofStoreError.writeFailed(failure.code)
         }
     }

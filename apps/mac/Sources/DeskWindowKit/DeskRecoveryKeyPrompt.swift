@@ -18,6 +18,8 @@ public protocol DeskRecoveryKeyPrompting: AnyObject {
     /// Asks for the whole key to restore with (`problem`: why the last
     /// try failed). Nil means Cancel.
     func askRestore(problem: String?, in window: NSWindow) async -> String?
+    /// Ends any open dialog as Cancel (the Desk locked or closed).
+    func dismiss()
 }
 
 public enum DeskRecoveryWording {
@@ -44,17 +46,34 @@ public enum DeskRecoveryWording {
     public static let noCopy = "This Desk has no recovery key saved, so it can't be restored here."
     public static let failed = "The Desk couldn't be restored. Nothing was changed."
     public static let cancel = "Cancel"
+    public static let confirmNotSaved = "The Mac couldn't save that you confirmed the key. Make a new one and try again."
 }
 
 /// The real dialogs: sheets on the Desk window.
 @MainActor
 public final class SheetRecoveryKeyPrompt: DeskRecoveryKeyPrompting {
+    /// The open sheet and the response that means Cancel for it.
+    private var open: (alert: NSAlert, window: NSWindow, cancel: NSApplication.ModalResponse)?
+
     public init() {}
 
-    private func run(_ alert: NSAlert, in window: NSWindow) async -> NSApplication.ModalResponse {
-        await withCheckedContinuation { continuation in
-            alert.beginSheetModal(for: window) { continuation.resume(returning: $0) }
+    private func run(_ alert: NSAlert, in window: NSWindow, cancel: NSApplication.ModalResponse) async -> NSApplication.ModalResponse {
+        dismiss()
+        return await withCheckedContinuation { continuation in
+            open = (alert, window, cancel)
+            alert.beginSheetModal(for: window) { [weak self, weak alert] response in
+                MainActor.assumeIsolated {
+                    if let self, let alert, self.open?.alert === alert { self.open = nil }
+                }
+                continuation.resume(returning: response)
+            }
         }
+    }
+
+    public func dismiss() {
+        guard let (alert, window, cancel) = open else { return }
+        open = nil
+        window.endSheet(alert.window, returnCode: cancel)
     }
 
     private static func field(_ placeholder: String, width: CGFloat) -> NSTextField {
@@ -75,7 +94,7 @@ public final class SheetRecoveryKeyPrompt: DeskRecoveryKeyPrompting {
         alert.accessoryView = key
         alert.addButton(withTitle: DeskRecoveryWording.wroteItDown)
         alert.addButton(withTitle: DeskRecoveryWording.cancel)
-        return await run(alert, in: window) == .alertFirstButtonReturn
+        return await run(alert, in: window, cancel: .alertSecondButtonReturn) == .alertFirstButtonReturn
     }
 
     public func askBack(_ check: RecoveryKeyCheck, retry: Bool, in window: NSWindow) async -> RecoveryCheckAnswer {
@@ -92,7 +111,7 @@ public final class SheetRecoveryKeyPrompt: DeskRecoveryKeyPrompting {
         alert.addButton(withTitle: DeskRecoveryWording.showAgain)
         alert.addButton(withTitle: DeskRecoveryWording.cancel)
         alert.window.initialFirstResponder = first
-        switch await run(alert, in: window) {
+        switch await run(alert, in: window, cancel: .alertThirdButtonReturn) {
         case .alertFirstButtonReturn: return .typed(first.stringValue, second.stringValue)
         case .alertSecondButtonReturn: return .showAgain
         default: return .cancel
@@ -108,6 +127,6 @@ public final class SheetRecoveryKeyPrompt: DeskRecoveryKeyPrompting {
         alert.addButton(withTitle: DeskRecoveryWording.restore)
         alert.addButton(withTitle: DeskRecoveryWording.cancel)
         alert.window.initialFirstResponder = field
-        return await run(alert, in: window) == .alertFirstButtonReturn ? field.stringValue : nil
+        return await run(alert, in: window, cancel: .alertSecondButtonReturn) == .alertFirstButtonReturn ? field.stringValue : nil
     }
 }

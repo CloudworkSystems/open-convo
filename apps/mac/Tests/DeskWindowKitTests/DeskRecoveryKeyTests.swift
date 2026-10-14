@@ -13,9 +13,21 @@ final class ScriptedRecoveryPrompt: DeskRecoveryKeyPrompting {
     private(set) var shown: [String] = []
     private(set) var retries: [Bool] = []
     private(set) var problems: [String?] = []
+    private(set) var dismissals = 0
+    /// When set, `show` waits until dismissed (answering false).
+    var holdShow = false
+    private var pending: CheckedContinuation<Bool, Never>?
+    var isHolding: Bool { pending != nil }
+
+    func dismiss() {
+        dismissals += 1
+        pending?.resume(returning: false)
+        pending = nil
+    }
 
     func show(_ displayText: String, durable: Bool, in window: NSWindow) async -> Bool {
         shown.append(displayText)
+        if holdShow { return await withCheckedContinuation { pending = $0 } }
         return showAnswers.isEmpty ? false : showAnswers.removeFirst()
     }
 
@@ -194,6 +206,24 @@ final class DeskRecoveryKeyTests: XCTestCase {
         XCTAssertFalse(controller.recoveryRow.isHidden)
         XCTAssertEqual(controller.recoveryLabel.stringValue, DeskRecoveryWording.unconfirmedLine)
         XCTAssertTrue(controller.recoveryButton.isEnabled)
+    }
+
+    func testALockEndsTheKeyDialogAtOnceAndNothingIsConfirmed() async throws {
+        let desk = try newRun()
+        let prompt = ScriptedRecoveryPrompt()
+        prompt.holdShow = true
+        let controller = window(for: desk, prompt: prompt)
+        await desk.unlock(verifier: StubUnlockVerifier(.verified))
+        let flow = Task { await controller.runRecoveryKeyFlow() }
+        try await waitUntil("the key is showing") { prompt.isHolding }
+        await desk.lock(reason: .screenLocked)
+        XCTAssertGreaterThanOrEqual(prompt.dismissals, 1, "the lock ended the dialog")
+        XCTAssertFalse(prompt.isHolding)
+        await flow.value
+        XCTAssertEqual(prompt.retries, [], "nothing was asked after the lock")
+        XCTAssertFalse(controller.recoveryFlowActive)
+        await desk.unlock(verifier: StubUnlockVerifier(.verified))
+        XCTAssertTrue(desk.needsRecoveryKey, "still unconfirmed")
     }
 
     func testWindowRestoreRetriesWithAReasonThenUnlocksAsUsual() async throws {
