@@ -1247,15 +1247,19 @@ public final class ProofStore: @unchecked Sendable {
     /// unconfirmed without anything being deleted.
     public var recoveryConfirmationURL: URL { directory.appendingPathComponent("recovery-key.confirmed") }
 
-    /// A confirmation note was renamed into place but its folder flush
-    /// failed: until a later confirmation flushes, it doesn't count (power
-    /// loss could bring back an older copy and an older matching note).
-    private var confirmationUnsynced = false
+    /// Whether the folder holding the note may not be on disk yet: true at
+    /// open (an earlier process may have failed its flush and quit, and that
+    /// fact lived only in its memory) and after a failed flush here. While
+    /// true a confirmation doesn't count (power loss could bring back an
+    /// older copy and an older matching note); the next check flushes the
+    /// folder once and trusts the note only if that succeeds.
+    private var confirmationUnsynced = true
 
     /// Whether the owner confirmed the recovery key whose copy is in place,
     /// with the note known to be on disk.
     public var recoveryCopyConfirmed: Bool {
         lock.lock()
+        if confirmationUnsynced, !closed, flushFolderForConfirmation() { confirmationUnsynced = false }
         let unsynced = confirmationUnsynced
         lock.unlock()
         guard !unsynced, hasRecoveryCopy, PathNode.inspect(recoveryConfirmationURL.path) == .regular(links: 1),
@@ -1287,6 +1291,12 @@ public final class ProofStore: @unchecked Sendable {
             }
             throw failure.stage == .target ? ProofStoreError.unsafeFile : ProofStoreError.writeFailed(failure.code)
         }
+    }
+
+    /// One folder flush on the confirmation's behalf (call with `lock` held).
+    private func flushFolderForConfirmation() -> Bool {
+        if faults?.flushRetryFault(target: recoveryConfirmationURL) != nil { return false }
+        return (try? AtomicFile.flushDirectory(directory)) != nil
     }
 
     static func confirmationNote(for copy: Data) -> Data {
