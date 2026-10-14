@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// The committed workspace: one opaque record under one revision. The
@@ -409,6 +410,12 @@ public final class ProofStore: @unchecked Sendable {
         var workspaceHandle: String
     }
 
+    /// The marker checks the store's open and a recovery share: this
+    /// format, and a handle.
+    private static func isUsableMarker(_ marker: Marker) -> Bool {
+        marker.formatVersion == formatVersion && !marker.workspaceHandle.isEmpty
+    }
+
     private struct State: Codable {
         var formatVersion: Int
         var workspace: WorkspaceRecord
@@ -605,7 +612,7 @@ public final class ProofStore: @unchecked Sendable {
                 } catch {
                     throw ProofStoreError.corruptState
                 }
-                guard marker.formatVersion == Self.formatVersion, !marker.workspaceHandle.isEmpty else { throw ProofStoreError.corruptState }
+                guard Self.isUsableMarker(marker) else { throw ProofStoreError.corruptState }
                 // An existing store with no key refuses. Nothing is regenerated.
                 guard let key = try keys.existingKey(for: marker.workspaceId) else { throw ProofStoreError.keyMissing }
                 keyCustody = key.custody
@@ -1190,6 +1197,135 @@ public final class ProofStore: @unchecked Sendable {
         defer { snapshotLock.unlock() }
         published = ParticipantRunsSnapshot(status: published.status, durable: false, uncertain: false, runs: [],
                                             reservedStartRequestIds: published.reservedStartRequestIds, locked: locked, closed: true)
+    }
+
+    // MARK: Recovery key (step 2, PR 3)
+
+    /// Where the store keeps its key's copy sealed under the recovery key.
+    public var recoveryCopyURL: URL { directory.appendingPathComponent(RecoveryCopy.fileName) }
+
+    /// Whether the store holds a recovery copy of its key.
+    public var hasRecoveryCopy: Bool { PathNode.inspect(recoveryCopyURL.path) == .regular(links: 1) }
+
+    /// A recovery key just made, and whether its copy is known to be durable.
+    public struct MadeRecoveryKey: Sendable {
+        public let key: RecoveryKey
+        /// False when the new copy replaced the old one (so only `key` opens
+        /// what the folder shows) but the folder flush after the rename
+        /// failed: power loss could still bring the earlier copy back.
+        /// Show the key anyway, and make another once the folder flushes.
+        public let isDurable: Bool
+    }
+
+    /// Makes a fresh recovery key and atomically replaces the store's sealed
+    /// copy with one under it, so an earlier recovery key stops working. The
+    /// recovery key is returned to be shown once; it is never written,
+    /// logged or kept. A failure before the rename leaves the earlier copy
+    /// in place and throws; once the rename happened the new key is always
+    /// returned (`isDurable` false if the flush failed), since it alone
+    /// opens the copy the folder now shows. Refused while the store is
+    /// closed or locked.
+    public func makeRecoveryKey() throws -> MadeRecoveryKey {
+        lock.lock()
+        defer { lock.unlock() }
+        if closed { throw ProofStoreError.closed }
+        if locked { throw ProofStoreError.locked }
+        let recovery = try RecoveryKey.generate()
+        let sealed = try RecoveryCopy.seal(storeKey: cipher.material, under: recovery, workspaceId: workspaceId)
+        do {
+            try AtomicFile.write(sealed, to: recoveryCopyURL, files: files, faults: faults)
+        } catch let failure as AtomicWriteError {
+            if failure.stage == .directoryFlush { return MadeRecoveryKey(key: recovery, isDurable: false) }
+            throw failure.stage == .target ? ProofStoreError.unsafeFile : ProofStoreError.writeFailed(failure.code)
+        }
+        return MadeRecoveryKey(key: recovery, isDurable: true)
+    }
+
+    /// Where the store notes that the owner confirmed writing the current
+    /// recovery key down: the SHA-256 of the sealed copy it vouches for
+    /// (nothing secret). A new copy no longer matches, so it reads as
+    /// unconfirmed without anything being deleted.
+    public var recoveryConfirmationURL: URL { directory.appendingPathComponent("recovery-key.confirmed") }
+
+    /// Whether the folder holding the note may not be on disk yet: true at
+    /// open (an earlier process may have failed its flush and quit, and that
+    /// fact lived only in its memory) and after a failed flush here. While
+    /// true a confirmation doesn't count (power loss could bring back an
+    /// older copy and an older matching note); the next check flushes the
+    /// folder once and trusts the note only if that succeeds.
+    private var confirmationUnsynced = true
+
+    /// Whether the owner confirmed the recovery key whose copy is in place,
+    /// with the note known to be on disk.
+    public var recoveryCopyConfirmed: Bool {
+        lock.lock()
+        if confirmationUnsynced, !closed, flushFolderForConfirmation() { confirmationUnsynced = false }
+        let unsynced = confirmationUnsynced
+        lock.unlock()
+        guard !unsynced, hasRecoveryCopy, PathNode.inspect(recoveryConfirmationURL.path) == .regular(links: 1),
+              let copy = try? Data(contentsOf: recoveryCopyURL),
+              let noted = try? Data(contentsOf: recoveryConfirmationURL) else { return false }
+        return noted == Self.confirmationNote(for: copy)
+    }
+
+    /// Notes that the owner confirmed the recovery key whose copy is in
+    /// place now. Refused while closed or locked, or with no copy. A failed
+    /// folder flush throws `replacedUnsynced` and the confirmation doesn't
+    /// count until a later one flushes; the same flush makes the copy's own
+    /// rename durable too.
+    public func confirmRecoveryCopy() throws {
+        lock.lock()
+        defer { lock.unlock() }
+        if closed { throw ProofStoreError.closed }
+        if locked { throw ProofStoreError.locked }
+        guard PathNode.inspect(recoveryCopyURL.path) == .regular(links: 1), let copy = try? Data(contentsOf: recoveryCopyURL) else {
+            throw RecoveryError.noRecoveryCopy
+        }
+        do {
+            try AtomicFile.write(Self.confirmationNote(for: copy), to: recoveryConfirmationURL, files: files, faults: faults)
+            confirmationUnsynced = false
+        } catch let failure as AtomicWriteError {
+            if failure.stage == .directoryFlush {
+                confirmationUnsynced = true
+                throw ProofStoreError.replacedUnsynced(failure.code)
+            }
+            throw failure.stage == .target ? ProofStoreError.unsafeFile : ProofStoreError.writeFailed(failure.code)
+        }
+    }
+
+    /// One folder flush on the confirmation's behalf (call with `lock` held).
+    private func flushFolderForConfirmation() -> Bool {
+        if faults?.flushRetryFault(target: recoveryConfirmationURL) != nil { return false }
+        return (try? AtomicFile.flushDirectory(directory)) != nil
+    }
+
+    static func confirmationNote(for copy: Data) -> Data {
+        Data(("confirmed " + SHA256.hash(data: copy).map { String(format: "%02x", $0) }.joined() + "\n").utf8)
+    }
+
+    /// Opens a store's recovery copy with the typed recovery key and hands
+    /// the store key back to `keys` (a wiped Keychain, or a new Mac with the
+    /// folder restored). Holds the store's writer lock meanwhile, so no
+    /// writer has it open. A wrong key, a changed copy, a missing copy or an
+    /// unreadable marker refuses with nothing imported; `keys` refuses to
+    /// replace a key it already holds (`keyExists`). Returns the store's id.
+    @discardableResult
+    public static func restoreKey(directory: URL, recoveryKey: RecoveryKey, into keys: any KeyImporting) throws -> UUID {
+        let directory = directory.standardizedFileURL
+        guard PathNode.inspect(directory.path) == .directory else { throw RecoveryError.storeUnreadable }
+        let writerLock = try acquireWriterLock(at: directory.appendingPathComponent("proof.lock"))
+        defer { writerLock.release() }
+        let markerURL = directory.appendingPathComponent("workspace.json")
+        guard PathNode.inspect(markerURL.path) == .regular(links: 1),
+              let marker = try? boundedDecode(Marker.self, from: Data(contentsOf: markerURL)),
+              isUsableMarker(marker) else { throw RecoveryError.storeUnreadable }
+        let copyURL = directory.appendingPathComponent(RecoveryCopy.fileName)
+        guard PathNode.inspect(copyURL.path) == .regular(links: 1), let sealed = try? Data(contentsOf: copyURL) else {
+            throw RecoveryError.noRecoveryCopy
+        }
+        let material = try RecoveryCopy.open(sealed, under: recoveryKey, workspaceId: marker.workspaceId)
+        _ = try keys.importKey(material, for: marker.workspaceId)
+        return marker.workspaceId
     }
 
     // MARK: Internals

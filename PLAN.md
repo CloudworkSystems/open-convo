@@ -97,10 +97,28 @@ has tried it. Each step ends with something the owner can try.
    dispatcher, Claude and Codex visible in one session, scoped delegation.
 7. Navigator search and sorting; Related and Revisit-when reminders.
 8. Reading the owner's real old sessions on the Mac, read-only.
-9. First creator beta: worksheet, website export, encrypted transfer between devices.
+9. First creator beta: worksheet, Site Engine's first site, encrypted transfer between devices.
 10. Business features: one-change card, business messaging, phone handoff.
 11. Canvas/Atlas knowledge view, browser annotations, family and shared spaces.
 12. iOS app; later the OS shell.
+
+### Modules Planned (Order Within Each Decided)
+
+- **Convo Engine** (voice): ramble-to-polished-piece, then Write Mode, then a
+  Voicebox adapter for speech. Plan:
+  [docs/design-notes/convo-engine.md](docs/design-notes/convo-engine.md).
+- **Site Engine**: builds sites for True Convo users, the owner's businesses
+  first; export plus one-click publish to the person's own free host, after a
+  preview and approval. Replaces the creator beta's one-page website. Plan:
+  [docs/design-notes/site-engine.md](docs/design-notes/site-engine.md).
+- **Capabilities layer and Nexus primitives**: primitives (what you ask for),
+  dispatcher (who handles it), capabilities (the tools: Jev/Decisions judge,
+  EmbeddingGemma search, Jeff checks, Impeccable design, ScrollCraft scroll).
+  Plan: [docs/design-notes/capabilities-and-primitives.md](docs/design-notes/capabilities-and-primitives.md).
+- **Visibility Agent**: the checkup as an agent plus AI visibility, for users
+  and for the owner's agency work, the owner's businesses first; ongoing watch
+  later. Plan:
+  [docs/design-notes/visibility-agent.md](docs/design-notes/visibility-agent.md).
 
 ## Moving Pieces From True Convo
 
@@ -150,3 +168,5 @@ Strategy and interview files, `docs/reviews`, `docs/sessions`, session audits,
 | 2026-10-12 | Conversation Desk → `apps/desk` | True Convo `apps/desk` (committed files only) | True Convo `78ebb50` | README, PRODUCT.md, review docs, `.openai` hosting target, ChatGPT-site publish scripts and their tests, Mac preview launcher and its tests. Roadmap content rewritten as the Open Convo roadmap (same card IDs except `first-run-guide`); evidence links now point at this repo. Owner name removed from comments. Typecheck, build, 541/541 unit tests, 231 browser tests across 24 files and 4 native-proof tests pass. Awaiting Codex review. |
 | 2026-10-12 | Mac app → `apps/mac` | True Convo `apps/true-convo-mac` (committed files only) | True Convo `78ebb50` | BUILD-PLAN.md (project history, owner's name and business notes), RELEASING.md (names the owner's signing certificate and release history), LICENSE (license is still the owner's decision). Source and tests unchanged. On the Mac: `swift build` passes; `swift test` passes 116 XCTest (37 skipped, mostly needing the packaged Desk) and 279 Swift Testing tests. |
 | 2026-10-12 | Desk and Mac app brought up to date | True Convo GitHub `main` (`apps/desk`, `apps/true-convo-mac`) | True Convo `c527e36` | The first ports came from the Mac's older local copy (`78ebb50`); this applies the 3 days of reviewed work on GitHub (`78ebb50..c527e36`, 147 files): native host and storage proof, participant coordinator, paid-usage controls, test identity. Same files left behind as before. Privacy fix across `apps/mac` and `packages/clarity`: owner's name in comments and AI instructions now "the owner", owner's surname in a dictation test replaced with an invented one, memory steward's personal name now "Memory Steward". Earlier commits in this private repo still contain those words. On the Mac: library 47/47, Desk typecheck and 559/559, `swift build` passes, `swift test` 129 XCTest (37 skipped) and 692 Swift Testing tests pass. |
+| 2026-10-13 | Desk-to-Mac connection specs → `docs/desk-native-join-contract.md`, `docs/desk-native-participant-contract.md` (same names, because 15 code and test files in `apps/mac` and `apps/desk` cite them by these paths) | True Convo `docs/desk-native-join-contract.md`, `docs/desk-native-participant-contract.md` | True Convo `c527e36` | Owner's name (17 times) now "the user", with matching pronouns (the spec already uses "owner" for a code object, so "the owner" would have been ambiguous). Links to True Convo issue comments and review records turned into plain text marked "(True Convo review record, not moved)". The pointer to True Convo's old build plan is marked as not moved. Text otherwise unchanged. |
+| 2026-10-13 | Four module concepts → `docs/design-notes/inline-browser-annotation.md`, `joint-sessions.md`, `business-phone.md`, `creator-protection.md` (rewritten, not copied) | True Convo `docs/2026-10-02-inline-browser-annotation-concept.md`, `docs/2026-09-30-joint-session-design.md`, `docs/2026-10-02-business-phone-product-concept.md`, `docs/2026-09-30-creator-protection-idea.md` | True Convo `c527e36` | Owner's name and nickname (now "the owner" / "[Owner]"); a link to a private Codex conversation; trial conversation and session IDs and a local record path; the owner's home-folder path in a command; an example customer count; the personal story behind creator protection and the line about the creator who inspired it; secondary news and blog sources. Meta facts marked for recheck. `docs/2026-09-28-jeff-proposal.md` stays in True Convo until Jeff's legal review. |

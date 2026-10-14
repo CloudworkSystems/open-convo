@@ -93,6 +93,7 @@ public final class DeskSession {
     public enum Message {
         public static let keyMissing = "This invented Desk can't open: its made-up key is gone. Nothing was replaced."
         public static let keychainKeyMissing = "The Desk can't open: its key is missing from this Mac's Keychain. Nothing was replaced."
+        public static let restored = "The Desk's key is back in this Mac's Keychain. Unlock to open it."
         public static let secondWriter = "The Desk is open in another copy of True Convo."
         public static let bundleMissing = "The Desk isn't in this build of True Convo."
         public static let bundleUnreadable = "The Desk in this build can't be read, so it stays closed."
@@ -235,6 +236,91 @@ public final class DeskSession {
     /// since the lane is locked in every state (section 14, S11 reading 3).
     public var respondsToLockSignals: Bool {
         state == .open || state == .closed || unlocking || participantLane != nil
+    }
+
+    // MARK: Recovery key (step 2, PR 3b)
+
+    /// The kept Desk is open and its recovery key is missing or was never
+    /// confirmed as written down: the window asks for one.
+    public var needsRecoveryKey: Bool {
+        guard keepsStore, state == .open, let store else { return false }
+        return !store.recoveryCopyConfirmed
+    }
+
+    /// Makes a new recovery key (retiring any earlier one) to show once.
+    /// Nil when there is no open kept store or the copy could not be
+    /// written. The key is never logged.
+    public func makeRecoveryKey() -> ProofStore.MadeRecoveryKey? {
+        guard keepsStore, state == .open, let store else { return nil }
+        do {
+            let made = try store.makeRecoveryKey()
+            log("desk.recovery-key.made", "durable=\(made.isDurable)")
+            onChange?()
+            return made
+        } catch {
+            log("desk.recovery-key.failed", "kind=\(Self.describe(error).kind)")
+            return nil
+        }
+    }
+
+    /// The owner typed back part of the key: the copy in place is noted as
+    /// confirmed. False if that could not be written.
+    @discardableResult
+    public func confirmRecoveryKey() -> Bool {
+        guard keepsStore, let store else { return false }
+        do {
+            try store.confirmRecoveryCopy()
+            log("desk.recovery-key.confirmed", "")
+            onChange?()
+            return true
+        } catch {
+            log("desk.recovery-key.confirm-failed", "")
+            return false
+        }
+    }
+
+    /// The kept Desk can't open because its Keychain key is missing: the
+    /// window offers a restore with the recovery key.
+    public var canRestoreWithRecoveryKey: Bool {
+        keepsStore && state == .unavailable(Message.keychainKeyMissing)
+    }
+
+    public enum RestoreOutcome: Equatable, Sendable {
+        case restored
+        case malformed
+        case wrongKey
+        case noRecoveryCopy
+        case failed
+    }
+
+    /// Puts the Desk's key back from the typed recovery key, then leaves
+    /// the Desk locked so the owner unlocks it as usual. Nothing is
+    /// replaced on any refusal; the typed key is never logged.
+    public func restore(typed text: String) -> RestoreOutcome {
+        guard canRestoreWithRecoveryKey, case .kept(let provider) = storage, let keys = provider as? any KeyImporting else {
+            return .failed
+        }
+        let outcome: RestoreOutcome
+        do {
+            let recovery = try RecoveryKey(typed: text)
+            let folder = try paths.openKeptStoreFolder()
+            try ProofStore.restoreKey(directory: folder, recoveryKey: recovery, into: keys)
+            outcome = .restored
+        } catch RecoveryError.malformedRecoveryKey {
+            outcome = .malformed
+        } catch RecoveryError.wrongRecoveryKey {
+            outcome = .wrongKey
+        } catch RecoveryError.noRecoveryCopy {
+            outcome = .noRecoveryCopy
+        } catch {
+            outcome = .failed
+        }
+        log("desk.recovery-key.restore", "outcome=\(outcome)")
+        if outcome == .restored {
+            state = .lockedNoStack
+            post(notice: Message.restored)
+        }
+        return outcome
     }
 
     public func post(notice text: String?) {
