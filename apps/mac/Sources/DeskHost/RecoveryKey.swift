@@ -64,6 +64,12 @@ public struct RecoveryKey: Equatable, Sendable, CustomStringConvertible, CustomD
         }
         guard values.count == Self.characterCount else { throw RecoveryError.malformedRecoveryKey }
         let bytes = Self.decode(values, byteCount: Self.secretLength + Self.checksumLength)
+        // 55 characters carry 275 bits for 272: the last character's three
+        // spare bits must be zero, so only the one canonical spelling of
+        // each key is accepted and a typo there is caught too.
+        guard Self.encode(bytes).map({ Self.alphabet.firstIndex(of: $0).map(UInt8.init) }) == values.map(Optional.some) else {
+            throw RecoveryError.malformedRecoveryKey
+        }
         let secret = bytes.prefix(Self.secretLength)
         guard bytes.suffix(Self.checksumLength) == Self.checksum(Data(secret)) else { throw RecoveryError.malformedRecoveryKey }
         self.init(secret: Data(secret))

@@ -1200,11 +1200,25 @@ public final class ProofStore: @unchecked Sendable {
     /// Whether the store holds a recovery copy of its key.
     public var hasRecoveryCopy: Bool { PathNode.inspect(recoveryCopyURL.path) == .regular(links: 1) }
 
+    /// A recovery key just made, and whether its copy is known to be durable.
+    public struct MadeRecoveryKey: Sendable {
+        public let key: RecoveryKey
+        /// False when the new copy replaced the old one (so only `key` opens
+        /// what the folder shows) but the folder flush after the rename
+        /// failed: power loss could still bring the earlier copy back.
+        /// Show the key anyway, and make another once the folder flushes.
+        public let isDurable: Bool
+    }
+
     /// Makes a fresh recovery key and atomically replaces the store's sealed
     /// copy with one under it, so an earlier recovery key stops working. The
     /// recovery key is returned to be shown once; it is never written,
-    /// logged or kept. Refused while the store is closed or locked.
-    public func makeRecoveryKey() throws -> RecoveryKey {
+    /// logged or kept. A failure before the rename leaves the earlier copy
+    /// in place and throws; once the rename happened the new key is always
+    /// returned (`isDurable` false if the flush failed), since it alone
+    /// opens the copy the folder now shows. Refused while the store is
+    /// closed or locked.
+    public func makeRecoveryKey() throws -> MadeRecoveryKey {
         lock.lock()
         defer { lock.unlock() }
         if closed { throw ProofStoreError.closed }
@@ -1214,9 +1228,10 @@ public final class ProofStore: @unchecked Sendable {
         do {
             try AtomicFile.write(sealed, to: recoveryCopyURL, files: files, faults: faults)
         } catch let failure as AtomicWriteError {
+            if failure.stage == .directoryFlush { return MadeRecoveryKey(key: recovery, isDurable: false) }
             throw failure.stage == .target ? ProofStoreError.unsafeFile : ProofStoreError.writeFailed(failure.code)
         }
-        return recovery
+        return MadeRecoveryKey(key: recovery, isDurable: true)
     }
 
     /// Opens a store's recovery copy with the typed recovery key and hands

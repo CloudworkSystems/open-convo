@@ -37,13 +37,44 @@ struct RecoveryKeyTests {
         #expect(throws: RecoveryError.malformedRecoveryKey) { try RecoveryKey(typed: String(chars)) }
     }
 
+    @Test("Every other last character is refused: only the canonical spelling reads")
+    func lastCharacterTypos() throws {
+        let key = try RecoveryKey.generate()
+        let text = key.displayText
+        let last = text.last!
+        var accepted: [Character] = []
+        for other in RecoveryKey.alphabet where other != last {
+            if (try? RecoveryKey(typed: String(text.dropLast()) + String(other))) != nil { accepted.append(other) }
+        }
+        #expect(accepted.isEmpty, "\(accepted)")
+    }
+
+    @Test("A copy renamed into place whose folder flush failed still hands back its key")
+    func flushFailureKeepsKey() throws {
+        let fixture = try DeskHostFixture()
+        defer { fixture.clean() }
+        let faults = OneShotFault()
+        let store = try fixture.makeStore(faults: faults)
+        let before = try store.makeRecoveryKey()
+        #expect(before.isDurable)
+        faults.arm(.directoryFlush, target: store.recoveryCopyURL)
+        let made = try store.makeRecoveryKey()
+        #expect(!made.isDurable)
+        let id = store.workspaceId
+        store.close()
+        fixture.keys.forgetKey(for: id)
+        #expect(throws: RecoveryError.wrongRecoveryKey) { try ProofStore.restoreKey(directory: fixture.storeDirectory, recoveryKey: before.key, into: fixture.keys) }
+        #expect(try ProofStore.restoreKey(directory: fixture.storeDirectory, recoveryKey: made.key, into: fixture.keys) == id,
+                "the returned key opens the copy the folder shows")
+    }
+
     @Test("With the key gone from the Keychain, the recovery key brings the store back")
     func restoreAfterWipe() throws {
         let fixture = try DeskHostFixture()
         defer { fixture.clean() }
         let store = try fixture.makeStore()
         #expect(try commit(store, label: "kept", expected: 0, revision: 1) == .committed(revision: 1))
-        let recovery = try store.makeRecoveryKey()
+        let recovery = try store.makeRecoveryKey().key
         #expect(store.hasRecoveryCopy)
         let workspaceId = store.workspaceId
         store.close()
@@ -73,7 +104,7 @@ struct RecoveryKeyTests {
         let other = InventedInMemoryKeyProvider()
         let directory = fixture.directory.appendingPathComponent("second", isDirectory: true)
         let second = try ProofStore(directory: directory, keys: other)
-        let right = try second.makeRecoveryKey()
+        let right = try second.makeRecoveryKey().key
         let id = second.workspaceId
         second.close()
         other.forgetKey(for: id)
@@ -95,8 +126,8 @@ struct RecoveryKeyTests {
         let fixture = try DeskHostFixture()
         defer { fixture.clean() }
         let store = try fixture.makeStore()
-        let first = try store.makeRecoveryKey()
-        let second = try store.makeRecoveryKey()
+        let first = try store.makeRecoveryKey().key
+        let second = try store.makeRecoveryKey().key
         let id = store.workspaceId
         store.close()
         fixture.keys.forgetKey(for: id)
@@ -109,7 +140,7 @@ struct RecoveryKeyTests {
         let fixture = try DeskHostFixture()
         defer { fixture.clean() }
         let store = try fixture.makeStore()
-        let recovery = try store.makeRecoveryKey()
+        let recovery = try store.makeRecoveryKey().key
         #expect(throws: ProofStoreError.secondWriter) {
             try ProofStore.restoreKey(directory: fixture.storeDirectory, recoveryKey: recovery, into: fixture.keys)
         }
@@ -127,7 +158,7 @@ struct RecoveryKeyTests {
         defer { fixture.clean() }
         let store = try fixture.makeStore()
         #expect(try commit(store, label: "x", expected: 0, revision: 1) == .committed(revision: 1))
-        let recovery = try store.makeRecoveryKey()
+        let recovery = try store.makeRecoveryKey().key
         let storeKey = store.cipher.material
         store.close()
         let needles = [recovery.secret, Data(recovery.displayText.utf8),
@@ -154,5 +185,25 @@ struct RecoveryKeyTests {
         #expect(throws: KeyProviderError.keyExists) { try keys.importKey(Data(repeating: 6, count: 32), for: id) }
         #expect(throws: KeyProviderError.unavailable) { try keys.importKey(Data(count: 16), for: UUID()) }
         #expect(items.count == 1)
+    }
+}
+
+/// Fails the named stage once, for one target, with EIO.
+private final class OneShotFault: AtomicWriteFaults, @unchecked Sendable {
+    private let lock = NSLock()
+    private var armed: (AtomicWriteStage, URL)?
+
+    func arm(_ stage: AtomicWriteStage, target: URL) {
+        lock.lock()
+        defer { lock.unlock() }
+        armed = (stage, target.standardizedFileURL)
+    }
+
+    func fault(before stage: AtomicWriteStage, target: URL) -> Int32? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let (armedStage, armedTarget) = armed, armedStage == stage, armedTarget == target.standardizedFileURL else { return nil }
+        armed = nil
+        return EIO
     }
 }
