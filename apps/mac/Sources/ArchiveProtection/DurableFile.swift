@@ -63,7 +63,11 @@ enum DurableFile {
     /// targets, standing in for a disk that refuses it.
     nonisolated(unsafe) static var failFolderFlushForTesting: ((URL) -> Bool)?
 
+    /// Test seam: any folder flush of these folders "fails".
+    nonisolated(unsafe) static var failFlushOfFolderForTesting: ((URL) -> Bool)?
+
     static func flushFolder(_ folder: URL) throws {
+        if let fail = failFlushOfFolderForTesting, fail(folder) { throw Failure(code: EIO) }
         let descriptor = Darwin.open(folder.path, O_RDONLY | O_CLOEXEC)
         guard descriptor >= 0 else { throw Failure(code: errno) }
         defer { close(descriptor) }

@@ -20,7 +20,31 @@ final class SealedRecordingsTests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
+        DurableFile.failFlushOfFolderForTesting = nil
         try? FileManager.default.removeItem(at: root.deletingLastPathComponent())
+    }
+
+    func testARemovalThatCantBeFlushedIsReported() throws {
+        let url = try plainRecording()
+        let folder = url.deletingLastPathComponent().standardizedFileURL
+        // The sealed copy's own flush succeeds; the flush after the
+        // plaintext's removal fails.
+        var flushes = 0
+        DurableFile.failFlushOfFolderForTesting = { candidate in
+            guard candidate.standardizedFileURL == folder else { return false }
+            flushes += 1
+            return flushes > 1
+        }
+        guard case .sealedPlaintextLeft = recordings.seal(url, seal: seal) else { return XCTFail("a failed flush must be reported (Codex P1 on #34)") }
+        DurableFile.failFlushOfFolderForTesting = { $0.standardizedFileURL == folder }
+        let other = try plainRecording("b.wav")
+        XCTAssertEqual(recordings.seal(other, seal: nil), .notSealedPlaintextLeft)
+    }
+
+    func testASealedNameWithPlainBytesIsRefused() throws {
+        let url = root.appendingPathComponent("recordings/swapped.wav.sealed")
+        try Data("plain bytes under a sealed name".utf8).write(to: url)
+        XCTAssertNil(recordings.data(of: url, seal: seal), "Codex P2 on #34")
     }
 
     private func plainRecording(_ name: String = "a.wav") throws -> URL {

@@ -59,7 +59,10 @@ public struct SealedRecordings: Sendable {
     /// as it is. Nil when it can't be read.
     public func data(of url: URL, seal: ArchiveSeal?) -> Data? {
         guard Self.isSealed(url) else { return try? Data(contentsOf: url) }
-        return files.read(url, seal: seal).data
+        // The extension says it is sealed: only an envelope that opens counts
+        // (Codex P2 on #34), never bytes read as plaintext.
+        if case .opened(let data) = files.read(url, seal: seal) { return data }
+        return nil
     }
 
     /// Runs `body` with a readable copy of the recording at `url`: an older
@@ -99,8 +102,10 @@ public struct SealedRecordings: Sendable {
         return removed
     }
 
+    /// Removes the plaintext and flushes its folder, so a power loss can't
+    /// bring it back (Codex P1 on #34). False when either step fails.
     private static func remove(_ url: URL) -> Bool {
-        if unlink(url.path) == 0 { return true }
-        return errno == ENOENT
+        guard unlink(url.path) == 0 || errno == ENOENT else { return false }
+        return (try? DurableFile.flushFolder(url.deletingLastPathComponent())) != nil
     }
 }
