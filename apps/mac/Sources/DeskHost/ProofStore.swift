@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// The committed workspace: one opaque record under one revision. The
@@ -1238,6 +1239,68 @@ public final class ProofStore: @unchecked Sendable {
             throw failure.stage == .target ? ProofStoreError.unsafeFile : ProofStoreError.writeFailed(failure.code)
         }
         return MadeRecoveryKey(key: recovery, isDurable: true)
+    }
+
+    /// Where the store notes that the owner confirmed writing the current
+    /// recovery key down: the SHA-256 of the sealed copy it vouches for
+    /// (nothing secret). A new copy no longer matches, so it reads as
+    /// unconfirmed without anything being deleted.
+    public var recoveryConfirmationURL: URL { directory.appendingPathComponent("recovery-key.confirmed") }
+
+    /// Whether the folder holding the note may not be on disk yet: true at
+    /// open (an earlier process may have failed its flush and quit, and that
+    /// fact lived only in its memory) and after a failed flush here. While
+    /// true a confirmation doesn't count (power loss could bring back an
+    /// older copy and an older matching note); the next check flushes the
+    /// folder once and trusts the note only if that succeeds.
+    private var confirmationUnsynced = true
+
+    /// Whether the owner confirmed the recovery key whose copy is in place,
+    /// with the note known to be on disk.
+    public var recoveryCopyConfirmed: Bool {
+        lock.lock()
+        if confirmationUnsynced, !closed, flushFolderForConfirmation() { confirmationUnsynced = false }
+        let unsynced = confirmationUnsynced
+        lock.unlock()
+        guard !unsynced, hasRecoveryCopy, PathNode.inspect(recoveryConfirmationURL.path) == .regular(links: 1),
+              let copy = try? Data(contentsOf: recoveryCopyURL),
+              let noted = try? Data(contentsOf: recoveryConfirmationURL) else { return false }
+        return noted == Self.confirmationNote(for: copy)
+    }
+
+    /// Notes that the owner confirmed the recovery key whose copy is in
+    /// place now. Refused while closed or locked, or with no copy. A failed
+    /// folder flush throws `replacedUnsynced` and the confirmation doesn't
+    /// count until a later one flushes; the same flush makes the copy's own
+    /// rename durable too.
+    public func confirmRecoveryCopy() throws {
+        lock.lock()
+        defer { lock.unlock() }
+        if closed { throw ProofStoreError.closed }
+        if locked { throw ProofStoreError.locked }
+        guard PathNode.inspect(recoveryCopyURL.path) == .regular(links: 1), let copy = try? Data(contentsOf: recoveryCopyURL) else {
+            throw RecoveryError.noRecoveryCopy
+        }
+        do {
+            try AtomicFile.write(Self.confirmationNote(for: copy), to: recoveryConfirmationURL, files: files, faults: faults)
+            confirmationUnsynced = false
+        } catch let failure as AtomicWriteError {
+            if failure.stage == .directoryFlush {
+                confirmationUnsynced = true
+                throw ProofStoreError.replacedUnsynced(failure.code)
+            }
+            throw failure.stage == .target ? ProofStoreError.unsafeFile : ProofStoreError.writeFailed(failure.code)
+        }
+    }
+
+    /// One folder flush on the confirmation's behalf (call with `lock` held).
+    private func flushFolderForConfirmation() -> Bool {
+        if faults?.flushRetryFault(target: recoveryConfirmationURL) != nil { return false }
+        return (try? AtomicFile.flushDirectory(directory)) != nil
+    }
+
+    static func confirmationNote(for copy: Data) -> Data {
+        Data(("confirmed " + SHA256.hash(data: copy).map { String(format: "%02x", $0) }.joined() + "\n").utf8)
     }
 
     /// Opens a store's recovery copy with the typed recovery key and hands

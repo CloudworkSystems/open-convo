@@ -211,6 +211,67 @@ struct RecoveryKeyTests {
         #expect(scanned >= 3)
     }
 
+    @Test("Confirmation vouches for one copy only, holds nothing secret, and a new key reads as unconfirmed")
+    func confirmationNote() throws {
+        let fixture = try DeskHostFixture()
+        defer { fixture.clean() }
+        let store = try fixture.makeStore()
+        defer { store.close() }
+        #expect(!store.recoveryCopyConfirmed)
+        #expect(throws: RecoveryError.noRecoveryCopy) { try store.confirmRecoveryCopy() }
+        let first = try store.makeRecoveryKey().key
+        #expect(!store.recoveryCopyConfirmed)
+        try store.confirmRecoveryCopy()
+        #expect(store.recoveryCopyConfirmed)
+        let note = try Data(contentsOf: store.recoveryConfirmationURL)
+        #expect(note.range(of: first.secret) == nil)
+        #expect(note.range(of: Data(first.displayText.utf8)) == nil)
+        _ = try store.makeRecoveryKey()
+        #expect(!store.recoveryCopyConfirmed, "the note named the old copy")
+        #expect(try Data(contentsOf: store.recoveryConfirmationURL) == note, "nothing was deleted or rewritten")
+    }
+
+    @Test("A confirmation whose folder flush failed doesn't count until one flushes")
+    func unflushedConfirmation() throws {
+        let fixture = try DeskHostFixture()
+        defer { fixture.clean() }
+        let faults = OneShotFault()
+        let store = try fixture.makeStore(faults: faults)
+        defer { store.close() }
+        _ = try store.makeRecoveryKey()
+        faults.arm(.directoryFlush, target: store.recoveryConfirmationURL)
+        faults.failRetries = true
+        #expect(throws: ProofStoreError.replacedUnsynced(EIO)) { try store.confirmRecoveryCopy() }
+        #expect(!store.recoveryCopyConfirmed, "visible but not durable: not confirmed")
+        #expect(!store.recoveryCopyConfirmed, "still not, while the folder won't flush")
+        faults.failRetries = false
+        #expect(store.recoveryCopyConfirmed, "a later folder flush makes the note durable")
+    }
+
+    @Test("After a reopen, a note whose flush failed counts only once the folder flushes")
+    func unflushedConfirmationAcrossReopen() throws {
+        let fixture = try DeskHostFixture()
+        defer { fixture.clean() }
+        let faults = OneShotFault()
+        let store = try fixture.makeStore(faults: faults)
+        _ = try store.makeRecoveryKey()
+        faults.arm(.directoryFlush, target: store.recoveryConfirmationURL)
+        #expect(throws: ProofStoreError.replacedUnsynced(EIO)) { try store.confirmRecoveryCopy() }
+        store.close()
+
+        // A new process whose folder flush keeps failing: not confirmed.
+        let failing = AlwaysFailingFlushRetry()
+        let reopened = try fixture.makeStore(faults: failing)
+        #expect(!reopened.recoveryCopyConfirmed)
+        #expect(failing.asked >= 1)
+        reopened.close()
+
+        // One whose flush succeeds: the visible note is now on disk and counts.
+        let later = try fixture.makeStore()
+        defer { later.close() }
+        #expect(later.recoveryCopyConfirmed)
+    }
+
     @Test("The Keychain provider takes a recovered key back once and refuses to replace it")
     func keychainImport() throws {
         let items = FakeKeychainItems()
@@ -229,6 +290,17 @@ struct RecoveryKeyTests {
 private final class OneShotFault: AtomicWriteFaults, @unchecked Sendable {
     private let lock = NSLock()
     private var armed: (AtomicWriteStage, URL)?
+    private var retriesFail = false
+    var failRetries: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return retriesFail }
+        set { lock.lock(); retriesFail = newValue; lock.unlock() }
+    }
+
+    func flushRetryFault(target: URL) -> Int32? {
+        lock.lock()
+        defer { lock.unlock() }
+        return retriesFail ? EIO : nil
+    }
 
     func arm(_ stage: AtomicWriteStage, target: URL) {
         lock.lock()
@@ -241,6 +313,24 @@ private final class OneShotFault: AtomicWriteFaults, @unchecked Sendable {
         defer { lock.unlock() }
         guard let (armedStage, armedTarget) = armed, armedStage == stage, armedTarget == target.standardizedFileURL else { return nil }
         armed = nil
+        return EIO
+    }
+}
+
+/// Every folder-flush retry fails with EIO; writes pass.
+private final class AlwaysFailingFlushRetry: AtomicWriteFaults, @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    var asked: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
+    }
+    func fault(before stage: AtomicWriteStage, target: URL) -> Int32? { nil }
+    func flushRetryFault(target: URL) -> Int32? {
+        lock.lock()
+        defer { lock.unlock() }
+        count += 1
         return EIO
     }
 }

@@ -79,8 +79,12 @@ with invented data in True Convo Test before anything touches the real app.
    `recovery-key.sealed` (HKDF-SHA256 per store, AES-GCM, bound to the store
    id), a new recovery key retiring the old copy, and a restore that hands
    the store key back to the Keychain without ever replacing a held key.
-   **PR 3b** is the guided screens: show it once, confirm a few characters
-   back, and the restore flow in the app.
+   **PR 3b** is the guided screens: while the open Desk has no confirmed key,
+   a row offers "Make Recovery Key…"; the key is shown once, then two random
+   groups must be typed back; the store notes the confirmation as a hash of
+   the copy it vouches for, so a new key reads as unconfirmed. When the
+   Keychain key is missing, "Restore With Recovery Key…" puts it back and
+   leaves the Desk locked for a normal unlock.
 4. **Protect dictation history and word fixes.** New dictation sessions,
    transcripts, kept recordings and the word-fix file are written encrypted under
    the same custody. Existing plaintext files are **left untouched** (the app
