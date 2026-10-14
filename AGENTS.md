@@ -6,7 +6,9 @@
 - Mac checkout: `/Users/patrick/OPEN-CONVO`.
 - This is the active product repo. True Convo (`/Users/patrick/True-Convo-AI`)
   was frozen on October 12, 2026 and is a read-only reference and parts library.
-- Build order and move log: [PLAN.md](PLAN.md).
+- Build order and move log: [PLAN.md](PLAN.md). Current state: [STATUS.md](STATUS.md);
+  update it in any pull request that changes the step, a part's state or an
+  owner decision.
 
 ## Moving Code From True Convo
 
