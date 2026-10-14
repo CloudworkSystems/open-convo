@@ -226,6 +226,21 @@ final class DeskRecoveryKeyTests: XCTestCase {
         XCTAssertTrue(desk.needsRecoveryKey, "still unconfirmed")
     }
 
+    func testAFailedMakeSaysSoAndShowsNothing() async throws {
+        let desk = try newRun()
+        let prompt = ScriptedRecoveryPrompt()
+        let controller = window(for: desk, prompt: prompt)
+        await desk.unlock(verifier: StubUnlockVerifier(.verified))
+        // Stand in for a full disk: the store folder no longer takes new files.
+        let folderURL = try XCTUnwrap(desk.runFolder)
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: folderURL.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: folderURL.path) }
+        await controller.runRecoveryKeyFlow()
+        XCTAssertEqual(prompt.shown, [], "no key shown")
+        XCTAssertEqual(desk.notice, DeskRecoveryWording.makeFailed)
+        XCTAssertTrue(desk.needsRecoveryKey)
+    }
+
     func testWindowRestoreRetriesWithAReasonThenUnlocksAsUsual() async throws {
         let first = try newRun()
         await first.unlock(verifier: StubUnlockVerifier(.verified))

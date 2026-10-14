@@ -358,7 +358,11 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
     /// Make a key, show it once, then have two groups typed back. Cancel at
     /// any point leaves it unconfirmed, so the row keeps asking.
     func runRecoveryKeyFlow() async {
-        guard !recoveryFlowActive, let window, let made = session.makeRecoveryKey() else { return }
+        guard !recoveryFlowActive, let window, session.state == .open else { return }
+        guard let made = session.makeRecoveryKey() else {
+            session.post(notice: DeskRecoveryWording.makeFailed)
+            return
+        }
         recoveryFlowActive = true
         defer {
             recoveryFlowActive = false

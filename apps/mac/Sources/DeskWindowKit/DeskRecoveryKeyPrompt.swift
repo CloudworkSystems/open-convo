@@ -46,6 +46,7 @@ public enum DeskRecoveryWording {
     public static let noCopy = "This Desk has no recovery key saved, so it can't be restored here."
     public static let failed = "The Desk couldn't be restored. Nothing was changed."
     public static let cancel = "Cancel"
+    public static let makeFailed = "Couldn't make a recovery key. Nothing was changed; try again."
     public static let confirmNotSaved = "The Mac couldn't save that you confirmed the key. Make a new one and try again."
 }
 
