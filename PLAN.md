@@ -101,6 +101,9 @@ has tried it. Each step ends with something the owner can try.
 
 6. Agents working together: the Pi harness for agent profiles, the model-based
    dispatcher, Claude and Codex visible in one session, scoped delegation.
+   Ideas borrowed from Scion (own space per agent, agent-to-agent messages,
+   one screen for all agents) are in
+   [agent-profiles-and-adapters.md](docs/design-notes/agent-profiles-and-adapters.md).
 7. Navigator search and sorting; Related and Revisit-when reminders.
 8. Reading the owner's real old sessions on the Mac, read-only.
 9. First creator beta: worksheet, Site Engine's first site, encrypted transfer between devices.
