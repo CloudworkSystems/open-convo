@@ -26,8 +26,10 @@ final class KillAndReopenProofTests: XCTestCase {
     override func setUpWithError() throws {
         base = FileManager.default.temporaryDirectory.appendingPathComponent("kill-reopen-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: keysFolder, withIntermediateDirectories: true)
+        // A missing writer fails the proof, never skips it (Codex on #36):
+        // a skipped proof must not read as a passed one.
         guard FileManager.default.isExecutableFile(atPath: Self.hostPath) else {
-            throw XCTSkip("ProtectionProofHost isn't built next to the tests: \(Self.hostPath)")
+            throw ProofError.writerMissing(Self.hostPath)
         }
     }
 
@@ -101,6 +103,15 @@ final class KillAndReopenProofTests: XCTestCase {
                 let transcript = root.appendingPathComponent("transcripts/\(id).md")
                 guard case .opened = files.read(transcript, seal: seal) else {
                     return XCTFail("round \(round): transcript \(id) doesn't open")
+                }
+            }
+            // Every transcript left on disk opens, including one written just
+            // before a kill cut off its acknowledgement (Codex on #36). Hidden
+            // names are the stores' own temporary copies, never read back.
+            let transcriptNames = try FileManager.default.contentsOfDirectory(atPath: root.appendingPathComponent("transcripts").path)
+            for name in transcriptNames where !name.hasPrefix(".") {
+                guard case .opened = files.read(root.appendingPathComponent("transcripts/\(name)"), seal: seal) else {
+                    return XCTFail("round \(round): transcript \(name) is left damaged")
                 }
             }
             if let newest = acknowledged.last {
@@ -195,7 +206,10 @@ final class KillAndReopenProofTests: XCTestCase {
         }
     }
 
-    enum ProofError: Error { case writerStopped(String) }
+    enum ProofError: Error {
+        case writerStopped(String)
+        case writerMissing(String)
+    }
 
     private final class Collected: @unchecked Sendable {
         private let lock = NSLock()
