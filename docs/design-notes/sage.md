@@ -37,9 +37,8 @@ September 2026 and built a catalog of roughly 300 entries.
   claims "(inference)", write a receipt), the entry template, and the bounds
   (a capped window per run, no commits without approval).
 - **Stays behind:** the catalog and receipts (True Convo's private decision
-  history, with internal plans, commit IDs and the owner's name) and the Harness
-  Builder's Guide. The guide as a sellable product is a CloudworkConnect idea,
-  noted with the business material, not core.
+  history, with internal plans, commit IDs and the owner's name) and the
+  guide the old Sage generated.
 - **Used locally as seed data:** the existing catalog may seed the first loop's
   tests and lessons **on the owner's Mac only**. It never enters this repo.
 
