@@ -135,6 +135,10 @@ final class ArchiveRecoveryTests: XCTestCase {
         XCTAssertTrue(recovery.needsRecoveryKey, "a copy that was never paired doesn't count (Codex P1)")
         XCTAssertTrue(recovery.retireAllBut(key))
         XCTAssertFalse(recovery.needsRecoveryKey)
+        try recovery.seal(under: try RecoveryKey.generate())
+        XCTAssertTrue(recovery.needsRecoveryKey, "a second copy whose rotation didn't finish keeps it asking")
+        XCTAssertTrue(recovery.retireAllBut(key))
+        XCTAssertFalse(recovery.needsRecoveryKey)
         keys.forgetKey(for: seal.archiveId)
         XCTAssertFalse(recovery.needsRecoveryKey, "a missing key is restored, not re-covered")
     }
@@ -159,6 +163,7 @@ final class ArchiveRecoveryTests: XCTestCase {
         try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o500)], ofItemAtPath: recovery.folder.path)
         XCTAssertFalse(recovery.retireAllBut(new), "an earlier copy that can't be removed is reported (Codex P2)")
         try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o700)], ofItemAtPath: recovery.folder.path)
+        XCTAssertTrue(recovery.needsRecoveryKey, "the old pairing no longer counts while an old copy remains (Codex round 2)")
         XCTAssertEqual(sealed().count, 2)
         XCTAssertTrue(recovery.retireAllBut(new), "the next try finishes it")
         XCTAssertEqual(sealed(), ["\(new.fingerprint).sealed"])

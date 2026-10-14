@@ -119,7 +119,8 @@ with invented data in True Convo Test before anything touches the real app.
    replaces nothing and shows no key), taken back if the Desk's write then
    fails, and earlier copies are retired once the Desk's new copy is
    durable; only then is the new key recorded as paired (`recovery/paired`),
-   and only a paired copy counts as coverage. A retirement that can't finish
+   and only a paired copy that is the only copy counts as coverage. A
+   retirement that can't finish
    makes the key read as not durable, so the owner is told to make another,
    which retries it. Restoring the Desk with the recovery key also restores the
    archive's key, and says so when that key doesn't cover dictation history.

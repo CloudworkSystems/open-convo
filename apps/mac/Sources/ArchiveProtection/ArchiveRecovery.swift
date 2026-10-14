@@ -109,11 +109,16 @@ public final class ArchiveRecovery: RecoveryCompanion, @unchecked Sendable {
     /// counts as coverage.
     var pairedURL: URL { folder.appendingPathComponent("paired", isDirectory: false) }
 
-    private func pairedCopyExists() -> Bool {
+    /// Covered means the paired copy is there and it is the only copy. Any
+    /// other copy (a rotation that didn't finish, a make whose Desk save
+    /// wasn't confirmed) keeps the Desk asking for a new key, and the next
+    /// make retries the removal (Codex round 2 on #32).
+    private func isFullyPaired() -> Bool {
         guard let data = try? Data(contentsOf: pairedURL), data.count <= 64 else { return false }
         let fingerprint = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         guard fingerprint.count == 32, fingerprint.allSatisfy({ $0.isHexDigit }) else { return false }
-        return FileManager.default.fileExists(atPath: folder.appendingPathComponent("\(fingerprint).sealed").path)
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+        return names.filter { $0.hasSuffix(".sealed") } == ["\(fingerprint).sealed"]
     }
 
     public func restore(with recovery: RecoveryKey) -> RecoveryCompanionRestore {
@@ -139,7 +144,7 @@ public final class ArchiveRecovery: RecoveryCompanion, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard let id = archiveId(), (try? keys.existingKey(for: id)) != nil else { return false }
-        return !pairedCopyExists()
+        return !isFullyPaired()
     }
 
     /// Whether the archive's key is gone from this Mac (its marker names a
