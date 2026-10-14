@@ -14,11 +14,12 @@ plan is in [PLAN.md](PLAN.md).
 | PR 2 and 2b: Desk store encrypted, reopens after restart | Merged (#18, #20) |
 | PR 3 and 3b: Recovery key and its screens | Merged (#23, #25, #29) |
 | PR 4: Dictation words and word fixes sealed on disk | Merged (#30) |
-| PR 4b: Dictation archive key under the same recovery key | Next |
-| PR 4c: Kept recordings sealed | To do |
-| PR 5: Kill-and-reopen proof, then the owner's real trial | To do |
+| PR 4b: Dictation archive key under the same recovery key | Merged (#32) |
+| PR 4c: Kept recordings sealed | Merged (#34, #35) |
+| PR 5: Scripted kill-and-reopen proof | In review (#36) |
+| PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-2-owner-trial.md)) | Waiting on the owner |
 
-Until PR 5 passes, the installed Desk is for invented data only.
+Until the owner's trial passes, the installed Desk is for invented data only.
 
 ## Done
 

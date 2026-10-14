@@ -86,6 +86,7 @@ final class KillAndReopenProofTests: XCTestCase {
             let history = root.appendingPathComponent("history.jsonl")
             let text = String(decoding: try Data(contentsOf: history), as: UTF8.self)
             var ids = Set<String>()
+            var order: [String] = []
             for line in text.split(separator: "\n") {
                 guard case .opened(let data) = files.readLine(line, in: history, seal: seal),
                       let object = try JSONSerialization.jsonObject(with: data) as? [String: String],
@@ -93,6 +94,7 @@ final class KillAndReopenProofTests: XCTestCase {
                     return XCTFail("round \(round): a history line doesn't open")
                 }
                 ids.insert(id)
+                order.append(id)
             }
             for id in acknowledged {
                 XCTAssertTrue(ids.contains(id), "round \(round): history lost \(id)")
@@ -101,10 +103,20 @@ final class KillAndReopenProofTests: XCTestCase {
                     return XCTFail("round \(round): transcript \(id) doesn't open")
                 }
             }
-            if !acknowledged.isEmpty {
-                guard case .opened = files.read(root.appendingPathComponent("latest-transcript.md"), seal: seal) else {
+            if let newest = acknowledged.last {
+                guard case .opened(let latest) = files.read(root.appendingPathComponent("latest-transcript.md"), seal: seal) else {
                     return XCTFail("round \(round): the latest copy doesn't open")
                 }
+                // It must hold the newest acknowledged write or a later one
+                // (a write the kill cut off before it was acknowledged), never
+                // an earlier one (Codex on #36).
+                let latestId = String(decoding: latest, as: UTF8.self)
+                    .replacingOccurrences(of: "# latest invented-proof-word ", with: "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                guard let latestPosition = order.firstIndex(of: latestId), let newestPosition = order.firstIndex(of: newest) else {
+                    return XCTFail("round \(round): the latest copy names \(latestId), which history doesn't hold")
+                }
+                XCTAssertGreaterThanOrEqual(latestPosition, newestPosition, "round \(round): the latest copy rolled back")
             }
             try assertNoPlaintext(under: root, round: round)
         }
