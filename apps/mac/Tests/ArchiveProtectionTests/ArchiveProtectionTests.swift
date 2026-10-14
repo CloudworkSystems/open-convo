@@ -210,6 +210,55 @@ final class ArchiveFilesTests: XCTestCase {
         XCTAssertEqual(files.read(root.appendingPathComponent("transcripts/none.md"), seal: seal), .missing)
     }
 
+    func testADamagedHeaderIsDamageNotPlaintext() throws {
+        let url = root.appendingPathComponent("transcripts/a.md")
+        try files.writeSealed(Data("invented".utf8), to: url, seal: seal)
+        let stored = try Data(contentsOf: url)
+        let header = Data(ArchiveSeal.fileHeader.utf8)
+        var damaged: [Data] = []
+        for index in [0, 3, 6, 10, 30, header.count - 1] {
+            var flipped = stored
+            flipped[index] ^= 0x01
+            damaged.append(flipped)
+            var high = stored
+            high[index] = 0xFF
+            damaged.append(high)
+        }
+        for cut in [1, 7, 20, header.count - 1, header.count] {
+            damaged.append(stored.dropFirst(cut))
+        }
+        for (number, bytes) in damaged.enumerated() {
+            try bytes.write(to: url)
+            XCTAssertEqual(files.read(url, seal: seal), .unreadable, "case \(number)")
+            XCTAssertEqual(files.read(url, seal: nil), .unreadable, "case \(number), no key")
+        }
+    }
+
+    func testOldPlaintextShapesStayPlaintext() throws {
+        let url = root.appendingPathComponent("transcripts/old.md")
+        let shapes = [
+            "# True Convo Session\n\n- ID: x\n\n## Transcript\n\n(empty)\n",
+            "{\n  \"id\" : \"x\",\n  \"text\" : \"invented\"\n}",
+            "[{\"phrasePair\":{\"replacementPhrase\":\"Kettle\",\"sourcePhrase\":\"kettel\"}}]",
+            "[]",
+            "",
+        ]
+        for shape in shapes {
+            try Data(shape.utf8).write(to: url)
+            XCTAssertEqual(files.read(url, seal: seal), .plaintext(Data(shape.utf8)), shape)
+        }
+    }
+
+    func testADamagedLinePrefixIsDamageNotPlaintext() throws {
+        let url = root.appendingPathComponent("history.jsonl")
+        let line = try seal.sealLine(Data("{}".utf8), purpose: files.purpose(of: url))
+        let bare = String(line.dropFirst(ArchiveSeal.linePrefix.count))
+        for damaged in ["TCARCH2:" + bare, "TCARCH1;" + bare, bare, "CARCH1:" + bare.prefix(0) + bare] {
+            XCTAssertEqual(files.readLine(damaged, in: url, seal: seal), .unreadable, damaged.prefix(10).description)
+        }
+        XCTAssertEqual(files.readLine("{\"id\":\"x\"}", in: url, seal: seal), .plaintext(Data("{\"id\":\"x\"}".utf8)))
+    }
+
     func testAMovedSealedFileDoesNotOpen() throws {
         let a = root.appendingPathComponent("transcripts/a.md")
         let b = root.appendingPathComponent("transcripts/b.md")
@@ -299,6 +348,15 @@ final class SealedLessonsFileTests: XCTestCase {
         let other = try ArchiveSeal(material: Data(repeating: 1, count: 32), archiveId: seal.archiveId)
         XCTAssertThrowsError(try CorrectionLessonStore(directory: directory, protection: protection(other)))
         XCTAssertThrowsError(try CorrectionLessonStore(directory: directory))
+    }
+
+    func testFixesWithADamagedHeaderRefuseToOpen() throws {
+        let store = try CorrectionLessonStore(directory: directory, protection: protection(seal))
+        try store.remember(try CorrectionPhrasePair(sourcePhrase: "invented", replacementPhrase: "Invented"), in: try CorrectionScope.anyApplication(localeIdentifier: "en-US"))
+        var stored = try Data(contentsOf: lessonsURL)
+        stored[2] ^= 0x01
+        try stored.write(to: lessonsURL)
+        XCTAssertThrowsError(try CorrectionLessonStore(directory: directory, protection: protection(seal)))
     }
 }
 

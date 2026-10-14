@@ -76,6 +76,43 @@ public struct ArchiveSeal: Sendable {
         stored.starts(with: Data(fileHeader.utf8))
     }
 
+    /// Whether `stored` is a sealed file or what is left of one whose header
+    /// was damaged or cut short, so it is refused as damaged rather than
+    /// passed on as plaintext from before this step. Those plaintext files
+    /// are always valid UTF-8 Markdown or JSON, never a bare base64 line.
+    /// Caught: any `TCARCH` start, bytes that are not UTF-8, the header's
+    /// sentence anywhere, and at most two lines ending in a base64 line.
+    public static func looksSealedFile(_ stored: Data) -> Bool {
+        if stored.starts(with: Data(familyPrefix.utf8)) { return true }
+        guard let text = String(data: stored, encoding: .utf8) else { return true }
+        if text.contains(headerSentence) { return true }
+        let lines = text.split(separator: "\n")
+        guard lines.count <= 2, let last = lines.last else { return false }
+        return isBase64Body(last)
+    }
+
+    /// The same for one history line. A plaintext entry from before this
+    /// step is always one JSON object, so any line that does not start with
+    /// `{` (a damaged or cut `TCARCH1:` prefix, a bare base64 line) is a
+    /// damaged sealed line, never a plaintext entry.
+    public static func looksSealedLine<S: StringProtocol>(_ line: S) -> Bool {
+        !line.hasPrefix("{")
+    }
+
+    static let familyPrefix = "TCARCH"
+    static let headerSentence = "encrypted by True Convo"
+    /// The shortest sealed body: nonce and tag alone, in base64.
+    static let shortestBase64Body = 40
+
+    private static func isBase64Body<S: StringProtocol>(_ text: S) -> Bool {
+        text.count >= shortestBase64Body && text.unicodeScalars.allSatisfy { scalar in
+            switch scalar {
+            case "A"..."Z", "a"..."z", "0"..."9", "+", "/", "=": return true
+            default: return false
+            }
+        }
+    }
+
     public func sealFile(_ plaintext: Data, purpose: String) throws -> Data {
         Data((Self.fileHeader + (try sealedBase64(plaintext, purpose: purpose)) + "\n").utf8)
     }

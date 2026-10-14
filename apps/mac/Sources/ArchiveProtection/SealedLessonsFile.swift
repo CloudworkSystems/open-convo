@@ -15,7 +15,8 @@ public struct SealedLessonsFile: LessonsFileProtection {
     }
 
     public func lessonsJSON(fromStored data: Data) throws -> Data {
-        guard ArchiveSeal.isSealedFile(data) else { return data }
+        // A damaged header throws like any other damage (Codex P2).
+        guard ArchiveSeal.looksSealedFile(data) else { return data }
         return try seal.openFile(data, purpose: purpose)
     }
 
