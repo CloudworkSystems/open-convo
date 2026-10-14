@@ -98,6 +98,10 @@ public final class ArchiveRecovery: RecoveryCompanion, @unchecked Sendable {
         do {
             try DurableFile.replace(pairedURL, with: Data((recovery.fingerprint + "\n").utf8))
         } catch {
+            // A note renamed into place before a failed folder flush could
+            // roll back on power loss: take it back so the Desk keeps asking
+            // (Codex round 3 on #32).
+            unlink(pairedURL.path)
             return false
         }
         return true

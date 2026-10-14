@@ -170,6 +170,19 @@ final class ArchiveRecoveryTests: XCTestCase {
         XCTAssertFalse(recovery.needsRecoveryKey)
     }
 
+    func testAPairingWhoseFlushFailsIsTakenBack() throws {
+        _ = try openArchive()
+        let key = try RecoveryKey.generate()
+        try recovery.seal(under: key)
+        DurableFile.failFolderFlushForTesting = { $0.lastPathComponent == "paired" }
+        XCTAssertFalse(recovery.retireAllBut(key))
+        DurableFile.failFolderFlushForTesting = nil
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recovery.pairedURL.path))
+        XCTAssertTrue(recovery.needsRecoveryKey, "the Desk keeps asking (Codex round 3 on #32)")
+        XCTAssertTrue(recovery.retireAllBut(key))
+        XCTAssertFalse(recovery.needsRecoveryKey)
+    }
+
     func testCopiesAreOwnerOnlyAndHoldNoPlainKey() throws {
         let seal = try openArchive()
         let key = try RecoveryKey.generate()
