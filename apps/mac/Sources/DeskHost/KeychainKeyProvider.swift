@@ -118,7 +118,12 @@ public enum KeychainItemsError: Error, Equatable, Sendable {
 public struct SystemKeychainItems: KeychainItems {
     public static let label = "True Convo Desk store key"
 
-    public init() {}
+    /// The label new items get, as Keychain Access shows it.
+    public let itemLabel: String
+
+    public init(itemLabel: String = SystemKeychainItems.label) {
+        self.itemLabel = itemLabel
+    }
 
     public func read(service: String, account: String) throws -> Data? {
         let query: [String: Any] = [
@@ -147,7 +152,7 @@ public struct SystemKeychainItems: KeychainItems {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
-            kSecAttrLabel as String: Self.label,
+            kSecAttrLabel as String: itemLabel,
             kSecAttrSynchronizable as String: kCFBooleanFalse as Any,
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
             kSecValueData as String: data,

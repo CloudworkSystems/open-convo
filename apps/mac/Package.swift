@@ -37,6 +37,17 @@ let package = Package(
             name: "CorrectionMemoryTests",
             dependencies: ["CorrectionMemory"]
         ),
+        // Dictation words sealed on disk (step 2, PR 4): the archive's own
+        // key under the Desk store's custody rules, sealed files and history
+        // lines, and the sealed word-fix file.
+        .target(
+            name: "ArchiveProtection",
+            dependencies: ["DeskHost", "CorrectionMemory"]
+        ),
+        .testTarget(
+            name: "ArchiveProtectionTests",
+            dependencies: ["ArchiveProtection", "DeskHost", "CorrectionMemory"]
+        ),
         // Native side of the Desk join proof (docs/desk-native-join-contract.md).
         // Pure Swift: no AppKit or WebKit, so every refusal is unit-testable.
         .target(name: "DeskHost"),
@@ -149,7 +160,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "VoiceCursorMac",
-            dependencies: ["VoiceCursorCore", "CorrectionMemory", "DeskHost", "DeskHostWebKit", "DeskWindowKit", "TrueConvoIdentity"]
+            dependencies: ["VoiceCursorCore", "CorrectionMemory", "ArchiveProtection", "DeskHost", "DeskHostWebKit", "DeskWindowKit", "TrueConvoIdentity"]
         ),
         .executableTarget(
             name: "VoiceCursorPolicyCheck",

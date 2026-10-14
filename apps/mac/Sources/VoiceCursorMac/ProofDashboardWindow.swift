@@ -132,7 +132,7 @@ final class ProofDashboardWindowController: NSWindowController {
     @objc private func refresh() {
         do {
             let url = try Archive.writeStartHereReport()
-            textView.string = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+            textView.string = Archive.readWordsText(url) ?? ""
             statusLabel.stringValue = "Refreshed \(Archive.startHere.path)"
             RunLog.write("proof-dashboard.refreshed", url.path)
         } catch {

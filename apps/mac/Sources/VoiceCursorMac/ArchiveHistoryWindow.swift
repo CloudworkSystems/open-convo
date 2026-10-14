@@ -136,9 +136,16 @@ final class ArchiveHistoryWindowController: NSWindowController, NSTableViewDataS
     @objc private func refresh() {
         entries = Array(Archive.readHistory().reversed())
         tableView.reloadData()
-        statusLabel.stringValue = entries.isEmpty
+        let notShown = Archive.historyLinesNotShown
+        var status = entries.isEmpty
             ? "No archived sessions yet."
             : "\(entries.count) archived sessions in \(Archive.history.path)"
+        if notShown > 0 {
+            status += Archive.currentSeal() == nil
+                ? " \(notShown) more are locked: the archive's key is missing from this Mac's Keychain."
+                : " \(notShown) more can't be read."
+        }
+        statusLabel.stringValue = status
         if entries.isEmpty {
             detailView.string = ""
         } else {
@@ -237,7 +244,7 @@ final class ArchiveHistoryWindowController: NSWindowController, NSTableViewDataS
     @objc private func copyMarkdown() {
         guard let entry = selectedEntry() else { return }
         let url = Archive.transcriptURL(for: entry.id)
-        let markdown = (try? String(contentsOf: url, encoding: .utf8)) ?? detailView.string
+        let markdown = Archive.readWordsText(url) ?? detailView.string
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(markdown, forType: .string)
         statusLabel.stringValue = "Copied transcript Markdown."
@@ -253,21 +260,17 @@ final class ArchiveHistoryWindowController: NSWindowController, NSTableViewDataS
     @objc private func openTranscript() {
         guard let entry = selectedEntry() else { return }
         let url = Archive.transcriptURL(for: entry.id)
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            statusLabel.stringValue = "Transcript file is missing for \(entry.id)."
-            return
+        if let problem = ArchiveFileOpener.open(url, title: "Transcript", missing: "Transcript file is missing for \(entry.id).") {
+            statusLabel.stringValue = problem
         }
-        NSWorkspace.shared.open(url)
     }
 
     @objc private func openContentPacket() {
         guard let entry = selectedEntry() else { return }
         let url = entry.contentPacketPath.map(URL.init(fileURLWithPath:)) ?? Archive.contentPacketURL(for: entry.id)
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            statusLabel.stringValue = "Content packet file is missing for \(entry.id)."
-            return
+        if let problem = ArchiveFileOpener.open(url, title: "Content Packet", missing: "Content packet file is missing for \(entry.id).") {
+            statusLabel.stringValue = problem
         }
-        NSWorkspace.shared.open(url)
     }
 
     @objc private func revealAudio() {
