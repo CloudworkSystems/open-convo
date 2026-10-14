@@ -123,8 +123,13 @@ public struct SealedRecordings: Sendable {
     /// is written there; a failure means it must not be kept.
     public func markPending(_ capture: URL) throws {
         let marker = pendingMarker(for: capture)
-        try FileManager.default.createDirectory(at: marker.deletingLastPathComponent(), withIntermediateDirectories: true,
+        let pending = marker.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: pending, withIntermediateDirectories: true,
                                                 attributes: [.posixPermissions: NSNumber(value: 0o700)])
+        // The `.pending` entry itself must be on disk in the recordings
+        // folder before capture starts, or a power loss could keep the audio
+        // and lose the marker (Codex round 3 on #34).
+        try DurableFile.flushFolder(pending.deletingLastPathComponent())
         try DurableFile.replace(marker, with: Data())
     }
 

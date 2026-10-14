@@ -149,6 +149,13 @@ final class SealedRecordingsTests: XCTestCase {
         XCTAssertEqual(recordings.reconcilePending(in: folder, seal: nil), 0, "marker cleared")
     }
 
+    func testMarkingFailsWhenThePendingFolderCantBeFlushedIntoRecordings() throws {
+        let folder = root.appendingPathComponent("recordings").standardizedFileURL
+        DurableFile.failFlushOfFolderForTesting = { $0.standardizedFileURL == folder }
+        XCTAssertThrowsError(try recordings.markPending(folder.appendingPathComponent("s4.wav")),
+                             "capture must not start (Codex round 3 on #34)")
+    }
+
     func testAFinishedRecordingClearsItsMarker() throws {
         let folder = root.appendingPathComponent("recordings")
         let capture = folder.appendingPathComponent("s3.wav")
