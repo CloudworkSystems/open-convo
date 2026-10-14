@@ -25,6 +25,9 @@ public final class ArchiveRecovery: RecoveryCompanion, @unchecked Sendable {
     public let root: URL
     private let keys: any KeyImporting
     private let lock = NSLock()
+    /// A pairing note was taken back but that removal couldn't be flushed:
+    /// until a later flush succeeds, the Desk keeps asking.
+    private var pairingUnsynced = false
 
     public init(root: URL, keys: any KeyImporting) {
         self.root = root
@@ -98,8 +101,16 @@ public final class ArchiveRecovery: RecoveryCompanion, @unchecked Sendable {
         do {
             try DurableFile.replace(pairedURL, with: Data((recovery.fingerprint + "\n").utf8))
         } catch {
+            // A note renamed into place before a failed folder flush could
+            // roll back on power loss: take it back so the Desk keeps asking
+            // (Codex round 3 on #32).
+            unlink(pairedURL.path)
+            // The removal must reach the disk too (Codex P1 on #34). If this
+            // flush fails as well, this run keeps asking for a new key.
+            if (try? DurableFile.flushFolder(folder)) == nil { pairingUnsynced = true }
             return false
         }
+        pairingUnsynced = false
         return true
     }
 
@@ -144,6 +155,10 @@ public final class ArchiveRecovery: RecoveryCompanion, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard let id = archiveId(), (try? keys.existingKey(for: id)) != nil else { return false }
+        if pairingUnsynced {
+            guard (try? DurableFile.flushFolder(folder)) != nil else { return true }
+            pairingUnsynced = false
+        }
         return !isFullyPaired()
     }
 

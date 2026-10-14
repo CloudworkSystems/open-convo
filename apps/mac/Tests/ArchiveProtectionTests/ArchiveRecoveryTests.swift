@@ -24,6 +24,7 @@ final class ArchiveRecoveryTests: XCTestCase {
 
     override func tearDownWithError() throws {
         DurableFile.failFolderFlushForTesting = nil
+        DurableFile.failFlushOfFolderForTesting = nil
         try? FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o700)], ofItemAtPath: recovery.folder.path)
         try? FileManager.default.removeItem(at: root)
     }
@@ -167,6 +168,35 @@ final class ArchiveRecoveryTests: XCTestCase {
         XCTAssertEqual(sealed().count, 2)
         XCTAssertTrue(recovery.retireAllBut(new), "the next try finishes it")
         XCTAssertEqual(sealed(), ["\(new.fingerprint).sealed"])
+        XCTAssertFalse(recovery.needsRecoveryKey)
+    }
+
+    func testAPairingWhoseFlushFailsIsTakenBack() throws {
+        _ = try openArchive()
+        let key = try RecoveryKey.generate()
+        try recovery.seal(under: key)
+        DurableFile.failFolderFlushForTesting = { $0.lastPathComponent == "paired" }
+        XCTAssertFalse(recovery.retireAllBut(key))
+        DurableFile.failFolderFlushForTesting = nil
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recovery.pairedURL.path))
+        XCTAssertTrue(recovery.needsRecoveryKey, "the Desk keeps asking (Codex round 3 on #32)")
+        XCTAssertTrue(recovery.retireAllBut(key))
+        XCTAssertFalse(recovery.needsRecoveryKey)
+    }
+
+    func testATakenBackPairingThatCantBeFlushedKeepsAsking() throws {
+        _ = try openArchive()
+        let key = try RecoveryKey.generate()
+        try recovery.seal(under: key)
+        let folder = recovery.folder.standardizedFileURL
+        DurableFile.failFolderFlushForTesting = { $0.lastPathComponent == "paired" }
+        DurableFile.failFlushOfFolderForTesting = { $0.standardizedFileURL == folder }
+        XCTAssertFalse(recovery.retireAllBut(key))
+        DurableFile.failFolderFlushForTesting = nil
+        XCTAssertTrue(recovery.needsRecoveryKey, "unflushed removal: keep asking (Codex P1 on #34)")
+        DurableFile.failFlushOfFolderForTesting = nil
+        XCTAssertTrue(recovery.needsRecoveryKey, "the note is gone, so still not paired")
+        XCTAssertTrue(recovery.retireAllBut(key))
         XCTAssertFalse(recovery.needsRecoveryKey)
     }
 
