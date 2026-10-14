@@ -126,10 +126,8 @@ has tried it. Each step ends with something the owner can try.
 2. **Conversation Desk. Ported October 12, awaiting Codex review.** (`apps/desk`)
 3. **Mac app. Ported October 12 to `apps/mac`, awaiting review.** (`apps/true-convo-mac`, 134 tracked files). Swift package; built
    and checked on the Mac. Signing and release settings stay with the owner.
-4. **Shared tooling, case by case** (`tools/capability-adapter`, `tools/action-guard`,
-   `tools/agent-bridge`). Paid bridges and evaluation tools (`glm-bridge`,
-   `muse-bridge`, `jev-helper`, `jeff`) stay in True Convo unless the owner
-   chooses otherwise.
+4. **Shared tooling: brought with step 6** (owner decision, October 13). See
+   "Still in the Old Folders" below.
 
 ## Stays in True Convo
 
@@ -159,6 +157,53 @@ Strategy and interview files, `docs/reviews`, `docs/sessions`, session audits,
   hosting stays behind; pick a host that does not tie users to ChatGPT. The two
   tests that need a hosted build (`tests/cloud-preview.test.mjs`,
   `tests/annotation-styles.test.mjs`) get rewired once that host is chosen.
+
+## Still in the Old Folders
+
+Owner decisions from the group-by-group review, October 13 and 14, 2026. Nothing
+here moves until its trigger; each move is privacy-checked and logged below.
+
+**Bring with step 6 (the Pi adapter):** True Convo `tools/capability-adapter`
+(becomes `packages/capabilities`), `tools/action-guard` and `tools/jev-helper`.
+
+**Bring later, on a trigger:**
+- `tools/muse-bridge`, with the Meta Muse adapter (last in the adapter order).
+- The alpha app's release scripts (`cloudwork_systems/true_convo/tca_desktop/scripts`),
+  rewritten for `apps/mac` at the first release, without signing details.
+- Continuity's memory model
+  (`cloudwork_systems/true_convo/cloudwork_continuity/docs/CONTINUITY_MEMORY_CONTEXT_MODEL.md`),
+  as a reference when step 5 is planned.
+- The `BrowserTrial` source (`cloudwork_systems/true_convo/tca_desktop/BrowserTrial`),
+  when the inline browser is built.
+- The Local Visibility Checkup template (`cloudwork_systems/louder_locally/customer-zero/local-visibility-checkup`),
+  made generic (no business name or pricing) as the Visibility Agent's report
+  template. Its `clients` folder never moves.
+- Sage's method (`cloudwork_systems/sage`), already rewritten as
+  `docs/design-notes/sage.md`; its catalog is used only as local seed data.
+- The full illustration brief from the old brand record, when a surface needs it.
+- A license and attribution register, if one turns up; it belongs with the first
+  release.
+
+**Bring now, separately:** the load alarm (`cloudwork_systems/tools/load-alarm.sh`),
+cleaned of old names and fixed core counts.
+
+**Reference only:** `cloudwork_systems/true_convo/tca_brain` (its ScrollCraft copy
+is named in the capabilities note).
+
+**Stays private:** Jeff (`tools/jeff`, `docs/2026-09-28-jeff-proposal.md`) until
+its legal review.
+
+**Business material, for a separate private business repo (created later, owner
+decision October 14):** CloudworkConnect (capability-pack model, pitches,
+website), Louder Locally (website, landing page), the content pilots and video
+engine, and the Sage guide as a possible CwC offering. Never in Open Convo.
+
+**Leave behind:** `tools/agent-bridge` and `tools/glm-bridge` (the adapter plan
+replaces them); the old status checker, router, Shared Home and Studio; the
+steward, control-room and traffic-control tools; receipts, ideation,
+`STRATEGY.md`, consolidation plans and founding snapshots; Sage's catalog and
+receipts; the type-exploration boards and domain-routing decision; review and
+session records; build output, `output/`, `tmp/` and archives.
 
 ## Move Log
 
