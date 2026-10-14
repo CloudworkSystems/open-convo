@@ -194,6 +194,15 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
     }
+    /// Step 2, PR 3b: asks for a recovery key while the open Desk has none
+    /// confirmed, and offers a restore when its Keychain key is missing.
+    let recoveryRow = NSView()
+    let recoveryLabel = NSTextField(wrappingLabelWithString: "")
+    let recoveryButton = NSButton(title: DeskRecoveryWording.makeButton, target: nil, action: nil)
+    let restoreButton = NSButton(title: DeskRecoveryWording.restoreButton, target: nil, action: nil)
+    let recoveryPrompt: DeskRecoveryKeyPrompting
+    /// A recovery-key or restore dialog is running.
+    private(set) var recoveryFlowActive = false
     /// Called after the set-aside dictation changes, with how many are kept
     /// (for the app's pill and menu).
     public var onHeldDictationChange: (@MainActor (Int) -> Void)?
@@ -227,8 +236,9 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
 
     public init(session: DeskSession, verifier: DeskUnlockVerifier, prompt: DeskUnsavedWorkPrompting? = nil,
                 log: @escaping DeskSession.Log = { _, _ in }, paidUsage: DeskPaidUsageControlling? = nil,
-                statement: DeskPaidUsageStatementPrompting? = nil) {
+                statement: DeskPaidUsageStatementPrompting? = nil, recoveryPrompt: DeskRecoveryKeyPrompting? = nil) {
         self.session = session
+        self.recoveryPrompt = recoveryPrompt ?? SheetRecoveryKeyPrompt()
         self.verifier = verifier
         self.prompt = prompt ?? SheetUnsavedWorkPrompt()
         self.log = log
@@ -324,6 +334,87 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
     }
 
     /// Copies the oldest set-aside dictation; it stays until dismissed.
+    @objc func recoveryPressed(_ sender: Any?) {
+        Task { await runRecoveryKeyFlow() }
+    }
+
+    @objc func restorePressed(_ sender: Any?) {
+        Task { await runRestoreFlow() }
+    }
+
+    /// The recovery row and the restore button as of now.
+    func renderRecovery() {
+        let needs = session.needsRecoveryKey
+        recoveryRow.isHidden = !needs
+        if needs {
+            recoveryLabel.stringValue = session.store?.hasRecoveryCopy == true
+                ? DeskRecoveryWording.unconfirmedLine : DeskRecoveryWording.missingLine
+        }
+        recoveryButton.isEnabled = needs && !recoveryFlowActive
+        restoreButton.isHidden = !session.canRestoreWithRecoveryKey
+        restoreButton.isEnabled = !recoveryFlowActive
+    }
+
+    /// Make a key, show it once, then have two groups typed back. Cancel at
+    /// any point leaves it unconfirmed, so the row keeps asking.
+    func runRecoveryKeyFlow() async {
+        guard !recoveryFlowActive, let window, let made = session.makeRecoveryKey() else { return }
+        recoveryFlowActive = true
+        defer {
+            recoveryFlowActive = false
+            renderRecovery()
+        }
+        renderRecovery()
+        let text = made.key.displayText
+        let check = RecoveryKeyCheck(displayText: text)
+        var retry = false
+        showing: while true {
+            guard session.state == .open, await recoveryPrompt.show(text, durable: made.isDurable, in: window) else { return }
+            while true {
+                guard session.state == .open else { return }
+                let answer = await recoveryPrompt.askBack(check, retry: retry, in: window)
+                guard session.state == .open else { return }
+                switch answer {
+                case .typed(let first, let second):
+                    if check.matches(first, second) {
+                        if !session.confirmRecoveryKey() { session.post(notice: DeskRecoveryWording.confirmNotSaved) }
+                        return
+                    }
+                    retry = true
+                case .showAgain:
+                    continue showing
+                case .cancel:
+                    return
+                }
+            }
+        }
+    }
+
+    /// Ask for the key until it restores, the owner cancels, or it can't.
+    func runRestoreFlow() async {
+        guard !recoveryFlowActive, let window, session.canRestoreWithRecoveryKey else { return }
+        recoveryFlowActive = true
+        defer {
+            recoveryFlowActive = false
+            render()
+        }
+        renderRecovery()
+        var problem: String?
+        while let typed = await recoveryPrompt.askRestore(problem: problem, in: window) {
+            switch session.restore(typed: typed) {
+            case .restored: return
+            case .malformed: problem = DeskRecoveryWording.malformed
+            case .wrongKey: problem = DeskRecoveryWording.wrongKey
+            case .noRecoveryCopy:
+                session.post(notice: DeskRecoveryWording.noCopy)
+                return
+            case .failed:
+                session.post(notice: DeskRecoveryWording.failed)
+                return
+            }
+        }
+    }
+
     @objc func heldCopyPressed(_ sender: Any?) {
         guard session.state == .open, let oldest = session.heldDictation.first else { return }
         copyToClipboard(oldest.text)
@@ -525,7 +616,11 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
         unlockButton.action = #selector(unlockPressed(_:))
         unlockButton.bezelStyle = .rounded
         unlockButton.keyEquivalent = "\r"
-        let lockedStack = NSStackView(views: [lockedTitle, lockedMessage, unlockButton])
+        restoreButton.target = self
+        restoreButton.action = #selector(restorePressed(_:))
+        restoreButton.bezelStyle = .rounded
+        restoreButton.isHidden = true
+        let lockedStack = NSStackView(views: [lockedTitle, lockedMessage, unlockButton, restoreButton])
         lockedStack.orientation = .vertical
         lockedStack.alignment = .centerX
         lockedStack.spacing = 12
@@ -562,7 +657,21 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
         heldRow.wantsLayer = true
         heldRow.layer?.backgroundColor = NSColor.systemOrange.withAlphaComponent(0.18).cgColor
         heldRow.isHidden = true
-        rows += [heldRow, stoppedBanner, pageContainer]
+        recoveryLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        recoveryLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        recoveryButton.target = self
+        recoveryButton.action = #selector(recoveryPressed(_:))
+        recoveryButton.bezelStyle = .rounded
+        recoveryButton.setContentHuggingPriority(.required, for: .horizontal)
+        let recoveryStack = NSStackView(views: [recoveryLabel, recoveryButton])
+        recoveryStack.orientation = .horizontal
+        recoveryStack.alignment = .centerY
+        recoveryStack.edgeInsets = NSEdgeInsets(top: 4, left: 12, bottom: 4, right: 12)
+        pin(recoveryStack, in: recoveryRow)
+        recoveryRow.wantsLayer = true
+        recoveryRow.layer?.backgroundColor = NSColor.systemBlue.withAlphaComponent(0.15).cgColor
+        recoveryRow.isHidden = true
+        rows += [recoveryRow, heldRow, stoppedBanner, pageContainer]
         let column = NSStackView(views: rows)
         column.orientation = .vertical
         column.alignment = .leading
@@ -649,6 +758,11 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
             statement?.dismiss()
             paidUsage?.abandonPendingConfirmation()
         }
+        if let shownState, shownState != state {
+            // A lock, close or other change ends any recovery dialog at once,
+            // so the key never stays on screen over a locked Desk.
+            recoveryPrompt.dismiss()
+        }
         shownState = state
         stripLabel.stringValue = "Invented data only · not private · key: \(session.keyCustody ?? "not opened yet")"
         noticeLabel.stringValue = session.displayedNotice ?? ""
@@ -685,6 +799,7 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
         }
         renderPaidUsage()
         renderHeld()
+        renderRecovery()
         onStateChange?()
     }
 
