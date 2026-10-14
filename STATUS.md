@@ -24,7 +24,8 @@ Until PR 5 passes, the installed Desk is for invented data only.
 
 - **Step 1: One app (Desk, dictation, HUD).** Built: the pill and the Desk
   switch with the pill's Desk button or a double tap of Right Option. The
-  owner's install trial is not yet recorded here.
+  owner recalls trying it in True Convo Test (noted October 14). It has not
+  replaced the real True Convo app; that waits for step 2's PR 5.
 - **Brought over from True Convo:** clarity library, Desk, Mac app,
   Desk-to-Mac specs, Ember brand, load alarm, four module concept notes.
 - **Design notes written:** agent profiles and adapters, Convo Engine, Site
