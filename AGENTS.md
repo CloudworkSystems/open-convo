@@ -54,6 +54,18 @@ reads from and writes to `CloudworkSystems/open-convo`.
   Desk refreshes itself when files change, so the inline browser shows the latest
   version. A normal browser is only for a second look.
 
+## Outside Builders (Owner Decision, October 15, 2026)
+
+Codex or GrokBot may build a module only when the module stands on its own
+(touches no app, storage or memory code) and has a merged plan in
+`docs/plans/` that lists the builder's rules. One outside module at a time.
+The builder works on a branch named after the session and opens a pull
+request; it never pushes to `main`. A different agent reviews it under the
+code path below (no agent reviews its own work), the planning session checks
+it against the plan, and the owner merges. The Limits below apply to outside
+builders in full; where a builder can reach the owner's Mac, the plan says
+which commands, if any, it may run there.
+
 ## Limits
 
 - Write every file as if this repo were public: no secrets, keys, private records,

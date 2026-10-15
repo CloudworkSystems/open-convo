@@ -42,8 +42,17 @@ review): [docs/plans/step-3-local-conversation.md](docs/plans/step-3-local-conve
 4. Clarity tools in the conversation ("Wait—what?" on a local model).
 5. Chosen memory in separate spaces.
 
+## Beside The Main Build
+
+**Site Engine, standalone first slice**, built by an outside builder (GrokBot
+builds, Codex reviews). Plan:
+[docs/plans/site-engine-standalone.md](docs/plans/site-engine-standalone.md).
+Not started.
+
 ## Recent Owner Decisions
 
+- **Oct 15:** Outside builders may build standalone modules (AGENTS.md).
+  First: Site Engine's standalone slice, GrokBot builds and Codex reviews.
 - **Oct 15:** Start step 3 now; the owner runs the step 2 trial when he's home.
 - **Oct 14:** Ember is the Desk's look. Business material stays out of this repo.
 - **Oct 14:** Dictation protection: words first, app-only reading, one recovery
