@@ -19,6 +19,12 @@ export interface ConversationRun {
   outputChunks: string[];
   lastSequence: number;
   phase: ConversationRunPhase;
+  /**
+   * Local-model runs only (contract section 20.3): the earlier completed runs of
+   * this session sent as context, oldest first. Present exactly when
+   * `participant.id` is `ollama-local`, possibly empty.
+   */
+  contextRunIds?: string[];
   createdAt: string;
   updatedAt: string;
   /** Native reason evidence belongs only to a stopped/failed phase. */

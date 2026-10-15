@@ -7,6 +7,10 @@ fallback. The main risk is a bill from the plan's paid extra usage
 ("overflow"), so the participant stays unavailable until that is confirmed
 off (section 17) and section 16's checks pass.
 
+Revision 4 (October 15, proposed) adds local models through Ollama in
+section 20; it changes nothing for the Claude Code entry or the existing
+vectors.
+
 Status: Claude's proposed wire, revision 2 (October 10). It applies Codex's
 review of a4165ef: four corrections and its answers to the twelve decisions
 (section 18). Revision 3 (October 10, later) rewrites section 17 for
@@ -2859,3 +2863,137 @@ connection id, through a test-only `issueConnection(adopting:)`). Settling
 after each action lets a lock's stop sequence end while it is locked, before
 the unlock that follows; no earlier case has more than one action. It runs
 all 107, adding #93 and #94, both passing; any other action is refused.
+
+## 20. Revision 4: local models through Ollama (proposed, October 15)
+
+In plain words: the same page wire also runs the owner's local chat models
+through Ollama on this Mac. A local run sends nothing off the Mac, has no
+paid path and no child process, and continues the conversation by sending
+earlier turns as context. Scope and order:
+[docs/plans/step-3-local-conversation.md](plans/step-3-local-conversation.md).
+Everything in sections 1-19 stays in force for the Claude Code entry; this
+section only adds. A host without a local route is revision 3 exactly, and
+every existing vector stays byte-identical.
+
+### 20.1 The local route
+
+- A host may have one local route, `ollama-local`. Native reaches it only at
+  the fixed base `http://127.0.0.1:11434` (or `http://[::1]:11434`). It reads
+  no environment variable (including `OLLAMA_HOST`), default, argument, file
+  or page value that could change the address.
+- **Every HTTP redirect is refused** (the URL session's redirect hook
+  answers no redirect), whatever its target. A redirected availability read
+  answers the route `catalog-unreadable`; a redirected chat request ends the
+  run `failed` `process-error`. Fake-server tests cover both.
+- Native uses `/api/tags` to list models and `/api/chat` (streaming) to run
+  one. It sends no other request.
+- Only chat models are listed: a model whose `capabilities` include
+  `completion` (embedding-only models are left out entirely). A chat model
+  counts as local only when Ollama lists it with a 64-hex `digest`, without
+  `remote_host` or `remote_model`, and its name does not end in `:cloud`.
+  Every other chat model is listed as never available (20.2). Checked
+  against Ollama 0.34.0 on October 15, which marks its cloud models with
+  `remote_host` (for example `https://ollama.com:443`).
+
+### 20.2 Availability with a local route
+
+The reply keeps `participants` and gains one key, `routes`, only on a host
+with a local route:
+
+- `participants`: the Claude Code entry first, exactly as section 5, then one
+  entry per chat model Ollama lists, sorted by name (code-point order), at most 64
+  (more are left out). A local entry is exactly `{id, label, model,
+  executionHost, available, reason}`: `id` `ollama-local`, `label` the model
+  name, `model` the name, `@`, and Ollama's full 64-hex digest
+  (`qwen3.5:9b@6488c96f...`, 64 hex in full), `executionHost` `this-mac`, each at most
+  256 bytes. `reason` is `null` exactly when available, else
+  `model-not-local`. A local entry never has `confirmation`.
+- `routes`: exactly one item, `{route, state, reason}`: `route`
+  `ollama-local`; `state` `ready` with `reason` `null`, or `unavailable` with
+  `reason` `ollama-not-running` (no answer on the fixed base),
+  `catalog-unreadable` (an answer that isn't a valid model list, including a
+  redirect) or `host-not-loopback` (the fixed base resolved off loopback). An
+  unavailable route lists no local entries.
+- The page derives "model missing" (its saved choice's name is absent from a
+  ready route) and "model changed" (the name is present with another digest)
+  itself; native never invents an entry for a model it can't list.
+
+### 20.3 Context: earlier turns of the same session
+
+- A prepared run whose participant is a local entry has exactly section 6's
+  twelve keys plus `contextRunIds`: an array, possibly empty, of at most 256
+  distinct run ids, in the order the turns happened. A Claude Code run never
+  has it, so section 6 step 3 is unchanged for it.
+- In the preparing commit (section 6, after step 5), native resolves each id
+  in the same request's `record`: the run must exist, belong to the same
+  `sessionId`, have phase `completed`, and come before this run in the
+  record's `conversationRuns` order; else `run-mismatch`. Each resolved run
+  contributes two turns, `{role: "user", text: join(inputChunks)}` then
+  `{role: "assistant", text: join(outputChunks)}`.
+- **One input limit.** The resolved turns' text bytes plus the new run's
+  `inputChunks` bytes are at most 262,144 (section 6 step 6's bound, measured
+  on resolved text, not ids); else `text-too-large`. The page counts the
+  same way before preparing and leaves out the oldest whole runs until it
+  fits; it never cuts a turn.
+- **Bound by hash, never stored as text.** The runs entry (section 15)
+  stores `contextRunIds`, `contextBytes` and `contextHash`: SHA-256 of the
+  canonical JSON array of the resolved turns. No context text is stored in
+  the runs list, which keeps section 15's rule that it holds no prompt or
+  reply text, and leaves nothing to compact later.
+- At start (section 7, after step 9), native resolves the same ids again from
+  the committed record and recomputes the hash. A difference, a missing run
+  or a changed phase is `run-mismatch`; nothing is sent. Native sends exactly
+  the turns it just hashed, then the new message.
+
+### 20.4 Start, events and stop for a local run
+
+- Section 7 applies unchanged up to and including step 14: the start record
+  is written by compare-and-set **before** any HTTP request; an undetermined
+  write answers `unknown` and sends nothing; a lost reply is resolved with
+  `participant.status`, never by sending again. Ollama has no request-level
+  idempotency, so nothing in native or the page resends on its own.
+- Step 10 for a local run: `participant-changed` when no local entry in a
+  ready route has the run's exact `model` (name and digest). Step 13:
+  `participant-unavailable` when the route is not ready or the entry is not
+  available. Section 17's confirmation and first-trial input bound do not
+  apply to local runs.
+- Step 15 for a local run issues one streaming `/api/chat` request
+  (`stream: true`, `think: false`, the turns from 20.3 then the new message)
+  in place of a spawn. `started` follows the response's HTTP 200; `text`
+  events carry the streamed content under section 8's rules; `completed`
+  follows Ollama's `done: true`. Any other status, a malformed line, a
+  redirect or a dropped connection is `failed` `process-error`. Section 8's
+  timeouts apply (no first byte 30 s, no output 120 s, total 15 min).
+  `paid-overflow` never occurs.
+- **No process group.** For a local run the "group" is its HTTP task:
+  cleared means the task finished or was cancelled and native accepts no more
+  bytes from it. Stop cancels the task; Stop's reply is `exited` with
+  `groupCleared:true`; `cleanup-pending` never occurs. `start.cliVersion` is
+  `ollama-local`.
+- **Lifecycle (section 14).** The task runs under the same launch-scoped
+  coordinator, lifecycle epoch and push gate as a process run. Lock, Desk
+  close and quit cancel it in place of SIGTERM; retained text is dropped on
+  lock and close exactly as section 14; terminals are held while locked and
+  written at unlock; quit stays inside the 17 s overall bound. No text
+  reaches a locked document or a replacement generation.
+- **After a crash.** A started local run with no terminal reads as section
+  14's crash row (`unknown` `exit-unrecorded`); the page labels its partial
+  reply as cut off. Only the owner's explicit Retry makes a new run with new
+  ids; the old one is never re-requested.
+
+### 20.5 Storage, reasons and vectors
+
+- Runs entries for local runs add exactly `contextRunIds`, `contextBytes`
+  (0-262,144) and `contextHash` (64 lowercase hex); Claude Code entries never
+  have them. Load invariants: the three appear together, only with
+  `participant.id` `ollama-local`.
+- New availability reasons: `model-not-local` (entry) and
+  `ollama-not-running`, `catalog-unreadable`, `host-not-loopback` (route).
+  No new refusal reasons: the local route reuses `run-mismatch`,
+  `participant-changed`, `participant-unavailable` and `text-too-large`.
+- Vectors live in a separate file, `native-participant-local-v1.json`, beside
+  section 19's file and in its format, plus seed keys `localRoute` (`{state,
+  reason, models}`, the fake Ollama's catalog) and fake-server `script` steps
+  (`http-200`, `chunk`, `done`, `http-error`, `redirect`, `drop`). The page
+  codec runs its shape cases now; the Swift harness runs all of them with the
+  host change (step 3 PR 3).

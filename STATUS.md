@@ -22,8 +22,16 @@ plan is in [PLAN.md](PLAN.md).
 Until the owner's trial passes, the installed Desk is for invented data only.
 
 **Step 3: One real conversation, local first.** Started October 15 with
-invented chats only, while the step 2 trial is pending. Scope (proposal, in
-review): [docs/plans/step-3-local-conversation.md](docs/plans/step-3-local-conversation.md).
+invented chats only, while the step 2 trial is pending. Scope:
+[docs/plans/step-3-local-conversation.md](docs/plans/step-3-local-conversation.md).
+
+| Part | State |
+| --- | --- |
+| PR 1: Scope | Merged (#37) |
+| PR 2: Contract revision 4 and the page codec | In review |
+| PR 3: Local route in the Mac host | Not started |
+| PR 4: Desk wiring | Not started |
+| PR 5: Proof and owner trial | Not started |
 
 ## Done
 

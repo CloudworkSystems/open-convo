@@ -16,6 +16,17 @@ export interface NativeParticipantAvailability extends Readonly<ParticipantIdent
   readonly reason: NativeParticipantAvailabilityReason | null;
   readonly confirmation?: NativeParticipantConfirmation;
 }
+/** Contract section 20.2: one local chat model; `model` is its name, `@` and its 64-hex digest. */
+export interface NativeLocalParticipantAvailability extends Readonly<ParticipantIdentity> {
+  readonly available: boolean;
+  readonly reason: 'model-not-local' | null;
+}
+export type NativeParticipantRouteReason = 'ollama-not-running' | 'catalog-unreadable' | 'host-not-loopback';
+export interface NativeParticipantRoute {
+  readonly route: 'ollama-local';
+  readonly state: 'ready' | 'unavailable';
+  readonly reason: NativeParticipantRouteReason | null;
+}
 export interface ParticipantRunClaim {
   readonly runId: string; readonly sessionId: string; readonly userMessageId: string; readonly assistantMessageId: string;
   readonly participantId: string; readonly createdAt: string;
@@ -36,7 +47,11 @@ export interface NativeParticipantLost {
 }
 export type NativeParticipantResult =
   | { readonly operation: Exclude<NativeParticipantOperation, 'participant.status'>; readonly outcome: 'unknown' }
-  | { readonly operation: 'participant.availability'; readonly outcome: 'ok'; readonly participants: readonly NativeParticipantAvailability[] }
+  | { readonly operation: 'participant.availability'; readonly outcome: 'ok';
+      /** The Claude Code entry first (section 5), then local chat models (section 20.2). */
+      readonly participants: readonly [NativeParticipantAvailability, ...NativeLocalParticipantAvailability[]];
+      /** Present only on a host with a local route (contract section 20.2). */
+      readonly routes?: readonly NativeParticipantRoute[] }
   | { readonly operation: 'participant.start'; readonly outcome: 'ok'; readonly runId: string }
   | { readonly operation: 'participant.stop'; readonly outcome: 'ok'; readonly runId: string;
       readonly state: 'exited' | 'cleanup-pending' | 'not-owned'; readonly terminal: NativeParticipantTerminalEvent | null;
@@ -115,6 +130,26 @@ function availability(value: unknown): value is NativeParticipantAvailability {
   // Earlier checks may fail despite an active confirmation, but its own check cannot.
   return value.confirmation.state === 'active' ? value.reason !== 'overflow-unverified' : !value.available;
 }
+const localModel = /^(.+)@([0-9a-f]{64})$/s;
+function localAvailability(value: unknown): value is NativeLocalParticipantAvailability {
+  if (!object(value) || !exact(value, ['id', 'label', 'model', 'executionHost', 'available', 'reason'])
+    || value.id !== 'ollama-local' || value.executionHost !== 'this-mac'
+    || !pin({ id: value.id, label: value.label, model: value.model, executionHost: value.executionHost })) return false;
+  const match = localModel.exec(value.model as string);
+  return match !== null && match[1] === value.label && typeof value.available === 'boolean'
+    && (value.available ? value.reason === null : value.reason === 'model-not-local');
+}
+function route(value: unknown): value is NativeParticipantRoute {
+  return object(value) && exact(value, ['route', 'state', 'reason']) && value.route === 'ollama-local'
+    && (value.state === 'ready' ? value.reason === null
+      : value.state === 'unavailable' && ['ollama-not-running', 'catalog-unreadable', 'host-not-loopback'].includes(value.reason as string));
+}
+/** Code-point order, not UTF-16 unit order (section 20.2). */
+function codePointBefore(a: string, b: string): boolean {
+  const x = Array.from(a, c => c.codePointAt(0)!), y = Array.from(b, c => c.codePointAt(0)!);
+  for (let i = 0; i < Math.min(x.length, y.length); i++) if (x[i] !== y[i]) return x[i] < y[i];
+  return x.length < y.length;
+}
 function event(value: unknown, target?: NativeParticipantMetadata): value is NativeParticipantEvent {
   if (!object(value) || !identities(value, false) || !integer(value.sequence) || value.sequence < 1 || !timestamp(value.at)
     || target?.runId !== undefined && value.runId !== target.runId || target?.sessionId !== undefined && value.sessionId !== target.sessionId) return false;
@@ -134,9 +169,20 @@ const baseReply = ['v', 'requestId', 'connectionId', 'generation', 'operation', 
 /** Called after envelope/identity correlation by NativeProofCodec. */
 export function decodeNativeParticipantOk(reply: Obj, expected: NativeParticipantMetadata): NativeParticipantResult | undefined {
   if (reply.operation === 'participant.availability') {
-    if (!exact(reply, [...baseReply, 'participants']) || !Array.isArray(reply.participants)
-      || reply.participants.length !== 1 || !reply.participants.every(availability)) return undefined;
-    return { operation: reply.operation, outcome: 'ok', participants: reply.participants };
+    if (!Object.hasOwn(reply, 'routes')) {
+      if (!exact(reply, [...baseReply, 'participants']) || !Array.isArray(reply.participants)
+        || reply.participants.length !== 1 || !reply.participants.every(availability)) return undefined;
+      return { operation: reply.operation, outcome: 'ok', participants: reply.participants as [NativeParticipantAvailability] };
+    }
+    // Section 20.2: the Claude Code entry first, then local chat models by name.
+    if (!exact(reply, [...baseReply, 'participants', 'routes']) || !Array.isArray(reply.participants)
+      || !Array.isArray(reply.routes) || reply.routes.length !== 1 || !route(reply.routes[0])
+      || reply.participants.length < 1 || reply.participants.length > 65 || !availability(reply.participants[0])) return undefined;
+    const local = reply.participants.slice(1);
+    if (!local.every(localAvailability) || reply.routes[0].state === 'unavailable' && local.length > 0
+      || local.some((entry, i) => i > 0 && !codePointBefore(local[i - 1].label, entry.label))) return undefined;
+    return { operation: reply.operation, outcome: 'ok',
+      participants: reply.participants as [NativeParticipantAvailability, ...NativeLocalParticipantAvailability[]], routes: reply.routes };
   }
   if (reply.runId !== expected.runId) return undefined;
   if (reply.operation === 'participant.start') return exact(reply, [...baseReply, 'runId'])
