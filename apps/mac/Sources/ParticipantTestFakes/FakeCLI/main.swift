@@ -169,7 +169,7 @@ func runCheck(_ check: PredictedCheck, folder: String, records: String, descript
         // Spawned without a new group and with this process's stdio, so the
         // child is a member of the check's group and holds its pipes.
         var pid: pid_t = 0
-        let argv: [UnsafeMutablePointer<CChar>?] = [CommandLine.arguments[0], "--fake-child", "ignore-term", records]
+        let argv: [UnsafeMutablePointer<CChar>?] = ([CommandLine.arguments[0], "--fake-child", "ignore-term", records] as [String])
             .map { strdup($0) } + [nil]
         _ = posix_spawn(&pid, CommandLine.arguments[0], nil, nil, argv, environ)
         argv.forEach { free($0) }
@@ -179,7 +179,7 @@ func runCheck(_ check: PredictedCheck, folder: String, records: String, descript
         // Like the child above: in the check's group, holding its stderr.
         for _ in 0..<writers {
             var pid: pid_t = 0
-            let argv: [UnsafeMutablePointer<CChar>?] = [CommandLine.arguments[0], "--fake-child", "stderr-flood", records]
+            let argv: [UnsafeMutablePointer<CChar>?] = ([CommandLine.arguments[0], "--fake-child", "stderr-flood", records] as [String])
                 .map { strdup($0) } + [nil]
             _ = posix_spawn(&pid, CommandLine.arguments[0], nil, nil, argv, environ)
             argv.forEach { free($0) }
@@ -276,7 +276,7 @@ if scenario["sigterm"] as? String == "ignore" { signal(SIGTERM, SIG_IGN) }
 if let childMode = scenario["child"] as? String {
     // Spawned without a new group, so the child is a member of ours.
     var pid: pid_t = 0
-    let argv: [UnsafeMutablePointer<CChar>?] = [arguments[0], "--fake-child", childMode, records].map { strdup($0) } + [nil]
+    let argv: [UnsafeMutablePointer<CChar>?] = ([arguments[0], "--fake-child", childMode, records] as [String]).map { strdup($0) } + [nil]
     _ = posix_spawn(&pid, arguments[0], nil, nil, argv, environ)
     argv.forEach { free($0) }
     // Wait for its record, so a test that finds `cli.json` also finds the child.
