@@ -1719,6 +1719,59 @@
           }
         ]
       }
+    },
+    {
+      "name": "a :cloud model marked available",
+      "basedOn": "local route ready: Claude entry, then chat models by name (cloud model never available)",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-cloud:cloud",
+            "model": "invented-cloud:cloud@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-large:9b",
+            "model": "invented-local-large:9b@b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": null
+          }
+        ]
+      }
     }
   ],
   "runs": {

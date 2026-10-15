@@ -136,8 +136,9 @@ function localAvailability(value: unknown): value is NativeLocalParticipantAvail
     || value.id !== 'ollama-local' || value.executionHost !== 'this-mac'
     || !pin({ id: value.id, label: value.label, model: value.model, executionHost: value.executionHost })) return false;
   const match = localModel.exec(value.model as string);
+  // Section 20.2: a `:cloud` model is never local, whatever the host says.
   return match !== null && match[1] === value.label && typeof value.available === 'boolean'
-    && (value.available ? value.reason === null : value.reason === 'model-not-local');
+    && (value.available ? value.reason === null && !(value.label as string).endsWith(':cloud') : value.reason === 'model-not-local');
 }
 function route(value: unknown): value is NativeParticipantRoute {
   return object(value) && exact(value, ['route', 'state', 'reason']) && value.route === 'ollama-local'

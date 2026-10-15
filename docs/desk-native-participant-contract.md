@@ -2887,11 +2887,12 @@ every existing vector stays byte-identical.
   run `failed` `process-error`. Fake-server tests cover both.
 - Native uses `/api/tags` to list models and `/api/chat` (streaming) to run
   one. It sends no other request.
-- Only chat models are listed: a model whose `capabilities` include
-  `completion` (embedding-only models are left out entirely). A chat model
-  counts as local only when Ollama lists it with a 64-hex `digest`, without
-  `remote_host` or `remote_model`, and its name does not end in `:cloud`.
-  Every other chat model is listed as never available (20.2). Checked
+- Only chat models with a usable identity are listed: a model whose
+  `capabilities` include `completion` and whose `digest` is 64 lowercase hex.
+  Embedding-only models and models without such a digest are left out
+  entirely. A listed model counts as local only when Ollama shows it without
+  `remote_host` or `remote_model` and its name does not end in `:cloud`;
+  every other listed model is never available (20.2). Checked
   against Ollama 0.34.0 on October 15, which marks its cloud models with
   `remote_host` (for example `https://ollama.com:443`).
 
@@ -2907,7 +2908,9 @@ with a local route:
   name, `model` the name, `@`, and Ollama's full 64-hex digest
   (`qwen3.5:9b@6488c96f...`, 64 hex in full), `executionHost` `this-mac`, each at most
   256 bytes. `reason` is `null` exactly when available, else
-  `model-not-local`. A local entry never has `confirmation`.
+  `model-not-local`; a name ending in `:cloud` is always unavailable with
+  `model-not-local`, and the page refuses a reply that says otherwise. A local
+  entry never has `confirmation`.
 - `routes`: exactly one item, `{route, state, reason}`: `route`
   `ollama-local`; `state` `ready` with `reason` `null`, or `unavailable` with
   `reason` `ollama-not-running` (no answer on the fixed base),
@@ -2924,6 +2927,12 @@ with a local route:
   twelve keys plus `contextRunIds`: an array, possibly empty, of at most 256
   distinct run ids, in the order the turns happened. A Claude Code run never
   has it, so section 6 step 3 is unchanged for it.
+- **Section 6 step 5 for a local run.** Instead of native's Claude Code pin,
+  `run.participant` must equal (all four fields, exact strings) an entry of
+  native's current local catalog that is available in a ready route, and
+  `participantId` must be `ollama-local`; else `run-mismatch`. Native reads
+  the catalog afresh for this check (no reused answer), with section 20.1's
+  rules. A Claude Code run keeps step 5 exactly.
 - In the preparing commit (section 6, after step 5), native resolves each id
   in the same request's `record`: the run must exist, belong to the same
   `sessionId`, have phase `completed`, and come before this run in the

@@ -44,7 +44,7 @@ test('the Claude Code entry stays first and typed as section 5 with a local rout
 });
 
 test('the page codec refuses every malformed local-route reply', () => {
-  assert.ok(fixture.invalidReplies.length >= 18);
+  assert.ok(fixture.invalidReplies.length >= 19);
   for (const entry of fixture.invalidReplies) {
     const base = fixture.cases.find(c => c.name === entry.basedOn)!;
     assert.equal(codecFor(base.request).decode(JSON.stringify(entry.reply)), undefined, entry.name);
