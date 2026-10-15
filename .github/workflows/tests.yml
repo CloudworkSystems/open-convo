@@ -110,6 +110,25 @@ jobs:
         env:
           ALLOW_MISSING_BASELINE: '1'
 
+  # The Mac test suites load bundled copies of the Desk's contract fixtures.
+  # The copies must stay byte-identical to the Desk's originals (cheap, Linux).
+  fixtures:
+    needs: changes
+    if: needs.changes.outputs.desk == 'true' || needs.changes.outputs.mac == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: |
+          status=0
+          check() { if cmp -s "$1" "$2"; then echo "same: $2"; else echo "DIFFERENT: $2 must be an exact copy of $1"; status=1; fi; }
+          check apps/desk/tests/fixtures/native-host-v1.json apps/mac/Tests/DeskHostTests/Fixtures/native-host-v1.json
+          check apps/desk/tests/fixtures/native-host-v1.json apps/mac/Tests/DeskHostWebKitTests/Fixtures/native-host-v1.json
+          check apps/desk/tests/fixtures/native-participant-v1.json apps/mac/Tests/ParticipantProcessTests/Fixtures/native-participant-v1.json
+          exit $status
+
   gate:
     needs: changes
     if: needs.changes.outputs.gate == 'true'
@@ -127,7 +146,7 @@ jobs:
   # The one check branch protection requires. Passes only if every part that
   # ran passed; parts with no changes are skipped.
   tests:
-    needs: [changes, clarity, desk, mac, gate]
+    needs: [changes, clarity, desk, mac, fixtures, gate]
     if: always()
     runs-on: ubuntu-latest
     steps:
