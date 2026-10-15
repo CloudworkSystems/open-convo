@@ -51,33 +51,49 @@ These change `docs/desk-native-participant-contract.md`, the Swift and page
 codecs and the vectors file together. Page and host already ship as one build
 (section 2), so the pinned page codec moves with them.
 
-1. **A catalog, not one pin.** `participant.availability` returns a list:
-   the Claude Code entry (unchanged) plus one entry per installed local chat
-   model. Each entry keeps today's four persisted fields: `id`
+1. **A catalog, not one pin.** `participant.availability` returns a list of
+   entries: the Claude Code entry (unchanged) plus one entry per installed
+   local chat model. Each entry keeps today's four persisted fields: `id`
    (`ollama-local` for every local model), `label`, `model` and
    `executionHost` (`this-mac`). `model` is the Ollama name plus its digest
    (`qwen3.5:9b@6488c96fa5fa`), so a re-downloaded or changed model is a
    different identity. The run's persisted `participant` stays four fields,
-   compared as exact strings on replay.
-2. **Prepared-run check (section 6, step 5)** compares `run.participant` with
+   compared as exact strings on replay. `:cloud` and remote models appear as
+   entries that are never available (`model-not-local`), so the Desk can say
+   why they can't be picked.
+2. **Route-level state.** Some failures have no model entry to hang on, so
+   the reply also carries `routes`: one item per route, for example
+   `{route: "ollama-local", state, reason}`, with `reason` `null` when ready,
+   else `ollama-not-running` or `host-not-loopback`. A model the owner chose
+   that is absent from a ready route's catalog is shown as missing; one whose
+   name is present with a new digest is shown as changed. The Desk works
+   these out by comparing its saved choice with the catalog.
+3. **Prepared-run check (section 6, step 5)** compares `run.participant` with
    *an entry* of native's current catalog instead of the one pin. **Start
    (section 7, step 10)** answers `participant-changed` when that entry is
    gone or its digest changed; native never runs a prepared run under another
    model.
-3. **Conversation context in the first wire.** A prepared run gains
+4. **Conversation context in the first wire.** A prepared run gains
    `contextMessageIds`: the ordered ids of earlier completed messages in the
-   same session that are sent as context. Native reads their role and text
-   from the committed record in the same commit, so the text can't differ
-   from what was saved. A missing, uncompleted or out-of-session id is
-   `run-mismatch`. Context counts toward the run's size limit (section 6,
-   step 7). When the history is too large, the page leaves out the oldest
-   whole turns and the composer says "Earlier turns not sent"; it never cuts
-   a turn in half. Context applies from the first host PR, so every second
-   turn continues the conversation, not just reopened ones.
-4. **Local-only entries.** Availability reasons gain `ollama-not-running`,
-   `model-missing`, `model-not-local` (a `:cloud` or remote model) and
-   `host-not-loopback`. Section 17's paid-usage confirmation and the
-   first-trial input bound apply to the Claude Code entry only.
+   same session to send as context. In the preparing commit, native reads
+   their role and text from the committed record (a missing, uncompleted or
+   out-of-session id is `run-mismatch`) and saves that resolved sequence as
+   an **immutable snapshot** in its own prepared entry, with its byte count
+   and SHA-256. Start sends exactly the snapshot, so a later edit to an
+   earlier message can't change what goes out; status and the proof can
+   check the hash.
+5. **One input limit over everything sent.** The resolved context's roles
+   and text plus the new message's `inputChunks` count together against the
+   existing 262,144-byte input bound (section 6, step 6), measured on the
+   resolved text, not the ids. Over the bound is `text-too-large`. The page
+   does the same count from its own record before preparing and leaves out
+   the oldest whole turns until it fits, so the refusal only catches a page
+   that got it wrong. The composer says "Earlier turns not sent" when any
+   were left out; a turn is never cut in half. Context applies from the
+   first host PR, so every second turn continues the conversation.
+6. **Local-only entries.** Model-level reasons are `model-not-local`;
+   route-level reasons are above. Section 17's paid-usage confirmation and
+   the first-trial input bound apply to the Claude Code entry only.
 
 ## Rules For The Local Route
 
@@ -111,7 +127,8 @@ codecs and the vectors file together. Page and host already ship as one build
 
 1. **Scope** (this document).
 2. **Contract revision 4, codecs and vectors.** The changes above, with new
-   vectors for catalog entries, context ids, the new reasons and
+   vectors for catalog entries, route states, context ids and their
+   snapshot, the shared input bound, the new reasons and
    `participant-changed` on a changed digest. No host behavior yet.
 3. **Local route in the Mac host.** Catalog from Ollama; start with receipt
    before request; streaming events; Stop; status after a lost reply;
