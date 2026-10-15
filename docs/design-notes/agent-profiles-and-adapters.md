@@ -99,7 +99,8 @@ keys live in Keychain, never in files or logs.
 
 Added October 14, 2026 by the planning session, at the owner's request.
 Scion is Google's experimental, open-source system for running teams of
-agents (Apache-2.0, pre-1.0). Its templates match our agent profiles, its
+agents (Apache-2.0, pre-1.0). It is unrelated to the "Scion" described in
+the video covered in the next section. Its templates match our agent profiles, its
 harnesses match Pi and the vendor harnesses, and its hub matches our
 dispatcher. **Decision: borrow three ideas for step 6; do not adopt Scion as a
 dependency now.** It is still changing quickly, and its container-per-agent
@@ -123,6 +124,47 @@ The three ideas, as requirements for step 6:
    agent: its profile, model, what it is working on, its space, and a Stop
    button. This is the design for "Claude and Codex visible in one session."
 
+## Lessons From A Video About Anthropic's Internal Scion (Unverified)
+
+Added October 15, 2026 by the planning session. The owner's original question
+was about a YouTube video, "Anthropic Just Ditched Git (Claude Broke It)"
+(https://www.youtube.com/watch?v=6Ozh4BKmtvs). **Everything in this section is
+the video's account. No post from Anthropic has been found, so none of it is
+confirmed.**
+
+What the video claims: Claude writes so much code that Git could not keep up
+with Anthropic's one giant repository (about 30,000 changes merged a day and
+millions of code downloads a day). Seven engineers built a replacement called
+Scion in five months: a server does the heavy work, each machine downloads only
+the files it opens, and setting up a fresh agent workspace went from 7 minutes
+to 5 seconds. It is not meant for normal teams and is not being released.
+
+We need none of that tool. The five lessons are what is worth keeping:
+
+1. **Time the whole loop, not just the typing.** Here the slow part is waiting
+   on review rounds, not writing code. *Applies now.*
+2. **The owner's main job is saying "no."** Read each change for its intent and
+   ask two questions: does it break a rule of this system, and does it fix a
+   problem the owner actually has? *Applies now;* proposed as a review rule in
+   AGENTS.md, pending the owner's approval.
+3. **Spend saved time on tests.** Step 2's kill-and-reopen proof already does
+   this. Good tests are what make later rewrites safe. *Applies now.*
+4. **"Superfans."** Give each part of the system its own agent whose only job
+   is watching that part's logs and flagging anything strange. *Planned for
+   step 6, and fits the Visibility Agent's "ongoing watch."*
+5. **Question rules that exist only because people are slow.** For example, a
+   full Codex review round on every docs pull request may be more process than
+   a plan doc needs. *An idea only; the review rules in AGENTS.md are
+   unchanged.*
+
+**Superfans as a step 6 idea.** One watcher agent per part of the system (for
+example storage, memory, the Desk, the dispatcher), each reading only its own
+part's logs. A watcher only reports: it shows findings to the owner on the
+Desk and never fixes, restarts or changes anything without the owner's
+approval, in line with the approval rules in AGENTS.md. Watchers follow the
+same memory space and privacy rules as every other agent and send nothing to a
+cloud model the owner has not approved.
+
 ## Before Shipping to Other People
 
 - Anthropic: running Claude Code inside a product requires its Commercial Terms,
@@ -139,3 +181,6 @@ The three ideas, as requirements for step 6:
 - Cursor CLI: https://cursor.com/en/cli
 - Codex CLI with local models: https://codex.danielvaughan.com/2026/05/03/codex-cli-gpt-oss-local-models-ollama-lm-studio-mlx-setup-guide/
 - Scion (GoogleCloudPlatform/scion) README, checked October 14, 2026: https://github.com/GoogleCloudPlatform/scion
+- Video "Anthropic Just Ditched Git (Claude Broke It)", summarized from its
+  transcript October 15, 2026 (unverified, not an Anthropic source):
+  https://www.youtube.com/watch?v=6Ozh4BKmtvs
