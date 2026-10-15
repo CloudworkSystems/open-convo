@@ -3921,8 +3921,27 @@ enum TextInjector {
         let statusText: String
     }
 
-    static var targetApplication: NSRunningApplication?
+    static var targetApplication: NSRunningApplication? {
+        didSet {
+            // A different app is now the target: any paste or Return still
+            // waiting for the old one must not land here.
+            if PasteTargetGeneration.targetChanged(
+                oldProcessIdentifier: oldValue?.processIdentifier,
+                newProcessIdentifier: targetApplication?.processIdentifier
+            ) {
+                targetGeneration.advance()
+            }
+        }
+    }
     private static var targetElement: AXUIElement?
+    /// Moves on with every new target (see PasteTargetGeneration). Delayed
+    /// pastes and Returns carry the value they were requested under.
+    private static var targetGeneration = PasteTargetGeneration()
+
+    /// The token a delayed paste or Return carries.
+    static var currentTargetToken: Int {
+        targetGeneration.value
+    }
     private static var livePreviewElement: AXUIElement?
     private static var livePreviewStartRange: CFRange?
     private static var livePreviewInputMode: LivePreviewInputMode?
@@ -3948,6 +3967,10 @@ enum TextInjector {
     private static var hotKeyIsDown = false
     private static var pendingPasteText: String?
     private static var pendingPasteFallbackWorkItem: DispatchWorkItem?
+    /// Runs after a paste that waited for the hotkey to be released.
+    private static var pendingPasteAfterPaste: ((PasteSubmitSequencing.PasteStep) -> Void)?
+    /// The target token of the paste waiting for the hotkey to be released.
+    private static var pendingPasteTargetToken = 0
     static var externalLivePreviewGuardHandler: ((String) -> Void)?
     /// The Desk window's last-moment shield (Desk window, build 9), asked
     /// just before a synthetic paste, typing or Return: true while the Desk
@@ -4043,11 +4066,21 @@ enum TextInjector {
         pendingKeyboardFinalReconcile != nil
     }
 
+    /// Picks the text box for a new dictation or correction. A new target
+    /// also cancels any earlier paste or Return still waiting (see
+    /// PasteTargetGeneration).
     static func rememberFocusedElement() {
+        targetGeneration.advance()
         guard accessibilityTrusted(prompt: false) else {
             targetElement = nil
             RunLog.write("cursor-focus.capture.skipped", "accessibility=not-trusted")
             return
+        }
+
+        // Electron apps (Claude, Codex, Grok Bot) build their Accessibility
+        // tree only when asked, so ask before looking for the text box.
+        if let application = targetApplication, !application.isTerminated {
+            wakeAccessibility(of: application)
         }
 
         let systemElement = AXUIElementCreateSystemWide()
@@ -4058,16 +4091,19 @@ enum TextInjector {
             &value
         )
 
-        if status != .success || value == nil,
-           let application = targetApplication
-        {
-            let appElement = AXUIElementCreateApplication(application.processIdentifier)
-            let fallbackStatus = AXUIElementCopyAttributeValue(
-                appElement,
-                kAXFocusedUIElementAttribute as CFString,
-                &value
-            )
-            if fallbackStatus != .success {
+        // The system-wide answer is used only when it belongs to the target
+        // app; otherwise the target app itself is asked.
+        var systemElementInTarget = status == .success && value != nil
+        if systemElementInTarget, let application = targetApplication, let found = value {
+            systemElementInTarget = elementProcessIdentifier(found as! AXUIElement) == application.processIdentifier
+            if !systemElementInTarget {
+                RunLog.write("cursor-focus.capture.other-app", "reason=system-focus-outside-target")
+            }
+        }
+
+        if !systemElementInTarget, let application = targetApplication {
+            let (fallbackStatus, element) = focusedElement(inApplication: application)
+            guard let element else {
                 targetElement = nil
                 RunLog.write(
                     "cursor-focus.capture.failed",
@@ -4075,6 +4111,7 @@ enum TextInjector {
                 )
                 return
             }
+            value = element
         }
 
         guard let value else {
@@ -4086,6 +4123,92 @@ enum TextInjector {
         let element = value as! AXUIElement
         targetElement = element
         RunLog.write("cursor-focus.captured", describe(element))
+    }
+
+    /// Asks only the given app (never the system-wide focus) for its focused
+    /// element, retrying briefly while a freshly woken Electron tree answers
+    /// "no value" (bounded by ElectronFocusPolicy). The element returned
+    /// always belongs to that app.
+    private static func focusedElement(inApplication application: NSRunningApplication) -> (AXError, AXUIElement?) {
+        let appElement = AXUIElementCreateApplication(application.processIdentifier)
+        var value: CFTypeRef?
+        var status = AXUIElementCopyAttributeValue(
+            appElement,
+            kAXFocusedUIElementAttribute as CFString,
+            &value
+        )
+        var retries = 0
+        while status != .success || value == nil,
+              let delay = ElectronFocusPolicy.retryDelay(
+                  afterFailedStatus: status.rawValue,
+                  retriesSoFar: retries
+              )
+        {
+            retries += 1
+            RunLog.write(
+                "focus-capture.retry",
+                "attempt=\(retries) status=\(status.rawValue) delayMs=\(Int(delay * 1000))"
+            )
+            Thread.sleep(forTimeInterval: delay)
+            value = nil
+            status = AXUIElementCopyAttributeValue(
+                appElement,
+                kAXFocusedUIElementAttribute as CFString,
+                &value
+            )
+        }
+        if retries > 0 {
+            RunLog.write(
+                "focus-capture.retry.finished",
+                "attempts=\(retries) status=\(status.rawValue)"
+            )
+        }
+        guard status == .success, let value, CFGetTypeID(value) == AXUIElementGetTypeID() else {
+            return (status, nil)
+        }
+        let element = value as! AXUIElement
+        // Belt and braces: an element from another process is never used.
+        guard elementProcessIdentifier(element) == application.processIdentifier else {
+            RunLog.write("cursor-focus.capture.other-app", "reason=element-pid-mismatch")
+            return (status, nil)
+        }
+        return (status, element)
+    }
+
+    /// The stop-time second look, used when no text box was found when the
+    /// dictation started. It asks only the session's own target app, never
+    /// the system-wide focus (which could be another app if activation is
+    /// slow or the owner switched apps), and keeps the session's token.
+    private static func recaptureFocusedElement(inTarget application: NSRunningApplication) {
+        guard accessibilityTrusted(prompt: false) else { return }
+        wakeAccessibility(of: application)
+        let (status, element) = focusedElement(inApplication: application)
+        guard let element else {
+            RunLog.write("cursor-focus.stop-recapture.failed", "status=\(status.rawValue)")
+            return
+        }
+        targetElement = element
+        RunLog.write("cursor-focus.stop-recaptured", describe(element))
+    }
+
+    private static func elementProcessIdentifier(_ element: AXUIElement) -> pid_t? {
+        var pid: pid_t = 0
+        guard AXUIElementGetPid(element, &pid) == .success else { return nil }
+        return pid
+    }
+
+    /// Asks an Electron app to build its Accessibility tree by setting
+    /// `AXManualAccessibility` on it. Any app gets the request: native apps
+    /// ignore it, so no list of bundle IDs is needed. Errors are logged (code
+    /// only) and otherwise ignored.
+    private static func wakeAccessibility(of application: NSRunningApplication) {
+        let appElement = AXUIElementCreateApplication(application.processIdentifier)
+        let status = AXUIElementSetAttributeValue(
+            appElement,
+            ElectronFocusPolicy.manualAccessibilityAttribute as CFString,
+            kCFBooleanTrue
+        )
+        RunLog.write("ax.manual-accessibility.set", "\(describe(application)) status=\(status.rawValue)")
     }
 
     /// `allowed: false` (a Desk recording) resets the state and starts nothing.
@@ -4963,31 +5086,48 @@ enum TextInjector {
         hotKeyIsDown = false
         RunLog.write("hotkey.released")
         guard let text = pendingPasteText else { return }
+        let afterPaste = pendingPasteAfterPaste
+        let token = pendingPasteTargetToken
         pendingPasteText = nil
+        pendingPasteAfterPaste = nil
         pendingPasteFallbackWorkItem?.cancel()
         pendingPasteFallbackWorkItem = nil
         RunLog.write("completion.paste.resumed", "reason=hotkey-released")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            performPaste(text)
+            performPaste(text, token: token, afterPaste: afterPaste)
         }
     }
 
-    static func paste(_ text: String) {
+    /// `afterPaste` runs once the paste step has really happened (or was
+    /// skipped), with what it did. "Paste and Submit" uses it so Return
+    /// follows the paste instead of racing it.
+    ///
+    /// The paste belongs to the target that is current now. If a newer
+    /// dictation or a different app takes over before a delayed step runs,
+    /// the paste is not typed anywhere (see `pasteStillCurrent`).
+    static func paste(_ text: String, afterPaste: ((PasteSubmitSequencing.PasteStep) -> Void)? = nil) {
+        let token = currentTargetToken
         guard canAutoPaste else {
             writeClipboardFallback(text, reason: "accessibility-not-trusted")
+            afterPaste?(.clipboardOnly)
             return
         }
 
         if hotKeyIsDown {
             pendingPasteText = text
+            pendingPasteAfterPaste = afterPaste
+            pendingPasteTargetToken = token
             pendingPasteFallbackWorkItem?.cancel()
             let fallback = DispatchWorkItem {
                 guard let text = pendingPasteText else { return }
+                let afterPaste = pendingPasteAfterPaste
+                let token = pendingPasteTargetToken
                 pendingPasteText = nil
+                pendingPasteAfterPaste = nil
                 pendingPasteFallbackWorkItem = nil
                 hotKeyIsDown = false
                 RunLog.write("completion.paste.resumed", "reason=hotkey-timeout")
-                performPaste(text)
+                performPaste(text, token: token, afterPaste: afterPaste)
             }
             pendingPasteFallbackWorkItem = fallback
             RunLog.write("completion.paste.deferred", "reason=hotkey-down")
@@ -4995,18 +5135,77 @@ enum TextInjector {
             return
         }
 
-        performPaste(text)
+        performPaste(text, token: token, afterPaste: afterPaste)
     }
 
-    private static func performPaste(_ text: String) {
+    /// True when a paste requested under `token` may still run. When a newer
+    /// target took over, the text goes to the clipboard instead of into the
+    /// newer target (the same fallback as an unconfirmed paste), and the
+    /// caller is told so it presses no Return.
+    private static func pasteStillCurrent(
+        _ text: String,
+        token: Int,
+        stage: String,
+        afterPaste: ((PasteSubmitSequencing.PasteStep) -> Void)?
+    ) -> Bool {
+        guard !targetGeneration.isCurrent(token) else { return true }
+        RunLog.write("completion.paste.skipped", "reason=superseded stage=\(stage)")
+        // Written directly (not writeClipboardFallback), so a newer session's
+        // own waiting paste is left alone.
+        writePrivateClipboardText(text)
+        RunLog.write("completion.pasteboard.retained", "reason=superseded chars=\(text.count)")
+        afterPaste?(.superseded)
+        return false
+    }
+
+    private static func performPaste(
+        _ text: String,
+        token: Int,
+        afterPaste: ((PasteSubmitSequencing.PasteStep) -> Void)? = nil
+    ) {
+        guard pasteStillCurrent(text, token: token, stage: "start", afterPaste: afterPaste) else { return }
         if let targetApplication, !targetApplication.isTerminated {
             RunLog.write("completion.paste.target", describe(targetApplication))
             targetApplication.activate(options: [.activateIgnoringOtherApps])
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                // While the token still matches, the global target is this
+                // paste's own target (any new target moves the token on).
+                guard pasteStillCurrent(text, token: token, stage: "refocus", afterPaste: afterPaste) else { return }
+                // Wake Electron's Accessibility tree again (harmless if it is
+                // already on) and, if no text box was found when dictation
+                // started, look once more now that the app is in front. This
+                // second look belongs to the same session, so the token stays.
+                if targetElement == nil {
+                    RunLog.write("cursor-focus.stop-recapture", describe(targetApplication))
+                    recaptureFocusedElement(inTarget: targetApplication)
+                } else {
+                    wakeAccessibility(of: targetApplication)
+                }
                 restoreFocusedElement()
                 targetApplication.activate(options: [.activateIgnoringOtherApps])
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                    pasteIntoActiveApplication(text)
+                    guard pasteStillCurrent(text, token: token, stage: "insert", afterPaste: afterPaste) else { return }
+                    // Type only into the target app, and only while it is in
+                    // front (see PasteDeliveryCheck).
+                    let route = PasteDeliveryCheck.route(
+                        targetProcessIdentifier: targetApplication.processIdentifier,
+                        frontmostProcessIdentifier: NSWorkspace.shared.frontmostApplication?.processIdentifier,
+                        elementProcessIdentifier: targetElement.flatMap { elementProcessIdentifier($0) }
+                    )
+                    let step: PasteSubmitSequencing.PasteStep
+                    switch route {
+                    case .accessibilityThenKeystroke:
+                        step = pasteIntoActiveApplication(text)
+                    case .keystrokeOnly:
+                        RunLog.write("completion.ax-insert.skipped", "reason=element-not-in-target")
+                        step = pasteIntoActiveApplication(text, allowAccessibilityInsert: false)
+                    case .clipboardOnly:
+                        RunLog.write("completion.paste.skipped", "reason=target-not-frontmost")
+                        writePrivateClipboardText(text)
+                        RunLog.write("completion.pasteboard.retained", "reason=target-not-frontmost chars=\(text.count)")
+                        step = .clipboardOnly
+                    }
+                    afterPaste?(step)
                 }
             }
             return
@@ -5014,16 +5213,21 @@ enum TextInjector {
 
         RunLog.write("completion.paste.target", "bundle=frontmost name=frontmost")
         restoreFocusedElement()
-        pasteIntoActiveApplication(text)
+        let step = pasteIntoActiveApplication(text)
+        afterPaste?(step)
     }
 
-    private static func pasteIntoActiveApplication(_ text: String) {
+    @discardableResult
+    private static func pasteIntoActiveApplication(
+        _ text: String,
+        allowAccessibilityInsert: Bool = true
+    ) -> PasteSubmitSequencing.PasteStep {
         if deskShieldHoldsBack(.paste) {
             writeClipboardFallback(text, reason: "desk-window-key")
-            return
+            return .clipboardOnly
         }
-        if insertUsingAccessibility(text) {
-            return
+        if allowAccessibilityInsert, insertUsingAccessibility(text) {
+            return .insertedThroughAccessibility
         }
 
         // Dictated text stays on this Mac (no Universal Clipboard) and clipboard
@@ -5033,7 +5237,7 @@ enum TextInjector {
 
         guard let source = CGEventSource(stateID: .combinedSessionState) else {
             RunLog.write("completion.paste.keystroke.failed", "reason=no-event-source")
-            return
+            return .notPerformed
         }
         let commandDown = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Command), keyDown: true)
         let keyDown = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: true)
@@ -5049,6 +5253,7 @@ enum TextInjector {
         commandUp?.post(tap: .cghidEventTap)
         RunLog.write("completion.paste.keystroke.posted", "style=command-sequence")
         RunLog.write("completion.pasteboard.retained", "reason=manual-paste-fallback")
+        return .keystrokePosted
     }
 
     private static func insertUsingAccessibility(_ text: String) -> Bool {
@@ -5456,6 +5661,7 @@ enum TextInjector {
     static func writeClipboardFallback(_ text: String, reason: String, sessionId: String? = nil) {
         writePrivateClipboardText(text)
         pendingPasteText = nil
+        pendingPasteAfterPaste = nil
         pendingPasteFallbackWorkItem?.cancel()
         pendingPasteFallbackWorkItem = nil
         let idPart = sessionId.map { "id=\($0) " } ?? ""
@@ -5464,6 +5670,7 @@ enum TextInjector {
 
     static func archiveSuppressedLateInsertion(finalText: String, sessionId: String, reason: String) {
         pendingPasteText = nil
+        pendingPasteAfterPaste = nil
         pendingPasteFallbackWorkItem?.cancel()
         pendingPasteFallbackWorkItem = nil
         RunLog.write(
@@ -5472,7 +5679,14 @@ enum TextInjector {
         )
     }
 
-    static func pressReturn() {
+    /// `targetToken` is the target token taken when Return was scheduled. If
+    /// a newer dictation or a different app has taken over since, Return is
+    /// not pressed, so it can never send someone else's draft.
+    static func pressReturn(targetToken: Int? = nil) {
+        if let targetToken, !targetGeneration.isCurrent(targetToken) {
+            RunLog.write("completion.submit.skipped", "reason=superseded")
+            return
+        }
         if deskShieldHoldsBack(.returnKey) {
             RunLog.write("completion.return.skipped", "reason=desk-window-key")
             return
@@ -7040,8 +7254,9 @@ final class DictationController {
                 completionActionAtStop == .autoSubmit
             {
                 RunLog.write("completion.live-submit.requested", "id=\(id) action=\(completionActionAtStop.rawValue) timing=immediate-stop")
+                let submitToken = TextInjector.currentTargetToken
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    TextInjector.pressReturn()
+                    TextInjector.pressReturn(targetToken: submitToken)
                 }
             }
         } else {
@@ -7340,8 +7555,9 @@ final class DictationController {
                         // Nothing was typed live, so nothing was sent at the
                         // stop. The final text was just typed; send it now.
                         RunLog.write("completion.live-submit.requested", "id=\(id) action=\(completionActionAtStop.rawValue) timing=after-final-typed")
+                        let submitToken = TextInjector.currentTargetToken
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                            TextInjector.pressReturn()
+                            TextInjector.pressReturn(targetToken: submitToken)
                         }
                     }
                     var backgroundOutcome: DictationOutcome
@@ -7371,17 +7587,32 @@ final class DictationController {
                 let shouldSubmit = !deliversPartialText && !suppressLateInsertion && !cleanedText.isEmpty && completionAction == .autoSubmit
                 var safetyStopOutcome: DictationOutcome?
                 if shouldPasteAtStop {
-                    TextInjector.paste(cleanedText + " ")
-                    RunLog.write("completion.paste.requested", "id=\(id) action=\(completionAction.rawValue)")
                     if shouldSubmit {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                            TextInjector.pressReturn()
+                        // Paste and Submit: Return waits for the paste to
+                        // actually land (it can take 0.2 s or more while the
+                        // target app comes forward), then a short settle.
+                        // Return belongs to this session's target: if a newer
+                        // dictation takes over first, it is skipped.
+                        let submitToken = TextInjector.currentTargetToken
+                        TextInjector.paste(cleanedText + " ") { step in
+                            guard PasteSubmitSequencing.shouldPressReturn(after: step) else {
+                                RunLog.write("completion.submit.skipped", "id=\(id) reason=paste-not-performed step=\(step)")
+                                return
+                            }
+                            RunLog.write("completion.submit.scheduled", "id=\(id) step=\(step)")
+                            DispatchQueue.main.asyncAfter(deadline: .now() + PasteSubmitSequencing.settleDelayAfterPaste) {
+                                TextInjector.pressReturn(targetToken: submitToken)
+                            }
                         }
+                    } else {
+                        TextInjector.paste(cleanedText + " ")
                     }
+                    RunLog.write("completion.paste.requested", "id=\(id) action=\(completionAction.rawValue)")
                 } else if shouldSubmit {
                     RunLog.write("completion.live-submit.requested", "id=\(id) action=\(completionAction.rawValue)")
+                    let submitToken = TextInjector.currentTargetToken
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                        TextInjector.pressReturn()
+                        TextInjector.pressReturn(targetToken: submitToken)
                     }
                 } else if suppressLateInsertion && !cleanedText.isEmpty {
                     safetyStopOutcome = self.deliverAfterSafetyStop(
