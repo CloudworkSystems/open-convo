@@ -1,0 +1,123 @@
+# Required check `tests`: runs the tests of every part a pull request changes.
+# Runs the pull request's code, so its token is read-only and holds no secrets.
+name: tests
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      clarity: ${{ steps.diff.outputs.clarity }}
+      desk: ${{ steps.diff.outputs.desk }}
+      mac: ${{ steps.diff.outputs.mac }}
+      gate: ${{ steps.diff.outputs.gate }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: diff
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ -z "$BASE" ]; then
+            # Manual run: test everything.
+            for part in clarity desk mac gate; do echo "$part=true" >> "$GITHUB_OUTPUT"; done
+            exit 0
+          fi
+          files=$(git diff --name-only "$(git merge-base "$BASE" "$HEAD")" "$HEAD")
+          echo "$files"
+          has() { echo "$files" | grep -Eq "$1" && echo true || echo false; }
+          # A change to the checks themselves runs every part.
+          all=$(has '^\.github/')
+          echo "clarity=$([ "$all" = true ] && echo true || has '^packages/clarity/')" >> "$GITHUB_OUTPUT"
+          echo "desk=$([ "$all" = true ] && echo true || has '^(apps/desk/|packages/clarity/)')" >> "$GITHUB_OUTPUT"
+          echo "mac=$([ "$all" = true ] && echo true || has '^apps/mac/')" >> "$GITHUB_OUTPUT"
+          echo "gate=$all" >> "$GITHUB_OUTPUT"
+
+  clarity:
+    needs: changes
+    if: needs.changes.outputs.clarity == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
+        working-directory: packages/clarity
+
+  desk:
+    needs: changes
+    if: needs.changes.outputs.desk == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desk/package-lock.json
+      - run: npm ci
+        working-directory: apps/desk
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/desk
+      - run: npm run check
+        working-directory: apps/desk
+
+  mac:
+    needs: changes
+    if: needs.changes.outputs.mac == 'true'
+    # macOS minutes count ten times against the monthly allowance, so this
+    # runs only when apps/mac (or the checks) change.
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: swift test
+        working-directory: apps/mac
+
+  gate:
+    needs: changes
+    if: needs.changes.outputs.gate == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test .github/scripts/tests/*.test.mjs
+
+  # The one check branch protection requires. Passes only if every part that
+  # ran passed; parts with no changes are skipped.
+  tests:
+    needs: [changes, clarity, desk, mac, gate]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Results: $RESULTS"
+          for result in $RESULTS; do
+            case "$result" in success|skipped) ;; *) echo "A test job did not pass."; exit 1 ;; esac
+          done

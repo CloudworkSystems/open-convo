@@ -59,31 +59,18 @@ Not started.
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:
-[docs/plans/merge-gate.md](docs/plans/merge-gate.md). Waiting on the owner's
-bot account. Until it's tried, the owner merges by hand.
+[docs/plans/merge-gate.md](docs/plans/merge-gate.md). Checks built but not
+switched on; next, the owner's bot account and the scratch-branch tests.
+Until those pass, the owner merges by hand.
 
-## Recent Owner Decisions
+## Owner Decisions
 
-- **Oct 15:** Build the merge gate (one shared write-only bot account for
-  the builders, enforced checks, auto-merge). `main` is protected from now on.
-  Owner decisions move to `docs/decisions.md`, which only the owner approves.
-  No interim "agents merge docs after Codex's 👍"; wait for the gate.
-
-- **Oct 15:** Outside builders may build standalone modules (AGENTS.md).
-  First: Site Engine's standalone slice, GrokBot builds and Codex reviews.
-- **Oct 15:** Start step 3 now; the owner runs the step 2 trial when he's home.
-- **Oct 14:** Ember is the Desk's look. Business material stays out of this repo.
-- **Oct 14:** Dictation protection: words first, app-only reading, one recovery
-  key for everything. Accepted the known limit noted on #30.
-- **Oct 13:** Step 3 runs on a local model first; the model-based dispatcher
-  waits for step 6.
-- **Oct 13:** The "Wait—what?" explainer runs on a local model.
-- **Oct 13:** Memory lives in separate spaces (Personal, one per business,
-  later Family).
-- **Oct 13:** Try each step in True Convo Test before the real app.
+Moved to [docs/decisions.md](docs/decisions.md), which only the owner
+approves.
 
 ## Keeping This File Current
 
-Whoever merges a pull request that changes the step, a part's state or an
-owner decision updates this file in the same pull request. Keep it under a
+A pull request that changes the step or a part's state updates this file
+itself. One that records an owner decision updates
+[docs/decisions.md](docs/decisions.md) instead. Keep it under a
 page; history belongs in PLAN.md.

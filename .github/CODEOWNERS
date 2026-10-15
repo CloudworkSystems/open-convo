@@ -1,0 +1,31 @@
+# Paths that always need the owner's approval (docs/plans/merge-gate.md).
+# Branch protection requires a code-owner review and dismisses it on new commits.
+
+# The rules, including the checks and this file.
+/AGENTS.md @CloudworkSystems
+/CLAUDE.md @CloudworkSystems
+/.github/ @CloudworkSystems
+
+# Decisions.
+/PLAN.md @CloudworkSystems
+/docs/plans/ @CloudworkSystems
+/docs/decisions.md @CloudworkSystems
+
+# Keys, encryption and recovery in the Mac app, and their tests.
+/apps/mac/Sources/ArchiveProtection/ @CloudworkSystems
+/apps/mac/Sources/DeskHost/KeyProvider.swift @CloudworkSystems
+/apps/mac/Sources/DeskHost/KeychainKeyProvider.swift @CloudworkSystems
+/apps/mac/Sources/DeskHost/RecoveryKey.swift @CloudworkSystems
+/apps/mac/Sources/DeskHost/StoreCipher.swift @CloudworkSystems
+/apps/mac/Sources/DeskWindowKit/DeskRecoveryKeyPrompt.swift @CloudworkSystems
+/apps/mac/Sources/DeskWindowKit/RecoveryKeyCheck.swift @CloudworkSystems
+/apps/mac/Tests/ArchiveProtectionTests/ @CloudworkSystems
+/apps/mac/Tests/DeskHostTests/KeychainKeyProviderTests.swift @CloudworkSystems
+/apps/mac/Tests/DeskHostTests/RecoveryKeyTests.swift @CloudworkSystems
+/apps/mac/Tests/DeskHostTests/StoreEncryptionTests.swift @CloudworkSystems
+/apps/mac/Tests/DeskWindowKitTests/DeskRecoveryKeyTests.swift @CloudworkSystems
+
+# Paid-usage controls (they spend money), and their tests.
+/apps/mac/Sources/DeskWindowKit/DeskPaidUsageControls.swift @CloudworkSystems
+/apps/mac/Sources/ParticipantProcess/PaidUsageConfirmation.swift @CloudworkSystems
+/apps/mac/Tests/ParticipantProcessTests/PaidUsage*.swift @CloudworkSystems
