@@ -2905,8 +2905,10 @@ The reply keeps `participants` and gains one key, `routes`, only on a host
 with a local route:
 
 - `participants`: the Claude Code entry first, exactly as section 5, then one
-  entry per chat model Ollama lists, sorted by name (code-point order), at most 64
-  (more are left out). A local entry is exactly `{id, label, model,
+  entry per chat model Ollama lists, sorted by name (code-point order), at most
+  256. With more than 256 the route is unavailable `catalog-too-large` and
+  lists no local entries, so a saved choice is never hidden behind a cut-off
+  list (Codex round 4 on #38). A local entry is exactly `{id, label, model,
   executionHost, available, reason}`: `id` `ollama-local`, `label` the model
   name, `model` the name, `@`, and Ollama's full 64-hex digest
   (`qwen3.5:9b@6488c96f...`, 64 hex in full), `executionHost` `this-mac`, each at most
@@ -2918,7 +2920,8 @@ with a local route:
   `ollama-local`; `state` `ready` with `reason` `null`, or `unavailable` with
   `reason` `ollama-not-running` (no answer on the fixed base),
   `catalog-unreadable` (an answer that isn't a valid model list, including a
-  redirect) or `host-not-loopback` (the fixed base resolved off loopback). An
+  redirect), `catalog-too-large` (more than 256 chat models) or
+  `host-not-loopback` (the fixed base resolved off loopback). An
   unavailable route lists no local entries.
 - The page derives "model missing" (its saved choice's name is absent from a
   ready route) and "model changed" (the name is present with another digest)
@@ -3004,7 +3007,10 @@ with a local route:
   follows Ollama's `done: true`. Any other status, a malformed line, a
   redirect or a dropped connection is `failed` `process-error`. Section 8's
   timeouts apply (no first byte 30 s, no output 120 s, total 15 min).
-  `paid-overflow` never occurs.
+  `paid-overflow` never occurs. **Reply budget:** section 8's
+  `reply-too-long` for a local run counts `contextBytes + inputBytes +
+  output` against 262,144 (section 15's input-plus-output bound with the
+  context included; Codex round 4 on #38).
 - **No process group.** For a local run the "group" is its HTTP task:
   cleared means the task finished or was cancelled and native accepts no more
   bytes from it. Stop cancels the task; Stop's reply is `exited` with
@@ -3028,7 +3034,8 @@ with a local route:
   have them. Load invariants: the three appear together, only with
   `participant.id` `ollama-local`.
 - New availability reasons: `model-not-local` (entry) and
-  `ollama-not-running`, `catalog-unreadable`, `host-not-loopback` (route).
+  `ollama-not-running`, `catalog-unreadable`, `catalog-too-large`,
+  `host-not-loopback` (route).
   No new refusal reasons: the local route reuses `run-mismatch`,
   `participant-changed`, `participant-unavailable` and `text-too-large`.
 - Vectors live in a separate file, `native-participant-local-v1.json`, beside

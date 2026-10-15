@@ -28,8 +28,9 @@ invented chats only, while the step 2 trial is pending. Scope:
 | Part | State |
 | --- | --- |
 | PR 1: Scope | Merged (#37) |
-| PR 2: Contract revision 4 and the page codec | In review |
-| PR 3: Local route in the Mac host | Not started |
+| PR 2: Contract revision 4 and the page codec | Merged (#38) |
+| PR 3a: Ollama client, chat runs and alias binding (inactive) | In review |
+| PR 3b: Local route wired into the coordinator | Not started |
 | PR 4: Desk wiring | Not started |
 | PR 5: Proof and owner trial | Not started |
 

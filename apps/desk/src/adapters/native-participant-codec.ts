@@ -21,7 +21,7 @@ export interface NativeLocalParticipantAvailability extends Readonly<Participant
   readonly available: boolean;
   readonly reason: 'model-not-local' | null;
 }
-export type NativeParticipantRouteReason = 'ollama-not-running' | 'catalog-unreadable' | 'host-not-loopback';
+export type NativeParticipantRouteReason = 'ollama-not-running' | 'catalog-unreadable' | 'catalog-too-large' | 'host-not-loopback';
 export interface NativeParticipantRoute {
   readonly route: 'ollama-local';
   readonly state: 'ready' | 'unavailable';
@@ -143,7 +143,7 @@ function localAvailability(value: unknown): value is NativeLocalParticipantAvail
 function route(value: unknown): value is NativeParticipantRoute {
   return object(value) && exact(value, ['route', 'state', 'reason']) && value.route === 'ollama-local'
     && (value.state === 'ready' ? value.reason === null
-      : value.state === 'unavailable' && ['ollama-not-running', 'catalog-unreadable', 'host-not-loopback'].includes(value.reason as string));
+      : value.state === 'unavailable' && ['ollama-not-running', 'catalog-unreadable', 'catalog-too-large', 'host-not-loopback'].includes(value.reason as string));
 }
 /** Code-point order, not UTF-16 unit order (section 20.2). */
 function codePointBefore(a: string, b: string): boolean {
@@ -178,7 +178,7 @@ export function decodeNativeParticipantOk(reply: Obj, expected: NativeParticipan
     // Section 20.2: the Claude Code entry first, then local chat models by name.
     if (!exact(reply, [...baseReply, 'participants', 'routes']) || !Array.isArray(reply.participants)
       || !Array.isArray(reply.routes) || reply.routes.length !== 1 || !route(reply.routes[0])
-      || reply.participants.length < 1 || reply.participants.length > 65 || !availability(reply.participants[0])) return undefined;
+      || reply.participants.length < 1 || reply.participants.length > 257 || !availability(reply.participants[0])) return undefined;
     const local = reply.participants.slice(1);
     if (!local.every(localAvailability) || reply.routes[0].state === 'unavailable' && local.length > 0
       || local.some((entry, i) => i > 0 && !codePointBefore(local[i - 1].label, entry.label))) return undefined;

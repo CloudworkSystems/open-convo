@@ -78,6 +78,15 @@ public struct ParticipantRunSnapshot: Equatable, Sendable {
     public var terminal: ParticipantEvent?
     public var groupCleared: Bool?
     public var cleanup: ParticipantCleanupState
+
+    /// Public so another run kind behind the same seam (the local route,
+    /// contract section 20.4) can report its own state.
+    public init(lastSequence: Int, terminal: ParticipantEvent?, groupCleared: Bool?, cleanup: ParticipantCleanupState) {
+        self.lastSequence = lastSequence
+        self.terminal = terminal
+        self.groupCleared = groupCleared
+        self.cleanup = cleanup
+    }
 }
 
 /// One run: a spawned supervisor and CLI, read through `StreamJSONReader`,
