@@ -50,6 +50,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.clarity == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -64,6 +65,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.desk == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -75,9 +77,12 @@ jobs:
           cache-dependency-path: apps/desk/package-lock.json
       - run: npm ci
         working-directory: apps/desk
-      - run: npx playwright install --with-deps chromium
+      # Build (with typecheck) and the unit tests. The browser suite
+      # (test:browser, test:native-proof) still runs on the Mac only: its
+      # setup fails on GitHub's Linux machines and then hangs.
+      - run: npm run build
         working-directory: apps/desk
-      - run: npm run check
+      - run: npm test
         working-directory: apps/desk
 
   mac:
@@ -85,12 +90,14 @@ jobs:
     if: needs.changes.outputs.mac == 'true'
     # macOS minutes count ten times against the monthly allowance, so this
     # runs only when apps/mac (or the checks) change.
-    runs-on: macos-15
+    # macOS 26 to match the Swift the owner's Mac builds with.
+    runs-on: macos-26
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - run: xcodebuild -version && swift --version
       - run: swift test
         working-directory: apps/mac
 
@@ -98,6 +105,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.gate == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
