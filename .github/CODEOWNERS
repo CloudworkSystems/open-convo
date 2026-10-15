@@ -38,6 +38,16 @@
 /apps/mac/**/*Availability* @CloudworkSystems
 /apps/mac/**/*Wiring* @CloudworkSystems
 
+# Other paid cloud calls: the OpenAI realtime transcriber and its smoke
+# command, and any file named for a paid AI provider or an API key. (The
+# batch transcription requests and API-key lookups live in main.swift,
+# protected below.)
+/apps/mac/**/*OpenAI* @CloudworkSystems
+/apps/mac/**/*Realtime* @CloudworkSystems
+/apps/mac/**/*Groq* @CloudworkSystems
+/apps/mac/**/*Anthropic* @CloudworkSystems
+/apps/mac/**/*APIKey* @CloudworkSystems
+
 # The storage protection proof.
 /apps/mac/Tests/ProtectionProofTests/ @CloudworkSystems
 

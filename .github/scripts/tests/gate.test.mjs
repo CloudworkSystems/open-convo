@@ -118,6 +118,8 @@ test('CODEOWNERS covers the rules, decisions and key files, and not ordinary cod
     'apps/mac/Sources/ParticipantSupervisor/Core/SupervisorDriver.swift',
     'apps/mac/Sources/DeskHost/ParticipantLane.swift', 'apps/mac/Tests/VoiceCursorCoreTests/DeskRouteWiringTests.swift',
     'apps/mac/Tests/ProtectionProofTests/Anything.swift',
+    'apps/mac/Sources/VoiceCursorMac/OpenAIRealtimeTranscriber.swift',
+    'apps/mac/Sources/VoiceCursorMac/OpenAIRealtimeSmoke.swift',
   ];
   assert.deepEqual(protectedFiles(rules, files), files);
   const open = ['STATUS.md', 'README.md', 'apps/desk/src/app/App.tsx', 'packages/clarity/src/index.mjs',
