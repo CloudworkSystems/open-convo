@@ -1,6 +1,6 @@
 # Status
 
-Updated October 14, 2026. The short version of where the build is. The full
+Updated October 15, 2026. The short version of where the build is. The full
 plan is in [PLAN.md](PLAN.md).
 
 ## Now
@@ -16,10 +16,14 @@ plan is in [PLAN.md](PLAN.md).
 | PR 4: Dictation words and word fixes sealed on disk | Merged (#30) |
 | PR 4b: Dictation archive key under the same recovery key | Merged (#32) |
 | PR 4c: Kept recordings sealed | Merged (#34, #35) |
-| PR 5: Scripted kill-and-reopen proof | In review (#36) |
+| PR 5: Scripted kill-and-reopen proof | Merged (#36) |
 | PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-2-owner-trial.md)) | Waiting on the owner |
 
 Until the owner's trial passes, the installed Desk is for invented data only.
+
+**Step 3: One real conversation, local first.** Started October 15 with
+invented chats only, while the step 2 trial is pending. Scope (proposal, in
+review): [docs/plans/step-3-local-conversation.md](docs/plans/step-3-local-conversation.md).
 
 ## Done
 
@@ -34,12 +38,13 @@ Until the owner's trial passes, the installed Desk is for invented data only.
 
 ## Next
 
-3. One real conversation on a local model (Ollama), then the Claude Code adapter.
+- The Claude Code adapter, right after step 3.
 4. Clarity tools in the conversation ("Wait—what?" on a local model).
 5. Chosen memory in separate spaces.
 
 ## Recent Owner Decisions
 
+- **Oct 15:** Start step 3 now; the owner runs the step 2 trial when he's home.
 - **Oct 14:** Ember is the Desk's look. Business material stays out of this repo.
 - **Oct 14:** Dictation protection: words first, app-only reading, one recovery
   key for everything. Accepted the known limit noted on #30.
