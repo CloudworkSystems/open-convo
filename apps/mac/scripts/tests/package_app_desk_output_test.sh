@@ -525,7 +525,12 @@ outcome() {
 # Applications folder holding old apps (with pgrep, pkill and open stand-ins);
 # and a signing fingerprint refused because the stand-in Keychain lookup finds
 # no certificate.
-if [[ ! -s "${BASELINE}" ]]; then
+if [[ ! -s "${BASELINE}" && "${ALLOW_MISSING_BASELINE:-0}" == 1 ]]; then
+  # Open Convo's history doesn't hold BASELINE_REV (a True Convo commit). CI
+  # sets ALLOW_MISSING_BASELINE=1 so the other checks still run; this one is
+  # reported as skipped, never as passed.
+  echo "skip - before and after: no package_app.sh at ${BASELINE_REV} here (set BASELINE_SCRIPT)" >&2
+elif [[ ! -s "${BASELINE}" ]]; then
   not_ok "before and after: could not read package_app.sh at ${BASELINE_REV} (set BASELINE_SCRIPT)"
 else
   for variant in plain desk old-apps install signing-refused lint-fails desk-link-refused; do

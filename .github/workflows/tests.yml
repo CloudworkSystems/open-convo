@@ -103,8 +103,12 @@ jobs:
       - run: swift test
         working-directory: apps/mac
       # Packaging checks (stand-ins only: never builds, signs or installs).
+      # The byte-identity comparison needs a True Convo commit this repo
+      # doesn't have, so it is skipped here until the baseline is brought over.
       - run: bash scripts/tests/package_app_desk_output_test.sh
         working-directory: apps/mac
+        env:
+          ALLOW_MISSING_BASELINE: '1'
 
   gate:
     needs: changes
