@@ -34,7 +34,9 @@ reads from and writes to `CloudworkSystems/open-convo`.
   one numbered item per annotation with the screen, the exact element or area,
   the owner's words, and the requested change. Each marked screenshot is saved
   next to it as `<session-name>-01.png`, `-02.png` and so on. Codex changes no
-  code, then commits only those files and pushes them to `main`.
+  code, then commits only those files on a branch named
+  `<session-name>-annotations` and opens a pull request; the owner merges it.
+  (`main` is protected: every change reaches it through a pull request.)
 - Claude pulls from GitHub, builds the changes on a branch named after the
   session and opens a pull request. Codex may review that pull request on
   GitHub. The owner merges it with GitHub's button.
@@ -60,7 +62,8 @@ Codex or GrokBot may build a module only when the module stands on its own
 (touches no app, storage or memory code) and has a merged plan in
 `docs/plans/` that lists the builder's rules. One outside module at a time.
 The builder works on a branch named after the session and opens a pull
-request; it never pushes to `main`. A different agent reviews it under the
+request; it never pushes to `main` (GitHub also blocks direct pushes, force
+pushes and deletion of `main`, for every account, since October 15, 2026). A different agent reviews it under the
 code path below (no agent reviews its own work), the planning session checks
 it against the plan, and the owner merges. The Limits below apply to outside
 builders in full; where a builder can reach the owner's Mac, the plan says
