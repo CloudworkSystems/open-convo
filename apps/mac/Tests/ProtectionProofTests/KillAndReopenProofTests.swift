@@ -183,10 +183,18 @@ final class KillAndReopenProofTests: XCTestCase {
         try process.run()
 
         let readyBy = Date().addingTimeInterval(10)
-        while !collected.text.contains("ready"), process.isRunning, Date() < readyBy { usleep(2_000) }
+        while !collected.saidReady, process.isRunning, Date() < readyBy { usleep(2_000) }
         guard process.isRunning else {
             let message = String(decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
             throw ProofError.writerStopped(message)
+        }
+        // A reopen that hangs is a failure, not a round to skip: without this
+        // the proof would kill the hung writer and re-check the last round.
+        guard collected.saidReady else {
+            kill(process.processIdentifier, SIGKILL)
+            process.waitUntilExit()
+            output.fileHandleForReading.readabilityHandler = nil
+            throw ProofError.writerNotReady(mode)
         }
         usleep(UInt32.random(in: 30_000...250_000))
         kill(process.processIdentifier, SIGKILL)
@@ -209,6 +217,7 @@ final class KillAndReopenProofTests: XCTestCase {
     enum ProofError: Error {
         case writerStopped(String)
         case writerMissing(String)
+        case writerNotReady(String)
     }
 
     private final class Collected: @unchecked Sendable {
@@ -216,6 +225,11 @@ final class KillAndReopenProofTests: XCTestCase {
         private var data = Data()
         func append(_ more: Data) { lock.lock(); data.append(more); lock.unlock() }
         var text: String { lock.lock(); defer { lock.unlock() }; return String(decoding: data, as: UTF8.self) }
+        /// True once the writer has printed a whole "ready" line.
+        var saidReady: Bool {
+            text.split(separator: "\n", omittingEmptySubsequences: false).dropLast()
+                .contains { $0 == "ready" || $0.hasPrefix("ready ") }
+        }
     }
 }
 
