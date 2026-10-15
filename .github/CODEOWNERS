@@ -28,11 +28,18 @@
 /apps/mac/Sources/DeskWindowKit/DeskPaths.swift @CloudworkSystems
 /apps/mac/Tests/DeskWindowKitTests/DeskKeptStoreTests.swift @CloudworkSystems
 
-# The paid-usage path (it can spend money): confirmation, end signals, Desk
-# controls, the coordinator that gates runs, and their tests.
+# The participant path: everything that can run a paid AI model, decide
+# whether it is available, confirm or end paid use, or wire it into the app.
+# Protected as whole modules and by name, so new files in it are covered too.
+/apps/mac/Sources/Participant*/ @CloudworkSystems
+/apps/mac/Tests/ParticipantProcessTests/ @CloudworkSystems
+/apps/mac/**/Participant* @CloudworkSystems
 /apps/mac/**/*PaidUsage* @CloudworkSystems
-/apps/mac/Sources/ParticipantDeskControls/ @CloudworkSystems
-/apps/mac/Sources/ParticipantCoordinator/ @CloudworkSystems
+/apps/mac/**/*Availability* @CloudworkSystems
+/apps/mac/**/*Wiring* @CloudworkSystems
+
+# The storage protection proof.
+/apps/mac/Tests/ProtectionProofTests/ @CloudworkSystems
 
 # What wires the above into the shipping app and could switch the paid path
 # on: the app's composition root, the package manifest (which modules link),

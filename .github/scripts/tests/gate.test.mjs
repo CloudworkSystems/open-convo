@@ -113,10 +113,16 @@ test('CODEOWNERS covers the rules, decisions and key files, and not ordinary cod
     'apps/mac/Tests/DeskHostTests/ProofStoreTests.swift', 'apps/mac/Tests/ArchiveProtectionTests/SealedRecordingsTests.swift',
     'apps/mac/Sources/VoiceCursorMac/main.swift', 'apps/mac/Package.swift',
     'apps/mac/Tests/DeskWindowKitTests/DeskSessionParticipantTests.swift',
+    'apps/mac/Sources/ParticipantProcess/ParticipantAvailability.swift',
+    'apps/mac/Tests/ParticipantProcessTests/CoordinatorAppWiringTests.swift',
+    'apps/mac/Sources/ParticipantSupervisor/Core/SupervisorDriver.swift',
+    'apps/mac/Sources/DeskHost/ParticipantLane.swift', 'apps/mac/Tests/VoiceCursorCoreTests/DeskRouteWiringTests.swift',
+    'apps/mac/Tests/ProtectionProofTests/Anything.swift',
   ];
   assert.deepEqual(protectedFiles(rules, files), files);
   const open = ['STATUS.md', 'README.md', 'apps/desk/src/app/App.tsx', 'packages/clarity/src/index.mjs',
-    'docs/annotations/x.md', 'apps/mac/Sources/DeskHost/DeskHost.swift', 'docs/plans-old.md', 'sub/AGENTS.md'];
+    'docs/annotations/x.md', 'apps/mac/Sources/DeskHost/DeskHost.swift', 'docs/plans-old.md', 'sub/AGENTS.md',
+    'apps/mac/Sources/VoiceCursorCore/ElectronFocusPolicy.swift', 'apps/mac/Sources/CorrectionMemory/LocalDataBoundary.swift'];
   assert.deepEqual(protectedFiles(rules, open), []);
 });
 
