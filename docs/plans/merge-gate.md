@@ -94,11 +94,17 @@ chat, files or logs.
 2. Invite it to the repo as a collaborator and accept from that account. On a
    personal-account repo, collaborators get Write and can never change
    settings.
-3. Create one fine-grained token for it, limited to this repository, with
-   Contents and Pull requests read and write (Metadata read is automatic).
-   **No Workflows permission**: builders can't edit `.github/workflows/`,
-   which is also owner-protected. Put it in Keychain, then point each builder
-   (GrokBot, local Codex) at it instead of the owner's login.
+3. Create one **classic** token for it with only the `repo` scope. GitHub's
+   fine-grained tokens can't write to a repo owned by another personal account
+   when the token's user is only a collaborator, which is the case here.
+   Because the bot collaborates only on this repo, `repo` reaches only this
+   repo. **No `workflow` scope**: builders can't edit `.github/workflows/`,
+   which is also owner-protected. `repo` does let the token set commit
+   statuses, so branch protection accepts `codex-approved` and `tests` only
+   from GitHub Actions, and every workflow's own token is read-only except
+   the one that posts `codex-approved`, which runs from `main` and never
+   runs pull request code. Expires in 90 days. Put it in Keychain, then point
+   each builder (GrokBot, local Codex) at it instead of the owner's login.
 4. Approve the repo setting changes before the session makes them.
 
 ## Cloud Claude
@@ -126,7 +132,9 @@ session can still make them.
 3. **Repo settings**, after owner approval: turn on "Allow auto-merge" and
    "Automatically delete head branches"; update `main`'s protection to require
    `tests` and `codex-approved` (from GitHub Actions), require code-owner
-   review, dismiss stale approvals, and keep "applies to admins" on.
+   review, dismiss stale approvals, and keep "applies to admins" on. Set the
+   default workflow token to read-only and leave "Allow GitHub Actions to
+   create and approve pull requests" off.
 4. **`CODEOWNERS`** with the protected paths above.
 5. **`docs/decisions.md`** with the decision list moved out of `STATUS.md`.
 6. **AGENTS.md update**: authors switch on auto-merge when opening a pull
