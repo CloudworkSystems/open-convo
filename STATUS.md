@@ -65,6 +65,9 @@ bot account. Until it's tried, the owner merges by hand.
 
 ## Recent Owner Decisions
 
+- **Oct 15:** Foundations set ([docs/foundations.md](docs/foundations.md)). Canvas/Atlas
+  moves to right after step 3; iPhone capture app right after step 5; modules
+  group under umbrellas (Personal, Family, Business, Creator, Code, Agents).
 - **Oct 15:** Every review asks two questions of each change: does it break a
   rule of this system, and does it fix a problem the owner actually has
   (AGENTS.md Review Loop; approved by merging #43).
@@ -72,7 +75,6 @@ bot account. Until it's tried, the owner merges by hand.
   the builders, enforced checks, auto-merge). `main` is protected from now on.
   Owner decisions move to `docs/decisions.md`, which only the owner approves.
   No interim "agents merge docs after Codex's 👍"; wait for the gate.
-
 - **Oct 15:** Outside builders may build standalone modules (AGENTS.md).
   First: Site Engine's standalone slice, GrokBot builds and Codex reviews.
 - **Oct 15:** Start step 3 now; the owner runs the step 2 trial when he's home.
