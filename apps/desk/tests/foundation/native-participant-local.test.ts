@@ -25,7 +25,7 @@ const codecFor = (request: Wire) => {
 const strip = ({ v: _v, requestId: _id, connectionId: _c, generation: _g, ...rest }: Wire) => rest;
 
 test('every local-route fixture prepares and decodes to its exact result', () => {
-  assert.equal(fixture.cases.length, 6);
+  assert.equal(fixture.cases.length, 8);
   for (const entry of fixture.cases) {
     const result = codecFor(entry.request).decode(JSON.stringify(entry.reply));
     assert.ok(result, entry.name);

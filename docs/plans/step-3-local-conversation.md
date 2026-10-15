@@ -107,7 +107,14 @@ PR 2). In short:
    (`native-participant-local-v1.json`) for catalog entries, route states,
    context ids, the shared input bound and the new reasons. The page codec
    runs the shape cases now; the existing 107 vectors stay byte-identical.
-3. **Local route in the Mac host** also runs every case in the new vectors
+3. **Local route in the Mac host**, in two parts. **3a**: a new
+   `LocalModelRoute` module, inactive (only its tests link it): the catalog,
+   per-run aliases, and `LocalChatRun` behind the existing
+   `ParticipantRunning` seam, tested against a fake Ollama on loopback and
+   checked once against the owner's real Ollama with invented text. **3b**:
+   the coordinator, prepare and store changes (catalog in availability,
+   section 6 step 5 for local runs, context hashing, step 13's alias bind),
+   which also runs every case in the new vectors
    file through the Swift harness, plus the hash binding and
    `participant-changed` on a changed digest.
    The host itself: catalog from Ollama; start with receipt
