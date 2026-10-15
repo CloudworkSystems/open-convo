@@ -6,6 +6,9 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 15:** Every review asks two questions of each change: does it break a
+  rule of this system, and does it fix a problem the owner actually has
+  (AGENTS.md Review Loop; approved by merging #43).
 - **Oct 15:** Build the merge gate (one shared write-only bot account for
   the builders, enforced checks, auto-merge). `main` is protected from now on.
   Owner decisions move to this file, which only the owner approves.

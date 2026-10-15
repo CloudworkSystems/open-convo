@@ -53,6 +53,9 @@ reads from and writes to `CloudworkSystems/open-convo`.
     not apply. Only the owner decides to merge with findings still open.
   - A green "Ready to merge" button means no conflicts, not approval. Claude
     tells the owner in chat when a pull request is ready to merge.
+- *Proposed October 15, pending the owner's approval at merge:* every review,
+  by any agent or the owner, asks two questions of each change. Does it break
+  a rule of this system? Does it fix a problem the owner actually has?
 - `Start Desk.command` pulls the latest `main` before starting, and the running
   Desk refreshes itself when files change, so the inline browser shows the latest
   version. A normal browser is only for a second look.
