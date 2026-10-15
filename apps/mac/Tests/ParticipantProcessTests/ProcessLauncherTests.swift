@@ -360,7 +360,7 @@ struct ProcessLauncherGateTests {
         #expect(found.isEmpty, "\(found)")
     }
 
-    @Test("Inactive: only the test fakes, the test target, the coordinator and section 17's window adapter depend on ParticipantProcess; only the test target depends on the coordinator or the adapter; the app, the Desk window and the hosts depend on none of them")
+    @Test("Inactive: only the test fakes, the test target, the coordinator, section 17's window adapter and the local route depend on ParticipantProcess; only test targets depend on the coordinator, the adapter or the local route; the app, the Desk window and the hosts depend on none of them")
     func packageDependencies() throws {
         let manifest = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("Package.swift")
@@ -384,8 +384,13 @@ struct ProcessLauncherGateTests {
         #expect(dependencies["VoiceCursorMac"]?.contains("DeskWindowKit") == true, "the scan reads dependency lists")
         #expect(dependencies["ParticipantCoordinator"] == ["DeskHost", "ParticipantProcess"], "the coordinator sits above both (Codex Q19)")
         let dependents = dependencies.filter { $0.value.contains("ParticipantProcess") }.keys.sorted()
-        #expect(dependents == ["ParticipantAvailabilityProbe", "ParticipantCoordinator", "ParticipantDeskControls", "ParticipantProcessTests",
-                               "ParticipantTestHost"], "\(dependents)")
+        #expect(dependents == ["LocalModelRoute", "LocalModelRouteTests", "ParticipantAvailabilityProbe", "ParticipantCoordinator",
+                               "ParticipantDeskControls", "ParticipantProcessTests", "ParticipantTestHost"], "\(dependents)")
+        // The local route (contract section 20) sits on ParticipantProcess and
+        // only its own test target links it until step 3 PR 3b wires it in.
+        #expect(dependencies["LocalModelRoute"] == ["ParticipantProcess"])
+        let localDependents = dependencies.filter { $0.value.contains("LocalModelRoute") }.keys.sorted()
+        #expect(localDependents == ["LocalModelRouteTests"], "\(localDependents)")
         // Section 17's window adapter (plan F4) joins the owner to the Desk
         // window's plain controls; only the test target links it, so the app
         // links neither it nor ParticipantProcess until activation (F7).

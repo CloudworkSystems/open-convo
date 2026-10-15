@@ -109,6 +109,17 @@ let package = Package(
             name: "ParticipantCoordinator",
             dependencies: ["DeskHost", "ParticipantProcess"]
         ),
+        // The local-model route (contract section 20): Ollama on this Mac only.
+        // INACTIVE: only its test target depends on it; the coordinator wires
+        // it in step 3 PR 3b.
+        .target(
+            name: "LocalModelRoute",
+            dependencies: ["ParticipantProcess"]
+        ),
+        .testTarget(
+            name: "LocalModelRouteTests",
+            dependencies: ["LocalModelRoute", "ParticipantProcess"]
+        ),
         // Test-only helpers, never bundled: a fake CLI, a host that plays the
         // app (so a test can SIGKILL it), a supervisor test build that can
         // pause before it watches the app and records how it saw the app go,
