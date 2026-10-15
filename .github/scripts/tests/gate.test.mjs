@@ -14,9 +14,9 @@ const clean = (sha, at, user = codex) => ({
   body: `Codex Review: Didn't find any major issues. Bravo.\n\n**Reviewed commit:** \`${sha.slice(0, 10)}\`\n`,
 });
 const findings = (sha, at, user = codex) => ({ user, commit_id: sha, state: 'COMMENTED', submitted_at: at, body: '### 💡 Codex Review' });
-const summary = (sha) => ({
+const summary = (sha, done = '2026-10-15T01:30:00.123456Z') => ({
   user: codex, created_at: '2026-10-15T00:00:00Z',
-  body: `<!-- codex-pull-request-review-summary -->\n| 📝 **Code Review** | ✅ **Completed** <relative-time datetime="x">x</relative-time> | \`${sha.slice(0, 7)}\` | Manual request |`,
+  body: `<!-- codex-pull-request-review-summary -->\n| 📝 **Code Review** | ✅ **Completed** <relative-time datetime="${done}">${done}</relative-time> | \`${sha.slice(0, 7)}\` | Manual request |`,
 });
 const thumb = (at, user = { login: CODEX_LOGIN, type: 'User' }) => ({ user, content: '+1', created_at: at });
 
@@ -118,4 +118,30 @@ test('CODEOWNERS covers the rules, decisions and key files, and not ordinary cod
   const open = ['STATUS.md', 'README.md', 'apps/desk/src/app/App.tsx', 'packages/clarity/src/index.mjs',
     'docs/annotations/x.md', 'apps/mac/Sources/DeskHost/DeskHost.swift', 'docs/plans-old.md', 'sub/AGENTS.md'];
   assert.deepEqual(protectedFiles(rules, open), []);
+});
+
+test('a thumbs-up left from an earlier commit does not count for a newly completed head', () => {
+  // 👍 at 01:00 for the old commit; the head's review completed at 01:30 with no new 👍.
+  const r = evaluateCodexSignal({ headSha: HEAD, comments: [summary(HEAD, '2026-10-15T01:30:00Z')], reactions: [thumb('2026-10-15T01:00:00Z')] });
+  assert.equal(r.approved, false);
+});
+
+test('a thumbs-up at the same second as the completion does not count', () => {
+  const r = evaluateCodexSignal({ headSha: HEAD, comments: [summary(HEAD, '2026-10-15T01:30:00Z')], reactions: [thumb('2026-10-15T01:30:00Z')] });
+  assert.equal(r.approved, false);
+});
+
+test('a clean comment and a finding in the same second fail closed', () => {
+  const r = evaluateCodexSignal({
+    headSha: HEAD,
+    comments: [clean(HEAD, '2026-10-15T02:00:00Z')],
+    reviews: [findings(HEAD, '2026-10-15T02:00:00Z')],
+  });
+  assert.equal(r.approved, false);
+});
+
+test('a summary without a completion time never approves through a thumbs-up', () => {
+  const body = `<!-- codex-pull-request-review-summary -->\n| 📝 **Code Review** | ✅ **Completed** | \`${HEAD.slice(0, 7)}\` | Manual request |`;
+  const r = evaluateCodexSignal({ headSha: HEAD, comments: [{ user: codex, created_at: '2026-10-15T00:00:00Z', body }], reactions: [thumb('2026-10-15T02:00:00Z')] });
+  assert.equal(r.approved, false);
 });

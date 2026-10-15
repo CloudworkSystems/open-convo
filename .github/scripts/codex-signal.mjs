@@ -9,7 +9,9 @@ export const CODEX_LOGIN = 'chatgpt-codex-connector[bot]';
 const CLEAN_PHRASE = /didn['’]t find any major issues/i;
 const REVIEWED_COMMIT = /\*\*Reviewed commit:\*\*\s*`([0-9a-f]{7,40})`/i;
 const SUMMARY_MARKER = '<!-- codex-pull-request-review-summary -->';
-const SUMMARY_CODE_ROW = /Code Review\*\*\s*\|\s*✅\s*\*\*Completed\*\*[^|]*\|\s*`([0-9a-f]{7,40})`/i;
+// Captures the completion time and the reviewed commit from the summary's
+// "Code Review | ✅ Completed <time> | `commit`" row.
+const SUMMARY_CODE_ROW = /Code Review\*\*\s*\|\s*✅\s*\*\*Completed\*\*\s*(?:<relative-time datetime="([^"]+)">)?[^|]*\|\s*`([0-9a-f]{7,40})`/i;
 
 // GitHub usernames can't contain "[", so only the app itself can carry this
 // login. (The reactions API reports the app's type as "User", so type isn't used.)
@@ -41,21 +43,26 @@ export function evaluateCodexSignal({ headSha, comments = [], reviews = [], reac
     .filter((c) => matchesHead((c.body.match(REVIEWED_COMMIT) || [])[1], headSha))
     .map((c) => time(c.created_at));
   const lastClean = clean.length ? Math.max(...clean) : 0;
-  if (lastClean && lastClean >= lastFinding) {
+  // Strictly later: a tie with a finding fails closed.
+  if (lastClean && lastClean > lastFinding) {
     return { approved: true, reason: `Codex found no major issues on ${short}.` };
   }
 
-  // Signal 2: Codex's 👍 on the pull request, with its summary showing the code
-  // review completed on the head commit and no findings posted after the 👍.
-  const summaryOnHead = comments.some((c) => {
-    if (!isCodex(c.user) || !(c.body ?? '').includes(SUMMARY_MARKER)) return false;
-    return matchesHead((c.body.match(SUMMARY_CODE_ROW) || [])[1], headSha);
-  });
+  // Signal 2: Codex's 👍 on the pull request, posted after its summary shows
+  // the code review of the head commit completed, with no findings after it.
+  // A 👍 left over from an earlier commit predates that completion, so it
+  // never counts for a new head.
+  const headCompletions = comments
+    .filter((c) => isCodex(c.user) && (c.body ?? '').includes(SUMMARY_MARKER))
+    .map((c) => c.body.match(SUMMARY_CODE_ROW))
+    .filter((m) => m && matchesHead(m[2], headSha))
+    .map((m) => time(m[1]));
+  const completedAt = headCompletions.length ? Math.max(...headCompletions) : 0;
   const thumbs = reactions
     .filter((r) => isCodex(r.user) && r.content === '+1')
     .map((r) => time(r.created_at));
   const lastThumb = thumbs.length ? Math.max(...thumbs) : 0;
-  if (summaryOnHead && lastThumb && lastThumb >= lastFinding) {
+  if (completedAt && lastThumb > completedAt && lastThumb > lastFinding) {
     return { approved: true, reason: `Codex reacted 👍 after reviewing ${short}.` };
   }
 
