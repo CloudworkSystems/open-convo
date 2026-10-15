@@ -33,3 +33,12 @@
 /apps/mac/**/*PaidUsage* @CloudworkSystems
 /apps/mac/Sources/ParticipantDeskControls/ @CloudworkSystems
 /apps/mac/Sources/ParticipantCoordinator/ @CloudworkSystems
+
+# What wires the above into the shipping app and could switch the paid path
+# on: the app's composition root, the package manifest (which modules link),
+# and the test that forbids linking the participant path today. Most Mac app
+# pull requests touch main.swift, so they wait for the owner; moving the
+# storage and paid-path wiring into small files of their own would end that.
+/apps/mac/Sources/VoiceCursorMac/main.swift @CloudworkSystems
+/apps/mac/Package.swift @CloudworkSystems
+/apps/mac/Tests/DeskWindowKitTests/DeskSessionParticipantTests.swift @CloudworkSystems
