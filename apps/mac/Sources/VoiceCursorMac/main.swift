@@ -4066,13 +4066,11 @@ enum TextInjector {
         pendingKeyboardFinalReconcile != nil
     }
 
-    /// `startsNewTarget` is true when a new dictation or correction picks its
-    /// target (the usual case), so earlier delayed pastes and Returns are
-    /// cancelled. The stop-time second look for the same session passes false.
-    static func rememberFocusedElement(startsNewTarget: Bool = true) {
-        if startsNewTarget {
-            targetGeneration.advance()
-        }
+    /// Picks the text box for a new dictation or correction. A new target
+    /// also cancels any earlier paste or Return still waiting (see
+    /// PasteTargetGeneration).
+    static func rememberFocusedElement() {
+        targetGeneration.advance()
         guard accessibilityTrusted(prompt: false) else {
             targetElement = nil
             RunLog.write("cursor-focus.capture.skipped", "accessibility=not-trusted")
@@ -4093,44 +4091,19 @@ enum TextInjector {
             &value
         )
 
-        if status != .success || value == nil,
-           let application = targetApplication
-        {
-            let appElement = AXUIElementCreateApplication(application.processIdentifier)
-            var fallbackStatus = AXUIElementCopyAttributeValue(
-                appElement,
-                kAXFocusedUIElementAttribute as CFString,
-                &value
-            )
-            // A freshly woken Electron tree can answer "no value" for a
-            // moment. Retry briefly (bounded by ElectronFocusPolicy).
-            var retries = 0
-            while fallbackStatus != .success || value == nil,
-                  let delay = ElectronFocusPolicy.retryDelay(
-                      afterFailedStatus: fallbackStatus.rawValue,
-                      retriesSoFar: retries
-                  )
-            {
-                retries += 1
-                RunLog.write(
-                    "focus-capture.retry",
-                    "attempt=\(retries) status=\(fallbackStatus.rawValue) delayMs=\(Int(delay * 1000))"
-                )
-                Thread.sleep(forTimeInterval: delay)
-                value = nil
-                fallbackStatus = AXUIElementCopyAttributeValue(
-                    appElement,
-                    kAXFocusedUIElementAttribute as CFString,
-                    &value
-                )
+        // The system-wide answer is used only when it belongs to the target
+        // app; otherwise the target app itself is asked.
+        var systemElementInTarget = status == .success && value != nil
+        if systemElementInTarget, let application = targetApplication, let found = value {
+            systemElementInTarget = elementProcessIdentifier(found as! AXUIElement) == application.processIdentifier
+            if !systemElementInTarget {
+                RunLog.write("cursor-focus.capture.other-app", "reason=system-focus-outside-target")
             }
-            if retries > 0 {
-                RunLog.write(
-                    "focus-capture.retry.finished",
-                    "attempts=\(retries) status=\(fallbackStatus.rawValue)"
-                )
-            }
-            if fallbackStatus != .success {
+        }
+
+        if !systemElementInTarget, let application = targetApplication {
+            let (fallbackStatus, element) = focusedElement(inApplication: application)
+            guard let element else {
                 targetElement = nil
                 RunLog.write(
                     "cursor-focus.capture.failed",
@@ -4138,6 +4111,7 @@ enum TextInjector {
                 )
                 return
             }
+            value = element
         }
 
         guard let value else {
@@ -4149,6 +4123,78 @@ enum TextInjector {
         let element = value as! AXUIElement
         targetElement = element
         RunLog.write("cursor-focus.captured", describe(element))
+    }
+
+    /// Asks only the given app (never the system-wide focus) for its focused
+    /// element, retrying briefly while a freshly woken Electron tree answers
+    /// "no value" (bounded by ElectronFocusPolicy). The element returned
+    /// always belongs to that app.
+    private static func focusedElement(inApplication application: NSRunningApplication) -> (AXError, AXUIElement?) {
+        let appElement = AXUIElementCreateApplication(application.processIdentifier)
+        var value: CFTypeRef?
+        var status = AXUIElementCopyAttributeValue(
+            appElement,
+            kAXFocusedUIElementAttribute as CFString,
+            &value
+        )
+        var retries = 0
+        while status != .success || value == nil,
+              let delay = ElectronFocusPolicy.retryDelay(
+                  afterFailedStatus: status.rawValue,
+                  retriesSoFar: retries
+              )
+        {
+            retries += 1
+            RunLog.write(
+                "focus-capture.retry",
+                "attempt=\(retries) status=\(status.rawValue) delayMs=\(Int(delay * 1000))"
+            )
+            Thread.sleep(forTimeInterval: delay)
+            value = nil
+            status = AXUIElementCopyAttributeValue(
+                appElement,
+                kAXFocusedUIElementAttribute as CFString,
+                &value
+            )
+        }
+        if retries > 0 {
+            RunLog.write(
+                "focus-capture.retry.finished",
+                "attempts=\(retries) status=\(status.rawValue)"
+            )
+        }
+        guard status == .success, let value, CFGetTypeID(value) == AXUIElementGetTypeID() else {
+            return (status, nil)
+        }
+        let element = value as! AXUIElement
+        // Belt and braces: an element from another process is never used.
+        guard elementProcessIdentifier(element) == application.processIdentifier else {
+            RunLog.write("cursor-focus.capture.other-app", "reason=element-pid-mismatch")
+            return (status, nil)
+        }
+        return (status, element)
+    }
+
+    /// The stop-time second look, used when no text box was found when the
+    /// dictation started. It asks only the session's own target app, never
+    /// the system-wide focus (which could be another app if activation is
+    /// slow or the owner switched apps), and keeps the session's token.
+    private static func recaptureFocusedElement(inTarget application: NSRunningApplication) {
+        guard accessibilityTrusted(prompt: false) else { return }
+        wakeAccessibility(of: application)
+        let (status, element) = focusedElement(inApplication: application)
+        guard let element else {
+            RunLog.write("cursor-focus.stop-recapture.failed", "status=\(status.rawValue)")
+            return
+        }
+        targetElement = element
+        RunLog.write("cursor-focus.stop-recaptured", describe(element))
+    }
+
+    private static func elementProcessIdentifier(_ element: AXUIElement) -> pid_t? {
+        var pid: pid_t = 0
+        guard AXUIElementGetPid(element, &pid) == .success else { return nil }
+        return pid
     }
 
     /// Asks an Electron app to build its Accessibility tree by setting
@@ -5131,7 +5177,7 @@ enum TextInjector {
                 // second look belongs to the same session, so the token stays.
                 if targetElement == nil {
                     RunLog.write("cursor-focus.stop-recapture", describe(targetApplication))
-                    rememberFocusedElement(startsNewTarget: false)
+                    recaptureFocusedElement(inTarget: targetApplication)
                 } else {
                     wakeAccessibility(of: targetApplication)
                 }
@@ -5139,7 +5185,26 @@ enum TextInjector {
                 targetApplication.activate(options: [.activateIgnoringOtherApps])
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
                     guard pasteStillCurrent(text, token: token, stage: "insert", afterPaste: afterPaste) else { return }
-                    let step = pasteIntoActiveApplication(text)
+                    // Type only into the target app, and only while it is in
+                    // front (see PasteDeliveryCheck).
+                    let route = PasteDeliveryCheck.route(
+                        targetProcessIdentifier: targetApplication.processIdentifier,
+                        frontmostProcessIdentifier: NSWorkspace.shared.frontmostApplication?.processIdentifier,
+                        elementProcessIdentifier: targetElement.flatMap { elementProcessIdentifier($0) }
+                    )
+                    let step: PasteSubmitSequencing.PasteStep
+                    switch route {
+                    case .accessibilityThenKeystroke:
+                        step = pasteIntoActiveApplication(text)
+                    case .keystrokeOnly:
+                        RunLog.write("completion.ax-insert.skipped", "reason=element-not-in-target")
+                        step = pasteIntoActiveApplication(text, allowAccessibilityInsert: false)
+                    case .clipboardOnly:
+                        RunLog.write("completion.paste.skipped", "reason=target-not-frontmost")
+                        writePrivateClipboardText(text)
+                        RunLog.write("completion.pasteboard.retained", "reason=target-not-frontmost chars=\(text.count)")
+                        step = .clipboardOnly
+                    }
                     afterPaste?(step)
                 }
             }
@@ -5153,12 +5218,15 @@ enum TextInjector {
     }
 
     @discardableResult
-    private static func pasteIntoActiveApplication(_ text: String) -> PasteSubmitSequencing.PasteStep {
+    private static func pasteIntoActiveApplication(
+        _ text: String,
+        allowAccessibilityInsert: Bool = true
+    ) -> PasteSubmitSequencing.PasteStep {
         if deskShieldHoldsBack(.paste) {
             writeClipboardFallback(text, reason: "desk-window-key")
             return .clipboardOnly
         }
-        if insertUsingAccessibility(text) {
+        if allowAccessibilityInsert, insertUsingAccessibility(text) {
             return .insertedThroughAccessibility
         }
 

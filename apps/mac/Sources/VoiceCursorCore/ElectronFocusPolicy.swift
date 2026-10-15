@@ -104,3 +104,34 @@ public struct PasteTargetGeneration: Equatable {
         oldProcessIdentifier != newProcessIdentifier
     }
 }
+
+/// How a delayed paste may reach its target app, decided just before it
+/// runs. Pure rules, so tests can prove them.
+///
+/// Why: the paste runs a moment after the target app is brought forward. If
+/// that has not finished, or the owner switched apps meanwhile, typing would
+/// land in the wrong app, and a text box found earlier might belong to
+/// another app. So the text goes into a text box only when it belongs to the
+/// target app and that app is in front, and Cmd+V is sent only when the
+/// target app is in front.
+public enum PasteDeliveryCheck {
+    public enum Route: Equatable {
+        /// Put the text straight into the text box (Cmd+V if that fails).
+        case accessibilityThenKeystroke
+        /// No usable text box in the target app: send Cmd+V.
+        case keystrokeOnly
+        /// The target app is not in front: type nothing, keep the text on
+        /// the clipboard for the owner.
+        case clipboardOnly
+    }
+
+    public static func route(
+        targetProcessIdentifier: Int32,
+        frontmostProcessIdentifier: Int32?,
+        elementProcessIdentifier: Int32?
+    ) -> Route {
+        guard frontmostProcessIdentifier == targetProcessIdentifier else { return .clipboardOnly }
+        guard elementProcessIdentifier == targetProcessIdentifier else { return .keystrokeOnly }
+        return .accessibilityThenKeystroke
+    }
+}

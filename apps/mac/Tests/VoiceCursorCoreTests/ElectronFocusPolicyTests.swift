@@ -72,6 +72,24 @@ struct ElectronFocusPolicyTests {
         #expect(!PasteTargetGeneration.targetChanged(oldProcessIdentifier: nil, newProcessIdentifier: nil))
     }
 
+    @Test("Text goes into a text box only in the target app while it is in front")
+    func deliveryIntoTargetTextBox() {
+        #expect(PasteDeliveryCheck.route(targetProcessIdentifier: 42, frontmostProcessIdentifier: 42, elementProcessIdentifier: 42) == .accessibilityThenKeystroke)
+    }
+
+    @Test("A text box from another app is never typed into; Cmd+V goes to the target")
+    func elementFromOtherApp() {
+        #expect(PasteDeliveryCheck.route(targetProcessIdentifier: 42, frontmostProcessIdentifier: 42, elementProcessIdentifier: 7) == .keystrokeOnly)
+        #expect(PasteDeliveryCheck.route(targetProcessIdentifier: 42, frontmostProcessIdentifier: 42, elementProcessIdentifier: nil) == .keystrokeOnly)
+    }
+
+    @Test("Nothing is typed when the target app is not in front")
+    func targetNotFrontmost() {
+        #expect(PasteDeliveryCheck.route(targetProcessIdentifier: 42, frontmostProcessIdentifier: 7, elementProcessIdentifier: 42) == .clipboardOnly)
+        #expect(PasteDeliveryCheck.route(targetProcessIdentifier: 42, frontmostProcessIdentifier: 7, elementProcessIdentifier: 7) == .clipboardOnly)
+        #expect(PasteDeliveryCheck.route(targetProcessIdentifier: 42, frontmostProcessIdentifier: nil, elementProcessIdentifier: 42) == .clipboardOnly)
+    }
+
     @Test("Return waits a short settle after the paste")
     func settleDelay() {
         #expect(PasteSubmitSequencing.settleDelayAfterPaste == 0.15)
