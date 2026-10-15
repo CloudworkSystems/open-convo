@@ -3948,6 +3948,8 @@ enum TextInjector {
     private static var hotKeyIsDown = false
     private static var pendingPasteText: String?
     private static var pendingPasteFallbackWorkItem: DispatchWorkItem?
+    /// Runs after a paste that waited for the hotkey to be released.
+    private static var pendingPasteAfterPaste: ((PasteSubmitSequencing.PasteStep) -> Void)?
     static var externalLivePreviewGuardHandler: ((String) -> Void)?
     /// The Desk window's last-moment shield (Desk window, build 9), asked
     /// just before a synthetic paste, typing or Return: true while the Desk
@@ -4050,6 +4052,12 @@ enum TextInjector {
             return
         }
 
+        // Electron apps (Claude, Codex, Grok Bot) build their Accessibility
+        // tree only when asked, so ask before looking for the text box.
+        if let application = targetApplication, !application.isTerminated {
+            wakeAccessibility(of: application)
+        }
+
         let systemElement = AXUIElementCreateSystemWide()
         var value: CFTypeRef?
         let status = AXUIElementCopyAttributeValue(
@@ -4062,11 +4070,39 @@ enum TextInjector {
            let application = targetApplication
         {
             let appElement = AXUIElementCreateApplication(application.processIdentifier)
-            let fallbackStatus = AXUIElementCopyAttributeValue(
+            var fallbackStatus = AXUIElementCopyAttributeValue(
                 appElement,
                 kAXFocusedUIElementAttribute as CFString,
                 &value
             )
+            // A freshly woken Electron tree can answer "no value" for a
+            // moment. Retry briefly (bounded by ElectronFocusPolicy).
+            var retries = 0
+            while fallbackStatus != .success || value == nil,
+                  let delay = ElectronFocusPolicy.retryDelay(
+                      afterFailedStatus: fallbackStatus.rawValue,
+                      retriesSoFar: retries
+                  )
+            {
+                retries += 1
+                RunLog.write(
+                    "focus-capture.retry",
+                    "attempt=\(retries) status=\(fallbackStatus.rawValue) delayMs=\(Int(delay * 1000))"
+                )
+                Thread.sleep(forTimeInterval: delay)
+                value = nil
+                fallbackStatus = AXUIElementCopyAttributeValue(
+                    appElement,
+                    kAXFocusedUIElementAttribute as CFString,
+                    &value
+                )
+            }
+            if retries > 0 {
+                RunLog.write(
+                    "focus-capture.retry.finished",
+                    "attempts=\(retries) status=\(fallbackStatus.rawValue)"
+                )
+            }
             if fallbackStatus != .success {
                 targetElement = nil
                 RunLog.write(
@@ -4086,6 +4122,20 @@ enum TextInjector {
         let element = value as! AXUIElement
         targetElement = element
         RunLog.write("cursor-focus.captured", describe(element))
+    }
+
+    /// Asks an Electron app to build its Accessibility tree by setting
+    /// `AXManualAccessibility` on it. Any app gets the request: native apps
+    /// ignore it, so no list of bundle IDs is needed. Errors are logged (code
+    /// only) and otherwise ignored.
+    private static func wakeAccessibility(of application: NSRunningApplication) {
+        let appElement = AXUIElementCreateApplication(application.processIdentifier)
+        let status = AXUIElementSetAttributeValue(
+            appElement,
+            ElectronFocusPolicy.manualAccessibilityAttribute as CFString,
+            kCFBooleanTrue
+        )
+        RunLog.write("ax.manual-accessibility.set", "\(describe(application)) status=\(status.rawValue)")
     }
 
     /// `allowed: false` (a Desk recording) resets the state and starts nothing.
@@ -4963,31 +5013,40 @@ enum TextInjector {
         hotKeyIsDown = false
         RunLog.write("hotkey.released")
         guard let text = pendingPasteText else { return }
+        let afterPaste = pendingPasteAfterPaste
         pendingPasteText = nil
+        pendingPasteAfterPaste = nil
         pendingPasteFallbackWorkItem?.cancel()
         pendingPasteFallbackWorkItem = nil
         RunLog.write("completion.paste.resumed", "reason=hotkey-released")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            performPaste(text)
+            performPaste(text, afterPaste: afterPaste)
         }
     }
 
-    static func paste(_ text: String) {
+    /// `afterPaste` runs once the paste step has really happened (or was
+    /// skipped), with what it did. "Paste and Submit" uses it so Return
+    /// follows the paste instead of racing it.
+    static func paste(_ text: String, afterPaste: ((PasteSubmitSequencing.PasteStep) -> Void)? = nil) {
         guard canAutoPaste else {
             writeClipboardFallback(text, reason: "accessibility-not-trusted")
+            afterPaste?(.clipboardOnly)
             return
         }
 
         if hotKeyIsDown {
             pendingPasteText = text
+            pendingPasteAfterPaste = afterPaste
             pendingPasteFallbackWorkItem?.cancel()
             let fallback = DispatchWorkItem {
                 guard let text = pendingPasteText else { return }
+                let afterPaste = pendingPasteAfterPaste
                 pendingPasteText = nil
+                pendingPasteAfterPaste = nil
                 pendingPasteFallbackWorkItem = nil
                 hotKeyIsDown = false
                 RunLog.write("completion.paste.resumed", "reason=hotkey-timeout")
-                performPaste(text)
+                performPaste(text, afterPaste: afterPaste)
             }
             pendingPasteFallbackWorkItem = fallback
             RunLog.write("completion.paste.deferred", "reason=hotkey-down")
@@ -4995,18 +5054,28 @@ enum TextInjector {
             return
         }
 
-        performPaste(text)
+        performPaste(text, afterPaste: afterPaste)
     }
 
-    private static func performPaste(_ text: String) {
+    private static func performPaste(_ text: String, afterPaste: ((PasteSubmitSequencing.PasteStep) -> Void)? = nil) {
         if let targetApplication, !targetApplication.isTerminated {
             RunLog.write("completion.paste.target", describe(targetApplication))
             targetApplication.activate(options: [.activateIgnoringOtherApps])
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                // Wake Electron's Accessibility tree again (harmless if it is
+                // already on) and, if no text box was found when dictation
+                // started, look once more now that the app is in front.
+                if targetElement == nil {
+                    RunLog.write("cursor-focus.stop-recapture", describe(targetApplication))
+                    rememberFocusedElement()
+                } else {
+                    wakeAccessibility(of: targetApplication)
+                }
                 restoreFocusedElement()
                 targetApplication.activate(options: [.activateIgnoringOtherApps])
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                    pasteIntoActiveApplication(text)
+                    let step = pasteIntoActiveApplication(text)
+                    afterPaste?(step)
                 }
             }
             return
@@ -5014,16 +5083,18 @@ enum TextInjector {
 
         RunLog.write("completion.paste.target", "bundle=frontmost name=frontmost")
         restoreFocusedElement()
-        pasteIntoActiveApplication(text)
+        let step = pasteIntoActiveApplication(text)
+        afterPaste?(step)
     }
 
-    private static func pasteIntoActiveApplication(_ text: String) {
+    @discardableResult
+    private static func pasteIntoActiveApplication(_ text: String) -> PasteSubmitSequencing.PasteStep {
         if deskShieldHoldsBack(.paste) {
             writeClipboardFallback(text, reason: "desk-window-key")
-            return
+            return .clipboardOnly
         }
         if insertUsingAccessibility(text) {
-            return
+            return .insertedThroughAccessibility
         }
 
         // Dictated text stays on this Mac (no Universal Clipboard) and clipboard
@@ -5033,7 +5104,7 @@ enum TextInjector {
 
         guard let source = CGEventSource(stateID: .combinedSessionState) else {
             RunLog.write("completion.paste.keystroke.failed", "reason=no-event-source")
-            return
+            return .notPerformed
         }
         let commandDown = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Command), keyDown: true)
         let keyDown = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: true)
@@ -5049,6 +5120,7 @@ enum TextInjector {
         commandUp?.post(tap: .cghidEventTap)
         RunLog.write("completion.paste.keystroke.posted", "style=command-sequence")
         RunLog.write("completion.pasteboard.retained", "reason=manual-paste-fallback")
+        return .keystrokePosted
     }
 
     private static func insertUsingAccessibility(_ text: String) -> Bool {
@@ -5456,6 +5528,7 @@ enum TextInjector {
     static func writeClipboardFallback(_ text: String, reason: String, sessionId: String? = nil) {
         writePrivateClipboardText(text)
         pendingPasteText = nil
+        pendingPasteAfterPaste = nil
         pendingPasteFallbackWorkItem?.cancel()
         pendingPasteFallbackWorkItem = nil
         let idPart = sessionId.map { "id=\($0) " } ?? ""
@@ -5464,6 +5537,7 @@ enum TextInjector {
 
     static func archiveSuppressedLateInsertion(finalText: String, sessionId: String, reason: String) {
         pendingPasteText = nil
+        pendingPasteAfterPaste = nil
         pendingPasteFallbackWorkItem?.cancel()
         pendingPasteFallbackWorkItem = nil
         RunLog.write(
@@ -7371,13 +7445,24 @@ final class DictationController {
                 let shouldSubmit = !deliversPartialText && !suppressLateInsertion && !cleanedText.isEmpty && completionAction == .autoSubmit
                 var safetyStopOutcome: DictationOutcome?
                 if shouldPasteAtStop {
-                    TextInjector.paste(cleanedText + " ")
-                    RunLog.write("completion.paste.requested", "id=\(id) action=\(completionAction.rawValue)")
                     if shouldSubmit {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                            TextInjector.pressReturn()
+                        // Paste and Submit: Return waits for the paste to
+                        // actually land (it can take 0.2 s or more while the
+                        // target app comes forward), then a short settle.
+                        TextInjector.paste(cleanedText + " ") { step in
+                            guard PasteSubmitSequencing.shouldPressReturn(after: step) else {
+                                RunLog.write("completion.submit.skipped", "id=\(id) reason=paste-not-performed step=\(step)")
+                                return
+                            }
+                            RunLog.write("completion.submit.scheduled", "id=\(id) step=\(step)")
+                            DispatchQueue.main.asyncAfter(deadline: .now() + PasteSubmitSequencing.settleDelayAfterPaste) {
+                                TextInjector.pressReturn()
+                            }
                         }
+                    } else {
+                        TextInjector.paste(cleanedText + " ")
                     }
+                    RunLog.write("completion.paste.requested", "id=\(id) action=\(completionAction.rawValue)")
                 } else if shouldSubmit {
                     RunLog.write("completion.live-submit.requested", "id=\(id) action=\(completionAction.rawValue)")
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
