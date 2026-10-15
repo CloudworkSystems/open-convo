@@ -34,17 +34,50 @@ built and tried with invented conversations only.
 
 Talk to Ollama's local HTTP service (`127.0.0.1:11434`, `/api/chat`,
 streaming) from the Mac host directly, with no child process. Present its
-replies to the page through the existing `participant.*` operations, with the
-route named, so the Claude Code adapter later shares the same page, transcript
-and Stop.
+replies to the page through the existing `participant.*` operations, so the
+Claude Code adapter later shares the same page, transcript and Stop.
 
 Why: a local HTTP stream has no process group to supervise and no paid path,
-so most of the participant lane's machinery (process groups, binary pinning,
-paid-usage confirmation) doesn't apply. Reusing the page wire keeps one
-conversation screen for every route.
+so the process-group, binary-pinning and paid-usage parts of the participant
+lane don't apply. Everything else the contract guarantees still does: the
+dispatch receipt, status-based recovery, lifecycle gates and limits.
 
-Trade-off: the contract gains a route field and a few local-only rules, which
-needs Codex's review of the wire before code.
+Trade-off: the contract needs a revision (below) and its codecs and fixtures
+change with it, before any host code.
+
+## Contract Changes (Revision 4, Its Own PR Before Host Code)
+
+These change `docs/desk-native-participant-contract.md`, the Swift and page
+codecs and the vectors file together. Page and host already ship as one build
+(section 2), so the pinned page codec moves with them.
+
+1. **A catalog, not one pin.** `participant.availability` returns a list:
+   the Claude Code entry (unchanged) plus one entry per installed local chat
+   model. Each entry keeps today's four persisted fields: `id`
+   (`ollama-local` for every local model), `label`, `model` and
+   `executionHost` (`this-mac`). `model` is the Ollama name plus its digest
+   (`qwen3.5:9b@6488c96fa5fa`), so a re-downloaded or changed model is a
+   different identity. The run's persisted `participant` stays four fields,
+   compared as exact strings on replay.
+2. **Prepared-run check (section 6, step 5)** compares `run.participant` with
+   *an entry* of native's current catalog instead of the one pin. **Start
+   (section 7, step 10)** answers `participant-changed` when that entry is
+   gone or its digest changed; native never runs a prepared run under another
+   model.
+3. **Conversation context in the first wire.** A prepared run gains
+   `contextMessageIds`: the ordered ids of earlier completed messages in the
+   same session that are sent as context. Native reads their role and text
+   from the committed record in the same commit, so the text can't differ
+   from what was saved. A missing, uncompleted or out-of-session id is
+   `run-mismatch`. Context counts toward the run's size limit (section 6,
+   step 7). When the history is too large, the page leaves out the oldest
+   whole turns and the composer says "Earlier turns not sent"; it never cuts
+   a turn in half. Context applies from the first host PR, so every second
+   turn continues the conversation, not just reopened ones.
+4. **Local-only entries.** Availability reasons gain `ollama-not-running`,
+   `model-missing`, `model-not-local` (a `:cloud` or remote model) and
+   `host-not-loopback`. Section 17's paid-usage confirmation and the
+   first-trial input bound apply to the Claude Code entry only.
 
 ## Rules For The Local Route
 
@@ -54,6 +87,21 @@ needs Codex's review of the wire before code.
   Ollama reports as remote; they send the conversation off the Mac.
 - **No fallback.** If Ollama isn't running or the model is missing, say so
   plainly; never switch to another route.
+- **Receipt before request.** Start follows section 7 unchanged: the start
+  record is written by compare-and-set inside the store's lock *before* any
+  HTTP request. An undetermined write answers `unknown` and sends nothing. A
+  start whose reply was lost is resolved with `participant.status`, never by
+  sending again. Ollama has no request-level idempotency, so nothing resends
+  a request on its own.
+- **After a crash.** A run with a start record and no terminal reopens as
+  interrupted: its partial text is kept and labeled as cut off. Only the
+  owner's explicit Retry makes a new run (new ids); the old one is never
+  re-requested.
+- **Lifecycle gates.** The HTTP task lives under the same coordinator,
+  lifecycle epoch and push gate as a process run. Lock, Desk close and quit
+  cancel the request, drop retained text on lock and close (section 14),
+  write the terminal record, and keep quit within section 14's 17-second
+  bound. Late text after lock or into a replacement Desk is never delivered.
 - **Visible before Send.** The composer shows "Local · <model> · stays on this
   Mac" for the chosen model.
 - **Model choice is rules only:** the owner's default plus a per-conversation
@@ -61,18 +109,22 @@ needs Codex's review of the wire before code.
 
 ## Proposed Pull Requests, In Order
 
-1. **Wire and scope** (this document), reviewed first.
-2. **Local route in the Mac host.** List installed local models; stream a
-   reply; Stop cancels the request; loopback and `:cloud` refusals. Tested
-   against a fake Ollama server, never the network.
-3. **Desk wiring.** Model picker, "who receives what" label, streaming reply in
-   the run transcript, Stop. Tried in True Convo Test with invented chats.
-4. **Saved and reopened.** Conversations on the protected store; reopening
-   sends the earlier turns back as context, so nothing is retold. Safe retry: a
-   reply cut off by a crash is marked as cut off, never duplicated or resent
-   silently.
-5. **Proof and owner trial.** A scripted kill-mid-reply proof, plus a short
-   checklist for the owner.
+1. **Scope** (this document).
+2. **Contract revision 4, codecs and vectors.** The changes above, with new
+   vectors for catalog entries, context ids, the new reasons and
+   `participant-changed` on a changed digest. No host behavior yet.
+3. **Local route in the Mac host.** Catalog from Ollama; start with receipt
+   before request; streaming events; Stop; status after a lost reply;
+   interrupted runs on relaunch; lock, close and quit gates. Tested against a
+   fake Ollama server, never the network, including unknown outcomes (reply
+   lost after the request, crash between receipt and request, crash
+   mid-stream) and every section 14 lifecycle case.
+4. **Desk wiring.** Model picker, "who receives what" label, context from
+   earlier turns, streaming reply in the run transcript, Stop, Retry on a
+   cut-off reply. Tried in True Convo Test with invented chats.
+5. **Proof and owner trial.** A scripted kill-mid-reply proof (no duplicate
+   replies, nothing resent, cut-off replies labeled), then a short checklist
+   for the owner: talk, quit, reopen, continue.
 
 ## Model Trial (October 15)
 
