@@ -99,8 +99,8 @@ keys live in Keychain, never in files or logs.
 
 Added October 14, 2026 by the planning session, at the owner's request.
 Scion is Google's experimental, open-source system for running teams of
-agents (Apache-2.0, pre-1.0). It is unrelated to the "Scion" described in
-the video covered in the next section. Its templates match our agent profiles, its
+agents (Apache-2.0, pre-1.0). It is unrelated to Anthropic's internal
+source-control system of the same name, covered in the next section. Its templates match our agent profiles, its
 harnesses match Pi and the vendor harnesses, and its hub matches our
 dispatcher. **Decision: borrow three ideas for step 6; do not adopt Scion as a
 dependency now.** It is still changing quickly, and its container-per-agent
@@ -124,20 +124,24 @@ The three ideas, as requirements for step 6:
    agent: its profile, model, what it is working on, its space, and a Stop
    button. This is the design for "Claude and Codex visible in one session."
 
-## Lessons From A Video About Anthropic's Internal Scion (Unverified)
+## Lessons From Anthropic's Internal Scion
 
-Added October 15, 2026 by the planning session. The owner's original question
-was about a YouTube video, "Anthropic Just Ditched Git (Claude Broke It)"
-(https://www.youtube.com/watch?v=6Ozh4BKmtvs). **Everything in this section is
-the video's account. No post from Anthropic has been found, so none of it is
-confirmed.**
+Added October 15, 2026. The owner's original question came from a YouTube
+video, "Anthropic Just Ditched Git (Claude Broke It)"
+(https://www.youtube.com/watch?v=6Ozh4BKmtvs). Anthropic's own account is the
+primary source: "Redesigning source control at Anthropic"
+(https://www.anthropic.com/engineering/redesigning-source-control, published
+October 13, 2026, read October 15).
 
-What the video claims: Claude writes so much code that Git could not keep up
-with Anthropic's one giant repository (about 30,000 changes merged a day and
-millions of code downloads a day). Seven engineers built a replacement called
-Scion in five months: a server does the heavy work, each machine downloads only
-the files it opens, and setting up a fresh agent workspace went from 7 minutes
-to 5 seconds. It is not meant for normal teams and is not being released.
+What Anthropic's post says: Claude writes so much code that git could not keep
+up with Anthropic's monorepo (merged changes rose from about 2,500 a day in May
+2026 to over 30,000 a day by September, with about 25 million CI checkouts a
+day). A team of seven spent five months building Scion, a server-side version
+control system, and Antique, a code review tool. Checkouts became "seconds
+rather than minutes," and the infrastructure is far smaller. Scion is internal
+and, in Anthropic's words, not a suitable git replacement for general use. The
+video adds a figure the post does not give (fresh agent workspace setup from 7
+minutes to 5 seconds); treat that one as the video's claim only.
 
 We need none of that tool. The five lessons are what is worth keeping:
 
@@ -181,6 +185,9 @@ cloud model the owner has not approved.
 - Cursor CLI: https://cursor.com/en/cli
 - Codex CLI with local models: https://codex.danielvaughan.com/2026/05/03/codex-cli-gpt-oss-local-models-ollama-lm-studio-mlx-setup-guide/
 - Scion (GoogleCloudPlatform/scion) README, checked October 14, 2026: https://github.com/GoogleCloudPlatform/scion
+- Anthropic, "Redesigning source control at Anthropic", October 13, 2026 (primary
+  source): https://www.anthropic.com/engineering/redesigning-source-control
 - Video "Anthropic Just Ditched Git (Claude Broke It)", summarized from its
-  transcript October 15, 2026 (unverified, not an Anthropic source):
+  transcript October 15, 2026 (secondary; its 7-minute-to-5-second figure is not
+  in Anthropic's post):
   https://www.youtube.com/watch?v=6Ozh4BKmtvs

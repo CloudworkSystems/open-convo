@@ -59,6 +59,9 @@ Not started.
 
 ## Recent Owner Decisions
 
+- **Oct 15:** Every review asks two questions of each change: does it break a
+  rule of this system, and does it fix a problem the owner actually has
+  (AGENTS.md Review Loop; approved by merging #43).
 - **Oct 15:** Outside builders may build standalone modules (AGENTS.md).
   First: Site Engine's standalone slice, GrokBot builds and Codex reviews.
 - **Oct 15:** Start step 3 now; the owner runs the step 2 trial when he's home.
