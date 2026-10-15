@@ -48,6 +48,19 @@ let package = Package(
             name: "ArchiveProtectionTests",
             dependencies: ["ArchiveProtection", "DeskHost", "CorrectionMemory"]
         ),
+        // Step 2, PR 5: the kill-and-reopen proof. A test-only writer that is
+        // SIGKILLed at random moments (never bundled), and the tests that
+        // reopen what it left and check nothing acknowledged was lost and
+        // nothing is damaged or readable.
+        .executableTarget(
+            name: "ProtectionProofHost",
+            dependencies: ["ArchiveProtection", "DeskHost"],
+            path: "Sources/ParticipantTestFakes/ProtectionProofHost"
+        ),
+        .testTarget(
+            name: "ProtectionProofTests",
+            dependencies: ["ArchiveProtection", "DeskHost"]
+        ),
         // Native side of the Desk join proof (docs/desk-native-join-contract.md).
         // Pure Swift: no AppKit or WebKit, so every refusal is unit-testable.
         .target(name: "DeskHost"),

@@ -155,6 +155,22 @@ with invented data in True Convo Test before anything touches the real app.
    invented data. Then the owner holds one real conversation and it survives a
    restart. Meeting this is what makes the installed Desk safe for real private
    material.
+   *As built (October 14):* **PR 5** is the scripted half.
+   `ProtectionProofHost` (test-only, never bundled) writes invented data
+   through the real Desk store, dictation archive and kept recordings and is
+   SIGKILLed at a random moment each round; `KillAndReopenProofTests` reopens
+   what it left and checks every acknowledged write survived, everything
+   opens, and the invented words never appear in the clear on disk
+   (`apps/mac/scripts/protection-proof.sh [rounds]`; 12 rounds per store in
+   `swift test`, 40 run before merging). Keys are invented and held in files
+   in the test folder, never the Keychain. The proof's first run caught that
+   a writer which skips the app's open-time recovery of an in-flight commit
+   leaves the Desk store unreadable after a second kill; the app already
+   recovers it when the Desk opens (`recoverUnresolvedDispatch`), so the
+   proof's writer now does the same. Sleep, lock and a real restart of the
+   Mac are the owner's trial in True Convo Test:
+   [step-2-owner-trial.md](step-2-owner-trial.md). Once it passes, the Desk's
+   "invented data only" label comes off in its own pull request.
 
 ## Requirements Carried From the Durable-Agents Note
 
