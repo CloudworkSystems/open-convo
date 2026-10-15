@@ -3921,8 +3921,27 @@ enum TextInjector {
         let statusText: String
     }
 
-    static var targetApplication: NSRunningApplication?
+    static var targetApplication: NSRunningApplication? {
+        didSet {
+            // A different app is now the target: any paste or Return still
+            // waiting for the old one must not land here.
+            if PasteTargetGeneration.targetChanged(
+                oldProcessIdentifier: oldValue?.processIdentifier,
+                newProcessIdentifier: targetApplication?.processIdentifier
+            ) {
+                targetGeneration.advance()
+            }
+        }
+    }
     private static var targetElement: AXUIElement?
+    /// Moves on with every new target (see PasteTargetGeneration). Delayed
+    /// pastes and Returns carry the value they were requested under.
+    private static var targetGeneration = PasteTargetGeneration()
+
+    /// The token a delayed paste or Return carries.
+    static var currentTargetToken: Int {
+        targetGeneration.value
+    }
     private static var livePreviewElement: AXUIElement?
     private static var livePreviewStartRange: CFRange?
     private static var livePreviewInputMode: LivePreviewInputMode?
@@ -3950,6 +3969,8 @@ enum TextInjector {
     private static var pendingPasteFallbackWorkItem: DispatchWorkItem?
     /// Runs after a paste that waited for the hotkey to be released.
     private static var pendingPasteAfterPaste: ((PasteSubmitSequencing.PasteStep) -> Void)?
+    /// The target token of the paste waiting for the hotkey to be released.
+    private static var pendingPasteTargetToken = 0
     static var externalLivePreviewGuardHandler: ((String) -> Void)?
     /// The Desk window's last-moment shield (Desk window, build 9), asked
     /// just before a synthetic paste, typing or Return: true while the Desk
@@ -4045,7 +4066,13 @@ enum TextInjector {
         pendingKeyboardFinalReconcile != nil
     }
 
-    static func rememberFocusedElement() {
+    /// `startsNewTarget` is true when a new dictation or correction picks its
+    /// target (the usual case), so earlier delayed pastes and Returns are
+    /// cancelled. The stop-time second look for the same session passes false.
+    static func rememberFocusedElement(startsNewTarget: Bool = true) {
+        if startsNewTarget {
+            targetGeneration.advance()
+        }
         guard accessibilityTrusted(prompt: false) else {
             targetElement = nil
             RunLog.write("cursor-focus.capture.skipped", "accessibility=not-trusted")
@@ -5014,20 +5041,26 @@ enum TextInjector {
         RunLog.write("hotkey.released")
         guard let text = pendingPasteText else { return }
         let afterPaste = pendingPasteAfterPaste
+        let token = pendingPasteTargetToken
         pendingPasteText = nil
         pendingPasteAfterPaste = nil
         pendingPasteFallbackWorkItem?.cancel()
         pendingPasteFallbackWorkItem = nil
         RunLog.write("completion.paste.resumed", "reason=hotkey-released")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            performPaste(text, afterPaste: afterPaste)
+            performPaste(text, token: token, afterPaste: afterPaste)
         }
     }
 
     /// `afterPaste` runs once the paste step has really happened (or was
     /// skipped), with what it did. "Paste and Submit" uses it so Return
     /// follows the paste instead of racing it.
+    ///
+    /// The paste belongs to the target that is current now. If a newer
+    /// dictation or a different app takes over before a delayed step runs,
+    /// the paste is not typed anywhere (see `pasteStillCurrent`).
     static func paste(_ text: String, afterPaste: ((PasteSubmitSequencing.PasteStep) -> Void)? = nil) {
+        let token = currentTargetToken
         guard canAutoPaste else {
             writeClipboardFallback(text, reason: "accessibility-not-trusted")
             afterPaste?(.clipboardOnly)
@@ -5037,16 +5070,18 @@ enum TextInjector {
         if hotKeyIsDown {
             pendingPasteText = text
             pendingPasteAfterPaste = afterPaste
+            pendingPasteTargetToken = token
             pendingPasteFallbackWorkItem?.cancel()
             let fallback = DispatchWorkItem {
                 guard let text = pendingPasteText else { return }
                 let afterPaste = pendingPasteAfterPaste
+                let token = pendingPasteTargetToken
                 pendingPasteText = nil
                 pendingPasteAfterPaste = nil
                 pendingPasteFallbackWorkItem = nil
                 hotKeyIsDown = false
                 RunLog.write("completion.paste.resumed", "reason=hotkey-timeout")
-                performPaste(text, afterPaste: afterPaste)
+                performPaste(text, token: token, afterPaste: afterPaste)
             }
             pendingPasteFallbackWorkItem = fallback
             RunLog.write("completion.paste.deferred", "reason=hotkey-down")
@@ -5054,26 +5089,56 @@ enum TextInjector {
             return
         }
 
-        performPaste(text, afterPaste: afterPaste)
+        performPaste(text, token: token, afterPaste: afterPaste)
     }
 
-    private static func performPaste(_ text: String, afterPaste: ((PasteSubmitSequencing.PasteStep) -> Void)? = nil) {
+    /// True when a paste requested under `token` may still run. When a newer
+    /// target took over, the text goes to the clipboard instead of into the
+    /// newer target (the same fallback as an unconfirmed paste), and the
+    /// caller is told so it presses no Return.
+    private static func pasteStillCurrent(
+        _ text: String,
+        token: Int,
+        stage: String,
+        afterPaste: ((PasteSubmitSequencing.PasteStep) -> Void)?
+    ) -> Bool {
+        guard !targetGeneration.isCurrent(token) else { return true }
+        RunLog.write("completion.paste.skipped", "reason=superseded stage=\(stage)")
+        // Written directly (not writeClipboardFallback), so a newer session's
+        // own waiting paste is left alone.
+        writePrivateClipboardText(text)
+        RunLog.write("completion.pasteboard.retained", "reason=superseded chars=\(text.count)")
+        afterPaste?(.superseded)
+        return false
+    }
+
+    private static func performPaste(
+        _ text: String,
+        token: Int,
+        afterPaste: ((PasteSubmitSequencing.PasteStep) -> Void)? = nil
+    ) {
+        guard pasteStillCurrent(text, token: token, stage: "start", afterPaste: afterPaste) else { return }
         if let targetApplication, !targetApplication.isTerminated {
             RunLog.write("completion.paste.target", describe(targetApplication))
             targetApplication.activate(options: [.activateIgnoringOtherApps])
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                // While the token still matches, the global target is this
+                // paste's own target (any new target moves the token on).
+                guard pasteStillCurrent(text, token: token, stage: "refocus", afterPaste: afterPaste) else { return }
                 // Wake Electron's Accessibility tree again (harmless if it is
                 // already on) and, if no text box was found when dictation
-                // started, look once more now that the app is in front.
+                // started, look once more now that the app is in front. This
+                // second look belongs to the same session, so the token stays.
                 if targetElement == nil {
                     RunLog.write("cursor-focus.stop-recapture", describe(targetApplication))
-                    rememberFocusedElement()
+                    rememberFocusedElement(startsNewTarget: false)
                 } else {
                     wakeAccessibility(of: targetApplication)
                 }
                 restoreFocusedElement()
                 targetApplication.activate(options: [.activateIgnoringOtherApps])
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                    guard pasteStillCurrent(text, token: token, stage: "insert", afterPaste: afterPaste) else { return }
                     let step = pasteIntoActiveApplication(text)
                     afterPaste?(step)
                 }
@@ -5546,7 +5611,14 @@ enum TextInjector {
         )
     }
 
-    static func pressReturn() {
+    /// `targetToken` is the target token taken when Return was scheduled. If
+    /// a newer dictation or a different app has taken over since, Return is
+    /// not pressed, so it can never send someone else's draft.
+    static func pressReturn(targetToken: Int? = nil) {
+        if let targetToken, !targetGeneration.isCurrent(targetToken) {
+            RunLog.write("completion.submit.skipped", "reason=superseded")
+            return
+        }
         if deskShieldHoldsBack(.returnKey) {
             RunLog.write("completion.return.skipped", "reason=desk-window-key")
             return
@@ -7114,8 +7186,9 @@ final class DictationController {
                 completionActionAtStop == .autoSubmit
             {
                 RunLog.write("completion.live-submit.requested", "id=\(id) action=\(completionActionAtStop.rawValue) timing=immediate-stop")
+                let submitToken = TextInjector.currentTargetToken
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    TextInjector.pressReturn()
+                    TextInjector.pressReturn(targetToken: submitToken)
                 }
             }
         } else {
@@ -7414,8 +7487,9 @@ final class DictationController {
                         // Nothing was typed live, so nothing was sent at the
                         // stop. The final text was just typed; send it now.
                         RunLog.write("completion.live-submit.requested", "id=\(id) action=\(completionActionAtStop.rawValue) timing=after-final-typed")
+                        let submitToken = TextInjector.currentTargetToken
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                            TextInjector.pressReturn()
+                            TextInjector.pressReturn(targetToken: submitToken)
                         }
                     }
                     var backgroundOutcome: DictationOutcome
@@ -7449,6 +7523,9 @@ final class DictationController {
                         // Paste and Submit: Return waits for the paste to
                         // actually land (it can take 0.2 s or more while the
                         // target app comes forward), then a short settle.
+                        // Return belongs to this session's target: if a newer
+                        // dictation takes over first, it is skipped.
+                        let submitToken = TextInjector.currentTargetToken
                         TextInjector.paste(cleanedText + " ") { step in
                             guard PasteSubmitSequencing.shouldPressReturn(after: step) else {
                                 RunLog.write("completion.submit.skipped", "id=\(id) reason=paste-not-performed step=\(step)")
@@ -7456,7 +7533,7 @@ final class DictationController {
                             }
                             RunLog.write("completion.submit.scheduled", "id=\(id) step=\(step)")
                             DispatchQueue.main.asyncAfter(deadline: .now() + PasteSubmitSequencing.settleDelayAfterPaste) {
-                                TextInjector.pressReturn()
+                                TextInjector.pressReturn(targetToken: submitToken)
                             }
                         }
                     } else {
@@ -7465,8 +7542,9 @@ final class DictationController {
                     RunLog.write("completion.paste.requested", "id=\(id) action=\(completionAction.rawValue)")
                 } else if shouldSubmit {
                     RunLog.write("completion.live-submit.requested", "id=\(id) action=\(completionAction.rawValue)")
+                    let submitToken = TextInjector.currentTargetToken
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                        TextInjector.pressReturn()
+                        TextInjector.pressReturn(targetToken: submitToken)
                     }
                 } else if suppressLateInsertion && !cleanedText.isEmpty {
                     safetyStopOutcome = self.deliverAfterSafetyStop(

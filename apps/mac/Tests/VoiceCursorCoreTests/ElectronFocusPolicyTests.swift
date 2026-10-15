@@ -48,6 +48,30 @@ struct ElectronFocusPolicyTests {
         #expect(!PasteSubmitSequencing.shouldPressReturn(after: .notPerformed))
     }
 
+    @Test("No Return when a newer target took the paste over")
+    func returnSkippedWhenSuperseded() {
+        #expect(!PasteSubmitSequencing.shouldPressReturn(after: .superseded))
+    }
+
+    @Test("A delayed step runs only while its target is still current")
+    func generationToken() {
+        var generation = PasteTargetGeneration()
+        let token = generation.value
+        #expect(generation.isCurrent(token))
+        generation.advance()
+        #expect(!generation.isCurrent(token))
+        #expect(generation.isCurrent(generation.value))
+    }
+
+    @Test("Only a different app counts as a new target")
+    func targetChange() {
+        #expect(!PasteTargetGeneration.targetChanged(oldProcessIdentifier: 42, newProcessIdentifier: 42))
+        #expect(PasteTargetGeneration.targetChanged(oldProcessIdentifier: 42, newProcessIdentifier: 43))
+        #expect(PasteTargetGeneration.targetChanged(oldProcessIdentifier: nil, newProcessIdentifier: 43))
+        #expect(PasteTargetGeneration.targetChanged(oldProcessIdentifier: 42, newProcessIdentifier: nil))
+        #expect(!PasteTargetGeneration.targetChanged(oldProcessIdentifier: nil, newProcessIdentifier: nil))
+    }
+
     @Test("Return waits a short settle after the paste")
     func settleDelay() {
         #expect(PasteSubmitSequencing.settleDelayAfterPaste == 0.15)

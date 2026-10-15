@@ -51,6 +51,9 @@ public enum PasteSubmitSequencing {
         case clipboardOnly
         /// The paste never ran (it was cancelled, or no keystroke could be made).
         case notPerformed
+        /// A newer dictation or a different app took over the target before
+        /// the paste ran, so it was not typed (the text went to the clipboard).
+        case superseded
     }
 
     /// The pause between the paste landing and Return, so the app has taken
@@ -62,7 +65,42 @@ public enum PasteSubmitSequencing {
     public static func shouldPressReturn(after step: PasteStep) -> Bool {
         switch step {
         case .insertedThroughAccessibility, .keystrokePosted: return true
-        case .clipboardOnly, .notPerformed: return false
+        case .clipboardOnly, .notPerformed, .superseded: return false
         }
+    }
+}
+
+/// Which target (app and text box) a delayed paste or Return belongs to.
+///
+/// Why: the paste and the Return that follows it run up to about half a
+/// second after a dictation finishes. By then the owner may have started a
+/// new dictation, or another app may have become the target. Each new target
+/// moves the generation on; a delayed step carries the generation it was
+/// requested under and only runs if that is still the current one, so it can
+/// never type or press Return into the newer target.
+public struct PasteTargetGeneration: Equatable {
+    public private(set) var value: Int
+
+    public init(value: Int = 0) {
+        self.value = value
+    }
+
+    /// A new target was chosen (a new dictation or correction, or a different
+    /// app became the target).
+    public mutating func advance() {
+        value &+= 1
+    }
+
+    /// True when a step requested under `token` still belongs to the current
+    /// target.
+    public func isCurrent(_ token: Int) -> Bool {
+        token == value
+    }
+
+    /// The target changes only when it is a different app (compared by
+    /// process ID). Re-choosing the same app (for example when the pill
+    /// brings it forward to paste) does not count.
+    public static func targetChanged(oldProcessIdentifier: Int32?, newProcessIdentifier: Int32?) -> Bool {
+        oldProcessIdentifier != newProcessIdentifier
     }
 }
