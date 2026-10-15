@@ -109,7 +109,11 @@ Moved up from step 11.
 - **iPhone capture app** (owner decision, October 15), right after step 5: a
   "Share to True Convo" button for links and the owner's own video clips,
   landing as sources in the inbox. Until then an Apple Shortcut saves shared
-  items into an iCloud Drive folder the Mac app watches. Automatic secure sync
+  items into an iCloud Drive folder the Mac app watches. That sends the items
+  to Apple's iCloud, so it follows foundations principle 6: the owner approves
+  iCloud Drive once as a host, seeing what goes there (links and video clips)
+  and that it is end-to-end encrypted only with Advanced Data Protection on.
+  AirDrop to the Mac is the local-only alternative. Automatic secure sync
   comes with step 9's encrypted transfer. The full iOS app stays at step 12.
 - **First-run guide** (ordinary code, no AI): checks the computer, sets up a
   local model or a cloud model. Needed before anyone else installs.
@@ -136,7 +140,11 @@ built in parallel by an outside builder under AGENTS.md "Outside Builders":
 - **Site Engine, standalone slice**:
   [docs/plans/site-engine-standalone.md](docs/plans/site-engine-standalone.md).
 - **Merge gate** (first piece of the Code umbrella): automatic merging once
-  tests pass and Codex's review is clean; plan in `docs/plans/merge-gate.md`.
+  tests pass and Codex's review is clean, with protected paths still needing
+  the owner. Plan proposed in pull request #41 (not merged yet). It is an owner
+  decision that changes AGENTS.md's merge rules, including the planning check
+  for outside builders; until that AGENTS.md change is merged and the gate's
+  tests pass, every merge stays manual and the current rules apply.
 
 ### Umbrellas (Owner Decision, October 15)
 
