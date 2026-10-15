@@ -72,6 +72,11 @@ that holds the facts file. The build refuses:
 The builder chooses the copied file's name (for example `images/1.webp`); names
 from the facts file are never used as output paths.
 
+**Image metadata is removed.** Photos can carry hidden details (GPS location,
+time taken, camera serial number, author name) that never went through the
+facts schema. The builder writes each image without that metadata (EXIF, XMP,
+IPTC and text chunks), or refuses the image if it can't.
+
 ## Page Requirements
 
 - **Every value is escaped for where it lands.** Facts are plain text that may
@@ -85,7 +90,10 @@ from the facts file are never used as output paths.
   alt text, text and background colors pass WCAG AA contrast (the build fails
   if brand colors don't).
 - Search and AI visibility: page title, meta description, canonical link,
-  `LocalBusiness` JSON-LD built from the facts, `sitemap.xml`, `robots.txt`.
+  JSON-LD built from the facts, `sitemap.xml`, `robots.txt`. The JSON-LD type
+  is `LocalBusiness` (with a `PostalAddress`) when `location` is a street
+  address, and `Organization` (no address) when it is `"Online only"` or
+  missing.
 - **No outside requests**: no CDNs, web fonts, trackers, analytics or scripts
   from anywhere. The page works with JavaScript turned off. Links to the
   business's own `bookingUrl` and `social` URLs are the only outside links.
@@ -105,8 +113,13 @@ online tutor). At least:
 4. A missing required field fails with a message naming it.
 5. Brand colors that fail contrast fail the build with a plain message.
 6. The JSON-LD parses as JSON and its name, address and hours match the facts.
+   The bakery (street address) gets `LocalBusiness` with a `PostalAddress`; the
+   online tutor gets `Organization` with no address.
 7. No output file contains `http://` or `https://` except `siteUrl`,
-   `bookingUrl` and `social` URLs from the facts file.
+   `bookingUrl` and `social` URLs from the facts file, plus two fixed
+   identifiers the standards require: the sitemap namespace
+   `http://www.sitemaps.org/schemas/sitemap/0.9` and the JSON-LD context
+   `https://schema.org`.
 8. Any image without alt text fails the build.
 9. Hostile but allowed text (a name with `&`, quotes, `<b>` and
    `</script><script>`) builds, shows as plain text, and adds no element: the
@@ -120,6 +133,9 @@ online tutor). At least:
 12. Building business A, then rebuilding into the same folder from facts with
     one image removed, leaves no trace of the removed image; and a failing
     rebuild leaves the previous good output exactly as it was.
+13. A JPEG with GPS coordinates and a marker string in its EXIF, and a PNG with
+    the marker in a text chunk, build into images that contain neither the
+    marker nor any location data.
 
 ## Out Of Scope For This Slice
 
