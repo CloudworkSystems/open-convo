@@ -5189,6 +5189,7 @@ enum TextInjector {
                     // front (see PasteDeliveryCheck).
                     let route = PasteDeliveryCheck.route(
                         targetProcessIdentifier: targetApplication.processIdentifier,
+                        targetIsRunning: isStillRunning(targetApplication),
                         frontmostProcessIdentifier: NSWorkspace.shared.frontmostApplication?.processIdentifier,
                         elementProcessIdentifier: targetElement.flatMap { elementProcessIdentifier($0) }
                     )
@@ -5200,10 +5201,8 @@ enum TextInjector {
                         RunLog.write("completion.ax-insert.skipped", "reason=element-not-in-target")
                         step = pasteIntoActiveApplication(text, allowAccessibilityInsert: false)
                     case .clipboardOnly:
-                        RunLog.write("completion.paste.skipped", "reason=target-not-frontmost")
-                        writePrivateClipboardText(text)
-                        RunLog.write("completion.pasteboard.retained", "reason=target-not-frontmost chars=\(text.count)")
-                        step = .clipboardOnly
+                        let reason = isStillRunning(targetApplication) ? "target-not-frontmost" : "target-quit"
+                        step = keepOnClipboardOnly(text, reason: reason)
                     }
                     afterPaste?(step)
                 }
@@ -5211,10 +5210,33 @@ enum TextInjector {
             return
         }
 
-        RunLog.write("completion.paste.target", "bundle=frontmost name=frontmost")
-        restoreFocusedElement()
-        let step = pasteIntoActiveApplication(text)
+        // No target app, or it has quit since the dictation started. The app
+        // in front now is some other app, so nothing is typed there and no
+        // Return follows; the text stays on the clipboard for the owner.
+        let route = PasteDeliveryCheck.route(
+            targetProcessIdentifier: targetApplication?.processIdentifier,
+            targetIsRunning: targetApplication.map { isStillRunning($0) } ?? false,
+            frontmostProcessIdentifier: NSWorkspace.shared.frontmostApplication?.processIdentifier,
+            elementProcessIdentifier: nil
+        )
+        assert(route == .clipboardOnly)
+        let step = keepOnClipboardOnly(text, reason: targetApplication == nil ? "no-target" : "target-quit")
         afterPaste?(step)
+    }
+
+    /// True while the target app is still running under the same process ID.
+    private static func isStillRunning(_ application: NSRunningApplication) -> Bool {
+        !application.isTerminated
+            && NSRunningApplication(processIdentifier: application.processIdentifier) != nil
+    }
+
+    /// Types nothing; keeps the text on the clipboard (Cmd+V works) and logs
+    /// why, text-free. The caller presses no Return after `.clipboardOnly`.
+    private static func keepOnClipboardOnly(_ text: String, reason: String) -> PasteSubmitSequencing.PasteStep {
+        RunLog.write("completion.paste.skipped", "reason=\(reason)")
+        writePrivateClipboardText(text)
+        RunLog.write("completion.pasteboard.retained", "reason=\(reason) chars=\(text.count)")
+        return .clipboardOnly
     }
 
     @discardableResult
@@ -5689,6 +5711,12 @@ enum TextInjector {
         }
         if deskShieldHoldsBack(.returnKey) {
             RunLog.write("completion.return.skipped", "reason=desk-window-key")
+            return
+        }
+        // A target that has quit means the app in front is some other app:
+        // Return could send its draft, so it is not pressed.
+        if let targetApplication, !isStillRunning(targetApplication) {
+            RunLog.write("completion.submit.skipped", "reason=target-quit")
             return
         }
         if let targetApplication, !targetApplication.isTerminated {
