@@ -36,7 +36,7 @@ final class LocalChatCoreTests: XCTestCase {
         XCTAssertEqual(list.map(\.type), [.started, .text, .text, .completed])
         XCTAssertEqual(list.map(\.sequence), [1, 2, 3, 4])
         XCTAssertEqual(list.compactMap(\.text).joined(), "Invented bakery plan.")
-        XCTAssertFalse(all.contains(.cancelRequest))
+        XCTAssertEqual(all.last, .cancelRequest, "done cancels the request so nothing holds the run open")
         XCTAssertEqual(run.snapshot.groupCleared, true)
         XCTAssertEqual(run.snapshot.cleanup, .released)
         XCTAssertEqual(run.finished(.closed, monotonic: 500, wall: wall), [], "nothing after the terminal")
@@ -166,5 +166,33 @@ final class LocalChatCoreTests: XCTestCase {
         _ = run.response(status: 200, monotonic: 0, wall: wall + 5_000)
         let list = events(run.bytes(bytes(Invented.chunk("a") + Invented.done), monotonic: 1, wall: wall + 1_000))
         XCTAssertEqual(Set(list.map(\.at)).count, 1, "an earlier wall clock reuses the previous time")
+    }
+
+    /// Codex round 1 on #42: the part of a delta that fits is kept, cut
+    /// between scalars, before `reply-too-long`.
+    func testAnOversizedDeltaKeepsItsFittingPrefix() {
+        var limits = LocalChatLimits()
+        limits.maxContextInputOutputBytes = 20
+        var run = core(context: 0, input: 10, limits: limits)
+        _ = run.response(status: 200, monotonic: 0, wall: wall)
+        let list = events(run.bytes(bytes(Invented.chunk("abcdefgh😀z")), monotonic: 1, wall: wall))
+        XCTAssertEqual(list.map(\.type), [.text, .failed])
+        XCTAssertEqual(list.first?.text, "abcdefgh", "the emoji would cross the 10-byte budget")
+        XCTAssertEqual(list.last?.reason, "reply-too-long")
+    }
+
+    /// Codex round 1 on #42: a valid JSON line without Ollama's shape fails.
+    func testLinesWithoutOllamasShapeFail() {
+        for body in [Data("{}\n".utf8), Invented.line(["done": false]), Invented.line(["message": ["role": "assistant", "content": "x"]]),
+                     Invented.line(["done": "true"]), Invented.line(["done": true, "message": "x"])] {
+            var run = core()
+            _ = run.response(status: 200, monotonic: 0, wall: wall)
+            XCTAssertEqual(events(run.bytes(bytes(body), monotonic: 1, wall: wall)).last?.reason, "process-error",
+                           String(decoding: body, as: UTF8.self))
+        }
+        var run = core()
+        _ = run.response(status: 200, monotonic: 0, wall: wall)
+        XCTAssertEqual(events(run.bytes(bytes(Invented.line(["done": true])), monotonic: 1, wall: wall)).last?.type, .completed,
+                       "a done line may omit its message")
     }
 }

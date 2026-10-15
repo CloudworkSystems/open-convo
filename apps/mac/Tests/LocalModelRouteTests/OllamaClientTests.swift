@@ -155,6 +155,19 @@ final class OllamaClientTests: XCTestCase {
         XCTAssertEqual(run.snapshot.cleanup, .released)
     }
 
+    /// Codex round 1 on #42: a peer that sends `done` and then holds the
+    /// connection open must not hold the run open.
+    func testDoneEndsTheRunEvenIfThePeerKeepsTheConnectionOpen() async throws {
+        let fake = try FakeOllama { _ in .stream(status: 200, pieces: [(0, Invented.chunk("ok")), (0, Invented.done),
+                                                                     (30_000, Data())]) }
+        let run = LocalChatRun.start(request(alias: alias), endpoint: OllamaEndpoint(port: fake.port),
+                                     clock: SystemParticipantClock(), limits: .contract)
+        let started = Date()
+        _ = await collect(run)
+        XCTAssertLessThan(Date().timeIntervalSince(started), 5)
+        XCTAssertEqual(run.snapshot.terminal?.type, .completed)
+    }
+
     func testARedirectedChatFailsAndItsTargetIsNeverContacted() async throws {
         let target = try FakeOllama { _ in .stream(status: 200, pieces: [(0, Invented.done)]) }
         let fake = try FakeOllama { _ in .redirect(location: "http://127.0.0.1:\(target.port)/api/chat") }

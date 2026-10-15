@@ -179,26 +179,50 @@ public struct LocalChatCore {
             end(.failed(.processError), wall: wall, cancel: true, into: &effects)
             return
         }
-        if let message = object["message"] {
-            guard let message = message as? [String: Any], let content = message["content"] as? String else {
+        // Every line is `{message?, done}` (Codex round 1 on #42): `done` is
+        // always a Bool, and a line that isn't done carries a message.
+        guard let done = object["done"] as? Bool else {
+            end(.failed(.processError), wall: wall, cancel: true, into: &effects)
+            return
+        }
+        if object["message"] != nil || !done {
+            guard let message = object["message"] as? [String: Any], let content = message["content"] as? String else {
                 end(.failed(.processError), wall: wall, cancel: true, into: &effects)
                 return
             }
             if !content.isEmpty {
-                let size = content.utf8.count
-                guard acceptedOutputBytes + size <= outputBudget else {
+                let left = outputBudget - acceptedOutputBytes
+                if content.utf8.count > left {
+                    // The longest scalar-aligned prefix that fits is accepted
+                    // first, then the run ends `reply-too-long`.
+                    var prefix = String.UnicodeScalarView()
+                    var size = 0
+                    for scalar in content.unicodeScalars {
+                        let width = String(scalar).utf8.count
+                        if size + width > left { break }
+                        prefix.append(scalar)
+                        size += width
+                    }
+                    accept(String(prefix), monotonic: now, wall: wall, into: &effects)
                     end(.failed(.replyTooLong), wall: wall, cancel: true, into: &effects)
                     return
                 }
-                acceptedOutputBytes += size
-                if pending.isEmpty { pendingSince = now }
-                pending += content
-                if pending.utf8.count >= limits.maxEventTextBytes { flush(wall: wall, into: &effects) }
+                accept(content, monotonic: now, wall: wall, into: &effects)
             }
         }
-        if let done = object["done"] as? Bool, done {
-            end(.completed, wall: wall, cancel: false, into: &effects)
+        if done {
+            // Cancel too, so a peer that keeps the connection open can't hold
+            // the run (and the next start) past its terminal.
+            end(.completed, wall: wall, cancel: true, into: &effects)
         }
+    }
+
+    private mutating func accept(_ content: String, monotonic now: UInt64, wall: Int64, into effects: inout [Effect]) {
+        guard !content.isEmpty else { return }
+        acceptedOutputBytes += content.utf8.count
+        if pending.isEmpty { pendingSince = now }
+        pending += content
+        if pending.utf8.count >= limits.maxEventTextBytes { flush(wall: wall, into: &effects) }
     }
 
     // MARK: Events
