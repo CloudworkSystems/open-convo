@@ -64,6 +64,8 @@ PR 2). In short:
    nothing to compact (Codex round 3 on #37).
 3. **One input limit** over resolved context text plus the new message.
 4. **Redirects refused** on every local request (Codex round 3 on #37).
+   **Digest-bound requests** through a private per-run alias, because Ollama
+   can't run a model by digest (Codex round 2 on #38).
 5. **Start, Stop and lifecycle** follow sections 7, 10 and 14, with the HTTP
    task in place of a process group.
 

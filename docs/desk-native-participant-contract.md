@@ -2886,7 +2886,9 @@ every existing vector stays byte-identical.
   answers the route `catalog-unreadable`; a redirected chat request ends the
   run `failed` `process-error`. Fake-server tests cover both.
 - Native uses `/api/tags` to list models and `/api/chat` (streaming) to run
-  one. It sends no other request.
+  one, plus `/api/copy` and `/api/delete` only for its own per-run aliases
+  (20.4). It sends no other request. Names starting `open-convo-run-` are
+  native's aliases and are never listed as entries.
 - Only chat models with a usable identity are listed: a model whose
   `capabilities` include `completion` and whose `digest` is 64 lowercase hex.
   Embedding-only models and models without such a digest are left out
@@ -2966,9 +2968,28 @@ with a local route:
   `participant-unavailable` when the route is not ready or the entry is not
   available. Section 17's confirmation and first-trial input bound do not
   apply to local runs.
+- **Digest-bound request.** Ollama can't run a model by digest (checked on
+  0.34.0: `name@digest` and `name@sha256:digest` are refused as invalid
+  names), and a tag can be moved to another model at any time. So step 13
+  for a local run, after its availability recheck, binds the run to its
+  digest with a private alias: `/api/copy` from the model name to
+  `open-convo-run-<runId without dashes>:pin`, a name unique to this run and
+  never reused; then a fresh `/api/tags` read must list that alias with the
+  run's exact digest, without `remote_host` or `remote_model`. Any other
+  result deletes the alias and refuses `participant-changed` (or
+  `participant-unavailable` if the route went down), with nothing sent. A
+  copy keeps the digest and the remote marker (checked on 0.34.0 with a
+  local and a cloud model), so a tag moved before the copy is caught by
+  this check. The chat request names only the alias. The alias is deleted
+  after the run's terminal is written; at launch, and before any new start,
+  native deletes every `open-convo-run-*` alias that no live run of this
+  launch owns. Trust boundary: a process that deliberately rewrites this
+  exact alias in the moment between the check and the request is outside
+  what native can prevent through Ollama's API; Ollama and other programs
+  able to call it on this Mac are trusted not to do that.
 - Step 15 for a local run issues one streaming `/api/chat` request
-  (`stream: true`, `think: false`, the turns from 20.3 then the new message)
-  in place of a spawn. `started` follows the response's HTTP 200; `text`
+  (`model` the run's alias, `stream: true`, `think: false`, the turns from
+  20.3 then the new message) in place of a spawn. `started` follows the response's HTTP 200; `text`
   events carry the streamed content under section 8's rules; `completed`
   follows Ollama's `done: true`. Any other status, a malformed line, a
   redirect or a dropped connection is `failed` `process-error`. Section 8's
@@ -3003,6 +3024,8 @@ with a local route:
 - Vectors live in a separate file, `native-participant-local-v1.json`, beside
   section 19's file and in its format, plus seed keys `localRoute` (`{state,
   reason, models}`, the fake Ollama's catalog) and fake-server `script` steps
-  (`http-200`, `chunk`, `done`, `http-error`, `redirect`, `drop`). The page
+  (`http-200`, `chunk`, `done`, `http-error`, `redirect`, `drop`,
+  `retag` (the fake moves a tag to another digest or to a cloud model at a
+  chosen point between the catalog read and the copy), `alias-swap`). The page
   codec runs its shape cases now; the Swift harness runs all of them with the
   host change (step 3 PR 3).
