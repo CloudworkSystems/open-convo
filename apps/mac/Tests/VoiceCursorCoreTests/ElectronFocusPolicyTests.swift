@@ -90,6 +90,18 @@ struct ElectronFocusPolicyTests {
         #expect(PasteDeliveryCheck.route(targetProcessIdentifier: 42, frontmostProcessIdentifier: nil, elementProcessIdentifier: 42) == .clipboardOnly)
     }
 
+    @Test("Nothing is typed when there is no target app or it has quit")
+    func targetMissingOrQuit() {
+        // No target captured: whatever is in front is never typed into.
+        #expect(PasteDeliveryCheck.route(targetProcessIdentifier: nil, frontmostProcessIdentifier: 7, elementProcessIdentifier: 7) == .clipboardOnly)
+        #expect(PasteDeliveryCheck.route(targetProcessIdentifier: nil, frontmostProcessIdentifier: nil, elementProcessIdentifier: nil) == .clipboardOnly)
+        // The target quit, even if its old process ID still looks in front.
+        #expect(PasteDeliveryCheck.route(targetProcessIdentifier: 42, targetIsRunning: false, frontmostProcessIdentifier: 42, elementProcessIdentifier: 42) == .clipboardOnly)
+        #expect(PasteDeliveryCheck.route(targetProcessIdentifier: 42, targetIsRunning: false, frontmostProcessIdentifier: 7, elementProcessIdentifier: nil) == .clipboardOnly)
+        // And no Return follows a clipboard-only result.
+        #expect(!PasteSubmitSequencing.shouldPressReturn(after: .clipboardOnly))
+    }
+
     @Test("Return waits a short settle after the paste")
     func settleDelay() {
         #expect(PasteSubmitSequencing.settleDelayAfterPaste == 0.15)

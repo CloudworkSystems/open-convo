@@ -125,11 +125,17 @@ public enum PasteDeliveryCheck {
         case clipboardOnly
     }
 
+    /// `targetProcessIdentifier` is nil when no target app was captured;
+    /// `targetIsRunning` is false when the target app has quit. Either way
+    /// nothing is typed: the app now in front is some other app, and Cmd+V
+    /// (and a Return after it) must never reach it.
     public static func route(
-        targetProcessIdentifier: Int32,
+        targetProcessIdentifier: Int32?,
+        targetIsRunning: Bool = true,
         frontmostProcessIdentifier: Int32?,
         elementProcessIdentifier: Int32?
     ) -> Route {
+        guard let targetProcessIdentifier, targetIsRunning else { return .clipboardOnly }
         guard frontmostProcessIdentifier == targetProcessIdentifier else { return .clipboardOnly }
         guard elementProcessIdentifier == targetProcessIdentifier else { return .keystrokeOnly }
         return .accessibilityThenKeystroke
