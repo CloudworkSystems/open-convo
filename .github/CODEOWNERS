@@ -11,21 +11,25 @@
 /docs/plans/ @CloudworkSystems
 /docs/decisions.md @CloudworkSystems
 
-# Keys, encryption and recovery in the Mac app, and their tests.
+# Keys, encryption, recovery and protected storage in the Mac app: the
+# primitives, the code that chooses and drives them, and their tests. Name
+# patterns also cover files added later with the same names.
 /apps/mac/Sources/ArchiveProtection/ @CloudworkSystems
-/apps/mac/Sources/DeskHost/KeyProvider.swift @CloudworkSystems
-/apps/mac/Sources/DeskHost/KeychainKeyProvider.swift @CloudworkSystems
-/apps/mac/Sources/DeskHost/RecoveryKey.swift @CloudworkSystems
-/apps/mac/Sources/DeskHost/StoreCipher.swift @CloudworkSystems
-/apps/mac/Sources/DeskWindowKit/DeskRecoveryKeyPrompt.swift @CloudworkSystems
-/apps/mac/Sources/DeskWindowKit/RecoveryKeyCheck.swift @CloudworkSystems
 /apps/mac/Tests/ArchiveProtectionTests/ @CloudworkSystems
-/apps/mac/Tests/DeskHostTests/KeychainKeyProviderTests.swift @CloudworkSystems
-/apps/mac/Tests/DeskHostTests/RecoveryKeyTests.swift @CloudworkSystems
-/apps/mac/Tests/DeskHostTests/StoreEncryptionTests.swift @CloudworkSystems
-/apps/mac/Tests/DeskWindowKitTests/DeskRecoveryKeyTests.swift @CloudworkSystems
+/apps/mac/**/*Keychain* @CloudworkSystems
+/apps/mac/**/*KeyProvider* @CloudworkSystems
+/apps/mac/**/*Recovery* @CloudworkSystems
+/apps/mac/**/*Cipher* @CloudworkSystems
+/apps/mac/**/*Encryption* @CloudworkSystems
+/apps/mac/**/*Seal* @CloudworkSystems
+/apps/mac/**/ProofStore* @CloudworkSystems
+/apps/mac/Sources/DeskHost/PayloadHash.swift @CloudworkSystems
+/apps/mac/Sources/DeskWindowKit/DeskSession.swift @CloudworkSystems
+/apps/mac/Sources/DeskWindowKit/DeskPaths.swift @CloudworkSystems
+/apps/mac/Tests/DeskWindowKitTests/DeskKeptStoreTests.swift @CloudworkSystems
 
-# Paid-usage controls (they spend money), and their tests.
-/apps/mac/Sources/DeskWindowKit/DeskPaidUsageControls.swift @CloudworkSystems
-/apps/mac/Sources/ParticipantProcess/PaidUsageConfirmation.swift @CloudworkSystems
-/apps/mac/Tests/ParticipantProcessTests/PaidUsage*.swift @CloudworkSystems
+# The paid-usage path (it can spend money): confirmation, end signals, Desk
+# controls, the coordinator that gates runs, and their tests.
+/apps/mac/**/*PaidUsage* @CloudworkSystems
+/apps/mac/Sources/ParticipantDeskControls/ @CloudworkSystems
+/apps/mac/Sources/ParticipantCoordinator/ @CloudworkSystems
