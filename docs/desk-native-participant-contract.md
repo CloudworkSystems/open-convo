@@ -2887,8 +2887,9 @@ every existing vector stays byte-identical.
   run `failed` `process-error`. Fake-server tests cover both.
 - Native uses `/api/tags` to list models and `/api/chat` (streaming) to run
   one, plus `/api/copy` and `/api/delete` only for its own per-run aliases
-  (20.4). It sends no other request. Names starting `open-convo-run-` are
-  native's aliases and are never listed as entries.
+  (20.4). It sends no other request. A name in native's exact alias format
+  (20.4) is never listed as an entry; any other name, including one the
+  owner chose that merely starts `open-convo-run-`, is an ordinary model.
 - Only chat models with a usable identity are listed: a model whose
   `capabilities` include `completion` and whose `digest` is 64 lowercase hex.
   Embedding-only models and models without such a digest are left out
@@ -2959,7 +2960,10 @@ with a local route:
 ### 20.4 Start, events and stop for a local run
 
 - Section 7 applies unchanged up to and including step 14: the start record
-  is written by compare-and-set **before** any HTTP request; an undetermined
+  is written by compare-and-set **before** any `/api/chat` request. The only
+  calls before it are step 13's alias calls below (`/api/copy`,
+  `/api/tags`, and `/api/delete` when the check fails), which carry no
+  conversation text and dispatch nothing; an undetermined
   write answers `unknown` and sends nothing; a lost reply is resolved with
   `participant.status`, never by sending again. Ollama has no request-level
   idempotency, so nothing in native or the page resends on its own.
@@ -2973,17 +2977,23 @@ with a local route:
   names), and a tag can be moved to another model at any time. So step 13
   for a local run, after its availability recheck, binds the run to its
   digest with a private alias: `/api/copy` from the model name to
-  `open-convo-run-<runId without dashes>:pin`, a name unique to this run and
-  never reused; then a fresh `/api/tags` read must list that alias with the
+  `open-convo-run-<runId>:pin`, where `<runId>` is the run's lowercase v4 id
+  with its dashes removed, so the name matches exactly
+  `^open-convo-run-[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}:pin$`; unique
+  to this run and never reused; then a fresh `/api/tags` read must list that alias with the
   run's exact digest, without `remote_host` or `remote_model`. Any other
   result deletes the alias and refuses `participant-changed` (or
   `participant-unavailable` if the route went down), with nothing sent. A
   copy keeps the digest and the remote marker (checked on 0.34.0 with a
   local and a cloud model), so a tag moved before the copy is caught by
-  this check. The chat request names only the alias. The alias is deleted
-  after the run's terminal is written; at launch, and before any new start,
-  native deletes every `open-convo-run-*` alias that no live run of this
-  launch owns. Trust boundary: a process that deliberately rewrites this
+  this check. The chat request names only the alias. Because these calls come
+  before the start record, their failures are ordinary refusals with nothing
+  dispatched, and a crash between the copy and the record leaves only an
+  alias. The alias is deleted after the run's terminal is written; at
+  launch, and before any new start, native deletes every alias whose name
+  matches that exact format and that no live run of this launch owns.
+  Native never deletes any other name: an owner's own tag is never touched,
+  whatever it starts with. Trust boundary: a process that deliberately rewrites this
   exact alias in the moment between the check and the request is outside
   what native can prevent through Ollama's API; Ollama and other programs
   able to call it on this Mac are trusted not to do that.
