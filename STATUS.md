@@ -57,7 +57,17 @@ builds, Codex reviews). Plan:
 [docs/plans/site-engine-standalone.md](docs/plans/site-engine-standalone.md).
 Not started.
 
+**Merge gate**: pull requests merge themselves once tests pass and Codex's
+review is clean; protected paths still need the owner. Plan:
+[docs/plans/merge-gate.md](docs/plans/merge-gate.md). Waiting on the owner's
+bot account. Until it's tried, the owner merges by hand.
+
 ## Recent Owner Decisions
+
+- **Oct 15:** Build the merge gate (one shared write-only bot account for
+  the builders, enforced checks, auto-merge). `main` is protected from now on.
+  Owner decisions move to `docs/decisions.md`, which only the owner approves.
+  No interim "agents merge docs after Codex's 👍"; wait for the gate.
 
 - **Oct 15:** Outside builders may build standalone modules (AGENTS.md).
   First: Site Engine's standalone slice, GrokBot builds and Codex reviews.
