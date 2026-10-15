@@ -65,6 +65,9 @@ bot account. Until it's tried, the owner merges by hand.
 
 ## Recent Owner Decisions
 
+- **Oct 15:** Every review asks two questions of each change: does it break a
+  rule of this system, and does it fix a problem the owner actually has
+  (AGENTS.md Review Loop; approved by merging #43).
 - **Oct 15:** Build the merge gate (one shared write-only bot account for
   the builders, enforced checks, auto-merge). `main` is protected from now on.
   Owner decisions move to `docs/decisions.md`, which only the owner approves.
