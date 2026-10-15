@@ -99,10 +99,11 @@ has tried it. Each step ends with something the owner can try.
    permits cloud use without separate approval. *Finish line:* the owner
    teaches, corrects and forgets something real and sees it respected.
 
-**Right after step 3 (owner decision, October 15):** a thin first version of
-the **Canvas/Atlas** knowledge view, the first thing built once real
-conversations run in the session view, reading the durable session records.
-Moved up from step 11.
+**Right after step 3, in this order (owner decision, October 15):**
+1. The **Claude Code adapter** (above).
+2. A thin first version of the **Canvas/Atlas/Navigator** knowledge view,
+   reading the durable session records. Moved up from step 11. Navigator
+   search and sorting stays at step 7.
 
 ### After the Top Five
 
@@ -141,7 +142,8 @@ built in parallel by an outside builder under AGENTS.md "Outside Builders":
   [docs/plans/site-engine-standalone.md](docs/plans/site-engine-standalone.md).
 - **Merge gate** (first piece of the Code umbrella): automatic merging once
   tests pass and Codex's review is clean, with protected paths still needing
-  the owner. Plan proposed in pull request #41 (not merged yet). It is an owner
+  the owner. Plan:
+  [docs/plans/merge-gate.md](docs/plans/merge-gate.md). It is an owner
   decision that changes AGENTS.md's merge rules, including the planning check
   for outside builders; until that AGENTS.md change is merged and the gate's
   tests pass, every merge stays manual and the current rules apply.

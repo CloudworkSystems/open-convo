@@ -48,6 +48,7 @@ invented chats only, while the step 2 trial is pending. Scope:
 ## Next
 
 - The Claude Code adapter, right after step 3.
+- Then a thin Canvas/Atlas/Navigator knowledge view.
 4. Clarity tools in the conversation ("Wait—what?" on a local model).
 5. Chosen memory in separate spaces.
 
@@ -65,8 +66,8 @@ bot account. Until it's tried, the owner merges by hand.
 
 ## Recent Owner Decisions
 
-- **Oct 15:** Foundations set ([docs/foundations.md](docs/foundations.md)). Canvas/Atlas
-  moves to right after step 3; iPhone capture app right after step 5; modules
+- **Oct 15:** Foundations set ([docs/foundations.md](docs/foundations.md)). Claude Code adapter,
+  then Canvas/Atlas/Navigator, right after step 3; iPhone capture app right after step 5; modules
   group under umbrellas (Personal, Family, Business, Creator, Code, Agents).
 - **Oct 15:** Every review asks two questions of each change: does it break a
   rule of this system, and does it fix a problem the owner actually has
