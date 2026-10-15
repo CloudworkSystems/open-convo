@@ -184,7 +184,9 @@ final class LocalChatCoreTests: XCTestCase {
     /// Codex round 1 on #42: a valid JSON line without Ollama's shape fails.
     func testLinesWithoutOllamasShapeFail() {
         for body in [Data("{}\n".utf8), Invented.line(["done": false]), Invented.line(["message": ["role": "assistant", "content": "x"]]),
-                     Invented.line(["done": "true"]), Invented.line(["done": true, "message": "x"])] {
+                     Invented.line(["done": "true"]), Invented.line(["done": true, "message": "x"]),
+                     Data("{\"done\":1}\n".utf8), Data("{\"done\":0,\"message\":{\"role\":\"assistant\",\"content\":\"x\"}}\n".utf8),
+                     Data("\n".utf8), Data("   \n".utf8)] {
             var run = core()
             _ = run.response(status: 200, monotonic: 0, wall: wall)
             XCTAssertEqual(events(run.bytes(bytes(body), monotonic: 1, wall: wall)).last?.reason, "process-error",

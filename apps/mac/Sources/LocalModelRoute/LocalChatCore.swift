@@ -173,7 +173,8 @@ public struct LocalChatCore {
     // MARK: Lines
 
     private mutating func handleLine(_ line: [UInt8], monotonic now: UInt64, wall: Int64, into effects: inout [Effect]) {
-        if line.allSatisfy({ $0 == 0x20 || $0 == 0x09 || $0 == 0x0D }) { return }
+        // A blank line is not an object either (Codex round 2 on #42): it
+        // falls through to the JSON check below and fails.
         guard let object = try? JSONSerialization.jsonObject(with: Data(line)) as? [String: Any],
               object["error"] == nil else {
             end(.failed(.processError), wall: wall, cancel: true, into: &effects)
@@ -181,7 +182,9 @@ public struct LocalChatCore {
         }
         // Every line is `{message?, done}` (Codex round 1 on #42): `done` is
         // always a Bool, and a line that isn't done carries a message.
-        guard let done = object["done"] as? Bool else {
+        // A real JSON Boolean only: `as? Bool` would also accept 0 and 1.
+        guard let doneValue = object["done"], CFGetTypeID(doneValue as CFTypeRef) == CFBooleanGetTypeID(),
+              let done = doneValue as? Bool else {
             end(.failed(.processError), wall: wall, cancel: true, into: &effects)
             return
         }
