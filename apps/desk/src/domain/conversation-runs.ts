@@ -7,6 +7,9 @@ export const MAX_RUN_SERIALIZED_BYTES = 768 * 1024;
 /** New open records reserve this within the serialized cap for terminal recovery. */
 export const MAX_RUN_CLOSURE_BYTES = 1024;
 export const MAX_PARTICIPANT_FIELD_BYTES = 256;
+/** Contract section 20: the local route's participant id and context bound. */
+export const LOCAL_PARTICIPANT_ID = 'ollama-local';
+export const MAX_CONTEXT_RUNS = 256;
 
 export type ConversationRunRefusal = 'invalid-arguments' | 'invalid-run' | 'invalid-event' | 'invalid-text'
   | 'text-limit' | 'run-size-limit' | 'target-mismatch' | 'sequence-mismatch' | 'invalid-transition' | 'invalid-closure';
@@ -23,6 +26,8 @@ export interface CreateConversationRunArgs {
   participant: ParticipantIdentity;
   input: string;
   createdAt: string;
+  /** Required exactly for a local participant (contract section 20.3). */
+  contextRunIds?: string[];
 }
 
 const v4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -31,6 +36,22 @@ const runKeys = ['version', 'runId', 'sessionId', 'userMessageId', 'assistantMes
   'inputChunks', 'outputChunks', 'lastSequence', 'phase', 'createdAt', 'updatedAt'];
 const eventKeys = ['runId', 'sessionId', 'sequence', 'at', 'type'];
 const createKeys = ['runId', 'sessionId', 'userMessageId', 'assistantMessageId', 'participant', 'input', 'createdAt'];
+/** Exactly when the participant is local; never an id twice or the run's own id. */
+function contextRunIds(value: Record<string, unknown>): boolean {
+  const local = (value.participant as ParticipantIdentity).id === LOCAL_PARTICIPANT_ID;
+  if (!Object.hasOwn(value, 'contextRunIds')) return !local;
+  const ids = value.contextRunIds;
+  if (!local || !Array.isArray(ids) || Object.getPrototypeOf(ids) !== Array.prototype || ids.length > MAX_CONTEXT_RUNS
+    || Reflect.ownKeys(ids).length !== ids.length + 1) return false;
+  const seen = new Set<string>([String(value.runId).toLowerCase()]);
+  for (let index = 0; index < ids.length; index++) {
+    const descriptor = Object.getOwnPropertyDescriptor(ids, String(index));
+    if (!descriptor || !Object.hasOwn(descriptor, 'value') || descriptor.enumerable !== true
+      || typeof descriptor.value !== 'string' || !v4.test(descriptor.value) || seen.has(descriptor.value)) return false;
+    seen.add(descriptor.value);
+  }
+  return true;
+}
 const refuse = (reason: ConversationRunRefusal): RunRefusal => ({ kind: 'refused', reason });
 const stopReasons: readonly ParticipantStopReason[] = ['local-stop', 'stop-incomplete', 'reply-too-long', 'paid-overflow', 'timeout', 'process-error'];
 type RunMetrics = { inputBytes: number; outputBytes: number; tailBytes: number; serializedBytes: number };
@@ -182,7 +203,8 @@ function readMetrics(value: unknown): RunMetrics | null {
       const cached = validatedRuns.get(value);
       if (cached) return cached;
     }
-    if (!shape(value, runKeys, ['reason', 'closure', 'cleanupAcknowledgment']) || value.version !== 1 || !identities(value) || !participant(value.participant)
+    if (!shape(value, runKeys, ['reason', 'closure', 'cleanupAcknowledgment', 'contextRunIds']) || value.version !== 1 || !identities(value) || !participant(value.participant)
+      || !contextRunIds(value)
       || !Number.isSafeInteger(value.lastSequence) || (value.lastSequence as number) < 0
       || !date(value.createdAt) || !date(value.updatedAt) || value.updatedAt < value.createdAt) return null;
     const input = chunkBytes(value.inputChunks);
@@ -219,6 +241,7 @@ function remember(run: ConversationRun, metrics: RunMetrics): ConversationRun {
   Object.freeze(run.participant);
   Object.freeze(run.inputChunks);
   Object.freeze(run.outputChunks);
+  if (run.contextRunIds) Object.freeze(run.contextRunIds);
   if (run.closure) {
     if (run.closure.kind === 'interrupted') {
       Object.freeze(run.closure.terminalEvent);
@@ -240,6 +263,7 @@ export function freezeConversationRun(value: unknown): ConversationRunResult {
   if (validatedRuns.has(source)) return { kind: 'ok', run: source };
   const run: ConversationRun = { ...source, participant: { ...source.participant },
     inputChunks: source.inputChunks.slice(), outputChunks: source.outputChunks.slice(),
+    ...(source.contextRunIds ? { contextRunIds: source.contextRunIds.slice() } : {}),
     ...(source.cleanupAcknowledgment ? { cleanupAcknowledgment: { ...source.cleanupAcknowledgment } } : {}),
     ...(source.closure ? { closure: source.closure.kind === 'interrupted'
       ? { ...source.closure, terminalEvent: { ...source.closure.terminalEvent },
@@ -272,14 +296,16 @@ function validateEvent(value: unknown, legacySaved: boolean): value is Participa
 
 export function createConversationRun(args: CreateConversationRunArgs): ConversationRunResult {
   try {
-    if (!exact(args, createKeys) || !identities(args) || !participant(args.participant) || !date(args.createdAt)) return refuse('invalid-arguments');
+    if (!shape(args, createKeys, ['contextRunIds']) || !identities(args) || !participant(args.participant) || !date(args.createdAt)
+      || !contextRunIds(args)) return refuse('invalid-arguments');
     const input = chunkRunText(args.input);
     if (input.kind !== 'ok') return input;
     if (input.chunks.length === 0) return refuse('invalid-text');
     const run: ConversationRun = { version: 1, runId: args.runId, sessionId: args.sessionId,
       userMessageId: args.userMessageId, assistantMessageId: args.assistantMessageId,
       participant: { ...args.participant }, inputChunks: input.chunks, outputChunks: [],
-      lastSequence: 0, phase: 'prepared', createdAt: args.createdAt, updatedAt: args.createdAt };
+      lastSequence: 0, phase: 'prepared', createdAt: args.createdAt, updatedAt: args.createdAt,
+      ...(args.contextRunIds ? { contextRunIds: args.contextRunIds.slice() } : {}) };
     const serializedBytes = scalarBytes(JSON.stringify(run));
     if (serializedBytes > MAX_RUN_SERIALIZED_BYTES - MAX_RUN_CLOSURE_BYTES) return refuse('run-size-limit');
     return { kind: 'ok', run: remember(run, { inputBytes: scalarBytes(args.input), outputBytes: 0, tailBytes: 0, serializedBytes }) };

@@ -45,55 +45,29 @@ dispatch receipt, status-based recovery, lifecycle gates and limits.
 Trade-off: the contract needs a revision (below) and its codecs and fixtures
 change with it, before any host code.
 
-## Contract Changes (Revision 4, Its Own PR Before Host Code)
+## Contract Changes (Revision 4)
 
-These change `docs/desk-native-participant-contract.md`, the Swift and page
-codecs and the vectors file together. Page and host already ship as one build
-(section 2), so the pinned page codec moves with them.
+Written as section 20 of `docs/desk-native-participant-contract.md` (step 3
+PR 2). In short:
 
-1. **A catalog, not one pin.** `participant.availability` returns a list of
-   entries: the Claude Code entry (unchanged) plus one entry per installed
-   local chat model. Each entry keeps today's four persisted fields: `id`
-   (`ollama-local` for every local model), `label`, `model` and
-   `executionHost` (`this-mac`). `model` is the Ollama name plus its digest
-   (`qwen3.5:9b@6488c96fa5fa`), so a re-downloaded or changed model is a
-   different identity. The run's persisted `participant` stays four fields,
-   compared as exact strings on replay. `:cloud` and remote models appear as
-   entries that are never available (`model-not-local`), so the Desk can say
-   why they can't be picked.
-2. **Route-level state.** Some failures have no model entry to hang on, so
-   the reply also carries `routes`: one item per route, for example
-   `{route: "ollama-local", state, reason}`, with `reason` `null` when ready,
-   else `ollama-not-running` or `host-not-loopback`. A model the owner chose
-   that is absent from a ready route's catalog is shown as missing; one whose
-   name is present with a new digest is shown as changed. The Desk works
-   these out by comparing its saved choice with the catalog.
-3. **Prepared-run check (section 6, step 5)** compares `run.participant` with
-   *an entry* of native's current catalog instead of the one pin. **Start
-   (section 7, step 10)** answers `participant-changed` when that entry is
-   gone or its digest changed; native never runs a prepared run under another
-   model.
-4. **Conversation context in the first wire.** A prepared run gains
-   `contextMessageIds`: the ordered ids of earlier completed messages in the
-   same session to send as context. In the preparing commit, native reads
-   their role and text from the committed record (a missing, uncompleted or
-   out-of-session id is `run-mismatch`) and saves that resolved sequence as
-   an **immutable snapshot** in its own prepared entry, with its byte count
-   and SHA-256. Start sends exactly the snapshot, so a later edit to an
-   earlier message can't change what goes out; status and the proof can
-   check the hash.
-5. **One input limit over everything sent.** The resolved context's roles
-   and text plus the new message's `inputChunks` count together against the
-   existing 262,144-byte input bound (section 6, step 6), measured on the
-   resolved text, not the ids. Over the bound is `text-too-large`. The page
-   does the same count from its own record before preparing and leaves out
-   the oldest whole turns until it fits, so the refusal only catches a page
-   that got it wrong. The composer says "Earlier turns not sent" when any
-   were left out; a turn is never cut in half. Context applies from the
-   first host PR, so every second turn continues the conversation.
-6. **Local-only entries.** Model-level reasons are `model-not-local`;
-   route-level reasons are above. Section 17's paid-usage confirmation and
-   the first-trial input bound apply to the Claude Code entry only.
+1. **Catalog.** With a local route, availability lists the Claude Code entry
+   plus one entry per local chat model (`id` `ollama-local`, `model` =
+   name@digest, `executionHost` `this-mac`) and a `routes` item for failures
+   with no model entry (`ollama-not-running`, `catalog-unreadable`,
+   `host-not-loopback`). Cloud models are listed as never available.
+2. **Context.** Earlier turns are referenced by run (`contextRunIds`), because
+   the Desk keeps each turn as a run, not as separate messages. Native
+   resolves them from the committed record and stores only their byte count
+   and SHA-256, never their text (the runs list holds no chat text). At
+   start it re-resolves and refuses on any difference, then sends exactly
+   what it hashed. This replaces the snapshot proposed earlier, so there is
+   nothing to compact (Codex round 3 on #37).
+3. **One input limit** over resolved context text plus the new message.
+4. **Redirects refused** on every local request (Codex round 3 on #37).
+   **Digest-bound requests** through a private per-run alias, because Ollama
+   can't run a model by digest (Codex round 2 on #38).
+5. **Start, Stop and lifecycle** follow sections 7, 10 and 14, with the HTTP
+   task in place of a process group.
 
 ## Rules For The Local Route
 
@@ -109,6 +83,8 @@ codecs and the vectors file together. Page and host already ship as one build
   start whose reply was lost is resolved with `participant.status`, never by
   sending again. Ollama has no request-level idempotency, so nothing resends
   a request on its own.
+- **No redirects.** Every HTTP redirect is refused, so nothing follows a
+  reply that points somewhere else.
 - **After a crash.** A run with a start record and no terminal reopens as
   interrupted: its partial text is kept and labeled as cut off. Only the
   owner's explicit Retry makes a new run (new ids); the old one is never
@@ -126,11 +102,15 @@ codecs and the vectors file together. Page and host already ship as one build
 ## Proposed Pull Requests, In Order
 
 1. **Scope** (this document).
-2. **Contract revision 4, codecs and vectors.** The changes above, with new
-   vectors for catalog entries, route states, context ids and their
-   snapshot, the shared input bound, the new reasons and
-   `participant-changed` on a changed digest. No host behavior yet.
-3. **Local route in the Mac host.** Catalog from Ollama; start with receipt
+2. **Contract revision 4 and the page codec.** Section 20, the page codec
+   and its tests, and a separate vectors file
+   (`native-participant-local-v1.json`) for catalog entries, route states,
+   context ids, the shared input bound and the new reasons. The page codec
+   runs the shape cases now; the existing 107 vectors stay byte-identical.
+3. **Local route in the Mac host** also runs every case in the new vectors
+   file through the Swift harness, plus the hash binding and
+   `participant-changed` on a changed digest.
+   The host itself: catalog from Ollama; start with receipt
    before request; streaming events; Stop; status after a lost reply;
    interrupted runs on relaunch; lock, close and quit gates. Tested against a
    fake Ollama server, never the network, including unknown outcomes (reply

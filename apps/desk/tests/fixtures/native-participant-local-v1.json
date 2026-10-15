@@ -1,0 +1,2274 @@
+{
+  "description": "Invented vectors for the local-model route, revision 4 (docs/desk-native-participant-contract.md section 20). Page-level cases only for now: availability replies with routes, a local start, replies the page codec must refuse, and prepared local runs. Step 3 PR 3 adds seeded host cases (seed localRoute, fake-server script steps) run by the Swift harness. No real model names, digests or text.",
+  "context": {
+    "connectionId": "51000000-0000-4000-8000-000000000001",
+    "documentGeneration": 2,
+    "workspaceHandle": "invented-workspace-handle",
+    "participant": {
+      "id": "claude-code",
+      "label": "Claude Code",
+      "model": "invented-pinned-model",
+      "executionHost": "this-mac"
+    },
+    "changedPin": {
+      "id": "claude-code",
+      "label": "Claude Code",
+      "model": "invented-newer-pinned-model",
+      "executionHost": "this-mac"
+    },
+    "launchId": "75abcdef-0000-4000-8abc-000000000002",
+    "previousLaunchId": "75abcdef-0000-4000-8abc-000000000001",
+    "cliVersion": "invented-cli-version",
+    "localParticipant": {
+      "id": "ollama-local",
+      "label": "invented-local-small:7b",
+      "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "executionHost": "this-mac"
+    },
+    "localRoute": "ollama-local"
+  },
+  "cases": [
+    {
+      "name": "local route ready: Claude entry, then chat models by name (cloud model never available)",
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "payload": {}
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-cloud:cloud",
+            "model": "invented-cloud:cloud@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "model-not-local"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-large:9b",
+            "model": "invented-local-large:9b@b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "local route ready with no local chat models",
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000902",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "payload": {}
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000902",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "local route unavailable: ollama-not-running",
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000903",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "payload": {}
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000903",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "unavailable",
+            "reason": "ollama-not-running"
+          }
+        ]
+      }
+    },
+    {
+      "name": "local route unavailable: catalog-unreadable",
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000904",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "payload": {}
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000904",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "unavailable",
+            "reason": "catalog-unreadable"
+          }
+        ]
+      }
+    },
+    {
+      "name": "local route unavailable: host-not-loopback",
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000905",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "payload": {}
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000905",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "unavailable",
+            "reason": "host-not-loopback"
+          }
+        ]
+      }
+    },
+    {
+      "name": "participant.start for a local model accepted",
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000906",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000000901",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000901",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000901",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "Invented question for an invented bakery: one first step?"
+          ]
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000906",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "outcome": "ok",
+        "runId": "71abcdef-0000-4000-8abc-000000000901"
+      }
+    }
+  ],
+  "invalidReplies": [
+    {
+      "name": "local entries out of name order",
+      "basedOn": "local route ready: Claude entry, then chat models by name (cloud model never available)",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-large:9b",
+            "model": "invented-local-large:9b@b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-cloud:cloud",
+            "model": "invented-cloud:cloud@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "model-not-local"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "duplicate local name",
+      "basedOn": "local route ready: Claude entry, then chat models by name (cloud model never available)",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-cloud:cloud",
+            "model": "invented-cloud:cloud@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "model-not-local"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-large:9b",
+            "model": "invented-local-large:9b@b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-large:9b",
+            "model": "invented-local-large:9b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "local entry before the Claude entry",
+      "basedOn": "local route ready: Claude entry, then chat models by name (cloud model never available)",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-cloud:cloud",
+            "model": "invented-cloud:cloud@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "model-not-local"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-large:9b",
+            "model": "invented-local-large:9b@b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "label differs from the model name",
+      "basedOn": "local route ready: Claude entry, then chat models by name (cloud model never available)",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-cloud:cloud",
+            "model": "invented-cloud:cloud@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "model-not-local"
+          },
+          {
+            "id": "ollama-local",
+            "label": "Invented Large",
+            "model": "invented-local-large:9b@b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "short digest",
+      "basedOn": "local route ready: Claude entry, then chat models by name (cloud model never available)",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-cloud:cloud",
+            "model": "invented-cloud:cloud@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "model-not-local"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-large:9b",
+            "model": "invented-local-large:9b@b2b2b2b2b2b2",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "uppercase digest",
+      "basedOn": "local route ready: Claude entry, then chat models by name (cloud model never available)",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-cloud:cloud",
+            "model": "invented-cloud:cloud@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "model-not-local"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-large:9b",
+            "model": "invented-local-large:9b@B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "local entry with confirmation",
+      "basedOn": "local route ready: Claude entry, then chat models by name (cloud model never available)",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-cloud:cloud",
+            "model": "invented-cloud:cloud@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "model-not-local"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-large:9b",
+            "model": "invented-local-large:9b@b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null,
+            "confirmation": {
+              "state": "unconfirmed"
+            }
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "local entry off this Mac",
+      "basedOn": "local route ready: Claude entry, then chat models by name (cloud model never available)",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-cloud:cloud",
+            "model": "invented-cloud:cloud@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "model-not-local"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-large:9b",
+            "model": "invented-local-large:9b@b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "executionHost": "ollama.com",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "available entry with a reason",
+      "basedOn": "local route ready: Claude entry, then chat models by name (cloud model never available)",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-cloud:cloud",
+            "model": "invented-cloud:cloud@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "model-not-local"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-large:9b",
+            "model": "invented-local-large:9b@b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": "model-not-local"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "unavailable entry without its reason",
+      "basedOn": "local route ready: Claude entry, then chat models by name (cloud model never available)",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-cloud:cloud",
+            "model": "invented-cloud:cloud@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-large:9b",
+            "model": "invented-local-large:9b@b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "Claude reason on a local entry",
+      "basedOn": "local route ready: Claude entry, then chat models by name (cloud model never available)",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-cloud:cloud",
+            "model": "invented-cloud:cloud@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "cli-missing"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-large:9b",
+            "model": "invented-local-large:9b@b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "unavailable route listing local entries",
+      "basedOn": "local route ready: Claude entry, then chat models by name (cloud model never available)",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-cloud:cloud",
+            "model": "invented-cloud:cloud@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "model-not-local"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-large:9b",
+            "model": "invented-local-large:9b@b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "unavailable",
+            "reason": "ollama-not-running"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ready route with a reason",
+      "basedOn": "local route ready: Claude entry, then chat models by name (cloud model never available)",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-cloud:cloud",
+            "model": "invented-cloud:cloud@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "model-not-local"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-large:9b",
+            "model": "invented-local-large:9b@b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": "ollama-not-running"
+          }
+        ]
+      }
+    },
+    {
+      "name": "two routes",
+      "basedOn": "local route ready: Claude entry, then chat models by name (cloud model never available)",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-cloud:cloud",
+            "model": "invented-cloud:cloud@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "model-not-local"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-large:9b",
+            "model": "invented-local-large:9b@b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": null
+          },
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "unknown route",
+      "basedOn": "local route ready: Claude entry, then chat models by name (cloud model never available)",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-cloud:cloud",
+            "model": "invented-cloud:cloud@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "model-not-local"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-large:9b",
+            "model": "invented-local-large:9b@b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ],
+        "routes": [
+          {
+            "route": "lm-studio",
+            "state": "ready",
+            "reason": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "unknown route reason",
+      "basedOn": "local route ready: Claude entry, then chat models by name (cloud model never available)",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-cloud:cloud",
+            "model": "invented-cloud:cloud@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "model-not-local"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-large:9b",
+            "model": "invented-local-large:9b@b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "unavailable",
+            "reason": "remote-only"
+          }
+        ]
+      }
+    },
+    {
+      "name": "local entries without routes",
+      "basedOn": "local route ready: Claude entry, then chat models by name (cloud model never available)",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-cloud:cloud",
+            "model": "invented-cloud:cloud@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "model-not-local"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-large:9b",
+            "model": "invented-local-large:9b@b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "more than 64 local entries",
+      "basedOn": "local route ready: Claude entry, then chat models by name (cloud model never available)",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m000:1b",
+            "model": "invented-m000:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m001:1b",
+            "model": "invented-m001:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m002:1b",
+            "model": "invented-m002:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m003:1b",
+            "model": "invented-m003:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m004:1b",
+            "model": "invented-m004:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m005:1b",
+            "model": "invented-m005:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m006:1b",
+            "model": "invented-m006:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m007:1b",
+            "model": "invented-m007:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m008:1b",
+            "model": "invented-m008:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m009:1b",
+            "model": "invented-m009:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m010:1b",
+            "model": "invented-m010:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m011:1b",
+            "model": "invented-m011:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m012:1b",
+            "model": "invented-m012:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m013:1b",
+            "model": "invented-m013:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m014:1b",
+            "model": "invented-m014:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m015:1b",
+            "model": "invented-m015:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m016:1b",
+            "model": "invented-m016:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m017:1b",
+            "model": "invented-m017:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m018:1b",
+            "model": "invented-m018:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m019:1b",
+            "model": "invented-m019:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m020:1b",
+            "model": "invented-m020:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m021:1b",
+            "model": "invented-m021:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m022:1b",
+            "model": "invented-m022:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m023:1b",
+            "model": "invented-m023:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m024:1b",
+            "model": "invented-m024:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m025:1b",
+            "model": "invented-m025:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m026:1b",
+            "model": "invented-m026:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m027:1b",
+            "model": "invented-m027:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m028:1b",
+            "model": "invented-m028:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m029:1b",
+            "model": "invented-m029:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m030:1b",
+            "model": "invented-m030:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m031:1b",
+            "model": "invented-m031:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m032:1b",
+            "model": "invented-m032:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m033:1b",
+            "model": "invented-m033:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m034:1b",
+            "model": "invented-m034:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m035:1b",
+            "model": "invented-m035:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m036:1b",
+            "model": "invented-m036:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m037:1b",
+            "model": "invented-m037:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m038:1b",
+            "model": "invented-m038:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m039:1b",
+            "model": "invented-m039:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m040:1b",
+            "model": "invented-m040:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m041:1b",
+            "model": "invented-m041:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m042:1b",
+            "model": "invented-m042:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m043:1b",
+            "model": "invented-m043:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m044:1b",
+            "model": "invented-m044:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m045:1b",
+            "model": "invented-m045:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m046:1b",
+            "model": "invented-m046:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m047:1b",
+            "model": "invented-m047:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m048:1b",
+            "model": "invented-m048:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m049:1b",
+            "model": "invented-m049:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m050:1b",
+            "model": "invented-m050:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m051:1b",
+            "model": "invented-m051:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m052:1b",
+            "model": "invented-m052:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m053:1b",
+            "model": "invented-m053:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m054:1b",
+            "model": "invented-m054:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m055:1b",
+            "model": "invented-m055:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m056:1b",
+            "model": "invented-m056:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m057:1b",
+            "model": "invented-m057:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m058:1b",
+            "model": "invented-m058:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m059:1b",
+            "model": "invented-m059:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m060:1b",
+            "model": "invented-m060:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m061:1b",
+            "model": "invented-m061:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m062:1b",
+            "model": "invented-m062:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m063:1b",
+            "model": "invented-m063:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-m064:1b",
+            "model": "invented-m064:1b@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "a :cloud model marked available",
+      "basedOn": "local route ready: Claude entry, then chat models by name (cloud model never available)",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000901",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "overflow-unverified"
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-cloud:cloud",
+            "model": "invented-cloud:cloud@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-large:9b",
+            "model": "invented-local-large:9b@b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": null
+          }
+        ]
+      }
+    }
+  ],
+  "runs": {
+    "valid": [
+      {
+        "name": "local run with no earlier turns",
+        "run": {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000000902",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000902",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000902",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "Invented follow-up question."
+          ],
+          "outputChunks": [],
+          "lastSequence": 0,
+          "phase": "prepared",
+          "createdAt": "2026-10-15T07:00:00.000Z",
+          "updatedAt": "2026-10-15T07:00:00.000Z",
+          "contextRunIds": []
+        }
+      },
+      {
+        "name": "local run with two earlier turns, oldest first",
+        "run": {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000000902",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000902",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000902",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "Invented follow-up question."
+          ],
+          "outputChunks": [],
+          "lastSequence": 0,
+          "phase": "prepared",
+          "createdAt": "2026-10-15T07:00:00.000Z",
+          "updatedAt": "2026-10-15T07:00:00.000Z",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000000903",
+            "71abcdef-0000-4000-8abc-000000000904"
+          ]
+        }
+      },
+      {
+        "name": "Claude Code run, unchanged twelve keys",
+        "run": {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000000902",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000902",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000902",
+          "participant": {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "Invented follow-up question."
+          ],
+          "outputChunks": [],
+          "lastSequence": 0,
+          "phase": "prepared",
+          "createdAt": "2026-10-15T07:00:00.000Z",
+          "updatedAt": "2026-10-15T07:00:00.000Z"
+        }
+      }
+    ],
+    "invalid": [
+      {
+        "name": "local run without contextRunIds",
+        "run": {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000000902",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000902",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000902",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "Invented follow-up question."
+          ],
+          "outputChunks": [],
+          "lastSequence": 0,
+          "phase": "prepared",
+          "createdAt": "2026-10-15T07:00:00.000Z",
+          "updatedAt": "2026-10-15T07:00:00.000Z"
+        }
+      },
+      {
+        "name": "Claude Code run with contextRunIds",
+        "run": {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000000902",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000902",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000902",
+          "participant": {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "Invented follow-up question."
+          ],
+          "outputChunks": [],
+          "lastSequence": 0,
+          "phase": "prepared",
+          "createdAt": "2026-10-15T07:00:00.000Z",
+          "updatedAt": "2026-10-15T07:00:00.000Z",
+          "contextRunIds": []
+        }
+      },
+      {
+        "name": "an earlier run listed twice",
+        "run": {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000000902",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000902",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000902",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "Invented follow-up question."
+          ],
+          "outputChunks": [],
+          "lastSequence": 0,
+          "phase": "prepared",
+          "createdAt": "2026-10-15T07:00:00.000Z",
+          "updatedAt": "2026-10-15T07:00:00.000Z",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000000903",
+            "71abcdef-0000-4000-8abc-000000000903"
+          ]
+        }
+      },
+      {
+        "name": "the run's own id as context",
+        "run": {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000000902",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000902",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000902",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "Invented follow-up question."
+          ],
+          "outputChunks": [],
+          "lastSequence": 0,
+          "phase": "prepared",
+          "createdAt": "2026-10-15T07:00:00.000Z",
+          "updatedAt": "2026-10-15T07:00:00.000Z",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000000902"
+          ]
+        }
+      },
+      {
+        "name": "a context id that is not a lowercase v4 id",
+        "run": {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000000902",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000902",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000902",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "Invented follow-up question."
+          ],
+          "outputChunks": [],
+          "lastSequence": 0,
+          "phase": "prepared",
+          "createdAt": "2026-10-15T07:00:00.000Z",
+          "updatedAt": "2026-10-15T07:00:00.000Z",
+          "contextRunIds": [
+            "71ABCDEF-0000-4000-8ABC-000000000903"
+          ]
+        }
+      },
+      {
+        "name": "more than 256 context runs",
+        "run": {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000000902",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000902",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000902",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "Invented follow-up question."
+          ],
+          "outputChunks": [],
+          "lastSequence": 0,
+          "phase": "prepared",
+          "createdAt": "2026-10-15T07:00:00.000Z",
+          "updatedAt": "2026-10-15T07:00:00.000Z",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000001000",
+            "71abcdef-0000-4000-8abc-000000001001",
+            "71abcdef-0000-4000-8abc-000000001002",
+            "71abcdef-0000-4000-8abc-000000001003",
+            "71abcdef-0000-4000-8abc-000000001004",
+            "71abcdef-0000-4000-8abc-000000001005",
+            "71abcdef-0000-4000-8abc-000000001006",
+            "71abcdef-0000-4000-8abc-000000001007",
+            "71abcdef-0000-4000-8abc-000000001008",
+            "71abcdef-0000-4000-8abc-000000001009",
+            "71abcdef-0000-4000-8abc-000000001010",
+            "71abcdef-0000-4000-8abc-000000001011",
+            "71abcdef-0000-4000-8abc-000000001012",
+            "71abcdef-0000-4000-8abc-000000001013",
+            "71abcdef-0000-4000-8abc-000000001014",
+            "71abcdef-0000-4000-8abc-000000001015",
+            "71abcdef-0000-4000-8abc-000000001016",
+            "71abcdef-0000-4000-8abc-000000001017",
+            "71abcdef-0000-4000-8abc-000000001018",
+            "71abcdef-0000-4000-8abc-000000001019",
+            "71abcdef-0000-4000-8abc-000000001020",
+            "71abcdef-0000-4000-8abc-000000001021",
+            "71abcdef-0000-4000-8abc-000000001022",
+            "71abcdef-0000-4000-8abc-000000001023",
+            "71abcdef-0000-4000-8abc-000000001024",
+            "71abcdef-0000-4000-8abc-000000001025",
+            "71abcdef-0000-4000-8abc-000000001026",
+            "71abcdef-0000-4000-8abc-000000001027",
+            "71abcdef-0000-4000-8abc-000000001028",
+            "71abcdef-0000-4000-8abc-000000001029",
+            "71abcdef-0000-4000-8abc-000000001030",
+            "71abcdef-0000-4000-8abc-000000001031",
+            "71abcdef-0000-4000-8abc-000000001032",
+            "71abcdef-0000-4000-8abc-000000001033",
+            "71abcdef-0000-4000-8abc-000000001034",
+            "71abcdef-0000-4000-8abc-000000001035",
+            "71abcdef-0000-4000-8abc-000000001036",
+            "71abcdef-0000-4000-8abc-000000001037",
+            "71abcdef-0000-4000-8abc-000000001038",
+            "71abcdef-0000-4000-8abc-000000001039",
+            "71abcdef-0000-4000-8abc-000000001040",
+            "71abcdef-0000-4000-8abc-000000001041",
+            "71abcdef-0000-4000-8abc-000000001042",
+            "71abcdef-0000-4000-8abc-000000001043",
+            "71abcdef-0000-4000-8abc-000000001044",
+            "71abcdef-0000-4000-8abc-000000001045",
+            "71abcdef-0000-4000-8abc-000000001046",
+            "71abcdef-0000-4000-8abc-000000001047",
+            "71abcdef-0000-4000-8abc-000000001048",
+            "71abcdef-0000-4000-8abc-000000001049",
+            "71abcdef-0000-4000-8abc-000000001050",
+            "71abcdef-0000-4000-8abc-000000001051",
+            "71abcdef-0000-4000-8abc-000000001052",
+            "71abcdef-0000-4000-8abc-000000001053",
+            "71abcdef-0000-4000-8abc-000000001054",
+            "71abcdef-0000-4000-8abc-000000001055",
+            "71abcdef-0000-4000-8abc-000000001056",
+            "71abcdef-0000-4000-8abc-000000001057",
+            "71abcdef-0000-4000-8abc-000000001058",
+            "71abcdef-0000-4000-8abc-000000001059",
+            "71abcdef-0000-4000-8abc-000000001060",
+            "71abcdef-0000-4000-8abc-000000001061",
+            "71abcdef-0000-4000-8abc-000000001062",
+            "71abcdef-0000-4000-8abc-000000001063",
+            "71abcdef-0000-4000-8abc-000000001064",
+            "71abcdef-0000-4000-8abc-000000001065",
+            "71abcdef-0000-4000-8abc-000000001066",
+            "71abcdef-0000-4000-8abc-000000001067",
+            "71abcdef-0000-4000-8abc-000000001068",
+            "71abcdef-0000-4000-8abc-000000001069",
+            "71abcdef-0000-4000-8abc-000000001070",
+            "71abcdef-0000-4000-8abc-000000001071",
+            "71abcdef-0000-4000-8abc-000000001072",
+            "71abcdef-0000-4000-8abc-000000001073",
+            "71abcdef-0000-4000-8abc-000000001074",
+            "71abcdef-0000-4000-8abc-000000001075",
+            "71abcdef-0000-4000-8abc-000000001076",
+            "71abcdef-0000-4000-8abc-000000001077",
+            "71abcdef-0000-4000-8abc-000000001078",
+            "71abcdef-0000-4000-8abc-000000001079",
+            "71abcdef-0000-4000-8abc-000000001080",
+            "71abcdef-0000-4000-8abc-000000001081",
+            "71abcdef-0000-4000-8abc-000000001082",
+            "71abcdef-0000-4000-8abc-000000001083",
+            "71abcdef-0000-4000-8abc-000000001084",
+            "71abcdef-0000-4000-8abc-000000001085",
+            "71abcdef-0000-4000-8abc-000000001086",
+            "71abcdef-0000-4000-8abc-000000001087",
+            "71abcdef-0000-4000-8abc-000000001088",
+            "71abcdef-0000-4000-8abc-000000001089",
+            "71abcdef-0000-4000-8abc-000000001090",
+            "71abcdef-0000-4000-8abc-000000001091",
+            "71abcdef-0000-4000-8abc-000000001092",
+            "71abcdef-0000-4000-8abc-000000001093",
+            "71abcdef-0000-4000-8abc-000000001094",
+            "71abcdef-0000-4000-8abc-000000001095",
+            "71abcdef-0000-4000-8abc-000000001096",
+            "71abcdef-0000-4000-8abc-000000001097",
+            "71abcdef-0000-4000-8abc-000000001098",
+            "71abcdef-0000-4000-8abc-000000001099",
+            "71abcdef-0000-4000-8abc-000000001100",
+            "71abcdef-0000-4000-8abc-000000001101",
+            "71abcdef-0000-4000-8abc-000000001102",
+            "71abcdef-0000-4000-8abc-000000001103",
+            "71abcdef-0000-4000-8abc-000000001104",
+            "71abcdef-0000-4000-8abc-000000001105",
+            "71abcdef-0000-4000-8abc-000000001106",
+            "71abcdef-0000-4000-8abc-000000001107",
+            "71abcdef-0000-4000-8abc-000000001108",
+            "71abcdef-0000-4000-8abc-000000001109",
+            "71abcdef-0000-4000-8abc-000000001110",
+            "71abcdef-0000-4000-8abc-000000001111",
+            "71abcdef-0000-4000-8abc-000000001112",
+            "71abcdef-0000-4000-8abc-000000001113",
+            "71abcdef-0000-4000-8abc-000000001114",
+            "71abcdef-0000-4000-8abc-000000001115",
+            "71abcdef-0000-4000-8abc-000000001116",
+            "71abcdef-0000-4000-8abc-000000001117",
+            "71abcdef-0000-4000-8abc-000000001118",
+            "71abcdef-0000-4000-8abc-000000001119",
+            "71abcdef-0000-4000-8abc-000000001120",
+            "71abcdef-0000-4000-8abc-000000001121",
+            "71abcdef-0000-4000-8abc-000000001122",
+            "71abcdef-0000-4000-8abc-000000001123",
+            "71abcdef-0000-4000-8abc-000000001124",
+            "71abcdef-0000-4000-8abc-000000001125",
+            "71abcdef-0000-4000-8abc-000000001126",
+            "71abcdef-0000-4000-8abc-000000001127",
+            "71abcdef-0000-4000-8abc-000000001128",
+            "71abcdef-0000-4000-8abc-000000001129",
+            "71abcdef-0000-4000-8abc-000000001130",
+            "71abcdef-0000-4000-8abc-000000001131",
+            "71abcdef-0000-4000-8abc-000000001132",
+            "71abcdef-0000-4000-8abc-000000001133",
+            "71abcdef-0000-4000-8abc-000000001134",
+            "71abcdef-0000-4000-8abc-000000001135",
+            "71abcdef-0000-4000-8abc-000000001136",
+            "71abcdef-0000-4000-8abc-000000001137",
+            "71abcdef-0000-4000-8abc-000000001138",
+            "71abcdef-0000-4000-8abc-000000001139",
+            "71abcdef-0000-4000-8abc-000000001140",
+            "71abcdef-0000-4000-8abc-000000001141",
+            "71abcdef-0000-4000-8abc-000000001142",
+            "71abcdef-0000-4000-8abc-000000001143",
+            "71abcdef-0000-4000-8abc-000000001144",
+            "71abcdef-0000-4000-8abc-000000001145",
+            "71abcdef-0000-4000-8abc-000000001146",
+            "71abcdef-0000-4000-8abc-000000001147",
+            "71abcdef-0000-4000-8abc-000000001148",
+            "71abcdef-0000-4000-8abc-000000001149",
+            "71abcdef-0000-4000-8abc-000000001150",
+            "71abcdef-0000-4000-8abc-000000001151",
+            "71abcdef-0000-4000-8abc-000000001152",
+            "71abcdef-0000-4000-8abc-000000001153",
+            "71abcdef-0000-4000-8abc-000000001154",
+            "71abcdef-0000-4000-8abc-000000001155",
+            "71abcdef-0000-4000-8abc-000000001156",
+            "71abcdef-0000-4000-8abc-000000001157",
+            "71abcdef-0000-4000-8abc-000000001158",
+            "71abcdef-0000-4000-8abc-000000001159",
+            "71abcdef-0000-4000-8abc-000000001160",
+            "71abcdef-0000-4000-8abc-000000001161",
+            "71abcdef-0000-4000-8abc-000000001162",
+            "71abcdef-0000-4000-8abc-000000001163",
+            "71abcdef-0000-4000-8abc-000000001164",
+            "71abcdef-0000-4000-8abc-000000001165",
+            "71abcdef-0000-4000-8abc-000000001166",
+            "71abcdef-0000-4000-8abc-000000001167",
+            "71abcdef-0000-4000-8abc-000000001168",
+            "71abcdef-0000-4000-8abc-000000001169",
+            "71abcdef-0000-4000-8abc-000000001170",
+            "71abcdef-0000-4000-8abc-000000001171",
+            "71abcdef-0000-4000-8abc-000000001172",
+            "71abcdef-0000-4000-8abc-000000001173",
+            "71abcdef-0000-4000-8abc-000000001174",
+            "71abcdef-0000-4000-8abc-000000001175",
+            "71abcdef-0000-4000-8abc-000000001176",
+            "71abcdef-0000-4000-8abc-000000001177",
+            "71abcdef-0000-4000-8abc-000000001178",
+            "71abcdef-0000-4000-8abc-000000001179",
+            "71abcdef-0000-4000-8abc-000000001180",
+            "71abcdef-0000-4000-8abc-000000001181",
+            "71abcdef-0000-4000-8abc-000000001182",
+            "71abcdef-0000-4000-8abc-000000001183",
+            "71abcdef-0000-4000-8abc-000000001184",
+            "71abcdef-0000-4000-8abc-000000001185",
+            "71abcdef-0000-4000-8abc-000000001186",
+            "71abcdef-0000-4000-8abc-000000001187",
+            "71abcdef-0000-4000-8abc-000000001188",
+            "71abcdef-0000-4000-8abc-000000001189",
+            "71abcdef-0000-4000-8abc-000000001190",
+            "71abcdef-0000-4000-8abc-000000001191",
+            "71abcdef-0000-4000-8abc-000000001192",
+            "71abcdef-0000-4000-8abc-000000001193",
+            "71abcdef-0000-4000-8abc-000000001194",
+            "71abcdef-0000-4000-8abc-000000001195",
+            "71abcdef-0000-4000-8abc-000000001196",
+            "71abcdef-0000-4000-8abc-000000001197",
+            "71abcdef-0000-4000-8abc-000000001198",
+            "71abcdef-0000-4000-8abc-000000001199",
+            "71abcdef-0000-4000-8abc-000000001200",
+            "71abcdef-0000-4000-8abc-000000001201",
+            "71abcdef-0000-4000-8abc-000000001202",
+            "71abcdef-0000-4000-8abc-000000001203",
+            "71abcdef-0000-4000-8abc-000000001204",
+            "71abcdef-0000-4000-8abc-000000001205",
+            "71abcdef-0000-4000-8abc-000000001206",
+            "71abcdef-0000-4000-8abc-000000001207",
+            "71abcdef-0000-4000-8abc-000000001208",
+            "71abcdef-0000-4000-8abc-000000001209",
+            "71abcdef-0000-4000-8abc-000000001210",
+            "71abcdef-0000-4000-8abc-000000001211",
+            "71abcdef-0000-4000-8abc-000000001212",
+            "71abcdef-0000-4000-8abc-000000001213",
+            "71abcdef-0000-4000-8abc-000000001214",
+            "71abcdef-0000-4000-8abc-000000001215",
+            "71abcdef-0000-4000-8abc-000000001216",
+            "71abcdef-0000-4000-8abc-000000001217",
+            "71abcdef-0000-4000-8abc-000000001218",
+            "71abcdef-0000-4000-8abc-000000001219",
+            "71abcdef-0000-4000-8abc-000000001220",
+            "71abcdef-0000-4000-8abc-000000001221",
+            "71abcdef-0000-4000-8abc-000000001222",
+            "71abcdef-0000-4000-8abc-000000001223",
+            "71abcdef-0000-4000-8abc-000000001224",
+            "71abcdef-0000-4000-8abc-000000001225",
+            "71abcdef-0000-4000-8abc-000000001226",
+            "71abcdef-0000-4000-8abc-000000001227",
+            "71abcdef-0000-4000-8abc-000000001228",
+            "71abcdef-0000-4000-8abc-000000001229",
+            "71abcdef-0000-4000-8abc-000000001230",
+            "71abcdef-0000-4000-8abc-000000001231",
+            "71abcdef-0000-4000-8abc-000000001232",
+            "71abcdef-0000-4000-8abc-000000001233",
+            "71abcdef-0000-4000-8abc-000000001234",
+            "71abcdef-0000-4000-8abc-000000001235",
+            "71abcdef-0000-4000-8abc-000000001236",
+            "71abcdef-0000-4000-8abc-000000001237",
+            "71abcdef-0000-4000-8abc-000000001238",
+            "71abcdef-0000-4000-8abc-000000001239",
+            "71abcdef-0000-4000-8abc-000000001240",
+            "71abcdef-0000-4000-8abc-000000001241",
+            "71abcdef-0000-4000-8abc-000000001242",
+            "71abcdef-0000-4000-8abc-000000001243",
+            "71abcdef-0000-4000-8abc-000000001244",
+            "71abcdef-0000-4000-8abc-000000001245",
+            "71abcdef-0000-4000-8abc-000000001246",
+            "71abcdef-0000-4000-8abc-000000001247",
+            "71abcdef-0000-4000-8abc-000000001248",
+            "71abcdef-0000-4000-8abc-000000001249",
+            "71abcdef-0000-4000-8abc-000000001250",
+            "71abcdef-0000-4000-8abc-000000001251",
+            "71abcdef-0000-4000-8abc-000000001252",
+            "71abcdef-0000-4000-8abc-000000001253",
+            "71abcdef-0000-4000-8abc-000000001254",
+            "71abcdef-0000-4000-8abc-000000001255",
+            "71abcdef-0000-4000-8abc-000000001256"
+          ]
+        }
+      }
+    ]
+  }
+}
