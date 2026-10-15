@@ -43,7 +43,8 @@ jobs:
           all=$(has '^\.github/')
           echo "clarity=$([ "$all" = true ] && echo true || has '^packages/clarity/')" >> "$GITHUB_OUTPUT"
           echo "desk=$([ "$all" = true ] && echo true || has '^(apps/desk/|packages/clarity/)')" >> "$GITHUB_OUTPUT"
-          echo "mac=$([ "$all" = true ] && echo true || has '^apps/mac/')" >> "$GITHUB_OUTPUT"
+          # The Mac tests also read the Desk's shared fixtures.
+          echo "mac=$([ "$all" = true ] && echo true || has '^(apps/mac/|apps/desk/tests/fixtures/)')" >> "$GITHUB_OUTPUT"
           echo "gate=$all" >> "$GITHUB_OUTPUT"
 
   clarity:
@@ -96,9 +97,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           persist-credentials: false
       - run: xcodebuild -version && swift --version
       - run: swift test
+        working-directory: apps/mac
+      # Packaging checks (stand-ins only: never builds, signs or installs).
+      - run: bash scripts/tests/package_app_desk_output_test.sh
         working-directory: apps/mac
 
   gate:
