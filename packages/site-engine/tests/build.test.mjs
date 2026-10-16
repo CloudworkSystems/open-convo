@@ -259,6 +259,78 @@ function dirtyAvif() {
   ]);
 }
 
+function jfifPayload() {
+  return Buffer.from([0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00]);
+}
+
+function iccJpeg() {
+  const parts = [Buffer.from([0xff, 0xd8])];
+  parts.push(jpegSegment(0xe0, jfifPayload()));
+  parts.push(
+    jpegSegment(
+      0xe2,
+      Buffer.concat([
+        Buffer.from("ICC_PROFILE\0", "latin1"),
+        Buffer.from([1, 1]),
+        Buffer.from("ICC-AUTHOR-9f3a desc Copyright Device"),
+      ]),
+    ),
+  );
+  parts.push(jpegSegment(0xc0, Buffer.from([0x08, 0x00, 0x01, 0x00, 0x01, 0x01, 0x01, 0x11, 0x00])));
+  parts.push(jpegSegment(0xda, Buffer.from([0x01, 0x01, 0x00, 0x00, 0x3f, 0x00])));
+  parts.push(Buffer.from([0x00, 0xff, 0xd9]));
+  return Buffer.concat(parts);
+}
+
+function iccPng() {
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(1, 0);
+  ihdr.writeUInt32BE(1, 4);
+  ihdr[8] = 8;
+  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  return Buffer.concat([
+    signature,
+    pngChunk("IHDR", ihdr),
+    pngChunk("iCCP", Buffer.from("sRGB\0\0ICC-AUTHOR-9f3a")),
+    pngChunk("IDAT", zlibStore(Buffer.from([0, 0]))),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+function iccWebp() {
+  const vp8x = Buffer.alloc(10);
+  vp8x[0] = 0x02;
+  const chunks = Buffer.concat([
+    riffChunk("VP8X", vp8x),
+    riffChunk("ICCP", Buffer.from("ICC-AUTHOR-9f3a profile-desc")),
+    riffChunk("VP8 ", Buffer.from("fakevp8payload")),
+  ]);
+  const header = Buffer.alloc(12);
+  header.write("RIFF", 0, "ascii");
+  header.writeUInt32LE(4 + chunks.length, 4);
+  header.write("WEBP", 8, "ascii");
+  return Buffer.concat([header, chunks]);
+}
+
+function progressiveJpeg() {
+  const parts = [Buffer.from([0xff, 0xd8])];
+  parts.push(jpegSegment(0xe0, jfifPayload()));
+  parts.push(jpegSegment(0xc2, Buffer.from([0x08, 0x00, 0x01, 0x00, 0x01, 0x01, 0x01, 0x11, 0x00])));
+  parts.push(jpegSegment(0xc4, Buffer.from([0x00, 0x00])));
+  parts.push(jpegSegment(0xda, Buffer.from([0x01, 0x01, 0x00, 0x00, 0x3f, 0x00])));
+  parts.push(Buffer.from([0x00, 0x11]));
+  parts.push(jpegSegment(0xfe, Buffer.from("PROGRESSIVE-MARKER-SECRET")));
+  parts.push(jpegSegment(0xc4, Buffer.from([0x01, 0x02])));
+  parts.push(jpegSegment(0xda, Buffer.from([0x01, 0x01, 0x00, 0x00, 0x3f, 0x00])));
+  parts.push(Buffer.from("SCAN2-KEEP"));
+  parts.push(Buffer.from([0xff, 0xd9]));
+  return Buffer.concat(parts);
+}
+
+function avifWithFreeBox() {
+  return Buffer.concat([cleanAvif(), bmffBox("free", Buffer.from("HIDDEN-AUTHOR-9f3a"))]);
+}
+
 function jsonLd(html) {
   const matches = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g) ?? [];
   assert.equal(matches.length, 1);
@@ -469,6 +541,15 @@ test("6. JSON-LD matches the facts, with LocalBusiness or Organization", async (
     assert.match(css, /#15110f/);
     assert.match(css, /#f7f2ee/);
     assert.match(css, /#f37a4a/);
+
+    const addressed = await loadFixture("northglass-tutoring.facts.json");
+    addressed.contact.email = "notes?draft#1@northglass-tutoring.example";
+    const addressedOut = path.join(root, "addressed");
+    const addressedRun = run(await writeJson(root, addressed, "addressed.json"), addressedOut);
+    assert.equal(addressedRun.status, 0, addressedRun.stderr);
+    const addressedHtml = await readFile(path.join(addressedOut, "index.html"), "utf8");
+    assert.match(addressedHtml, /href="mailto:notes%3Fdraft%231@northglass-tutoring\.example"/);
+    assert.match(addressedHtml, />notes\?draft#1@northglass-tutoring\.example</);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -660,12 +741,20 @@ test("13. JPEG and PNG metadata, including GPS, is removed from the built images
     await writeFile(path.join(root, "note.png"), dirtyPng());
     await writeFile(path.join(root, "still.webp"), dirtyWebp());
     await writeFile(path.join(root, "clean.avif"), cleanAvif());
+    await writeFile(path.join(root, "icc.jpg"), iccJpeg());
+    await writeFile(path.join(root, "icc.png"), iccPng());
+    await writeFile(path.join(root, "icc.webp"), iccWebp());
+    await writeFile(path.join(root, "progressive.jpg"), progressiveJpeg());
     const facts = await loadFixture("marrow-lane-bakery.facts.json");
     facts.images = [
       { file: "counter.jpg", alt: "A fictional counter" },
       { file: "note.png", alt: "A fictional note card" },
       { file: "still.webp", alt: "A fictional still life" },
       { file: "clean.avif", alt: "A fictional clean picture" },
+      { file: "icc.jpg", alt: "A fictional color target" },
+      { file: "icc.png", alt: "A fictional color card" },
+      { file: "icc.webp", alt: "A fictional color still" },
+      { file: "progressive.jpg", alt: "A fictional progressive photo" },
     ];
     const out = path.join(root, "site");
     const result = run(await writeJson(root, facts), out);
@@ -681,6 +770,9 @@ test("13. JPEG and PNG metadata, including GPS, is removed from the built images
       "Exif\0",
       "SECRET-TRAILING-JPEG",
       "SECRET-TRAILING-HTML",
+      "ICC-AUTHOR-9f3a",
+      "PROGRESSIVE-MARKER-SECRET",
+      "HIDDEN-AUTHOR-9f3a",
     ];
     for (const rel of await filesIn(out)) {
       const bytes = await readFile(path.join(out, rel));
@@ -700,6 +792,17 @@ test("13. JPEG and PNG metadata, including GPS, is removed from the built images
     assert.equal(textOf(webp).includes("VP8 "), true);
     const avif = await readFile(path.join(out, "images/4.avif"));
     assert.deepEqual(avif, cleanAvif());
+    const iccJpegOut = await readFile(path.join(out, "images/5.jpg"));
+    assert.equal(textOf(iccJpegOut).includes("JFIF"), true);
+    assert.equal(textOf(iccJpegOut).includes("ICC_PROFILE"), false);
+    const iccPngOut = await readFile(path.join(out, "images/6.png"));
+    assert.deepEqual(pngChunkTypes(iccPngOut), ["IHDR", "IDAT", "IEND"]);
+    const iccWebpOut = await readFile(path.join(out, "images/7.webp"));
+    assert.equal(textOf(iccWebpOut).includes("ICCP"), false);
+    assert.equal(iccWebpOut[20] & 0x02, 0);
+    const progressive = await readFile(path.join(out, "images/8.jpg"));
+    assert.equal(textOf(progressive).includes("SCAN2-KEEP"), true);
+    assert.equal(progressive.filter((byte, index) => byte === 0xff && progressive[index + 1] === 0xda).length, 2);
 
     const refusedDir = path.join(root, "refused");
     await mkdir(refusedDir);
@@ -712,6 +815,18 @@ test("13. JPEG and PNG metadata, including GPS, is removed from the built images
     assert.match(refused.stderr, /Could not remove hidden details/);
     assert.equal(existsSync(refusedOut), false);
     assert.equal(refused.stderr.includes("OC-MARKER-AVIF-9f3a2c"), false);
+
+    const freeDir = path.join(root, "free-box");
+    await mkdir(freeDir);
+    await writeFile(path.join(freeDir, "padded.avif"), avifWithFreeBox());
+    const freeFacts = await loadFixture("northglass-tutoring.facts.json");
+    freeFacts.images = [{ file: "padded.avif", alt: "A picture with a spare box" }];
+    const freeOut = path.join(freeDir, "site");
+    const freeRun = run(await writeJson(freeDir, freeFacts), freeOut);
+    assert.notEqual(freeRun.status, 0);
+    assert.match(freeRun.stderr, /Could not remove hidden details/);
+    assert.equal(existsSync(freeOut), false);
+    assert.equal(freeRun.stderr.includes("HIDDEN-AUTHOR-9f3a"), false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

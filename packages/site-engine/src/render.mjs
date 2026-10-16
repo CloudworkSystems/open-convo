@@ -18,6 +18,20 @@ function telHref(phone) {
   return `tel:${compact}`;
 }
 
+// `?` and `#` are legal in an email's local part. Left raw, a browser treats
+// them as the start of a mailto query or fragment, so the link misses the address.
+function mailtoHref(email) {
+  const encoded = [...email]
+    .map((character) => {
+      if (/^[A-Za-z0-9@._~-]$/.test(character)) return character;
+      return [...Buffer.from(character, "utf8")]
+        .map((byte) => `%${byte.toString(16).toUpperCase().padStart(2, "0")}`)
+        .join("");
+    })
+    .join("");
+  return `mailto:${encoded}`;
+}
+
 export function buildJsonLd(facts) {
   const location = facts.location;
   const street = location && typeof location === "object";
@@ -165,7 +179,7 @@ export function renderPage(facts, images, colors) {
     }
     if (facts.contact.email) {
       links.push(
-        `<a href="${escapeAttr(`mailto:${facts.contact.email}`)}">${escapeText(facts.contact.email)}</a>`,
+        `<a href="${escapeAttr(mailtoHref(facts.contact.email))}">${escapeText(facts.contact.email)}</a>`,
       );
     }
     if (facts.contact.bookingUrl) {

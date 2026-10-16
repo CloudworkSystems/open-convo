@@ -22,6 +22,6 @@ page. Any other field stops the build before the output folder is touched.
 Default colors are the Ember palette (near-black `#15110f`, cream `#f7f2ee`,
 coral `#f37a4a`). The page names Atkinson Hyperlegible Next when that font is
 already installed, then a system serif. It does not ship font files or request
-anything from the network.
+anything from the network. Color profiles are removed from photos, because a profile can carry a name or a device id.
 
 This slice does not publish, host, take payment, or call a model.

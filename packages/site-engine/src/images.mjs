@@ -18,7 +18,6 @@ const PNG_KEEP = new Set([
   "tRNS",
   "cHRM",
   "gAMA",
-  "iCCP",
   "sRGB",
   "cICP",
   "sBIT",
@@ -31,7 +30,7 @@ const PNG_KEEP = new Set([
   "fdAT",
 ]);
 
-const WEBP_KEEP = new Set(["VP8X", "VP8 ", "VP8L", "ALPH", "ANIM", "ANMF", "ICCP"]);
+const WEBP_KEEP = new Set(["VP8X", "VP8 ", "VP8L", "ALPH", "ANIM", "ANMF"]);
 
 const AVIF_MARKERS = [
   "Exif",
@@ -169,8 +168,7 @@ function stripJpeg(buf) {
     if (offset + 2 > buf.length) throw new Error("jpeg truncated");
     const length = buf.readUInt16BE(offset);
     if (length < 2 || offset + length > buf.length) throw new Error("jpeg truncated");
-    const segment = buf.subarray(offset, offset + length);
-    const drop = shouldDropJpegSegment(marker, segment.subarray(2));
+    const drop = shouldDropJpegSegment(marker);
     if (!drop) {
       parts.push(Buffer.from([0xff, marker]));
       parts.push(buf.subarray(offset, offset + length));
@@ -179,28 +177,24 @@ function stripJpeg(buf) {
     if (marker === 0xda) {
       sawScan = true;
       const start = offset;
-      const end = findJpegEoi(buf, offset);
-      parts.push(buf.subarray(start, end));
-      return Buffer.concat(parts);
+      offset = scanEntropyEnd(buf, offset);
+      parts.push(buf.subarray(start, offset));
     }
   }
   throw new Error("jpeg truncated");
 }
 
-// APP0 (JFIF) and an ICC APP2 stay, because they are color, not identity.
-// APP14 (Adobe) stays for the color transform. APP1, APP13, comments, and
-// any other APP segment are removed: that is where EXIF, XMP, IPTC and
-// private text live.
-function shouldDropJpegSegment(marker, payload) {
-  if (marker === 0xfe || marker === 0xe1 || marker === 0xed) return true;
-  if (marker < 0xe2 || marker > 0xef || marker === 0xee) return false;
-  if (marker === 0xe2 && payload.subarray(0, 12).toString("latin1").startsWith("ICC_PROFILE\0")) {
-    return false;
-  }
-  return true;
+// APP0 (JFIF) and APP14 (Adobe color transform) stay. Every other APP
+// segment is dropped, including ICC profiles: a profile can carry a
+// description, a copyright line, a device name, or private fields.
+function shouldDropJpegSegment(marker) {
+  if (marker === 0xfe) return true;
+  return marker >= 0xe1 && marker <= 0xef && marker !== 0xee;
 }
 
-function findJpegEoi(buf, offset) {
+// Entropy runs until the next real marker. That marker may be another scan,
+// a table, or the end of the image; the caller decides which to keep.
+function scanEntropyEnd(buf, offset) {
   let index = offset;
   while (index < buf.length) {
     if (buf[index] !== 0xff) {
@@ -215,8 +209,7 @@ function findJpegEoi(buf, offset) {
       index = markerAt + 1;
       continue;
     }
-    if (marker === 0xd9) return markerAt + 1;
-    throw new Error("jpeg scan");
+    return index;
   }
   throw new Error("jpeg truncated");
 }
@@ -270,12 +263,13 @@ function stripWebp(buf) {
     const data = Buffer.from(buf.subarray(dataStart, dataEnd));
     const pad = size % 2 === 1 ? 1 : 0;
     if (tag === "VP8 " || tag === "VP8L" || tag === "ANMF") sawImage = true;
-    if (tag === "EXIF" || tag === "XMP ") {
+    if (tag === "EXIF" || tag === "XMP " || tag === "ICCP") {
       droppedMeta = true;
     } else if (!WEBP_KEEP.has(tag)) {
       throw new Error("webp chunk");
     } else if (tag === "VP8X") {
       if (data.length < 10) throw new Error("webp vp8x");
+      data[0] &= ~0x02;
       data[0] &= ~0x08;
       data[0] &= ~0x10;
       chunks.push(riffChunk(tag, data));
@@ -303,69 +297,125 @@ function riffChunk(tag, data) {
   return Buffer.concat([head, data, pad]);
 }
 
+// Boxes whose bytes are image structure, not a place to store a name or a
+// location. Anything else, including `free` and `skip`, is refused: those
+// boxes can hold arbitrary bytes, and rewriting AVIF offsets without a
+// decoder would not reliably remove them.
+const AVIF_SAFE = new Set([
+  "ftyp",
+  "meta",
+  "mdat",
+  "idat",
+  "hdlr",
+  "pitm",
+  "iloc",
+  "iinf",
+  "infe",
+  "iref",
+  "iprp",
+  "ipco",
+  "ipma",
+  "dinf",
+  "dref",
+  "url ",
+  "urn ",
+  "ispe",
+  "pixi",
+  "av1C",
+  "clap",
+  "irot",
+  "imir",
+  "pasp",
+  "lsel",
+  "a1op",
+  "a1lx",
+  "auxC",
+  "colr",
+]);
+
 function stripAvif(buf, file) {
-  walkBmff(buf, 0, buf.length);
+  const boxes = [];
+  walkAvif(buf, 0, buf.length, (type, payload) => boxes.push({ type, payload }));
+  for (const box of boxes) {
+    if (!AVIF_SAFE.has(box.type) || !avifBoxIsSafe(box)) {
+      fail(`Could not remove hidden details from image: ${file}`);
+    }
+  }
   const text = buf.toString("latin1");
   for (const marker of AVIF_MARKERS) {
-    if (text.includes(marker)) {
-      fail(`Could not remove hidden details from image: ${file}`);
-    }
+    if (text.includes(marker)) fail(`Could not remove hidden details from image: ${file}`);
   }
-  for (const type of boxTypes(buf, 0, buf.length)) {
-    if (type === "Exif" || type === "xml " || type === "uuid") {
-      fail(`Could not remove hidden details from image: ${file}`);
-    }
-  }
-  // AVIF metadata lives in offset tables. Rewriting those without a decoder
-  // can publish a broken file that still holds the metadata, so a clean file
-  // is copied and anything we cannot prove is clean is refused.
   return Buffer.from(buf);
 }
 
-function walkBmff(buf, start, end) {
+function avifBoxIsSafe(box) {
+  const { type, payload } = box;
+  if (type === "ftyp") return payload.length >= 8 && payload.length % 4 === 0;
+  if (type === "colr") {
+    if (payload.toString("ascii", 0, 4) !== "nclx" || payload.length !== 11) return false;
+    return true;
+  }
+  if (type === "hdlr") {
+    if (payload.length < 24) return false;
+    return payload.subarray(24).every((byte) => byte === 0);
+  }
+  if (type === "url " || type === "urn ") {
+    if (payload.length !== 4) return false;
+    return (payload.readUInt32BE(0) & 0xffffff) === 1;
+  }
+  if (type === "infe") return avifItemIsImage(payload);
+  return true;
+}
+
+function avifItemIsImage(payload) {
+  if (payload.length < 4) return false;
+  const version = payload[0];
+  if (version < 2) return false;
+  let cursor = 4;
+  const idSize = version === 2 ? 2 : 4;
+  if (payload.length < cursor + idSize + 6) return false;
+  cursor += idSize + 2;
+  const itemType = payload.toString("ascii", cursor, cursor + 4);
+  cursor += 4;
+  if (!["av01", "grid", "iden"].includes(itemType)) return false;
+  if (payload[cursor] !== 0) return false;
+  return cursor + 1 === payload.length;
+}
+
+function walkAvif(buf, start, end, visit) {
   let offset = start;
   while (offset + 8 <= end) {
     let size = buf.readUInt32BE(offset);
     let header = 8;
+    const type = buf.toString("ascii", offset + 4, offset + 8);
     if (size === 1) {
       if (offset + 16 > end) throw new Error("avif size");
       const large = buf.readBigUInt64BE(offset + 8);
-      if (large > BigInt(Number.MAX_SAFE_INTEGER) || large < 16n) throw new Error("avif size");
+      if (large > BigInt(end - offset) || large < 16n) throw new Error("avif size");
       size = Number(large);
       header = 16;
     } else if (size === 0) {
       size = end - offset;
     }
-    if (size < header || offset + size > end) throw new Error("avif size");
+    if (!Number.isFinite(size) || size < header || offset + size > end) throw new Error("avif size");
+    const payload = buf.subarray(offset + header, offset + size);
+    visit(type, payload);
+    const childSkip = avifChildSkip(type, payload);
+    if (childSkip !== null) walkAvif(buf, offset + header + childSkip, offset + size, visit);
     offset += size;
   }
   if (offset !== end) throw new Error("avif trailing");
 }
 
-function boxTypes(buf, start, end, into = []) {
-  let offset = start;
-  while (offset + 8 <= end) {
-    let size = buf.readUInt32BE(offset);
-    const type = buf.toString("ascii", offset + 4, offset + 8);
-    let header = 8;
-    if (size === 1) {
-      size = Number(buf.readBigUInt64BE(offset + 8));
-      header = 16;
-    } else if (size === 0) {
-      size = end - offset;
-    }
-    into.push(type);
-    const childStart = offset + header;
-    const childEnd = offset + size;
-    if (type === "meta" && childStart + 4 <= childEnd) {
-      // FullBox: version and flags, then nested boxes.
-      boxTypes(buf, childStart + 4, childEnd, into);
-    } else if (["moov", "trak", "mdia", "minf", "dinf", "iprp", "ipco", "iref"].includes(type)) {
-      boxTypes(buf, childStart, childEnd, into);
-    }
-    offset += size;
+function avifChildSkip(type, payload) {
+  if (type === "meta" || type === "iref") return payload.length >= 4 ? 4 : null;
+  if (type === "iprp" || type === "ipco" || type === "dinf") return 0;
+  if (type === "iinf") {
+    if (payload.length < 6) return null;
+    return payload[0] === 0 ? 6 : 8;
   }
-  return into;
+  if (type === "dref") return payload.length >= 8 ? 8 : null;
+  return null;
 }
 
 const EXTENSIONS = { jpeg: "jpg", png: "png", webp: "webp", avif: "avif" };
