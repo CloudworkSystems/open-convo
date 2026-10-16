@@ -264,12 +264,31 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
     /// Moves on every `detach()`, so an attach that was waiting on its
     /// store refresh sees that its stack was let go meanwhile.
     private var attachEpoch = 0
+    /// Local runs (contract section 20.4) whose private alias may exist in
+    /// Ollama and is still to be deleted: from just before step 13's bind
+    /// until `releaseAlias` hands the deletion to a task. Text-free.
+    private var owedAliases: Set<String> = []
+    /// Alias deletions in flight; a shutdown waits for them.
+    private var aliasDeletions: [String: Task<Void, Never>] = [:]
+    /// The launch's alias sweep (section 20.4: at launch, every exact-format
+    /// alias goes; no run of this launch owns one yet). A local start waits
+    /// for it before its own sweep, so the two never cross.
+    private let launchSweep: Task<Void, Never>?
 
     public init(configuration: Configuration) {
         self.configuration = configuration
         let pushes = ParticipantPushGate()
         pushGate = pushes
         gate = CoordinatorGate(pushes: pushes)
+        launchSweep = (configuration.hostConfiguration.localRoute as? any LocalRouteLaunching).map { route in
+            Task { await route.sweepAliases(keepingRunIds: []) }
+        }
+    }
+
+    /// The local route, when it can start runs (section 20.4). A route that
+    /// only lists models never starts one: its runs are `participant-changed`.
+    private nonisolated var localStarter: (any LocalRouteLaunching)? {
+        configuration.hostConfiguration.localRoute as? any LocalRouteLaunching
     }
 
     // MARK: Desk stack
@@ -513,6 +532,7 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
         var reconciled = false
         while true {
             let ticket = progress.ticket
+            releaseEndedAliases()
             if shutdownSettled(quitting: quitting) {
                 if !reconciled, let store = stack?.store, !gate.isLocked, !owedWrites().isEmpty {
                     reconciled = true
@@ -573,7 +593,9 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
     /// progress, every spawned run's terminal in (and, `quitting`, its
     /// cleanup released and updates ended), and no store work in flight.
     private func shutdownSettled(quitting: Bool) -> Bool {
-        guard cancellations.isEmpty, rereads.isEmpty, persisting.isEmpty else { return false }
+        guard cancellations.isEmpty, rereads.isEmpty, persisting.isEmpty, aliasDeletions.isEmpty else { return false }
+        // A quit leaves no alias behind that it could delete (section 20.4).
+        if quitting, !owedAliases.isEmpty { return false }
         for memory in owned.values {
             switch memory.phase {
             case .starting:
@@ -590,6 +612,7 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
 
     private func lifecycleFollowUp() {
         syncLifecycle()
+        releaseEndedAliases()
         noteProgress()
     }
 
@@ -726,12 +749,37 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
             if case .unresolved = resolution { return .unknown(echo) }
             stack = current
         }
-        switch admit(request, stack: stack) {
+        // Section 20.4 step 10 for a local run: the catalog, read afresh
+        // before the checks (as a preparing commit reads it), so steps 1-12
+        // and the starting mark still run with no await between them. The
+        // read carries no conversation text.
+        var localCatalog: LocalCatalogAnswer?
+        if let route = localStarter, Self.namesLocalRoute(request.payload) {
+            localCatalog = await route.localCatalog().checked
+            guard let current = stillAttached(stack) else { return .refused(.unknownConnection, echo: echo) }
+            if let refusal = HostPreflight.check(request, connections: current.connections) { return .refused(refusal, echo: echo) }
+            stack = current
+        }
+        switch admit(request, stack: stack, localCatalog: localCatalog) {
         case .answer(let response):
             return response
         case .admitted(let admitted):
+            if let route = localStarter, Self.isLocal(admitted.entry) {
+                return await runLocal(admitted, echo: echo, stack: stack, route: route)
+            }
             return await run(admitted, echo: echo, stack: stack)
         }
+    }
+
+    /// The start names the local route's participant id (section 20).
+    private static func namesLocalRoute(_ payload: [String: JSONValue]) -> Bool {
+        guard let id = payload["participant"]?.objectValue?["id"]?.stringValue else { return false }
+        return ParticipantPin.sameBytes(id, LocalRouteWire.participantId)
+    }
+
+    /// A prepared local run: `ollama-local` with its context (section 20.5).
+    private static func isLocal(_ entry: ParticipantRunEntry) -> Bool {
+        ParticipantPin.sameBytes(entry.participant.id, LocalRouteWire.participantId) && entry.context != nil
     }
 
     /// Steps 1-3 alone, for a start that must re-read before step 4.
@@ -749,7 +797,7 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
     /// Steps 1-12 and the starting mark, with no await. A refusal releases
     /// the request id's claim before it answers, so it leaves no identity
     /// and writes nothing.
-    private func admit(_ request: HostRequest, stack: Stack) -> Admission {
+    private func admit(_ request: HostRequest, stack: Stack, localCatalog: LocalCatalogAnswer? = nil) -> Admission {
         let echo = request.echo
         // Read once, before step 1: a lock, close, quit or detach after this
         // read moves `serial`, which the start checks before step 14 and
@@ -841,12 +889,25 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
             return refuse(.runMismatch)
         }
         // 10. Prepared for another pin than this build's (Codex Q25): never
-        // run under another model. A local run (section 20) is refused here
-        // too, sending nothing, until its start is wired (step 3 PR 3c).
-        guard entry.participant == configuration.hostConfiguration.pin else { return refuse(.participantChanged) }
+        // run under another model. A local run (section 20.4): no local
+        // entry of the catalog read for this start has the run's exact
+        // participant (name and digest) in a ready route. An unavailable
+        // route is step 13's `participant-unavailable`, not a change. A host
+        // whose route cannot start runs refuses every local run here,
+        // sending nothing.
+        let local = Self.isLocal(entry)
+        if local {
+            guard localStarter != nil, let catalog = localCatalog, !catalog.lacks(entry.participant) else {
+                return refuse(.participantChanged)
+            }
+        } else {
+            guard entry.participant == configuration.hostConfiguration.pin else { return refuse(.participantChanged) }
+        }
         // 11. Chunk limits and the first-trial bound, which also refuses a
-        // run prepared above it.
-        guard Self.inputFits(start.inputChunks, bound: configuration.hostConfiguration.inputBound) else {
+        // run prepared above it. A local run has no first-trial bound; its
+        // one limit is context and input together (section 20.3).
+        guard Self.inputFits(start.inputChunks, bound: local ? nil : configuration.hostConfiguration.inputBound),
+              !local || (entry.context?.bytes ?? 0) + entry.inputBytes <= ParticipantLimits.inputTotalBytes else {
             return refuse(.textTooLarge)
         }
         // 12. Another start in progress; a spawned run whose cleanup,
@@ -1010,12 +1071,223 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
         return .ok(echo, ["runId": .string(runId)])
     }
 
+    // MARK: Local start (contract section 20.4; step 3 PR 3c)
+
+    /// Steps 13-15 for an admitted local run, with section 20's additions
+    /// in this order: the context re-resolved from the committed record and
+    /// re-hashed (`run-mismatch` on any difference), step 13's availability
+    /// recheck from a fresh catalog, the alias sweep and the alias bind,
+    /// then the start record (`cliVersion` `ollama-local`) and only then
+    /// the one `/api/chat` request. Nothing before the start record carries
+    /// conversation text to Ollama. A lock, close, quit, detach or Stop
+    /// seen after any await before step 14 ends the start as `run` ends it
+    /// after its recheck; at or after step 14, as `run` does there. Every
+    /// path that does not launch deletes the alias if it may exist.
+    private func runLocal(_ admitted: AdmittedStart, echo: HostEcho, stack: Stack,
+                          route: any LocalRouteLaunching) async -> HostResponse {
+        let runId = admitted.entry.runId
+        let identities = configuration.hostConfiguration.identities
+        let latch = startingLatch(runId)
+        defer {
+            if case .live? = owned[runId]?.phase {} else { releaseAlias(runId) }
+            latch?.resolve(.reevaluate)
+            noteProgress()
+        }
+        func refuse(_ reason: HostRefusal) -> HostResponse {
+            identities.releaseStarting(admitted.requestId)
+            owned[runId] = nil
+            return .refused(reason, echo: echo)
+        }
+        // After each await before step 14, as `run` checks after its
+        // recheck: let go, a Stop, or a lock, close or quit.
+        func interrupted() async -> HostResponse? {
+            guard stillAttached(stack) != nil else { return refuse(.unknownConnection) }
+            if stopRequested(runId) {
+                identities.releaseStarting(admitted.requestId)
+                return await cancelBeforeStart(admitted, latch: latch, stack: stack, echo: echo)
+            }
+            if gate.state.serial != admitted.serial { return refuse(.storeLocked) }
+            return nil
+        }
+        guard let context = admitted.entry.context else { return refuse(.participantChanged) }
+
+        // Section 20.3 at start: the same ids, resolved again from the
+        // committed record and hashed again. Native sends exactly these.
+        let store = stack.store
+        let read: Result<WorkspaceRecord, Error>
+        do {
+            read = .success(try await configuration.executor.run { try store.read() })
+        } catch {
+            read = .failure(error)
+        }
+        if let answer = await interrupted() { return answer }
+        let turns: [LocalTurn]
+        switch read {
+        case .failure(let error):
+            if let refusal = Self.definiteReadFailure(error) { return refuse(refusal) }
+            // Not readable now (an unconfirmed replacement): nothing was
+            // written or sent; the page's status answers `not-dispatched`.
+            identities.releaseStarting(admitted.requestId)
+            owned[runId] = nil
+            return .unknown(echo)
+        case .success(let workspace):
+            guard let resolved = Self.resolveContext(context, of: admitted.entry, in: workspace.record) else {
+                return refuse(.runMismatch)
+            }
+            turns = resolved
+        }
+
+        // 13. The availability recheck, from a fresh catalog: the route
+        // ready and the run's exact entry listed and local. Whether it is
+        // available is the catalog's answer, never this actor's.
+        let recheck = await route.localCatalog().checked.recheck(admitted.entry.participant)
+        if let answer = await interrupted() { return answer }
+        switch recheck {
+        case .ready: break
+        case .changed: return refuse(.participantChanged)
+        case .unavailable: return refuse(.participantUnavailable)
+        }
+        // The sweep before a new start: every exact-format alias that no
+        // live run of this launch owns. After the launch's own sweep, so
+        // the two never cross.
+        await launchSweep?.value
+        await route.sweepAliases(keepingRunIds: owedAliases)
+        if let answer = await interrupted() { return answer }
+        // The bind (owed from here: a copy may succeed even when the check
+        // after it cannot be read).
+        owedAliases.insert(runId)
+        let binding = await route.bindAlias(admitted.entry.participant, runId: runId)
+        if let answer = await interrupted() { return answer }
+        let alias: String
+        switch binding {
+        case .bound(let bound): alias = bound
+        case .changed: return refuse(.participantChanged)
+        case .unavailable: return refuse(.participantUnavailable)
+        }
+        guard let record = ParticipantRunStart(requestId: admitted.requestId.canonicalString, payloadHash: admitted.payloadHash,
+                                               at: Self.at(wall: configuration.clock.wallMillis(), createdAt: admitted.entry.createdAt),
+                                               launchId: configuration.launchId, cliVersion: LocalRouteWire.participantId) else {
+            return refuse(.participantUnavailable)
+        }
+
+        // 14. The start record, before any `/api/chat` (section 20.4).
+        let written: Result<ParticipantRunEntry, Error>
+        do {
+            written = .success(try await configuration.executor.run { try store.recordStart(runId: runId, record) })
+        } catch {
+            written = .failure(error)
+        }
+        let attached = stillAttached(stack) != nil
+        let entry: ParticipantRunEntry
+        switch written {
+        case .success(let durable):
+            entry = durable
+        case .failure(let error):
+            if let refusal = Self.definiteStartFailure(error) {
+                identities.releaseStarting(admitted.requestId)
+                owned[runId] = nil
+                return attached ? .refused(refusal, echo: echo) : .refused(.unknownConnection, echo: echo)
+            }
+            // Undetermined: nothing is sent for this attempt, ever.
+            owned[runId]?.phase = .uncertain(UncertainStart(requestId: admitted.requestId, retainedBefore: retained?.runId))
+            return attached ? .unknown(echo) : .refused(.unknownConnection, echo: echo)
+        }
+        identities.recordStart(admitted.requestId)
+        retained = RetainedRun.started(runId: runId, sessionId: entry.sessionId)
+
+        // A Stop, lock, close, quit or detach at or after step 14: nothing
+        // is sent; `stopped` `local-stop` at sequence 1 (section 7).
+        if stopRequested(runId) || gate.state.serial != admitted.serial || !attached {
+            owned[runId] = nil
+            let task = cancellationTask(runId: runId, sessionId: entry.sessionId,
+                                        terminal: unspawnedTerminal(.stopped(.localStop), createdAt: entry.createdAt),
+                                        startRecorded: true, store: store)
+            latch?.resolve(.answered(await task.value))
+            return stillAttached(stack) != nil ? .ok(echo, ["runId": .string(runId)]) : .refused(.unknownConnection, echo: echo)
+        }
+
+        // 15. The one streaming request, to the alias: the turns just
+        // hashed, then the new message. No section 17 claim: a local run
+        // has no paid path.
+        let launch = LocalRunLaunch(
+            identity: ParticipantRunIdentity(runId: runId, sessionId: entry.sessionId,
+                                             createdAtMillis: ParticipantTimestamp.parse(entry.createdAt) ?? 0),
+            alias: alias, context: turns, inputChunks: admitted.request.inputChunks,
+            contextBytes: context.bytes, inputBytes: entry.inputBytes, preparedBytes: entry.preparedBytes)
+        own(runId: runId, sessionId: entry.sessionId, handle: route.launchLocal(launch, clock: configuration.clock),
+            admittedAt: admitted.serial, local: true)
+        return .ok(echo, ["runId": .string(runId)])
+    }
+
+    /// Section 20.3 at start: the run's context ids resolved again from the
+    /// committed record (the run itself must be there, once), the same
+    /// byte count and hash as its prepared entry; nil on any difference.
+    private static func resolveContext(_ context: ParticipantRunContext, of entry: ParticipantRunEntry,
+                                       in record: [String: JSONValue]) -> [LocalTurn]? {
+        guard case .array(let elements)? = record["conversationRuns"] else { return nil }
+        let own = elements.indices.filter { index in
+            elements[index].objectValue?["runId"]?.stringValue.map { ParticipantPin.sameBytes($0, entry.runId) } ?? false
+        }
+        guard own.count == 1, let ownIndex = own.first,
+              let turns = ParticipantPrepare.resolveContext(context.runIds, in: elements, before: ownIndex, sessionId: entry.sessionId),
+              turns.reduce(0, { $0 + $1.text.utf8.count }) == context.bytes,
+              ParticipantRunContext.hash(of: turns) == context.hash else { return nil }
+        return turns.map { LocalTurn(role: $0.role, text: $0.text) }
+    }
+
+    /// A committed-record read that failed definitely, as a start answers
+    /// it; nil when the record may be readable a moment later.
+    private static func definiteReadFailure(_ error: Error) -> HostRefusal? {
+        guard let failure = error as? ProofStoreError else { return .storeCorrupt }
+        switch failure {
+        case .locked, .closed: return .storeLocked
+        case .missing: return .storeMissing
+        case .replacedUnsynced: return nil
+        default: return .storeCorrupt
+        }
+    }
+
+    // MARK: Local aliases (section 20.4)
+
+    /// Hands the run's alias, if owed, to a deletion task. Never any other
+    /// name: the route deletes only the exact generated format.
+    private func releaseAlias(_ runId: String) {
+        guard let route = localStarter, owedAliases.remove(runId) != nil else { return }
+        aliasDeletions[runId] = Task {
+            await route.deleteAlias(runId: runId)
+            await self.aliasDeleted(runId)
+        }
+    }
+
+    private func aliasDeleted(_ runId: String) {
+        aliasDeletions[runId] = nil
+        noteProgress()
+    }
+
+    /// A launched local run's alias goes once its request has ended (its
+    /// updates finished) and its terminal is written; while the terminal is
+    /// held (locked, closing, quitting or with no stack), as soon as the
+    /// request has ended, so lock, close and quit leave no alias behind.
+    private func releaseAliasIfEnded(_ runId: String) {
+        guard owedAliases.contains(runId), case .live(let live)? = owned[runId]?.phase, live.updatesFinished else { return }
+        let lifecycle = gate.state
+        guard live.persistence.isResolved || lifecycle.locked || lifecycle.closing || stack == nil else { return }
+        releaseAlias(runId)
+    }
+
+    private func releaseEndedAliases() {
+        for runId in owedAliases { releaseAliasIfEnded(runId) }
+    }
+
     /// Step 15's end: the spawned run is this launch's, and its updates are
     /// consumed in order from here. Its handle is registered with the gate,
     /// so lock, close and quit can `stop` it from the app's thread; one that
     /// came after the start last looked (`serial`) stops it here.
-    private func own(runId: String, sessionId: String, handle: any ParticipantRunning, admittedAt serial: Int) {
-        let watch = UpdatesWatch(owner: configuration.confirmation, clock: configuration.clock)
+    /// A local run has no paid path, so section 17's watch has no owner to
+    /// end (section 20.4).
+    private func own(runId: String, sessionId: String, handle: any ParticipantRunning, admittedAt serial: Int,
+                     local: Bool = false) {
+        let watch = UpdatesWatch(owner: local ? nil : configuration.confirmation, clock: configuration.clock)
         var live = LiveRun(handle: handle, watch: watch)
         if gate.register(runId: runId, handle: handle, admittedAt: serial) {
             handle.stop()
@@ -1147,6 +1419,7 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
         live.retryLatch = nil
         owned[runId]?.phase = .live(live)
         for latch in latches { latch?.resolve() }
+        releaseAliasIfEnded(runId)
     }
 
     /// One update, applied to memory at once: every answer from here sees
@@ -1273,6 +1546,7 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
         defer {
             persisting[runId] = nil
             if persistAgain.remove(runId) != nil { persist(runId) }
+            releaseAliasIfEnded(runId)
             noteProgress()
         }
         // The terminal first, then the cleanup upgrade: at most one attempt

@@ -173,6 +173,28 @@ public enum LocalCatalogAnswer: Equatable, Sendable {
         return entries.first { $0.available && $0.participant == participant }
     }
 
+    /// Section 20.4 step 10 for a local start: a ready route that does not
+    /// list the run's exact participant (name and digest). A route that is
+    /// not ready lists nothing to judge a change by: step 13 answers it.
+    public func lacks(_ participant: ParticipantPin) -> Bool {
+        guard case .ready(let entries) = self else { return false }
+        return !entries.contains { $0.participant == participant }
+    }
+
+    /// Section 20.4 step 13 for a local start, on a fresh read: `ready` when
+    /// the route is ready and lists the run's exact participant as local;
+    /// `changed` when a ready route does not list it; `unavailable` when the
+    /// route is down or the entry no longer runs on this Mac.
+    public func recheck(_ participant: ParticipantPin) -> LocalStartRecheck {
+        switch self {
+        case .unavailable:
+            return .unavailable
+        case .ready(let entries):
+            guard let listed = entries.first(where: { $0.participant == participant }) else { return .changed }
+            return listed.available ? .ready : .unavailable
+        }
+    }
+
     /// This answer held to section 20.2 whatever produced it, as the page
     /// codec holds a reply: a ready list has at most 256 entries, each
     /// `ollama-local` on `this-mac`, its label the name before `@` and a
@@ -237,6 +259,15 @@ public enum LocalCatalogAnswer: Equatable, Sendable {
         guard bytes.count == nameBytes.count + 65, bytes.starts(with: nameBytes), bytes[nameBytes.count] == 0x40 else { return false }
         return bytes[(nameBytes.count + 1)...].allSatisfy { (0x30...0x39).contains($0) || (0x61...0x66).contains($0) }
     }
+}
+
+/// Step 13's recheck of a local start (section 20.4).
+public enum LocalStartRecheck: Equatable, Sendable {
+    case ready
+    /// `participant-changed`.
+    case changed
+    /// `participant-unavailable`.
+    case unavailable
 }
 
 /// Section 20's fixed names.

@@ -147,6 +147,13 @@ PR 2). In short:
    fake Ollama server, never the network, including unknown outcomes (reply
    lost after the request, crash between receipt and request, crash
    mid-stream) and every section 14 lifecycle case.
+   *Built in PR 3c (October 16):* everything above except the seeded host
+   cases in the shared vectors file. The same situations (retag, route
+   down, alias moved, dropped stream, lock, quit, crash mid-reply) are
+   tested in Swift through the real coordinator and store, with Ollama
+   played at the route seam (`LocalStartTests.swift`); adding them to
+   `native-participant-local-v1.json` changes the shared file on both
+   sides and is left for a follow-up, so the page's copy is unchanged.
 4. **Desk wiring.** Model picker, "who receives what" label, context from
    earlier turns, streaming reply in the run transcript, Stop, Retry on a
    cut-off reply. Tried in True Convo Test with invented chats.

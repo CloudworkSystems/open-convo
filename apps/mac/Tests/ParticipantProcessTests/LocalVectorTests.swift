@@ -8,8 +8,8 @@ import ParticipantProcess
 /// The Swift side of `native-participant-local-v1.json` (contract section
 /// 20.5): the page codec runs the same file, so both sides agree on every
 /// availability reply with a local route, every reply the page refuses, and
-/// every prepared run's form. The start case waits for the coordinator's
-/// local start (step 3 PR 3c); it is counted here so it cannot be lost.
+/// every prepared run's form, and the local start runs through the
+/// coordinator with a route that can start runs (step 3 PR 3c).
 private struct LocalVectors {
     static let resourceName = "native-participant-local-v1"
     let data: Data
@@ -89,7 +89,7 @@ struct LocalVectorTests {
         #expect(bundled == original, "copy apps/desk/tests/fixtures/native-participant-local-v1.json over the test fixture; never edit the copy")
     }
 
-    @Test("Every case is counted: seven availability replies run here, the one local start waits for PR 3c")
+    @Test("Every case is counted: seven availability replies and the one local start run here")
     func everyCaseCounted() throws {
         let vectors = try LocalVectors.load()
         let operations = vectors.cases.map { $0["request"]?.objectValue?["operation"]?.stringValue ?? "" }
@@ -249,9 +249,10 @@ struct LocalAvailabilityTests {
         #expect(second.fields["participants"]?.listItems?.count == 1)
         #expect(second.fields["routes"]?.listItems?.first?.objectValue?["reason"] == .string("ollama-not-running"))
 
-        // The vectors' local start, on a run this host prepared: refused
-        // `participant-changed` with nothing written or launched until the
-        // local start is wired (PR 3c).
+        // The vectors' local start, on a run this host prepared, with a route
+        // that only lists models: refused `participant-changed`, with
+        // nothing written or launched (a route that can start runs is
+        // `localStartVector` below).
         route.answer = .ready([LocalCatalogEntry(participant: localPin, available: true)])
         let start = try #require(local.cases.first { $0["request"]?.objectValue?["operation"] == .string("participant.start") })
         var payload = try #require(start["request"]?.objectValue?["payload"]?.objectValue)
@@ -275,6 +276,41 @@ struct LocalAvailabilityTests {
         #expect(refused.reason == .participantChanged)
         #expect(world.launcher.runs.isEmpty)
         #expect(world.store.publishedRuns.entry(for: runId)?.start == nil)
+    }
+}
+
+@Suite("The shared local start vector, through the coordinator (step 3 PR 3c)")
+struct LocalStartVectorTests {
+    @Test("The vectors' local start answers the vector's reply exactly, records its receipt before the chat, and leaves no alias")
+    func localStartVector() async throws {
+        let vectors = try LocalVectors.load()
+        let localPin = try #require(vectors.localParticipant)
+        let vector = try #require(vectors.cases.first { $0["request"]?.objectValue?["operation"] == .string("participant.start") })
+        let request = try #require(vector["request"]?.objectValue)
+        let expected = try #require(vector["reply"]?.objectValue)
+        let route = ScriptedLocalRoute([.ready([LocalCatalogEntry(participant: localPin, available: true)])])
+        let local = try await LocalStartWorld(route: route)
+        defer { local.clean() }
+        var payload = try #require(request["payload"]?.objectValue)
+        payload["workspaceHandle"] = .string(local.world.store.workspaceHandle)
+        var run: [String: JSONValue] = ["version": .number(1), "outputChunks": .array([]), "lastSequence": .number(0),
+                                        "phase": .string("prepared"), "createdAt": .string(LocalStartWorld.createdAt),
+                                        "updatedAt": .string(LocalStartWorld.createdAt), "contextRunIds": .array([])]
+        for key in ["runId", "sessionId", "userMessageId", "assistantMessageId", "participant", "inputChunks"] { run[key] = payload[key] }
+        let runId = try #require(payload["runId"]?.stringValue)
+        try await local.commit([.object(run)], claim: runId)
+        let requestId = try #require(request["requestId"]?.stringValue.flatMap(UUID.init(uuidString:)))
+        let reply = await local.ask(.participantStart, payload, requestId: requestId)
+        #expect(reply.outcome == .ok, "\(reply)")
+        #expect(JSONValue.object(reply.fields).canonicalData() == JSONValue.object(result(expected)).canonicalData())
+        #expect(route.calls.suffix(2) == ["bind", "chat"], "\(route.calls)")
+        #expect(local.world.store.publishedRuns.entry(for: runId)?.start?.cliVersion == "ollama-local")
+        let started = try #require(route.runs.first)
+        #expect(started.launch.context.isEmpty)
+        started.respond()
+        started.done()
+        #expect(await eventually { local.world.store.publishedRuns.entry(for: runId)?.terminal?.type == "completed" })
+        #expect(await eventually { route.aliases.isEmpty })
     }
 }
 
