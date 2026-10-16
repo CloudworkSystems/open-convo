@@ -228,10 +228,66 @@ test('every ending of a local reply has a plain message, and Retry is offered on
   assert.equal(localRunOutcome(run('Q.', '', 'running')), undefined);
   assert.deepEqual([completed, stopped, tooLong, timeout, broken, crashed].map(canRetryLocalRun), [false, true, true, true, true, true]);
   assert.equal(canRetryLocalRun({ ...stopped, participant: claude }), false, 'Retry is local-only in this step');
-  for (const reason of ['run-mismatch', 'participant-changed', 'participant-unavailable', 'text-too-large']) {
-    assert.match(localStartRefusalMessage(reason, inventedLocal)!, /nothing was sent/);
+  assert.equal(localStartRefusalMessage('participant-busy', true, inventedLocal), undefined);
+});
+
+test('every local refusal message matches its retryability: only retryable ones point to Start prepared message', async () => {
+  // Every refusal the port can give for a local start, from the real port.
+  const seen: { reason: string; retryable: boolean }[] = [];
+  const replies = [ready(localEntry('invented-model:7b', digestB)), ready(), ready(localEntry('invented-model:7b', digestA, false)),
+    down('ollama-not-running'), { outcome: 'refused', reason: 'store-unreadable' }];
+  for (const reply of replies) {
+    const h = setup(() => reply);
+    try {
+      const result = await h.connection.portFor(inventedLocal).start(input);
+      assert.equal(result.kind, 'not-started');
+      if (result.kind === 'not-started') seen.push({ reason: result.reason!, retryable: result.retryable! });
+      assert.equal(h.starts().length, 0);
+    } finally { h.connection.dispose(); }
   }
-  assert.equal(localStartRefusalMessage('participant-busy', inventedLocal), undefined);
+  const h = setup(() => ready(localEntry('invented-model:7b')));
+  try {
+    const result = await h.connection.portFor(inventedLocal).start({ ...input, inputChunks: ['a'.repeat(MAX_LOCAL_CONTEXT_BYTES + 1)] });
+    if (result.kind === 'not-started') seen.push({ reason: result.reason!, retryable: result.retryable! });
+  } finally { h.connection.dispose(); }
+  assert.deepEqual(seen, [
+    { reason: 'participant-changed', retryable: false }, { reason: 'participant-changed', retryable: false },
+    { reason: 'participant-unavailable', retryable: false }, { reason: 'participant-unavailable', retryable: true },
+    { reason: 'participant-unavailable', retryable: true }, { reason: 'text-too-large', retryable: false },
+  ]);
+  // The full table, both flags for every local reason, including ones native sends (run-mismatch).
+  for (const reason of ['run-mismatch', 'participant-changed', 'participant-unavailable', 'text-too-large']) {
+    for (const retryable of [true, false]) {
+      const message = localStartRefusalMessage(reason, retryable, inventedLocal)!;
+      assert.match(message, /nothing was sent/, `${reason} ${retryable}`);
+      assert.equal(/Start prepared message/.test(message), retryable, `${reason} ${retryable}: ${message}`);
+      assert.doesNotMatch(message, /stays on this Mac/);
+    }
+  }
+  // The model-not-local case: plain recovery, no Start control, no residency claim.
+  assert.equal(localStartRefusalMessage('participant-unavailable', false, inventedLocal),
+    'invented-model:7b now runs off this Mac, so it can’t be used and nothing was sent. Pick a local model, then close this message, then use Retry.');
+});
+
+test('a closure’s terminal above sequence 1 proves a start even when the gap hid started itself', () => {
+  const at = '2026-10-16T12:05:00.000Z';
+  const base = { ...run('Q.', '', 'prepared'), lastSequence: 0 };
+  const recovered = (type: 'completed' | 'stopped' | 'failed', sequence: number, reason: 'event-refused' | 'replay-lost'): ConversationRun => ({
+    ...base, closure: reason === 'replay-lost'
+      ? { kind: 'interrupted', reason, at, terminalEvent: { runId: base.runId, sessionId: base.sessionId, sequence, at, type } as never,
+        lost: { fromSequence: 1, throughSequence: sequence - 1, reason: 'restarted' } }
+      : { kind: 'interrupted', reason, at, terminalEvent: { runId: base.runId, sessionId: base.sessionId, sequence, at, type } as never } });
+  assert.equal(localRunStarted(recovered('completed', 5, 'replay-lost')), true);
+  assert.equal(localRunStarted(recovered('failed', 3, 'replay-lost')), true);
+  assert.equal(localRunStarted(recovered('stopped', 2, 'event-refused')), true);
+  assert.equal(localRunStarted(recovered('stopped', 1, 'event-refused')), false);
+  assert.equal(localRunOutcome(recovered('stopped', 1, 'event-refused')), 'Stopped before any reply started.');
+  assert.match(localRunOutcome(recovered('completed', 5, 'replay-lost'))!, /^Reply finished/);
+  // Saved text and a lost range after sequence 1 are evidence too.
+  assert.equal(localRunStarted({ ...base, phase: 'unknown', outputChunks: ['Partial'], lastSequence: 0 }), true);
+  assert.equal(localRunStarted({ ...run('Q.', '', 'running'), lastSequence: 1, closure: { kind: 'interrupted', reason: 'replay-lost', at,
+    terminalEvent: { runId: base.runId, sessionId: base.sessionId, sequence: 4, at, type: 'failed' } as never,
+    lost: { fromSequence: 2, throughSequence: 3, reason: 'restarted' } } }), true);
 });
 
 test('a failed availability read drops the local catalog, so nothing stays "Local" on old evidence; a later read restores it', async () => {

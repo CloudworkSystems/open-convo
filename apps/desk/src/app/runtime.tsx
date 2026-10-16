@@ -235,7 +235,9 @@ function createRuntime(mode: DeskRuntime['mode'], workspace: WorkspaceRepository
     get localCatalog() {
       if (!nativeParticipants || !isActive()) return undefined;
       const snapshot = nativeParticipants.snapshot;
-      return Object.freeze({ route: snapshot.route, entries: snapshot.local });
+      // The connection already drops these on a failed read; a set error never shows old evidence.
+      return snapshot.error !== null ? Object.freeze({ route: null, entries: Object.freeze([]) })
+        : Object.freeze({ route: snapshot.route, entries: snapshot.local });
     },
     get localRouteMessage() {
       if (!nativeParticipants || !isActive()) return undefined;

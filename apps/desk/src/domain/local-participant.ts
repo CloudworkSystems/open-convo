@@ -133,13 +133,28 @@ export function selectLocalContext(runs: readonly Readonly<ConversationRun>[], s
   return { kind: 'ok', contextRunIds: chosen.reverse(), contextBytes: total - inputBytes };
 }
 
-/** A start the host refused, in plain words. Undefined for a reason that isn't local-specific. */
-export function localStartRefusalMessage(reason: string, identity: Readonly<ParticipantIdentity>): string | undefined {
+/**
+ * A start the host refused, in plain words, or undefined for a reason that
+ * isn't local-specific. The guidance follows `retryable`: the controller offers
+ * "Start prepared message" only for a retryable refusal, so only those
+ * messages point to it; every other one says how to recover without it.
+ */
+export function localStartRefusalMessage(reason: string, retryable: boolean, identity: Readonly<ParticipantIdentity>): string | undefined {
+  const name = localModelName(identity);
+  const again = 'Close this message, then use Retry';
   switch (reason) {
-    case 'run-mismatch': return 'The earlier part of this conversation changed before sending, so nothing was sent. Close this message, then use Retry to send it again with the conversation as it is now.';
-    case 'participant-changed': return `${localModelName(identity)} changed in Ollama since you chose it, so nothing was sent. Choose the model again, close this message, then use Retry.`;
-    case 'participant-unavailable': return 'The local model is not ready on this Mac, so nothing was sent. Open Ollama, then use Start prepared message.';
-    case 'text-too-large': return 'This message plus the earlier conversation is too long for the local model, so nothing was sent.';
+    case 'run-mismatch': return retryable
+      ? 'The earlier part of this conversation changed before sending, so nothing was sent. Use Start prepared message to try again.'
+      : `The earlier part of this conversation changed before sending, so nothing was sent. ${again} to send it again with the conversation as it is now.`;
+    case 'participant-changed': return retryable
+      ? `${name} changed in Ollama since you chose it, so nothing was sent. Use Start prepared message once it is back.`
+      : `${name} changed in Ollama since you chose it, so nothing was sent. Choose a model again, then ${again.charAt(0).toLowerCase()}${again.slice(1)}.`;
+    case 'participant-unavailable': return retryable
+      ? 'The local model is not ready on this Mac, so nothing was sent. Open Ollama, then use Start prepared message.'
+      : `${name} now runs off this Mac, so it can’t be used and nothing was sent. Pick a local model, then ${again.charAt(0).toLowerCase()}${again.slice(1)}.`;
+    case 'text-too-large': return retryable
+      ? 'This message plus the earlier conversation was too long for the local model, so nothing was sent. Use Start prepared message to try again.'
+      : 'This message plus the earlier conversation is too long for the local model, so nothing was sent. Close this message and send a shorter one.';
     default: return undefined;
   }
 }
@@ -147,19 +162,35 @@ export function localStartRefusalMessage(reason: string, identity: Readonly<Part
 /**
  * Whether the Mac reported that this local reply started (contract section 8:
  * the first event is `started`, or a terminal if the run ends before
- * starting; section 20.4: `started` follows Ollama's HTTP 200). A saved run
- * keeps no event types, so: `started` is the only event that moves a prepared
- * run to `running` at sequence 1, and any sequence above 1 comes after it.
+ * starting; section 20.4: `started` follows Ollama's HTTP 200). Sequences
+ * start at 1 and rise by one, so any event above sequence 1 proves sequence 1
+ * was `started`. A saved run keeps no event types; every place it keeps a
+ * sequence or text is evidence:
+ * - `lastSequence` above 1, or exactly 1 in phase `running` (only `started`
+ *   moves a prepared run to running);
+ * - any saved reply text (text only follows `started`);
+ * - a closure's terminal event above sequence 1, including after a replay
+ *   gap that hid `started` itself (`lastSequence` can still be 0 then);
+ * - a closure's lost range starting after sequence 1.
  * A stopped or failed ending at sequence 1 never started.
  */
 export function localRunStarted(run: Readonly<ConversationRun>): boolean {
-  return run.lastSequence >= 2 || run.lastSequence === 1 && run.phase === 'running';
+  if (run.lastSequence >= 2 || run.lastSequence === 1 && run.phase === 'running') return true;
+  if (run.outputChunks.some((chunk) => chunk.length > 0)) return true;
+  const closure = run.closure;
+  if (closure?.kind === 'interrupted') {
+    if (closure.terminalEvent.sequence > 1) return true;
+    if (closure.reason === 'replay-lost' && closure.lost.fromSequence > 1) return true;
+  }
+  return false;
 }
 
 /** The ending of a local reply, in plain words, or undefined while it is still open. */
 export function localRunOutcome(run: Readonly<ConversationRun>): string | undefined {
   if (run.closure?.kind === 'interrupted') {
     const event = run.closure.terminalEvent;
+    if (!localRunStarted(run)) return event.type === 'stopped' ? 'Stopped before any reply started.'
+      : 'No reply started: the local model could not be reached or refused the request.';
     if (event.type === 'completed') return 'Reply finished, but some of its updates could not be checked. The text shown may be incomplete.';
     return 'Reply cut off. The text so far is kept.';
   }

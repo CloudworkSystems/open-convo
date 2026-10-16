@@ -481,7 +481,7 @@ export function useConversationRuns(options: RunWorkspace) {
     const uncertain = !closed && (!snapshot || ['unknown', 'unavailable'].includes(snapshot.status));
     const obsoleteActionError = closed && snapshot?.error && ['stop-unknown', 'start-unknown', 'start-refused', 'reconcile-unknown', 'subscription-failed'].includes(snapshot.error);
     const localRefusal = snapshot?.startRefusal && isLocalParticipant(run.participant) && !closed
-      ? localStartRefusalMessage(snapshot.startRefusal.reason, run.participant) : undefined;
+      ? localStartRefusalMessage(snapshot.startRefusal.reason, snapshot.startRefusal.retryable, run.participant) : undefined;
     const startMessage = localRefusal ?? (snapshot?.startRefusal?.reason === 'run-not-prepared' ? 'Stopped before it started. Check this run to read its recorded ending.'
       : snapshot?.startRefusal && !snapshot.startRefusal.retryable ? 'This prepared message cannot be started. Its text is kept; check the run or close it locally before preparing another message.' : undefined);
     const oldPinMessage = !closed && !isLocalParticipant(run.participant) && options.runtime.participantForRun && connected && !sameParticipantIdentity(connected, run.participant)
