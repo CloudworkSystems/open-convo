@@ -242,14 +242,82 @@ function bmffBox(type, payload) {
   return Buffer.concat([size, Buffer.from(type, "ascii"), payload]);
 }
 
+function leb128(value) {
+  const bytes = [];
+  let rest = value;
+  do {
+    let byte = rest & 0x7f;
+    rest >>= 7;
+    if (rest) byte |= 0x80;
+    bytes.push(byte);
+  } while (rest);
+  return Buffer.from(bytes.length ? bytes : [0]);
+}
+
+function obu(type, payload) {
+  return Buffer.concat([Buffer.from([(type << 3) | 0x02]), leb128(payload.length), payload]);
+}
+
+function packBits(bits) {
+  const out = Buffer.alloc(Math.ceil(bits.length / 8));
+  for (let index = 0; index < bits.length; index += 1) {
+    if (bits[index]) out[index >> 3] |= 1 << (7 - (index & 7));
+  }
+  return out;
+}
+
+function pushBits(bits, value, width) {
+  for (let shift = width - 1; shift >= 0; shift -= 1) bits.push((value >> shift) & 1);
+}
+
+// One-pixel still picture: reduced header, profile 0, monochrome, no timing
+// and no color description. The parser has to accept these bytes exactly.
+function sequenceHeaderPayload() {
+  const bits = [];
+  pushBits(bits, 0, 3);
+  pushBits(bits, 1, 1);
+  pushBits(bits, 1, 1);
+  pushBits(bits, 0, 5);
+  pushBits(bits, 0, 4);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 4);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 1, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 1, 1);
+  pushBits(bits, 0, 1);
+  return packBits(bits);
+}
+
+function minimalAv1Extent() {
+  return Buffer.concat([obu(2, Buffer.alloc(0)), obu(1, sequenceHeaderPayload())]);
+}
+
+function ilocBox(fileOffset, length) {
+  const body = Buffer.alloc(22);
+  body[4] = 0x44;
+  body[7] = 0x01;
+  body[9] = 0x01;
+  body[13] = 0x01;
+  body.writeUInt32BE(fileOffset, 14);
+  body.writeUInt32BE(length, 18);
+  return bmffBox("iloc", body);
+}
+
 function cleanAvif() {
-  return Buffer.concat([
-    bmffBox(
-      "ftyp",
-      Buffer.concat([Buffer.from("avif"), Buffer.from([0, 0, 0, 0]), Buffer.from("avif"), Buffer.from("mif1")]),
-    ),
-    bmffBox("mdat", Buffer.from("clean-pixel-data")),
-  ]);
+  const coded = minimalAv1Extent();
+  const ftyp = avifFtyp();
+  const mdat = bmffBox("mdat", coded);
+  const iloc = ilocBox(ftyp.length + 8, coded.length);
+  const meta = bmffBox("meta", Buffer.concat([Buffer.from([0, 0, 0, 0]), iloc]));
+  return Buffer.concat([ftyp, mdat, meta]);
 }
 
 function dirtyAvif() {
@@ -345,18 +413,15 @@ function avifFtyp(extraBrands = []) {
 }
 
 function structuralAvif() {
+  const coded = minimalAv1Extent();
+  const ftyp = avifFtyp();
+  const mdat = bmffBox("mdat", coded);
   const hdlr = bmffBox(
     "hdlr",
     Buffer.concat([Buffer.alloc(8), Buffer.from("pict"), Buffer.alloc(13)]),
   );
   const pitm = bmffBox("pitm", Buffer.from([0, 0, 0, 0, 0, 1]));
-  const iloc = bmffBox(
-    "iloc",
-    Buffer.from([
-      0, 0, 0, 0, 0x44, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
-      0x00, 0x00, 0x00, 0x04,
-    ]),
-  );
+  const iloc = ilocBox(ftyp.length + 8, coded.length);
   const infe = bmffBox("infe", Buffer.from([0x02, 0, 0, 0, 0x00, 0x01, 0x00, 0x00, 0x61, 0x76, 0x30, 0x31, 0x00]));
   const iinf = bmffBox("iinf", Buffer.concat([Buffer.from([0, 0, 0, 0, 0, 1]), infe]));
   const ispe = bmffBox("ispe", Buffer.from([0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1]));
@@ -375,7 +440,30 @@ function structuralAvif() {
     "meta",
     Buffer.concat([Buffer.from([0, 0, 0, 0]), hdlr, pitm, iloc, iinf, iref, iprp, dinf]),
   );
-  return Buffer.concat([avifFtyp(), meta, bmffBox("mdat", Buffer.from("clean-pixel-data"))]);
+  return Buffer.concat([ftyp, mdat, meta]);
+}
+
+function avifWithLooseText() {
+  return Buffer.concat([avifFtyp(), bmffBox("mdat", Buffer.from("HIDDEN-AUTHOR-9f3a"))]);
+}
+
+function avifWithCoveredText() {
+  const text = Buffer.from("HIDDEN-AUTHOR-9f3a");
+  const ftyp = avifFtyp();
+  const mdat = bmffBox("mdat", text);
+  const iloc = ilocBox(ftyp.length + 8, text.length);
+  const meta = bmffBox("meta", Buffer.concat([Buffer.from([0, 0, 0, 0]), iloc]));
+  return Buffer.concat([ftyp, mdat, meta]);
+}
+
+function avifWithUnreferencedTail() {
+  const coded = minimalAv1Extent();
+  const payload = Buffer.concat([coded, Buffer.from("HIDDEN-AUTHOR-9f3a")]);
+  const ftyp = avifFtyp();
+  const mdat = bmffBox("mdat", payload);
+  const iloc = ilocBox(ftyp.length + 8, coded.length);
+  const meta = bmffBox("meta", Buffer.concat([Buffer.from([0, 0, 0, 0]), iloc]));
+  return Buffer.concat([ftyp, mdat, meta]);
 }
 
 function avifWithBadBrand() {
@@ -971,6 +1059,9 @@ test("an AVIF with an unknown or unclean box is refused", async () => {
     ["wide-ispe.avif", avifWithWideIspe(), "HIDDEN-AUTHOR-9f3a"],
     ["metadata-obu.avif", avifWithMetadataObu(), "HIDDEN-AUTHOR-9f3a"],
     ["spare.avif", avifWithFreeBox(), "HIDDEN-AUTHOR-9f3a"],
+    ["loose.avif", avifWithLooseText(), "HIDDEN-AUTHOR-9f3a"],
+    ["covered.avif", avifWithCoveredText(), "HIDDEN-AUTHOR-9f3a"],
+    ["tail.avif", avifWithUnreferencedTail(), "HIDDEN-AUTHOR-9f3a"],
   ];
   const root = await tempDir();
   try {

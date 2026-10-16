@@ -24,7 +24,9 @@ coral `#f37a4a`). The page names Atkinson Hyperlegible Next when that font is
 already installed, then a system serif. It does not ship font files or request
 anything from the network. Color profiles are removed from photos, because a
 profile can carry a name or a device id. An AVIF is kept only when every box
-is a known part of the picture and matches that box's layout. A progressive
+is a known part of the picture and matches that box's layout. The picture
+bytes themselves must be listed by the file and must be AV1 data; spare bytes
+after the picture are refused. A progressive
 JPEG keeps every scan. Reserved characters in an email are percent-encoded
 in the mailto link; the address on the page stays as written.
 

@@ -339,18 +339,79 @@ const AVIF_ALPHA_AUX = Buffer.from("urn:mpeg:mpegB:cicp:systems:auxiliary:alpha\
 
 function stripAvif(buf, file) {
   const boxes = [];
-  walkAvif(buf, 0, buf.length, (type, payload) => boxes.push({ type, payload }));
+  walkAvif(buf, 0, buf.length, (type, payload, fileOffset) => {
+    boxes.push({ type, payload, fileOffset });
+  });
   for (const box of boxes) {
     const known = AVIF_SAFE.has(box.type) || AVIF_REFERENCE.has(box.type);
     if (!known || !avifBoxIsSafe(box)) {
       fail(`Could not remove hidden details from image: ${file}`);
     }
   }
+  if (!avifMediaIsVerified(buf, boxes)) {
+    fail(`Could not remove hidden details from image: ${file}`);
+  }
   const text = buf.toString("latin1");
   for (const marker of AVIF_MARKERS) {
     if (text.includes(marker)) fail(`Could not remove hidden details from image: ${file}`);
   }
   return Buffer.from(buf);
+}
+
+// Every byte of mdat/idat must belong to an item extent, and those bytes
+// must be AV1 open bitstream units. Unreferenced bytes, plain text, metadata
+// OBUs and padding are refused: this builder does not re-encode AV1.
+function avifMediaIsVerified(buf, boxes) {
+  const media = boxes
+    .filter((box) => box.type === "mdat" || box.type === "idat")
+    .map((box) => ({ type: box.type, start: box.fileOffset, end: box.fileOffset + box.payload.length }));
+  if (media.length === 0) return false;
+  const extents = [];
+  for (const box of boxes) {
+    if (box.type !== "iloc") continue;
+    const parsed = avifIlocExtents(box.payload);
+    if (!parsed) return false;
+    extents.push(...parsed);
+  }
+  if (extents.length === 0) return false;
+  const covered = [];
+  for (const extent of extents) {
+    if (extent.dataReferenceIndex !== 0 || extent.length <= 0) return false;
+    let start = null;
+    if (extent.construction === 0) start = extent.offset;
+    else if (extent.construction === 1) {
+      const idat = media.filter((span) => span.type === "idat");
+      if (idat.length !== 1) return false;
+      start = idat[0].start + extent.offset;
+    }
+    if (start === null || !Number.isSafeInteger(start) || start < 0) return false;
+    const end = start + extent.length;
+    if (!media.some((span) => start >= span.start && end <= span.end)) return false;
+    covered.push({ start, end });
+  }
+  for (const span of media) {
+    let cursor = span.start;
+    const pieces = covered
+      .filter((item) => item.end > span.start && item.start < span.end)
+      .map((item) => ({
+        start: Math.max(item.start, span.start),
+        end: Math.min(item.end, span.end),
+      }))
+      .sort((left, right) => left.start - right.start);
+    for (const piece of pieces) {
+      if (piece.start > cursor) return false;
+      cursor = Math.max(cursor, piece.end);
+    }
+    if (cursor !== span.end) return false;
+  }
+  let sawSequence = false;
+  for (const extent of covered) {
+    const bytes = buf.subarray(extent.start, extent.end);
+    const coded = avifExtentIsCoded(bytes);
+    if (!coded) return false;
+    if (coded.sequence) sawSequence = true;
+  }
+  return sawSequence;
 }
 
 function avifBoxIsSafe(box) {
@@ -501,7 +562,11 @@ function avifIpmaIsClean(payload) {
 }
 
 function avifIlocIsClean(payload) {
-  if (!avifFullBoxHeader(payload, payload[0]) || payload[0] > 2 || payload.length < 8) return false;
+  return Array.isArray(avifIlocExtents(payload));
+}
+
+function avifIlocExtents(payload) {
+  if (!avifFullBoxHeader(payload, payload[0]) || payload[0] > 2 || payload.length < 8) return null;
   const version = payload[0];
   let cursor = 4;
   const offsetSize = payload[cursor] >> 4;
@@ -511,40 +576,78 @@ function avifIlocIsClean(payload) {
   const indexOrReserved = payload[cursor] & 0x0f;
   cursor += 1;
   if (![0, 4, 8].includes(offsetSize) || ![0, 4, 8].includes(lengthSize) || ![0, 4, 8].includes(baseOffsetSize)) {
-    return false;
+    return null;
   }
   let indexSize = 0;
   if (version === 0) {
-    if (indexOrReserved !== 0) return false;
+    if (indexOrReserved !== 0) return null;
   } else if (![0, 4, 8].includes(indexOrReserved)) {
-    return false;
+    return null;
   } else {
     indexSize = indexOrReserved;
   }
   const countBytes = version < 2 ? 2 : 4;
   const idBytes = version < 2 ? 2 : 4;
-  if (cursor + countBytes > payload.length) return false;
+  if (cursor + countBytes > payload.length) return null;
   const itemCount = readBe(payload, cursor, countBytes);
   cursor += countBytes;
-  if (itemCount > 1024) return false;
+  if (itemCount > 1024) return null;
+  const extents = [];
   for (let index = 0; index < itemCount; index += 1) {
-    if (cursor + idBytes > payload.length) return false;
+    if (cursor + idBytes > payload.length) return null;
     cursor += idBytes;
+    let construction = 0;
     if (version === 1 || version === 2) {
-      if (cursor + 2 > payload.length) return false;
-      if ((payload.readUInt16BE(cursor) & 0xfff0) !== 0) return false;
+      if (cursor + 2 > payload.length) return null;
+      const word = payload.readUInt16BE(cursor);
+      if ((word & 0xfff0) !== 0) return null;
+      construction = word & 0x0f;
       cursor += 2;
     }
-    if (cursor + 2 + baseOffsetSize + 2 > payload.length) return false;
-    cursor += 2 + baseOffsetSize;
+    if (cursor + 2 > payload.length) return null;
+    const dataReferenceIndex = payload.readUInt16BE(cursor);
+    cursor += 2;
+    const base = readSized(payload, cursor, baseOffsetSize);
+    if (!base) return null;
+    cursor = base.cursor;
+    if (cursor + 2 > payload.length) return null;
     const extentCount = payload.readUInt16BE(cursor);
     cursor += 2;
-    if (extentCount > 1024) return false;
-    const extentBytes = (version >= 1 && indexSize > 0 ? indexSize : 0) + offsetSize + lengthSize;
-    if (extentCount * extentBytes > payload.length - cursor) return false;
-    cursor += extentCount * extentBytes;
+    if (extentCount > 1024) return null;
+    for (let extentIndex = 0; extentIndex < extentCount; extentIndex += 1) {
+      if (version >= 1 && indexSize > 0) {
+        const extentIndexValue = readSized(payload, cursor, indexSize);
+        if (!extentIndexValue) return null;
+        cursor = extentIndexValue.cursor;
+      }
+      const extentOffset = readSized(payload, cursor, offsetSize);
+      if (!extentOffset) return null;
+      cursor = extentOffset.cursor;
+      const extentLength = readSized(payload, cursor, lengthSize);
+      if (!extentLength) return null;
+      cursor = extentLength.cursor;
+      const offset = base.value + extentOffset.value;
+      if (!Number.isSafeInteger(offset)) return null;
+      extents.push({
+        construction,
+        dataReferenceIndex,
+        offset,
+        length: extentLength.value,
+      });
+    }
   }
-  return cursor === payload.length;
+  if (cursor !== payload.length) return null;
+  return extents;
+}
+
+function readSized(payload, cursor, size) {
+  if (size === 0) return { value: 0, cursor };
+  if (size !== 4 && size !== 8) return null;
+  if (cursor + size > payload.length) return null;
+  if (size === 4) return { value: payload.readUInt32BE(cursor), cursor: cursor + 4 };
+  const big = payload.readBigUInt64BE(cursor);
+  if (big > BigInt(Number.MAX_SAFE_INTEGER)) return null;
+  return { value: Number(big), cursor: cursor + 8 };
 }
 
 function readBe(payload, offset, size) {
@@ -593,6 +696,219 @@ function readLeb128(buf, offset) {
   return null;
 }
 
+function avifExtentIsCoded(bytes) {
+  let offset = 0;
+  let sequence = false;
+  if (bytes.length === 0) return null;
+  while (offset < bytes.length) {
+    const header = bytes[offset];
+    const type = (header >> 3) & 0x0f;
+    const extension = (header & 0x04) !== 0;
+    const hasSize = (header & 0x02) !== 0;
+    if ((header & 0x81) !== 0 || !hasSize || ![1, 2, 3, 4, 6, 7].includes(type)) return null;
+    offset += 1;
+    if (extension) {
+      if (offset >= bytes.length) return null;
+      offset += 1;
+    }
+    const decoded = readLeb128(bytes, offset);
+    if (!decoded || decoded.value > bytes.length - decoded.offset) return null;
+    const payload = bytes.subarray(decoded.offset, decoded.offset + decoded.value);
+    if (hasIdentityRun(payload)) return null;
+    if (type === 2 && payload.length !== 0) return null;
+    if (type === 1) {
+      if (!avifSequenceHeaderIsClean(payload)) return null;
+      sequence = true;
+    }
+    offset = decoded.offset + decoded.value;
+  }
+  return { sequence };
+}
+
+function hasIdentityRun(buf) {
+  let run = 0;
+  for (const byte of buf) {
+    const word = (byte >= 0x30 && byte <= 0x39) || (byte >= 0x41 && byte <= 0x5a) || (byte >= 0x61 && byte <= 0x7a);
+    run = word ? run + 1 : 0;
+    if (run >= 6) return true;
+  }
+  return false;
+}
+
+function avifSequenceHeaderIsClean(payload) {
+  try {
+    const bits = new BitCursor(payload);
+    const profile = bits.u(3);
+    if (profile > 2) return false;
+    const still = bits.u(1);
+    const reduced = bits.u(1);
+    if (reduced && !still) return false;
+    let decoderModel = false;
+    let initialDelay = false;
+    if (reduced) {
+      bits.u(5);
+    } else {
+      const timing = bits.u(1);
+      if (timing) {
+        readTimingInfo(bits);
+        decoderModel = bits.u(1) === 1;
+        if (decoderModel) readDecoderModelInfo(bits);
+      }
+      initialDelay = bits.u(1) === 1;
+      const points = bits.u(5);
+      for (let index = 0; index <= points; index += 1) {
+        bits.u(12);
+        const level = bits.u(5);
+        if (level > 7) bits.u(1);
+        if (decoderModel) {
+          const present = bits.u(1);
+          if (present) readOperatingParameters(bits);
+        }
+        if (initialDelay && bits.u(1)) bits.u(4);
+      }
+    }
+    const widthBits = bits.u(4) + 1;
+    bits.u(widthBits);
+    const heightBits = bits.u(4) + 1;
+    bits.u(heightBits);
+    let orderHint = false;
+    if (!reduced && bits.u(1)) {
+      bits.u(4);
+      bits.u(3);
+    }
+    bits.u(1);
+    bits.u(1);
+    bits.u(1);
+    if (!reduced) {
+      bits.u(1);
+      bits.u(1);
+      bits.u(1);
+      bits.u(1);
+      orderHint = bits.u(1) === 1;
+      if (orderHint) {
+        bits.u(1);
+        bits.u(1);
+      }
+      const chooseScreen = bits.u(1);
+      const forceScreen = chooseScreen ? 2 : bits.u(1);
+      if (forceScreen > 0) {
+        const chooseInteger = bits.u(1);
+        if (!chooseInteger) bits.u(1);
+      }
+      if (orderHint) bits.u(3);
+    }
+    bits.u(1);
+    bits.u(1);
+    bits.u(1);
+    readColorConfig(bits, profile);
+    if (bits.u(1)) return false;
+    return bits.done();
+  } catch {
+    return false;
+  }
+}
+
+function readTimingInfo(bits) {
+  bits.u(32);
+  if (bits.u(32) === 0) throw new Error("time scale");
+  if (bits.u(1)) bits.uvlc();
+}
+
+function readDecoderModelInfo(bits) {
+  bits.bufferDelayBits = bits.u(5) + 1;
+  bits.u(32);
+  bits.u(5);
+  bits.u(5);
+}
+
+function readOperatingParameters(bits) {
+  const width = bits.bufferDelayBits ?? 1;
+  bits.u(width);
+  bits.u(width);
+  bits.u(1);
+}
+
+function readColorConfig(bits, profile) {
+  const high = bits.u(1);
+  let bitDepth = high ? 10 : 8;
+  if (profile === 2 && high) bitDepth = bits.u(1) ? 12 : 10;
+  const mono = profile === 1 ? 0 : bits.u(1);
+  let primaries = 2;
+  let transfer = 2;
+  let matrix = 2;
+  if (bits.u(1)) {
+    primaries = bits.u(8);
+    transfer = bits.u(8);
+    matrix = bits.u(8);
+  }
+  if (mono) {
+    bits.u(1);
+    return;
+  }
+  const identity = primaries === 1 && transfer === 13 && matrix === 0;
+  let subsampleX = 1;
+  let subsampleY = 1;
+  if (identity) {
+    subsampleX = 0;
+    subsampleY = 0;
+  } else {
+    bits.u(1);
+    if (profile === 0) {
+      subsampleX = 1;
+      subsampleY = 1;
+    } else if (profile === 1) {
+      subsampleX = 0;
+      subsampleY = 0;
+    } else if (bitDepth === 12) {
+      subsampleX = bits.u(1);
+      subsampleY = subsampleX ? bits.u(1) : 0;
+    } else {
+      subsampleX = 1;
+      subsampleY = 0;
+    }
+    if (subsampleX && subsampleY) bits.u(2);
+  }
+  bits.u(1);
+}
+
+class BitCursor {
+  constructor(buf) {
+    this.buf = buf;
+    this.bit = 0;
+    this.bufferDelayBits = 1;
+  }
+
+  u(n) {
+    let value = 0;
+    for (let index = 0; index < n; index += 1) {
+      const byteIndex = this.bit >> 3;
+      if (byteIndex >= this.buf.length) throw new Error("bits");
+      const shift = 7 - (this.bit & 7);
+      value = (value << 1) | ((this.buf[byteIndex] >> shift) & 1);
+      this.bit += 1;
+    }
+    return value >>> 0;
+  }
+
+  uvlc() {
+    let leading = 0;
+    while (this.u(1) === 0) {
+      leading += 1;
+      if (leading > 31) throw new Error("uvlc");
+    }
+    if (leading === 0) return 0;
+    return this.u(leading) + (1 << leading) - 1;
+  }
+
+  done() {
+    const leftover = this.buf.length * 8 - this.bit;
+    if (leftover < 0 || leftover >= 8) return false;
+    if (leftover === 0) return true;
+    const mask = (1 << leftover) - 1;
+    return (this.buf[this.bit >> 3] & mask) === 0;
+  }
+}
+
 function avifItemIsImage(payload) {
   if (payload.length < 4) return false;
   const version = payload[0];
@@ -625,7 +941,7 @@ function walkAvif(buf, start, end, visit) {
     }
     if (!Number.isFinite(size) || size < header || offset + size > end) throw new Error("avif size");
     const payload = buf.subarray(offset + header, offset + size);
-    visit(type, payload);
+    visit(type, payload, offset + header);
     const childSkip = avifChildSkip(type, payload);
     if (childSkip !== null) walkAvif(buf, offset + header + childSkip, offset + size, visit);
     offset += size;
