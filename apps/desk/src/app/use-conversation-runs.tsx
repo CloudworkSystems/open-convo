@@ -7,6 +7,8 @@ import { acknowledgeUnreachableCleanup, closeConversationRun, createConversation
 import { canAdmitConversationRun, canSaveConversationWorkspaceWithRuns, captureConversationWorkspace, prepareConversationRun, saveConversationRunCheckpoint } from '../domain/conversation-workspace';
 import type { DeskState } from '../domain/types';
 import { RunTranscript } from '../features/RunTranscript';
+import { canRetryLocalRun, isLocalParticipant, localChoiceProblem, ollamaChoiceTitle, localStartRefusalMessage,
+  selectLocalContext } from '../domain/local-participant';
 import type { DeskRuntime } from './runtime';
 
 export type WorkspaceAttemptResult = WorkspaceSaveResult | { kind: 'blocked'; error: string };
@@ -19,6 +21,8 @@ interface RunWorkspace {
   present(state: DeskState): void;
   save(state: DeskState): Promise<WorkspaceAttemptResult>;
   error(message: string): void;
+  /** Puts a message back in a session's empty composer (Retry). Never sends. */
+  restoreDraft?(sessionId: string, text: string): void;
 }
 interface LocalClosure {
   run: ConversationRun;
@@ -115,7 +119,7 @@ export function useConversationRuns(options: RunWorkspace) {
 
   function attach(run: ConversationRun, mode: 'new' | 'restored') {
     const { runtime } = latest.current;
-    const port = mode === 'restored' ? runtime.participantForRun?.(run.participant) ?? runtime.participant : runtime.participant;
+    const port = mode === 'restored' ? runtime.participantForRun?.(run.participant) ?? runtime.participant : sendPort(run.participant);
     if (!port || !runtime.isActive() || controllers.current.has(run.runId)) return null;
     const controller = new ConversationRunController({ run, mode, port,
       checkpoint, acceptRun: admitted,
@@ -272,6 +276,11 @@ export function useConversationRuns(options: RunWorkspace) {
     return canSaveConversationWorkspaceWithRuns(next, [...records.values()], previousView);
   }
 
+  /** The port a new run uses: a local model's own exact pin, never the Claude entry in its place. */
+  function sendPort(identity: Readonly<ParticipantIdentity>) {
+    const { runtime } = latest.current;
+    return isLocalParticipant(identity) ? runtime.participantForRun?.(identity) : runtime.participant;
+  }
   // Catalog entries are supplied by the integration, never authorized by a saved preference.
   // Recovery controllers keep the original port/identity; choosing the next reply cannot retarget Stop.
   function catalogBlock(identity: Readonly<ParticipantIdentity>) {
@@ -279,6 +288,14 @@ export function useConversationRuns(options: RunWorkspace) {
     if (runtime.participantAvailabilityMessage) return runtime.participantAvailabilityMessage;
     if (runtime.participantChoices === undefined) return undefined;
     const choice = runtime.participantChoices.find((item) => sameParticipantIdentity(item.identity, identity));
+    if (isLocalParticipant(identity)) {
+      // Section 20.2: the page derives "missing" and "changed" from a ready route.
+      const problem = runtime.localCatalog ? localChoiceProblem(identity, runtime.localCatalog) : null;
+      if (problem) return problem;
+      if (!choice?.approved || !choice.available) return choice?.unavailableReason ?? 'This local model is unavailable right now.';
+      if (!runtime.participantForRun) return 'This Mac app has no local model connection. No other model will be used.';
+      return undefined;
+    }
     if (!choice?.approved) return 'This saved participant is no longer an approved choice. Choose an approved participant; nothing was substituted.';
     if (!choice.available) return choice.unavailableReason ?? 'This participant is unavailable.';
     if (!runtime.participant || !sameParticipantIdentity(runtime.participant.identity, identity)) return 'This participant has no matching connection. No other model will be used.';
@@ -338,20 +355,29 @@ export function useConversationRuns(options: RunWorkspace) {
       const access = latest.current;
       const state = access.current();
       const choice = state?.sessions.find((item) => item.id === sessionId)?.participantChoice;
-      const participant = access.runtime.participant;
+      const participant = choice ? sendPort(choice) : access.runtime.participant;
+      const local = isLocalParticipant(participant?.identity);
       if (!mounted.current || access.runtime !== initial.runtime || !access.runtime.isActive() || !state || !participant
         || access.blocked() || busy(sessionId, true) || choiceBlock(sessionId)
         || state.selection.sessionId !== sessionId || state.drafts[sessionId] !== input
         || (!!selected !== !!choice) || selected && choice && !sameParticipantIdentity(selected, choice)) return;
-      if (access.runtime.participantInputLimit !== undefined && new TextEncoder().encode(input).byteLength > access.runtime.participantInputLimit) {
+      if (!local && access.runtime.participantInputLimit !== undefined && new TextEncoder().encode(input).byteLength > access.runtime.participantInputLimit) {
         access.error('This message is too long for the current trial. Shorten it before sending. Your full draft is kept; nothing was sent.');
         return;
       }
       let run: ConversationRun;
       try {
         const id = access.runtime.createId ?? (() => crypto.randomUUID());
+        // Section 20.3: a local model is sent this session's earlier completed
+        // turns by run id, oldest whole turns left out to fit one limit.
+        const context = local ? selectLocalContext(state.conversationRuns ?? [], sessionId, input) : undefined;
+        if (context?.kind === 'too-large') {
+          access.error('This message is too long for a local model. Shorten it before sending. Your full draft is kept; nothing was sent.');
+          return;
+        }
         const result = createConversationRun({ runId: id(), sessionId, userMessageId: id(), assistantMessageId: id(),
-          participant: { ...participant.identity }, input, createdAt: logicalTime(state, undefined, sessionId) });
+          participant: { ...participant.identity }, input, createdAt: logicalTime(state, undefined, sessionId),
+          ...(context?.kind === 'ok' ? { contextRunIds: context.contextRunIds } : {}) });
         if (result.kind !== 'ok') {
           access.error('This message could not be prepared within the current participant limits. Your draft is unchanged.');
           return;
@@ -422,6 +448,19 @@ export function useConversationRuns(options: RunWorkspace) {
     refresh();
   }
 
+  /** Retry (section 20.4): only the owner's explicit Send makes a new run with new ids. */
+  function retry(run: ConversationRun) {
+    const access = latest.current;
+    const state = access.current();
+    if (!state || !access.runtime.isActive() || !access.restoreDraft || !canRetryLocalRun(run)) return;
+    if ((state.drafts[run.sessionId] ?? '') !== '') {
+      access.error('Retry needs an empty message box so nothing you typed is replaced. Clear or send your draft first.');
+      return;
+    }
+    access.error('');
+    access.restoreDraft(run.sessionId, run.inputChunks.join(''));
+  }
+
   const selected = options.state?.selection.sessionId;
   const selectedRuns = new Map((options.state?.conversationRuns ?? []).filter((run) => run.sessionId === selected)
     .map((run) => [run.runId, run]));
@@ -429,6 +468,7 @@ export function useConversationRuns(options: RunWorkspace) {
     if (controller.currentRun.sessionId === selected) selectedRuns.set(id, controller.currentRun);
   }
   for (const [id, entry] of localClosures.current) if (entry.run.sessionId === selected) selectedRuns.set(id, entry.run);
+  const lastSelectedRunId = [...selectedRuns.keys()].at(-1);
   const content = selectedRuns.size ? <>{[...selectedRuns.values()].map((run) => {
     const controller = controllers.current.get(run.runId);
     const snapshot = controller?.snapshot;
@@ -440,9 +480,11 @@ export function useConversationRuns(options: RunWorkspace) {
     const matches = matchingParticipant(run);
     const uncertain = !closed && (!snapshot || ['unknown', 'unavailable'].includes(snapshot.status));
     const obsoleteActionError = closed && snapshot?.error && ['stop-unknown', 'start-unknown', 'start-refused', 'reconcile-unknown', 'subscription-failed'].includes(snapshot.error);
-    const startMessage = snapshot?.startRefusal?.reason === 'run-not-prepared' ? 'Stopped before it started. Check this run to read its recorded ending.'
-      : snapshot?.startRefusal && !snapshot.startRefusal.retryable ? 'This prepared message cannot be started. Its text is kept; check the run or close it locally before preparing another message.' : undefined;
-    const oldPinMessage = !closed && options.runtime.participantForRun && connected && !sameParticipantIdentity(connected, run.participant)
+    const localRefusal = snapshot?.startRefusal && isLocalParticipant(run.participant) && !closed
+      ? localStartRefusalMessage(snapshot.startRefusal.reason, snapshot.startRefusal.retryable, run.participant) : undefined;
+    const startMessage = localRefusal ?? (snapshot?.startRefusal?.reason === 'run-not-prepared' ? 'Stopped before it started. Check this run to read its recorded ending.'
+      : snapshot?.startRefusal && !snapshot.startRefusal.retryable ? 'This prepared message cannot be started. Its text is kept; check the run or close it locally before preparing another message.' : undefined);
+    const oldPinMessage = !closed && !isLocalParticipant(run.participant) && options.runtime.participantForRun && connected && !sameParticipantIdentity(connected, run.participant)
       ? 'This saved run was prepared for a different participant version. Its text is kept and Start is unavailable; you can still check its status or request Stop.' : undefined;
     const message = local?.error ?? startMessage ?? (!obsoleteActionError && snapshot?.error ? errors[snapshot.error] : undefined) ?? oldPinMessage ?? (uncertain
       ? controller ? 'This run is not confirmed. Check its status or request Stop. A local closure preserves the recorded prefix without confirming completion.'
@@ -477,6 +519,9 @@ export function useConversationRuns(options: RunWorkspace) {
         : 'Close as unknown keeps the recorded prefix and allows another message after saving. It does not stop a participant or confirm completion.'}</p>
         <button type="button" className="recovery-button secondary"
           onClick={(event) => { focusStatus(event.currentTarget); void closeUnknown(run); }}>{interruptedClose ? 'Close interrupted reply' : 'Close as unknown'}</button></>}
+      {run.runId === lastSelectedRunId && canRetryLocalRun(run) && !local && checkpointPending === false && options.restoreDraft && <>
+        <p className="run-recovery-note">Retry puts your message back in the box below. Nothing is sent until you press Send; this reply stays as it is.</p>
+        <button type="button" className="recovery-button secondary" onClick={() => retry(run)}>Retry</button></>}
     </div>;
   })}</> : undefined;
   const visibleSession = options.state?.selection.route === 'sessions'
@@ -534,11 +579,12 @@ export function useConversationRuns(options: RunWorkspace) {
   const selectedSession = options.state?.sessions.find((session) => session.id === selected);
   const selectionBlock = selected ? choiceBlock(selected) : undefined;
   const inputLimit = options.runtime.participantInputLimit;
-  const inputTooLarge = inputLimit !== undefined && new TextEncoder().encode(options.state?.drafts[selected ?? ''] ?? '').byteLength > inputLimit;
+  const selectedLocal = isLocalParticipant(selectedSession?.participantChoice);
+  const inputTooLarge = !selectedLocal && inputLimit !== undefined && new TextEncoder().encode(options.state?.drafts[selected ?? ''] ?? '').byteLength > inputLimit;
   const inputBlock = inputTooLarge ? 'This message is too long for the current trial. Shorten it before sending. Your full draft is kept.' : undefined;
   const savedSelection = selectedSession?.participantChoice;
   const choiceLabel = savedSelection
-    ? `${savedSelection.label}${options.runtime.participantAvailabilityChecking ? ' · Checking availability' : options.runtime.participantChoices === undefined || catalogBlock(savedSelection) ? ' · Unavailable' : options.runtime.refreshParticipants ? ' · Available' : ''}`
+    ? `${selectedLocal ? ollamaChoiceTitle(savedSelection, options.runtime.localCatalog) : savedSelection.label}${options.runtime.participantAvailabilityChecking ? ' · Checking availability' : options.runtime.participantChoices === undefined || catalogBlock(savedSelection) ? ' · Unavailable' : options.runtime.refreshParticipants ? ' · Available' : ''}`
     : options.runtime.participantChoices !== undefined ? 'No participant chosen' : options.runtime.participant?.identity.label;
   const participantMode = options.runtime.participantChoices !== undefined || !!selectedSession?.participantChoice
     || !!options.runtime.participant || options.state?.schemaVersion === 2;
@@ -549,12 +595,13 @@ export function useConversationRuns(options: RunWorkspace) {
   });
   return { send, refreshAvailability, confirmSaved, content, otherRunControls, hasUnconfirmed, canSaveEdits,
     participantLabel: participantMode ? choiceLabel ?? 'Participant unavailable' : undefined,
+    selectedLocalProblem: selectedLocal && savedSelection && !options.runtime.participantAvailabilityChecking ? catalogBlock(savedSelection) : undefined,
     busy: selected ? busy(selected) : false,
-    unavailable: participantMode && (!options.runtime.participant || options.blocked() || cleanupPending() || !!selectionBlock || inputTooLarge),
+    unavailable: participantMode && (!(selectedLocal ? options.runtime.participantForRun : options.runtime.participant) || options.blocked() || cleanupPending() || !!selectionBlock || inputTooLarge),
     sendBlockedReason: participantMode && options.blocked()
       ? 'Sending is paused until the workspace save is resolved. Your draft is retained.'
       : selectionBlock ? selectionBlock
-      : participantMode && !options.runtime.participant ? 'Connect a participant before sending. Your draft remains editable.'
+      : participantMode && !(selectedLocal ? options.runtime.participantForRun : options.runtime.participant) ? 'Connect a participant before sending. Your draft remains editable.'
       : participantMode && cleanupPending() ? `Cleanup for ${cleanupTitle ?? 'a saved session'}${cleanupRun ? ` (run ${cleanupRun.runId})` : ''} is not confirmed. Use the available recovery controls for that response before sending another message.` : inputBlock,
   };
 }

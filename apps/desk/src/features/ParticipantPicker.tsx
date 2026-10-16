@@ -7,6 +7,7 @@ import {
   validParticipantChoice,
   type ParticipantChoice,
 } from '../domain/participant-choices';
+import { isLocalParticipant, localModelName, ollamaChoiceShortName, ollamaChoiceTitle, ollamaResidency, type LocalCatalogView } from '../domain/local-participant';
 import { Icon } from '../ui/Icon';
 import { Modal } from '../ui/Modal';
 import './participant-picker.css';
@@ -15,7 +16,7 @@ export function ParticipantPicker({
   choices,
   selected,
   disabled = false,
-  error, confirmation, availabilityMessage, availabilityChecking = false, onOpen, onClose,
+  error, confirmation, availabilityMessage, availabilityChecking = false, localNotice, selectedProblem, localCatalog, onOpen, onClose,
   onSelect,
 }: {
   choices: readonly ParticipantChoice[];
@@ -25,6 +26,12 @@ export function ParticipantPicker({
   confirmation?: NativeParticipantConfirmation;
   availabilityMessage?: string;
   availabilityChecking?: boolean;
+  /** Why the local route is down (contract section 20.2), in plain words. */
+  localNotice?: string;
+  /** Why the saved local choice can't be used: missing, changed or route down. */
+  selectedProblem?: string;
+  /** The newest catalog: the only evidence for calling an Ollama pin local or cloud. */
+  localCatalog?: LocalCatalogView;
   onOpen?: () => void;
   onClose?: () => void;
   onSelect: (identity: ParticipantIdentity) => void;
@@ -46,21 +53,27 @@ export function ParticipantPicker({
   const availabilityStatus = availabilityChecking ? 'Checking participant availability. Your draft is kept.'
     : availabilityMessage ?? (approved.length ? approved.map((choice) => `${choice.identity.label}: ${choice.available ? 'Available' : `Unavailable — ${choice.unavailableReason}`}.`).join(' ')
       : 'No approved participants are listed.');
+  // Only the current catalog's exact local entry is "stays on this Mac" (section 20.2).
+  const residency = (identity: ParticipantIdentity) => ollamaResidency(identity, localCatalog);
+  const shortName = (identity: ParticipantIdentity) => isLocalParticipant(identity)
+    ? ollamaChoiceShortName(identity, localCatalog) : identity.model;
+  const title = (identity: ParticipantIdentity) => isLocalParticipant(identity)
+    ? ollamaChoiceTitle(identity, localCatalog) : identity.label;
   const currentConfirmation = availabilityChecking || availabilityMessage ? undefined : confirmation;
 
   return <>
     <button
       type="button"
       className="model-harness-slot participant-picker-trigger"
-      aria-label={`Model and participant: ${selected ? `${selected.label}, ${selected.model}` : 'Choose participant'}`}
+      aria-label={`Model and participant: ${selected ? isLocalParticipant(selected) ? title(selected) : `${selected.label}, ${selected.model}` : 'Choose participant'}`}
       aria-haspopup="dialog"
       aria-expanded={open}
-      title={selected ? `${selected.label} · ${selected.model}` : 'Choose participant'}
+      title={selected ? isLocalParticipant(selected) ? title(selected) : `${selected.label} · ${selected.model}` : 'Choose participant'}
       disabled={disabled}
       onClick={() => { setOpen(true); onOpen?.(); }}
     >
       <Icon name="spark" size={13} />
-      <span>{selected?.model ?? 'Choose participant'}</span>
+      <span>{selected ? shortName(selected) : 'Choose participant'}</span>
       <Icon name="chevron" size={12} />
     </button>
     {open && <Modal title="Model and participant" onClose={close} scrollable portalRoot={document.body}>
@@ -77,18 +90,20 @@ export function ParticipantPicker({
         {onOpen && <button type="button" className="secondary-button" aria-disabled={availabilityChecking || undefined}
           onClick={() => { if (!availabilityChecking) onOpen(); }}>Check availability again</button>}
         {error && <p className="participant-picker-error" role="alert">{error}</p>}
+        {localNotice && !availabilityChecking && <p className="participant-picker-availability" data-local-route-notice>{localNotice}</p>}
         {selected && !selectedChoice && <section className="participant-picker-missing" aria-label="Saved participant selection">
           <div className="participant-picker-heading">
-            <h3>{selected.label}</h3>
+            <h3>{title(selected)}</h3>
             <span className="participant-picker-selected">Selected</span>
           </div>
           <dl className="participant-picker-details">
-            <dt>Model</dt><dd>{selected.model}</dd>
+            <dt>Model</dt><dd>{isLocalParticipant(selected) ? localModelName(selected) : selected.model}</dd>
             <dt>Provider</dt><dd>Unknown</dd>
             <dt>Data destination</dt><dd>Unknown</dd>
-            <dt>Process location</dt><dd>{selected.executionHost}</dd>
+            <dt>Process location</dt><dd>{isLocalParticipant(selected) ? { local: 'This Mac', cloud: 'Ollama’s servers', unknown: 'Unknown right now' }[residency(selected)] : selected.executionHost}</dd>
           </dl>
-          <p className="participant-picker-availability">{availabilityChecking ? 'Checking participant availability.' : availabilityMessage ?? 'Unavailable — this saved selection is not in the approved participant list.'}</p>
+          <p className="participant-picker-availability">{availabilityChecking ? 'Checking participant availability.' : availabilityMessage ?? (isLocalParticipant(selected) && selectedProblem
+            ? `Unavailable — ${selectedProblem}` : 'Unavailable — this saved selection is not in the approved participant list.')}</p>
         </section>}
         {approved.length === 0
           ? !availabilityMessage && <p className="participant-picker-empty">No approved participants are listed.</p>
@@ -99,14 +114,15 @@ export function ParticipantPicker({
               const availabilityId = `${descriptionId}-availability-${index}`;
               return <li key={participantChoiceKey(choice.identity)} className={`participant-picker-choice${active ? ' is-selected' : ''}`}>
                 <div className="participant-picker-heading">
-                  <h3>{choice.identity.label}</h3>
+                  <h3>{title(choice.identity)}</h3>
                   {active && <span className="participant-picker-selected"><Icon name="check" size={12} />Selected</span>}
                 </div>
                 <dl id={detailsId} className="participant-picker-details">
-                  <dt>Model</dt><dd>{choice.identity.model}</dd>
+                  <dt>Model</dt><dd>{isLocalParticipant(choice.identity) ? localModelName(choice.identity) : choice.identity.model}</dd>
+                  {isLocalParticipant(choice.identity) && <><dt>Version</dt><dd>{choice.identity.model.slice(choice.identity.label.length + 1, choice.identity.label.length + 13)}</dd></>}
                   <dt>Provider</dt><dd>{choice.provider}</dd>
                   <dt>Data destination</dt><dd>{choice.destination}</dd>
-                  <dt>Process location</dt><dd>{choice.identity.executionHost}</dd>
+                  <dt>Process location</dt><dd>{isLocalParticipant(choice.identity) ? { local: 'This Mac', cloud: 'Ollama’s servers', unknown: 'Unknown right now' }[residency(choice.identity)] : choice.identity.executionHost}</dd>
                 </dl>
                 <p id={availabilityId} className="participant-picker-availability">
                   {availabilityChecking ? 'Checking availability' : choice.available ? 'Available' : `Unavailable — ${choice.unavailableReason}`}
@@ -114,7 +130,7 @@ export function ParticipantPicker({
                 <button
                   type="button"
                   className="secondary-button participant-picker-select"
-                  aria-label={`Choose participant: ${choice.identity.label}, ${choice.identity.model}`}
+                  aria-label={`Choose participant: ${isLocalParticipant(choice.identity) ? title(choice.identity) : `${choice.identity.label}, ${choice.identity.model}`}`}
                   aria-pressed={active}
                   aria-describedby={`${descriptionId} ${detailsId} ${availabilityId}`}
                   disabled={disabled}

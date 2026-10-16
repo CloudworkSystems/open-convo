@@ -2,6 +2,7 @@ import { useId, useRef } from 'react';
 import type { ConversationRun, ConversationRunPhase, ParticipantStopReason } from '../domain/conversation-run-types';
 import type { ConversationRunStatus, ParticipantCleanupState } from '../adapters/participant-runtime';
 import { isConversationRunClosed } from '../domain/conversation-runs';
+import { isLocalParticipant, localModelName, localRunOutcome, localRunStarted } from '../domain/local-participant';
 import './run-transcript.css';
 
 export type RunStopState = 'idle' | 'requesting' | 'unknown' | 'confirmed';
@@ -64,7 +65,14 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
   const closed = isConversationRunClosed(run);
   const cleanupPending = cleanupState === 'unknown' || cleanupState === 'owned';
   const stopDisabled = !canStop || (!cleanupPending && (terminal || closed || stopState === 'confirmed')) || stopState === 'requesting';
-  const phase = run.closure?.kind === 'unknown' ? 'Closed with outcome unknown'
+  const local = isLocalParticipant(run.participant);
+  // Native starts a local run only for an exact entry it lists as local
+  // (section 20.4), so "stays on this Mac" is claimed only once it started.
+  const sentLocally = local && localRunStarted(run);
+  // A local run has no provider to cancel: Stop ends its request on this Mac
+  // (contract section 20.4), so its endings are worded plainly.
+  const localOutcome = local ? localRunOutcome(run) : undefined;
+  const phase = localOutcome ? localOutcome : run.closure?.kind === 'unknown' ? 'Closed with outcome unknown'
     : run.closure?.kind === 'interrupted' ? 'Run ended with incomplete response'
     : terminal ? run.phase === 'stopped' || run.phase === 'failed' ? terminalLabel(run.phase, run.reason, run.participant.executionHost) : phaseLabels[run.phase]
     : stopState === 'confirmed' ? 'Response stopped · provider cancellation unconfirmed'
@@ -107,7 +115,7 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
           {stopLabel}
         </button>
       </header>
-      {run.closure?.kind === 'interrupted' && (run.closure.terminalEvent.type === 'stopped' || run.closure.terminalEvent.type === 'failed')
+      {!local && run.closure?.kind === 'interrupted' && (run.closure.terminalEvent.type === 'stopped' || run.closure.terminalEvent.type === 'failed')
         && <p className="run-empty">{terminalLabel(run.closure.terminalEvent.type, run.closure.terminalEvent.reason, run.participant.executionHost)}</p>}
       {run.closure?.kind === 'interrupted' && <p className="run-empty" data-interruption-reason>
         {run.closure.reason === 'workspace-limit'
@@ -126,11 +134,11 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
         <h3>You</h3>
         <div className="run-message-text" dir="auto">{run.inputChunks.join('')}</div>
       </article>
-      <article className="run-message" aria-label={`${run.participant.label} response`} data-message-id={run.assistantMessageId}>
-        <h3>{run.participant.label}</h3>
+      <article className="run-message" aria-label={`${local ? `${sentLocally ? 'Local' : 'Ollama'} ${localModelName(run.participant)}` : run.participant.label} response`} data-message-id={run.assistantMessageId}>
+        <h3>{local ? `${sentLocally ? 'Local' : 'Ollama'} · ${localModelName(run.participant)}` : run.participant.label}</h3>
         <dl className="run-participant">
-          <div><dt>Model</dt><dd>{run.participant.model}</dd></div>
-          <div><dt>Running on</dt><dd>{run.participant.executionHost}</dd></div>
+          <div><dt>Model</dt><dd>{local ? localModelName(run.participant) : run.participant.model}</dd></div>
+          <div><dt>Running on</dt><dd>{local ? sentLocally ? 'This Mac · stays on this Mac' : 'No reply started' : run.participant.executionHost}</dd></div>
         </dl>
         {output ? (
           <div className="run-message-text run-output" dir="auto" aria-live="off">

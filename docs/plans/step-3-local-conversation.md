@@ -157,6 +157,38 @@ PR 2). In short:
 4. **Desk wiring.** Model picker, "who receives what" label, context from
    earlier turns, streaming reply in the run transcript, Stop, Retry on a
    cut-off reply. Tried in True Convo Test with invented chats.
+   *Split October 16* into two pull requests, because turning the route on
+   is the first time the Mac app constructs any participant lane at all
+   (today nothing in `VoiceCursorMac` builds a `ParticipantCoordinator`;
+   the coordinator and `LocalModelRoute` are linked only by tests).
+   **4a** (Desk only, nothing turned on): the page keeps every local entry
+   and the route from the availability reply; the picker lists each local
+   model as "Local · <model> · stays on this Mac", with a plain reason for
+   each route reason (`ollama-not-running`, `catalog-unreadable`,
+   `catalog-too-large`, `host-not-loopback`), for `model-not-local`, and
+   for a saved choice that is missing or changed; Send builds
+   `contextRunIds` from the session's earlier completed runs (oldest whole
+   runs left out to fit 262,144 bytes, at most 256), saves the prepared run,
+   then starts it through the exact local pin (never the Claude entry
+   instead); the reply streams into the transcript; Stop works; each ending
+   (stopped, reply-too-long, timeout, failed, cut off after a crash) and
+   each local start refusal (`run-mismatch`, `participant-changed`,
+   `participant-unavailable`, `text-too-large`) has a plain message; Retry
+   on a cut-off or failed local reply puts the message back in an empty
+   composer and never sends by itself (the owner's Send makes a new run
+   with new ids). Tested with the real page codec, connection and runtime
+   against a host played inside the page.
+   **4b** (Mac): the app builds the coordinator with a real
+   `LocalModelRoute` (`OllamaClient` at the fixed loopback base) and hands
+   it to the Desk session, on in the Test build only; the package
+   tripwire tests change narrowly, with the reason in the pull request;
+   the seeded host cases (`localRoute` seed, fake-server `script` steps)
+   join `native-participant-local-v1.json` on both sides, byte-identical;
+   and one end-to-end run against a fake Ollama through the real app
+   wiring. Open question for 4b: the Claude Code entry must still come
+   first in availability, so 4b decides with the owner whether the app's
+   lane also carries the (unconfirmed, never available) Claude entry or
+   whether that waits for the Claude Code adapter.
 5. **Proof and owner trial.** A scripted kill-mid-reply proof (no duplicate
    replies, nothing resent, cut-off replies labeled), then a short checklist
    for the owner: talk, quit, reopen, continue.

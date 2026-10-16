@@ -14,6 +14,7 @@ import type { ParticipantIdentity } from '../domain/conversation-run-types';
 import type { NativeParticipantConnection } from '../adapters/native-participant-port';
 import type { NativeParticipantConfirmation } from '../adapters/native-participant-codec';
 import type { NativeDictationLane } from '../adapters/native-dictation';
+import { localEntryMessage, localRouteMessage, ollamaResidency, type LocalCatalogView } from '../domain/local-participant';
 
 export interface RuntimeLifecycle {
   isActive(): boolean;
@@ -47,6 +48,14 @@ export interface DeskRuntime extends RuntimeLifecycle {
   readonly participantAvailabilityMessage?: string;
   readonly participantAvailabilityChecking?: boolean;
   readonly participantInputLimit?: number;
+  /**
+   * Step 3 PR 4a: the local route as the newest availability reply described
+   * it (contract section 20.2), or undefined without a native connection.
+   * Display evidence only; each Start reads availability afresh.
+   */
+  readonly localCatalog?: LocalCatalogView;
+  /** Why the whole local route is down, in plain words; undefined when ready or absent. */
+  readonly localRouteMessage?: string;
   readonly subscribeParticipants?: (listener: () => void) => () => void;
   readonly refreshParticipants?: () => Promise<void>;
   readonly workspace: WorkspaceRepository;
@@ -198,17 +207,42 @@ function createRuntime(mode: DeskRuntime['mode'], workspace: WorkspaceRepository
       if (!entry) return Object.freeze([]);
       const { id, label, model, executionHost, reason, confirmation } = entry;
       const available = snapshot.available;
-      return Object.freeze([Object.freeze({ identity: Object.freeze({ id, label, model, executionHost }),
+      const claude = Object.freeze({ identity: Object.freeze({ id, label, model, executionHost }),
         provider: 'Claude subscription', destination: 'Anthropic cloud', approved: true,
         available, unavailableReason: available ? null : snapshot.checking ? availabilityChecking
           : snapshot.error ? availabilityCheckFailed : nativeAvailabilityMessage(reason, !!confirmation),
-      })]);
+      });
+      // Section 20.2: one choice per local chat model. Listed only from a ready
+      // route; a cloud model is listed but never available.
+      const catalog: LocalCatalogView = { route: snapshot.route, entries: snapshot.local };
+      const local = snapshot.local.map((item) => {
+        // The same classifier as every label: only an exact local entry stays on this Mac.
+        const residency = ollamaResidency(item, catalog);
+        const usable = residency === 'local' && !snapshot.checking && !snapshot.error;
+        return Object.freeze({ identity: Object.freeze({ id: item.id, label: item.label, model: item.model, executionHost: item.executionHost }),
+          provider: residency === 'local' ? 'Ollama on this Mac' : 'Ollama', destination: residency === 'local' ? 'Stays on this Mac' : residency === 'cloud' ? 'Ollama’s servers (not this Mac)' : 'Unknown right now', approved: true,
+          available: usable, unavailableReason: usable ? null : snapshot.checking ? availabilityChecking
+            : snapshot.error ? availabilityCheckFailed : localEntryMessage(item.reason) });
+      });
+      return Object.freeze([claude, ...local]);
     },
     get participantAvailabilityMessage() {
       if (!nativeParticipants || !isActive()) return undefined;
       const snapshot = nativeParticipants.snapshot;
       return snapshot.checking ? availabilityChecking : snapshot.error ? availabilityCheckFailed
         : !snapshot.entry ? 'Participant availability has not been checked. Your draft is kept.' : undefined;
+    },
+    get localCatalog() {
+      if (!nativeParticipants || !isActive()) return undefined;
+      const snapshot = nativeParticipants.snapshot;
+      // The connection already drops these on a failed read; a set error never shows old evidence.
+      return snapshot.error !== null ? Object.freeze({ route: null, entries: Object.freeze([]) })
+        : Object.freeze({ route: snapshot.route, entries: snapshot.local });
+    },
+    get localRouteMessage() {
+      if (!nativeParticipants || !isActive()) return undefined;
+      const { route, checking, error } = nativeParticipants.snapshot;
+      return !checking && !error && route?.state === 'unavailable' ? localRouteMessage(route.reason) : undefined;
     },
     get participantAvailabilityChecking() { return nativeParticipants && isActive() ? nativeParticipants.snapshot.checking : undefined; },
     participantForRun: nativeParticipants ? (identity) => nativeParticipants.portFor(identity) : undefined,
