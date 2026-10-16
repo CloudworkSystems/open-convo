@@ -58,6 +58,11 @@ builds, Codex reviews). Plan:
 [docs/plans/site-engine-standalone.md](docs/plans/site-engine-standalone.md).
 Not started.
 
+**Household lists engine** (Family and Home), queued for an outside builder
+after Site Engine. Plan:
+[docs/plans/household-lists-engine.md](docs/plans/household-lists-engine.md).
+First real use after step 5, synced through iCloud with the owner's approval.
+
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:
 [docs/plans/merge-gate.md](docs/plans/merge-gate.md). Waiting on the owner's
