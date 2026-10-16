@@ -1,3 +1,4 @@
+import DeskHost
 import XCTest
 @testable import LocalModelRoute
 
@@ -66,4 +67,33 @@ final class CatalogTests: XCTestCase {
 
 extension LocalCatalog {
     var entryCount: Int? { if case .ready(let entries) = self { return entries.count }; return nil }
+}
+
+/// The catalog as a participant host reads it (`LocalCatalogReading`).
+final class CatalogSeamTests: XCTestCase {
+    func testTheAnswerKeepsTheCatalogsOrderAndMarksRemoteModelsUnavailable() throws {
+        let body = try JSONSerialization.data(withJSONObject: Invented.tags([
+            Invented.model("invented-small:7b", digest: Invented.digestC),
+            Invented.model("invented-cloud:cloud", digest: Invented.digestA, remote: true),
+            Invented.model("invented-embed:1b", digest: Invented.digestB, capabilities: ["embedding"])
+        ]))
+        let answer = OllamaClient.answer(OllamaCatalog.parse(body))
+        guard case .ready(let entries) = answer else { return XCTFail("\(answer)") }
+        XCTAssertEqual(entries.map(\.participant.label), ["invented-cloud:cloud", "invented-small:7b"])
+        XCTAssertEqual(entries.map(\.available), [false, true])
+        XCTAssertEqual(entries[1].participant.model, "invented-small:7b@\(Invented.digestC)")
+        XCTAssertEqual(entries[1].participant.id, "ollama-local")
+        XCTAssertEqual(entries[1].participant.executionHost, "this-mac")
+        XCTAssertEqual(answer.checked, answer, "the parser's answer already keeps section 20.2")
+        XCTAssertEqual(OllamaClient.answer(.unavailable(.ollamaNotRunning)), .unavailable(reason: "ollama-not-running"))
+    }
+
+    func testAFreshReadOverLoopback() async throws {
+        let fake = try FakeOllama { _ in .json(status: 200, Invented.tags([Invented.model("invented-small:7b", digest: Invented.digestA)])) }
+        let client = OllamaClient(endpoint: OllamaEndpoint(port: fake.port))
+        let reader: any LocalCatalogReading = client
+        _ = await reader.localCatalog()
+        _ = await reader.localCatalog()
+        XCTAssertEqual(fake.requests.filter { $0.path == "/api/tags" }.count, 2, "no reused answer")
+    }
 }

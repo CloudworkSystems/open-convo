@@ -115,7 +115,7 @@ final class OllamaClientTests: XCTestCase {
         LocalChatRequest(identity: ParticipantRunIdentity(runId: runId, sessionId: "52abcdef-0000-4000-8abc-000000000001",
                                                           createdAtMillis: 1_760_500_000_000),
                          alias: alias, context: context, inputChunks: ["Invented ", "question?"],
-                         contextBytes: context.reduce(0) { $0 + $1.text.utf8.count }, inputBytes: 18)
+                         contextBytes: context.reduce(0) { $0 + $1.text.utf8.count }, inputBytes: 18, preparedBytes: 600)
     }
 
     private func collect(_ run: LocalChatRun) async -> [ParticipantRunUpdate] {

@@ -195,18 +195,22 @@ public struct LocalChatRequest: Sendable {
     public var alias: String
     public var context: [LocalChatTurn]
     public var inputChunks: [String]
-    /// The prepared entry's byte counts (section 20.5).
+    /// The prepared entry's byte counts (sections 6 and 20.5).
     public var contextBytes: Int
     public var inputBytes: Int
+    /// The prepared run's canonical JSON size: the reply's escapes are
+    /// projected onto it (`LocalChatCore`).
+    public var preparedBytes: Int
 
     public init(identity: ParticipantRunIdentity, alias: String, context: [LocalChatTurn], inputChunks: [String],
-                contextBytes: Int, inputBytes: Int) {
+                contextBytes: Int, inputBytes: Int, preparedBytes: Int) {
         self.identity = identity
         self.alias = alias
         self.context = context
         self.inputChunks = inputChunks
         self.contextBytes = contextBytes
         self.inputBytes = inputBytes
+        self.preparedBytes = preparedBytes
     }
 
     /// `/api/chat`'s body: the alias, streaming, thinking off, the context

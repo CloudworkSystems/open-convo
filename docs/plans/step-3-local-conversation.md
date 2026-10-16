@@ -107,19 +107,43 @@ PR 2). In short:
    (`native-participant-local-v1.json`) for catalog entries, route states,
    context ids, the shared input bound and the new reasons. The page codec
    runs the shape cases now; the existing 107 vectors stay byte-identical.
-3. **Local route in the Mac host**, in two parts. **3a**: a new
+3. **Local route in the Mac host**, in three parts (split October 15 to
+   keep each pull request reviewable). **3a** (merged, #42): a new
    `LocalModelRoute` module, inactive (only its tests link it): the catalog,
    per-run aliases, and `LocalChatRun` behind the existing
    `ParticipantRunning` seam, tested against a fake Ollama on loopback and
-   checked once against the owner's real Ollama with invented text. **3b**:
-   the coordinator, prepare and store changes (catalog in availability,
-   section 6 step 5 for local runs, context hashing, step 13's alias bind),
-   which also runs every case in the new vectors
-   file through the Swift harness, plus the hash binding and
-   `participant-changed` on a changed digest.
-   The host itself: catalog from Ollama; start with receipt
-   before request; streaming events; Stop; status after a lost reply;
-   interrupted runs on relaunch; lock, close and quit gates. Tested against a
+   checked once against the owner's real Ollama with invented text.
+   **3b**: availability, preparation and storage.
+   - Availability lists the Claude Code entry, then the local catalog's
+     entries and the one `routes` item, read afresh each time (20.2).
+   - A preparing commit for a local run reads the catalog afresh before its
+     checks; section 6 step 3 accepts `contextRunIds` only for a local run
+     on a host with a local route; step 5 checks the run's participant
+     against that fresh catalog; the earlier turns are resolved from the
+     same record (completed, same session, before the run, in turn order)
+     and the runs entry stores only `contextRunIds`, `contextBytes` and
+     `contextHash`, never text (20.3, 20.5). Section 17's first-trial bound
+     is Claude Code's, so a local run has the one context-plus-input limit.
+   - The reply budget fix from Codex round 3 on #42: `LocalChatCore` takes
+     the prepared run's `preparedBytes` and counts the reply's JSON escapes
+     against the saved run's 785,408-byte bound, as `StreamJSONReader`
+     does, beside the 262,144-byte context-plus-input-plus-output bound.
+   - The Swift side of `native-participant-local-v1.json`: every
+     availability reply and prepared run, and a check that native never
+     sends any reply the page refuses. The local start case is counted and
+     waits for 3c.
+   - A local start is still refused `participant-changed` (step 10), with
+     nothing written or sent.
+   **3c**: the local start and its lifecycle. Step 10's
+   `participant-changed` from a fresh catalog; re-resolving and re-hashing
+   the context at start (`run-mismatch` on any difference); step 13's
+   availability recheck, alias sweep and alias bind before the start
+   record; the start record (`cliVersion` `ollama-local`) before any
+   `/api/chat`; `LocalChatRun` launched with `preparedBytes`; the alias
+   deleted after the terminal is written and swept at launch; section 14's
+   lock, close and quit with `groupCleared` true; status after a lost reply;
+   interrupted runs on relaunch; the vectors' start case and seeded host
+   cases (`localRoute` seed, fake-server `script` steps). Tested against a
    fake Ollama server, never the network, including unknown outcomes (reply
    lost after the request, crash between receipt and request, crash
    mid-stream) and every section 14 lifecycle case.

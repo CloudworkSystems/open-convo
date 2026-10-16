@@ -8,8 +8,8 @@ final class LocalChatCoreTests: XCTestCase {
                                                   createdAtMillis: 1_760_500_000_000)
     private let wall: Int64 = 1_760_500_000_000
 
-    private func core(context: Int = 0, input: Int = 10, limits: LocalChatLimits = .contract) -> LocalChatCore {
-        var core = LocalChatCore(identity: identity, contextBytes: context, inputBytes: input, limits: limits)
+    private func core(context: Int = 0, input: Int = 10, prepared: Int = 600, limits: LocalChatLimits = .contract) -> LocalChatCore {
+        var core = LocalChatCore(identity: identity, contextBytes: context, inputBytes: input, preparedBytes: prepared, limits: limits)
         core.requestSent(monotonic: 0)
         return core
     }
@@ -196,5 +196,58 @@ final class LocalChatCoreTests: XCTestCase {
         _ = run.response(status: 200, monotonic: 0, wall: wall)
         XCTAssertEqual(events(run.bytes(bytes(Invented.line(["done": true])), monotonic: 1, wall: wall)).last?.type, .completed,
                        "a done line may omit its message")
+    }
+
+    /// Codex round 3 on #42: the saved run's canonical JSON counts the
+    /// reply's escapes. With room for 10 escaped bytes in the first event,
+    /// `ab"cd` takes 6 and a control character 6 more, so the run ends
+    /// `reply-too-long` after `ab"cd` though only 5 UTF-8 bytes were used.
+    func testTheProjectedRunCountsJSONEscapes() {
+        var limits = LocalChatLimits()
+        // prepared + 3 + 64, then one event: its escaped text, 2 quotes, 3.
+        limits.maxProjectedRunBytes = 1_000 + 67 + 3 + 2 + 10
+        var run = core(prepared: 1_000, limits: limits)
+        _ = run.response(status: 200, monotonic: 0, wall: wall)
+        let effects = run.bytes(bytes(Invented.chunk("ab\"cd\u{01}e")), monotonic: 1, wall: wall)
+        let list = events(effects)
+        XCTAssertEqual(list.map(\.type), [.text, .failed])
+        XCTAssertEqual(list.first?.text, "ab\"cd", "the longest prefix within both bounds")
+        XCTAssertEqual(list.last?.reason, "reply-too-long")
+        XCTAssertTrue(effects.contains(.cancelRequest))
+
+        // The same bound holds exactly 10 unescaped bytes, then completes.
+        var plain = core(prepared: 1_000, limits: limits)
+        _ = plain.response(status: 200, monotonic: 0, wall: wall)
+        let done = events(plain.bytes(bytes(Invented.chunk("abcdefghij") + Invented.done), monotonic: 1, wall: wall))
+        XCTAssertEqual(done.map(\.type), [.text, .completed])
+    }
+
+    /// Each emitted event adds its quotes and separator to the projected
+    /// run, so text that fits as one event can end the run when it was
+    /// split across two (the 250 ms coalescing flushed in between).
+    func testEachEventAddsItsOverheadToTheProjectedRun() {
+        var limits = LocalChatLimits()
+        limits.maxProjectedRunBytes = 1_000 + 67 + 3 + 2 + 10
+        var run = core(prepared: 1_000, limits: limits)
+        _ = run.response(status: 200, monotonic: 0, wall: wall)
+        _ = run.bytes(bytes(Invented.chunk("abcd")), monotonic: 1, wall: wall)
+        let first = events(run.tick(monotonic: 251, wall: wall))
+        XCTAssertEqual(first.compactMap(\.text), ["abcd"])
+        // That event took 4 + 2 quotes + 3: the next has room for one
+        // escaped byte, where one event alone would have held six more.
+        let list = events(run.bytes(bytes(Invented.chunk("efg")), monotonic: 300, wall: wall))
+        XCTAssertEqual(list.map(\.type), [.text, .failed])
+        XCTAssertEqual(list.first?.text, "e")
+        XCTAssertEqual(list.last?.reason, "reply-too-long")
+    }
+
+    /// The raw bound and the projected bound both apply: a reply with no
+    /// escapes still stops at context + input + output = 262,144 bytes.
+    func testTheRawBoundStillAppliesWithRoomInTheProjectedRun() {
+        var run = core(context: 200_000, input: 62_000, prepared: 2_000)
+        _ = run.response(status: 200, monotonic: 0, wall: wall)
+        let list = events(run.bytes(bytes(Invented.chunk(String(repeating: "a", count: 145))), monotonic: 1, wall: wall))
+        XCTAssertEqual(list.map(\.type), [.text, .failed])
+        XCTAssertEqual(list.first?.text?.utf8.count, 144, "262,144 - 200,000 - 62,000")
     }
 }

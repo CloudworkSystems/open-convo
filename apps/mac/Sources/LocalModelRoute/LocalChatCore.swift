@@ -8,6 +8,10 @@ public struct LocalChatLimits: Equatable, Sendable {
     /// Context, input and output together (section 20.3 and Codex round 4
     /// on #38): the reply's budget is what context and input leave of this.
     public var maxContextInputOutputBytes = 262_144
+    /// The open run's canonical JSON as the page saves it (sections 8 and
+    /// 15): the prepared run plus every text event's escaped string, as
+    /// `StreamJSONReader` projects it (Codex round 3 on #42).
+    public var maxProjectedRunBytes = 785_408
     /// One streamed line from Ollama.
     public var maxLineBytes = 1_048_576
     public var firstByteTimeoutMillis: UInt64 = 30_000
@@ -44,7 +48,8 @@ public struct LocalChatCore {
 
     public let identity: ParticipantRunIdentity
     private let limits: LocalChatLimits
-    /// Bytes the reply may use: the shared bound less context and input.
+    /// UTF-8 bytes the reply may use: the shared bound less context and
+    /// input.
     private let outputBudget: Int
 
     private var sequence = 0
@@ -56,15 +61,28 @@ public struct LocalChatCore {
     private var responseSeen = false
     private var lineBuffer: [UInt8] = []
     private var pending = ""
+    private var pendingBytes = 0
+    /// `StreamJSONReader.escapedWidth` summed over `pending`, without its
+    /// quotes.
+    private var pendingEscapedBytes = 0
     private var pendingSince: UInt64?
     private var acceptedOutputBytes = 0
+    /// `preparedBytes` + 3 + Σ(escaped event text + 2 quotes + 3) + 64, so
+    /// far: the saved run's projected canonical size, `StreamJSONReader`'s
+    /// formula exactly.
+    private var projectedBytes: Int
 
-    /// `contextBytes` and `inputBytes` are the prepared entry's (20.3, 20.5).
-    public init(identity: ParticipantRunIdentity, contextBytes: Int, inputBytes: Int,
+    /// `contextBytes`, `inputBytes` and `preparedBytes` are the prepared
+    /// entry's (sections 6, 20.3 and 20.5). A reply ends `reply-too-long`
+    /// after the longest prefix that keeps both bounds: context, input and
+    /// output within 262,144 UTF-8 bytes, and the saved run's canonical JSON,
+    /// with the reply's escapes, within 785,408.
+    public init(identity: ParticipantRunIdentity, contextBytes: Int, inputBytes: Int, preparedBytes: Int,
                 limits: LocalChatLimits = .contract) {
         self.identity = identity
         self.limits = limits
         self.outputBudget = max(0, limits.maxContextInputOutputBytes - contextBytes - inputBytes)
+        self.projectedBytes = preparedBytes + 3 + 64
         self.lastAtMillis = identity.createdAtMillis
     }
 
@@ -193,25 +211,9 @@ public struct LocalChatCore {
                 end(.failed(.processError), wall: wall, cancel: true, into: &effects)
                 return
             }
-            if !content.isEmpty {
-                let left = outputBudget - acceptedOutputBytes
-                if content.utf8.count > left {
-                    // The longest scalar-aligned prefix that fits is accepted
-                    // first, then the run ends `reply-too-long`.
-                    var prefix = String.UnicodeScalarView()
-                    var size = 0
-                    for scalar in content.unicodeScalars {
-                        let width = String(scalar).utf8.count
-                        if size + width > left { break }
-                        prefix.append(scalar)
-                        size += width
-                    }
-                    accept(String(prefix), monotonic: now, wall: wall, into: &effects)
-                    end(.failed(.replyTooLong), wall: wall, cancel: true, into: &effects)
-                    return
-                }
-                accept(content, monotonic: now, wall: wall, into: &effects)
-            }
+            accept(content, monotonic: now, wall: wall, into: &effects)
+            // The longest prefix that fits was accepted, then the run ended.
+            if terminalEvent != nil { return }
         }
         if done {
             // Cancel too, so a peer that keeps the connection open can't hold
@@ -220,35 +222,50 @@ public struct LocalChatCore {
         }
     }
 
+    /// Accepts the reply scalar by scalar, as `StreamJSONReader.accept`
+    /// does: an event is emitted before it would pass 16,384 bytes, and the
+    /// first scalar that cannot fit either bound ends the run
+    /// `reply-too-long` with the text before it emitted (sections 8 and 15).
+    /// Escapes count: a quote, backslash or control character takes 2 or 6
+    /// bytes in the saved run, other scalars their UTF-8 width.
     private mutating func accept(_ content: String, monotonic now: UInt64, wall: Int64, into effects: inout [Effect]) {
-        guard !content.isEmpty else { return }
-        acceptedOutputBytes += content.utf8.count
-        if pending.isEmpty { pendingSince = now }
-        pending += content
-        if pending.utf8.count >= limits.maxEventTextBytes { flush(wall: wall, into: &effects) }
+        for scalar in content.unicodeScalars {
+            let size = UTF8.width(scalar)
+            if pendingBytes + size > limits.maxEventTextBytes { flush(wall: wall, into: &effects) }
+            let escapedSize = StreamJSONReader.escapedWidth(scalar)
+            if acceptedOutputBytes + size > outputBudget || 2 + pendingEscapedBytes + escapedSize > projectedRoom {
+                end(.failed(.replyTooLong), wall: wall, cancel: true, into: &effects)
+                return
+            }
+            if pending.isEmpty { pendingSince = now }
+            pending.unicodeScalars.append(scalar)
+            pendingBytes += size
+            pendingEscapedBytes += escapedSize
+            acceptedOutputBytes += size
+        }
+        if pendingBytes >= limits.maxEventTextBytes { flush(wall: wall, into: &effects) }
+    }
+
+    /// Escaped bytes one more text event may still add to the projected run.
+    private var projectedRoom: Int {
+        limits.maxProjectedRunBytes - projectedBytes - 3
     }
 
     // MARK: Events
 
-    /// Emits accepted text in chunks of at most `maxEventTextBytes`, cut
-    /// between Unicode scalars (section 8).
+    /// Emits accepted text as one event: `accept` keeps it within
+    /// `maxEventTextBytes`, cut between Unicode scalars, and within both
+    /// bounds (section 8).
     private mutating func flush(wall: Int64, into effects: inout [Effect]) {
-        guard !pending.isEmpty else { pendingSince = nil; return }
-        var chunk = String.UnicodeScalarView()
-        var size = 0
-        for scalar in pending.unicodeScalars {
-            let width = String(scalar).utf8.count
-            if size + width > limits.maxEventTextBytes {
-                effects.append(.update(.event(emit(.text, text: String(chunk), wall: wall))))
-                chunk = String.UnicodeScalarView()
-                size = 0
-            }
-            chunk.append(scalar)
-            size += width
+        defer {
+            pending = ""
+            pendingBytes = 0
+            pendingEscapedBytes = 0
+            pendingSince = nil
         }
-        if !chunk.isEmpty { effects.append(.update(.event(emit(.text, text: String(chunk), wall: wall)))) }
-        pending = ""
-        pendingSince = nil
+        guard !pending.isEmpty else { return }
+        effects.append(.update(.event(emit(.text, text: pending, wall: wall))))
+        projectedBytes += pendingEscapedBytes + 2 + 3
     }
 
     /// Accepted text, then the one terminal, recorded with `groupCleared: true`.
