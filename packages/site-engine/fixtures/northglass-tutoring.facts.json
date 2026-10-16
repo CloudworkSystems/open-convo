@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "name": "Northglass Tutoring",
+  "tagline": "Calm help with algebra and writing",
+  "description": "A fictional online tutor for algebra and essay structure. Sessions are one at a time.",
+  "siteUrl": "https://northglass-tutoring.example/",
+  "services": [
+    {
+      "name": "Algebra hour",
+      "description": "One hour on the current unit.",
+      "price": "$40"
+    },
+    {
+      "name": "Essay review",
+      "description": "Notes on one draft.",
+      "price": "$25"
+    }
+  ],
+  "hours": "By appointment",
+  "location": "Online only",
+  "contact": {
+    "email": "tutor@northglass-tutoring.example",
+    "bookingUrl": "https://northglass-tutoring.example/book"
+  },
+  "social": [
+    { "label": "Practice sheet", "url": "https://notes.northglass-tutoring.example/" }
+  ]
+}

@@ -1,0 +1,239 @@
+{
+  "$comment": "Single authority for what Site Engine may publish. Every object rejects unknown fields. x-kind marks checks this package enforces (https URL, email, phone, hex color, public text, alt text). This file is never copied into a built site.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "name", "tagline", "description", "siteUrl"],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "x-kind": "text"
+    },
+    "tagline": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "x-kind": "text"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8000,
+      "x-kind": "text"
+    },
+    "siteUrl": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "x-kind": "https-url"
+    },
+    "services": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "description"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "x-kind": "text"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "x-kind": "text"
+          },
+          "price": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "x-kind": "text"
+          }
+        }
+      }
+    },
+    "hours": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "By appointment"
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 14,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["days", "open", "close"],
+            "properties": {
+              "days": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "x-kind": "text"
+              },
+              "open": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40,
+                "x-kind": "text"
+              },
+              "close": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40,
+                "x-kind": "text"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "location": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "Online only"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["street", "city", "region", "postalCode", "country"],
+          "properties": {
+            "street": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "x-kind": "text"
+            },
+            "city": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120,
+              "x-kind": "text"
+            },
+            "region": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120,
+              "x-kind": "text"
+            },
+            "postalCode": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32,
+              "x-kind": "text"
+            },
+            "country": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120,
+              "x-kind": "text"
+            }
+          }
+        }
+      ]
+    },
+    "contact": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "phone": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40,
+          "x-kind": "phone"
+        },
+        "email": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 254,
+          "x-kind": "email"
+        },
+        "bookingUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "x-kind": "https-url"
+        }
+      }
+    },
+    "social": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "url"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "x-kind": "text"
+          },
+          "url": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "x-kind": "https-url"
+          }
+        }
+      }
+    },
+    "images": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "alt"],
+        "properties": {
+          "file": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240,
+            "x-kind": "image-path"
+          },
+          "alt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300,
+            "x-kind": "alt-text"
+          }
+        }
+      }
+    },
+    "brand": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "accent": {
+          "type": "string",
+          "x-kind": "hex-color"
+        },
+        "background": {
+          "type": "string",
+          "x-kind": "hex-color"
+        },
+        "text": {
+          "type": "string",
+          "x-kind": "hex-color"
+        }
+      }
+    }
+  }
+}
