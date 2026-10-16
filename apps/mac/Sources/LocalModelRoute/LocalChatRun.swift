@@ -41,7 +41,7 @@ public final class LocalChatRun: NSObject, ParticipantRunning, URLSessionDataDel
         self.continuation = continuation
         self.clock = clock
         core = LocalChatCore(identity: request.identity, contextBytes: request.contextBytes,
-                             inputBytes: request.inputBytes, limits: limits)
+                             inputBytes: request.inputBytes, preparedBytes: request.preparedBytes, limits: limits)
         lastSnapshot = core.snapshot
         super.init()
     }

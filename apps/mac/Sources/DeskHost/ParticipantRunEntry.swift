@@ -9,6 +9,57 @@ import Foundation
 // the section 15 shape cannot exist in memory, and a stored one that does
 // makes the whole store corrupt.
 
+/// A local run's earlier turns, bound by hash and never kept as text
+/// (contract section 20.3): the run ids in turn order, the resolved turns'
+/// text bytes, and SHA-256 of the canonical JSON array of those turns.
+public struct ParticipantRunContext: Equatable, Sendable {
+    public static let keys: Set<String> = ["contextRunIds", "contextBytes", "contextHash"]
+
+    public let runIds: [String]
+    public let bytes: Int
+    public let hash: String
+
+    /// Nil unless there are at most 256 ids, each a canonical lowercase
+    /// UUIDv4 and all distinct, `bytes` is 0-262,144 and `hash` 64
+    /// lowercase hex digits (section 20.5).
+    public init?(runIds: [String], bytes: Int, hash: String) {
+        guard runIds.count <= LocalRouteWire.maxContextRuns, runIds.allSatisfy(ParticipantRunText.isRunLike),
+              Set(runIds).count == runIds.count, (0...ParticipantLimits.inputTotalBytes).contains(bytes),
+              ParticipantRunText.isSHA256Hex(hash) else { return nil }
+        self.runIds = runIds
+        self.bytes = bytes
+        self.hash = hash
+    }
+
+    /// The three keys a runs entry adds, all present or none (nil when none).
+    init?(fields: [String: JSONValue]) throws {
+        let present = Self.keys.filter { fields[$0] != nil }
+        guard !present.isEmpty else { return nil }
+        guard present.count == Self.keys.count, case .array(let ids)? = fields["contextRunIds"],
+              let bytes = fields["contextBytes"]?.safeIntegerValue, let hash = fields["contextHash"]?.stringValue else {
+            throw ParticipantRunContextError.malformed
+        }
+        let strings = ids.compactMap(\.stringValue)
+        guard strings.count == ids.count, let context = Self(runIds: strings, bytes: bytes, hash: hash) else {
+            throw ParticipantRunContextError.malformed
+        }
+        self = context
+    }
+
+    var jsonFields: [String: JSONValue] {
+        ["contextRunIds": .array(runIds.map(JSONValue.string)), "contextBytes": .number(Double(bytes)),
+         "contextHash": .string(hash)]
+    }
+
+    /// The hash of resolved turns: SHA-256 of the canonical JSON array of
+    /// `{role, text}` objects, in order.
+    public static func hash(of turns: [(role: String, text: String)]) -> String {
+        PayloadHash.hex(of: .array(turns.map { .object(["role": .string($0.role), "text": .string($0.text)]) }))
+    }
+}
+
+enum ParticipantRunContextError: Error { case malformed }
+
 /// What a preparing commit proves about its run (section 6 steps 1-7),
 /// before the store binds it to the commit that introduces it.
 public struct ParticipantPreparedRun: Equatable, Sendable {
@@ -22,20 +73,31 @@ public struct ParticipantPreparedRun: Equatable, Sendable {
     public let inputHash: String
     public let inputBytes: Int
     public let preparedBytes: Int
+    /// A local run's earlier turns (section 20.3); nil for any other run.
+    public let context: ParticipantRunContext?
 
     /// Nil unless the run and message ids are canonical lowercase UUIDv4,
     /// the session id a record id (case kept), the four distinct ignoring
     /// case, `createdAt` a real `.mmmZ` time, `inputHash` 64 lowercase hex
     /// digits, `inputBytes` 1-262,144 (section 6 step 6) and
-    /// `preparedBytes` 1-785,408 (step 7).
+    /// `preparedBytes` 1-785,408 (step 7). A `context` comes exactly with
+    /// participant id `ollama-local`, never names the run itself, and with
+    /// the input stays within 262,144 bytes (section 20.5).
     public init?(runId: String, sessionId: String, userMessageId: String, assistantMessageId: String,
-                 participant: ParticipantPin, createdAt: String, inputHash: String, inputBytes: Int, preparedBytes: Int) {
+                 participant: ParticipantPin, createdAt: String, inputHash: String, inputBytes: Int, preparedBytes: Int,
+                 context: ParticipantRunContext? = nil) {
         guard [runId, userMessageId, assistantMessageId].allSatisfy(ParticipantRunText.isRunLike),
               UUID.isRecordId(sessionId),
               ParticipantIds.distinctIgnoringCase([runId, sessionId, userMessageId, assistantMessageId]),
               WireTimestamp.isValid(createdAt), ParticipantRunText.isSHA256Hex(inputHash),
               (1...ParticipantLimits.inputTotalBytes).contains(inputBytes),
               (1...ParticipantLimits.preparedRunBytes).contains(preparedBytes) else { return nil }
+        let local = ParticipantPin.sameBytes(participant.id, LocalRouteWire.participantId)
+        guard local == (context != nil) else { return nil }
+        if let context {
+            guard !context.runIds.contains(runId), context.bytes + inputBytes <= ParticipantLimits.inputTotalBytes else { return nil }
+        }
+        self.context = context
         self.runId = runId
         self.sessionId = sessionId
         self.userMessageId = userMessageId
@@ -159,8 +221,9 @@ public struct ParticipantRunTerminal: Equatable, Sendable {
 }
 
 /// One `state.json` `runs` entry: exactly the fourteen keys of section 15,
-/// with explicit nulls. Written at prepare, then given a start, a terminal
-/// and a cleared group; never evicted.
+/// with explicit nulls, plus section 20.5's three context keys for a local
+/// run. Written at prepare, then given a start, a terminal and a cleared
+/// group; never evicted.
 public struct ParticipantRunEntry: Equatable, Sendable {
     public static let keys: Set<String> = [
         "runId", "sessionId", "userMessageId", "assistantMessageId", "participant", "createdAt", "inputHash",
@@ -185,6 +248,9 @@ public struct ParticipantRunEntry: Equatable, Sendable {
     /// Null until a terminal; then true, false, or null when nothing was
     /// spawned. Only ever moves from false to true.
     public let groupCleared: Bool?
+    /// A local run's `contextRunIds`, `contextBytes` and `contextHash`
+    /// (section 20.5); nil, and the keys absent, for any other run.
+    public let context: ParticipantRunContext?
 
     /// The entry a preparing commit writes: no start, no terminal. Nil
     /// unless the commit's request id is a UUIDv4 (the only kind the host
@@ -208,6 +274,7 @@ public struct ParticipantRunEntry: Equatable, Sendable {
         inputHash = prepared.inputHash
         inputBytes = prepared.inputBytes
         preparedBytes = prepared.preparedBytes
+        context = prepared.context
         self.prepareRequestId = prepareRequestId
         self.preparedRevision = preparedRevision
         self.start = start
@@ -216,9 +283,15 @@ public struct ParticipantRunEntry: Equatable, Sendable {
     }
 
     /// Strict: exactly the fourteen keys, each of its section 15 type and
-    /// form. Anything else is nil, which the store reads as corrupt.
+    /// form, plus all three context keys or none (section 20.5); the context
+    /// keys appear exactly when `participant.id` is `ollama-local`. Anything
+    /// else is nil, which the store reads as corrupt.
     public init?(json: JSONValue) {
-        guard let fields = json.objectValue, Set(fields.keys) == Self.keys,
+        guard let fields = json.objectValue else { return nil }
+        let context: ParticipantRunContext?
+        do { context = try ParticipantRunContext(fields: fields) } catch { return nil }
+        let expected = context == nil ? Self.keys : Self.keys.union(ParticipantRunContext.keys)
+        guard Set(fields.keys) == expected,
               let runId = fields["runId"]?.stringValue, let sessionId = fields["sessionId"]?.stringValue,
               let userMessageId = fields["userMessageId"]?.stringValue,
               let assistantMessageId = fields["assistantMessageId"]?.stringValue,
@@ -231,7 +304,7 @@ public struct ParticipantRunEntry: Equatable, Sendable {
               let prepared = ParticipantPreparedRun(runId: runId, sessionId: sessionId, userMessageId: userMessageId,
                                                     assistantMessageId: assistantMessageId, participant: participant,
                                                     createdAt: createdAt, inputHash: inputHash, inputBytes: inputBytes,
-                                                    preparedBytes: preparedBytes) else { return nil }
+                                                    preparedBytes: preparedBytes, context: context) else { return nil }
         let start: ParticipantRunStart?
         if case .null = startValue {
             start = nil
@@ -256,9 +329,10 @@ public struct ParticipantRunEntry: Equatable, Sendable {
                   start: start, terminal: terminal, groupCleared: groupCleared)
     }
 
-    /// The fourteen keys, nulls written out (as the vectors' `afterRuns`).
+    /// The fourteen keys, nulls written out (as the vectors' `afterRuns`),
+    /// and a local run's three context keys.
     public var jsonValue: JSONValue {
-        .object([
+        var fields: [String: JSONValue] = [
             "runId": .string(runId),
             "sessionId": .string(sessionId),
             "userMessageId": .string(userMessageId),
@@ -273,7 +347,9 @@ public struct ParticipantRunEntry: Equatable, Sendable {
             "start": start?.jsonValue ?? .null,
             "terminal": terminal?.jsonValue ?? .null,
             "groupCleared": groupCleared.map(JSONValue.bool) ?? .null
-        ])
+        ]
+        if let context { fields.merge(context.jsonFields) { _, added in added } }
+        return .object(fields)
     }
 
     var namespacedIds: [String] { [runId, userMessageId, assistantMessageId] }
@@ -299,7 +375,7 @@ public struct ParticipantRunEntry: Equatable, Sendable {
         // Already validated when this entry was built.
         ParticipantPreparedRun(runId: runId, sessionId: sessionId, userMessageId: userMessageId,
                                assistantMessageId: assistantMessageId, participant: participant, createdAt: createdAt,
-                               inputHash: inputHash, inputBytes: inputBytes, preparedBytes: preparedBytes)!
+                               inputHash: inputHash, inputBytes: inputBytes, preparedBytes: preparedBytes, context: context)!
     }
 
     /// The per-entry load invariants of section 15: a run that never started

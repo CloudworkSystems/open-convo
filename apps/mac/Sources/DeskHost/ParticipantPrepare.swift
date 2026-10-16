@@ -32,6 +32,20 @@ public struct ParticipantClaim: Equatable, Sendable {
     public let createdAt: String
 }
 
+/// What a host with a local route (contract section 20) brings to a
+/// preparing commit. A host without one passes nil and is revision 3
+/// exactly: a run with a context list is not in the prepared form.
+public struct ParticipantLocalPrepare: Equatable, Sendable {
+    /// The route's catalog, read afresh for this commit (no reused answer);
+    /// nil when the claim does not name the local route, so a local run's
+    /// step 5 can only fail.
+    public let catalog: LocalCatalogAnswer?
+
+    public init(catalog: LocalCatalogAnswer?) {
+        self.catalog = catalog
+    }
+}
+
 public enum ParticipantPrepare {
     public static let claimKeys: Set<String> = [
         "runId", "sessionId", "userMessageId", "assistantMessageId", "participantId", "createdAt"
@@ -54,7 +68,8 @@ public enum ParticipantPrepare {
     /// The caller runs this after v1's checks through exact replay and
     /// before the delivery check.
     public static func check(record: [String: JSONValue], claim: JSONValue?, hasDeliveryId: Bool,
-                             pin: ParticipantPin, inputBound: Int?) -> ParticipantCheck<ParticipantCommitCheck> {
+                             pin: ParticipantPin, inputBound: Int?,
+                             local: ParticipantLocalPrepare? = nil) -> ParticipantCheck<ParticipantCommitCheck> {
         if claim != nil, hasDeliveryId { return .refused(.malformedEnvelope) }
         let attempted: [String]?
         switch attemptedRunIds(in: record) {
@@ -62,7 +77,7 @@ public enum ParticipantPrepare {
         case .passed(let ids): attempted = ids
         }
         guard let claim else { return .passed(ParticipantCommitCheck(preparedRun: nil, attemptedRunIds: attempted ?? [])) }
-        switch prepare(claim: claim, record: record, pin: pin, inputBound: inputBound) {
+        switch prepare(claim: claim, record: record, pin: pin, inputBound: inputBound, local: local) {
         case .refused(let reason): return .refused(reason)
         case .passed(let run): return .passed(ParticipantCommitCheck(preparedRun: run, attemptedRunIds: attempted ?? []))
         }
@@ -70,11 +85,19 @@ public enum ParticipantPrepare {
 
     /// Steps 1-7 for one claim against the same request's record.
     public static func prepare(claim value: JSONValue, record: [String: JSONValue], pin: ParticipantPin,
-                               inputBound: Int?) -> ParticipantCheck<ParticipantPreparedRun> {
+                               inputBound: Int?, local: ParticipantLocalPrepare? = nil) -> ParticipantCheck<ParticipantPreparedRun> {
         switch claim(value) {
         case .refused(let reason): return .refused(reason)
-        case .passed(let claim): return prepare(claim, record: record, pin: pin, inputBound: inputBound)
+        case .passed(let claim): return prepare(claim, record: record, pin: pin, inputBound: inputBound, local: local)
         }
+    }
+
+    /// Whether a commit's claim names the local route, read before any
+    /// check so a host reads its catalog only for such a commit, and before
+    /// the checks rather than between them (section 20.3).
+    public static func claimNamesLocalRoute(_ claim: JSONValue?) -> Bool {
+        guard let id = claim?.objectValue?["participantId"]?.stringValue else { return false }
+        return ParticipantPin.sameBytes(id, LocalRouteWire.participantId)
     }
 
     /// Step 1, with Codex's precedence (Q6): unknown keys (`unknown-field`);
@@ -144,7 +167,7 @@ public enum ParticipantPrepare {
     /// refusal is the answer. Strings are compared byte for byte, as the
     /// page's `===` compares, never by Swift's canonical equivalence.
     public static func prepare(_ claim: ParticipantClaim, record: [String: JSONValue], pin: ParticipantPin,
-                               inputBound: Int?) -> ParticipantCheck<ParticipantPreparedRun> {
+                               inputBound: Int?, local: ParticipantLocalPrepare? = nil) -> ParticipantCheck<ParticipantPreparedRun> {
         // 2. Schema 2 and exactly one element with the claimed run id.
         guard record["schemaVersion"] == .number(2), case .array(let elements)? = record["conversationRuns"] else {
             return .refused(.runNotFound)
@@ -155,10 +178,20 @@ public enum ParticipantPrepare {
         guard matches.count == 1, let run = matches[0].objectValue else { return .refused(.runNotFound) }
 
         // 3. Exactly the prepared form: the twelve keys, version 1, phase
-        // prepared, nothing sequenced or written yet, never updated.
-        guard Set(run.keys) == preparedRunKeys, run["version"] == .number(1), isString(run["phase"], "prepared"),
+        // prepared, nothing sequenced or written yet, never updated. On a
+        // host with a local route, a run whose participant id is
+        // `ollama-local` has `contextRunIds` too (section 20.3): a list of
+        // at most 256 distinct canonical lowercase UUIDv4 strings.
+        let localRun = local != nil && isString(run["participant"]?.objectValue?["id"], LocalRouteWire.participantId)
+        guard Set(run.keys) == (localRun ? preparedRunKeys.union(["contextRunIds"]) : preparedRunKeys),
+              run["version"] == .number(1), isString(run["phase"], "prepared"),
               run["lastSequence"] == .number(0), run["outputChunks"] == .array([]),
               sameValue(run["updatedAt"], run["createdAt"]) else { return .refused(.runNotPrepared) }
+        var contextRunIds: [String] = []
+        if localRun {
+            guard let ids = contextIds(run["contextRunIds"]) else { return .refused(.runNotPrepared) }
+            contextRunIds = ids
+        }
 
         // 4. The ids and createdAt the claim names.
         guard isString(run["sessionId"], claim.sessionId), isString(run["userMessageId"], claim.userMessageId),
@@ -168,10 +201,32 @@ public enum ParticipantPrepare {
 
         // 5. The claim's participant id and the run's whole participant are
         // native's current pin. A participant object with any other key
-        // set is not the pin.
-        guard ParticipantPin.sameBytes(claim.participantId, pin.id),
-              let participant = run["participant"].flatMap(ParticipantPin.init(json:)), participant == pin else {
-            return .refused(.runMismatch)
+        // set is not the pin. A local run's are `ollama-local` and an
+        // available entry of the ready catalog read for this commit (all
+        // four fields, byte for byte; section 20.3).
+        let participant: ParticipantPin
+        if localRun {
+            guard ParticipantPin.sameBytes(claim.participantId, LocalRouteWire.participantId),
+                  let named = run["participant"].flatMap(ParticipantPin.init(json:)),
+                  local?.catalog?.availableEntry(named) != nil else { return .refused(.runMismatch) }
+            participant = named
+        } else {
+            guard ParticipantPin.sameBytes(claim.participantId, pin.id),
+                  let named = run["participant"].flatMap(ParticipantPin.init(json:)), named == pin else {
+                return .refused(.runMismatch)
+            }
+            participant = named
+        }
+
+        // A local run's earlier turns, resolved from this same record
+        // (section 20.3, after step 5).
+        var turns: [(role: String, text: String)] = []
+        if localRun {
+            guard let ownIndex = elements.firstIndex(where: { $0.objectValue?["runId"]?.stringValue.map { ParticipantPin.sameBytes($0, claim.runId) } ?? false }),
+                  let resolved = resolveContext(contextRunIds, in: elements, before: ownIndex, sessionId: claim.sessionId) else {
+                return .refused(.runMismatch)
+            }
+            turns = resolved
         }
 
         // 6. Input: at least one chunk, each a string of 1-16,384 bytes, at
@@ -188,7 +243,13 @@ public enum ParticipantPrepare {
             chunks.append(chunk)
             inputBytes += chunk.utf8.count
         }
-        guard inputBytes <= min(ParticipantLimits.inputTotalBytes, inputBound ?? ParticipantLimits.inputTotalBytes) else {
+        // Section 17's first-trial bound is Claude Code's; a local run has
+        // one limit instead, over its resolved context and its input
+        // together (section 20.3).
+        let contextBytes = turns.reduce(0) { $0 + $1.text.utf8.count }
+        let bound = localRun ? ParticipantLimits.inputTotalBytes - contextBytes
+            : min(ParticipantLimits.inputTotalBytes, inputBound ?? ParticipantLimits.inputTotalBytes)
+        guard inputBytes <= bound else {
             return .refused(.textTooLarge)
         }
 
@@ -201,9 +262,54 @@ public enum ParticipantPrepare {
         guard let prepared = ParticipantPreparedRun(
             runId: claim.runId, sessionId: claim.sessionId, userMessageId: claim.userMessageId,
             assistantMessageId: claim.assistantMessageId, participant: participant, createdAt: claim.createdAt,
-            inputHash: PayloadHash.hex(of: .array(chunks.map(JSONValue.string))), inputBytes: inputBytes, preparedBytes: preparedBytes
+            inputHash: PayloadHash.hex(of: .array(chunks.map(JSONValue.string))), inputBytes: inputBytes, preparedBytes: preparedBytes,
+            context: localRun ? ParticipantRunContext(runIds: contextRunIds, bytes: contextBytes,
+                                                      hash: ParticipantRunContext.hash(of: turns)) : nil
         ) else { return .refused(.malformedEnvelope) }
         return .passed(prepared)
+    }
+
+    /// Step 3's form of `contextRunIds`: a list of at most 256 canonical
+    /// lowercase UUIDv4 strings, distinct by their bytes.
+    static func contextIds(_ value: JSONValue?) -> [String]? {
+        guard case .array(let elements)? = value, elements.count <= LocalRouteWire.maxContextRuns else { return nil }
+        var ids: [String] = []
+        var seen = Set<[UInt8]>()
+        for element in elements {
+            guard let id = ParticipantIds.runLike(element), seen.insert(Array(id.utf8)).inserted else { return nil }
+            ids.append(id)
+        }
+        return ids
+    }
+
+    /// Each context id names exactly one run of `elements`, before the run
+    /// at `ownIndex` and after the one before it in the list (the order the
+    /// turns happened), in the same session, `completed`, with string input
+    /// and output chunks. Each gives two turns: the joined input as the
+    /// user's, the joined output as the assistant's. Nil when any id fails
+    /// (`run-mismatch`). Also how native re-resolves at start (section 20.3).
+    public static func resolveContext(_ ids: [String], in elements: [JSONValue], before ownIndex: Int,
+                                      sessionId: String) -> [(role: String, text: String)]? {
+        var turns: [(role: String, text: String)] = []
+        var previous = -1
+        for id in ids {
+            let found = elements.indices.filter { index in
+                elements[index].objectValue?["runId"]?.stringValue.map { ParticipantPin.sameBytes($0, id) } ?? false
+            }
+            guard found.count == 1, let index = found.first, index > previous, index < ownIndex,
+                  let run = elements[index].objectValue, isString(run["sessionId"], sessionId), isString(run["phase"], "completed"),
+                  let input = strings(run["inputChunks"]), let output = strings(run["outputChunks"]) else { return nil }
+            previous = index
+            turns.append((role: "user", text: input.joined()))
+            turns.append((role: "assistant", text: output.joined()))
+        }
+        return turns
+    }
+
+    private static func strings(_ value: JSONValue?) -> [String]? {
+        guard case .array(let elements)? = value else { return nil }
+        let strings = elements.compactMap(\.stringValue)
+        return strings.count == elements.count ? strings : nil
     }
 
     private static func isString(_ value: JSONValue?, _ expected: String) -> Bool {

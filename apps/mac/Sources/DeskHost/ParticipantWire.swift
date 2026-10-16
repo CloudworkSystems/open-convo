@@ -105,22 +105,149 @@ public struct ParticipantHostConfiguration: Equatable, Sendable {
     /// The request-identity space both lanes claim through. Shared runtime
     /// state, held by reference.
     public let identities: RequestIdentityIndex
+    /// The local route (contract section 20), or nil for a host without one,
+    /// which is revision 3 exactly. Held by reference: a preparing commit
+    /// and availability each read its catalog afresh.
+    public let localRoute: (any LocalCatalogReading)?
 
-    public init(pin: ParticipantPin, inputBound: Int? = nil, identities: RequestIdentityIndex = RequestIdentityIndex()) {
+    public init(pin: ParticipantPin, inputBound: Int? = nil, identities: RequestIdentityIndex = RequestIdentityIndex(),
+                localRoute: (any LocalCatalogReading)? = nil) {
         precondition(inputBound.map { (1...ParticipantLimits.inputTotalBytes).contains($0) } ?? true,
                      "an input bound is positive and within the input total")
         self.pin = pin
         self.inputBound = inputBound
         self.identities = identities
+        self.localRoute = localRoute
     }
 
-    /// Equal when they configure the same wire: the pin (byte for byte)
-    /// and the input bound. `identities` is runtime state, not a setting,
-    /// and is not compared; whether two hosts share one identity space is
+    /// Equal when they configure the same wire: the pin (byte for byte),
+    /// the input bound and the same local route (`===`, or none on both).
+    /// `identities` is runtime state, not a setting, and is not compared;
+    /// whether two hosts share one identity space is
     /// `lhs.identities === rhs.identities`.
     public static func == (lhs: ParticipantHostConfiguration, rhs: ParticipantHostConfiguration) -> Bool {
-        lhs.pin == rhs.pin && lhs.inputBound == rhs.inputBound
+        lhs.pin == rhs.pin && lhs.inputBound == rhs.inputBound && lhs.localRoute === rhs.localRoute
     }
+}
+
+// MARK: The local route's catalog (contract section 20.2)
+
+/// Where a participant host reads the local route's catalog. LocalModelRoute's
+/// `OllamaClient` is the real one; this module cannot import it, so the seam
+/// lives here. Every call is a fresh read: nothing here caches an answer.
+public protocol LocalCatalogReading: AnyObject, Sendable {
+    func localCatalog() async -> LocalCatalogAnswer
+}
+
+/// One chat model as availability lists it: exactly `{id, label, model,
+/// executionHost}` (`ollama-local`, the name, name@digest, `this-mac`), and
+/// whether it runs on this Mac.
+public struct LocalCatalogEntry: Equatable, Sendable {
+    public let participant: ParticipantPin
+    /// False for a cloud or remote model: listed, never available
+    /// (`model-not-local`).
+    public let available: Bool
+
+    public init(participant: ParticipantPin, available: Bool) {
+        self.participant = participant
+        self.available = available
+    }
+}
+
+/// The local route as one catalog read found it (section 20.2).
+public enum LocalCatalogAnswer: Equatable, Sendable {
+    /// Entries in availability's order (sorted by name, at most 256).
+    case ready([LocalCatalogEntry])
+    /// `ollama-not-running`, `catalog-unreadable`, `catalog-too-large` or
+    /// `host-not-loopback`. An unavailable route lists no entries.
+    case unavailable(reason: String)
+
+    public static let routeReasons: Set<String> = [
+        "ollama-not-running", "catalog-unreadable", "catalog-too-large", "host-not-loopback"
+    ]
+
+    /// The ready route's available entry equal to `participant` (all four
+    /// fields, byte for byte), if any: section 6 step 5 for a local run.
+    public func availableEntry(_ participant: ParticipantPin) -> LocalCatalogEntry? {
+        guard case .ready(let entries) = self else { return nil }
+        return entries.first { $0.available && $0.participant == participant }
+    }
+
+    /// This answer held to section 20.2 whatever produced it, as the page
+    /// codec holds a reply: a ready list has at most 256 entries, each
+    /// `ollama-local` on `this-mac`, its label the name before `@` and a
+    /// 64-hex digest after it, sorted by name in code-point order with no
+    /// name twice; anything else is `catalog-unreadable` (more than 256 is
+    /// `catalog-too-large`). A name ending `:cloud` is never available. An
+    /// unknown route reason is `catalog-unreadable`.
+    public var checked: LocalCatalogAnswer {
+        switch self {
+        case .unavailable(let reason):
+            return Self.routeReasons.contains(reason) ? self : .unavailable(reason: "catalog-unreadable")
+        case .ready(let entries):
+            guard entries.count <= 256 else { return .unavailable(reason: "catalog-too-large") }
+            var previous: String?
+            var kept: [LocalCatalogEntry] = []
+            for entry in entries {
+                let pin = entry.participant
+                guard ParticipantPin.sameBytes(pin.id, LocalRouteWire.participantId),
+                      ParticipantPin.sameBytes(pin.executionHost, LocalRouteWire.executionHost),
+                      Self.isModel(pin.model, named: pin.label) else { return .unavailable(reason: "catalog-unreadable") }
+                if let previous {
+                    guard previous.unicodeScalars.lexicographicallyPrecedes(pin.label.unicodeScalars, by: { $0.value < $1.value }) else {
+                        return .unavailable(reason: "catalog-unreadable")
+                    }
+                }
+                previous = pin.label
+                kept.append(LocalCatalogEntry(participant: pin, available: entry.available && !pin.label.hasSuffix(":cloud")))
+            }
+            return .ready(kept)
+        }
+    }
+
+    /// Availability's fields with a local route (section 20.2): `claude`
+    /// (the Claude Code entry, as section 5 builds it) first, then one
+    /// entry per listed model, `reason` null exactly when available and
+    /// `model-not-local` otherwise, and the one `routes` item. An
+    /// unavailable route lists no local entry. Call it on a `checked`
+    /// answer.
+    public func availabilityFields(claude: [String: JSONValue]) -> [String: JSONValue] {
+        var listed: [JSONValue] = [.object(claude)]
+        let route: JSONValue
+        switch self {
+        case .ready(let entries):
+            for entry in entries {
+                var fields = entry.participant.jsonValue.objectValue ?? [:]
+                fields["available"] = .bool(entry.available)
+                fields["reason"] = entry.available ? .null : .string(LocalRouteWire.modelNotLocal)
+                listed.append(.object(fields))
+            }
+            route = .object(["route": .string(LocalRouteWire.participantId), "state": .string("ready"), "reason": .null])
+        case .unavailable(let reason):
+            route = .object(["route": .string(LocalRouteWire.participantId), "state": .string("unavailable"),
+                             "reason": .string(reason)])
+        }
+        return ["participants": .array(listed), "routes": .array([route])]
+    }
+
+    /// `model` is exactly `name`, `@` and 64 lowercase hex digits.
+    static func isModel(_ model: String, named name: String) -> Bool {
+        let bytes = Array(model.utf8)
+        let nameBytes = Array(name.utf8)
+        guard bytes.count == nameBytes.count + 65, bytes.starts(with: nameBytes), bytes[nameBytes.count] == 0x40 else { return false }
+        return bytes[(nameBytes.count + 1)...].allSatisfy { (0x30...0x39).contains($0) || (0x61...0x66).contains($0) }
+    }
+}
+
+/// Section 20's fixed names.
+public enum LocalRouteWire {
+    /// The local route's participant id and route name.
+    public static let participantId = "ollama-local"
+    public static let executionHost = "this-mac"
+    /// The reason on a listed model that does not run on this Mac.
+    public static let modelNotLocal = "model-not-local"
+    /// At most this many earlier runs as context (section 20.3).
+    public static let maxContextRuns = 256
 }
 
 /// Participant id rules (section 3). `runId`, `userMessageId` and

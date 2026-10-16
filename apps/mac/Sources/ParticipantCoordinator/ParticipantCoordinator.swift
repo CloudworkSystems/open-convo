@@ -683,7 +683,14 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
         let report = ownedReport(await configuration.availability.report())
         var entry = configuration.hostConfiguration.pin.jsonValue.objectValue ?? [:]
         entry.merge(report.jsonFields) { pinned, _ in pinned }
-        return .ok(request.echo, ["participants": .array([.object(entry)])])
+        guard let route = configuration.hostConfiguration.localRoute else {
+            return .ok(request.echo, ["participants": .array([.object(entry)])])
+        }
+        // Section 20.2: the Claude Code entry first, exactly as above, then
+        // the local route's entries and its one `routes` item, read afresh.
+        // Whether a local model is available is the catalog's answer
+        // (`LocalCatalogAnswer.availabilityFields`), never this actor's.
+        return .ok(request.echo, await route.localCatalog().checked.availabilityFields(claude: entry))
     }
 
     /// A report that carries a confirmation, from a coordinator with no
@@ -834,7 +841,8 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
             return refuse(.runMismatch)
         }
         // 10. Prepared for another pin than this build's (Codex Q25): never
-        // run under another model.
+        // run under another model. A local run (section 20) is refused here
+        // too, sending nothing, until its start is wired (step 3 PR 3c).
         guard entry.participant == configuration.hostConfiguration.pin else { return refuse(.participantChanged) }
         // 11. Chunk limits and the first-trial bound, which also refuses a
         // run prepared above it.
