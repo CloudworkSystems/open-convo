@@ -23,7 +23,9 @@ Tick each one. Write down anything that surprises you.
 
 1. **Pick the model.** Open the model picker. You should see your local
    models labeled "Local · <model> · stays on this Mac", with `qwen3:8b`
-   chosen by default. Cloud models (names ending in `:cloud`) should say
+   chosen by default (your choice on October 16, recorded in
+   [docs/decisions.md](../decisions.md)). If `qwen3:8b` isn't installed,
+   pick any local model and note it. Cloud models should say
    "Cloud · … · not on this Mac (can't be used)" and stay greyed out.
 2. **Check who receives what.** Before you press Send, the label above the
    conversation should name the model and say it stays on this Mac.
@@ -35,20 +37,26 @@ Tick each one. Write down anything that surprises you.
 5. **Stop.** Send: "Write a long story about a muffin that travels the
    world." Press Stop partway through. The text so far should stay, marked as
    stopped.
-6. **Retry.** On the stopped reply, press Retry. The message should come
-   back into the message box without being sent. Press Send yourself. A new
-   reply should start; the stopped one stays as it was.
-7. **Quit and reopen.** Quit True Convo Test (its menu, Quit). Open it again
+6. **Quit and reopen.** Quit True Convo Test (its menu, Quit). Open it again
    and go back to the conversation. Every message and reply should still be
    there.
-8. **Continue.** Send: "Remind me what muffin name you suggested." The
+7. **Continue.** Send: "Remind me what muffin name you suggested." The
    answer should match the earlier suggestion, without you retelling it.
+8. **Quit while it's writing.** Send a message that needs a long answer and
+   quit True Convo Test from its menu while the reply is still coming in.
+   Reopen. That reply should be marked as stopped on this Mac, with the text
+   so far kept, and it should not have been sent again.
 9. **Ollama closed.** Quit Ollama from its menu bar icon. The picker should
    say Ollama isn't running, and Send should do nothing. Nothing should be
    sent anywhere else. Open Ollama again; the models should come back.
-10. **Quit mid-reply.** Send a message that needs a long answer, and quit
-    True Convo Test while it is still writing. Reopen. That reply should be
-    marked as cut off, and it should **not** have been sent again on its own.
+10. **Crash while it's writing.** Send another message that needs a long
+    answer. While the reply is still coming in, force quit True Convo Test
+    (Option-Command-Escape, pick True Convo Test, Force Quit). Reopen. That
+    reply should be marked as cut off, and it should **not** have been sent
+    again on its own.
+11. **Retry the cut-off reply.** On that cut-off reply, press Retry. The
+    message should come back into the message box without being sent. Press
+    Send yourself. A new reply should start; the cut-off one stays as it was.
 
 ## When Something Is Wrong
 
