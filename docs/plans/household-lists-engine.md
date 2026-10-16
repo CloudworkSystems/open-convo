@@ -53,12 +53,28 @@ Two phones will edit the same list while apart (at the store and at home), so
 the engine records changes in a way that merges cleanly:
 
 - Every list and item has a permanent ID; text is never used as identity.
-- Every change carries the device it came from and when it happened.
+- Every change carries the device it came from and a **version stamp** that
+  puts all changes in one total order, even when two phones' clocks disagree
+  or two changes share a time: a logical counter (a Lamport-style clock that
+  always moves past any stamp it has seen), then the wall-clock time, then the
+  device ID as the final tie-breaker. "Later" in the rules below means "higher
+  version stamp", never the phone's clock alone.
 - **Merge** takes two copies of a list and produces one result, the same
   whichever copy goes first. Rules: changes to different items both survive;
   for the same field of the same item, the later change wins; a deletion wins
   over an earlier edit and loses to a later re-add; checking and editing the
   text of the same item at the same time keeps both.
+- **List-level changes follow the same rules.** Renaming a list, changing its
+  sort order, and editing its section map are fields of the list, so the
+  higher version stamp wins per field. Removing a list wins over earlier edits
+  inside it and loses to a later edit or re-add, which restores the list.
+  Section-map additions from two phones are both kept; for the same word, the
+  higher stamp wins.
+- **Deletions leave a permanent marker.** Deleting an item or list, and
+  emptying Trash, removes the content but keeps a small record (ID, version
+  stamp, "deleted"), so an offline phone's older copy can never bring it back.
+  These markers are kept indefinitely in this slice; compacting them is
+  deferred until sync exists and can confirm every device has seen them.
 - No network code in this slice: merge works on two files.
 
 ## Data Format
@@ -83,6 +99,12 @@ invented households only. At least:
 8. Merge: two devices editing different items; the same field; delete vs
    edit; check vs text edit; merging A into B equals merging B into A; merging
    a copy with itself changes nothing.
+   Also: two changes with the same time, and a phone whose clock runs hours
+   behind, both resolve the same way on every device; one phone renames a
+   list, changes its sort and adds a section word while the other edits items;
+   one phone removes a list while the other edits an item in it (later stamp
+   wins); and phone A empties Trash while phone B is offline with the old
+   item, then they merge and the item stays deleted.
 9. Saving and loading a list file gives back exactly the same list, and a file
    with an unknown `schemaVersion` is refused with a plain message.
 10. Hostile but valid text (quotes, `<`, `&`, emoji, very long names) is
