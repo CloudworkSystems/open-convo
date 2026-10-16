@@ -2,7 +2,7 @@ import { useId, useRef } from 'react';
 import type { ConversationRun, ConversationRunPhase, ParticipantStopReason } from '../domain/conversation-run-types';
 import type { ConversationRunStatus, ParticipantCleanupState } from '../adapters/participant-runtime';
 import { isConversationRunClosed } from '../domain/conversation-runs';
-import { isLocalParticipant, localModelName, localRunOutcome } from '../domain/local-participant';
+import { isLocalParticipant, localModelName, localRunOutcome, localRunStarted } from '../domain/local-participant';
 import './run-transcript.css';
 
 export type RunStopState = 'idle' | 'requesting' | 'unknown' | 'confirmed';
@@ -68,7 +68,7 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
   const local = isLocalParticipant(run.participant);
   // Native starts a local run only for an exact entry it lists as local
   // (section 20.4), so "stays on this Mac" is claimed only once it started.
-  const sentLocally = local && run.lastSequence >= 1;
+  const sentLocally = local && localRunStarted(run);
   // A local run has no provider to cancel: Stop ends its request on this Mac
   // (contract section 20.4), so its endings are worded plainly.
   const localOutcome = local ? localRunOutcome(run) : undefined;
@@ -138,7 +138,7 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
         <h3>{local ? `${sentLocally ? 'Local' : 'Ollama'} · ${localModelName(run.participant)}` : run.participant.label}</h3>
         <dl className="run-participant">
           <div><dt>Model</dt><dd>{local ? localModelName(run.participant) : run.participant.model}</dd></div>
-          <div><dt>Running on</dt><dd>{local ? sentLocally ? 'This Mac · stays on this Mac' : 'Not sent' : run.participant.executionHost}</dd></div>
+          <div><dt>Running on</dt><dd>{local ? sentLocally ? 'This Mac · stays on this Mac' : 'No reply started' : run.participant.executionHost}</dd></div>
         </dl>
         {output ? (
           <div className="run-message-text run-output" dir="auto" aria-live="off">

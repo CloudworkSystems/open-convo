@@ -144,12 +144,27 @@ export function localStartRefusalMessage(reason: string, identity: Readonly<Part
   }
 }
 
+/**
+ * Whether the Mac reported that this local reply started (contract section 8:
+ * the first event is `started`, or a terminal if the run ends before
+ * starting; section 20.4: `started` follows Ollama's HTTP 200). A saved run
+ * keeps no event types, so: `started` is the only event that moves a prepared
+ * run to `running` at sequence 1, and any sequence above 1 comes after it.
+ * A stopped or failed ending at sequence 1 never started.
+ */
+export function localRunStarted(run: Readonly<ConversationRun>): boolean {
+  return run.lastSequence >= 2 || run.lastSequence === 1 && run.phase === 'running';
+}
+
 /** The ending of a local reply, in plain words, or undefined while it is still open. */
 export function localRunOutcome(run: Readonly<ConversationRun>): string | undefined {
   if (run.closure?.kind === 'interrupted') {
     const event = run.closure.terminalEvent;
     if (event.type === 'completed') return 'Reply finished, but some of its updates could not be checked. The text shown may be incomplete.';
     return 'Reply cut off. The text so far is kept.';
+  }
+  if ((run.phase === 'stopped' || run.phase === 'failed') && !localRunStarted(run)) {
+    return run.phase === 'stopped' ? 'Stopped before any reply started.' : 'No reply started: the local model could not be reached or refused the request.';
   }
   if (run.closure?.kind === 'unknown' && run.lastSequence === 0) return 'Closed before any reply arrived. Use Retry to send this message again.';
   if (run.closure?.kind === 'unknown') return 'Reply cut off. The text so far is kept; the Mac never recorded how it ended.';

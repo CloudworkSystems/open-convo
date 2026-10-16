@@ -136,6 +136,11 @@ export class NativeParticipantConnection {
       } else {
         // Retain a known identity without granting stale availability. A failed
         // check says nothing about whether that saved participant is approved.
+        // The local catalog is dropped, not kept: an older reply is no evidence
+        // that a model is still local, so every Ollama title turns neutral
+        // until a later read succeeds (section 20.2).
+        this.local = Object.freeze([]);
+        this.route = null;
         this.error = outcome.kind !== 'completed' ? outcome.reason
           : result?.outcome === 'refused' ? result.reason : 'check-failed';
       }

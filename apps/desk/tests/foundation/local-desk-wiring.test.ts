@@ -9,7 +9,7 @@ import type { WorkspaceRepository } from '../../src/adapters/workspace-repositor
 import type { ConversationRun } from '../../src/domain/conversation-run-types';
 import { createConversationRun } from '../../src/domain/conversation-runs';
 import {
-  canRetryLocalRun, localChoiceProblem, ollamaChoiceShortName, ollamaChoiceTitle, ollamaResidency, localRouteMessage, localRunOutcome, localStartRefusalMessage,
+  canRetryLocalRun, localChoiceProblem, localRunStarted, ollamaChoiceShortName, ollamaChoiceTitle, ollamaResidency, localRouteMessage, localRunOutcome, localStartRefusalMessage,
   MAX_LOCAL_CONTEXT_BYTES, selectLocalContext,
 } from '../../src/domain/local-participant';
 
@@ -232,4 +232,45 @@ test('every ending of a local reply has a plain message, and Retry is offered on
     assert.match(localStartRefusalMessage(reason, inventedLocal)!, /nothing was sent/);
   }
   assert.equal(localStartRefusalMessage('participant-busy', inventedLocal), undefined);
+});
+
+test('a failed availability read drops the local catalog, so nothing stays "Local" on old evidence; a later read restores it', async () => {
+  let reply: Reply | 'malformed' = ready(localEntry('invented-model:7b'));
+  const h = setup(() => reply === 'malformed' ? { outcome: 'ok', participants: 'invented-garbage' } : reply);
+  let active = true;
+  const lifecycle: RuntimeLifecycle = { isActive: () => active, subscribeInvalidation: () => () => {}, revoke: () => { active = false; } };
+  const workspace: WorkspaceRepository = {
+    loadLatest: async () => ({ kind: 'unavailable', error: 'Invented.' }), save: async () => ({ kind: 'unavailable', error: 'Invented.' }),
+    subscribe: () => () => {},
+  };
+  const runtime = createNativeProofRuntime(workspace, lifecycle, { nativeParticipants: h.connection });
+  try {
+    await h.connection.refreshAvailability();
+    assert.equal(ollamaChoiceTitle(inventedLocal, runtime.localCatalog), 'Local · invented-model:7b · stays on this Mac');
+    for (const failure of ['malformed', { outcome: 'refused', reason: 'store-unreadable' }] as const) {
+      reply = failure;
+      await h.connection.refreshAvailability();
+      assert.notEqual(h.connection.snapshot.error, null);
+      assert.deepEqual(h.connection.snapshot.local, []);
+      assert.equal(h.connection.snapshot.route, null);
+      assert.equal(ollamaResidency(inventedLocal, runtime.localCatalog), 'unknown');
+      assert.equal(ollamaChoiceTitle(inventedLocal, runtime.localCatalog), 'Ollama · invented-model:7b · not available right now');
+      assert.equal(runtime.participantChoices!.some((choice) => choice.destination === 'Stays on this Mac'), false);
+      assert.equal(h.connection.portFor(inventedLocal).canStart?.(), false);
+      reply = ready(localEntry('invented-model:7b'));
+      await h.connection.refreshAvailability();
+      assert.equal(ollamaChoiceTitle(inventedLocal, runtime.localCatalog), 'Local · invented-model:7b · stays on this Mac');
+    }
+  } finally { runtime.revoke(); h.connection.dispose(); }
+});
+
+test('a local reply counts as started only after the Mac reported started', () => {
+  const stoppedBefore: ConversationRun = { ...run('Q.', '', 'stopped'), lastSequence: 1, reason: 'local-stop' };
+  const failedBefore: ConversationRun = { ...run('Q.', '', 'failed'), lastSequence: 1, reason: 'process-error' };
+  const runningNow: ConversationRun = { ...run('Q.', '', 'running'), lastSequence: 1 };
+  const stoppedAfter: ConversationRun = { ...run('Q.', '', 'stopped'), lastSequence: 2, reason: 'local-stop' };
+  assert.deepEqual([stoppedBefore, failedBefore, runningNow, stoppedAfter, run('Q.', 'A.')].map(localRunStarted), [false, false, true, true, true]);
+  assert.equal(localRunOutcome(stoppedBefore), 'Stopped before any reply started.');
+  assert.match(localRunOutcome(failedBefore)!, /^No reply started/);
+  assert.equal(localRunOutcome(stoppedAfter), 'Stopped. The reply so far is kept.');
 });

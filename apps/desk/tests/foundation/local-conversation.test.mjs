@@ -115,7 +115,7 @@ function answer(request) {
       if (options.refuseStart) { host.requests.push('refused-start'); return { outcome: 'refused', reason: options.refuseStart }; }
       host.starts.push({ payload: structuredClone(payload), saved: structuredClone(stored.conversationRuns.find((item) => item.runId === payload.runId)) });
       host.runs.set(payload.runId, { runId: payload.runId, sessionId: payload.sessionId, sequence: 0, events: [], terminal: null });
-      setTimeout(() => host.emit('started'), 0);
+      if (!options.holdStarted) setTimeout(() => host.emit('started'), 0);
       return { outcome: 'ok', runId: payload.runId };
     case 'participant.stop': {
       host.stops.push(payload.runId);
@@ -166,12 +166,12 @@ const ready = { outcome: 'ok', participants: [claude,
 routes: [{ route: 'ollama-local', state: 'ready', reason: null }] };
 const down = (reason) => ({ outcome: 'ok', participants: [claude], routes: [{ route: 'ollama-local', state: 'unavailable', reason }] });
 
-async function fixture({ availability = ready, choice, refuseStart } = {}) {
+async function fixture({ availability = ready, choice, refuseStart, holdStarted } = {}) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
   const errors = []; const outside = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.addInitScript((value) => { window.__localOptions = value; }, { availability, choice, refuseStart });
+  await page.addInitScript((value) => { window.__localOptions = value; }, { availability, choice, refuseStart, holdStarted });
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
     if (url.origin !== origin) { outside.push(url.origin); return route.abort(); }
@@ -242,6 +242,7 @@ test('Stop ends a local reply, keeps its text and offers Retry, which only refil
     await expect(page.locator('[data-run-id]')).toContainText('Invented partial');
     await page.getByRole('button', { name: 'Stop', exact: true }).click();
     await expect(page.locator('[data-run-id]')).toContainText('Stopped. The reply so far is kept.');
+    await expect(page.locator('[data-run-id]')).toContainText('This Mac · stays on this Mac');
     assert.equal((await f.host()).stops.length, 1);
     await page.getByRole('button', { name: 'Retry', exact: true }).click();
     await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toHaveValue('Invented question to stop.');
@@ -343,6 +344,22 @@ test('a saved remote pin without a ":cloud" name that later disappears is never 
     await expect(saved).not.toContainText('this-mac');
     await expect(saved).not.toContainText('stays on this Mac');
     assert.deepEqual((await f.host()).starts, []);
+    f.check();
+  } finally { await f.close(); }
+});
+
+test('Stop before the Mac reported started says no reply started, never "stays on this Mac"', async () => {
+  const f = await fixture({ choice: local, holdStarted: true });
+  try {
+    const { page } = f;
+    await f.send('Invented question stopped early.');
+    await expect.poll(async () => (await f.host()).starts.length).toBe(1);
+    await page.getByRole('button', { name: 'Stop', exact: true }).click();
+    const transcript = page.locator('[data-run-id]');
+    await expect(transcript).toContainText('Stopped before any reply started.');
+    await expect(transcript).toContainText('No reply started');
+    await expect(transcript).not.toContainText('stays on this Mac');
+    await expect(transcript.getByRole('heading', { name: 'Ollama · invented-model:7b' })).toBeVisible();
     f.check();
   } finally { await f.close(); }
 });
