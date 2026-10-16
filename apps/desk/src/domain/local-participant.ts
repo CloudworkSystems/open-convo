@@ -101,12 +101,29 @@ export function defaultLocalChoice(
   return choice && { id: choice.identity.id, label: choice.identity.label, model: choice.identity.model, executionHost: choice.identity.executionHost };
 }
 
-/** Why a session has no model yet, in plain words, on a Mac that offers local models. */
+/**
+ * Why a session has no model yet, in plain words, on a Mac that offers local
+ * models. Every case says what to do next (Codex round 1 on #61).
+ */
 export function noLocalChoiceMessage(catalog: LocalCatalogView): string {
-  if (catalog.route?.state === 'ready' && !catalog.entries.some((entry) => entry.label === DEFAULT_LOCAL_MODEL)) {
-    return `No model chosen yet. The default, ${DEFAULT_LOCAL_MODEL}, isn’t installed in Ollama on this Mac, so nothing was picked for you. Choose a local model in the model picker. Your draft is kept.`;
+  const kept = 'Your draft is kept.';
+  // No list to choose from: the route's own reason (Ollama not running, list unreadable, ...).
+  if (catalog.route?.state !== 'ready') return `No model chosen yet. ${localRouteMessage(catalog.route?.reason)}`;
+  const usable = catalog.entries.filter((entry) => ollamaResidency(entry, catalog) === 'local');
+  const listed = catalog.entries.find((entry) => entry.label === DEFAULT_LOCAL_MODEL);
+  const next = usable.length ? `Pick another local model in the model picker. ${kept}`
+    : `No other local model is installed either. Install one in Ollama, then check again. ${kept}`;
+  if (listed?.reason === 'model-not-local') {
+    return `No model chosen yet. ${DEFAULT_LOCAL_MODEL} isn’t on this Mac right now (it runs on Ollama’s servers). ${next}`;
   }
-  return `No model chosen yet. Choose a local model in the model picker before sending. Your draft is kept.`;
+  if (listed && ollamaResidency(listed, catalog) !== 'local') {
+    return `No model chosen yet. ${DEFAULT_LOCAL_MODEL} isn’t available on this Mac right now. ${next}`;
+  }
+  if (!listed) {
+    return usable.length ? `No model chosen yet. ${DEFAULT_LOCAL_MODEL} isn’t installed in Ollama on this Mac. Pick a local model in the model picker. ${kept}`
+      : `No model chosen yet. No local models are installed in Ollama on this Mac. Install ${DEFAULT_LOCAL_MODEL} (or another model) in Ollama, then check again. ${kept}`;
+  }
+  return `No model chosen yet. Choose a local model in the model picker before sending. ${kept}`;
 }
 
 export interface LocalCatalogView {

@@ -364,12 +364,12 @@ test('the default model is qwen3:8b, chosen only when the catalog lists it as lo
     reply = ready(localEntry('invented-model:7b'));
     await h.connection.refreshAvailability();
     assert.equal(defaultLocalChoice(runtime.participantChoices, runtime.localCatalog), undefined);
-    assert.match(noLocalChoiceMessage(runtime.localCatalog!), /The default, qwen3:8b, isn’t installed in Ollama on this Mac/);
-    // Ollama down: no default, and a hint that does not blame the model.
+    assert.match(noLocalChoiceMessage(runtime.localCatalog!), /qwen3:8b isn’t installed in Ollama on this Mac\. Pick a local model/);
+    // Ollama down: no default, and the route's own reason, not the model's.
     reply = down('ollama-not-running');
     await h.connection.refreshAvailability();
     assert.equal(defaultLocalChoice(runtime.participantChoices, runtime.localCatalog), undefined);
-    assert.equal(noLocalChoiceMessage(runtime.localCatalog!), 'No model chosen yet. Choose a local model in the model picker before sending. Your draft is kept.');
+    assert.equal(noLocalChoiceMessage(runtime.localCatalog!), `No model chosen yet. ${localRouteMessage('ollama-not-running')}`);
   } finally { done(); }
 });
 
@@ -380,4 +380,29 @@ test('a host without a local route (contract revision 3) still lists its Claude 
     assert.equal(h.connection.snapshot.offersLocal, false);
     assert.deepEqual(runtime.participantChoices!.map((choice) => choice.identity.id), ['claude-code']);
   } finally { done(); }
+});
+
+test('every way the default can be missing gives its own reason and a next step (Codex round 1 on #61)', () => {
+  const view = (route: { state: 'ready' | 'unavailable'; reason: string | null } | null, ...entries: Reply[]) =>
+    ({ route, entries: entries as never });
+  const ok = { state: 'ready' as const, reason: null };
+  const other = localEntry('invented-model:7b');
+  const cases: [ReturnType<typeof view>, RegExp][] = [
+    [view({ state: 'unavailable', reason: 'ollama-not-running' }), /Ollama is not running on this Mac\. Open Ollama/],
+    [view({ state: 'unavailable', reason: 'catalog-unreadable' }), /list of models could not be read\. Restart Ollama/],
+    [view({ state: 'unavailable', reason: 'host-not-loopback' }), /did not lead back to this Mac/],
+    [view(null), /Local models could not be checked\. Your draft is kept; check again/],
+    [view(ok, other, localEntry('qwen3:8b', digestA, false)), /qwen3:8b isn’t on this Mac right now \(it runs on Ollama’s servers\)\. Pick another local model/],
+    [view(ok, localEntry('qwen3:8b', digestA, false)), /runs on Ollama’s servers\)\. No other local model is installed either\. Install one in Ollama/],
+    [view(ok, other, { ...localEntry('qwen3:8b'), available: false, reason: 'invented-other-reason' }), /qwen3:8b isn’t available on this Mac right now\. Pick another local model/],
+    [view(ok, other), /qwen3:8b isn’t installed in Ollama on this Mac\. Pick a local model in the model picker/],
+    [view(ok), /No local models are installed in Ollama on this Mac\. Install qwen3:8b \(or another model\) in Ollama/],
+    [view(ok, other, localEntry('qwen3:8b')), /Choose a local model in the model picker before sending/],
+  ];
+  for (const [catalog, expected] of cases) {
+    const message = noLocalChoiceMessage(catalog);
+    assert.match(message, expected, JSON.stringify(catalog.route));
+    assert.match(message, /^No model chosen yet\. /);
+  }
+  assert.equal(new Set(cases.map(([catalog]) => noLocalChoiceMessage(catalog))).size, cases.length, 'each case has its own words');
 });
