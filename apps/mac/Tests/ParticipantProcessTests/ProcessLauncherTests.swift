@@ -386,11 +386,13 @@ struct ProcessLauncherGateTests {
         let dependents = dependencies.filter { $0.value.contains("ParticipantProcess") }.keys.sorted()
         #expect(dependents == ["LocalModelRoute", "LocalModelRouteTests", "ParticipantAvailabilityProbe", "ParticipantCoordinator",
                                "ParticipantDeskControls", "ParticipantProcessTests", "ParticipantTestHost"], "\(dependents)")
-        // The local route (contract section 20) sits on ParticipantProcess and
-        // only its own test target links it until step 3 PR 3b wires it in.
-        #expect(dependencies["LocalModelRoute"] == ["ParticipantProcess"])
+        // The local route (contract section 20) sits on ParticipantProcess,
+        // and on DeskHost for the catalog seam a participant host reads.
+        // Only test targets link it: its own, and this one for the shared
+        // local vectors (step 3 PR 3b). The coordinator and the app do not.
+        #expect(dependencies["LocalModelRoute"] == ["DeskHost", "ParticipantProcess"])
         let localDependents = dependencies.filter { $0.value.contains("LocalModelRoute") }.keys.sorted()
-        #expect(localDependents == ["LocalModelRouteTests"], "\(localDependents)")
+        #expect(localDependents == ["LocalModelRouteTests", "ParticipantProcessTests"], "\(localDependents)")
         // Section 17's window adapter (plan F4) joins the owner to the Desk
         // window's plain controls; only the test target links it, so the app
         // links neither it nor ParticipantProcess until activation (F7).

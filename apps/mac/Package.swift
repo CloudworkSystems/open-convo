@@ -110,15 +110,16 @@ let package = Package(
             dependencies: ["DeskHost", "ParticipantProcess"]
         ),
         // The local-model route (contract section 20): Ollama on this Mac only.
-        // INACTIVE: only its test target depends on it; the coordinator wires
-        // it in step 3 PR 3b.
+        // INACTIVE: only test targets depend on it. DeskHost for the catalog
+        // seam a participant host reads (`LocalCatalogReading`); the
+        // coordinator's start wiring follows in step 3 PR 3c.
         .target(
             name: "LocalModelRoute",
-            dependencies: ["ParticipantProcess"]
+            dependencies: ["DeskHost", "ParticipantProcess"]
         ),
         .testTarget(
             name: "LocalModelRouteTests",
-            dependencies: ["LocalModelRoute", "ParticipantProcess"]
+            dependencies: ["LocalModelRoute", "ParticipantProcess", "DeskHost"]
         ),
         // Test-only helpers, never bundled: a fake CLI, a host that plays the
         // app (so a test can SIGKILL it), a supervisor test build that can
@@ -159,13 +160,16 @@ let package = Package(
             // coordinator through the WebKit glue and the Desk session (plan
             // S11's end-to-end proof); the app and those targets still never
             // depend on the coordinator.
+            // LocalModelRoute only so the shared local vectors run through
+            // the real catalog parser (step 3 PR 3b).
             dependencies: ["ParticipantProcess", "ParticipantSupervisorCore", "DeskHost", "ParticipantCoordinator",
-                           "DeskHostWebKit", "DeskWindowKit", "ParticipantDeskControls"],
+                           "DeskHostWebKit", "DeskWindowKit", "ParticipantDeskControls", "LocalModelRoute"],
             // Byte copy of the shared participant vectors (apps/desk/tests/fixtures);
             // ParticipantVectorTests fails if the two ever differ. cli-2.1.283:
             // invented streams in the shapes PREDICTED for Claude Code 2.1.283
             // (F1; its README), which StreamConformanceTests replays.
-            resources: [.copy("Fixtures/native-participant-v1.json"), .copy("Fixtures/cli-2.1.283")]
+            resources: [.copy("Fixtures/native-participant-v1.json"), .copy("Fixtures/native-participant-local-v1.json"),
+                        .copy("Fixtures/cli-2.1.283")]
         ),
         // The Desk window for the Mac app (invented data only): its folders,
         // the bundled Desk's location, one Desk session per app run, lock

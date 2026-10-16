@@ -757,8 +757,9 @@ public struct StreamJSONReader {
         heldOverran = false
     }
 
-    /// Bytes `JSON.stringify` writes for one scalar inside a string.
-    static func escapedWidth(_ scalar: Unicode.Scalar) -> Int {
+    /// Bytes `JSON.stringify` writes for one scalar inside a string. Public
+    /// so the local route counts a reply exactly as this reader does.
+    public static func escapedWidth(_ scalar: Unicode.Scalar) -> Int {
         switch scalar {
         case "\"", "\\", "\n", "\r", "\t", "\u{08}", "\u{0C}": return 2
         default: return scalar.value < 0x20 ? 6 : UTF8.width(scalar)

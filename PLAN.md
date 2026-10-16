@@ -37,6 +37,9 @@ Codex's inline browser. No website or ChatGPT hosting is involved.
 
 ## Build Plan
 
+The rules every step and module follows are in
+[docs/foundations.md](docs/foundations.md) (owner review, October 15, 2026).
+
 Agreed October 12, 2026. **Done** means it runs, its checks pass, and the owner
 has tried it. Each step ends with something the owner can try.
 
@@ -65,7 +68,9 @@ has tried it. Each step ends with something the owner can try.
    per-conversation choice). The building session tests two or three local chat
    models on the Mac and the owner picks by feel. Step 3 finishes with the
    local route only; Claude through Claude Code is the next adapter, built
-   right after step 3. *Finish line:* the owner holds a real
+   right after step 3. Every session gets a durable identity from day one
+   (foundations, principle 17), because Canvas/Atlas follows immediately.
+   *Finish line:* the owner holds a real
    conversation, quits, reopens and continues it. Profiles, harnesses, billing
    and adapter order:
    [docs/design-notes/agent-profiles-and-adapters.md](docs/design-notes/agent-profiles-and-adapters.md).
@@ -94,8 +99,23 @@ has tried it. Each step ends with something the owner can try.
    permits cloud use without separate approval. *Finish line:* the owner
    teaches, corrects and forgets something real and sees it respected.
 
+**Right after step 3, in this order (owner decision, October 15):**
+1. The **Claude Code adapter** (above).
+2. A thin first version of the **Canvas/Atlas/Navigator** knowledge view,
+   reading the durable session records. Moved up from step 11. Navigator
+   search and sorting stays at step 7.
+
 ### After the Top Five
 
+- **iPhone capture app** (owner decision, October 15), right after step 5: a
+  "Share to True Convo" button for links and the owner's own video clips,
+  landing as sources in the inbox. Until then an Apple Shortcut saves shared
+  items into an iCloud Drive folder the Mac app watches. That sends the items
+  to Apple's iCloud, so it follows foundations principle 6: the owner approves
+  iCloud Drive once as a host, seeing what goes there (links and video clips)
+  and that it is end-to-end encrypted only with Advanced Data Protection on.
+  AirDrop to the Mac is the local-only alternative. Automatic secure sync
+  comes with step 9's encrypted transfer. The full iOS app stays at step 12.
 - **First-run guide** (ordinary code, no AI): checks the computer, sets up a
   local model or a cloud model. Needed before anyone else installs.
 
@@ -108,8 +128,36 @@ has tried it. Each step ends with something the owner can try.
 8. Reading the owner's real old sessions on the Mac, read-only.
 9. First creator beta: worksheet, Site Engine's first site, encrypted transfer between devices.
 10. Business features: one-change card, business messaging, phone handoff.
-11. Canvas/Atlas knowledge view, browser annotations, family and shared spaces.
-12. iOS app; later the OS shell.
+11. Browser annotations, family and shared spaces (Canvas/Atlas moved up to
+    right after step 3).
+12. iOS app showing the same modules as the Mac, in a phone layout; later the
+    OS shell.
+
+### Beside The Main Build
+
+Modules that stand on their own (touch no app, storage or memory code) can be
+built in parallel by an outside builder under AGENTS.md "Outside Builders":
+
+- **Site Engine, standalone slice**:
+  [docs/plans/site-engine-standalone.md](docs/plans/site-engine-standalone.md).
+- **Merge gate** (first piece of the Code umbrella): automatic merging once
+  tests pass and Codex's review is clean, with protected paths still needing
+  the owner. Plan:
+  [docs/plans/merge-gate.md](docs/plans/merge-gate.md). It is an owner
+  decision that changes AGENTS.md's merge rules, including the planning check
+  for outside builders; until that AGENTS.md change is merged and the gate's
+  tests pass, every merge stays manual and the current rules apply.
+
+### Umbrellas (Owner Decision, October 15)
+
+Modules group under umbrellas, each paired with a memory space type:
+**Personal**, **Family** (with Home), **Business**, **Creator**, **Code** and
+**Agents** (a submodule of Cloudwork Nexus at first). Each module has one
+default home; the owner can move, rename or hide it. Personal is where each
+Top Five step is first used and proven. Ideas for each umbrella are parked with
+the step that unlocks them and surface when that step lands. Home and Family
+tools (wall screen, household lists, home devices) will likely build on Home
+Assistant rather than connect devices one by one.
 
 ### Modules Planned (Order Within Each Decided)
 

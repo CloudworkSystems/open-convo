@@ -1,6 +1,6 @@
 # Status
 
-Updated October 15, 2026. The short version of where the build is. The full
+Updated October 16, 2026. The short version of where the build is. The full
 plan is in [PLAN.md](PLAN.md).
 
 ## Now
@@ -29,8 +29,9 @@ invented chats only, while the step 2 trial is pending. Scope:
 | --- | --- |
 | PR 1: Scope | Merged (#37) |
 | PR 2: Contract revision 4 and the page codec | Merged (#38) |
-| PR 3a: Ollama client, chat runs and alias binding (inactive) | In review |
-| PR 3b: Local route wired into the coordinator | Not started |
+| PR 3a: Ollama client, chat runs and alias binding (inactive) | Merged (#42) |
+| PR 3b: Local models in availability, preparation and storage (inactive) | Merged (#48) |
+| PR 3c: Local start, alias lifecycle, lock and quit (inactive) | In review |
 | PR 4: Desk wiring | Not started |
 | PR 5: Proof and owner trial | Not started |
 
@@ -48,6 +49,7 @@ invented chats only, while the step 2 trial is pending. Scope:
 ## Next
 
 - The Claude Code adapter, right after step 3.
+- Then a thin Canvas/Atlas/Navigator knowledge view.
 4. Clarity tools in the conversation ("Wait—what?" on a local model).
 5. Chosen memory in separate spaces.
 
@@ -57,6 +59,11 @@ invented chats only, while the step 2 trial is pending. Scope:
 builds, Codex reviews). Plan:
 [docs/plans/site-engine-standalone.md](docs/plans/site-engine-standalone.md).
 Not started.
+
+**Household lists engine** (Family and Home), queued for an outside builder
+after Site Engine. Plan:
+[docs/plans/household-lists-engine.md](docs/plans/household-lists-engine.md).
+First real use after step 5, synced through iCloud with the owner's approval.
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:

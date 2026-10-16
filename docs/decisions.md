@@ -6,6 +6,9 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 15:** Foundations set ([docs/foundations.md](foundations.md)). Claude Code adapter,
+  then Canvas/Atlas/Navigator, right after step 3; iPhone capture app right after step 5; modules
+  group under umbrellas (Personal, Family, Business, Creator, Code, Agents).
 - **Oct 15:** Every review asks two questions of each change: does it break a
   rule of this system, and does it fix a problem the owner actually has
   (AGENTS.md Review Loop; approved by merging #43).

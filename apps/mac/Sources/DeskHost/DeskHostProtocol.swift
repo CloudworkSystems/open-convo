@@ -550,8 +550,27 @@ public actor DeskHostProtocol {
     /// takes the barrier through its identity index, before the first
     /// await: a start that claimed the id in between makes it
     /// `payload-mismatch`, exactly as if the start had come first.
+    ///
+    /// On a host with a local route (contract section 20), a commit whose
+    /// claim names `ollama-local` reads the route's catalog afresh first,
+    /// before any check, so that the checks and the barrier claim below
+    /// still run with no await between them. That read carries no
+    /// conversation text.
     private func commit(_ request: HostRequest) async -> HostResponse {
         let echo = request.echo
+        var local: ParticipantLocalPrepare?
+        if let route = participants?.localRoute {
+            let claim = request.payload["participantRun"]
+            if ParticipantPrepare.claimNamesLocalRoute(claim) {
+                local = ParticipantLocalPrepare(catalog: await route.localCatalog().checked)
+                // The connection may have been revoked, or a new generation
+                // begun, during the read: preflight again before anything
+                // is checked or held.
+                if let refusal = HostPreflight.check(request, connections: connections) { return .refused(refusal, echo: echo) }
+            } else {
+                local = ParticipantLocalPrepare(catalog: nil)
+            }
+        }
         guard let fields = PayloadFields(request.payload, allowed: acceptsParticipant ? Self.participantCommitKeys : Self.commitKeys) else {
             return .refused(.unknownField, echo: echo)
         }
@@ -602,7 +621,7 @@ public actor DeskHostProtocol {
         var participantCheck: ParticipantCommitCheck?
         if let participants {
             switch ParticipantPrepare.check(record: record, claim: fields.value("participantRun"), hasDeliveryId: fields.has("dictationDeliveryId"),
-                                            pin: participants.pin, inputBound: participants.inputBound) {
+                                            pin: participants.pin, inputBound: participants.inputBound, local: local) {
             case .refused(let reason): return .refused(reason, echo: echo)
             case .passed(let check): participantCheck = check
             }
