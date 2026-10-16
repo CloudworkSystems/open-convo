@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "name": "Marrow Lane Bakery",
+  "tagline": "Rye bread and morning buns",
+  "description": "A fictional neighborhood bakery. We bake rye, buns, and a Friday pie. Nothing here is a real shop.",
+  "siteUrl": "https://marrow-lane.example/",
+  "services": [
+    {
+      "name": "Rye loaf",
+      "description": "A slow-fermented rye, sold whole.",
+      "price": "$9"
+    },
+    {
+      "name": "Morning bun",
+      "description": "One bun, still warm at open.",
+      "price": "$4"
+    }
+  ],
+  "hours": [
+    { "days": "Tue–Fri", "open": "07:00", "close": "14:00" },
+    { "days": "Sat", "open": "08:00", "close": "13:00" }
+  ],
+  "location": {
+    "street": "18 Marrow Lane",
+    "city": "Hearthwick",
+    "region": "Northglass",
+    "postalCode": "00000",
+    "country": "Freedonia"
+  },
+  "contact": {
+    "phone": "+1 206 555 0142",
+    "email": "hello@marrow-lane.example",
+    "bookingUrl": "https://booking.marrow-lane.example/visit"
+  },
+  "social": [
+    { "label": "The bakery journal", "url": "https://journal.marrow-lane.example/" }
+  ],
+  "brand": {
+    "background": "#15110f",
+    "text": "#f7f2ee",
+    "accent": "#f37a4a"
+  }
+}

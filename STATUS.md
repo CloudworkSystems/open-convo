@@ -58,7 +58,7 @@ invented chats only, while the step 2 trial is pending. Scope:
 **Site Engine, standalone first slice**, built by an outside builder (GrokBot
 builds, Codex reviews). Plan:
 [docs/plans/site-engine-standalone.md](docs/plans/site-engine-standalone.md).
-Not started.
+In review.
 
 **Household lists engine** (Family and Home), queued for an outside builder
 after Site Engine. Plan:
