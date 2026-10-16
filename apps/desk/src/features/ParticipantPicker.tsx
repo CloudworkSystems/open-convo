@@ -7,7 +7,7 @@ import {
   validParticipantChoice,
   type ParticipantChoice,
 } from '../domain/participant-choices';
-import { isLocalParticipant, localModelName, localParticipantLabel } from '../domain/local-participant';
+import { isLocalParticipant, isRemoteOllamaModel, localModelName, ollamaChoiceShortName, ollamaChoiceTitle } from '../domain/local-participant';
 import { Icon } from '../ui/Icon';
 import { Modal } from '../ui/Modal';
 import './participant-picker.css';
@@ -16,7 +16,7 @@ export function ParticipantPicker({
   choices,
   selected,
   disabled = false,
-  error, confirmation, availabilityMessage, availabilityChecking = false, localNotice, selectedProblem, onOpen, onClose,
+  error, confirmation, availabilityMessage, availabilityChecking = false, localNotice, selectedProblem, localEntries = [], onOpen, onClose,
   onSelect,
 }: {
   choices: readonly ParticipantChoice[];
@@ -30,6 +30,8 @@ export function ParticipantPicker({
   localNotice?: string;
   /** Why the saved local choice can't be used: missing, changed or route down. */
   selectedProblem?: string;
+  /** The newest catalog's Ollama entries, so a cloud model is never called local. */
+  localEntries?: readonly (ParticipantIdentity & { readonly reason: string | null })[];
   onOpen?: () => void;
   onClose?: () => void;
   onSelect: (identity: ParticipantIdentity) => void;
@@ -51,18 +53,22 @@ export function ParticipantPicker({
   const availabilityStatus = availabilityChecking ? 'Checking participant availability. Your draft is kept.'
     : availabilityMessage ?? (approved.length ? approved.map((choice) => `${choice.identity.label}: ${choice.available ? 'Available' : `Unavailable — ${choice.unavailableReason}`}.`).join(' ')
       : 'No approved participants are listed.');
-  const shortName = (identity: ParticipantIdentity) => isLocalParticipant(identity) ? `Local · ${localModelName(identity)}` : identity.model;
-  const title = (identity: ParticipantIdentity) => isLocalParticipant(identity) ? localParticipantLabel(identity) : identity.label;
+  // A cloud-backed Ollama entry is never "stays on this Mac" (section 20.2).
+  const remote = (identity: ParticipantIdentity) => isRemoteOllamaModel(identity, localEntries);
+  const shortName = (identity: ParticipantIdentity) => isLocalParticipant(identity)
+    ? ollamaChoiceShortName(identity, localEntries) : identity.model;
+  const title = (identity: ParticipantIdentity) => isLocalParticipant(identity)
+    ? ollamaChoiceTitle(identity, localEntries) : identity.label;
   const currentConfirmation = availabilityChecking || availabilityMessage ? undefined : confirmation;
 
   return <>
     <button
       type="button"
       className="model-harness-slot participant-picker-trigger"
-      aria-label={`Model and participant: ${selected ? isLocalParticipant(selected) ? localParticipantLabel(selected) : `${selected.label}, ${selected.model}` : 'Choose participant'}`}
+      aria-label={`Model and participant: ${selected ? isLocalParticipant(selected) ? title(selected) : `${selected.label}, ${selected.model}` : 'Choose participant'}`}
       aria-haspopup="dialog"
       aria-expanded={open}
-      title={selected ? isLocalParticipant(selected) ? localParticipantLabel(selected) : `${selected.label} · ${selected.model}` : 'Choose participant'}
+      title={selected ? isLocalParticipant(selected) ? title(selected) : `${selected.label} · ${selected.model}` : 'Choose participant'}
       disabled={disabled}
       onClick={() => { setOpen(true); onOpen?.(); }}
     >
@@ -116,7 +122,7 @@ export function ParticipantPicker({
                   {isLocalParticipant(choice.identity) && <><dt>Version</dt><dd>{choice.identity.model.slice(choice.identity.label.length + 1, choice.identity.label.length + 13)}</dd></>}
                   <dt>Provider</dt><dd>{choice.provider}</dd>
                   <dt>Data destination</dt><dd>{choice.destination}</dd>
-                  <dt>Process location</dt><dd>{isLocalParticipant(choice.identity) ? 'This Mac' : choice.identity.executionHost}</dd>
+                  <dt>Process location</dt><dd>{isLocalParticipant(choice.identity) ? remote(choice.identity) ? 'Ollama’s servers' : 'This Mac' : choice.identity.executionHost}</dd>
                 </dl>
                 <p id={availabilityId} className="participant-picker-availability">
                   {availabilityChecking ? 'Checking availability' : choice.available ? 'Available' : `Unavailable — ${choice.unavailableReason}`}
@@ -124,7 +130,7 @@ export function ParticipantPicker({
                 <button
                   type="button"
                   className="secondary-button participant-picker-select"
-                  aria-label={`Choose participant: ${isLocalParticipant(choice.identity) ? localParticipantLabel(choice.identity) : `${choice.identity.label}, ${choice.identity.model}`}`}
+                  aria-label={`Choose participant: ${isLocalParticipant(choice.identity) ? title(choice.identity) : `${choice.identity.label}, ${choice.identity.model}`}`}
                   aria-pressed={active}
                   aria-describedby={`${descriptionId} ${detailsId} ${availabilityId}`}
                   disabled={disabled}

@@ -23,7 +23,7 @@ export function Conversation({
   participantLabel,
   participantChoices,
   participantChoiceError, participantConfirmation, participantAvailabilityMessage, participantAvailabilityChecking, onParticipantPickerOpen, onParticipantPickerClose,
-  participantLocalNotice, participantSelectedProblem,
+  participantLocalNotice, participantSelectedProblem, participantLocalEntries,
   onParticipantSelect,
   participantBusy = false,
   participantSendUnavailable = false,
@@ -45,6 +45,7 @@ export function Conversation({
   participantAvailabilityChecking?: boolean;
   participantLocalNotice?: string;
   participantSelectedProblem?: string;
+  participantLocalEntries?: readonly (ParticipantIdentity & { readonly reason: string | null })[];
   onParticipantPickerOpen?: () => void;
   onParticipantPickerClose?: () => void;
   onParticipantSelect?: (sessionId: string, participant: ParticipantIdentity) => void;
@@ -347,7 +348,7 @@ export function Conversation({
             choices={participantChoices ?? []} selected={session?.participantChoice}
             error={participantChoiceError} confirmation={participantConfirmation}
             availabilityMessage={participantAvailabilityMessage} availabilityChecking={participantAvailabilityChecking}
-            localNotice={participantLocalNotice} selectedProblem={participantSelectedProblem}
+            localNotice={participantLocalNotice} selectedProblem={participantSelectedProblem} localEntries={participantLocalEntries}
             onOpen={onParticipantPickerOpen} onClose={onParticipantPickerClose}
             disabled={readOnly || !session || !onParticipantSelect}
             onSelect={(participant) => session && onParticipantSelect?.(session.id, participant)} />

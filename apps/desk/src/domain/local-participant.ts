@@ -22,9 +22,35 @@ export function localModelName(identity: Readonly<ParticipantIdentity>): string 
   return identity.label;
 }
 
-/** What the composer shows before Send (step 3 scope: "Visible before Send"). */
+/** What the composer shows before Send (step 3 scope: "Visible before Send"). Only for a model that runs on this Mac. */
 export function localParticipantLabel(identity: Readonly<ParticipantIdentity>): string {
   return `Local · ${localModelName(identity)} · stays on this Mac`;
+}
+
+/**
+ * Whether an Ollama entry runs off this Mac (section 20.2): a `:cloud` name,
+ * or the catalog's `model-not-local` reason for this exact entry. Never
+ * labeled as staying on this Mac.
+ */
+export function isRemoteOllamaModel(identity: Readonly<ParticipantIdentity>,
+  entries: readonly (Readonly<ParticipantIdentity> & { readonly reason: string | null })[] = []): boolean {
+  if (!isLocalParticipant(identity)) return false;
+  if (localModelName(identity).endsWith(':cloud')) return true;
+  return entries.some((entry) => entry.reason === 'model-not-local' && entry.id === identity.id && entry.label === identity.label
+    && entry.model === identity.model && entry.executionHost === identity.executionHost);
+}
+
+/** The full name of an Ollama choice: "Local · … · stays on this Mac" only for a model that runs here. */
+export function ollamaChoiceTitle(identity: Readonly<ParticipantIdentity>,
+  entries?: readonly (Readonly<ParticipantIdentity> & { readonly reason: string | null })[]): string {
+  return isRemoteOllamaModel(identity, entries)
+    ? `Cloud · ${localModelName(identity)} · not on this Mac (can’t be used)` : localParticipantLabel(identity);
+}
+
+/** The short name on the picker button. */
+export function ollamaChoiceShortName(identity: Readonly<ParticipantIdentity>,
+  entries?: readonly (Readonly<ParticipantIdentity> & { readonly reason: string | null })[]): string {
+  return `${isRemoteOllamaModel(identity, entries) ? 'Cloud' : 'Local'} · ${localModelName(identity)}`;
 }
 
 /** Plain-language reason when the whole local route is down (section 20.2). */

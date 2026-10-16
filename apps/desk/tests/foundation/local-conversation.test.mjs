@@ -203,6 +203,8 @@ test('choosing a local model shows who receives the message, and earlier turns g
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('heading', { name: 'Local · invented-model:7b · stays on this Mac' })).toBeVisible();
     await expect(dialog.getByText('This model runs on Ollama’s servers, not on this Mac.', { exact: false }).first()).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'Cloud · invented-cloud:cloud · not on this Mac (can’t be used)' })).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: /invented-cloud.*stays on this Mac/ })).toHaveCount(0);
     await dialog.getByRole('button', { name: 'Choose participant: Local · invented-model:7b · stays on this Mac' }).click();
     await dialog.getByRole('button', { name: 'Done' }).click();
     await expect(page.locator('.provider-label')).toContainText('Local · invented-model:7b · stays on this Mac');
@@ -301,6 +303,22 @@ test('a start refused because the earlier turns changed says nothing was sent an
     await expect(f.page.locator('[data-run-id]')).toContainText('Closed before any reply arrived.');
     await f.page.getByRole('button', { name: 'Retry', exact: true }).click();
     await expect(f.page.getByRole('textbox', { name: 'Your message', exact: true })).toHaveValue('Invented question.');
+    f.check();
+  } finally { await f.close(); }
+});
+
+test('a saved cloud choice is never called local, in the picker or above the conversation', async () => {
+  const cloudChoice = { id: 'ollama-local', label: 'invented-cloud:cloud', model: `invented-cloud:cloud@${cloudDigest}`, executionHost: 'this-mac' };
+  const f = await fixture({ choice: cloudChoice });
+  try {
+    const { page } = f;
+    await expect(page.locator('.provider-label')).toContainText('Cloud · invented-cloud:cloud · not on this Mac (can’t be used)');
+    await expect(page.locator('.provider-label')).not.toContainText('stays on this Mac');
+    await expect(page.locator('#send-blocked-reason')).toContainText('runs on Ollama’s servers, not on this Mac');
+    await expect(page.getByRole('button', { name: /^Model and participant/ })).toContainText('Cloud · invented-cloud:cloud');
+    await page.getByRole('textbox', { name: 'Your message', exact: true }).fill('Invented question.');
+    await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
+    assert.deepEqual((await f.host()).starts, []);
     f.check();
   } finally { await f.close(); }
 });

@@ -486,6 +486,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
           participantAvailabilityMessage={runtime.participantAvailabilityMessage}
           participantAvailabilityChecking={runtime.participantAvailabilityChecking}
           participantLocalNotice={runtime.localRouteMessage} participantSelectedProblem={runs.selectedLocalProblem}
+          participantLocalEntries={runtime.localCatalog?.entries}
           onParticipantPickerOpen={runtime.refreshParticipants ? () => { void runs.refreshAvailability(); } : undefined}
           participantChoiceError={problem?.message || (participantChoiceError?.sessionId === state.selection.sessionId ? participantChoiceError.message : undefined)}
           onParticipantSelect={(sessionId, participant) => {

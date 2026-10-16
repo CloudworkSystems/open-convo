@@ -7,7 +7,7 @@ import { acknowledgeUnreachableCleanup, closeConversationRun, createConversation
 import { canAdmitConversationRun, canSaveConversationWorkspaceWithRuns, captureConversationWorkspace, prepareConversationRun, saveConversationRunCheckpoint } from '../domain/conversation-workspace';
 import type { DeskState } from '../domain/types';
 import { RunTranscript } from '../features/RunTranscript';
-import { canRetryLocalRun, isLocalParticipant, localChoiceProblem, localParticipantLabel, localStartRefusalMessage,
+import { canRetryLocalRun, isLocalParticipant, localChoiceProblem, ollamaChoiceTitle, localStartRefusalMessage,
   selectLocalContext } from '../domain/local-participant';
 import type { DeskRuntime } from './runtime';
 
@@ -584,7 +584,7 @@ export function useConversationRuns(options: RunWorkspace) {
   const inputBlock = inputTooLarge ? 'This message is too long for the current trial. Shorten it before sending. Your full draft is kept.' : undefined;
   const savedSelection = selectedSession?.participantChoice;
   const choiceLabel = savedSelection
-    ? `${selectedLocal ? localParticipantLabel(savedSelection) : savedSelection.label}${options.runtime.participantAvailabilityChecking ? ' · Checking availability' : options.runtime.participantChoices === undefined || catalogBlock(savedSelection) ? ' · Unavailable' : options.runtime.refreshParticipants ? ' · Available' : ''}`
+    ? `${selectedLocal ? ollamaChoiceTitle(savedSelection, options.runtime.localCatalog?.entries) : savedSelection.label}${options.runtime.participantAvailabilityChecking ? ' · Checking availability' : options.runtime.participantChoices === undefined || catalogBlock(savedSelection) ? ' · Unavailable' : options.runtime.refreshParticipants ? ' · Available' : ''}`
     : options.runtime.participantChoices !== undefined ? 'No participant chosen' : options.runtime.participant?.identity.label;
   const participantMode = options.runtime.participantChoices !== undefined || !!selectedSession?.participantChoice
     || !!options.runtime.participant || options.state?.schemaVersion === 2;

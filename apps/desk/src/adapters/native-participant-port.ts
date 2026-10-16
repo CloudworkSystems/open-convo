@@ -73,9 +73,9 @@ function localDecision(identity: Readonly<ParticipantIdentity>, fresh: FreshAvai
   if (!fresh.route || fresh.route.state !== 'ready') return { kind: 'not-started', reason: 'participant-unavailable', retryable: true };
   const exact = fresh.local.find((entry) => sameParticipantIdentity(identity, entry));
   if (exact) return exact.available ? null : { kind: 'not-started', reason: 'participant-unavailable', retryable: false };
-  // Same name, other digest: the tag now names a different model.
-  if (fresh.local.some((entry) => entry.label === identity.label)) return { kind: 'not-started', reason: 'participant-changed', retryable: false };
-  return { kind: 'not-started', reason: 'participant-unavailable', retryable: true };
+  // Section 20.4: a ready route with no entry for this exact name and digest
+  // is a change (moved tag or removed model), never a passing outage.
+  return { kind: 'not-started', reason: 'participant-changed', retryable: false };
 }
 const ambiguousStart = new Set(['duplicate-run', 'payload-mismatch', 'store-corrupt', 'store-missing']);
 const retryableStart = new Set(['participant-busy', 'participant-unavailable', 'store-locked', 'unknown-connection', 'stale-generation']);
