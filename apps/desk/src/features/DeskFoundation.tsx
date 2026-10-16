@@ -43,6 +43,8 @@ export interface DeskFoundationProps {
   participantConfirmation?: NativeParticipantConfirmation;
   participantAvailabilityMessage?: string;
   participantAvailabilityChecking?: boolean;
+  /** Step 3 PR 4a: why local models are unavailable, and why a saved local choice can't be used. */
+  participantLocalNotice?: string; participantSelectedProblem?: string;
   onParticipantPickerOpen?: () => void;
   onParticipantPickerClose?: () => void;
   onParticipantSelect?: (sessionId: string, participant: ParticipantIdentity) => void;
@@ -376,6 +378,7 @@ export function DeskFoundation(props: DeskFoundationProps) {
                 participantChoiceError={props.participantChoiceError} participantConfirmation={props.participantConfirmation}
                 participantAvailabilityMessage={props.participantAvailabilityMessage}
                 participantAvailabilityChecking={props.participantAvailabilityChecking}
+                participantLocalNotice={props.participantLocalNotice} participantSelectedProblem={props.participantSelectedProblem}
                 onParticipantPickerOpen={props.onParticipantPickerOpen} onParticipantPickerClose={props.onParticipantPickerClose}
                 participantBusy={props.participantBusy} participantSendUnavailable={props.participantSendUnavailable}
                 participantSendBlockedReason={props.participantSendBlockedReason} />

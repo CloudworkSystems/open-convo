@@ -164,6 +164,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
     blocked: () => writeProblem.current !== null,
     present: (next) => { stateRef.current = next; setState(next); },
     save, error: setCommandError,
+    restoreDraft: (sessionId, text) => dispatch({ type: 'set-draft', sessionId, text }),
   });
   notifyRunSave.current = runs.confirmSaved;
 
@@ -484,6 +485,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
           participantConfirmation={runtime.participantConfirmation}
           participantAvailabilityMessage={runtime.participantAvailabilityMessage}
           participantAvailabilityChecking={runtime.participantAvailabilityChecking}
+          participantLocalNotice={runtime.localRouteMessage} participantSelectedProblem={runs.selectedLocalProblem}
           onParticipantPickerOpen={runtime.refreshParticipants ? () => { void runs.refreshAvailability(); } : undefined}
           participantChoiceError={problem?.message || (participantChoiceError?.sessionId === state.selection.sessionId ? participantChoiceError.message : undefined)}
           onParticipantSelect={(sessionId, participant) => {
