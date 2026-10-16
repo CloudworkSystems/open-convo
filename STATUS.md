@@ -60,12 +60,13 @@ builds, Codex reviews). Plan:
 [docs/plans/site-engine-standalone.md](docs/plans/site-engine-standalone.md).
 Not started.
 
-**Household lists engine** (Family and Home), queued for an outside builder
-after Site Engine. Plan:
+**Household lists engine** (Family and Home), built by Codex alongside Site
+Engine, reviewed by Claude. Plan:
 [docs/plans/household-lists-engine.md](docs/plans/household-lists-engine.md).
 First real use after step 5, synced through iCloud with the owner's approval.
 
-**Habit grid engine** (Personal), queued after the household lists engine.
+**Habit grid engine** (Personal), starts when Site Engine or the household
+lists engine finishes.
 Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
