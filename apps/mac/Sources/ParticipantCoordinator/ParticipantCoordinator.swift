@@ -1148,9 +1148,12 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
         case .unavailable: return refuse(.participantUnavailable)
         }
         // The sweep before a new start: every exact-format alias that no
-        // live run of this launch owns. After the launch's own sweep, so
-        // the two never cross.
+        // live run of this launch owns. After the launch's own sweep, and
+        // after every alias deletion still in flight, this run's own from
+        // an earlier attempt included (Codex round 1 on #50): a late DELETE
+        // must never land after this attempt's copy and remove its alias.
         await launchSweep?.value
+        await settleAliasDeletions()
         await route.sweepAliases(keepingRunIds: owedAliases)
         if let answer = await interrupted() { return answer }
         // The bind (owed from here: a copy may succeed even when the check
@@ -1257,6 +1260,13 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
             await route.deleteAlias(runId: runId)
             await self.aliasDeleted(runId)
         }
+    }
+
+    /// Waits until no alias deletion is in flight. A deletion only starts
+    /// for an alias that is no longer owed, and starts are serialized
+    /// (step 12), so this ends: each task removes itself when it returns.
+    private func settleAliasDeletions() async {
+        while let pending = aliasDeletions.values.first { await pending.value }
     }
 
     private func aliasDeleted(_ runId: String) {

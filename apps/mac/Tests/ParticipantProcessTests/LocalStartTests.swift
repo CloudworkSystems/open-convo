@@ -97,6 +97,10 @@ final class ScriptedLocalRoute: LocalRouteLaunching, @unchecked Sendable {
     private var held: Set<String>
     private var launched: [ScriptedLocalRun] = []
     var bindResult: LocalAliasBinding?
+    /// How long each DELETE takes to land (a slow Ollama).
+    var deleteDelayNanos: UInt64 = 0
+    /// Whether the run's alias was held when each chat went out.
+    private(set) var aliasHeldAtChat: [Bool] = []
     var onBind: (@Sendable () async -> Void)?
     var onLaunch: (@Sendable (LocalRunLaunch) -> Void)?
 
@@ -131,7 +135,9 @@ final class ScriptedLocalRoute: LocalRouteLaunching, @unchecked Sendable {
     }
 
     func deleteAlias(runId: String) async {
-        lock.lock(); recorded.append("delete"); held.remove(runId); lock.unlock()
+        note("delete")
+        if deleteDelayNanos > 0 { try? await Task.sleep(nanoseconds: deleteDelayNanos) }
+        lock.lock(); recorded.append("deleted"); held.remove(runId); lock.unlock()
     }
 
     func sweepAliases(keepingRunIds: Set<String>) async {
@@ -140,6 +146,7 @@ final class ScriptedLocalRoute: LocalRouteLaunching, @unchecked Sendable {
 
     func launchLocal(_ request: LocalRunLaunch, clock: any ParticipantClock) -> any ParticipantRunning {
         note("chat")
+        lock.lock(); aliasHeldAtChat.append(held.contains(request.identity.runId)); lock.unlock()
         onLaunch?(request)
         let run = ScriptedLocalRun(launch: request, clock: clock)
         lock.lock(); launched.append(run); lock.unlock()
@@ -318,7 +325,7 @@ struct LocalStartTests {
         #expect(await eventually { local.entry?.terminal?.type == "completed" })
         #expect(local.entry?.groupCleared == true)
         #expect(await eventually { route.aliases.isEmpty }, "the alias is deleted after the terminal is written")
-        #expect(route.calls.last == "delete")
+        #expect(route.calls.last == "deleted")
         let pushed = local.world.sink.take().compactMap { $0.objectValue?["event"]?.objectValue?["type"]?.stringValue }
         #expect(pushed == ["started", "text", "completed"], "\(pushed)")
         let status = await local.ask(.participantStatus, ["workspaceHandle": .string(store.workspaceHandle),
@@ -410,6 +417,40 @@ struct LocalStartTests {
         #expect(await eventually { route.aliases.isEmpty })
         #expect(!route.calls.contains("chat"))
         #expect(local.entry?.start == nil && local.entry?.terminal == nil, "still not dispatched")
+    }
+
+    @Test("Codex round 1 on #50: a retry right after a refused bind waits for the slow DELETE of the first alias, so the retry's alias survives and its chat goes out")
+    func retryAfterRefusedBindWaitsForDeletion() async throws {
+        let route = ScriptedLocalRoute([ready])
+        route.deleteDelayNanos = 300_000_000
+        let local = try await LocalStartWorld(route: route)
+        defer { local.clean() }
+        try await local.prepare()
+        let coordinator = local.coordinator
+        let first = LockedFlag()
+        route.onBind = {
+            guard !first.value else { return }
+            first.set(true)
+            coordinator.lockNow()
+        }
+        #expect(await local.start().reason == .storeLocked)
+        #expect(route.aliases.contains(LocalStartWorld.runId), "the first alias's DELETE is still on its way")
+        await coordinator.unlock(ifNoLockSince: coordinator.lockEpoch)
+        let retry = await local.start()
+        #expect(retry.outcome == .ok, "\(retry)")
+        let calls = route.calls
+        let firstDeleted = try #require(calls.firstIndex(of: "deleted"))
+        let binds = calls.indices.filter { calls[$0] == "bind" }
+        #expect(binds.count == 2 && firstDeleted < binds[1], "the old DELETE landed before the new copy: \(calls)")
+        #expect(route.aliasHeldAtChat == [true])
+        try await Task.sleep(nanoseconds: 400_000_000)
+        #expect(route.aliases.contains(LocalStartWorld.runId), "nothing late removed the retry's alias")
+        let run = try #require(route.runs.first)
+        run.respond()
+        run.send("Invented answer.")
+        run.done()
+        #expect(await eventually { local.entry?.terminal?.type == "completed" })
+        #expect(await eventually { route.aliases.isEmpty })
     }
 
     @Test("An undetermined start record sends nothing and deletes the alias")
