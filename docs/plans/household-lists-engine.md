@@ -44,6 +44,12 @@ A small library in `packages/household-lists/`:
   - **By store section**: grouped (produce, dairy, frozen and so on), A to Z
     within each group, unsectioned items last.
   - **As added**: the order items were first added.
+- **Sections can be switched off per list** (owner, October 16). A list
+  setting turns the whole section feature off for that list: no section
+  suggestions, no "by store section" sort offered, and section fields
+  ignored. It's off by choice, on by default only where the user turns it on.
+  Section groups, when used, stay in alphabetical order (store layouts differ
+  too much for a walk order).
 - **Store sections**: a small built-in starter map from common grocery words
   to sections, which the user can override per item and extend. Changing the
   map never changes items silently; it only suggests.
@@ -94,6 +100,9 @@ invented households only. At least:
 2. A to Z sorting ignores case, accents and leading quantities; checked items
    keep their sorted place.
 3. Section sorting groups correctly, with unsectioned items last.
+   With sections switched off for a list, no suggestions appear and the
+   section sort isn't offered; switching it back on restores the items'
+   saved sections.
 4. "As added" keeps first-added order through edits and re-checks.
 5. Several lists stay independent.
 6. Undo restores the previous state exactly.
