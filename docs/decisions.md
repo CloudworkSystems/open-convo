@@ -6,6 +6,10 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 16:** Step 3 local conversation: Retry puts the cut-off message back
+  in the message box and the owner presses Send (nothing resends on its own);
+  the Claude entry stays out of the model picker until the Claude Code adapter
+  works; the default local model is `qwen3:8b`.
 - **Oct 16:** Up to two outside modules at a time, each with a different
   builder: GrokBot builds Site Engine (Codex reviews); Codex builds the
   household lists engine in its cloud (a Claude session reviews); the habit
