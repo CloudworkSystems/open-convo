@@ -1,0 +1,48 @@
+# Required check `codex-approved`: posted as a commit status on each pull
+# request's head commit. Every trigger here runs the default branch's copy of
+# this file, never the pull request's, and it never checks out pull request
+# code. (pull_request_review is left out on purpose: it would run the pull
+# request's copy of this file. Codex's reviews also update its summary
+# comment, which triggers issue_comment.) See docs/plans/merge-gate.md.
+name: codex-approved
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+  issue_comment:
+    types: [created, edited]
+  schedule:
+    # Backstop for Codex's 👍 reactions, which send no event.
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: Pull request number (blank checks every open one)
+        required: false
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+  statuses: write
+
+concurrency:
+  group: codex-approved-${{ github.event.pull_request.number || github.event.issue.number || 'all' }}
+  cancel-in-progress: false
+
+jobs:
+  codex-approved:
+    if: github.event_name != 'issue_comment' || github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node .github/scripts/codex-approved.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

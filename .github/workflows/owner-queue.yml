@@ -1,0 +1,38 @@
+# Keeps the "Needs the owner" issue current. Runs the default branch's copy
+# and never checks out pull request code.
+name: owner-queue
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, closed]
+  schedule:
+    # Also catches the owner's approvals; pull_request_review is left out
+    # because it would run the pull request's copy of this file.
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: read
+  issues: write
+
+concurrency:
+  group: owner-queue
+  cancel-in-progress: false
+
+jobs:
+  owner-queue:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node .github/scripts/owner-queue.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

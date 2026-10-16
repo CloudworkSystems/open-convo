@@ -1,0 +1,61 @@
+# Paths that always need the owner's approval (docs/plans/merge-gate.md).
+# Branch protection requires a code-owner review and dismisses it on new commits.
+
+# The rules, including the checks and this file.
+/AGENTS.md @CloudworkSystems
+/CLAUDE.md @CloudworkSystems
+/.github/ @CloudworkSystems
+
+# Decisions.
+/PLAN.md @CloudworkSystems
+/docs/plans/ @CloudworkSystems
+/docs/decisions.md @CloudworkSystems
+
+# Keys, encryption, recovery and protected storage in the Mac app: the
+# primitives, the code that chooses and drives them, and their tests. Name
+# patterns also cover files added later with the same names.
+/apps/mac/Sources/ArchiveProtection/ @CloudworkSystems
+/apps/mac/Tests/ArchiveProtectionTests/ @CloudworkSystems
+/apps/mac/**/*Keychain* @CloudworkSystems
+/apps/mac/**/*KeyProvider* @CloudworkSystems
+/apps/mac/**/*Recovery* @CloudworkSystems
+/apps/mac/**/*Cipher* @CloudworkSystems
+/apps/mac/**/*Encryption* @CloudworkSystems
+/apps/mac/**/*Seal* @CloudworkSystems
+/apps/mac/**/ProofStore* @CloudworkSystems
+/apps/mac/Sources/DeskHost/PayloadHash.swift @CloudworkSystems
+/apps/mac/Sources/DeskWindowKit/DeskSession.swift @CloudworkSystems
+/apps/mac/Sources/DeskWindowKit/DeskPaths.swift @CloudworkSystems
+/apps/mac/Tests/DeskWindowKitTests/DeskKeptStoreTests.swift @CloudworkSystems
+
+# The participant path: everything that can run a paid AI model, decide
+# whether it is available, confirm or end paid use, or wire it into the app.
+# Protected as whole modules and by name, so new files in it are covered too.
+/apps/mac/Sources/Participant*/ @CloudworkSystems
+/apps/mac/Tests/ParticipantProcessTests/ @CloudworkSystems
+/apps/mac/**/Participant* @CloudworkSystems
+/apps/mac/**/*PaidUsage* @CloudworkSystems
+/apps/mac/**/*Availability* @CloudworkSystems
+/apps/mac/**/*Wiring* @CloudworkSystems
+
+# Other paid cloud calls: the OpenAI realtime transcriber and its smoke
+# command, and any file named for a paid AI provider or an API key. (The
+# batch transcription requests and API-key lookups live in main.swift,
+# protected below.)
+/apps/mac/**/*OpenAI* @CloudworkSystems
+/apps/mac/**/*Realtime* @CloudworkSystems
+/apps/mac/**/*Groq* @CloudworkSystems
+/apps/mac/**/*Anthropic* @CloudworkSystems
+/apps/mac/**/*APIKey* @CloudworkSystems
+
+# The storage protection proof.
+/apps/mac/Tests/ProtectionProofTests/ @CloudworkSystems
+
+# What wires the above into the shipping app and could switch the paid path
+# on: the app's composition root, the package manifest (which modules link),
+# and the test that forbids linking the participant path today. Most Mac app
+# pull requests touch main.swift, so they wait for the owner; moving the
+# storage and paid-path wiring into small files of their own would end that.
+/apps/mac/Sources/VoiceCursorMac/main.swift @CloudworkSystems
+/apps/mac/Package.swift @CloudworkSystems
+/apps/mac/Tests/DeskWindowKitTests/DeskSessionParticipantTests.swift @CloudworkSystems
