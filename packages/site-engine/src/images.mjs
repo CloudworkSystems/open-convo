@@ -298,9 +298,9 @@ function riffChunk(tag, data) {
 }
 
 // Boxes whose bytes are image structure, not a place to store a name or a
-// location. Anything else, including `free` and `skip`, is refused: those
-// boxes can hold arbitrary bytes, and rewriting AVIF offsets without a
-// decoder would not reliably remove them.
+// location. Anything else, including `free` and `skip`, is refused. A box on
+// this list still has to match that box's layout, so a familiar name cannot
+// carry an author string or a color profile.
 const AVIF_SAFE = new Set([
   "ftyp",
   "meta",
@@ -333,11 +333,16 @@ const AVIF_SAFE = new Set([
   "colr",
 ]);
 
+const AVIF_BRANDS = new Set(["avif", "avis", "mif1", "miaf", "MA1A", "MA1B"]);
+const AVIF_REFERENCE = new Set(["dimg", "thmb", "auxl", "cdsc"]);
+const AVIF_ALPHA_AUX = Buffer.from("urn:mpeg:mpegB:cicp:systems:auxiliary:alpha\0", "ascii");
+
 function stripAvif(buf, file) {
   const boxes = [];
   walkAvif(buf, 0, buf.length, (type, payload) => boxes.push({ type, payload }));
   for (const box of boxes) {
-    if (!AVIF_SAFE.has(box.type) || !avifBoxIsSafe(box)) {
+    const known = AVIF_SAFE.has(box.type) || AVIF_REFERENCE.has(box.type);
+    if (!known || !avifBoxIsSafe(box)) {
       fail(`Could not remove hidden details from image: ${file}`);
     }
   }
@@ -350,27 +355,248 @@ function stripAvif(buf, file) {
 
 function avifBoxIsSafe(box) {
   const { type, payload } = box;
-  if (type === "ftyp") return payload.length >= 8 && payload.length % 4 === 0;
-  if (type === "colr") {
-    if (payload.toString("ascii", 0, 4) !== "nclx" || payload.length !== 11) return false;
-    return true;
+  if (type === "ftyp") return avifFtypIsClean(payload);
+  if (type === "mdat" || type === "idat") return true;
+  if (type === "meta") return avifFullBoxHeader(payload, 0) && payload.length >= 4;
+  if (type === "iref") {
+    return (avifFullBoxHeader(payload, 0) || avifFullBoxHeader(payload, 1)) && payload.length >= 4;
   }
-  if (type === "hdlr") {
-    if (payload.length < 24) return false;
-    return payload.subarray(24).every((byte) => byte === 0);
-  }
-  if (type === "url " || type === "urn ") {
-    if (payload.length !== 4) return false;
-    return (payload.readUInt32BE(0) & 0xffffff) === 1;
-  }
+  if (type === "hdlr") return avifHdlrIsClean(payload);
+  if (type === "pitm") return avifPitmIsClean(payload);
+  if (type === "iloc") return avifIlocIsClean(payload);
+  if (type === "iinf") return avifIinfIsClean(payload);
   if (type === "infe") return avifItemIsImage(payload);
+  if (type === "iprp" || type === "ipco" || type === "dinf") return true;
+  if (type === "ipma") return avifIpmaIsClean(payload);
+  if (type === "dref") return avifFullBoxHeader(payload, 0) && payload.length >= 8;
+  if (type === "url " || type === "urn ") return payload.equals(Buffer.from([0, 0, 0, 1]));
+  if (type === "ispe") return avifFixedProperty(payload, 12);
+  if (type === "pixi") return avifPixiIsClean(payload);
+  if (type === "av1C") return avifAv1cIsClean(payload);
+  if (type === "colr") return avifColrIsClean(payload);
+  if (type === "clap") return avifClapIsClean(payload);
+  if (type === "irot") return avifAngleIsClean(payload, 0xfc);
+  if (type === "imir") return avifAngleIsClean(payload, 0xfe);
+  if (type === "pasp") return avifPaspIsClean(payload);
+  if (type === "lsel") return avifFixedProperty(payload, 6);
+  if (type === "a1op") return avifFixedProperty(payload, 5);
+  if (type === "a1lx") return avifA1lxIsClean(payload);
+  if (type === "auxC") return avifAuxcIsClean(payload);
+  if (AVIF_REFERENCE.has(type)) return avifReferenceIsClean(payload);
+  return false;
+}
+
+function avifFullBoxHeader(payload, version) {
+  return payload.length >= 4 && payload[0] === version && payload[1] === 0 && payload[2] === 0 && payload[3] === 0;
+}
+
+function avifFtypIsClean(payload) {
+  if (payload.length < 8 || payload.length % 4 !== 0) return false;
+  for (let offset = 0; offset < payload.length; offset += 4) {
+    if (offset === 4) continue;
+    if (!AVIF_BRANDS.has(payload.toString("ascii", offset, offset + 4))) return false;
+  }
   return true;
+}
+
+function avifHdlrIsClean(payload) {
+  if (!avifFullBoxHeader(payload, 0) || payload.length < 24) return false;
+  if (payload.readUInt32BE(4) !== 0) return false;
+  if (payload.toString("ascii", 8, 12) !== "pict") return false;
+  return payload.subarray(12).every((byte) => byte === 0);
+}
+
+function avifPitmIsClean(payload) {
+  if (avifFullBoxHeader(payload, 0) && payload.length === 6) return true;
+  return avifFullBoxHeader(payload, 1) && payload.length === 8;
+}
+
+function avifIinfIsClean(payload) {
+  if (avifFullBoxHeader(payload, 0)) return payload.length >= 6;
+  if (avifFullBoxHeader(payload, 1)) return payload.length >= 8;
+  return false;
+}
+
+function avifFixedProperty(payload, length) {
+  return avifFullBoxHeader(payload, 0) && payload.length === length;
+}
+
+function avifPixiIsClean(payload) {
+  if (!avifFullBoxHeader(payload, 0) || payload.length < 5) return false;
+  const channels = payload[4];
+  if (channels < 1 || channels > 8 || payload.length !== 5 + channels) return false;
+  for (let index = 0; index < channels; index += 1) {
+    const bits = payload[5 + index];
+    if (bits < 1 || bits > 32) return false;
+  }
+  return true;
+}
+
+function avifColrIsClean(payload) {
+  if (payload.toString("ascii", 0, 4) !== "nclx" || payload.length !== 11) return false;
+  return (payload[10] & 0x7f) === 0;
+}
+
+function avifClapIsClean(payload) {
+  if (payload.length !== 32) return false;
+  for (const offset of [4, 12, 20, 28]) {
+    if (payload.readUInt32BE(offset) === 0) return false;
+  }
+  return true;
+}
+
+function avifAngleIsClean(payload, reservedMask) {
+  return avifFixedProperty(payload, 5) && (payload[4] & reservedMask) === 0;
+}
+
+function avifPaspIsClean(payload) {
+  return payload.length === 8 && payload.readUInt32BE(0) !== 0 && payload.readUInt32BE(4) !== 0;
+}
+
+function avifA1lxIsClean(payload) {
+  if (!avifFullBoxHeader(payload, 0) || payload.length < 5) return false;
+  if ((payload[4] & 0xfe) !== 0) return false;
+  const large = (payload[4] & 0x01) === 1;
+  return payload.length === (large ? 17 : 11);
+}
+
+function avifAuxcIsClean(payload) {
+  if (!avifFullBoxHeader(payload, 0) || payload.length !== 4 + AVIF_ALPHA_AUX.length) return false;
+  return payload.subarray(4).equals(AVIF_ALPHA_AUX);
+}
+
+function avifReferenceIsClean(payload) {
+  if (payload.length >= 4 && payload.length % 2 === 0) {
+    const count = payload.readUInt16BE(2);
+    if (count <= 64 && payload.length === 4 + 2 * count) return true;
+  }
+  if (payload.length >= 8 && payload.length % 4 === 0) {
+    const count = payload.readUInt32BE(4);
+    if (count <= 64 && payload.length === 8 + 4 * count) return true;
+  }
+  return false;
+}
+
+function avifIpmaIsClean(payload) {
+  if (payload.length < 8 || payload[1] !== 0 || payload[2] !== 0) return false;
+  const version = payload[0];
+  const flags = payload[3];
+  if (version > 1 || flags > 1) return false;
+  const entryCount = payload.readUInt32BE(4);
+  if (entryCount > 1024) return false;
+  let cursor = 8;
+  const idBytes = version === 0 ? 2 : 4;
+  const assocBytes = flags === 1 ? 2 : 1;
+  for (let index = 0; index < entryCount; index += 1) {
+    if (cursor + idBytes + 1 > payload.length) return false;
+    cursor += idBytes;
+    const associationCount = payload[cursor];
+    cursor += 1;
+    if (associationCount > 64) return false;
+    const bytes = associationCount * assocBytes;
+    if (cursor + bytes > payload.length) return false;
+    cursor += bytes;
+  }
+  return cursor === payload.length;
+}
+
+function avifIlocIsClean(payload) {
+  if (!avifFullBoxHeader(payload, payload[0]) || payload[0] > 2 || payload.length < 8) return false;
+  const version = payload[0];
+  let cursor = 4;
+  const offsetSize = payload[cursor] >> 4;
+  const lengthSize = payload[cursor] & 0x0f;
+  cursor += 1;
+  const baseOffsetSize = payload[cursor] >> 4;
+  const indexOrReserved = payload[cursor] & 0x0f;
+  cursor += 1;
+  if (![0, 4, 8].includes(offsetSize) || ![0, 4, 8].includes(lengthSize) || ![0, 4, 8].includes(baseOffsetSize)) {
+    return false;
+  }
+  let indexSize = 0;
+  if (version === 0) {
+    if (indexOrReserved !== 0) return false;
+  } else if (![0, 4, 8].includes(indexOrReserved)) {
+    return false;
+  } else {
+    indexSize = indexOrReserved;
+  }
+  const countBytes = version < 2 ? 2 : 4;
+  const idBytes = version < 2 ? 2 : 4;
+  if (cursor + countBytes > payload.length) return false;
+  const itemCount = readBe(payload, cursor, countBytes);
+  cursor += countBytes;
+  if (itemCount > 1024) return false;
+  for (let index = 0; index < itemCount; index += 1) {
+    if (cursor + idBytes > payload.length) return false;
+    cursor += idBytes;
+    if (version === 1 || version === 2) {
+      if (cursor + 2 > payload.length) return false;
+      if ((payload.readUInt16BE(cursor) & 0xfff0) !== 0) return false;
+      cursor += 2;
+    }
+    if (cursor + 2 + baseOffsetSize + 2 > payload.length) return false;
+    cursor += 2 + baseOffsetSize;
+    const extentCount = payload.readUInt16BE(cursor);
+    cursor += 2;
+    if (extentCount > 1024) return false;
+    const extentBytes = (version >= 1 && indexSize > 0 ? indexSize : 0) + offsetSize + lengthSize;
+    if (extentCount * extentBytes > payload.length - cursor) return false;
+    cursor += extentCount * extentBytes;
+  }
+  return cursor === payload.length;
+}
+
+function readBe(payload, offset, size) {
+  if (size === 2) return payload.readUInt16BE(offset);
+  return payload.readUInt32BE(offset);
+}
+
+function avifAv1cIsClean(payload) {
+  if (payload.length < 4 || payload[0] !== 0x81) return false;
+  if ((payload[3] & 0xe0) !== 0) return false;
+  if ((payload[3] & 0x10) === 0 && (payload[3] & 0x0f) !== 0) return false;
+  return walkAv1Obus(payload.subarray(4));
+}
+
+// Sequence-header and temporal-delimiter OBUs only. Metadata and padding
+// OBUs can hold a name, and a payload that is not an OBU at all can too.
+function walkAv1Obus(data) {
+  let offset = 0;
+  while (offset < data.length) {
+    const header = data[offset];
+    const type = (header >> 3) & 0x0f;
+    const extension = (header & 0x04) !== 0;
+    const hasSize = (header & 0x02) !== 0;
+    if ((header & 0x81) !== 0 || (type !== 1 && type !== 2) || !hasSize) return false;
+    offset += 1;
+    if (extension) {
+      if (offset >= data.length) return false;
+      offset += 1;
+    }
+    const decoded = readLeb128(data, offset);
+    if (!decoded || decoded.value > data.length - decoded.offset) return false;
+    offset = decoded.offset + decoded.value;
+  }
+  return true;
+}
+
+function readLeb128(buf, offset) {
+  let value = 0;
+  for (let shift = 0; shift <= 21; shift += 7) {
+    if (offset >= buf.length) return null;
+    const byte = buf[offset];
+    offset += 1;
+    value |= (byte & 0x7f) << shift;
+    if ((byte & 0x80) === 0) return { value, offset };
+  }
+  return null;
 }
 
 function avifItemIsImage(payload) {
   if (payload.length < 4) return false;
   const version = payload[0];
-  if (version < 2) return false;
+  if (version < 2 || payload[1] !== 0 || payload[2] !== 0 || payload[3] !== 0) return false;
   let cursor = 4;
   const idSize = version === 2 ? 2 : 4;
   if (payload.length < cursor + idSize + 6) return false;
