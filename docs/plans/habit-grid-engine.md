@@ -30,16 +30,33 @@ A small library in `packages/habit-grid/`:
 
 - **Trackers**, each with a name, a color and one of three kinds:
   - **Done / not done** (took vitamins).
-  - **Count** (glasses of water), with an optional daily target.
+  - **Count** (glasses of water), with an optional daily target. Without a
+    target, any count above zero makes the day "done", and the shade steps
+    show how that day compares with the tracker's own amounts in the range
+    shown (quarters of its highest day); there is no "full" level.
   - **Amount toward a target** (30 minutes of exercise), with a unit.
 - **How often:** daily; a number of times per week ("3 times a week"); or
   chosen days of the week. Days a tracker isn't due, and days the owner marks
   as rest, show as rest, never as misses.
+  - **Daily and chosen-days trackers** work day by day: each due day is met
+    or not met once it has passed.
+  - **Times-per-week trackers** work week by week. No single day is due: a
+    day with a check-in shows as done, other days show as open (neither rest
+    nor miss). The week is met when its total reaches the target; the current
+    week shows "in progress" until it ends, never "missed" early. Their
+    streaks count weeks, not days.
 - **Stacks:** trackers grouped into a named set ("morning stack: water,
   vitamins, stretch") that can be checked off together or one by one.
-- **Check-ins:** each entry has a date, a value, and where it came from
-  (`manual` now; `voice` and `automatic` reserved for later). Entries can be
-  edited and removed; removal is reversible until Trash is emptied.
+  Checking a whole stack marks its done/not-done members done. For count and
+  amount members the engine never invents a value: it writes the member's
+  "usual amount" only if the user has set one, and otherwise lists that member
+  as needing a value and writes nothing for it.
+- **Check-ins:** each entry is its own record with a permanent ID, a date, a
+  value, and where it came from
+  (`manual` now; `voice` and `automatic` reserved for later). A day's value
+  is the sum of that day's check-in records, so two people logging water on
+  the same day both count. Entries can be edited and removed; removal is
+  reversible until Trash is emptied.
 - **The grid:** for any tracker or stack, a grid of days (rows by weekday,
   columns by week). Each square's shade shows how close that day came to the
   target: empty, partial steps, full. Rest days have their own look.
@@ -65,7 +82,9 @@ The same rules as the household lists engine
 ([household-lists-engine.md](household-lists-engine.md)): permanent IDs,
 version stamps with a device-ID tie-breaker, field-level merge, and permanent
 deletion markers, so the phone, Mac and wall hub can later merge cleanly. No
-network code in this slice.
+network code in this slice. Check-ins merge as a set of records by ID (never
+as a single "day total" field), so the same record arriving twice counts once
+and two devices' separate check-ins both survive.
 
 ## Data Format
 
@@ -77,15 +96,19 @@ package README.
 `npm test` in `packages/habit-grid`, Node's built-in test runner, invented
 people only. At least:
 
-1. Each tracker kind records and shades correctly (none, partial, full).
-2. Weekly targets ("3 times a week") and chosen days mark non-due days as
-   rest, not misses.
+1. Each tracker kind records and shades correctly (none, partial, full), and
+   a count tracker without a target shades by quarters with no "full" level.
+2. Chosen days mark non-due days as rest, not misses. A "3 times a week"
+   tracker shows checked days as done and others as open, meets the week at
+   three, shows the current week as in progress, and counts its streak in
+   weeks.
 3. Rest days never break a streak; a missed due day ends it; current and
    longest streaks are right across month and year boundaries.
 4. Week start on Sunday and on Monday both lay out the grid correctly,
    including a daylight-saving change and a leap day.
-5. Stacks: checking a stack checks each member; members can still be checked
-   alone.
+5. Stacks: checking a stack marks done/not-done members done, writes a usual
+   amount only where one is set, and lists other count or amount members as
+   needing a value; members can still be checked alone.
 6. Editing and removing check-ins, Trash and restore.
 7. Output contains no grading words (a test scans for words such as "failed",
    "broke", "score" in any text the engine produces).
@@ -93,7 +116,9 @@ people only. At least:
    color.
 9. Merge: the same cases as the household lists engine (different trackers,
    same field, delete vs edit, equal timestamps, clock skew, offline copy
-   after Trash is emptied), and merging A into B equals B into A.
+   after Trash is emptied), and merging A into B equals B into A. Also: two
+   devices log the same water tracker on the same day and both entries count;
+   merging the same file twice doesn't double-count.
 10. Saving and loading round-trips exactly; an unknown `schemaVersion` is
     refused with a plain message.
 

@@ -140,6 +140,10 @@ built in parallel by an outside builder under AGENTS.md "Outside Builders":
 
 - **Site Engine, standalone slice**:
   [docs/plans/site-engine-standalone.md](docs/plans/site-engine-standalone.md).
+- **Household lists engine** (Family and Home), after Site Engine:
+  [docs/plans/household-lists-engine.md](docs/plans/household-lists-engine.md).
+- **Habit grid engine** (Personal), after the household lists engine:
+  [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 - **Merge gate** (first piece of the Code umbrella): automatic merging once
   tests pass and Codex's review is clean, with protected paths still needing
   the owner. Plan:
