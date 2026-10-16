@@ -268,13 +268,18 @@ public struct LocalChatCore {
         projectedBytes += pendingEscapedBytes + 2 + 3
     }
 
-    /// Accepted text, then the one terminal, recorded with `groupCleared: true`.
+    /// Accepted text, then the one terminal, recorded with `groupCleared: true`,
+    /// then cleanup released.
     private mutating func end(_ terminal: ParticipantTerminal, wall: Int64, cancel: Bool, into effects: inout [Effect]) {
         guard terminalEvent == nil else { return }
         if startedEmitted { flush(wall: wall, into: &effects) }
         let event = emit(terminal.type, reason: terminal.reason, wall: wall)
         terminalEvent = event
         effects.append(.update(.terminal(event, groupCleared: true)))
+        // No process group to wait for: cleanup is released with the
+        // terminal, so the coordinator's busy rule (section 7 step 12) ends
+        // once the updates end and the terminal is durable (step 3 PR 3c).
+        effects.append(.update(.cleanupReleased))
         if cancel { effects.append(.cancelRequest) }
     }
 

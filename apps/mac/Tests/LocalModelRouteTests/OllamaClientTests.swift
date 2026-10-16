@@ -1,4 +1,5 @@
 import XCTest
+import DeskHost
 import ParticipantProcess
 @testable import LocalModelRoute
 
@@ -201,6 +202,57 @@ final class OllamaClientTests: XCTestCase {
         }
         XCTAssertEqual(run.snapshot.terminal?.reason, "local-stop")
         XCTAssertEqual(run.snapshot.groupCleared, true)
-        if case .terminal(let event, _) = updates.last { XCTAssertEqual(event.type, .stopped) } else { XCTFail() }
+        let terminal = updates.last(where: { if case .terminal = $0 { return true }; return false })
+        if case .terminal(let event, _)? = terminal { XCTAssertEqual(event.type, .stopped) } else { XCTFail() }
+        XCTAssertEqual(updates.last, .cleanupReleased, "no process group: cleanup is released with the terminal")
+    }
+
+    // MARK: The coordinator's seam (step 3 PR 3c)
+
+    private var pin: ParticipantPin {
+        ParticipantPin(id: "ollama-local", label: "invented-small:7b", model: "invented-small:7b@" + Invented.digestA,
+                       executionHost: "this-mac")!
+    }
+
+    func testTheSeamReadsOnlyALocalEntrysExactForm() {
+        XCTAssertEqual(OllamaClient.entry(pin), small)
+        for bad in [ParticipantPin(id: "claude-code", label: "invented-small:7b", model: "invented-small:7b@" + Invented.digestA,
+                                   executionHost: "this-mac"),
+                    ParticipantPin(id: "ollama-local", label: "invented-small:7b", model: "invented-other:7b@" + Invented.digestA,
+                                   executionHost: "this-mac"),
+                    ParticipantPin(id: "ollama-local", label: "invented-small:7b", model: "invented-small:7b@ABC",
+                                   executionHost: "this-mac"),
+                    ParticipantPin(id: "ollama-local", label: "invented-small:7b", model: "invented-small:7b@" + Invented.digestA,
+                                   executionHost: "elsewhere")] {
+            XCTAssertNil(OllamaClient.entry(bad!))
+        }
+    }
+
+    func testTheSeamBindsDeletesAndLaunchesThroughTheSameRequests() async throws {
+        let fake = try FakeOllama { [alias] request in
+            switch request.path {
+            case "/api/tags": return .json(status: 200, Invented.tags([Invented.model("invented-small:7b", digest: Invented.digestA),
+                                                                        Invented.model(alias, digest: Invented.digestA)]))
+            case "/api/chat": return .stream(status: 200, pieces: [(0, Invented.chunk("Invented.")), (0, Invented.done)])
+            default: return .json(status: 200, [:] as [String: Any])
+            }
+        }
+        let client = client(fake)
+        let bound = await client.bindAlias(pin, runId: runId)
+        XCTAssertEqual(bound, .bound(alias: alias))
+        let launch = LocalRunLaunch(identity: ParticipantRunIdentity(runId: runId, sessionId: "52abcdef-0000-4000-8abc-000000000001",
+                                                                     createdAtMillis: 1_760_500_000_000),
+                                    alias: alias, context: [LocalTurn(role: "user", text: "Earlier invented question."),
+                                                            LocalTurn(role: "assistant", text: "Earlier invented answer.")],
+                                    inputChunks: ["Invented question?"], contextBytes: 50, inputBytes: 18, preparedBytes: 600)
+        let run = client.launchLocal(launch, clock: SystemParticipantClock())
+        for await _ in run.updates {}
+        XCTAssertEqual(run.snapshot.terminal?.type, .completed)
+        await client.deleteAlias(runId: runId)
+        await client.deleteAlias(runId: "not-a-run-id")
+        XCTAssertEqual(fake.requests.map(\.path), ["/api/copy", "/api/tags", "/api/chat", "/api/delete"])
+        let messages = try XCTUnwrap(fake.requests[2].json?["messages"] as? [[String: String]])
+        XCTAssertEqual(messages.map { $0["role"] ?? "" }, ["user", "assistant", "user"])
+        XCTAssertEqual(fake.requests[3].json as? [String: String], ["model": alias])
     }
 }

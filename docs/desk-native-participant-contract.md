@@ -2973,8 +2973,11 @@ with a local route:
 - Step 10 for a local run: `participant-changed` when no local entry in a
   ready route has the run's exact `model` (name and digest). Step 13:
   `participant-unavailable` when the route is not ready or the entry is not
-  available. Section 17's confirmation and first-trial input bound do not
-  apply to local runs.
+  available. Reading (step 3 PR 3c): a route that is not ready at step 10
+  has no list to judge a change by, so step 10 passes it and step 13
+  answers `participant-unavailable`; "Ollama is not running" is never
+  reported as a permanent model change. Section 17's confirmation and
+  first-trial input bound do not apply to local runs.
 - **Digest-bound request.** Ollama can't run a model by digest (checked on
   0.34.0: `name@digest` and `name@sha256:digest` are refused as invalid
   names), and a tag can be moved to another model at any time. So step 13
@@ -2992,7 +2995,11 @@ with a local route:
   this check. The chat request names only the alias. Because these calls come
   before the start record, their failures are ordinary refusals with nothing
   dispatched, and a crash between the copy and the record leaves only an
-  alias. The alias is deleted after the run's terminal is written; at
+  alias. The alias is deleted after the run's terminal is written (reading,
+  step 3 PR 3c: while a lock, Desk close or quit holds the terminal
+  unwritten, the alias is deleted as soon as the request has ended, so
+  none is left behind; a start that refuses or sends nothing after the
+  copy deletes it at once); at
   launch, and before any new start, native deletes every alias whose name
   matches that exact format and that no live run of this launch owns.
   Native never deletes any other name: an owner's own tag is never touched,

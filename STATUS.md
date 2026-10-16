@@ -1,6 +1,6 @@
 # Status
 
-Updated October 15, 2026. The short version of where the build is. The full
+Updated October 16, 2026. The short version of where the build is. The full
 plan is in [PLAN.md](PLAN.md).
 
 ## Now
@@ -30,8 +30,8 @@ invented chats only, while the step 2 trial is pending. Scope:
 | PR 1: Scope | Merged (#37) |
 | PR 2: Contract revision 4 and the page codec | Merged (#38) |
 | PR 3a: Ollama client, chat runs and alias binding (inactive) | Merged (#42) |
-| PR 3b: Local models in availability, preparation and storage (inactive) | In review |
-| PR 3c: Local start, alias lifecycle, lock and quit (inactive) | Not started |
+| PR 3b: Local models in availability, preparation and storage (inactive) | Merged (#48) |
+| PR 3c: Local start, alias lifecycle, lock and quit (inactive) | In review |
 | PR 4: Desk wiring | Not started |
 | PR 5: Proof and owner trial | Not started |
 
