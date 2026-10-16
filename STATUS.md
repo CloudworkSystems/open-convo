@@ -61,7 +61,7 @@ builds, Codex reviews). Plan:
 Not started.
 
 **Household lists engine** (Family and Home), built by Codex alongside Site
-Engine, reviewed by Claude. Plan:
+Engine; implemented, tests pass; awaiting Claude review and planning check. Plan:
 [docs/plans/household-lists-engine.md](docs/plans/household-lists-engine.md).
 First real use after step 5, synced through iCloud with the owner's approval.
 
