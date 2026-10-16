@@ -12,6 +12,7 @@ import Speech
 import ArchiveProtection
 import CorrectionMemory
 import DeskWindowKit
+import ParticipantAppWiring
 import TrueConvoIdentity
 import VoiceCursorCore
 
@@ -11076,9 +11077,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // and True Convo Test never share it).
         // Step 2, PR 4b: the Desk's one recovery key also covers the
         // dictation archive's key.
+        // Step 3, PR 4b: True Convo Test gets the local-model lane (Ollama on
+        // this Mac only); the real app gets none (the factory is nil).
         let session = DeskSession(paths: paths, bundle: deskBundle, info: DeskSession.hostInfo(), storage: .keychain(identity: .current),
                                   recoveryCompanion: Archive.recovery,
-                                  log: { RunLog.write($0, $1) })
+                                  log: { RunLog.write($0, $1) },
+                                  makeParticipantLane: LocalConversationLane.factory(for: AppIdentity.current))
         deskSessionStorage = session
         return session
     }

@@ -269,11 +269,14 @@ final class DeskSessionParticipantTests: XCTestCase {
         await session.close()
     }
 
-    /// The app makes its one session without a lane, and the only thing in
-    /// Sources that conforms to the stack attachment a lane needs is the
-    /// coordinator (Codex's S10 carried requirement 1), which nothing in
-    /// the app constructs (ProcessLauncherTests' gates; comments aside).
-    func testTheAppGivesItsSessionNoLane() throws {
+    /// The app makes its one session with the lane factory of
+    /// `LocalConversationLane` for the running copy, which is nil (no lane)
+    /// for the real app and the local route for True Convo Test only (step 3
+    /// PR 4b; `LocalConversationLaneTests` checks the factory itself). The
+    /// only thing in Sources that conforms to the stack attachment a lane
+    /// needs is the coordinator (Codex's S10 carried requirement 1), which
+    /// only that wiring constructs (ProcessLauncherTests' gates).
+    func testTheAppGivesItsSessionOnlyTheTestCopysLane() throws {
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("Sources")
         let files = try XCTUnwrap(FileManager.default.subpaths(atPath: sources.path)).filter { $0.hasSuffix(".swift") }
@@ -288,9 +291,13 @@ final class DeskSessionParticipantTests: XCTestCase {
         }
         let sessions = lines.filter { $0.line.contains("DeskSession(") }
         XCTAssertEqual(sessions.map(\.file), ["VoiceCursorMac/main.swift"], "the app's one session")
-        XCTAssertFalse(sessions.contains { $0.line.contains("makeParticipantLane") }, "made without a lane")
-        XCTAssertEqual(Set(lines.filter { $0.line.contains("makeParticipantLane") }.map(\.file)), ["DeskWindowKit/DeskSession.swift"],
-                       "only the session names its factory")
+        XCTAssertFalse(sessions.contains { $0.line.contains("makeParticipantLane") }, "the factory is its own argument line")
+        let appFactory = lines.filter { $0.file == "VoiceCursorMac/main.swift" && $0.line.contains("makeParticipantLane") }
+        XCTAssertEqual(appFactory.map(\.line), ["makeParticipantLane: LocalConversationLane.factory(for: AppIdentity.current))"],
+                       "the app's one factory: the running copy's, nil for the real app")
+        XCTAssertEqual(Set(lines.filter { $0.line.contains("makeParticipantLane") }.map(\.file)),
+                       ["DeskWindowKit/DeskSession.swift", "VoiceCursorMac/main.swift"], "only the session and the app name its factory")
+        XCTAssertEqual(Set(lines.filter { $0.line.contains("LocalConversationLane.factory(") }.map(\.file)), ["VoiceCursorMac/main.swift"])
         let conformance = try NSRegularExpression(pattern: #"[:,]\s*(ParticipantStackAttaching|DeskParticipantLane)\b"#)
         let conforming = lines.filter { conformance.firstMatch(in: $0.line, range: NSRange($0.line.startIndex..., in: $0.line)) != nil }
         XCTAssertEqual(conforming.map(\.file), ["ParticipantCoordinator/ParticipantCoordinator.swift"],

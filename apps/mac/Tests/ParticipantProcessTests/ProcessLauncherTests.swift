@@ -360,7 +360,7 @@ struct ProcessLauncherGateTests {
         #expect(found.isEmpty, "\(found)")
     }
 
-    @Test("Inactive: only the test fakes, the test target, the coordinator, section 17's window adapter and the local route depend on ParticipantProcess; only test targets depend on the coordinator, the adapter or the local route; the app, the Desk window and the hosts depend on none of them")
+    @Test("Only the test fakes, the test target, the coordinator, section 17's window adapter, the local route and the app's lane wiring depend on ParticipantProcess; the app reaches the coordinator and the local route only through ParticipantAppWiring; the adapter stays test-only; the Desk window and the hosts depend on none of them")
     func packageDependencies() throws {
         let manifest = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("Package.swift")
@@ -378,42 +378,66 @@ struct ProcessLauncherGateTests {
         }
         for name in ["VoiceCursorMac", "DeskWindowKit", "DeskHost", "DeskHostWebKit", "DeskBundleManifest", "ParticipantProcess",
                      "ParticipantTestHost", "ParticipantAvailabilityProbe", "ParticipantProcessTests", "ParticipantCoordinator",
-                     "ParticipantDeskControls"] {
+                     "ParticipantDeskControls", "ParticipantAppWiring"] {
             #expect(dependencies[name] != nil, "the scan found \(name)")
         }
         #expect(dependencies["VoiceCursorMac"]?.contains("DeskWindowKit") == true, "the scan reads dependency lists")
         #expect(dependencies["ParticipantCoordinator"] == ["DeskHost", "ParticipantProcess"], "the coordinator sits above both (Codex Q19)")
         let dependents = dependencies.filter { $0.value.contains("ParticipantProcess") }.keys.sorted()
-        #expect(dependents == ["LocalModelRoute", "LocalModelRouteTests", "ParticipantAvailabilityProbe", "ParticipantCoordinator",
-                               "ParticipantDeskControls", "ParticipantProcessTests", "ParticipantTestHost"], "\(dependents)")
+        #expect(dependents == ["LocalModelRoute", "LocalModelRouteTests", "ParticipantAppWiring", "ParticipantAvailabilityProbe",
+                               "ParticipantCoordinator", "ParticipantDeskControls", "ParticipantProcessTests", "ParticipantTestHost"],
+                "\(dependents)")
         // The local route (contract section 20) sits on ParticipantProcess,
         // and on DeskHost for the catalog seam a participant host reads.
-        // Only test targets link it: its own, and this one for the shared
-        // local vectors (step 3 PR 3b). The coordinator and the app do not.
+        // Besides test targets (its own, and this one for the shared local
+        // vectors), only the app's lane wiring links it (step 3 PR 4b). The
+        // coordinator does not.
         #expect(dependencies["LocalModelRoute"] == ["DeskHost", "ParticipantProcess"])
         let localDependents = dependencies.filter { $0.value.contains("LocalModelRoute") }.keys.sorted()
-        #expect(localDependents == ["LocalModelRouteTests", "ParticipantProcessTests"], "\(localDependents)")
+        #expect(localDependents == ["LocalModelRouteTests", "ParticipantAppWiring", "ParticipantProcessTests"], "\(localDependents)")
+        // Step 3 PR 4b: the app's one lane. Exactly these modules, and only
+        // the app (and this test target) link it. The Desk window kit and
+        // the hosts still know no participant module.
+        #expect(dependencies["ParticipantAppWiring"]
+                    == ["DeskHost", "LocalModelRoute", "ParticipantCoordinator", "ParticipantProcess", "TrueConvoIdentity"])
+        let wiringDependents = dependencies.filter { $0.value.contains("ParticipantAppWiring") }.keys.sorted()
+        #expect(wiringDependents == ["ParticipantProcessTests", "VoiceCursorMac"], "\(wiringDependents)")
+        let appParticipantModules = (dependencies["VoiceCursorMac"] ?? []).filter { $0.hasPrefix("Participant") || $0 == "LocalModelRoute" }
+        #expect(appParticipantModules == ["ParticipantAppWiring"], "the app links the lane wiring and nothing else of the participant path")
+        for name in ["DeskWindowKit", "DeskHost", "DeskHostWebKit", "DeskBundleManifest"] {
+            #expect(!(dependencies[name] ?? []).contains { $0.hasPrefix("Participant") || $0 == "LocalModelRoute" }, "\(name)")
+        }
         // Section 17's window adapter (plan F4) joins the owner to the Desk
         // window's plain controls; only the test target links it, so the app
         // links neither it nor ParticipantProcess until activation (F7).
         #expect(dependencies["ParticipantDeskControls"] == ["DeskWindowKit", "ParticipantProcess"])
         let adapterDependents = dependencies.filter { $0.value.contains("ParticipantDeskControls") }.keys.sorted()
         #expect(adapterDependents == ["ParticipantProcessTests"], "\(adapterDependents)")
-        // Linking the coordinator is what could pull it into the app; only
-        // the test target may (Codex Q1, Q19). A test host that needs it is
-        // added here deliberately, and never the app, the window or a host.
+        // Linking the coordinator is what could pull it into the app: only
+        // the test target and the app's lane wiring may (Codex Q1, Q19; step
+        // 3 PR 4b). Never the window or a host directly.
         let coordinatorDependents = dependencies.filter { $0.value.contains("ParticipantCoordinator") }.keys.sorted()
-        #expect(coordinatorDependents == ["ParticipantProcessTests"], "\(coordinatorDependents)")
+        #expect(coordinatorDependents == ["ParticipantAppWiring", "ParticipantProcessTests"], "\(coordinatorDependents)")
     }
 
-    @Test("Inactive: nothing in Sources outside the coordinator's own folder imports, names or constructs ParticipantCoordinator, and nothing constructs it there either")
+    @Test("Nothing in Sources outside the coordinator's own folder imports, names or constructs ParticipantCoordinator but the app's lane wiring, which constructs it once; nothing constructs it in its own folder")
     func coordinatorInactiveGate() throws {
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("Sources")
         let files = try #require(FileManager.default.subpaths(atPath: sources.path)).filter { $0.hasSuffix(".swift") }
         #expect(files.count > 20, "the scan sees the package's sources")
         #expect(files.contains("ParticipantCoordinator/ParticipantCoordinator.swift"))
+        // Step 3 PR 4b: the app's lane wiring is the one file outside the
+        // module that may import, name and construct it: these lines exactly.
+        let wiring = "ParticipantAppWiring/LocalConversationLane.swift"
+        let wiringLines: Set<String> = [
+            "import ParticipantCoordinator",
+            "static func makeCoordinator(route: any LocalRouteLaunching, launchId: String) -> ParticipantCoordinator {",
+            "ParticipantCoordinator(configuration: ParticipantCoordinator.Configuration(",
+        ]
+        #expect(files.contains(wiring))
         var found: [String] = []
+        var wiringFound: [String] = []
         for relative in files {
             let own = relative.hasPrefix("ParticipantCoordinator/")
             let lines = try String(contentsOf: sources.appendingPathComponent(relative), encoding: .utf8)
@@ -425,12 +449,17 @@ struct ProcessLauncherGateTests {
                 // `shared`, say); no other type there takes that label.
                 if own { needles += ["Self(configuration:", ".init(configuration:"] }
                 if !own { needles += ["ParticipantCoordinator", "import ParticipantCoordinator"] }
-                for needle in needles where line.contains(needle) {
-                    found.append("\(relative): \(line.trimmingCharacters(in: .whitespaces))")
+                let code = line.trimmingCharacters(in: .whitespaces)
+                guard needles.contains(where: { line.contains($0) }) else { continue }
+                if relative == wiring && wiringLines.contains(code) {
+                    wiringFound.append(code)
+                } else {
+                    found.append("\(relative): \(code)")
                 }
             }
         }
         #expect(found.isEmpty, "\(found)")
+        #expect(wiringFound.sorted() == wiringLines.sorted(), "the wiring constructs it exactly once: \(wiringFound)")
     }
 
     @Test("The coordinator cannot make an answer available: its sources never write `available`, and its entry comes from the report")

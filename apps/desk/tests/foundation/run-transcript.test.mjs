@@ -459,3 +459,32 @@ test('completed cleanup never claims provider cancellation and acknowledged unce
   await expect(page.getByRole('button', { name: 'Retry Stop', exact: true })).toHaveCount(0);
   await expect(page.getByRole('status')).toHaveText('Response complete');
 });
+
+// Step 3 PR 4b (carried from #54): a local run has no provider process, so
+// its Stop and cleanup are never worded as provider cancellation.
+test('a stopped local reply with cleared cleanup shows no provider line, and Stop reads as this Mac', async (t) => {
+  const props = fixture();
+  props.run.participant = { id: 'ollama-local', label: 'invented-model:7b', model: `invented-model:7b@${'a'.repeat(64)}`, executionHost: 'this-mac' };
+  props.run.phase = 'stopped';
+  props.run.reason = 'local-stop';
+  props.cleanupState = 'cleared';
+  props.stopState = 'confirmed';
+  props.canStop = false;
+  const page = await open(t, props);
+  await expect(page.getByRole('status')).toHaveText('Stopped. The reply so far is kept.');
+  await expect(page.locator('[data-cleanup-state]')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Run transcript' })).not.toContainText(/provider|cancellation|process/i);
+  // Stop confirmed while the run's own ending is still on its way.
+  await page.evaluate((run) => window.renderTranscript({ run }), { ...props.run, phase: 'running', reason: undefined });
+  await expect(page.getByRole('status')).toHaveText('Stopped on this Mac. The reply so far is kept.');
+  // Unconfirmed and unowned cleanup, and an acknowledgment, in local words.
+  for (const [state, text] of [['unknown', /not yet confirmed on this Mac/], ['unowned', /no longer tracks this reply’s request/]]) {
+    await page.evaluate(([run, cleanupState]) => window.renderTranscript({ run, cleanupState, stopState: 'unknown', canStop: true }), [props.run, state]);
+    await expect(page.locator('[data-cleanup-state]')).toContainText(text);
+    await expect(page.getByRole('region', { name: 'Run transcript' })).not.toContainText(/provider|process handle/i);
+  }
+  await page.evaluate((run) => window.renderTranscript({ run, cleanupState: 'cleared' }),
+    { ...props.run, cleanupAcknowledgment: { kind: 'unreachable', at: '2026-10-10T00:00:00.000Z' } });
+  await expect(page.locator('[data-cleanup-acknowledgment]')).toHaveText('You chose to continue without confirming this reply ended on this Mac.');
+  await expect(page.getByRole('region', { name: 'Run transcript' })).not.toContainText(/provider/i);
+});

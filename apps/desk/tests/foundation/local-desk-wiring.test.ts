@@ -9,7 +9,7 @@ import type { WorkspaceRepository } from '../../src/adapters/workspace-repositor
 import type { ConversationRun } from '../../src/domain/conversation-run-types';
 import { createConversationRun } from '../../src/domain/conversation-runs';
 import {
-  canRetryLocalRun, localChoiceProblem, localRunStarted, ollamaChoiceShortName, ollamaChoiceTitle, ollamaResidency, localRouteMessage, localRunOutcome, localStartRefusalMessage,
+  canRetryLocalRun, DEFAULT_LOCAL_MODEL, defaultLocalChoice, localChoiceProblem, noLocalChoiceMessage, localRunStarted, ollamaChoiceShortName, ollamaChoiceTitle, ollamaResidency, localRouteMessage, localRunOutcome, localStartRefusalMessage,
   MAX_LOCAL_CONTEXT_BYTES, selectLocalContext,
 } from '../../src/domain/local-participant';
 
@@ -112,8 +112,9 @@ test('the runtime lists each local model as its own choice that stays on this Ma
   try {
     await h.connection.refreshAvailability();
     const choices = runtime.participantChoices!;
-    assert.deepEqual(choices.map((choice) => choice.identity.id), ['claude-code', 'ollama-local', 'ollama-local']);
-    const [, cloud, local] = choices;
+    // Owner decision, October 16: the Claude entry is on the wire but not in the picker.
+    assert.deepEqual(choices.map((choice) => choice.identity.id), ['ollama-local', 'ollama-local']);
+    const [cloud, local] = choices;
     assert.equal(local.available, true);
     assert.equal(local.destination, 'Stays on this Mac');
     assert.equal(cloud.available, false);
@@ -121,7 +122,7 @@ test('the runtime lists each local model as its own choice that stays on this Ma
     assert.equal(runtime.localRouteMessage, undefined);
     reply = down('ollama-not-running');
     await h.connection.refreshAvailability();
-    assert.equal(runtime.participantChoices!.length, 1);
+    assert.equal(runtime.participantChoices!.length, 0, 'a down route lists no models, and no Claude entry in their place');
     assert.equal(runtime.localRouteMessage, localRouteMessage('ollama-not-running'));
     assert.match(runtime.localRouteMessage!, /Ollama is not running on this Mac/);
   } finally { runtime.revoke(); h.connection.dispose(); }
@@ -312,6 +313,8 @@ test('a failed availability read drops the local catalog, so nothing stays "Loca
       assert.equal(ollamaResidency(inventedLocal, runtime.localCatalog), 'unknown');
       assert.equal(ollamaChoiceTitle(inventedLocal, runtime.localCatalog), 'Ollama · invented-model:7b · not available right now');
       assert.equal(runtime.participantChoices!.some((choice) => choice.destination === 'Stays on this Mac'), false);
+      assert.equal(runtime.participantChoices!.some((choice) => choice.identity.id === 'claude-code'), false,
+        'no Claude entry in the picker, even while a read is failing');
       assert.equal(h.connection.portFor(inventedLocal).canStart?.(), false);
       reply = ready(localEntry('invented-model:7b'));
       await h.connection.refreshAvailability();
@@ -329,4 +332,52 @@ test('a local reply counts as started only after the Mac reported started', () =
   assert.equal(localRunOutcome(stoppedBefore), 'Stopped before any reply started.');
   assert.match(localRunOutcome(failedBefore)!, /^No reply started/);
   assert.equal(localRunOutcome(stoppedAfter), 'Stopped. The reply so far is kept.');
+});
+
+// Step 3 PR 4b: the owner's default model and the hidden Claude entry (decisions, October 16).
+function nativeRuntime(reply: () => Reply) {
+  const h = setup(reply);
+  let active = true;
+  const lifecycle: RuntimeLifecycle = { isActive: () => active, subscribeInvalidation: () => () => {}, revoke: () => { active = false; } };
+  const workspace: WorkspaceRepository = {
+    loadLatest: async () => ({ kind: 'unavailable', error: 'Invented.' }), save: async () => ({ kind: 'unavailable', error: 'Invented.' }),
+    subscribe: () => () => {},
+  };
+  const runtime = createNativeProofRuntime(workspace, lifecycle, { nativeParticipants: h.connection });
+  return { h, runtime, done: () => { runtime.revoke(); h.connection.dispose(); } };
+}
+
+test('the default model is qwen3:8b, chosen only when the catalog lists it as local and usable', async () => {
+  assert.equal(DEFAULT_LOCAL_MODEL, 'qwen3:8b');
+  let reply = ready(localEntry('invented-model:7b'), localEntry('qwen3:8b'));
+  const { runtime, h, done } = nativeRuntime(() => reply);
+  try {
+    assert.equal(defaultLocalChoice(runtime.participantChoices, runtime.localCatalog), undefined, 'nothing before a check');
+    await h.connection.refreshAvailability();
+    assert.deepEqual(defaultLocalChoice(runtime.participantChoices, runtime.localCatalog),
+      { id: 'ollama-local', label: 'qwen3:8b', model: `qwen3:8b@${digestA}`, executionHost: 'this-mac' });
+    // Listed but not local: never chosen, and nothing else in its place.
+    reply = ready(localEntry('invented-model:7b'), localEntry('qwen3:8b', digestA, false));
+    await h.connection.refreshAvailability();
+    assert.equal(defaultLocalChoice(runtime.participantChoices, runtime.localCatalog), undefined);
+    // Not installed: the plain hint names the default.
+    reply = ready(localEntry('invented-model:7b'));
+    await h.connection.refreshAvailability();
+    assert.equal(defaultLocalChoice(runtime.participantChoices, runtime.localCatalog), undefined);
+    assert.match(noLocalChoiceMessage(runtime.localCatalog!), /The default, qwen3:8b, isn’t installed in Ollama on this Mac/);
+    // Ollama down: no default, and a hint that does not blame the model.
+    reply = down('ollama-not-running');
+    await h.connection.refreshAvailability();
+    assert.equal(defaultLocalChoice(runtime.participantChoices, runtime.localCatalog), undefined);
+    assert.equal(noLocalChoiceMessage(runtime.localCatalog!), 'No model chosen yet. Choose a local model in the model picker before sending. Your draft is kept.');
+  } finally { done(); }
+});
+
+test('a host without a local route (contract revision 3) still lists its Claude entry', async () => {
+  const { runtime, h, done } = nativeRuntime(() => ({ outcome: 'ok', participants: [{ ...claude, available: false, reason: 'overflow-unverified' }] }));
+  try {
+    await h.connection.refreshAvailability();
+    assert.equal(h.connection.snapshot.offersLocal, false);
+    assert.deepEqual(runtime.participantChoices!.map((choice) => choice.identity.id), ['claude-code']);
+  } finally { done(); }
 });

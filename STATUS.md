@@ -32,9 +32,10 @@ invented chats only, while the step 2 trial is pending. Scope:
 | PR 3a: Ollama client, chat runs and alias binding (inactive) | Merged (#42) |
 | PR 3b: Local models in availability, preparation and storage (inactive) | Merged (#48) |
 | PR 3c: Local start, alias lifecycle, lock and quit (inactive) | Merged (#50) |
-| PR 4a: Desk wiring: local model picker, context, reply, Stop, Retry (nothing turned on) | In review |
-| PR 4b: Turn on the local route in the Mac app (Test build) | Not started |
-| PR 5: Proof and owner trial | Not started |
+| PR 4a: Desk wiring: local model picker, context, reply, Stop, Retry (nothing turned on) | Merged (#54) |
+| PR 4b: Turn on the local route in the Mac app (True Convo Test only), default `qwen3:8b` | In review |
+| PR 4c: Fake-Ollama host cases in the shared local vectors | Not started |
+| PR 5: Proof and owner trial ([checklist](docs/plans/step-3-owner-trial.md)) | Not started |
 
 ## Done
 

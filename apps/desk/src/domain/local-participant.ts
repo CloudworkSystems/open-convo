@@ -84,6 +84,31 @@ export function ollamaChoiceShortName(identity: Readonly<ParticipantIdentity>, c
   return `${residency === 'local' ? 'Local' : residency === 'cloud' ? 'Cloud' : 'Ollama'} · ${localModelName(identity)}`;
 }
 
+/** The owner's default local model (decision, October 16). */
+export const DEFAULT_LOCAL_MODEL = 'qwen3:8b';
+
+/**
+ * The model a session with no saved choice starts with: the default, only
+ * when the current catalog lists it as local and it can be used now.
+ * Otherwise none, and nothing else is picked in its place.
+ */
+export function defaultLocalChoice(
+  choices: readonly { readonly identity: Readonly<ParticipantIdentity>; readonly approved: boolean; readonly available: boolean }[] | undefined,
+  catalog: LocalCatalogView | undefined,
+): ParticipantIdentity | undefined {
+  const choice = choices?.find((item) => isLocalParticipant(item.identity) && localModelName(item.identity) === DEFAULT_LOCAL_MODEL
+    && item.approved && item.available && ollamaResidency(item.identity, catalog) === 'local');
+  return choice && { id: choice.identity.id, label: choice.identity.label, model: choice.identity.model, executionHost: choice.identity.executionHost };
+}
+
+/** Why a session has no model yet, in plain words, on a Mac that offers local models. */
+export function noLocalChoiceMessage(catalog: LocalCatalogView): string {
+  if (catalog.route?.state === 'ready' && !catalog.entries.some((entry) => entry.label === DEFAULT_LOCAL_MODEL)) {
+    return `No model chosen yet. The default, ${DEFAULT_LOCAL_MODEL}, isn’t installed in Ollama on this Mac, so nothing was picked for you. Choose a local model in the model picker. Your draft is kept.`;
+  }
+  return `No model chosen yet. Choose a local model in the model picker before sending. Your draft is kept.`;
+}
+
 export interface LocalCatalogView {
   /** Null on a host without a local route (contract revision 3). */
   readonly route: { readonly state: 'ready' | 'unavailable'; readonly reason: string | null } | null;

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { WorkspaceLoadResult, WorkspaceSaveOptions, WorkspaceSaveResult } from '../adapters/workspace-repository';
 import { DeskRuntimeContext, type DeskRuntime } from './runtime';
+import { defaultLocalChoice } from '../domain/local-participant';
 import { sameParticipantIdentity } from '../domain/participant-choices';
 import { applyCommand, isViewCommand } from '../domain/commands';
 import { createDemoState } from '../domain/demo';
@@ -167,6 +168,23 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
     restoreDraft: (sessionId, text) => dispatch({ type: 'set-draft', sessionId, text }),
   });
   notifyRunSave.current = runs.confirmSaved;
+
+  // Owner decision, October 16: a session with no saved model starts with
+  // the default local model, saved as its choice, but only when the current
+  // catalog lists it as local and usable. Otherwise nothing is picked and the
+  // composer says why. Tried once per session per visit, so a choice the
+  // owner clears or a failed save is never fought over.
+  const defaultTried = useRef(new Set<string>());
+  useEffect(() => {
+    const sessionId = state?.selection.sessionId;
+    if (!state || !sessionId || defaultTried.current.has(sessionId) || writeProblem.current || !isCurrent()) return;
+    const session = state.sessions.find((item) => item.id === sessionId);
+    if (!session || session.participantChoice || runtime.participantAvailabilityChecking) return;
+    const choice = defaultLocalChoice(runtime.participantChoices, runtime.localCatalog);
+    if (!choice) return;
+    defaultTried.current.add(sessionId);
+    dispatch({ type: 'set-participant-choice', sessionId, participant: choice });
+  });
 
   const dictation = useDeskDictation({ runtime, state, settleSignal: saveStatus,
     current: () => stateRef.current,

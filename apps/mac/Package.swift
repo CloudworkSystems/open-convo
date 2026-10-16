@@ -102,20 +102,28 @@ let package = Package(
             dependencies: ["DeskHost", "ParticipantSupervisorCore", "TrueConvoIdentity"]
         ),
         // The participant lane behind HostRouter (contract sections 3-10):
-        // one launch-scoped coordinator actor. INACTIVE: only the test target
-        // depends on it, nothing in Sources constructs it, and linking it
-        // constructs nothing (Codex Q1, Q19).
+        // one launch-scoped coordinator actor. Linking it constructs nothing
+        // (Codex Q1, Q19); only ParticipantAppWiring constructs it, and only
+        // for True Convo Test (step 3 PR 4b).
         .target(
             name: "ParticipantCoordinator",
             dependencies: ["DeskHost", "ParticipantProcess"]
         ),
         // The local-model route (contract section 20): Ollama on this Mac only.
-        // INACTIVE: only test targets depend on it. DeskHost for the catalog
-        // seam a participant host reads (`LocalCatalogReading`); the
-        // coordinator's start wiring follows in step 3 PR 3c.
+        // DeskHost for the catalog seam a participant host reads
+        // (`LocalCatalogReading`). Besides tests, only ParticipantAppWiring
+        // links it (step 3 PR 4b).
         .target(
             name: "LocalModelRoute",
             dependencies: ["DeskHost", "ParticipantProcess"]
+        ),
+        // Step 3 PR 4b: the app's one participant lane, the local route in
+        // True Convo Test only (nil for the real app). The Claude Code entry
+        // stays never available: shipping availability, no confirmation owner,
+        // and a launcher that refuses every launch.
+        .target(
+            name: "ParticipantAppWiring",
+            dependencies: ["DeskHost", "LocalModelRoute", "ParticipantCoordinator", "ParticipantProcess", "TrueConvoIdentity"]
         ),
         .testTarget(
             name: "LocalModelRouteTests",
@@ -148,8 +156,9 @@ let package = Package(
         ),
         // Section 17's owner as the Desk window's native controls see it
         // (plan F4). INACTIVE: only the test target depends on it, so the app
-        // links neither it nor ParticipantProcess; the window shows the
-        // controls only when given them, and the app gives none.
+        // never links it (it reaches ParticipantProcess only through
+        // ParticipantAppWiring, step 3 PR 4b); the window shows the controls
+        // only when given them, and the app gives none.
         .target(
             name: "ParticipantDeskControls",
             dependencies: ["DeskWindowKit", "ParticipantProcess"]
@@ -158,12 +167,15 @@ let package = Package(
             name: "ParticipantProcessTests",
             // DeskHostWebKit and DeskWindowKit only so tests can drive the real
             // coordinator through the WebKit glue and the Desk session (plan
-            // S11's end-to-end proof); the app and those targets still never
-            // depend on the coordinator.
+            // S11's end-to-end proof); those targets still never depend on the
+            // coordinator, and the app reaches it only through
+            // ParticipantAppWiring.
             // LocalModelRoute only so the shared local vectors run through
-            // the real catalog parser (step 3 PR 3b).
+            // the real catalog parser (step 3 PR 3b); ParticipantAppWiring to
+            // check the app's lane and run the opt-in end-to-end check (4b).
             dependencies: ["ParticipantProcess", "ParticipantSupervisorCore", "DeskHost", "ParticipantCoordinator",
-                           "DeskHostWebKit", "DeskWindowKit", "ParticipantDeskControls", "LocalModelRoute"],
+                           "DeskHostWebKit", "DeskWindowKit", "ParticipantDeskControls", "LocalModelRoute",
+                           "ParticipantAppWiring"],
             // Byte copy of the shared participant vectors (apps/desk/tests/fixtures);
             // ParticipantVectorTests fails if the two ever differ. cli-2.1.283:
             // invented streams in the shapes PREDICTED for Claude Code 2.1.283
@@ -188,7 +200,8 @@ let package = Package(
         ),
         .executableTarget(
             name: "VoiceCursorMac",
-            dependencies: ["VoiceCursorCore", "CorrectionMemory", "ArchiveProtection", "DeskHost", "DeskHostWebKit", "DeskWindowKit", "TrueConvoIdentity"]
+            dependencies: ["VoiceCursorCore", "CorrectionMemory", "ArchiveProtection", "DeskHost", "DeskHostWebKit", "DeskWindowKit", "TrueConvoIdentity",
+                           "ParticipantAppWiring"]
         ),
         .executableTarget(
             name: "VoiceCursorPolicyCheck",

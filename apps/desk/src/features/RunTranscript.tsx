@@ -55,6 +55,19 @@ function terminalLabel(phase: 'stopped' | 'failed', reason: ParticipantStopReaso
     : phase === 'stopped' ? `${result} · provider cancellation unconfirmed` : result;
 }
 
+/** A local run's cleanup line: none once its request on this Mac has ended. */
+function localCleanupLine(state: ParticipantCleanupState, acknowledged: boolean, canStop: boolean, stopState: RunStopState): string | undefined {
+  switch (state) {
+    case 'none': case 'cleared': return undefined;
+    case 'unowned': return 'This Mac no longer tracks this reply’s request, so it can’t retry Stop. Check this run before sending another message.';
+    default:
+      if (acknowledged) return 'Whether this reply’s request ended on this Mac is still unconfirmed. You can retry Stop or check this run.';
+      return !canStop && stopState !== 'requesting'
+        ? 'Whether this reply’s request ended on this Mac is not confirmed. Check this run before sending another message.'
+        : 'The reply ended, but Stop is not yet confirmed on this Mac. Retry Stop or check this run before sending another message.';
+  }
+}
+
 /** Presentation only: provider text stays literal and save failure never prevents Stop. */
 export function RunTranscript({ run, savedSequence, savedOutput, stopState, canStop = true, cleanupState = 'none', runtimeStatus, checkpointPending = false, saving, error, onStop }: RunTranscriptProps) {
   const statusId = useId();
@@ -75,7 +88,7 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
   const phase = localOutcome ? localOutcome : run.closure?.kind === 'unknown' ? 'Closed with outcome unknown'
     : run.closure?.kind === 'interrupted' ? 'Run ended with incomplete response'
     : terminal ? run.phase === 'stopped' || run.phase === 'failed' ? terminalLabel(run.phase, run.reason, run.participant.executionHost) : phaseLabels[run.phase]
-    : stopState === 'confirmed' ? 'Response stopped · provider cancellation unconfirmed'
+    : stopState === 'confirmed' ? local ? 'Stopped on this Mac. The reply so far is kept.' : 'Response stopped · provider cancellation unconfirmed'
     : runtimeStatus === 'unknown' || runtimeStatus === 'disposed' || runtimeStatus === 'unavailable' || runtimeStatus === 'mismatched' ? runtimeLabels[runtimeStatus]
     : stopState === 'requesting' ? 'Stop requested · awaiting confirmation'
     : stopState === 'unknown' ? 'Stop outcome unknown'
@@ -100,6 +113,17 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
   const saveLabel = prefixMismatch ? 'Save status could not be verified for this response.'
     : !sequenceConfirmed ? 'Save not yet confirmed.'
     : `Saved through update ${savedSequence}.${pending ? ` ${pendingLabel}` : ''}`;
+  // A local run has no provider process (contract section 20.4): its Stop
+  // cancels the request on this Mac and answers groupCleared true, so a
+  // confirmed cleanup needs no line at all, and the other states are worded
+  // without providers or processes.
+  const cleanupLine = local ? localCleanupLine(cleanupState, !!run.cleanupAcknowledgment, canStop, stopState)
+    : cleanupState === 'none' ? undefined
+    : run.cleanupAcknowledgment && cleanupState === 'unknown' ? 'Local cleanup remains unconfirmed. You can retry Stop or check this run if its original participant becomes reachable.'
+    : cleanupState === 'cleared' ? `Local cleanup is confirmed. The recorded response outcome is unchanged.${run.phase === 'completed' || run.closure?.kind === 'interrupted' && run.closure.terminalEvent.type === 'completed' ? '' : ' Provider cancellation is not confirmed.'}`
+    : cleanupState === 'unowned' ? 'The host no longer has a safe process handle. It cannot retry Stop for this response. Check the participant session directly; do not assume it has stopped.'
+    : !canStop && stopState !== 'requesting' ? 'Local cleanup is not confirmed. Reconnect the original participant to check this response; do not assume it has stopped.'
+    : 'The participant reported an end, but local cleanup is not confirmed. Retry Stop or check this run before sending another message.';
   const emptyOutput = closed || run.phase === 'unknown' || runtimeStatus === 'unknown' || runtimeStatus === 'disposed' || runtimeStatus === 'unavailable' || runtimeStatus === 'mismatched'
     ? 'No response text is available.' : terminal ? 'No response text was received.' : 'Waiting for response text.';
 
@@ -122,14 +146,10 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
           ? 'This workspace reached its storage limit. The retained response is incomplete.'
           : 'Some response updates could not be verified. The retained response is incomplete.'}
       </p>}
-      {run.cleanupAcknowledgment && <p className="run-empty" data-cleanup-acknowledgment>Unreachable cleanup acknowledged locally. This does not confirm that the participant stopped or that provider work was cancelled.</p>}
-      {cleanupState !== 'none' && <p className="run-empty" data-cleanup-state={cleanupState}>
-        {run.cleanupAcknowledgment && cleanupState === 'unknown' ? 'Local cleanup remains unconfirmed. You can retry Stop or check this run if its original participant becomes reachable.'
-          : cleanupState === 'cleared' ? `Local cleanup is confirmed. The recorded response outcome is unchanged.${run.phase === 'completed' || run.closure?.kind === 'interrupted' && run.closure.terminalEvent.type === 'completed' ? '' : ' Provider cancellation is not confirmed.'}`
-          : cleanupState === 'unowned' ? 'The host no longer has a safe process handle. It cannot retry Stop for this response. Check the participant session directly; do not assume it has stopped.'
-          : !canStop && stopState !== 'requesting' ? 'Local cleanup is not confirmed. Reconnect the original participant to check this response; do not assume it has stopped.'
-          : 'The participant reported an end, but local cleanup is not confirmed. Retry Stop or check this run before sending another message.'}
-      </p>}
+      {run.cleanupAcknowledgment && <p className="run-empty" data-cleanup-acknowledgment>{local
+        ? 'You chose to continue without confirming this reply ended on this Mac.'
+        : 'Unreachable cleanup acknowledged locally. This does not confirm that the participant stopped or that provider work was cancelled.'}</p>}
+      {cleanupLine && <p className="run-empty" data-cleanup-state={cleanupState}>{cleanupLine}</p>}
       <article className="run-message" aria-label="Your message" data-message-id={run.userMessageId}>
         <h3>You</h3>
         <div className="run-message-text" dir="auto">{run.inputChunks.join('')}</div>

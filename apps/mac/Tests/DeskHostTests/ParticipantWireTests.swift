@@ -218,13 +218,15 @@ struct ParticipantWireTests {
             "{\"connectionId\":\"51000000-0000-4000-8000-000000000001\",\"event\":{\"at\":\"2026-10-09T00:00:01.000Z\","))
     }
 
-    /// A tripwire until the page codec for the longer list is bundled: no
-    /// app code builds a participant configuration, and the one hand-off to
-    /// a host is the coordinator's `makeHost`, passing its own (Codex's S10
-    /// carried requirement 1; nothing in the app constructs a coordinator,
-    /// which ProcessLauncherTests' gates hold). Switching the lane on is a
-    /// reviewed change that edits this test.
-    @Test("Nothing in Sources builds a ParticipantHostConfiguration, and only the coordinator's makeHost passes one to a host")
+    /// A tripwire: one place in the app builds a participant configuration,
+    /// the app's lane wiring (step 3 PR 4b: the local route, in True Convo
+    /// Test only, with the never-available Claude entry), on one exact line;
+    /// and the one hand-off to a host is the coordinator's `makeHost`,
+    /// passing its own (Codex's S10 carried requirement 1; only the wiring
+    /// constructs a coordinator, which ProcessLauncherTests' gates hold).
+    /// Any other way to switch a lane on is a reviewed change that edits
+    /// this test.
+    @Test("Only the app's lane wiring builds a ParticipantHostConfiguration, on one exact line, and only the coordinator's makeHost passes one to a host")
     func nothingSwitchesTheLaneOn() throws {
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("Sources")
@@ -239,7 +241,11 @@ struct ParticipantWireTests {
                 if !code.hasPrefix("//") { lines.append((relative, code)) }
             }
         }
-        for construction in ["ParticipantHostConfiguration(", "ParticipantHostConfiguration.init", "Self(pin:"] {
+        let wiring = lines.filter { $0.line.contains("ParticipantHostConfiguration(") }
+        #expect(wiring.map(\.file) == ["ParticipantAppWiring/LocalConversationLane.swift"], "\(wiring)")
+        #expect(wiring.map(\.line) == ["hostConfiguration: ParticipantHostConfiguration(pin: claudePin, localRoute: route),"],
+                "the Claude pin with no first-trial bound and the given local route; nothing else")
+        for construction in ["ParticipantHostConfiguration.init", "Self(pin:"] {
             #expect(lines.filter { $0.line.contains(construction) }.map(\.file) == [], "\(construction)")
         }
         #expect(lines.filter { $0.line.contains("init(pin:") }.map(\.file) == ["DeskHost/ParticipantWire.swift"],
