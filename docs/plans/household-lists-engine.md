@@ -2,8 +2,10 @@
 
 Written October 16, 2026 by the planning session from the owner's decisions.
 Session name: `OC-261016-household-lists-engine`. Umbrella: Family and Home.
-Built by an outside builder under AGENTS.md "Outside Builders", after the Site
-Engine slice (one outside module at a time).
+Built by an outside builder under AGENTS.md "Outside Builders". Builder:
+**Codex** (in Codex's cloud, not on the owner's Mac), started alongside the
+Site Engine slice (owner decision, October 16: two outside modules at a time).
+Reviewer: a Claude session, since Codex can't review its own work.
 
 ## Why
 
@@ -125,7 +127,8 @@ unless unavoidable (listed with license); no repo license file.
 
 ## Review And Finish Line
 
-A different agent reviews it as code until Codex gives a 👍; the planning
+A Claude session reviews it as code until it finds nothing open (Codex built
+it, so Codex does not review it); the planning
 session checks it against this document and gives the owner a short try-it
-note; the owner merges. Done when the tests pass with one command, Codex has
-given a 👍, and the planning check finds nothing missing.
+note; the owner merges. Done when the tests pass with one command, the Claude
+review has nothing open, and the planning check finds nothing missing.

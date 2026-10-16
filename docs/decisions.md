@@ -6,6 +6,10 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 16:** Up to two outside modules at a time, each with a different
+  builder: GrokBot builds Site Engine (Codex reviews); Codex builds the
+  household lists engine in its cloud (a Claude session reviews); the habit
+  grid engine starts when either finishes.
 - **Oct 15:** Foundations set ([docs/foundations.md](foundations.md)). Claude Code adapter,
   then Canvas/Atlas/Navigator, right after step 3; iPhone capture app right after step 5; modules
   group under umbrellas (Personal, Family, Business, Creator, Code, Agents).
