@@ -273,6 +273,10 @@ test('with Ollama not running, the picker and composer say why and nothing is se
   try {
     const { page } = f;
     await expect(page.locator('#send-blocked-reason')).toContainText('Ollama is not running on this Mac.');
+    // The saved pin can't be classified while the route is down: neutral, never "stays on this Mac".
+    await expect(page.locator('.provider-label')).toContainText('Ollama · invented-model:7b · not available right now');
+    await expect(page.locator('.provider-label')).not.toContainText('stays on this Mac');
+    await expect(page.getByRole('button', { name: /^Model and participant/ })).toContainText('Ollama · invented-model:7b');
     await page.getByRole('textbox', { name: 'Your message', exact: true }).fill('Invented question.');
     await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
     await page.getByRole('button', { name: /^Model and participant/ }).click();
@@ -318,6 +322,26 @@ test('a saved cloud choice is never called local, in the picker or above the con
     await expect(page.getByRole('button', { name: /^Model and participant/ })).toContainText('Cloud · invented-cloud:cloud');
     await page.getByRole('textbox', { name: 'Your message', exact: true }).fill('Invented question.');
     await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
+    assert.deepEqual((await f.host()).starts, []);
+    f.check();
+  } finally { await f.close(); }
+});
+
+test('a saved remote pin without a ":cloud" name that later disappears is never called local', async () => {
+  const remotePin = { id: 'ollama-local', label: 'invented-remote:20b', model: `invented-remote:20b@${cloudDigest}`, executionHost: 'this-mac' };
+  const f = await fixture({ choice: remotePin });
+  try {
+    const { page } = f;
+    await expect(page.locator('.provider-label')).toContainText('Ollama · invented-remote:20b · no longer installed');
+    await expect(page.locator('.provider-label')).not.toContainText('stays on this Mac');
+    await page.getByRole('button', { name: /^Model and participant/ }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading', { name: 'Ollama · invented-remote:20b · no longer installed' })).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'Local · invented-model:7b · stays on this Mac' })).toBeVisible();
+    const saved = dialog.getByRole('region', { name: 'Saved participant selection' });
+    await expect(saved).toContainText('Process location' + 'Unknown right now');
+    await expect(saved).not.toContainText('this-mac');
+    await expect(saved).not.toContainText('stays on this Mac');
     assert.deepEqual((await f.host()).starts, []);
     f.check();
   } finally { await f.close(); }

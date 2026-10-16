@@ -7,7 +7,7 @@ import {
   validParticipantChoice,
   type ParticipantChoice,
 } from '../domain/participant-choices';
-import { isLocalParticipant, isRemoteOllamaModel, localModelName, ollamaChoiceShortName, ollamaChoiceTitle } from '../domain/local-participant';
+import { isLocalParticipant, localModelName, ollamaChoiceShortName, ollamaChoiceTitle, ollamaResidency, type LocalCatalogView } from '../domain/local-participant';
 import { Icon } from '../ui/Icon';
 import { Modal } from '../ui/Modal';
 import './participant-picker.css';
@@ -16,7 +16,7 @@ export function ParticipantPicker({
   choices,
   selected,
   disabled = false,
-  error, confirmation, availabilityMessage, availabilityChecking = false, localNotice, selectedProblem, localEntries = [], onOpen, onClose,
+  error, confirmation, availabilityMessage, availabilityChecking = false, localNotice, selectedProblem, localCatalog, onOpen, onClose,
   onSelect,
 }: {
   choices: readonly ParticipantChoice[];
@@ -30,8 +30,8 @@ export function ParticipantPicker({
   localNotice?: string;
   /** Why the saved local choice can't be used: missing, changed or route down. */
   selectedProblem?: string;
-  /** The newest catalog's Ollama entries, so a cloud model is never called local. */
-  localEntries?: readonly (ParticipantIdentity & { readonly reason: string | null })[];
+  /** The newest catalog: the only evidence for calling an Ollama pin local or cloud. */
+  localCatalog?: LocalCatalogView;
   onOpen?: () => void;
   onClose?: () => void;
   onSelect: (identity: ParticipantIdentity) => void;
@@ -53,12 +53,12 @@ export function ParticipantPicker({
   const availabilityStatus = availabilityChecking ? 'Checking participant availability. Your draft is kept.'
     : availabilityMessage ?? (approved.length ? approved.map((choice) => `${choice.identity.label}: ${choice.available ? 'Available' : `Unavailable — ${choice.unavailableReason}`}.`).join(' ')
       : 'No approved participants are listed.');
-  // A cloud-backed Ollama entry is never "stays on this Mac" (section 20.2).
-  const remote = (identity: ParticipantIdentity) => isRemoteOllamaModel(identity, localEntries);
+  // Only the current catalog's exact local entry is "stays on this Mac" (section 20.2).
+  const residency = (identity: ParticipantIdentity) => ollamaResidency(identity, localCatalog);
   const shortName = (identity: ParticipantIdentity) => isLocalParticipant(identity)
-    ? ollamaChoiceShortName(identity, localEntries) : identity.model;
+    ? ollamaChoiceShortName(identity, localCatalog) : identity.model;
   const title = (identity: ParticipantIdentity) => isLocalParticipant(identity)
-    ? ollamaChoiceTitle(identity, localEntries) : identity.label;
+    ? ollamaChoiceTitle(identity, localCatalog) : identity.label;
   const currentConfirmation = availabilityChecking || availabilityMessage ? undefined : confirmation;
 
   return <>
@@ -100,7 +100,7 @@ export function ParticipantPicker({
             <dt>Model</dt><dd>{isLocalParticipant(selected) ? localModelName(selected) : selected.model}</dd>
             <dt>Provider</dt><dd>Unknown</dd>
             <dt>Data destination</dt><dd>Unknown</dd>
-            <dt>Process location</dt><dd>{selected.executionHost}</dd>
+            <dt>Process location</dt><dd>{isLocalParticipant(selected) ? { local: 'This Mac', cloud: 'Ollama’s servers', unknown: 'Unknown right now' }[residency(selected)] : selected.executionHost}</dd>
           </dl>
           <p className="participant-picker-availability">{availabilityChecking ? 'Checking participant availability.' : availabilityMessage ?? (isLocalParticipant(selected) && selectedProblem
             ? `Unavailable — ${selectedProblem}` : 'Unavailable — this saved selection is not in the approved participant list.')}</p>
@@ -122,7 +122,7 @@ export function ParticipantPicker({
                   {isLocalParticipant(choice.identity) && <><dt>Version</dt><dd>{choice.identity.model.slice(choice.identity.label.length + 1, choice.identity.label.length + 13)}</dd></>}
                   <dt>Provider</dt><dd>{choice.provider}</dd>
                   <dt>Data destination</dt><dd>{choice.destination}</dd>
-                  <dt>Process location</dt><dd>{isLocalParticipant(choice.identity) ? remote(choice.identity) ? 'Ollama’s servers' : 'This Mac' : choice.identity.executionHost}</dd>
+                  <dt>Process location</dt><dd>{isLocalParticipant(choice.identity) ? { local: 'This Mac', cloud: 'Ollama’s servers', unknown: 'Unknown right now' }[residency(choice.identity)] : choice.identity.executionHost}</dd>
                 </dl>
                 <p id={availabilityId} className="participant-picker-availability">
                   {availabilityChecking ? 'Checking availability' : choice.available ? 'Available' : `Unavailable — ${choice.unavailableReason}`}

@@ -6,6 +6,7 @@ import './composer.css';
 import { ParticipantPicker } from './ParticipantPicker';
 import type { ParticipantChoice } from '../domain/participant-choices';
 import type { ParticipantIdentity } from '../domain/conversation-run-types';
+import type { LocalCatalogView } from '../domain/local-participant';
 import { useDeskDictationView } from '../app/use-desk-dictation';
 
 const MIN_DRAFT_HEIGHT = 78;
@@ -23,7 +24,7 @@ export function Conversation({
   participantLabel,
   participantChoices,
   participantChoiceError, participantConfirmation, participantAvailabilityMessage, participantAvailabilityChecking, onParticipantPickerOpen, onParticipantPickerClose,
-  participantLocalNotice, participantSelectedProblem, participantLocalEntries,
+  participantLocalNotice, participantSelectedProblem, participantLocalCatalog,
   onParticipantSelect,
   participantBusy = false,
   participantSendUnavailable = false,
@@ -45,7 +46,7 @@ export function Conversation({
   participantAvailabilityChecking?: boolean;
   participantLocalNotice?: string;
   participantSelectedProblem?: string;
-  participantLocalEntries?: readonly (ParticipantIdentity & { readonly reason: string | null })[];
+  participantLocalCatalog?: LocalCatalogView;
   onParticipantPickerOpen?: () => void;
   onParticipantPickerClose?: () => void;
   onParticipantSelect?: (sessionId: string, participant: ParticipantIdentity) => void;
@@ -348,7 +349,7 @@ export function Conversation({
             choices={participantChoices ?? []} selected={session?.participantChoice}
             error={participantChoiceError} confirmation={participantConfirmation}
             availabilityMessage={participantAvailabilityMessage} availabilityChecking={participantAvailabilityChecking}
-            localNotice={participantLocalNotice} selectedProblem={participantSelectedProblem} localEntries={participantLocalEntries}
+            localNotice={participantLocalNotice} selectedProblem={participantSelectedProblem} localCatalog={participantLocalCatalog}
             onOpen={onParticipantPickerOpen} onClose={onParticipantPickerClose}
             disabled={readOnly || !session || !onParticipantSelect}
             onSelect={(participant) => session && onParticipantSelect?.(session.id, participant)} />

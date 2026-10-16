@@ -66,6 +66,9 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
   const cleanupPending = cleanupState === 'unknown' || cleanupState === 'owned';
   const stopDisabled = !canStop || (!cleanupPending && (terminal || closed || stopState === 'confirmed')) || stopState === 'requesting';
   const local = isLocalParticipant(run.participant);
+  // Native starts a local run only for an exact entry it lists as local
+  // (section 20.4), so "stays on this Mac" is claimed only once it started.
+  const sentLocally = local && run.lastSequence >= 1;
   // A local run has no provider to cancel: Stop ends its request on this Mac
   // (contract section 20.4), so its endings are worded plainly.
   const localOutcome = local ? localRunOutcome(run) : undefined;
@@ -131,11 +134,11 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
         <h3>You</h3>
         <div className="run-message-text" dir="auto">{run.inputChunks.join('')}</div>
       </article>
-      <article className="run-message" aria-label={`${local ? `Local ${localModelName(run.participant)}` : run.participant.label} response`} data-message-id={run.assistantMessageId}>
-        <h3>{local ? `Local · ${localModelName(run.participant)}` : run.participant.label}</h3>
+      <article className="run-message" aria-label={`${local ? `${sentLocally ? 'Local' : 'Ollama'} ${localModelName(run.participant)}` : run.participant.label} response`} data-message-id={run.assistantMessageId}>
+        <h3>{local ? `${sentLocally ? 'Local' : 'Ollama'} · ${localModelName(run.participant)}` : run.participant.label}</h3>
         <dl className="run-participant">
           <div><dt>Model</dt><dd>{local ? localModelName(run.participant) : run.participant.model}</dd></div>
-          <div><dt>Running on</dt><dd>{local ? 'This Mac · stays on this Mac' : run.participant.executionHost}</dd></div>
+          <div><dt>Running on</dt><dd>{local ? sentLocally ? 'This Mac · stays on this Mac' : 'Not sent' : run.participant.executionHost}</dd></div>
         </dl>
         {output ? (
           <div className="run-message-text run-output" dir="auto" aria-live="off">

@@ -584,7 +584,7 @@ export function useConversationRuns(options: RunWorkspace) {
   const inputBlock = inputTooLarge ? 'This message is too long for the current trial. Shorten it before sending. Your full draft is kept.' : undefined;
   const savedSelection = selectedSession?.participantChoice;
   const choiceLabel = savedSelection
-    ? `${selectedLocal ? ollamaChoiceTitle(savedSelection, options.runtime.localCatalog?.entries) : savedSelection.label}${options.runtime.participantAvailabilityChecking ? ' · Checking availability' : options.runtime.participantChoices === undefined || catalogBlock(savedSelection) ? ' · Unavailable' : options.runtime.refreshParticipants ? ' · Available' : ''}`
+    ? `${selectedLocal ? ollamaChoiceTitle(savedSelection, options.runtime.localCatalog) : savedSelection.label}${options.runtime.participantAvailabilityChecking ? ' · Checking availability' : options.runtime.participantChoices === undefined || catalogBlock(savedSelection) ? ' · Unavailable' : options.runtime.refreshParticipants ? ' · Available' : ''}`
     : options.runtime.participantChoices !== undefined ? 'No participant chosen' : options.runtime.participant?.identity.label;
   const participantMode = options.runtime.participantChoices !== undefined || !!selectedSession?.participantChoice
     || !!options.runtime.participant || options.state?.schemaVersion === 2;

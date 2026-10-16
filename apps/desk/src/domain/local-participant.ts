@@ -22,37 +22,6 @@ export function localModelName(identity: Readonly<ParticipantIdentity>): string 
   return identity.label;
 }
 
-/** What the composer shows before Send (step 3 scope: "Visible before Send"). Only for a model that runs on this Mac. */
-export function localParticipantLabel(identity: Readonly<ParticipantIdentity>): string {
-  return `Local · ${localModelName(identity)} · stays on this Mac`;
-}
-
-/**
- * Whether an Ollama entry runs off this Mac (section 20.2): a `:cloud` name,
- * or the catalog's `model-not-local` reason for this exact entry. Never
- * labeled as staying on this Mac.
- */
-export function isRemoteOllamaModel(identity: Readonly<ParticipantIdentity>,
-  entries: readonly (Readonly<ParticipantIdentity> & { readonly reason: string | null })[] = []): boolean {
-  if (!isLocalParticipant(identity)) return false;
-  if (localModelName(identity).endsWith(':cloud')) return true;
-  return entries.some((entry) => entry.reason === 'model-not-local' && entry.id === identity.id && entry.label === identity.label
-    && entry.model === identity.model && entry.executionHost === identity.executionHost);
-}
-
-/** The full name of an Ollama choice: "Local · … · stays on this Mac" only for a model that runs here. */
-export function ollamaChoiceTitle(identity: Readonly<ParticipantIdentity>,
-  entries?: readonly (Readonly<ParticipantIdentity> & { readonly reason: string | null })[]): string {
-  return isRemoteOllamaModel(identity, entries)
-    ? `Cloud · ${localModelName(identity)} · not on this Mac (can’t be used)` : localParticipantLabel(identity);
-}
-
-/** The short name on the picker button. */
-export function ollamaChoiceShortName(identity: Readonly<ParticipantIdentity>,
-  entries?: readonly (Readonly<ParticipantIdentity> & { readonly reason: string | null })[]): string {
-  return `${isRemoteOllamaModel(identity, entries) ? 'Cloud' : 'Local'} · ${localModelName(identity)}`;
-}
-
 /** Plain-language reason when the whole local route is down (section 20.2). */
 export function localRouteMessage(reason: LocalRouteReason | string | null | undefined): string {
   switch (reason) {
@@ -69,6 +38,50 @@ export function localEntryMessage(reason: string | null | undefined): string {
   return reason === 'model-not-local'
     ? 'This model runs on Ollama’s servers, not on this Mac. Only models that stay on this Mac can be used here.'
     : 'This local model is unavailable right now.';
+}
+
+/**
+ * The one "who receives this" classifier for an Ollama pin (contract section
+ * 20.2). Every place that says "stays on this Mac" goes through it.
+ * - `local`: the current catalog's route is ready and lists this exact pin
+ *   (name and digest) as available, with no `model-not-local` reason, and
+ *   the name doesn't end in `:cloud`.
+ * - `cloud`: the name ends in `:cloud` (never local, whatever the host says),
+ *   or the current catalog lists this exact pin as `model-not-local`.
+ * - `unknown`: the current catalog can't classify it (no catalog, route not
+ *   ready, pin missing, digest changed). Neither local nor cloud is claimed.
+ */
+export type OllamaResidency = 'local' | 'cloud' | 'unknown';
+export function ollamaResidency(identity: Readonly<ParticipantIdentity>, catalog: LocalCatalogView | undefined): OllamaResidency {
+  if (!isLocalParticipant(identity)) return 'unknown';
+  if (localModelName(identity).endsWith(':cloud')) return 'cloud';
+  if (catalog?.route?.state !== 'ready') return 'unknown';
+  const exact = catalog.entries.find((entry) => entry.id === identity.id && entry.label === identity.label
+    && entry.model === identity.model && entry.executionHost === identity.executionHost);
+  if (!exact) return 'unknown';
+  if (exact.reason === 'model-not-local') return 'cloud';
+  return exact.available && exact.reason === null ? 'local' : 'unknown';
+}
+
+/** The full name of an Ollama pin; "Local · … · stays on this Mac" only when the current catalog says so. */
+export function ollamaChoiceTitle(identity: Readonly<ParticipantIdentity>, catalog: LocalCatalogView | undefined): string {
+  const name = localModelName(identity);
+  switch (ollamaResidency(identity, catalog)) {
+    case 'local': return `Local · ${name} · stays on this Mac`;
+    case 'cloud': return `Cloud · ${name} · not on this Mac (can’t be used)`;
+    default:
+      if (catalog?.route?.state === 'ready') {
+        return catalog.entries.some((entry) => entry.label === identity.label)
+          ? `Ollama · ${name} · changed since you chose it` : `Ollama · ${name} · no longer installed`;
+      }
+      return `Ollama · ${name} · not available right now`;
+  }
+}
+
+/** The short name on the picker button. */
+export function ollamaChoiceShortName(identity: Readonly<ParticipantIdentity>, catalog: LocalCatalogView | undefined): string {
+  const residency = ollamaResidency(identity, catalog);
+  return `${residency === 'local' ? 'Local' : residency === 'cloud' ? 'Cloud' : 'Ollama'} · ${localModelName(identity)}`;
 }
 
 export interface LocalCatalogView {

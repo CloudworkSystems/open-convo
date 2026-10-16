@@ -9,7 +9,7 @@ import type { WorkspaceRepository } from '../../src/adapters/workspace-repositor
 import type { ConversationRun } from '../../src/domain/conversation-run-types';
 import { createConversationRun } from '../../src/domain/conversation-runs';
 import {
-  canRetryLocalRun, isRemoteOllamaModel, localChoiceProblem, ollamaChoiceShortName, ollamaChoiceTitle, localParticipantLabel, localRouteMessage, localRunOutcome, localStartRefusalMessage,
+  canRetryLocalRun, localChoiceProblem, ollamaChoiceShortName, ollamaChoiceTitle, ollamaResidency, localRouteMessage, localRunOutcome, localStartRefusalMessage,
   MAX_LOCAL_CONTEXT_BYTES, selectLocalContext,
 } from '../../src/domain/local-participant';
 
@@ -141,22 +141,41 @@ test('the page derives "missing" and "changed" for a saved local choice', () => 
   assert.match(localChoiceProblem(inventedLocal, { route, entries: [] })!, /no longer installed/);
   assert.match(localChoiceProblem(inventedLocal, { route: { state: 'unavailable', reason: 'catalog-unreadable' }, entries: [] })!, /could not be read/);
   assert.match(localChoiceProblem(inventedLocal, { route: null, entries: [] })!, /does not offer local models/);
-  assert.equal(localParticipantLabel(inventedLocal), 'Local · invented-model:7b · stays on this Mac');
 });
 
-test('a cloud-backed Ollama entry is never labeled as staying on this Mac', () => {
-  const cloudEntry = localEntry('invented-remote:20b', digestB, false);
-  const { available: _a, reason: _r, ...cloudIdentity } = cloudEntry;
-  const named = { ...inventedLocal, label: 'invented-thing:cloud', model: `invented-thing:cloud@${digestB}` };
-  assert.equal(isRemoteOllamaModel(cloudIdentity, [cloudEntry]), true);
-  assert.equal(isRemoteOllamaModel(named), true, 'a :cloud name is remote even without a catalog');
-  assert.equal(isRemoteOllamaModel(inventedLocal, [localEntry('invented-model:7b')]), false);
-  for (const [identity, entries] of [[cloudIdentity, [cloudEntry]], [named, []]] as const) {
-    assert.match(ollamaChoiceTitle(identity, entries), /^Cloud · .* · not on this Mac \(can’t be used\)$/);
-    assert.doesNotMatch(ollamaChoiceTitle(identity, entries), /stays on this Mac/);
-    assert.match(ollamaChoiceShortName(identity, entries), /^Cloud · /);
+test('only the current catalog’s exact local entry is called "stays on this Mac"', () => {
+  const route = { state: 'ready' as const, reason: null };
+  const present = { route, entries: [localEntry('invented-model:7b')] };
+  assert.equal(ollamaResidency(inventedLocal, present), 'local');
+  assert.equal(ollamaChoiceTitle(inventedLocal, present), 'Local · invented-model:7b · stays on this Mac');
+  assert.equal(ollamaChoiceShortName(inventedLocal, present), 'Local · invented-model:7b');
+
+  // A saved local pin while the route is down, or with no catalog at all: neutral.
+  for (const catalog of [{ route: { state: 'unavailable' as const, reason: 'ollama-not-running' }, entries: [] }, { route: null, entries: [] }, undefined]) {
+    assert.equal(ollamaResidency(inventedLocal, catalog), 'unknown');
+    assert.equal(ollamaChoiceTitle(inventedLocal, catalog), 'Ollama · invented-model:7b · not available right now');
+    assert.equal(ollamaChoiceShortName(inventedLocal, catalog), 'Ollama · invented-model:7b');
   }
-  assert.equal(ollamaChoiceTitle(inventedLocal, [localEntry('invented-model:7b')]), 'Local · invented-model:7b · stays on this Mac');
+  // Same name, other digest; or removed: neutral, never local.
+  assert.equal(ollamaChoiceTitle(inventedLocal, { route, entries: [localEntry('invented-model:7b', digestB)] }), 'Ollama · invented-model:7b · changed since you chose it');
+  assert.equal(ollamaChoiceTitle(inventedLocal, { route, entries: [] }), 'Ollama · invented-model:7b · no longer installed');
+
+  // A remote model whose name has no ":cloud": cloud while the catalog lists it so...
+  const remoteEntry = localEntry('invented-remote:20b', digestB, false);
+  const { available: _a, reason: _r, ...remotePin } = remoteEntry;
+  assert.equal(ollamaChoiceTitle(remotePin, { route, entries: [remoteEntry] }), 'Cloud · invented-remote:20b · not on this Mac (can’t be used)');
+  assert.equal(ollamaChoiceShortName(remotePin, { route, entries: [remoteEntry] }), 'Cloud · invented-remote:20b');
+  // ...and neutral, never local, once it disappears or the route goes down.
+  for (const catalog of [{ route, entries: [] }, { route, entries: [localEntry('invented-model:7b')] },
+    { route: { state: 'unavailable' as const, reason: 'catalog-unreadable' }, entries: [] }]) {
+    assert.equal(ollamaResidency(remotePin, catalog), 'unknown');
+    assert.match(ollamaChoiceTitle(remotePin, catalog), /^Ollama · invented-remote:20b · /);
+    assert.doesNotMatch(ollamaChoiceTitle(remotePin, catalog), /stays on this Mac|^Local/);
+  }
+  // A ":cloud" name is cloud whatever the catalog says.
+  const named = { ...inventedLocal, label: 'invented-thing:cloud', model: `invented-thing:cloud@${digestB}` };
+  assert.equal(ollamaResidency(named, undefined), 'cloud');
+  assert.equal(ollamaResidency(named, { route, entries: [localEntry('invented-thing:cloud', digestB, true)] }), 'cloud');
 });
 
 let ids = 0;

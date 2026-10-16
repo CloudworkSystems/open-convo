@@ -11,6 +11,7 @@ import { ResizeHandle } from '../ui/ResizeHandle';
 import { Navigation, type SessionRevealRequest } from './Navigation';
 import type { ParticipantChoice } from '../domain/participant-choices';
 import type { ParticipantIdentity } from '../domain/conversation-run-types';
+import type { LocalCatalogView } from '../domain/local-participant';
 import { Conversation } from './Conversation';
 import { GoalPanel } from './GoalPanel';
 import { Canvas, Atlas } from './NexusViews';
@@ -45,7 +46,7 @@ export interface DeskFoundationProps {
   participantAvailabilityChecking?: boolean;
   /** Step 3 PR 4a: why local models are unavailable, and why a saved local choice can't be used. */
   participantLocalNotice?: string; participantSelectedProblem?: string;
-  participantLocalEntries?: readonly (ParticipantIdentity & { readonly reason: string | null })[];
+  participantLocalCatalog?: LocalCatalogView;
   onParticipantPickerOpen?: () => void;
   onParticipantPickerClose?: () => void;
   onParticipantSelect?: (sessionId: string, participant: ParticipantIdentity) => void;
@@ -380,7 +381,7 @@ export function DeskFoundation(props: DeskFoundationProps) {
                 participantAvailabilityMessage={props.participantAvailabilityMessage}
                 participantAvailabilityChecking={props.participantAvailabilityChecking}
                 participantLocalNotice={props.participantLocalNotice} participantSelectedProblem={props.participantSelectedProblem}
-                participantLocalEntries={props.participantLocalEntries}
+                participantLocalCatalog={props.participantLocalCatalog}
                 onParticipantPickerOpen={props.onParticipantPickerOpen} onParticipantPickerClose={props.onParticipantPickerClose}
                 participantBusy={props.participantBusy} participantSendUnavailable={props.participantSendUnavailable}
                 participantSendBlockedReason={props.participantSendBlockedReason} />

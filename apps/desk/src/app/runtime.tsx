@@ -14,7 +14,7 @@ import type { ParticipantIdentity } from '../domain/conversation-run-types';
 import type { NativeParticipantConnection } from '../adapters/native-participant-port';
 import type { NativeParticipantConfirmation } from '../adapters/native-participant-codec';
 import type { NativeDictationLane } from '../adapters/native-dictation';
-import { localEntryMessage, localRouteMessage, type LocalCatalogView } from '../domain/local-participant';
+import { localEntryMessage, localRouteMessage, ollamaResidency, type LocalCatalogView } from '../domain/local-participant';
 
 export interface RuntimeLifecycle {
   isActive(): boolean;
@@ -214,11 +214,13 @@ function createRuntime(mode: DeskRuntime['mode'], workspace: WorkspaceRepository
       });
       // Section 20.2: one choice per local chat model. Listed only from a ready
       // route; a cloud model is listed but never available.
-      const ready = snapshot.route?.state === 'ready';
+      const catalog: LocalCatalogView = { route: snapshot.route, entries: snapshot.local };
       const local = snapshot.local.map((item) => {
-        const usable = ready && !snapshot.checking && !snapshot.error && item.available;
+        // The same classifier as every label: only an exact local entry stays on this Mac.
+        const residency = ollamaResidency(item, catalog);
+        const usable = residency === 'local' && !snapshot.checking && !snapshot.error;
         return Object.freeze({ identity: Object.freeze({ id: item.id, label: item.label, model: item.model, executionHost: item.executionHost }),
-          provider: 'Ollama on this Mac', destination: item.available ? 'Stays on this Mac' : 'Ollama’s servers (not this Mac)', approved: true,
+          provider: residency === 'local' ? 'Ollama on this Mac' : 'Ollama', destination: residency === 'local' ? 'Stays on this Mac' : residency === 'cloud' ? 'Ollama’s servers (not this Mac)' : 'Unknown right now', approved: true,
           available: usable, unavailableReason: usable ? null : snapshot.checking ? availabilityChecking
             : snapshot.error ? availabilityCheckFailed : localEntryMessage(item.reason) });
       });
