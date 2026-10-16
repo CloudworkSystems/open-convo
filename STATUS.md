@@ -65,6 +65,9 @@ after Site Engine. Plan:
 [docs/plans/household-lists-engine.md](docs/plans/household-lists-engine.md).
 First real use after step 5, synced through iCloud with the owner's approval.
 
+**Habit grid engine** (Personal), queued after the household lists engine.
+Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
+
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:
 [docs/plans/merge-gate.md](docs/plans/merge-gate.md). Checks built but not
