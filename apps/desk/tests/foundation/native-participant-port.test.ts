@@ -355,7 +355,7 @@ test('strict pushes reject stale documents and malformed terminal reasons; revok
   await refreshing;
   h.push(push);
   assert.equal(received.length, 1);
-  assert.deepEqual(h.connection.snapshot, { entry: null, local: [], route: null, available: false, checking: false, error: 'revoked' });
+  assert.deepEqual(h.connection.snapshot, { entry: null, local: [], route: null, offersLocal: false, available: false, checking: false, error: 'revoked' });
   assert.deepEqual(await h.port.stop(target), { kind: 'unknown' });
 });
 

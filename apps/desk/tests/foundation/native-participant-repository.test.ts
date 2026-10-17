@@ -255,3 +255,42 @@ test('out-of-order reads and stale expected revisions cannot lose known runs or 
     assert.equal((await saved).kind, 'saved');
   } finally { f.close(); }
 });
+
+// Step 3 PR 4b: a local model's prepared run has `contextRunIds` (contract
+// section 20.3). Before this fix the repository refused it before dispatch,
+// so a local run was never prepared on the Mac.
+test('a local prepared run with its context ids is claimed; a Claude run with them, or a local run without, is refused', async () => {
+  const f = setup();
+  try {
+    await f.read(record());
+    const base = record();
+    const localRun = (context: boolean) => {
+      const result = createConversationRun({ runId: id(40), sessionId: base.sessions.at(-1)!.id, userMessageId: id(41), assistantMessageId: id(42),
+        participant: { id: 'ollama-local', label: 'invented-local:8b', model: `invented-local:8b@${'b'.repeat(64)}`, executionHost: 'this-mac' },
+        input: 'Invented local question.', createdAt: at, ...(context ? { contextRunIds: [] } : {}) });
+      assert.equal(result.kind, 'ok');
+      if (result.kind !== 'ok') throw new Error('Expected a valid invented run');
+      const state = structuredClone(base);
+      state.schemaVersion = 2; state.revision += 2; state.updatedAt = at; state.capabilities.provider = 'runtime-selected';
+      state.conversationRuns = [structuredClone(result.run)];
+      return state;
+    };
+    const withoutContext = localRun(true);
+    delete withoutContext.conversationRuns![0].contextRunIds;
+    const claudeWithContext = localRun(true);
+    claudeWithContext.conversationRuns![0].participant.id = 'claude-code';
+    for (const [attempt, why] of [[withoutContext, 'local without context ids'], [claudeWithContext, 'Claude with context ids']] as const) {
+      if (!validateState(attempt).valid) continue;
+      assert.equal((await f.repository.save(attempt, 1)).kind, 'failed', why);
+    }
+    assert.equal(f.transport.wires.length, 1, 'nothing dispatched for the refused shapes');
+    const attempted = localRun(true);
+    assert.equal(validateState(attempted).valid, true);
+    const saved = f.repository.save(attempted, 1);
+    const request = JSON.parse(f.transport.wires[1]);
+    assert.deepEqual(request.payload.participantRun, claim(attempted.conversationRuns![0]));
+    assert.equal(request.payload.participantRun.participantId, 'ollama-local');
+    f.transport.answer(1, { outcome: 'ok', revision: attempted.revision });
+    assert.equal((await saved).kind, 'saved');
+  } finally { f.close(); }
+});

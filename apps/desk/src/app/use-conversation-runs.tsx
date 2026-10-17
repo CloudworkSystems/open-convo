@@ -7,7 +7,7 @@ import { acknowledgeUnreachableCleanup, closeConversationRun, createConversation
 import { canAdmitConversationRun, canSaveConversationWorkspaceWithRuns, captureConversationWorkspace, prepareConversationRun, saveConversationRunCheckpoint } from '../domain/conversation-workspace';
 import type { DeskState } from '../domain/types';
 import { RunTranscript } from '../features/RunTranscript';
-import { canRetryLocalRun, isLocalParticipant, localChoiceProblem, ollamaChoiceTitle, localStartRefusalMessage,
+import { canRetryLocalRun, isLocalParticipant, localChoiceProblem, localModelName, noLocalChoiceMessage, ollamaChoiceTitle, localStartRefusalMessage,
   selectLocalContext } from '../domain/local-participant';
 import type { DeskRuntime } from './runtime';
 
@@ -307,7 +307,8 @@ export function useConversationRuns(options: RunWorkspace) {
     const choice = session?.participantChoice;
     if (access.runtime.participantAvailabilityMessage) return access.runtime.participantAvailabilityMessage;
     if (access.runtime.participantChoices === undefined && !choice) return undefined;
-    if (!choice) return 'Choose a participant for this session before sending.';
+    if (!choice) return access.runtime.localCatalog?.route ? noLocalChoiceMessage(access.runtime.localCatalog)
+      : 'Choose a participant for this session before sending.';
     if (access.runtime.participantChoices === undefined) return 'The saved participant is unavailable in this workspace. No other model will be used.';
     const blocked = catalogBlock(choice);
     if (blocked) return blocked;
@@ -558,7 +559,9 @@ export function useConversationRuns(options: RunWorkspace) {
             onClick={() => { if (!latest.current.blocked() && !cleanupPending() && !otherUnconfirmed(run.runId) && !catalogBlock(run.participant)) { focusGlobalStatus(run, title); void startPrepared(controller); } }}>Start prepared message</button>}
           {!controller && matchingParticipant(run) && <button type="button" className="recovery-button secondary"
             aria-label={`Retry participant connection in ${title}`} onClick={() => { focusGlobalStatus(run, title); retryConnection(run); }}>Retry connection</button>}
-          {!controller && !matchingParticipant(run) && <span>Reconnect {run.participant.label} using {run.participant.model} on {run.participant.executionHost} to check or stop this run.</span>}
+          {!controller && !matchingParticipant(run) && <span>{isLocalParticipant(run.participant)
+            ? `Open this conversation in the app that offers local models to check ${localModelName(run.participant)}’s reply.`
+            : `Reconnect ${run.participant.label} using ${run.participant.model} on ${run.participant.executionHost} to check or stop this run.`}</span>}
           {canClose && <><span>{interruptedClose
             ? 'This keeps the accepted response prefix and recorded ending. Text after a missing update is not included; cleanup is tracked separately.'
             : 'Close locally without confirming Stop; the participant may still be running.'}</span>
@@ -585,7 +588,8 @@ export function useConversationRuns(options: RunWorkspace) {
   const savedSelection = selectedSession?.participantChoice;
   const choiceLabel = savedSelection
     ? `${selectedLocal ? ollamaChoiceTitle(savedSelection, options.runtime.localCatalog) : savedSelection.label}${options.runtime.participantAvailabilityChecking ? ' · Checking availability' : options.runtime.participantChoices === undefined || catalogBlock(savedSelection) ? ' · Unavailable' : options.runtime.refreshParticipants ? ' · Available' : ''}`
-    : options.runtime.participantChoices !== undefined ? 'No participant chosen' : options.runtime.participant?.identity.label;
+    : options.runtime.participantChoices !== undefined ? options.runtime.localCatalog?.route ? 'No model chosen' : 'No participant chosen'
+    : options.runtime.participant?.identity.label;
   const participantMode = options.runtime.participantChoices !== undefined || !!selectedSession?.participantChoice
     || !!options.runtime.participant || options.state?.schemaVersion === 2;
   const hasUnconfirmed = () => cleanupPending() || localClosures.current.size > 0

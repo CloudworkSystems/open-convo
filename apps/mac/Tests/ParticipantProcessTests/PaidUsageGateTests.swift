@@ -198,8 +198,18 @@ struct PaidUsageGateTests {
             String(package[$0.upperBound...].prefix { $0 != "]" })
         })
         #expect(appTarget.contains("DeskWindowKit"))
-        for module in ["ParticipantProcess", "ParticipantCoordinator", "ParticipantDeskControls"] {
-            #expect(!appTarget.contains(module), "the app links \(module)")
+        for module in ["ParticipantProcess", "ParticipantCoordinator", "ParticipantDeskControls", "LocalModelRoute"] {
+            #expect(!appTarget.contains("\"\(module)\""), "the app links \(module)")
+        }
+        // Step 3 PR 4b: the app links the lane wiring, which builds a lane
+        // only for True Convo Test, with shipping availability and no owner,
+        // controls or process launcher (LocalConversationLaneTests).
+        #expect(appTarget.contains("\"ParticipantAppWiring\""))
+        let wiring = try Sources.code("ParticipantAppWiring")
+        #expect(!wiring.isEmpty)
+        for name in ["PaidUsage", "ParticipantDeskControls", "ProcessParticipantLauncher", "confirmationOwner", "ClaudeLocalChecks",
+                     "OwnerAuthentication", "@testable"] {
+            #expect(!wiring.contains { $0.line.contains(name) }, "the lane wiring names \(name)")
         }
         let windowKit = try #require(package.range(of: "name: \"DeskWindowKit\",\n            dependencies: [").map {
             String(package[$0.upperBound...].prefix { $0 != "]" })

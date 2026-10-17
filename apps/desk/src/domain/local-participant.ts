@@ -84,6 +84,48 @@ export function ollamaChoiceShortName(identity: Readonly<ParticipantIdentity>, c
   return `${residency === 'local' ? 'Local' : residency === 'cloud' ? 'Cloud' : 'Ollama'} · ${localModelName(identity)}`;
 }
 
+/** The owner's default local model (decision, October 16). */
+export const DEFAULT_LOCAL_MODEL = 'qwen3:8b';
+
+/**
+ * The model a session with no saved choice starts with: the default, only
+ * when the current catalog lists it as local and it can be used now.
+ * Otherwise none, and nothing else is picked in its place.
+ */
+export function defaultLocalChoice(
+  choices: readonly { readonly identity: Readonly<ParticipantIdentity>; readonly approved: boolean; readonly available: boolean }[] | undefined,
+  catalog: LocalCatalogView | undefined,
+): ParticipantIdentity | undefined {
+  const choice = choices?.find((item) => isLocalParticipant(item.identity) && localModelName(item.identity) === DEFAULT_LOCAL_MODEL
+    && item.approved && item.available && ollamaResidency(item.identity, catalog) === 'local');
+  return choice && { id: choice.identity.id, label: choice.identity.label, model: choice.identity.model, executionHost: choice.identity.executionHost };
+}
+
+/**
+ * Why a session has no model yet, in plain words, on a Mac that offers local
+ * models. Every case says what to do next (Codex round 1 on #61).
+ */
+export function noLocalChoiceMessage(catalog: LocalCatalogView): string {
+  const kept = 'Your draft is kept.';
+  // No list to choose from: the route's own reason (Ollama not running, list unreadable, ...).
+  if (catalog.route?.state !== 'ready') return `No model chosen yet. ${localRouteMessage(catalog.route?.reason)}`;
+  const usable = catalog.entries.filter((entry) => ollamaResidency(entry, catalog) === 'local');
+  const listed = catalog.entries.find((entry) => entry.label === DEFAULT_LOCAL_MODEL);
+  const next = usable.length ? `Pick another local model in the model picker. ${kept}`
+    : `No other local model is installed either. Install one in Ollama, then check again. ${kept}`;
+  if (listed?.reason === 'model-not-local') {
+    return `No model chosen yet. ${DEFAULT_LOCAL_MODEL} isn’t on this Mac right now (it runs on Ollama’s servers). ${next}`;
+  }
+  if (listed && ollamaResidency(listed, catalog) !== 'local') {
+    return `No model chosen yet. ${DEFAULT_LOCAL_MODEL} isn’t available on this Mac right now. ${next}`;
+  }
+  if (!listed) {
+    return usable.length ? `No model chosen yet. ${DEFAULT_LOCAL_MODEL} isn’t installed in Ollama on this Mac. Pick a local model in the model picker. ${kept}`
+      : `No model chosen yet. No local models are installed in Ollama on this Mac. Install ${DEFAULT_LOCAL_MODEL} (or another model) in Ollama, then check again. ${kept}`;
+  }
+  return `No model chosen yet. Choose a local model in the model picker before sending. ${kept}`;
+}
+
 export interface LocalCatalogView {
   /** Null on a host without a local route (contract revision 3). */
   readonly route: { readonly state: 'ready' | 'unavailable'; readonly reason: string | null } | null;

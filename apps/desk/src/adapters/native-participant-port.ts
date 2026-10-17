@@ -48,6 +48,12 @@ export interface NativeParticipantSnapshot {
   readonly local: readonly NativeLocalParticipantAvailability[];
   /** The local route's state, or null on a host without one (revision 3). */
   readonly route: NativeParticipantRoute | null;
+  /**
+   * Whether any reply on this connection carried a local route: a host that
+   * offers local models, even while a later read failed or is outstanding.
+   * Display only: it never makes anything available.
+   */
+  readonly offersLocal: boolean;
   readonly available: boolean;
   /** Whether the newest availability read is outstanding; older reads cannot clear this. */
   readonly checking: boolean;
@@ -91,6 +97,7 @@ export class NativeParticipantConnection {
   private entry: NativeParticipantAvailability | null = null;
   private local: readonly NativeLocalParticipantAvailability[] = Object.freeze([]);
   private route: NativeParticipantRoute | null = null;
+  private offersLocal = false;
   private error: string | null = null;
   private readonly changed = new Set<() => void>();
   private readonly listeners = new Set<(event: unknown) => void>();
@@ -104,7 +111,7 @@ export class NativeParticipantConnection {
   }
 
   get snapshot(): NativeParticipantSnapshot {
-    return Object.freeze({ entry: this.entry, local: this.local, route: this.route,
+    return Object.freeze({ entry: this.entry, local: this.local, route: this.route, offersLocal: this.offersLocal,
       available: this.active && !this.checking && this.error === null && this.entry?.available === true,
       checking: this.checking, error: this.error });
   }
@@ -132,6 +139,7 @@ export class NativeParticipantConnection {
         this.entry = fresh.entry;
         this.local = fresh.local;
         this.route = fresh.route;
+        if (fresh.route) this.offersLocal = true;
         this.error = null;
       } else {
         // Retain a known identity without granting stale availability. A failed

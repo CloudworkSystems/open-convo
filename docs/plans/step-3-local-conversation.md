@@ -189,6 +189,22 @@ PR 2). In short:
    first in availability, so 4b decides with the owner whether the app's
    lane also carries the (unconfirmed, never available) Claude entry or
    whether that waits for the Claude Code adapter.
+   *Built in PR 4b (October 16):* a new module, `ParticipantAppWiring`,
+   is the one place the app builds a lane: a coordinator with the real
+   `OllamaClient` at the fixed loopback base, handed to the Desk session
+   in True Convo Test only (the real app's factory is nil). The open
+   question is settled by the owner's October 16 decision: the lane
+   carries the Claude entry on the wire, first and never available
+   (shipping availability, no confirmation owner, a launcher that refuses
+   every launch), and the Desk leaves it out of the picker. A session with
+   no saved model starts with `qwen3:8b` when the catalog lists it as
+   local and usable; otherwise nothing is picked and the composer says
+   why. The end-to-end check runs the real page against this Mac's Ollama
+   (opt-in), not a fake. The seeded host cases moved to **4c**, to keep
+   4b reviewable.
+   **4c**: the seeded host cases (`localRoute` seed, fake-server `script`
+   steps) join `native-participant-local-v1.json` on both sides,
+   byte-identical, run by the Swift harness against a fake Ollama.
 5. **Proof and owner trial.** A scripted kill-mid-reply proof (no duplicate
    replies, nothing resent, cut-off replies labeled), then a short checklist
    for the owner: talk, quit, reopen, continue.

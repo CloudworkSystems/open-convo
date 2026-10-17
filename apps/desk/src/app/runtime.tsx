@@ -224,7 +224,12 @@ function createRuntime(mode: DeskRuntime['mode'], workspace: WorkspaceRepository
           available: usable, unavailableReason: usable ? null : snapshot.checking ? availabilityChecking
             : snapshot.error ? availabilityCheckFailed : localEntryMessage(item.reason) });
       });
-      return Object.freeze([claude, ...local]);
+      // Owner decision, October 16: no Claude entry in the picker until the
+      // Claude Code adapter works. A host with a local route still sends it
+      // first (section 20.2), never available; the page doesn't offer it,
+      // even while a later read is failing. A host without one (contract
+      // revision 3) keeps it as before.
+      return Object.freeze(snapshot.offersLocal ? local : [claude, ...local]);
     },
     get participantAvailabilityMessage() {
       if (!nativeParticipants || !isActive()) return undefined;
