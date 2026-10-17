@@ -127,7 +127,7 @@ session can still make them.
    tests run on a macOS runner only when `apps/mac` changes, because macOS
    minutes count ten times against the monthly allowance.
 2. **`codex-approved` check**: as described above. Re-runs when Codex
-   comments or reviews, on new commits, and every 15 minutes as a backstop
+   comments or reviews, on new commits, and hourly as a backstop
    for 👍 reactions (GitHub sends no event for those).
 3. **Repo settings**, after owner approval: turn on "Allow auto-merge" and
    "Automatically delete head branches"; update `main`'s protection to require

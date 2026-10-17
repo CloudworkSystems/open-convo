@@ -34,12 +34,14 @@ async function check(number) {
 
   const current = await gh.get(`${base}/commits/${pr.head.sha}/status`);
   const existing = current.statuses.find((s) => s.context === CONTEXT);
-  if (existing && existing.state === state && existing.description === reason) return;
+  const description = [...reason].filter((ch) => ch.codePointAt(0) <= 0xffff).join('').slice(0, 140);
+  if (existing && existing.state === state && existing.description === description) return;
 
   await gh.post(`${base}/statuses/${pr.head.sha}`, {
     state,
     context: CONTEXT,
-    description: reason.slice(0, 140),
+    // GitHub refuses 4-byte characters (most emoji) in status descriptions.
+    description,
   });
   console.log(`#${number} ${pr.head.sha.slice(0, 7)}: ${state} (${reason})`);
 }

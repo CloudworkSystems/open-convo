@@ -153,3 +153,36 @@ test('a summary without a completion time never approves through a thumbs-up', (
   const r = evaluateCodexSignal({ headSha: HEAD, comments: [{ user: codex, created_at: '2026-10-15T00:00:00Z', body }], reactions: [thumb('2026-10-15T02:00:00Z')] });
   assert.equal(r.approved, false);
 });
+
+const stateComment = (sha, { findings = false, status = 'completed', at = '2026-10-15T02:00:00Z', user = codex } = {}) => ({
+  user, created_at: '2026-10-15T00:00:00Z', updated_at: at,
+  body: `<!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 ${JSON.stringify({ code_review: { commit_sha: sha, has_any_findings: findings, has_unresolved_findings: findings, status } })} -->\n## Codex Review Summary`,
+});
+
+test('Codex review state: completed with no findings on the head approves', () => {
+  assert.equal(evaluateCodexSignal({ headSha: HEAD, comments: [stateComment(HEAD)] }).approved, true);
+});
+
+test('Codex review state: an older commit, findings, or not completed do not approve', () => {
+  assert.equal(evaluateCodexSignal({ headSha: HEAD, comments: [stateComment(OLD)] }).approved, false);
+  assert.equal(evaluateCodexSignal({ headSha: HEAD, comments: [stateComment(HEAD, { findings: true })] }).approved, false);
+  assert.equal(evaluateCodexSignal({ headSha: HEAD, comments: [stateComment(HEAD, { status: 'in_progress' })] }).approved, false);
+});
+
+test('Codex review state from any other account is ignored', () => {
+  assert.equal(evaluateCodexSignal({ headSha: HEAD, comments: [stateComment(HEAD, { user: impostor })] }).approved, false);
+});
+
+test('Codex review state does not outweigh a later finding on the head', () => {
+  const r = evaluateCodexSignal({
+    headSha: HEAD,
+    comments: [stateComment(HEAD, { at: '2026-10-15T01:00:00Z' })],
+    reviews: [findings(HEAD, '2026-10-15T02:00:00Z')],
+  });
+  assert.equal(r.approved, false);
+});
+
+test('a malformed review state never approves', () => {
+  const bad = { user: codex, updated_at: '2026-10-15T02:00:00Z', body: '<!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 {not json} -->' };
+  assert.equal(evaluateCodexSignal({ headSha: HEAD, comments: [bad] }).approved, false);
+});
