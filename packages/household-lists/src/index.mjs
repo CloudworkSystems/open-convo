@@ -26,11 +26,13 @@ export function compareStamps(a, b) {
   return lex(a.counter, b.counter) || lex(a.time, b.time) || lex(a.device, b.device);
 }
 const latest = (a, b) => compareStamps(a, b) >= 0 ? a : b;
+// Register values are primitives or stamps, whose JSON key order is immaterial.
+const sameValue = (a, b) => a === b || (validStamp(a) && validStamp(b) && compareStamps(a, b) === 0);
 function register(a, b) {
   if (!a) return clone(b);
   if (!b) return clone(a);
   const order = compareStamps(a.stamp, b.stamp);
-  if (!order && JSON.stringify(a.value) !== JSON.stringify(b.value)) fail('Conflicting values share a version stamp. Use a unique device ID per writer.');
+  if (!order && !sameValue(a.value, b.value)) fail('Conflicting values share a version stamp. Use a unique device ID per writer.');
   return clone(order >= 0 ? a : b);
 }
 function records(a, b, purge = null) {
@@ -85,7 +87,7 @@ function validStamp(stamp) {
     Number.isSafeInteger(stamp.time) && typeof stamp.device === 'string' && stamp.device.length > 0;
 }
 const itemTypes = {text: 'string', quantity: 'string', note: 'string', section: 'string', addedBy: 'string', checked: 'boolean', added: 'stamp'};
-const listTypes = {name: 'string', sort: 'sort'};
+const listTypes = {name: 'string', sort: 'sort', sectionsEnabled: 'boolean'};
 function validateFields(fields, types) {
   if (!object(fields)) fail('Invalid fields in list file.');
   for (const [key, entry] of Object.entries(fields)) {
@@ -136,15 +138,23 @@ function itemView(item) {
 export function viewList(list, {trash = false} = {}) {
   validate(list);
   const fields = values(list.fields);
+  const sectionsEnabled = fields.sectionsEnabled ?? false;
+  const sort = !sectionsEnabled && fields.sort === 'section' ? 'alphabetical' : fields.sort ?? 'alphabetical';
   const items = list.items.filter(item => item.life.value !== trash && Object.keys(item.fields).length).slice();
   const order = (a, b) => compareStamps(a.fields.added?.value, b.fields.added?.value) || lex(a.id, b.id);
   const alpha = (a, b) => lex(sortKey(a.fields.text?.value ?? ''), sortKey(b.fields.text?.value ?? '')) || order(a, b);
-  items.sort(fields.sort === 'added' ? order : fields.sort === 'section' ? (a, b) => {
+  items.sort(sort === 'added' ? order : sort === 'section' ? (a, b) => {
     const sa = normalized(a.fields.section?.value ?? '').trim();
     const sb = normalized(b.fields.section?.value ?? '').trim();
     return lex(!sa, !sb) || lex(sa, sb) || alpha(a, b);
   } : alpha);
-  return {id: list.id, name: fields.name ?? '', sort: fields.sort ?? 'alphabetical', deleted: !list.life.value, sectionMap: {...STARTER_SECTIONS, ...Object.fromEntries(Object.entries(values(list.sections)).filter(([, value]) => value !== null))}, items: items.map(itemView)};
+  return {
+    id: list.id, name: fields.name ?? '', sort, sectionsEnabled,
+    availableSortOrders: SORT_ORDERS.filter(order => sectionsEnabled || order !== 'section'),
+    deleted: !list.life.value,
+    sectionMap: sectionsEnabled ? {...STARTER_SECTIONS, ...Object.fromEntries(Object.entries(values(list.sections)).filter(([, value]) => value !== null))} : {},
+    items: items.map(item => ({...itemView(item), ...(!sectionsEnabled ? {section: ''} : {})})),
+  };
 }
 
 /** One writer per unique device ID. State and undo history are held only in memory. */
@@ -166,7 +176,7 @@ export class HouseholdLists {
     const before = this.#get(id); const draft = clone(before); const stamp = this.#stamp();
     operation(draft, stamp);
     const history = this.#history.get(id) ?? [];
-    history.push(clone(before));
+    history.push({before: clone(before), after: clone(draft)});
     if (history.length > this.undoLimit) history.shift();
     this.#history.set(id, history); this.#lists.set(id, canonical(draft));
     return this.getList(id);
@@ -176,7 +186,7 @@ export class HouseholdLists {
     if (this.#lists.has(id)) fail('List ID already exists; restore the existing list.');
     const stamp = this.#stamp();
     this.#lists.set(id, {schemaVersion: SCHEMA_VERSION, id, life: {value: true, stamp}, purge: null,
-      fields: {name: {value: name, stamp}, sort: {value: 'alphabetical', stamp}}, sections: {}, items: []});
+      fields: {name: {value: name, stamp}, sort: {value: 'alphabetical', stamp}, sectionsEnabled: {value: false, stamp}}, sections: {}, items: []});
     return id;
   }
   getList(id) { return clone(this.#get(id)); }
@@ -185,15 +195,30 @@ export class HouseholdLists {
   renameList(id, name) { string(name, 'List name'); return this.#change(id, (list, stamp) => { list.fields.name = {value: name, stamp}; list.life = {value: true, stamp}; }); }
   setSort(id, sort) {
     if (!SORT_ORDERS.includes(sort)) fail('Unknown sort order.');
+    if (sort === 'section' && !this.view(id).sectionsEnabled) fail('Section sorting is disabled for this list.');
     return this.#change(id, (list, stamp) => { list.fields.sort = {value: sort, stamp}; list.life = {value: true, stamp}; });
+  }
+  setSectionsEnabled(id, enabled) {
+    if (typeof enabled !== 'boolean') fail('Sections enabled must be a boolean.');
+    return this.#change(id, (list, stamp) => {
+      list.fields.sectionsEnabled = {value: enabled, stamp};
+      list.life = {value: true, stamp};
+    });
   }
   setSectionWord(id, word, section) {
     identity(word, 'Section word'); string(section, 'Section'); const key = sortKey(word);
     return this.#change(id, (list, stamp) => { Object.defineProperty(list.sections, key, {value: {value: section, stamp}, enumerable: true, writable: true, configurable: true}); list.life = {value: true, stamp}; });
   }
   suggestSection(id, text) {
-    const map = this.view(id).sectionMap; const key = sortKey(text);
-    return own(map, key) ? map[key] : null;
+    const view = this.view(id);
+    if (!view.sectionsEnabled) return null;
+    const map = view.sectionMap;
+    const key = sortKey(text);
+    // Exact phrases (including custom overrides) precede whole-word fallback.
+    if (own(map, key)) return map[key];
+    const words = key.match(/[\p{L}\p{N}_]+/gu) ?? [];
+    for (const word of words.reverse()) if (own(map, word)) return map[word];
+    return null;
   }
   addItem(id, fields, {itemId = randomUUID()} = {}) {
     identity(itemId, 'Item ID'); this.#checkItemFields(fields);
@@ -253,21 +278,60 @@ export class HouseholdLists {
     return result;
   }
   undo(id) {
-    const current = this.#get(id); const history = this.#history.get(id);
+    const current = this.#get(id);
+    const history = this.#history.get(id);
     if (!history?.length) return false;
-    const before = history.at(-1); const stamp = this.#stamp(); const restored = clone(before);
-    const rewrite = entry => ({value: clone(entry.value), stamp});
-    restored.life = rewrite(before.life);
-    for (const key of Object.keys(restored.fields)) restored.fields[key] = rewrite(restored.fields[key]);
-    // Null removes a custom override and reveals the starter entry, if any.
-    for (const key of Object.keys(current.sections)) if (!own(restored.sections, key)) Object.defineProperty(restored.sections, key, {value: {value: null, stamp}, enumerable: true, writable: true, configurable: true});
-    for (const key of Object.keys(restored.sections)) restored.sections[key] = rewrite(restored.sections[key]);
-    for (const item of restored.items) {
-      item.life = rewrite(item.life);
-      for (const key of Object.keys(item.fields)) if (key !== 'added') item.fields[key] = rewrite(item.fields[key]);
+    const {before, after} = history.at(-1);
+    const stamp = this.#stamp();
+    const restored = clone(current);
+
+    // Use the original operation's footprint, not changes left by later undos.
+    // In particular, never re-stamp unrelated fields or existing tombstones.
+    const compensate = (previous, written, currentEntry, fallback) => {
+      if (!previous) return {value: clone(fallback), stamp};
+      if (sameValue(previous.value, written.value)) {
+        // A later undo may already have compensated this register. Keep that
+        // newer compensation rather than exposing a previously undone edit.
+        return clone(compareStamps(currentEntry.stamp, written.stamp) === 0 ? previous : currentEntry);
+      }
+      return {value: clone(previous.value), stamp};
+    };
+    const undoFields = (target, previous, written, defaults) => {
+      for (const [key, entry] of Object.entries(written)) {
+        const old = own(previous, key) ? previous[key] : undefined;
+        if (old && compareStamps(old.stamp, entry.stamp) === 0) continue;
+        Object.defineProperty(target, key, {
+          value: compensate(old, entry, target[key], own(defaults, key) ? defaults[key] : null),
+          enumerable: true, writable: true, configurable: true,
+        });
+      }
+    };
+    if (compareStamps(before.life.stamp, after.life.stamp)) {
+      restored.life = compensate(before.life, after.life, restored.life);
     }
-    for (const item of current.items) if (!restored.items.some(previous => previous.id === item.id)) restored.items.push({id: item.id, fields: {}, life: {value: false, stamp}, purge: stamp});
-    history.pop(); this.#lists.set(id, canonical(restored)); return true;
+    undoFields(restored.fields, before.fields, after.fields, {name: '', sort: 'alphabetical', sectionsEnabled: false});
+    undoFields(restored.sections, before.sections, after.sections, {});
+    const previousItems = new Map(before.items.map(item => [item.id, item]));
+    const targets = new Map(restored.items.map(item => [item.id, item]));
+    for (const item of after.items) {
+      const previous = previousItems.get(item.id);
+      const target = targets.get(item.id);
+      if (!previous || (!Object.keys(previous.fields).length && Object.keys(item.fields).length)) {
+        target.fields = {};
+        target.life = {value: false, stamp};
+        target.purge = stamp;
+        continue;
+      }
+      if (compareStamps(previous.life.stamp, item.life.stamp)) {
+        target.life = compensate(previous.life, item.life, target.life);
+      }
+      undoFields(target.fields, previous.fields, item.fields, {
+        text: '', quantity: '', note: '', section: '', addedBy: '', checked: false,
+      });
+    }
+    history.pop();
+    this.#lists.set(id, canonical(restored));
+    return true;
   }
   importList(list) {
     validate(list); this.#observe(list);

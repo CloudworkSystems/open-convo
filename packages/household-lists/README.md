@@ -19,6 +19,8 @@ node --input-type=module <<'JS'
 import { HouseholdLists } from './src/index.mjs';
 const phone = new HouseholdLists({deviceId: 'example-phone'});
 const groceries = phone.createList('Maple household groceries');
+// Sections start off. Enable them only for lists that need the feature.
+phone.setSectionsEnabled(groceries, true);
 phone.addItem(groceries, {text: '2 milk', section: 'dairy'});
 const apples = phone.addItem(groceries, {text: 'Apples', quantity: '4'});
 phone.setChecked(groceries, apples, true);
@@ -46,7 +48,8 @@ an imported file, including tombstones. Reload saved lists before editing after
 restart. A future sync adapter must persist all list files, including deleted
 ones; dropping tombstones would break the offline-deletion guarantee.
 
-- `createList(name, {id}?)` returns a permanent ID (UUID by default).
+- `createList(name, {id}?)` returns a permanent ID (UUID by default), with
+  sections disabled.
 - `listIds({trash = false}?)` lists active or recoverable deleted list IDs.
 - `renameList(id, name)`, `setSort(id, order)`, `deleteList(id)`,
   `restoreList(id)` modify list settings/lifecycle.
@@ -58,13 +61,21 @@ ones; dropping tombstones would break the offline-deletion guarantee.
 - `deleteItem(id, itemId)` moves to Trash; `restoreItem(id, itemId)` restores
   its content and first-added position. Editing a recoverable deleted item
   also restores it. A later item change restores a removed containing list.
+- `setSectionsEnabled(id, boolean)` enables/disables the whole section feature
+  for this list. It is a separately stamped list field, with merge and undo.
+  While off, suggestions return null, section sorting is unavailable, the view
+  returns an empty map and blank item sections, and saved sections are retained.
 - `setSectionWord(id, word, section)` extends or overrides the starter map.
   `suggestSection(id, text)` returns a suggestion or null. Suggestions use the
-  normalized whole item text; callers explicitly apply them via `section`.
+  normalized whole item text first, then whole words from last to first
+  (punctuation separates words; substrings do not match). Exact custom phrases
+  take priority, including an empty-string override. Callers explicitly apply
+  suggestions via `section`.
   A map change never changes existing item sections. Empty section strings
   mean unsectioned. Map words are normalized; map section values stay literal.
 - `view(id, {trash = false}?)` returns plain list settings, the effective
-  section map, and sorted active or recoverable deleted items. `viewList`
+  section map, `sectionsEnabled`, `availableSortOrders`, and sorted active or
+  recoverable deleted items. `sort` is the effective sort order. `viewList`
   does the same for a standalone snapshot. Removed lists retain their contents
   in Trash until emptied; check `deleted` before displaying them as active.
 - `getList(id)` returns a JSON-compatible snapshot with sync metadata.
@@ -79,6 +90,13 @@ ones; dropping tombstones would break the offline-deletion guarantee.
   if the list itself is deleted, it removes all list content instead.
 
 Sort settings are `alphabetical` (default), `section`, and `added`.
+`SORT_ORDERS` lists the library's supported orders; use a list view's
+`availableSortOrders` for the orders currently offered to that list. Selecting
+`section` while disabled throws a plain error. Switching sections off when
+`section` is saved uses an effective `alphabetical` fallback without changing
+the saved sort register. Switching back on resumes that saved order and the
+saved sections/map. An explicit `setSort` replaces the saved preference.
+Disabling sections leaves an existing `added` or `alphabetical` sort in effect.
 Alphabetical keys ignore Unicode combining accents, case and a leading numeric
 quantity (integers, decimals, fractions, optional `x`/`×`). These keys are only
 for comparison: stored text is never rewritten. Section names sort
@@ -100,7 +118,8 @@ must render them as text rather than execute/interpret them.
   "purge": null,
   "fields": {
     "name": {"value": "Maple groceries", "stamp": {"counter": 1, "time": 100, "device": "example-phone"}},
-    "sort": {"value": "alphabetical", "stamp": {"counter": 1, "time": 100, "device": "example-phone"}}
+    "sort": {"value": "alphabetical", "stamp": {"counter": 1, "time": 100, "device": "example-phone"}},
+    "sectionsEnabled": {"value": false, "stamp": {"counter": 1, "time": 100, "device": "example-phone"}}
   },
   "sections": {},
   "items": []
@@ -114,7 +133,14 @@ outweigh a greater counter. Concurrent equal counters and times resolve by
 device ID. Conflicting values with an identical stamp are refused: they indicate
 reused writer identity or corrupt input.
 
-A **register** is `{value, stamp}`. List `fields` contain `name` and `sort`.
+A **register** is `{value, stamp}`. List `fields` contain `name`, `sort`, and
+boolean `sectionsEnabled`. A missing `sectionsEnabled` register defaults to
+false, allowing earlier version-1 snapshots to load without rewriting them.
+The field merges independently of sort, section words and item fields. The
+view applies its off behavior even when a remote copy supplies a saved section
+sort. Stamp-valued registers compare by counter/time/device, independent of
+JSON object key order; truly conflicting values at an identical stamp still
+fail with a plain message.
 `sections` maps each normalized word to an independent string-valued register,
 so distinct additions survive together. A null value is an undo removal of a
 custom override (revealing the starter word, if any).
@@ -162,11 +188,17 @@ undoing an old snapshot after external changes would overwrite unseen work.
 
 ## Undo and Trash
 
-Undo retains up to 20 previous snapshots **per list**, in memory only. It
+Undo retains up to 20 before/after operation snapshots **per list**, in memory only. It
 restores the previous user-visible state exactly: text, checking, ordering,
-settings, section map, active/Trash membership and IDs. Sync metadata receives
-fresh compensating stamps, so a merged copy honors the undo instead of
-reapplying the undone changes. Undo of an addition leaves a content-free
+settings, section map, active/Trash membership and IDs. Only registers whose
+values changed in that operation receive fresh compensating stamps. Unrelated
+registers keep their stamps, so concurrent checking, editing, section words and
+deletions on another phone survive. A same-value lifecycle write (such as a
+rename writing `life: true` to an already active list) returns to its previous
+stamp instead of gaining a new activation stamp. The operation's original
+before/after footprint ensures sequential undos preserve tombstones left by
+later undos. A merged copy honors the compensating change instead of reapplying
+the undone value. Undo of an addition leaves a content-free
 marker to prevent an offline copy from restoring it. Undo history and counters
 are not part of the JSON file. Emptying Trash clears that list's undo history,
 so purged content is neither retained there nor recoverable by Undo. Creating
@@ -180,4 +212,7 @@ independent lists, undo, Trash, field-level and lifecycle merges, equal clocks
 and skew, permanent purge markers against offline copies, exact JSON round
 trips/version rejection, and hostile text. Additional cases check prototype-like
 words, atomic invalid operations, immutable returned snapshots, explicit re-add,
-self merge, and deterministic three-device histories under all delivery orders.
+self merge, deterministic three-device histories under all delivery orders,
+concurrent undo versus offline edits/deletions, structural stamp comparison,
+multi-word suggestions, sections off/on with sort fallback, toggle persistence/
+merge/undo/legacy defaults, and concurrent equal-counter clock skew.

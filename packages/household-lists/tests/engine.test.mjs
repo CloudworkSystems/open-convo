@@ -5,6 +5,7 @@ import {HouseholdLists, mergeLists, serializeList, deserializeList, compareStamp
 function engine(deviceId = 'phone-a', time = 100) { return new HouseholdLists({deviceId, now: () => time}); }
 function fixture() {
   const a = engine(); const id = a.createList('Maple household groceries', {id: 'groceries'});
+  a.setSectionsEnabled(id, true);
   a.addItem(id, {text: 'Milk'}, {itemId: 'milk'});
   a.addItem(id, {text: 'Apples'}, {itemId: 'apples'});
   const b = engine('phone-b'); b.importList(a.getList(id));
@@ -40,7 +41,7 @@ test('alphabetical ignores case, accents, leading quantities and check state', (
 });
 
 test('section grouping, unsectioned last, suggestions never silently assign', () => {
-  const a = engine(); const id = a.createList('Sections');
+  const a = engine(); const id = a.createList('Sections'); a.setSectionsEnabled(id, true);
   for (const [text, section] of [['Zebra toy', ''], ['Milk', 'dairy'], ['Butter', 'dairy'], ['Apples', 'produce'], ['Bread', 'bakery']]) a.addItem(id, {text, section});
   a.setSort(id, 'section');
   assert.deepEqual(a.view(id).items.map(i => i.text), ['Bread', 'Butter', 'Milk', 'Apples', 'Zebra toy']);
@@ -167,7 +168,7 @@ test('JSON round trip is exact, unknown versions and malformed files are refused
 });
 
 test('hostile text, huge names, emoji and prototype-like section words stay plain text', () => {
-  const a = engine(); const hostile = '" <tag> & 🥕 \\ \n' + 'z'.repeat(100_000); const id = a.createList(hostile);
+  const a = engine(); const hostile = '" <tag> & 🥕 \\ \n' + 'z'.repeat(100_000); const id = a.createList(hostile); a.setSectionsEnabled(id, true);
   const item = a.addItem(id, {text: hostile, note: hostile, quantity: hostile, addedBy: hostile, section: hostile});
   a.setSectionWord(id, '__proto__', hostile); a.setSectionWord(id, 'constructor', hostile);
   const b = engine('b'); b.load(a.save(id)); assert.deepEqual(b.view(id), a.view(id));
@@ -229,7 +230,7 @@ test('three-device mixed histories converge under every delivery order', () => {
       const d = devices[next(3)];
       switch (next(8)) {
         case 0: d.renameList(id, `Name ${step}`); break;
-        case 1: d.setSort(id, ['added', 'section', 'alphabetical'][next(3)]); break;
+        case 1: { const orders = d.view(id).availableSortOrders; d.setSort(id, orders[next(orders.length)]); break; }
         case 2: d.deleteList(id); break;
         case 3: d.emptyTrash(id); break;
         case 4: d.addItem(id, {text: `Beans ${step}`}, {itemId: `new-${run}-${step}`}); break;
