@@ -8,7 +8,8 @@ on:
   schedule:
     # Also catches the owner's approvals; pull_request_review is left out
     # because it would run the pull request's copy of this file.
-    - cron: '7,22,37,52 * * * *'
+    # Hourly: every run bills a full Actions minute.
+    - cron: '7 * * * *'
   workflow_dispatch:
 
 permissions:
