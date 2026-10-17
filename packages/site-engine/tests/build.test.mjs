@@ -242,14 +242,107 @@ function bmffBox(type, payload) {
   return Buffer.concat([size, Buffer.from(type, "ascii"), payload]);
 }
 
+function leb128(value) {
+  const bytes = [];
+  let rest = value;
+  do {
+    let byte = rest & 0x7f;
+    rest >>= 7;
+    if (rest) byte |= 0x80;
+    bytes.push(byte);
+  } while (rest);
+  return Buffer.from(bytes.length ? bytes : [0]);
+}
+
+function obu(type, payload) {
+  return Buffer.concat([Buffer.from([(type << 3) | 0x02]), leb128(payload.length), payload]);
+}
+
+function packBits(bits) {
+  const out = Buffer.alloc(Math.ceil(bits.length / 8));
+  for (let index = 0; index < bits.length; index += 1) {
+    if (bits[index]) out[index >> 3] |= 1 << (7 - (index & 7));
+  }
+  return out;
+}
+
+function pushBits(bits, value, width) {
+  for (let shift = width - 1; shift >= 0; shift -= 1) bits.push((value >> shift) & 1);
+}
+
+// One-pixel still picture: reduced header, profile 0, monochrome, no timing
+// and no color description. The parser has to accept these bytes exactly.
+function sequenceHeaderPayload() {
+  const bits = [];
+  pushBits(bits, 0, 3);
+  pushBits(bits, 1, 1);
+  pushBits(bits, 1, 1);
+  pushBits(bits, 0, 5);
+  pushBits(bits, 0, 4);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 4);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 1, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 1, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 1, 1);
+  return packBits(bits);
+}
+
+function sequenceHeaderWithoutTrailingBit() {
+  const bits = [];
+  pushBits(bits, 0, 3);
+  pushBits(bits, 1, 1);
+  pushBits(bits, 1, 1);
+  pushBits(bits, 0, 5);
+  pushBits(bits, 0, 4);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 4);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 1, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 1, 1);
+  pushBits(bits, 0, 1);
+  return packBits(bits);
+}
+
+function minimalAv1Extent() {
+  return Buffer.concat([obu(2, Buffer.alloc(0)), obu(1, sequenceHeaderPayload())]);
+}
+
+function ilocBox(fileOffset, length) {
+  const body = Buffer.alloc(22);
+  body[4] = 0x44;
+  body[7] = 0x01;
+  body[9] = 0x01;
+  body[13] = 0x01;
+  body.writeUInt32BE(fileOffset, 14);
+  body.writeUInt32BE(length, 18);
+  return bmffBox("iloc", body);
+}
+
 function cleanAvif() {
-  return Buffer.concat([
-    bmffBox(
-      "ftyp",
-      Buffer.concat([Buffer.from("avif"), Buffer.from([0, 0, 0, 0]), Buffer.from("avif"), Buffer.from("mif1")]),
-    ),
-    bmffBox("mdat", Buffer.from("clean-pixel-data")),
-  ]);
+  const coded = minimalAv1Extent();
+  const ftyp = avifFtyp();
+  const mdat = bmffBox("mdat", coded);
+  const iloc = ilocBox(ftyp.length + 8, coded.length);
+  const meta = bmffBox("meta", Buffer.concat([Buffer.from([0, 0, 0, 0]), iloc]));
+  return Buffer.concat([ftyp, mdat, meta]);
 }
 
 function dirtyAvif() {
@@ -329,6 +422,135 @@ function progressiveJpeg() {
 
 function avifWithFreeBox() {
   return Buffer.concat([cleanAvif(), bmffBox("free", Buffer.from("HIDDEN-AUTHOR-9f3a"))]);
+}
+
+function avifFtyp(extraBrands = []) {
+  return bmffBox(
+    "ftyp",
+    Buffer.concat([
+      Buffer.from("avif"),
+      Buffer.from([0, 0, 0, 0]),
+      Buffer.from("avif"),
+      Buffer.from("mif1"),
+      ...extraBrands.map((brand) => Buffer.from(brand, "ascii")),
+    ]),
+  );
+}
+
+function structuralAvif() {
+  const coded = minimalAv1Extent();
+  const ftyp = avifFtyp();
+  const mdat = bmffBox("mdat", coded);
+  const hdlr = bmffBox(
+    "hdlr",
+    Buffer.concat([Buffer.alloc(8), Buffer.from("pict"), Buffer.alloc(13)]),
+  );
+  const pitm = bmffBox("pitm", Buffer.from([0, 0, 0, 0, 0, 1]));
+  const iloc = ilocBox(ftyp.length + 8, coded.length);
+  const infe = bmffBox("infe", Buffer.from([0x02, 0, 0, 0, 0x00, 0x01, 0x00, 0x00, 0x61, 0x76, 0x30, 0x31, 0x00]));
+  const iinf = bmffBox("iinf", Buffer.concat([Buffer.from([0, 0, 0, 0, 0, 1]), infe]));
+  const ispe = bmffBox("ispe", Buffer.from([0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1]));
+  const pixi = bmffBox("pixi", Buffer.from([0, 0, 0, 0, 3, 8, 8, 8]));
+  const av1c = bmffBox("av1C", Buffer.from([0x81, 0, 0, 0]));
+  const colr = bmffBox("colr", Buffer.from([0x6e, 0x63, 0x6c, 0x78, 0x00, 0x01, 0x00, 0x0d, 0x00, 0x06, 0x80]));
+  const ipco = bmffBox("ipco", Buffer.concat([ispe, pixi, av1c, colr]));
+  const ipma = bmffBox("ipma", Buffer.from([0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 4, 0x81, 0x82, 0x83, 0x84]));
+  const iprp = bmffBox("iprp", Buffer.concat([ipco, ipma]));
+  const url = bmffBox("url ", Buffer.from([0, 0, 0, 1]));
+  const dref = bmffBox("dref", Buffer.concat([Buffer.from([0, 0, 0, 0, 0, 0, 0, 1]), url]));
+  const dinf = bmffBox("dinf", dref);
+  const dimg = bmffBox("dimg", Buffer.from([0, 1, 0, 1, 0, 2]));
+  const iref = bmffBox("iref", Buffer.concat([Buffer.from([0, 0, 0, 0]), dimg]));
+  const meta = bmffBox(
+    "meta",
+    Buffer.concat([Buffer.from([0, 0, 0, 0]), hdlr, pitm, iloc, iinf, iref, iprp, dinf]),
+  );
+  return Buffer.concat([ftyp, mdat, meta]);
+}
+
+function avifWithLooseText() {
+  return Buffer.concat([avifFtyp(), bmffBox("mdat", Buffer.from("HIDDEN-AUTHOR-9f3a"))]);
+}
+
+function avifWithCoveredText() {
+  const text = Buffer.from("HIDDEN-AUTHOR-9f3a");
+  const ftyp = avifFtyp();
+  const mdat = bmffBox("mdat", text);
+  const iloc = ilocBox(ftyp.length + 8, text.length);
+  const meta = bmffBox("meta", Buffer.concat([Buffer.from([0, 0, 0, 0]), iloc]));
+  return Buffer.concat([ftyp, mdat, meta]);
+}
+
+function avifWithUnreferencedTail() {
+  const coded = minimalAv1Extent();
+  const payload = Buffer.concat([coded, Buffer.from("HIDDEN-AUTHOR-9f3a")]);
+  const ftyp = avifFtyp();
+  const mdat = bmffBox("mdat", payload);
+  const iloc = ilocBox(ftyp.length + 8, coded.length);
+  const meta = bmffBox("meta", Buffer.concat([Buffer.from([0, 0, 0, 0]), iloc]));
+  return Buffer.concat([ftyp, mdat, meta]);
+}
+
+function avifAround(coded) {
+  const ftyp = avifFtyp();
+  const mdat = bmffBox("mdat", coded);
+  const iloc = ilocBox(ftyp.length + 8, coded.length);
+  const meta = bmffBox("meta", Buffer.concat([Buffer.from([0, 0, 0, 0]), iloc]));
+  return Buffer.concat([ftyp, mdat, meta]);
+}
+
+function avifMissingTrailingBit() {
+  const coded = Buffer.concat([obu(2, Buffer.alloc(0)), obu(1, sequenceHeaderWithoutTrailingBit())]);
+  return avifAround(coded);
+}
+
+function avifWithFrameLetters() {
+  const coded = Buffer.concat([minimalAv1Extent(), obu(6, Buffer.from("ABCDEF"))]);
+  return avifAround(coded);
+}
+
+function avifWithBadBrand() {
+  return Buffer.concat([
+    avifFtyp(["AUTH", "NAME", "9f3a"]),
+    bmffBox("mdat", Buffer.from("clean-pixel-data")),
+  ]);
+}
+
+function avifWithWideIspe() {
+  const ispe = bmffBox(
+    "ispe",
+    Buffer.concat([
+      Buffer.from([0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1]),
+      Buffer.from("HIDDEN-AUTHOR-9f3a"),
+    ]),
+  );
+  const meta = bmffBox("meta", Buffer.concat([Buffer.from([0, 0, 0, 0]), ispe]));
+  return Buffer.concat([avifFtyp(), meta, bmffBox("mdat", Buffer.from("pixels"))]);
+}
+
+function avifWithMetadataObu() {
+  const obu = Buffer.concat([
+    Buffer.from([(5 << 3) | 0x02, "HIDDEN-AUTHOR-9f3a".length]),
+    Buffer.from("HIDDEN-AUTHOR-9f3a"),
+  ]);
+  const config = Buffer.concat([Buffer.from([0x81, 0, 0, 0]), obu]);
+  return Buffer.concat([avifFtyp(), bmffBox("av1C", config), bmffBox("mdat", Buffer.from("pixels"))]);
+}
+
+function progressiveJpegWithTables() {
+  const parts = [Buffer.from([0xff, 0xd8])];
+  parts.push(jpegSegment(0xe0, jfifPayload()));
+  parts.push(jpegSegment(0xc2, Buffer.from([0x08, 0x00, 0x01, 0x00, 0x01, 0x01, 0x01, 0x11, 0x00])));
+  parts.push(jpegSegment(0xdd, Buffer.from([0x00, 0x04])));
+  parts.push(jpegSegment(0xc4, Buffer.from("SCAN1-TABLE")));
+  parts.push(jpegSegment(0xda, Buffer.from([0x01, 0x01, 0x00, 0x00, 0x3f, 0x00])));
+  parts.push(Buffer.from([0x00, 0x11]));
+  parts.push(jpegSegment(0xfe, Buffer.from("PROGRESSIVE-MARKER-SECRET")));
+  parts.push(jpegSegment(0xc4, Buffer.from("SCAN2-TABLE")));
+  parts.push(jpegSegment(0xda, Buffer.from([0x01, 0x01, 0x00, 0x00, 0x3f, 0x00])));
+  parts.push(Buffer.from("SCAN2-KEEP"));
+  parts.push(Buffer.from([0xff, 0xd9]));
+  return Buffer.concat(parts);
 }
 
 function jsonLd(html) {
@@ -827,6 +1049,138 @@ test("13. JPEG and PNG metadata, including GPS, is removed from the built images
     assert.match(freeRun.stderr, /Could not remove hidden details/);
     assert.equal(existsSync(freeOut), false);
     assert.equal(freeRun.stderr.includes("HIDDEN-AUTHOR-9f3a"), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("ICC profiles in PNG, JPEG, and WebP are removed", async () => {
+  const root = await tempDir();
+  try {
+    await writeFile(path.join(root, "icc.png"), iccPng());
+    await writeFile(path.join(root, "icc.jpg"), iccJpeg());
+    await writeFile(path.join(root, "icc.webp"), iccWebp());
+    const facts = await loadFixture("marrow-lane-bakery.facts.json");
+    facts.images = [
+      { file: "icc.png", alt: "A fictional color card" },
+      { file: "icc.jpg", alt: "A fictional color target" },
+      { file: "icc.webp", alt: "A fictional color still" },
+    ];
+    const out = path.join(root, "site");
+    const result = run(await writeJson(root, facts), out);
+    assert.equal(result.status, 0, result.stderr);
+    const png = await readFile(path.join(out, "images/1.png"));
+    const jpeg = await readFile(path.join(out, "images/2.jpg"));
+    const webp = await readFile(path.join(out, "images/3.webp"));
+    assert.deepEqual(pngChunkTypes(png), ["IHDR", "IDAT", "IEND"]);
+    assert.equal(textOf(jpeg).includes("ICC_PROFILE"), false);
+    assert.equal(textOf(jpeg).includes("JFIF"), true);
+    assert.equal(textOf(webp).includes("ICCP"), false);
+    let flags = null;
+    let offset = 12;
+    while (offset + 8 <= webp.length) {
+      const tag = webp.toString("ascii", offset, offset + 4);
+      const size = webp.readUInt32LE(offset + 4);
+      if (tag === "VP8X") flags = webp[offset + 8];
+      offset += 8 + size + (size % 2);
+    }
+    assert.equal(flags & 0x02, 0);
+    for (const bytes of [png, jpeg, webp]) {
+      const text = textOf(bytes);
+      assert.equal(text.includes("ICC-AUTHOR-9f3a"), false);
+      assert.equal(text.includes("Copyright"), false);
+      assert.equal(text.includes("Device"), false);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("an AVIF with an unknown or unclean box is refused", async () => {
+  const cases = [
+    ["branded.avif", avifWithBadBrand(), "AUTHNAME9f3a"],
+    ["wide-ispe.avif", avifWithWideIspe(), "HIDDEN-AUTHOR-9f3a"],
+    ["metadata-obu.avif", avifWithMetadataObu(), "HIDDEN-AUTHOR-9f3a"],
+    ["spare.avif", avifWithFreeBox(), "HIDDEN-AUTHOR-9f3a"],
+    ["loose.avif", avifWithLooseText(), "HIDDEN-AUTHOR-9f3a"],
+    ["covered.avif", avifWithCoveredText(), "HIDDEN-AUTHOR-9f3a"],
+    ["tail.avif", avifWithUnreferencedTail(), "HIDDEN-AUTHOR-9f3a"],
+    ["no-trailing.avif", avifMissingTrailingBit(), "ABCDEF"],
+  ];
+  const root = await tempDir();
+  try {
+    await writeFile(path.join(root, "structural.avif"), structuralAvif());
+    const kept = await loadFixture("northglass-tutoring.facts.json");
+    kept.images = [{ file: "structural.avif", alt: "A fictional structural picture" }];
+    const keptOut = path.join(root, "kept");
+    const keptRun = run(await writeJson(root, kept, "kept.json"), keptOut);
+    assert.equal(keptRun.status, 0, keptRun.stderr);
+    const keptBytes = await readFile(path.join(keptOut, "images/1.avif"));
+    assert.deepEqual(keptBytes, structuralAvif());
+
+    await writeFile(path.join(root, "letters.avif"), avifWithFrameLetters());
+    const letters = await loadFixture("northglass-tutoring.facts.json");
+    letters.images = [{ file: "letters.avif", alt: "A fictional coded frame" }];
+    const lettersOut = path.join(root, "letters");
+    const lettersRun = run(await writeJson(root, letters, "letters.json"), lettersOut);
+    assert.equal(lettersRun.status, 0, lettersRun.stderr);
+    const lettersBytes = await readFile(path.join(lettersOut, "images/1.avif"));
+    assert.equal(textOf(lettersBytes).includes("ABCDEF"), true);
+
+    for (const [fileName, bytes, marker] of cases) {
+      const dir = path.join(root, fileName.replace(".avif", ""));
+      await mkdir(dir);
+      await writeFile(path.join(dir, fileName), bytes);
+      const facts = await loadFixture("northglass-tutoring.facts.json");
+      facts.images = [{ file: fileName, alt: "A picture that should be refused" }];
+      const out = path.join(dir, "site");
+      const result = run(await writeJson(dir, facts), out);
+      assert.notEqual(result.status, 0, fileName);
+      assert.match(result.stderr, /Could not remove hidden details/);
+      assert.equal(existsSync(out), false, fileName);
+      assert.equal(result.stderr.includes(marker), false, fileName);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a progressive JPEG keeps later scans", async () => {
+  const root = await tempDir();
+  try {
+    await writeFile(path.join(root, "progressive.jpg"), progressiveJpegWithTables());
+    const facts = await loadFixture("marrow-lane-bakery.facts.json");
+    facts.images = [{ file: "progressive.jpg", alt: "A fictional progressive photo" }];
+    const out = path.join(root, "site");
+    const result = run(await writeJson(root, facts), out);
+    assert.equal(result.status, 0, result.stderr);
+    const jpeg = await readFile(path.join(out, "images/1.jpg"));
+    const text = textOf(jpeg);
+    assert.equal(text.includes("SCAN2-KEEP"), true);
+    assert.equal(text.includes("SCAN2-TABLE"), true);
+    assert.equal(text.includes("PROGRESSIVE-MARKER-SECRET"), false);
+    assert.equal(jpeg.filter((byte, index) => byte === 0xff && jpeg[index + 1] === 0xda).length, 2);
+    assert.equal(jpeg.filter((byte, index) => byte === 0xff && jpeg[index + 1] === 0xc2).length, 1);
+    assert.equal(jpeg.filter((byte, index) => byte === 0xff && jpeg[index + 1] === 0xdd).length, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("mailto links percent-encode reserved characters", async () => {
+  const root = await tempDir();
+  try {
+    const facts = await loadFixture("northglass-tutoring.facts.json");
+    const email = "notes?draft&1#box@northglass-tutoring.example";
+    facts.contact.email = email;
+    const out = path.join(root, "site");
+    const result = run(await writeJson(root, facts), out);
+    assert.equal(result.status, 0, result.stderr);
+    const html = await readFile(path.join(out, "index.html"), "utf8");
+    assert.match(html, /href="mailto:notes%3Fdraft%261%23box@northglass-tutoring\.example"/);
+    assert.match(html, />notes\?draft&amp;1#box@northglass-tutoring\.example</);
+    assert.equal(jsonLd(html).email, email);
+    assert.equal(html.includes("mailto:notes?draft"), false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
