@@ -359,8 +359,10 @@ function stripAvif(buf, file) {
 }
 
 // Every byte of mdat/idat must belong to an item extent, and those bytes
-// must be AV1 open bitstream units. Unreferenced bytes, plain text, metadata
-// OBUs and padding are refused: this builder does not re-encode AV1.
+// must be AV1 open bitstream units. Unreferenced bytes, metadata OBUs and
+// padding are refused. Coded frame bytes are not scanned for letters:
+// compressed pixels can contain an accidental run, and this builder does
+// not decode AV1.
 function avifMediaIsVerified(buf, boxes) {
   const media = boxes
     .filter((box) => box.type === "mdat" || box.type === "idat")
@@ -714,7 +716,6 @@ function avifExtentIsCoded(bytes) {
     const decoded = readLeb128(bytes, offset);
     if (!decoded || decoded.value > bytes.length - decoded.offset) return null;
     const payload = bytes.subarray(decoded.offset, decoded.offset + decoded.value);
-    if (hasIdentityRun(payload)) return null;
     if (type === 2 && payload.length !== 0) return null;
     if (type === 1) {
       if (!avifSequenceHeaderIsClean(payload)) return null;
@@ -723,16 +724,6 @@ function avifExtentIsCoded(bytes) {
     offset = decoded.offset + decoded.value;
   }
   return { sequence };
-}
-
-function hasIdentityRun(buf) {
-  let run = 0;
-  for (const byte of buf) {
-    const word = (byte >= 0x30 && byte <= 0x39) || (byte >= 0x41 && byte <= 0x5a) || (byte >= 0x61 && byte <= 0x7a);
-    run = word ? run + 1 : 0;
-    if (run >= 6) return true;
-  }
-  return false;
 }
 
 function avifSequenceHeaderIsClean(payload) {
@@ -802,6 +793,8 @@ function avifSequenceHeaderIsClean(payload) {
     bits.u(1);
     readColorConfig(bits, profile);
     if (bits.u(1)) return false;
+    // AV1 trailing_bits is a one bit, then zeros to the next byte.
+    if (bits.u(1) !== 1) return false;
     return bits.done();
   } catch {
     return false;

@@ -293,6 +293,31 @@ function sequenceHeaderPayload() {
   pushBits(bits, 0, 1);
   pushBits(bits, 1, 1);
   pushBits(bits, 0, 1);
+  pushBits(bits, 1, 1);
+  return packBits(bits);
+}
+
+function sequenceHeaderWithoutTrailingBit() {
+  const bits = [];
+  pushBits(bits, 0, 3);
+  pushBits(bits, 1, 1);
+  pushBits(bits, 1, 1);
+  pushBits(bits, 0, 5);
+  pushBits(bits, 0, 4);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 4);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 1, 1);
+  pushBits(bits, 0, 1);
+  pushBits(bits, 1, 1);
+  pushBits(bits, 0, 1);
   return packBits(bits);
 }
 
@@ -464,6 +489,24 @@ function avifWithUnreferencedTail() {
   const iloc = ilocBox(ftyp.length + 8, coded.length);
   const meta = bmffBox("meta", Buffer.concat([Buffer.from([0, 0, 0, 0]), iloc]));
   return Buffer.concat([ftyp, mdat, meta]);
+}
+
+function avifAround(coded) {
+  const ftyp = avifFtyp();
+  const mdat = bmffBox("mdat", coded);
+  const iloc = ilocBox(ftyp.length + 8, coded.length);
+  const meta = bmffBox("meta", Buffer.concat([Buffer.from([0, 0, 0, 0]), iloc]));
+  return Buffer.concat([ftyp, mdat, meta]);
+}
+
+function avifMissingTrailingBit() {
+  const coded = Buffer.concat([obu(2, Buffer.alloc(0)), obu(1, sequenceHeaderWithoutTrailingBit())]);
+  return avifAround(coded);
+}
+
+function avifWithFrameLetters() {
+  const coded = Buffer.concat([minimalAv1Extent(), obu(6, Buffer.from("ABCDEF"))]);
+  return avifAround(coded);
 }
 
 function avifWithBadBrand() {
@@ -1062,6 +1105,7 @@ test("an AVIF with an unknown or unclean box is refused", async () => {
     ["loose.avif", avifWithLooseText(), "HIDDEN-AUTHOR-9f3a"],
     ["covered.avif", avifWithCoveredText(), "HIDDEN-AUTHOR-9f3a"],
     ["tail.avif", avifWithUnreferencedTail(), "HIDDEN-AUTHOR-9f3a"],
+    ["no-trailing.avif", avifMissingTrailingBit(), "ABCDEF"],
   ];
   const root = await tempDir();
   try {
@@ -1073,6 +1117,15 @@ test("an AVIF with an unknown or unclean box is refused", async () => {
     assert.equal(keptRun.status, 0, keptRun.stderr);
     const keptBytes = await readFile(path.join(keptOut, "images/1.avif"));
     assert.deepEqual(keptBytes, structuralAvif());
+
+    await writeFile(path.join(root, "letters.avif"), avifWithFrameLetters());
+    const letters = await loadFixture("northglass-tutoring.facts.json");
+    letters.images = [{ file: "letters.avif", alt: "A fictional coded frame" }];
+    const lettersOut = path.join(root, "letters");
+    const lettersRun = run(await writeJson(root, letters, "letters.json"), lettersOut);
+    assert.equal(lettersRun.status, 0, lettersRun.stderr);
+    const lettersBytes = await readFile(path.join(lettersOut, "images/1.avif"));
+    assert.equal(textOf(lettersBytes).includes("ABCDEF"), true);
 
     for (const [fileName, bytes, marker] of cases) {
       const dir = path.join(root, fileName.replace(".avif", ""));
