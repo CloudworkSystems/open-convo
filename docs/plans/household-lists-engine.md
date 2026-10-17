@@ -38,12 +38,27 @@ A small library in `packages/household-lists/`:
   state. The item stays where it is: in a sorted list it keeps its sorted
   position whether checked or not (owner, October 16). Deleting is a separate,
   deliberate action, reversible until Trash is emptied.
-- **Three sort orders per list**, chosen per list:
-  - **A to Z** (the default): by item text, ignoring case, accents and a
-    leading quantity, so "2 milk" sorts under M.
+- **Four sort orders per list**, chosen per list:
+  - **A to Z** (the default for every new list): by item text, ignoring case,
+    accents and a leading quantity, so "2 milk" sorts under M.
   - **By store section**: grouped (produce, dairy, frozen and so on), A to Z
-    within each group, unsectioned items last.
+    within each group, unsectioned items last. Offered only while sections are
+    on for that list.
   - **As added**: the order items were first added.
+  - **Custom** (owner, October 17): the owner drags items into his own order.
+    A list's custom order starts as the as-added order; new items join at the
+    end. Moving an item is a list change like any other, so it follows the
+    sync rules below: the move with the higher version stamp wins, and two
+    phones moving different items both keep their moves.
+- **Sections can be switched off per list** (owner, October 16). A list
+  setting turns the whole section feature off for that list: no section
+  suggestions, no "by store section" sort offered, and section fields
+  ignored. **Every new list starts with sections off** (owner, October 17);
+  the user turns them on per list. If sections are switched off while the
+  list is sorted by store section, the list falls back to **A to Z**, and
+  switching sections back on doesn't change the sort on its own.
+  Section groups, when used, stay in alphabetical order (store layouts differ
+  too much for a walk order).
 - **Store sections**: a small built-in starter map from common grocery words
   to sections, which the user can override per item and extend. Changing the
   map never changes items silently; it only suggests.
@@ -94,7 +109,14 @@ invented households only. At least:
 2. A to Z sorting ignores case, accents and leading quantities; checked items
    keep their sorted place.
 3. Section sorting groups correctly, with unsectioned items last.
-4. "As added" keeps first-added order through edits and re-checks.
+   With sections switched off for a list, no suggestions appear and the
+   section sort isn't offered; switching it back on restores the items'
+   saved sections.
+4. "As added" keeps first-added order through edits and re-checks. A new
+   list starts with sections off and sorted A to Z. Switching sections off
+   while sorted by section falls back to A to Z. Custom order starts as the
+   as-added order, keeps dragged positions through edits and re-checks, puts
+   new items at the end, and merges moves from two phones by the rules below.
 5. Several lists stay independent.
 6. Undo restores the previous state exactly.
 7. Delete goes to Trash and can be restored; emptying Trash removes it.
