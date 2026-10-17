@@ -127,6 +127,7 @@ jobs:
           check apps/desk/tests/fixtures/native-host-v1.json apps/mac/Tests/DeskHostTests/Fixtures/native-host-v1.json
           check apps/desk/tests/fixtures/native-host-v1.json apps/mac/Tests/DeskHostWebKitTests/Fixtures/native-host-v1.json
           check apps/desk/tests/fixtures/native-participant-v1.json apps/mac/Tests/ParticipantProcessTests/Fixtures/native-participant-v1.json
+          check apps/desk/tests/fixtures/native-participant-local-v1.json apps/mac/Tests/ParticipantProcessTests/Fixtures/native-participant-local-v1.json
           exit $status
 
   gate:

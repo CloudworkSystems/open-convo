@@ -24,7 +24,10 @@ private struct LocalVectors {
         return LocalVectors(data: data, root: root)
     }
 
-    var cases: [[String: JSONValue]] { root["cases"]?.listItems?.compactMap(\.objectValue) ?? [] }
+    /// The page-level cases: those without a `seed`. The seeded host cases
+    /// (step 3 PR 4c) run in `LocalHostVectorTests`.
+    var cases: [[String: JSONValue]] { allCases.filter { $0["seed"] == nil } }
+    var allCases: [[String: JSONValue]] { root["cases"]?.listItems?.compactMap(\.objectValue) ?? [] }
     var invalidReplies: [[String: JSONValue]] { root["invalidReplies"]?.listItems?.compactMap(\.objectValue) ?? [] }
     func runs(_ kind: String) -> [[String: JSONValue]] {
         root["runs"]?.objectValue?[kind]?.listItems?.compactMap(\.objectValue) ?? []
@@ -89,13 +92,14 @@ struct LocalVectorTests {
         #expect(bundled == original, "copy apps/desk/tests/fixtures/native-participant-local-v1.json over the test fixture; never edit the copy")
     }
 
-    @Test("Every case is counted: seven availability replies and the one local start run here")
+    @Test("Every case is counted: seven availability replies and the one local start run here, and the seeded host cases elsewhere")
     func everyCaseCounted() throws {
         let vectors = try LocalVectors.load()
         let operations = vectors.cases.map { $0["request"]?.objectValue?["operation"]?.stringValue ?? "" }
         #expect(operations.filter { $0 == "participant.availability" }.count == 7)
         #expect(operations.filter { $0 == "participant.start" }.count == 1)
         #expect(operations.count == 8)
+        #expect(vectors.allCases.count - vectors.cases.count == 26, "the seeded host cases (LocalHostVectorTests)")
         #expect(vectors.invalidReplies.count == 19)
         #expect(vectors.runs("valid").count == 3 && vectors.runs("invalid").count == 6)
     }
