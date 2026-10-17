@@ -1,5 +1,5 @@
 {
-  "description": "Invented vectors for the local-model route, revision 4 (docs/desk-native-participant-contract.md section 20). Page-level cases only for now: availability replies with routes, a local start, replies the page codec must refuse, and prepared local runs. Step 3 PR 3 adds seeded host cases (seed localRoute, fake-server script steps) run by the Swift harness. No real model names, digests or text.",
+  "description": "Invented vectors for the local-model route, revision 4 (docs/desk-native-participant-contract.md section 20). Page-level cases (no seed): availability replies with routes, a local start, replies the page codec must refuse, and prepared local runs. Seeded host cases (step 3 PR 4c: seed with records, localRoute and fake-server script steps, and the ollama requests each case makes): the Swift harness replays them through the real coordinator and store against a fake Ollama, and the page checks their requests, replies, pushes and runs. No real model names, digests or text.",
   "context": {
     "connectionId": "51000000-0000-4000-8000-000000000001",
     "documentGeneration": 2,
@@ -26,6 +26,183 @@
       "executionHost": "this-mac"
     },
     "localRoute": "ollama-local"
+  },
+  "records": {
+    "local-earlier-r4": {
+      "schemaVersion": 2,
+      "revision": 4,
+      "updatedAt": "2026-10-16T07:59:05.000Z",
+      "goals": [
+        {
+          "id": "A1000000-0000-1000-8000-000000000001",
+          "title": "Invented proof folder",
+          "nextStep": "Try an invented draft.",
+          "createdAt": "2026-10-09T00:00:00.000Z",
+          "updatedAt": "2026-10-09T00:00:00.000Z"
+        }
+      ],
+      "sessions": [
+        {
+          "id": "52abcdef-0000-4000-8abc-000000000901",
+          "goalId": "A1000000-0000-1000-8000-000000000001",
+          "title": "Invented proof session",
+          "createdAt": "2026-10-09T00:00:00.000Z",
+          "updatedAt": "2026-10-09T00:00:00.000Z"
+        }
+      ],
+      "messages": [],
+      "drafts": {
+        "52abcdef-0000-4000-8abc-000000000901": ""
+      },
+      "goalDrafts": {
+        "A1000000-0000-1000-8000-000000000001": {
+          "nextStep": null,
+          "workTitle": ""
+        }
+      },
+      "workItems": [],
+      "notes": [],
+      "activity": [],
+      "selection": {
+        "goalId": "A1000000-0000-1000-8000-000000000001",
+        "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+        "route": "sessions"
+      },
+      "preferences": {
+        "theme": "system"
+      },
+      "capabilities": {
+        "mode": "synthetic",
+        "provider": "runtime-selected",
+        "native": "unavailable"
+      },
+      "conversationRuns": [
+        {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000000903",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000903",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000903",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "My invented bakery is called Maple Crumb."
+          ],
+          "outputChunks": [
+            "Noted: Maple Crumb."
+          ],
+          "lastSequence": 3,
+          "phase": "completed",
+          "createdAt": "2026-10-16T07:59:00.000Z",
+          "updatedAt": "2026-10-16T07:59:05.000Z",
+          "contextRunIds": []
+        }
+      ]
+    },
+    "local-prepared-r5": {
+      "schemaVersion": 2,
+      "revision": 5,
+      "updatedAt": "2026-10-16T08:00:00.000Z",
+      "goals": [
+        {
+          "id": "A1000000-0000-1000-8000-000000000001",
+          "title": "Invented proof folder",
+          "nextStep": "Try an invented draft.",
+          "createdAt": "2026-10-09T00:00:00.000Z",
+          "updatedAt": "2026-10-09T00:00:00.000Z"
+        }
+      ],
+      "sessions": [
+        {
+          "id": "52abcdef-0000-4000-8abc-000000000901",
+          "goalId": "A1000000-0000-1000-8000-000000000001",
+          "title": "Invented proof session",
+          "createdAt": "2026-10-09T00:00:00.000Z",
+          "updatedAt": "2026-10-09T00:00:00.000Z"
+        }
+      ],
+      "messages": [],
+      "drafts": {
+        "52abcdef-0000-4000-8abc-000000000901": ""
+      },
+      "goalDrafts": {
+        "A1000000-0000-1000-8000-000000000001": {
+          "nextStep": null,
+          "workTitle": ""
+        }
+      },
+      "workItems": [],
+      "notes": [],
+      "activity": [],
+      "selection": {
+        "goalId": "A1000000-0000-1000-8000-000000000001",
+        "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+        "route": "sessions"
+      },
+      "preferences": {
+        "theme": "system"
+      },
+      "capabilities": {
+        "mode": "synthetic",
+        "provider": "runtime-selected",
+        "native": "unavailable"
+      },
+      "conversationRuns": [
+        {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000000903",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000903",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000903",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "My invented bakery is called Maple Crumb."
+          ],
+          "outputChunks": [
+            "Noted: Maple Crumb."
+          ],
+          "lastSequence": 3,
+          "phase": "completed",
+          "createdAt": "2026-10-16T07:59:00.000Z",
+          "updatedAt": "2026-10-16T07:59:05.000Z",
+          "contextRunIds": []
+        },
+        {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "What is my invented bakery ",
+            "called?"
+          ],
+          "outputChunks": [],
+          "lastSequence": 0,
+          "phase": "prepared",
+          "createdAt": "2026-10-16T08:00:00.000Z",
+          "updatedAt": "2026-10-16T08:00:00.000Z",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000000903"
+          ]
+        }
+      ]
+    }
   },
   "cases": [
     {
@@ -2386,6 +2563,2861 @@
         "outcome": "ok",
         "runId": "71abcdef-0000-4000-8abc-000000000901"
       }
+    },
+    {
+      "name": "local host: a preparing commit binds the earlier turn by its hash",
+      "seed": {
+        "record": "local-earlier-r4",
+        "localRoute": {
+          "state": "ready",
+          "reason": null,
+          "models": [
+            {
+              "name": "invented-local-small:7b",
+              "digest": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+            },
+            {
+              "name": "invented-local-large:9b",
+              "digest": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+            },
+            {
+              "name": "invented-cloud:cloud",
+              "digest": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+              "remote": true
+            }
+          ]
+        },
+        "clock": "2026-10-16T08:00:00.000Z"
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000930",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "workspace.commitProof",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "expectedRevision": 4,
+          "record": {
+            "schemaVersion": 2,
+            "revision": 5,
+            "updatedAt": "2026-10-16T08:00:00.000Z",
+            "goals": [
+              {
+                "id": "A1000000-0000-1000-8000-000000000001",
+                "title": "Invented proof folder",
+                "nextStep": "Try an invented draft.",
+                "createdAt": "2026-10-09T00:00:00.000Z",
+                "updatedAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "sessions": [
+              {
+                "id": "52abcdef-0000-4000-8abc-000000000901",
+                "goalId": "A1000000-0000-1000-8000-000000000001",
+                "title": "Invented proof session",
+                "createdAt": "2026-10-09T00:00:00.000Z",
+                "updatedAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "messages": [],
+            "drafts": {
+              "52abcdef-0000-4000-8abc-000000000901": ""
+            },
+            "goalDrafts": {
+              "A1000000-0000-1000-8000-000000000001": {
+                "nextStep": null,
+                "workTitle": ""
+              }
+            },
+            "workItems": [],
+            "notes": [],
+            "activity": [],
+            "selection": {
+              "goalId": "A1000000-0000-1000-8000-000000000001",
+              "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+              "route": "sessions"
+            },
+            "preferences": {
+              "theme": "system"
+            },
+            "capabilities": {
+              "mode": "synthetic",
+              "provider": "runtime-selected",
+              "native": "unavailable"
+            },
+            "conversationRuns": [
+              {
+                "version": 1,
+                "runId": "71abcdef-0000-4000-8abc-000000000903",
+                "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+                "userMessageId": "72abcdef-0000-4000-8abc-000000000903",
+                "assistantMessageId": "73abcdef-0000-4000-8abc-000000000903",
+                "participant": {
+                  "id": "ollama-local",
+                  "label": "invented-local-small:7b",
+                  "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+                  "executionHost": "this-mac"
+                },
+                "inputChunks": [
+                  "My invented bakery is called Maple Crumb."
+                ],
+                "outputChunks": [
+                  "Noted: Maple Crumb."
+                ],
+                "lastSequence": 3,
+                "phase": "completed",
+                "createdAt": "2026-10-16T07:59:00.000Z",
+                "updatedAt": "2026-10-16T07:59:05.000Z",
+                "contextRunIds": []
+              },
+              {
+                "version": 1,
+                "runId": "71abcdef-0000-4000-8abc-000000000911",
+                "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+                "userMessageId": "72abcdef-0000-4000-8abc-000000000911",
+                "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+                "participant": {
+                  "id": "ollama-local",
+                  "label": "invented-local-small:7b",
+                  "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+                  "executionHost": "this-mac"
+                },
+                "inputChunks": [
+                  "What is my invented bakery ",
+                  "called?"
+                ],
+                "outputChunks": [],
+                "lastSequence": 0,
+                "phase": "prepared",
+                "createdAt": "2026-10-16T08:00:00.000Z",
+                "updatedAt": "2026-10-16T08:00:00.000Z",
+                "contextRunIds": [
+                  "71abcdef-0000-4000-8abc-000000000903"
+                ]
+              }
+            ]
+          },
+          "participantRun": {
+            "runId": "71abcdef-0000-4000-8abc-000000000911",
+            "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+            "userMessageId": "72abcdef-0000-4000-8abc-000000000911",
+            "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+            "participantId": "ollama-local",
+            "createdAt": "2026-10-16T08:00:00.000Z"
+          }
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000930",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "workspace.commitProof",
+        "outcome": "ok",
+        "revision": 5
+      },
+      "afterRuns": [
+        {
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "contextBytes": 60,
+          "contextHash": "0b6c6165a74851c543d26b90cc9687b8b09fc24ed4dec2788b1cdfac897adf1b",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000000903"
+          ],
+          "createdAt": "2026-10-16T08:00:00.000Z",
+          "groupCleared": null,
+          "inputBytes": 34,
+          "inputHash": "c43bb1067071b45e7eccf74b2abd36fb83bf0ee9e27911140ee7c6ff844338c9",
+          "participant": {
+            "executionHost": "this-mac",
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+          },
+          "prepareRequestId": "62abcdef-0000-4000-8abc-000000000930",
+          "preparedBytes": 667,
+          "preparedRevision": 5,
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "start": null,
+          "terminal": null,
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911"
+        }
+      ],
+      "ollama": [
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        }
+      ]
+    },
+    {
+      "name": "local host: a preparing commit whose context names a run not in the record is run-mismatch",
+      "seed": {
+        "record": "local-earlier-r4",
+        "localRoute": {
+          "state": "ready",
+          "reason": null,
+          "models": [
+            {
+              "name": "invented-local-small:7b",
+              "digest": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+            },
+            {
+              "name": "invented-local-large:9b",
+              "digest": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+            },
+            {
+              "name": "invented-cloud:cloud",
+              "digest": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+              "remote": true
+            }
+          ]
+        }
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000931",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "workspace.commitProof",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "expectedRevision": 4,
+          "record": {
+            "schemaVersion": 2,
+            "revision": 5,
+            "updatedAt": "2026-10-16T08:00:00.000Z",
+            "goals": [
+              {
+                "id": "A1000000-0000-1000-8000-000000000001",
+                "title": "Invented proof folder",
+                "nextStep": "Try an invented draft.",
+                "createdAt": "2026-10-09T00:00:00.000Z",
+                "updatedAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "sessions": [
+              {
+                "id": "52abcdef-0000-4000-8abc-000000000901",
+                "goalId": "A1000000-0000-1000-8000-000000000001",
+                "title": "Invented proof session",
+                "createdAt": "2026-10-09T00:00:00.000Z",
+                "updatedAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "messages": [],
+            "drafts": {
+              "52abcdef-0000-4000-8abc-000000000901": ""
+            },
+            "goalDrafts": {
+              "A1000000-0000-1000-8000-000000000001": {
+                "nextStep": null,
+                "workTitle": ""
+              }
+            },
+            "workItems": [],
+            "notes": [],
+            "activity": [],
+            "selection": {
+              "goalId": "A1000000-0000-1000-8000-000000000001",
+              "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+              "route": "sessions"
+            },
+            "preferences": {
+              "theme": "system"
+            },
+            "capabilities": {
+              "mode": "synthetic",
+              "provider": "runtime-selected",
+              "native": "unavailable"
+            },
+            "conversationRuns": [
+              {
+                "version": 1,
+                "runId": "71abcdef-0000-4000-8abc-000000000903",
+                "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+                "userMessageId": "72abcdef-0000-4000-8abc-000000000903",
+                "assistantMessageId": "73abcdef-0000-4000-8abc-000000000903",
+                "participant": {
+                  "id": "ollama-local",
+                  "label": "invented-local-small:7b",
+                  "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+                  "executionHost": "this-mac"
+                },
+                "inputChunks": [
+                  "My invented bakery is called Maple Crumb."
+                ],
+                "outputChunks": [
+                  "Noted: Maple Crumb."
+                ],
+                "lastSequence": 3,
+                "phase": "completed",
+                "createdAt": "2026-10-16T07:59:00.000Z",
+                "updatedAt": "2026-10-16T07:59:05.000Z",
+                "contextRunIds": []
+              },
+              {
+                "version": 1,
+                "runId": "71abcdef-0000-4000-8abc-000000000911",
+                "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+                "userMessageId": "72abcdef-0000-4000-8abc-000000000911",
+                "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+                "participant": {
+                  "id": "ollama-local",
+                  "label": "invented-local-small:7b",
+                  "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+                  "executionHost": "this-mac"
+                },
+                "inputChunks": [
+                  "What is my invented bakery ",
+                  "called?"
+                ],
+                "outputChunks": [],
+                "lastSequence": 0,
+                "phase": "prepared",
+                "createdAt": "2026-10-16T08:00:00.000Z",
+                "updatedAt": "2026-10-16T08:00:00.000Z",
+                "contextRunIds": [
+                  "71abcdef-0000-4000-8abc-000000000999"
+                ]
+              }
+            ]
+          },
+          "participantRun": {
+            "runId": "71abcdef-0000-4000-8abc-000000000911",
+            "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+            "userMessageId": "72abcdef-0000-4000-8abc-000000000911",
+            "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+            "participantId": "ollama-local",
+            "createdAt": "2026-10-16T08:00:00.000Z"
+          }
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000931",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "workspace.commitProof",
+        "outcome": "refused",
+        "reason": "run-mismatch"
+      },
+      "ollama": [
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        }
+      ]
+    },
+    {
+      "name": "local host: a local start sends the earlier turn and the new message, only after its start record",
+      "seed": {
+        "afterCase": "local host: a preparing commit binds the earlier turn by its hash",
+        "clock": "2026-10-16T08:00:01.000Z",
+        "script": [
+          {
+            "kind": "http-200"
+          },
+          {
+            "kind": "chunk",
+            "text": "Your invented bakery "
+          },
+          {
+            "kind": "chunk",
+            "text": "is Maple Crumb."
+          },
+          {
+            "kind": "done"
+          }
+        ]
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000932",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "What is my invented bakery ",
+            "called?"
+          ]
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000932",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "outcome": "ok",
+        "runId": "71abcdef-0000-4000-8abc-000000000911"
+      },
+      "pushed": [
+        {
+          "type": "participant.event",
+          "connectionId": "51000000-0000-4000-8000-000000000001",
+          "generation": 2,
+          "event": {
+            "runId": "71abcdef-0000-4000-8abc-000000000911",
+            "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+            "sequence": 1,
+            "at": "2026-10-16T08:00:01.000Z",
+            "type": "started"
+          }
+        },
+        {
+          "type": "participant.event",
+          "connectionId": "51000000-0000-4000-8000-000000000001",
+          "generation": 2,
+          "event": {
+            "runId": "71abcdef-0000-4000-8abc-000000000911",
+            "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+            "sequence": 2,
+            "at": "2026-10-16T08:00:01.000Z",
+            "type": "text",
+            "text": "Your invented bakery is Maple Crumb."
+          }
+        },
+        {
+          "type": "participant.event",
+          "connectionId": "51000000-0000-4000-8000-000000000001",
+          "generation": 2,
+          "event": {
+            "runId": "71abcdef-0000-4000-8abc-000000000911",
+            "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+            "sequence": 3,
+            "at": "2026-10-16T08:00:01.000Z",
+            "type": "completed"
+          }
+        }
+      ],
+      "afterRuns": [
+        {
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "contextBytes": 60,
+          "contextHash": "0b6c6165a74851c543d26b90cc9687b8b09fc24ed4dec2788b1cdfac897adf1b",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000000903"
+          ],
+          "createdAt": "2026-10-16T08:00:00.000Z",
+          "groupCleared": true,
+          "inputBytes": 34,
+          "inputHash": "c43bb1067071b45e7eccf74b2abd36fb83bf0ee9e27911140ee7c6ff844338c9",
+          "participant": {
+            "executionHost": "this-mac",
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+          },
+          "prepareRequestId": "62abcdef-0000-4000-8abc-000000000930",
+          "preparedBytes": 667,
+          "preparedRevision": 5,
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "start": {
+            "at": "2026-10-16T08:00:01.000Z",
+            "cliVersion": "ollama-local",
+            "launchId": "75abcdef-0000-4000-8abc-000000000002",
+            "payloadHash": "62ec058f59be33088933df82b1883c72a2f45fd3609a31ecf595b83fc19c6e45",
+            "requestId": "62abcdef-0000-4000-8abc-000000000932"
+          },
+          "terminal": {
+            "at": "2026-10-16T08:00:01.000Z",
+            "reason": null,
+            "sequence": 3,
+            "type": "completed"
+          },
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911"
+        }
+      ],
+      "ollama": [
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "POST",
+          "path": "/api/copy",
+          "body": {
+            "destination": "open-convo-run-71abcdef000040008abc000000000911:pin",
+            "source": "invented-local-small:7b"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "POST",
+          "path": "/api/chat",
+          "body": {
+            "messages": [
+              {
+                "content": "My invented bakery is called Maple Crumb.",
+                "role": "user"
+              },
+              {
+                "content": "Noted: Maple Crumb.",
+                "role": "assistant"
+              },
+              {
+                "content": "What is my invented bakery called?",
+                "role": "user"
+              }
+            ],
+            "model": "open-convo-run-71abcdef000040008abc000000000911:pin",
+            "stream": true,
+            "think": false
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/delete",
+          "body": {
+            "model": "open-convo-run-71abcdef000040008abc000000000911:pin"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local host: the same start again replays ok and sends nothing",
+      "seed": {
+        "afterCase": "local host: a local start sends the earlier turn and the new message, only after its start record"
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000932",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "What is my invented bakery ",
+            "called?"
+          ]
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000932",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "outcome": "ok",
+        "runId": "71abcdef-0000-4000-8abc-000000000911"
+      },
+      "afterRuns": [
+        {
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "contextBytes": 60,
+          "contextHash": "0b6c6165a74851c543d26b90cc9687b8b09fc24ed4dec2788b1cdfac897adf1b",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000000903"
+          ],
+          "createdAt": "2026-10-16T08:00:00.000Z",
+          "groupCleared": true,
+          "inputBytes": 34,
+          "inputHash": "c43bb1067071b45e7eccf74b2abd36fb83bf0ee9e27911140ee7c6ff844338c9",
+          "participant": {
+            "executionHost": "this-mac",
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+          },
+          "prepareRequestId": "62abcdef-0000-4000-8abc-000000000930",
+          "preparedBytes": 667,
+          "preparedRevision": 5,
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "start": {
+            "at": "2026-10-16T08:00:01.000Z",
+            "cliVersion": "ollama-local",
+            "launchId": "75abcdef-0000-4000-8abc-000000000002",
+            "payloadHash": "62ec058f59be33088933df82b1883c72a2f45fd3609a31ecf595b83fc19c6e45",
+            "requestId": "62abcdef-0000-4000-8abc-000000000932"
+          },
+          "terminal": {
+            "at": "2026-10-16T08:00:01.000Z",
+            "reason": null,
+            "sequence": 3,
+            "type": "completed"
+          },
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911"
+        }
+      ],
+      "ollama": [
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/api/tags"
+        }
+      ]
+    },
+    {
+      "name": "local host: the page edits the earlier turn after the run was prepared",
+      "seed": {
+        "afterCase": "local host: a preparing commit binds the earlier turn by its hash"
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000933",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "workspace.commitProof",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "expectedRevision": 5,
+          "record": {
+            "schemaVersion": 2,
+            "revision": 6,
+            "updatedAt": "2026-10-16T08:00:00.000Z",
+            "goals": [
+              {
+                "id": "A1000000-0000-1000-8000-000000000001",
+                "title": "Invented proof folder",
+                "nextStep": "Try an invented draft.",
+                "createdAt": "2026-10-09T00:00:00.000Z",
+                "updatedAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "sessions": [
+              {
+                "id": "52abcdef-0000-4000-8abc-000000000901",
+                "goalId": "A1000000-0000-1000-8000-000000000001",
+                "title": "Invented proof session",
+                "createdAt": "2026-10-09T00:00:00.000Z",
+                "updatedAt": "2026-10-09T00:00:00.000Z"
+              }
+            ],
+            "messages": [],
+            "drafts": {
+              "52abcdef-0000-4000-8abc-000000000901": ""
+            },
+            "goalDrafts": {
+              "A1000000-0000-1000-8000-000000000001": {
+                "nextStep": null,
+                "workTitle": ""
+              }
+            },
+            "workItems": [],
+            "notes": [],
+            "activity": [],
+            "selection": {
+              "goalId": "A1000000-0000-1000-8000-000000000001",
+              "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+              "route": "sessions"
+            },
+            "preferences": {
+              "theme": "system"
+            },
+            "capabilities": {
+              "mode": "synthetic",
+              "provider": "runtime-selected",
+              "native": "unavailable"
+            },
+            "conversationRuns": [
+              {
+                "version": 1,
+                "runId": "71abcdef-0000-4000-8abc-000000000903",
+                "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+                "userMessageId": "72abcdef-0000-4000-8abc-000000000903",
+                "assistantMessageId": "73abcdef-0000-4000-8abc-000000000903",
+                "participant": {
+                  "id": "ollama-local",
+                  "label": "invented-local-small:7b",
+                  "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+                  "executionHost": "this-mac"
+                },
+                "inputChunks": [
+                  "My invented bakery is called Maple Crumb."
+                ],
+                "outputChunks": [
+                  "An edited invented answer."
+                ],
+                "lastSequence": 3,
+                "phase": "completed",
+                "createdAt": "2026-10-16T07:59:00.000Z",
+                "updatedAt": "2026-10-16T07:59:05.000Z",
+                "contextRunIds": []
+              },
+              {
+                "version": 1,
+                "runId": "71abcdef-0000-4000-8abc-000000000911",
+                "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+                "userMessageId": "72abcdef-0000-4000-8abc-000000000911",
+                "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+                "participant": {
+                  "id": "ollama-local",
+                  "label": "invented-local-small:7b",
+                  "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+                  "executionHost": "this-mac"
+                },
+                "inputChunks": [
+                  "What is my invented bakery ",
+                  "called?"
+                ],
+                "outputChunks": [],
+                "lastSequence": 0,
+                "phase": "prepared",
+                "createdAt": "2026-10-16T08:00:00.000Z",
+                "updatedAt": "2026-10-16T08:00:00.000Z",
+                "contextRunIds": [
+                  "71abcdef-0000-4000-8abc-000000000903"
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000933",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "workspace.commitProof",
+        "outcome": "ok",
+        "revision": 6
+      },
+      "ollama": []
+    },
+    {
+      "name": "local host: a start whose earlier turn changed is run-mismatch, with nothing bound or sent",
+      "seed": {
+        "afterCase": "local host: the page edits the earlier turn after the run was prepared",
+        "clock": "2026-10-16T08:00:01.000Z"
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000934",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "What is my invented bakery ",
+            "called?"
+          ]
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000934",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "outcome": "refused",
+        "reason": "run-mismatch"
+      },
+      "ollama": [
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        }
+      ]
+    },
+    {
+      "name": "local host: a tag moved to another model before the start is participant-changed",
+      "seed": {
+        "afterCase": "local host: a preparing commit binds the earlier turn by its hash",
+        "clock": "2026-10-16T08:00:01.000Z",
+        "localRoute": {
+          "state": "ready",
+          "reason": null,
+          "models": [
+            {
+              "name": "invented-local-small:7b",
+              "digest": "d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4"
+            },
+            {
+              "name": "invented-local-large:9b",
+              "digest": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+            },
+            {
+              "name": "invented-cloud:cloud",
+              "digest": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+              "remote": true
+            }
+          ]
+        }
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000935",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "What is my invented bakery ",
+            "called?"
+          ]
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000935",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "outcome": "refused",
+        "reason": "participant-changed"
+      },
+      "ollama": [
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        }
+      ]
+    },
+    {
+      "name": "local host: a retag between the recheck and the copy is participant-changed, and the alias is deleted",
+      "seed": {
+        "afterCase": "local host: a preparing commit binds the earlier turn by its hash",
+        "clock": "2026-10-16T08:00:01.000Z",
+        "script": [
+          {
+            "kind": "retag",
+            "name": "invented-local-small:7b",
+            "digest": "d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4"
+          }
+        ]
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000936",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "What is my invented bakery ",
+            "called?"
+          ]
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000936",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "outcome": "refused",
+        "reason": "participant-changed"
+      },
+      "ollama": [
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/api/tags"
+        },
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/api/tags"
+        },
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/api/tags"
+        },
+        {
+          "body": {
+            "destination": "open-convo-run-71abcdef000040008abc000000000911:pin",
+            "source": "invented-local-small:7b"
+          },
+          "method": "POST",
+          "path": "/api/copy"
+        },
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/api/tags"
+        },
+        {
+          "body": {
+            "model": "open-convo-run-71abcdef000040008abc000000000911:pin"
+          },
+          "method": "DELETE",
+          "path": "/api/delete"
+        },
+        {
+          "body": {
+            "model": "open-convo-run-71abcdef000040008abc000000000911:pin"
+          },
+          "method": "DELETE",
+          "path": "/api/delete"
+        }
+      ]
+    },
+    {
+      "name": "local host: an alias moved before its check is participant-changed, and the alias is deleted",
+      "seed": {
+        "afterCase": "local host: a preparing commit binds the earlier turn by its hash",
+        "clock": "2026-10-16T08:00:01.000Z",
+        "script": [
+          {
+            "kind": "alias-swap",
+            "digest": "d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4"
+          }
+        ]
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000937",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "What is my invented bakery ",
+            "called?"
+          ]
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000937",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "outcome": "refused",
+        "reason": "participant-changed"
+      },
+      "ollama": [
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/api/tags"
+        },
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/api/tags"
+        },
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/api/tags"
+        },
+        {
+          "body": {
+            "destination": "open-convo-run-71abcdef000040008abc000000000911:pin",
+            "source": "invented-local-small:7b"
+          },
+          "method": "POST",
+          "path": "/api/copy"
+        },
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/api/tags"
+        },
+        {
+          "body": {
+            "model": "open-convo-run-71abcdef000040008abc000000000911:pin"
+          },
+          "method": "DELETE",
+          "path": "/api/delete"
+        },
+        {
+          "body": {
+            "model": "open-convo-run-71abcdef000040008abc000000000911:pin"
+          },
+          "method": "DELETE",
+          "path": "/api/delete"
+        }
+      ]
+    },
+    {
+      "name": "local host: Ollama not running at the start is participant-unavailable, never a model change",
+      "seed": {
+        "afterCase": "local host: a preparing commit binds the earlier turn by its hash",
+        "clock": "2026-10-16T08:00:01.000Z",
+        "localRoute": {
+          "state": "unavailable",
+          "reason": "ollama-not-running",
+          "models": []
+        }
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000938",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "What is my invented bakery ",
+            "called?"
+          ]
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000938",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "outcome": "refused",
+        "reason": "participant-unavailable"
+      },
+      "ollama": []
+    },
+    {
+      "name": "local host: a model that became remote is participant-unavailable",
+      "seed": {
+        "afterCase": "local host: a preparing commit binds the earlier turn by its hash",
+        "clock": "2026-10-16T08:00:01.000Z",
+        "localRoute": {
+          "state": "ready",
+          "reason": null,
+          "models": [
+            {
+              "name": "invented-local-small:7b",
+              "digest": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+              "remote": true
+            },
+            {
+              "name": "invented-local-large:9b",
+              "digest": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+            },
+            {
+              "name": "invented-cloud:cloud",
+              "digest": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+              "remote": true
+            }
+          ]
+        }
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000939",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "What is my invented bakery ",
+            "called?"
+          ]
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000939",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "outcome": "refused",
+        "reason": "participant-unavailable"
+      },
+      "ollama": [
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        }
+      ]
+    },
+    {
+      "name": "local host: a local start whose reply has not begun",
+      "seed": {
+        "afterCase": "local host: a preparing commit binds the earlier turn by its hash",
+        "clock": "2026-10-16T08:00:01.000Z"
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000940",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "What is my invented bakery ",
+            "called?"
+          ]
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000940",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "outcome": "ok",
+        "runId": "71abcdef-0000-4000-8abc-000000000911"
+      },
+      "afterRuns": [
+        {
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "contextBytes": 60,
+          "contextHash": "0b6c6165a74851c543d26b90cc9687b8b09fc24ed4dec2788b1cdfac897adf1b",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000000903"
+          ],
+          "createdAt": "2026-10-16T08:00:00.000Z",
+          "groupCleared": null,
+          "inputBytes": 34,
+          "inputHash": "c43bb1067071b45e7eccf74b2abd36fb83bf0ee9e27911140ee7c6ff844338c9",
+          "participant": {
+            "executionHost": "this-mac",
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+          },
+          "prepareRequestId": "62abcdef-0000-4000-8abc-000000000930",
+          "preparedBytes": 667,
+          "preparedRevision": 5,
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "start": {
+            "at": "2026-10-16T08:00:01.000Z",
+            "cliVersion": "ollama-local",
+            "launchId": "75abcdef-0000-4000-8abc-000000000002",
+            "payloadHash": "62ec058f59be33088933df82b1883c72a2f45fd3609a31ecf595b83fc19c6e45",
+            "requestId": "62abcdef-0000-4000-8abc-000000000940"
+          },
+          "terminal": null,
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911"
+        }
+      ],
+      "ollama": [
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "POST",
+          "path": "/api/copy",
+          "body": {
+            "destination": "open-convo-run-71abcdef000040008abc000000000911:pin",
+            "source": "invented-local-small:7b"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "POST",
+          "path": "/api/chat",
+          "body": {
+            "messages": [
+              {
+                "content": "My invented bakery is called Maple Crumb.",
+                "role": "user"
+              },
+              {
+                "content": "Noted: Maple Crumb.",
+                "role": "assistant"
+              },
+              {
+                "content": "What is my invented bakery called?",
+                "role": "user"
+              }
+            ],
+            "model": "open-convo-run-71abcdef000040008abc000000000911:pin",
+            "stream": true,
+            "think": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "local host: Stop before the reply begins cancels the request: stopped at sequence 1",
+      "seed": {
+        "afterCase": "local host: a local start whose reply has not begun"
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000941",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.stop",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901"
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000941",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.stop",
+        "outcome": "ok",
+        "runId": "71abcdef-0000-4000-8abc-000000000911",
+        "state": "exited",
+        "terminal": {
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "sequence": 1,
+          "at": "2026-10-16T08:00:01.000Z",
+          "type": "stopped",
+          "reason": "local-stop"
+        },
+        "groupCleared": true,
+        "providerCancelConfirmed": false
+      },
+      "pushed": [
+        {
+          "type": "participant.event",
+          "connectionId": "51000000-0000-4000-8000-000000000001",
+          "generation": 2,
+          "event": {
+            "runId": "71abcdef-0000-4000-8abc-000000000911",
+            "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+            "sequence": 1,
+            "at": "2026-10-16T08:00:01.000Z",
+            "type": "stopped",
+            "reason": "local-stop"
+          }
+        }
+      ],
+      "afterRuns": [
+        {
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "contextBytes": 60,
+          "contextHash": "0b6c6165a74851c543d26b90cc9687b8b09fc24ed4dec2788b1cdfac897adf1b",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000000903"
+          ],
+          "createdAt": "2026-10-16T08:00:00.000Z",
+          "groupCleared": true,
+          "inputBytes": 34,
+          "inputHash": "c43bb1067071b45e7eccf74b2abd36fb83bf0ee9e27911140ee7c6ff844338c9",
+          "participant": {
+            "executionHost": "this-mac",
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+          },
+          "prepareRequestId": "62abcdef-0000-4000-8abc-000000000930",
+          "preparedBytes": 667,
+          "preparedRevision": 5,
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "start": {
+            "at": "2026-10-16T08:00:01.000Z",
+            "cliVersion": "ollama-local",
+            "launchId": "75abcdef-0000-4000-8abc-000000000002",
+            "payloadHash": "62ec058f59be33088933df82b1883c72a2f45fd3609a31ecf595b83fc19c6e45",
+            "requestId": "62abcdef-0000-4000-8abc-000000000940"
+          },
+          "terminal": {
+            "at": "2026-10-16T08:00:01.000Z",
+            "reason": "local-stop",
+            "sequence": 1,
+            "type": "stopped"
+          },
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911"
+        }
+      ],
+      "ollama": [
+        {
+          "method": "DELETE",
+          "path": "/api/delete",
+          "body": {
+            "model": "open-convo-run-71abcdef000040008abc000000000911:pin"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local host: a local start whose reply has begun",
+      "seed": {
+        "afterCase": "local host: a preparing commit binds the earlier turn by its hash",
+        "clock": "2026-10-16T08:00:01.000Z",
+        "script": [
+          {
+            "kind": "http-200"
+          },
+          {
+            "kind": "chunk",
+            "text": "Invented partial "
+          }
+        ]
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000942",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "What is my invented bakery ",
+            "called?"
+          ]
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000942",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "outcome": "ok",
+        "runId": "71abcdef-0000-4000-8abc-000000000911"
+      },
+      "pushed": [
+        {
+          "type": "participant.event",
+          "connectionId": "51000000-0000-4000-8000-000000000001",
+          "generation": 2,
+          "event": {
+            "runId": "71abcdef-0000-4000-8abc-000000000911",
+            "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+            "sequence": 1,
+            "at": "2026-10-16T08:00:01.000Z",
+            "type": "started"
+          }
+        }
+      ],
+      "afterRuns": [
+        {
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "contextBytes": 60,
+          "contextHash": "0b6c6165a74851c543d26b90cc9687b8b09fc24ed4dec2788b1cdfac897adf1b",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000000903"
+          ],
+          "createdAt": "2026-10-16T08:00:00.000Z",
+          "groupCleared": null,
+          "inputBytes": 34,
+          "inputHash": "c43bb1067071b45e7eccf74b2abd36fb83bf0ee9e27911140ee7c6ff844338c9",
+          "participant": {
+            "executionHost": "this-mac",
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+          },
+          "prepareRequestId": "62abcdef-0000-4000-8abc-000000000930",
+          "preparedBytes": 667,
+          "preparedRevision": 5,
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "start": {
+            "at": "2026-10-16T08:00:01.000Z",
+            "cliVersion": "ollama-local",
+            "launchId": "75abcdef-0000-4000-8abc-000000000002",
+            "payloadHash": "62ec058f59be33088933df82b1883c72a2f45fd3609a31ecf595b83fc19c6e45",
+            "requestId": "62abcdef-0000-4000-8abc-000000000942"
+          },
+          "terminal": null,
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911"
+        }
+      ],
+      "ollama": [
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "POST",
+          "path": "/api/copy",
+          "body": {
+            "destination": "open-convo-run-71abcdef000040008abc000000000911:pin",
+            "source": "invented-local-small:7b"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "POST",
+          "path": "/api/chat",
+          "body": {
+            "messages": [
+              {
+                "content": "My invented bakery is called Maple Crumb.",
+                "role": "user"
+              },
+              {
+                "content": "Noted: Maple Crumb.",
+                "role": "assistant"
+              },
+              {
+                "content": "What is my invented bakery called?",
+                "role": "user"
+              }
+            ],
+            "model": "open-convo-run-71abcdef000040008abc000000000911:pin",
+            "stream": true,
+            "think": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "local host: Stop after the reply began keeps the text so far, then stopped",
+      "seed": {
+        "afterCase": "local host: a local start whose reply has begun"
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000943",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.stop",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901"
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000943",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.stop",
+        "outcome": "ok",
+        "runId": "71abcdef-0000-4000-8abc-000000000911",
+        "state": "exited",
+        "terminal": {
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "sequence": 3,
+          "at": "2026-10-16T08:00:01.000Z",
+          "type": "stopped",
+          "reason": "local-stop"
+        },
+        "groupCleared": true,
+        "providerCancelConfirmed": false
+      },
+      "pushed": [
+        {
+          "type": "participant.event",
+          "connectionId": "51000000-0000-4000-8000-000000000001",
+          "generation": 2,
+          "event": {
+            "runId": "71abcdef-0000-4000-8abc-000000000911",
+            "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+            "sequence": 2,
+            "at": "2026-10-16T08:00:01.000Z",
+            "type": "text",
+            "text": "Invented partial "
+          }
+        },
+        {
+          "type": "participant.event",
+          "connectionId": "51000000-0000-4000-8000-000000000001",
+          "generation": 2,
+          "event": {
+            "runId": "71abcdef-0000-4000-8abc-000000000911",
+            "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+            "sequence": 3,
+            "at": "2026-10-16T08:00:01.000Z",
+            "type": "stopped",
+            "reason": "local-stop"
+          }
+        }
+      ],
+      "afterRuns": [
+        {
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "contextBytes": 60,
+          "contextHash": "0b6c6165a74851c543d26b90cc9687b8b09fc24ed4dec2788b1cdfac897adf1b",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000000903"
+          ],
+          "createdAt": "2026-10-16T08:00:00.000Z",
+          "groupCleared": true,
+          "inputBytes": 34,
+          "inputHash": "c43bb1067071b45e7eccf74b2abd36fb83bf0ee9e27911140ee7c6ff844338c9",
+          "participant": {
+            "executionHost": "this-mac",
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+          },
+          "prepareRequestId": "62abcdef-0000-4000-8abc-000000000930",
+          "preparedBytes": 667,
+          "preparedRevision": 5,
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "start": {
+            "at": "2026-10-16T08:00:01.000Z",
+            "cliVersion": "ollama-local",
+            "launchId": "75abcdef-0000-4000-8abc-000000000002",
+            "payloadHash": "62ec058f59be33088933df82b1883c72a2f45fd3609a31ecf595b83fc19c6e45",
+            "requestId": "62abcdef-0000-4000-8abc-000000000942"
+          },
+          "terminal": {
+            "at": "2026-10-16T08:00:01.000Z",
+            "reason": "local-stop",
+            "sequence": 3,
+            "type": "stopped"
+          },
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911"
+        }
+      ],
+      "ollama": [
+        {
+          "method": "DELETE",
+          "path": "/api/delete",
+          "body": {
+            "model": "open-convo-run-71abcdef000040008abc000000000911:pin"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local host: lock while a reply streams cancels it; the terminal is written at unlock",
+      "seed": {
+        "afterCase": "local host: a local start whose reply has begun"
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000944",
+        "connectionId": "51000000-0000-4000-8000-000000000003",
+        "generation": 3,
+        "operation": "participant.status",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901"
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000944",
+        "connectionId": "51000000-0000-4000-8000-000000000003",
+        "generation": 3,
+        "operation": "participant.status",
+        "outcome": "ok",
+        "runId": "71abcdef-0000-4000-8abc-000000000911",
+        "state": "exited",
+        "lastSequence": 3,
+        "terminal": {
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "sequence": 3,
+          "at": "2026-10-16T08:00:01.000Z",
+          "type": "stopped",
+          "reason": "local-stop"
+        },
+        "groupCleared": true,
+        "unknownReason": null
+      },
+      "actions": [
+        "lock",
+        "unlock",
+        "begin-generation",
+        "issue-connection"
+      ],
+      "pushed": [
+        {
+          "type": "host.connection",
+          "connectionId": "51000000-0000-4000-8000-000000000001",
+          "generation": 2,
+          "state": "locked",
+          "reason": "lock"
+        },
+        {
+          "type": "host.connection",
+          "connectionId": "51000000-0000-4000-8000-000000000003",
+          "generation": 3,
+          "state": "ready",
+          "reason": "ready"
+        }
+      ],
+      "afterRuns": [
+        {
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "contextBytes": 60,
+          "contextHash": "0b6c6165a74851c543d26b90cc9687b8b09fc24ed4dec2788b1cdfac897adf1b",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000000903"
+          ],
+          "createdAt": "2026-10-16T08:00:00.000Z",
+          "groupCleared": true,
+          "inputBytes": 34,
+          "inputHash": "c43bb1067071b45e7eccf74b2abd36fb83bf0ee9e27911140ee7c6ff844338c9",
+          "participant": {
+            "executionHost": "this-mac",
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+          },
+          "prepareRequestId": "62abcdef-0000-4000-8abc-000000000930",
+          "preparedBytes": 667,
+          "preparedRevision": 5,
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "start": {
+            "at": "2026-10-16T08:00:01.000Z",
+            "cliVersion": "ollama-local",
+            "launchId": "75abcdef-0000-4000-8abc-000000000002",
+            "payloadHash": "62ec058f59be33088933df82b1883c72a2f45fd3609a31ecf595b83fc19c6e45",
+            "requestId": "62abcdef-0000-4000-8abc-000000000942"
+          },
+          "terminal": {
+            "at": "2026-10-16T08:00:01.000Z",
+            "reason": "local-stop",
+            "sequence": 3,
+            "type": "stopped"
+          },
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911"
+        }
+      ],
+      "ollama": [
+        {
+          "method": "DELETE",
+          "path": "/api/delete",
+          "body": {
+            "model": "open-convo-run-71abcdef000040008abc000000000911:pin"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local host: a connection dropped mid-reply is failed process-error",
+      "seed": {
+        "afterCase": "local host: a preparing commit binds the earlier turn by its hash",
+        "clock": "2026-10-16T08:00:01.000Z",
+        "script": [
+          {
+            "kind": "http-200"
+          },
+          {
+            "kind": "chunk",
+            "text": "Invented cut "
+          },
+          {
+            "kind": "drop"
+          }
+        ]
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000945",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "What is my invented bakery ",
+            "called?"
+          ]
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000945",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "outcome": "ok",
+        "runId": "71abcdef-0000-4000-8abc-000000000911"
+      },
+      "pushed": [
+        {
+          "type": "participant.event",
+          "connectionId": "51000000-0000-4000-8000-000000000001",
+          "generation": 2,
+          "event": {
+            "runId": "71abcdef-0000-4000-8abc-000000000911",
+            "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+            "sequence": 1,
+            "at": "2026-10-16T08:00:01.000Z",
+            "type": "started"
+          }
+        },
+        {
+          "type": "participant.event",
+          "connectionId": "51000000-0000-4000-8000-000000000001",
+          "generation": 2,
+          "event": {
+            "runId": "71abcdef-0000-4000-8abc-000000000911",
+            "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+            "sequence": 2,
+            "at": "2026-10-16T08:00:01.000Z",
+            "type": "text",
+            "text": "Invented cut "
+          }
+        },
+        {
+          "type": "participant.event",
+          "connectionId": "51000000-0000-4000-8000-000000000001",
+          "generation": 2,
+          "event": {
+            "runId": "71abcdef-0000-4000-8abc-000000000911",
+            "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+            "sequence": 3,
+            "at": "2026-10-16T08:00:01.000Z",
+            "type": "failed",
+            "reason": "process-error"
+          }
+        }
+      ],
+      "afterRuns": [
+        {
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "contextBytes": 60,
+          "contextHash": "0b6c6165a74851c543d26b90cc9687b8b09fc24ed4dec2788b1cdfac897adf1b",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000000903"
+          ],
+          "createdAt": "2026-10-16T08:00:00.000Z",
+          "groupCleared": true,
+          "inputBytes": 34,
+          "inputHash": "c43bb1067071b45e7eccf74b2abd36fb83bf0ee9e27911140ee7c6ff844338c9",
+          "participant": {
+            "executionHost": "this-mac",
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+          },
+          "prepareRequestId": "62abcdef-0000-4000-8abc-000000000930",
+          "preparedBytes": 667,
+          "preparedRevision": 5,
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "start": {
+            "at": "2026-10-16T08:00:01.000Z",
+            "cliVersion": "ollama-local",
+            "launchId": "75abcdef-0000-4000-8abc-000000000002",
+            "payloadHash": "62ec058f59be33088933df82b1883c72a2f45fd3609a31ecf595b83fc19c6e45",
+            "requestId": "62abcdef-0000-4000-8abc-000000000945"
+          },
+          "terminal": {
+            "at": "2026-10-16T08:00:01.000Z",
+            "reason": "process-error",
+            "sequence": 3,
+            "type": "failed"
+          },
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911"
+        }
+      ],
+      "ollama": [
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "POST",
+          "path": "/api/copy",
+          "body": {
+            "destination": "open-convo-run-71abcdef000040008abc000000000911:pin",
+            "source": "invented-local-small:7b"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "POST",
+          "path": "/api/chat",
+          "body": {
+            "messages": [
+              {
+                "content": "My invented bakery is called Maple Crumb.",
+                "role": "user"
+              },
+              {
+                "content": "Noted: Maple Crumb.",
+                "role": "assistant"
+              },
+              {
+                "content": "What is my invented bakery called?",
+                "role": "user"
+              }
+            ],
+            "model": "open-convo-run-71abcdef000040008abc000000000911:pin",
+            "stream": true,
+            "think": false
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/delete",
+          "body": {
+            "model": "open-convo-run-71abcdef000040008abc000000000911:pin"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local host: an HTTP error from the chat is failed process-error",
+      "seed": {
+        "afterCase": "local host: a preparing commit binds the earlier turn by its hash",
+        "clock": "2026-10-16T08:00:01.000Z",
+        "script": [
+          {
+            "kind": "http-error",
+            "status": 500
+          }
+        ]
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000946",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "What is my invented bakery ",
+            "called?"
+          ]
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000946",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "outcome": "ok",
+        "runId": "71abcdef-0000-4000-8abc-000000000911"
+      },
+      "pushed": [
+        {
+          "type": "participant.event",
+          "connectionId": "51000000-0000-4000-8000-000000000001",
+          "generation": 2,
+          "event": {
+            "runId": "71abcdef-0000-4000-8abc-000000000911",
+            "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+            "sequence": 1,
+            "at": "2026-10-16T08:00:01.000Z",
+            "type": "failed",
+            "reason": "process-error"
+          }
+        }
+      ],
+      "afterRuns": [
+        {
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "contextBytes": 60,
+          "contextHash": "0b6c6165a74851c543d26b90cc9687b8b09fc24ed4dec2788b1cdfac897adf1b",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000000903"
+          ],
+          "createdAt": "2026-10-16T08:00:00.000Z",
+          "groupCleared": true,
+          "inputBytes": 34,
+          "inputHash": "c43bb1067071b45e7eccf74b2abd36fb83bf0ee9e27911140ee7c6ff844338c9",
+          "participant": {
+            "executionHost": "this-mac",
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+          },
+          "prepareRequestId": "62abcdef-0000-4000-8abc-000000000930",
+          "preparedBytes": 667,
+          "preparedRevision": 5,
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "start": {
+            "at": "2026-10-16T08:00:01.000Z",
+            "cliVersion": "ollama-local",
+            "launchId": "75abcdef-0000-4000-8abc-000000000002",
+            "payloadHash": "62ec058f59be33088933df82b1883c72a2f45fd3609a31ecf595b83fc19c6e45",
+            "requestId": "62abcdef-0000-4000-8abc-000000000946"
+          },
+          "terminal": {
+            "at": "2026-10-16T08:00:01.000Z",
+            "reason": "process-error",
+            "sequence": 1,
+            "type": "failed"
+          },
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911"
+        }
+      ],
+      "ollama": [
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "POST",
+          "path": "/api/copy",
+          "body": {
+            "destination": "open-convo-run-71abcdef000040008abc000000000911:pin",
+            "source": "invented-local-small:7b"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "POST",
+          "path": "/api/chat",
+          "body": {
+            "messages": [
+              {
+                "content": "My invented bakery is called Maple Crumb.",
+                "role": "user"
+              },
+              {
+                "content": "Noted: Maple Crumb.",
+                "role": "assistant"
+              },
+              {
+                "content": "What is my invented bakery called?",
+                "role": "user"
+              }
+            ],
+            "model": "open-convo-run-71abcdef000040008abc000000000911:pin",
+            "stream": true,
+            "think": false
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/delete",
+          "body": {
+            "model": "open-convo-run-71abcdef000040008abc000000000911:pin"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local host: a redirected chat is never followed: failed process-error",
+      "seed": {
+        "afterCase": "local host: a preparing commit binds the earlier turn by its hash",
+        "clock": "2026-10-16T08:00:01.000Z",
+        "script": [
+          {
+            "kind": "redirect"
+          }
+        ]
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000947",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "What is my invented bakery ",
+            "called?"
+          ]
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000947",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "outcome": "ok",
+        "runId": "71abcdef-0000-4000-8abc-000000000911"
+      },
+      "pushed": [
+        {
+          "type": "participant.event",
+          "connectionId": "51000000-0000-4000-8000-000000000001",
+          "generation": 2,
+          "event": {
+            "runId": "71abcdef-0000-4000-8abc-000000000911",
+            "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+            "sequence": 1,
+            "at": "2026-10-16T08:00:01.000Z",
+            "type": "failed",
+            "reason": "process-error"
+          }
+        }
+      ],
+      "afterRuns": [
+        {
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "contextBytes": 60,
+          "contextHash": "0b6c6165a74851c543d26b90cc9687b8b09fc24ed4dec2788b1cdfac897adf1b",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000000903"
+          ],
+          "createdAt": "2026-10-16T08:00:00.000Z",
+          "groupCleared": true,
+          "inputBytes": 34,
+          "inputHash": "c43bb1067071b45e7eccf74b2abd36fb83bf0ee9e27911140ee7c6ff844338c9",
+          "participant": {
+            "executionHost": "this-mac",
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+          },
+          "prepareRequestId": "62abcdef-0000-4000-8abc-000000000930",
+          "preparedBytes": 667,
+          "preparedRevision": 5,
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "start": {
+            "at": "2026-10-16T08:00:01.000Z",
+            "cliVersion": "ollama-local",
+            "launchId": "75abcdef-0000-4000-8abc-000000000002",
+            "payloadHash": "62ec058f59be33088933df82b1883c72a2f45fd3609a31ecf595b83fc19c6e45",
+            "requestId": "62abcdef-0000-4000-8abc-000000000947"
+          },
+          "terminal": {
+            "at": "2026-10-16T08:00:01.000Z",
+            "reason": "process-error",
+            "sequence": 1,
+            "type": "failed"
+          },
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911"
+        }
+      ],
+      "ollama": [
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "POST",
+          "path": "/api/copy",
+          "body": {
+            "destination": "open-convo-run-71abcdef000040008abc000000000911:pin",
+            "source": "invented-local-small:7b"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "POST",
+          "path": "/api/chat",
+          "body": {
+            "messages": [
+              {
+                "content": "My invented bakery is called Maple Crumb.",
+                "role": "user"
+              },
+              {
+                "content": "Noted: Maple Crumb.",
+                "role": "assistant"
+              },
+              {
+                "content": "What is my invented bakery called?",
+                "role": "user"
+              }
+            ],
+            "model": "open-convo-run-71abcdef000040008abc000000000911:pin",
+            "stream": true,
+            "think": false
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/delete",
+          "body": {
+            "model": "open-convo-run-71abcdef000040008abc000000000911:pin"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local host: a reply past the shared bound ends reply-too-long",
+      "seed": {
+        "afterCase": "local host: a preparing commit binds the earlier turn by its hash",
+        "clock": "2026-10-16T08:00:01.000Z",
+        "faults": [
+          "pushes-fail"
+        ],
+        "script": [
+          {
+            "kind": "http-200"
+          },
+          {
+            "kind": "chunk",
+            "text": "a",
+            "repeat": 262144
+          }
+        ]
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000948",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "What is my invented bakery ",
+            "called?"
+          ]
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000948",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "outcome": "ok",
+        "runId": "71abcdef-0000-4000-8abc-000000000911"
+      },
+      "pushed": [],
+      "afterRuns": [
+        {
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "contextBytes": 60,
+          "contextHash": "0b6c6165a74851c543d26b90cc9687b8b09fc24ed4dec2788b1cdfac897adf1b",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000000903"
+          ],
+          "createdAt": "2026-10-16T08:00:00.000Z",
+          "groupCleared": true,
+          "inputBytes": 34,
+          "inputHash": "c43bb1067071b45e7eccf74b2abd36fb83bf0ee9e27911140ee7c6ff844338c9",
+          "participant": {
+            "executionHost": "this-mac",
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+          },
+          "prepareRequestId": "62abcdef-0000-4000-8abc-000000000930",
+          "preparedBytes": 667,
+          "preparedRevision": 5,
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "start": {
+            "at": "2026-10-16T08:00:01.000Z",
+            "cliVersion": "ollama-local",
+            "launchId": "75abcdef-0000-4000-8abc-000000000002",
+            "payloadHash": "62ec058f59be33088933df82b1883c72a2f45fd3609a31ecf595b83fc19c6e45",
+            "requestId": "62abcdef-0000-4000-8abc-000000000948"
+          },
+          "terminal": {
+            "at": "2026-10-16T08:00:01.000Z",
+            "reason": "reply-too-long",
+            "sequence": 18,
+            "type": "failed"
+          },
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911"
+        }
+      ],
+      "ollama": [
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "POST",
+          "path": "/api/copy",
+          "body": {
+            "destination": "open-convo-run-71abcdef000040008abc000000000911:pin",
+            "source": "invented-local-small:7b"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "POST",
+          "path": "/api/chat",
+          "body": {
+            "messages": [
+              {
+                "content": "My invented bakery is called Maple Crumb.",
+                "role": "user"
+              },
+              {
+                "content": "Noted: Maple Crumb.",
+                "role": "assistant"
+              },
+              {
+                "content": "What is my invented bakery called?",
+                "role": "user"
+              }
+            ],
+            "model": "open-convo-run-71abcdef000040008abc000000000911:pin",
+            "stream": true,
+            "think": false
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/delete",
+          "body": {
+            "model": "open-convo-run-71abcdef000040008abc000000000911:pin"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local host: status after reply-too-long names the ending",
+      "seed": {
+        "afterCase": "local host: a reply past the shared bound ends reply-too-long",
+        "faults": []
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000949",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.status",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901"
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000949",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.status",
+        "outcome": "ok",
+        "runId": "71abcdef-0000-4000-8abc-000000000911",
+        "state": "exited",
+        "lastSequence": 18,
+        "terminal": {
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "sequence": 18,
+          "at": "2026-10-16T08:00:01.000Z",
+          "type": "failed",
+          "reason": "reply-too-long"
+        },
+        "groupCleared": true,
+        "unknownReason": null
+      },
+      "ollama": []
+    },
+    {
+      "name": "local host: after a crash, a run started by an earlier launch reads cut off (exit-unrecorded)",
+      "seed": {
+        "record": "local-prepared-r5",
+        "runs": [
+          {
+            "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+            "contextBytes": 60,
+            "contextHash": "0b6c6165a74851c543d26b90cc9687b8b09fc24ed4dec2788b1cdfac897adf1b",
+            "contextRunIds": [
+              "71abcdef-0000-4000-8abc-000000000903"
+            ],
+            "createdAt": "2026-10-16T08:00:00.000Z",
+            "groupCleared": null,
+            "inputBytes": 34,
+            "inputHash": "c43bb1067071b45e7eccf74b2abd36fb83bf0ee9e27911140ee7c6ff844338c9",
+            "participant": {
+              "executionHost": "this-mac",
+              "id": "ollama-local",
+              "label": "invented-local-small:7b",
+              "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+            },
+            "prepareRequestId": "62abcdef-0000-4000-8abc-000000000930",
+            "preparedBytes": 667,
+            "preparedRevision": 5,
+            "runId": "71abcdef-0000-4000-8abc-000000000911",
+            "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+            "start": {
+              "at": "2026-10-16T08:00:01.000Z",
+              "cliVersion": "ollama-local",
+              "launchId": "75abcdef-0000-4000-8abc-000000000001",
+              "payloadHash": "62ec058f59be33088933df82b1883c72a2f45fd3609a31ecf595b83fc19c6e45",
+              "requestId": "62abcdef-0000-4000-8abc-000000000932"
+            },
+            "terminal": null,
+            "userMessageId": "72abcdef-0000-4000-8abc-000000000911"
+          }
+        ],
+        "localRoute": {
+          "state": "ready",
+          "reason": null,
+          "models": [
+            {
+              "name": "invented-local-small:7b",
+              "digest": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+            },
+            {
+              "name": "invented-local-large:9b",
+              "digest": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+            },
+            {
+              "name": "invented-cloud:cloud",
+              "digest": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+              "remote": true
+            },
+            {
+              "name": "open-convo-run-71abcdef000040008abc000000000911:pin",
+              "digest": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+            }
+          ]
+        },
+        "clock": "2026-10-16T08:05:00.000Z"
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000950",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.status",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901"
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000950",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.status",
+        "outcome": "ok",
+        "runId": "71abcdef-0000-4000-8abc-000000000911",
+        "state": "unknown",
+        "lastSequence": null,
+        "terminal": null,
+        "groupCleared": null,
+        "unknownReason": "exit-unrecorded"
+      },
+      "ollama": [
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/delete",
+          "body": {
+            "model": "open-convo-run-71abcdef000040008abc000000000911:pin"
+          }
+        }
+      ]
+    },
+    {
+      "name": "local host: the cut-off run is never sent again: a new start for it is duplicate-run",
+      "seed": {
+        "afterCase": "local host: after a crash, a run started by an earlier launch reads cut off (exit-unrecorded)"
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000951",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000000911",
+          "sessionId": "52abcdef-0000-4000-8abc-000000000901",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000000911",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000000911",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "What is my invented bakery ",
+            "called?"
+          ]
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000951",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "outcome": "refused",
+        "reason": "duplicate-run"
+      },
+      "ollama": [
+        {
+          "body": null,
+          "method": "GET",
+          "path": "/api/tags"
+        }
+      ]
+    },
+    {
+      "name": "local host: availability reads the fake Ollama afresh; the run alias is swept and an owner's look-alike tag is listed",
+      "seed": {
+        "localRoute": {
+          "state": "ready",
+          "reason": null,
+          "models": [
+            {
+              "name": "invented-local-small:7b",
+              "digest": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+            },
+            {
+              "name": "invented-local-large:9b",
+              "digest": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+            },
+            {
+              "name": "invented-cloud:cloud",
+              "digest": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+              "remote": true
+            },
+            {
+              "name": "invented-embedding:1b",
+              "digest": "e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5",
+              "capabilities": [
+                "embedding"
+              ]
+            },
+            {
+              "name": "open-convo-run-mine:latest",
+              "digest": "f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6"
+            },
+            {
+              "name": "open-convo-run-71abcdef000040008abc000000000911:pin",
+              "digest": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3"
+            }
+          ]
+        },
+        "clock": "2026-10-16T08:00:00.000Z"
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000952",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "payload": {}
+      },
+      "reply": {
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "available": false,
+            "executionHost": "this-mac",
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "reason": "overflow-unverified"
+          },
+          {
+            "available": false,
+            "executionHost": "this-mac",
+            "id": "ollama-local",
+            "label": "invented-cloud:cloud",
+            "model": "invented-cloud:cloud@a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            "reason": "model-not-local"
+          },
+          {
+            "available": true,
+            "executionHost": "this-mac",
+            "id": "ollama-local",
+            "label": "invented-local-large:9b",
+            "model": "invented-local-large:9b@b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+            "reason": null
+          },
+          {
+            "available": true,
+            "executionHost": "this-mac",
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "reason": null
+          },
+          {
+            "available": true,
+            "executionHost": "this-mac",
+            "id": "ollama-local",
+            "label": "open-convo-run-mine:latest",
+            "model": "open-convo-run-mine:latest@f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6",
+            "reason": null
+          }
+        ],
+        "requestId": "62abcdef-0000-4000-8abc-000000000952",
+        "routes": [
+          {
+            "reason": null,
+            "route": "ollama-local",
+            "state": "ready"
+          }
+        ],
+        "v": 1
+      },
+      "ollama": [
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/delete",
+          "body": {
+            "model": "open-convo-run-71abcdef000040008abc000000000911:pin"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        }
+      ]
+    },
+    {
+      "name": "local host: availability with Ollama not running",
+      "seed": {
+        "localRoute": {
+          "state": "unavailable",
+          "reason": "ollama-not-running",
+          "models": []
+        }
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000953",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "payload": {}
+      },
+      "reply": {
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "available": false,
+            "executionHost": "this-mac",
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "reason": "overflow-unverified"
+          }
+        ],
+        "requestId": "62abcdef-0000-4000-8abc-000000000953",
+        "routes": [
+          {
+            "reason": "ollama-not-running",
+            "route": "ollama-local",
+            "state": "unavailable"
+          }
+        ],
+        "v": 1
+      },
+      "ollama": []
+    },
+    {
+      "name": "local host: availability with an unreadable catalog",
+      "seed": {
+        "localRoute": {
+          "state": "unavailable",
+          "reason": "catalog-unreadable",
+          "models": []
+        }
+      },
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000000954",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "payload": {}
+      },
+      "reply": {
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "available": false,
+            "executionHost": "this-mac",
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "reason": "overflow-unverified"
+          }
+        ],
+        "requestId": "62abcdef-0000-4000-8abc-000000000954",
+        "routes": [
+          {
+            "reason": "catalog-unreadable",
+            "route": "ollama-local",
+            "state": "unavailable"
+          }
+        ],
+        "v": 1
+      },
+      "ollama": [
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "body": null
+        }
+      ]
     }
   ],
   "invalidReplies": [

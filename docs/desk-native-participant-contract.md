@@ -3053,3 +3053,35 @@ with a local route:
   chosen point between the catalog read and the copy), `alias-swap`). The page
   codec runs its shape cases now; the Swift harness runs all of them with the
   host change (step 3 PR 3).
+- **Seeded host cases (step 3 PR 4c).** Cases with a `seed` are host cases
+  in section 19's form (`afterCase` chains, `records`, seeded `runs`,
+  `clock`, `faults`, `inFlight`, `pushed`, `afterRuns`, and the actions
+  `lock`, `unlock`, `begin-generation` and `issue-connection`), plus:
+  - `localRoute` `{state, reason, models}`: `state` `ready` (with `reason`
+    `null`) or `unavailable` with `ollama-not-running` (nothing listens) or
+    `catalog-unreadable` (`/api/tags` answers something that is not a model
+    list); each model is `{name, digest}` with optional `remote: true`
+    (Ollama's cloud marker) and `capabilities` (default `["completion"]`).
+    Required at a chain's root; a later case may change it.
+  - `script` steps: `retag` (`name`, `digest`, optional `remote`) and
+    `alias-swap` (`digest`) arm the fake's next `/api/copy`; `http-200`,
+    `chunk` (`text`, optional `repeat` count), `done`, `http-error`
+    (`status`), `redirect` and `drop` answer the chat request of the run the
+    case starts, in order, after its reply. Virtual time stands still while a
+    chat streams, so accepted text reaches the page as one event when the run
+    ends or is stopped.
+  - `ollama`: every request the fake Ollama received during the case, in
+    order, as `{method, path, body}` (body `null` when empty). A root's list
+    begins with the launch's own alias sweep.
+  The Swift harness (`LocalHostVectorTests`) replays each case through the
+  real router, host, coordinator and store, with the real `OllamaClient`
+  talking HTTP to a fake Ollama on a random loopback port, and fails a case
+  whose `/api/chat` arrives before its start record is durable. The page
+  checks each case's request and reply through its codec, decodes every
+  pushed event, chooses the same earlier turns, and checks each chat body is
+  the earlier turns then the new message, sent to the run's alias. Two
+  readings the cases record: a start reads `/api/tags` once even when it is
+  answered before step 10 (an exact replay, or `duplicate-run`), which
+  carries no conversation text; and a bind that fails its check deletes the
+  alias, after which the start's own cleanup asks once more (Ollama answers
+  404).

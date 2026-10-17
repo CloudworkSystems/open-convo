@@ -123,7 +123,8 @@ struct ParticipantVectors {
 
     let data: Data
     let context: Context
-    let records: [String: [String: JSONValue]]
+    /// `var` so the local file's host cases can name their own records.
+    var records: [String: [String: JSONValue]]
     let cases: [Case]
     let hashVectors: [HashVector]
     let pageCaseCount: Int
@@ -398,6 +399,10 @@ final class VectorWorld {
     /// The script a case's `run-script` action plays on the live run.
     private var actionScript: [ScriptStep]?
 
+    /// The local host cases' own drain (step 3 PR 4c): every local run's
+    /// updates consumed. Nil for the section 19 vectors.
+    var localDrain: (() async -> Bool)?
+
     /// Every scripted run the coordinator owns: launched by a start, or
     /// replayed from a memory seed.
     var ownedRuns: [ScriptedParticipantRun] { replayed + launcher.runs }
@@ -413,7 +418,8 @@ final class VectorWorld {
     /// store faults. `beforeHost` runs on the opened store before the host
     /// (and so the shared identity index) is built over it.
     init(seed: [String: JSONValue], number: Int, operation: String?, vectors: ParticipantVectors, clock: String? = nil,
-         actions: [String] = [], faults: AtomicWriteFaults? = nil, beforeHost: ((ProofStore) throws -> Void)? = nil) async throws {
+         actions: [String] = [], faults: AtomicWriteFaults? = nil, beforeHost: ((ProofStore) throws -> Void)? = nil,
+         localRoute: (any LocalCatalogReading)? = nil) async throws {
         if let extra = Set(seed.keys).subtracting(Self.rootSeedKeys).sorted().first {
             throw VectorHarnessError.unsupported("#\(number) seed key \(extra)")
         }
@@ -493,7 +499,7 @@ final class VectorWorld {
             }
             inputBound = bound
         }
-        hostConfiguration = ParticipantHostConfiguration(pin: pin, inputBound: inputBound)
+        hostConfiguration = ParticipantHostConfiguration(pin: pin, inputBound: inputBound, localRoute: localRoute)
         host = DeskHostProtocol(store: store, connections: connections, drafts: DraftBindingRegistry(), info: Self.info,
                                 events: sink, participants: hostConfiguration)
 
@@ -1052,6 +1058,7 @@ final class VectorWorld {
                 guard let consumed = await self.coordinator.consumption(of: run.identity.runId) else { return false }
                 if consumed.applied < run.recordedUpdates.count || (run.isFinished && !consumed.finished) { return false }
             }
+            if let localDrain = self.localDrain, !(await localDrain()) { return false }
             guard !(await self.coordinator.isWriting) else { return false }
             return !(await self.coordinator.isRevoking)
         }

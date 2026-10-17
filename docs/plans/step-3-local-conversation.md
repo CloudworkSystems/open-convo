@@ -205,6 +205,15 @@ PR 2). In short:
    **4c**: the seeded host cases (`localRoute` seed, fake-server `script`
    steps) join `native-participant-local-v1.json` on both sides,
    byte-identical, run by the Swift harness against a fake Ollama.
+   *Built in PR 4c (October 16):* 26 seeded host cases (prepare with an
+   earlier turn, the start sequence and its replay, `run-mismatch`,
+   `participant-changed` and `participant-unavailable` five ways, Stop
+   before and after the reply began, lock, a dropped connection, an HTTP
+   error, a redirect, `reply-too-long`, recovery after a crash, and
+   availability three ways), each stating every request that reached
+   Ollama. The Swift side replays them with the real `OllamaClient` against
+   a fake Ollama on loopback (`LocalHostVectorTests`); the page checks the
+   same cases through its codec. No product code changed.
 5. **Proof and owner trial.** A scripted kill-mid-reply proof (no duplicate
    replies, nothing resent, cut-off replies labeled), then a short checklist
    for the owner: talk, quit, reopen, continue.
