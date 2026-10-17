@@ -9,6 +9,8 @@ export const CODEX_LOGIN = 'chatgpt-codex-connector[bot]';
 const CLEAN_PHRASE = /didn['’]t find any major issues/i;
 const REVIEWED_COMMIT = /\*\*Reviewed commit:\*\*\s*`([0-9a-f]{7,40})`/i;
 const SUMMARY_MARKER = '<!-- codex-pull-request-review-summary -->';
+// Codex's machine-readable review state, kept in its summary comment.
+const REVIEW_STATE = /<!--\s*codex-review-state:v1\s+(\{.*?\})\s*-->/s;
 // Captures the completion time and the reviewed commit from the summary's
 // "Code Review | ✅ Completed <time> | `commit`" row.
 const SUMMARY_CODE_ROW = /Code Review\*\*\s*\|\s*✅\s*\*\*Completed\*\*\s*(?:<relative-time datetime="([^"]+)">)?[^|]*\|\s*`([0-9a-f]{7,40})`/i;
@@ -48,7 +50,27 @@ export function evaluateCodexSignal({ headSha, comments = [], reviews = [], reac
     return { approved: true, reason: `Codex found no major issues on ${short}.` };
   }
 
-  // Signal 2: Codex's 👍 on the pull request, posted after its summary shows
+  // Signal 2: Codex's own review state in its summary comment says the code
+  // review of this exact head completed with no findings at all. (Not
+  // "unresolved": anyone with write access can resolve a finding.) Timed by
+  // the comment's last edit, and it must be later than any finding.
+  const stateTimes = comments
+    .filter((c) => isCodex(c.user) && (c.body ?? '').includes(SUMMARY_MARKER))
+    .map((c) => {
+      const m = (c.body ?? '').match(REVIEW_STATE);
+      if (!m) return 0;
+      let state;
+      try { state = JSON.parse(m[1]); } catch { return 0; }
+      const code = state?.code_review;
+      const clean = code && code.commit_sha === headSha && code.status === 'completed' && code.has_any_findings === false;
+      return clean ? time(c.updated_at ?? c.created_at) : 0;
+    });
+  const lastState = stateTimes.length ? Math.max(...stateTimes) : 0;
+  if (lastState && lastState > lastFinding) {
+    return { approved: true, reason: `Codex's review state shows no findings on ${short}.` };
+  }
+
+  // Signal 3: Codex's 👍 on the pull request, posted after its summary shows
   // the code review of the head commit completed, with no findings after it.
   // A 👍 left over from an earlier commit predates that completion, so it
   // never counts for a new head.
@@ -63,7 +85,7 @@ export function evaluateCodexSignal({ headSha, comments = [], reviews = [], reac
     .map((r) => time(r.created_at));
   const lastThumb = thumbs.length ? Math.max(...thumbs) : 0;
   if (completedAt && lastThumb > completedAt && lastThumb > lastFinding) {
-    return { approved: true, reason: `Codex reacted 👍 after reviewing ${short}.` };
+    return { approved: true, reason: `Codex reacted thumbs-up after reviewing ${short}.` };
   }
 
   if (lastFinding) return { approved: false, reason: `Codex left findings on ${short}; waiting for a clean round.` };
