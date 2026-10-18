@@ -66,7 +66,7 @@ that holds the facts file. The build refuses:
 - absolute paths, `..`, or any path whose real location (after following
   links) is outside the facts file's folder;
 - symbolic links and anything that is not a regular file;
-- any format other than `.jpg`, `.jpeg`, `.png`, `.webp` and `.avif`, checked by
+- any format other than `.jpg`, `.jpeg`, `.png` and `.webp`, checked by
   the file's actual contents, not only its name (no SVG or HTML).
 
 The builder chooses the copied file's name (for example `images/1.webp`); names
