@@ -18,3 +18,4 @@ Moved from the archived `cloudwork_systems/true_convo/open-convo` on October 12,
 Some proof output still names design docs that were not moved; see the move log in `PLAN.md`.
 
 <!-- gate-test scratch 5 -->
+<!-- gate-test scratch 5, second commit -->
