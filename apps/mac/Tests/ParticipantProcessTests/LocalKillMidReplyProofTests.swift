@@ -22,11 +22,20 @@ import Testing
 // and the proof checks:
 // - the run reads as cut off (`unknown`, `exit-unrecorded`), with exactly
 //   the text saved so far kept, nothing doubled;
+// - until the owner closes it, the Desk's own rules hold: Retry is not
+//   offered and Send waits (busy). The restored page's recovery (status,
+//   then events, which answer `lost` `restarted` with no ending) leads to
+//   "Close as unknown"; once that closure is saved the run reads as cut off,
+//   its text unchanged, and Send is free;
 // - nothing was sent again on its own: Ollama saw one `/api/chat` for it;
 // - the run's leftover `open-convo-run-…:pin` alias is swept at launch;
-// - Retry (a new prepared run from the same message, new ids) sends exactly
-//   one new chat with the same context and message, completes, and leaves
-//   the old run exactly as it was.
+// - Retry (allowed now, by the Desk's `canRetryLocalRun`), then Send: a new
+//   prepared run from the same message, new ids, sends exactly one new chat
+//   with the same context and message, completes, and leaves the closed old
+//   run exactly as it was.
+// The page side of the same path (the real Desk restoring a crashed run,
+// offering Close as unknown, then Retry) is in the Desk's
+// `tests/foundation/local-conversation.test.mjs`.
 // A graceful quit mid-reply is checked the same way: it records `stopped`,
 // not cut off, deletes the alias itself, and there is still one chat.
 
@@ -321,7 +330,47 @@ struct LocalKillMidReplyProofTests {
                 #expect(kept == acknowledged, "\(moment) round \(round): kept \(kept.count) chars")
             }
             #expect(cutOff?["phase"] == .string(moment == .beforeReplyStarted ? "prepared" : "running"), "\(moment) round \(round)")
+            #expect(cutOff?["closure"] == nil, "\(moment) round \(round): no closure until the owner closes it")
             #expect(world.chats.count == 1, "\(moment) round \(round): nothing re-sent on reopen")
+
+            // Before the recovery, the Desk's rules hold everything: Retry is
+            // not offered (the run has not ended) and Send waits (busy).
+            second.send("busy")
+            #expect(try await second.next("busy ") == "true", "\(moment) round \(round): Send waits on the unfinished run")
+            second.send("retry \(runId)")
+            #expect(try await second.next("retry refused ") == "not-retryable", "\(moment) round \(round)")
+
+            // The restored page's recovery, as the Desk runs it: status (above),
+            // then events from the saved sequence. Native answers that the
+            // rest was lost when the earlier launch ended, with no recorded
+            // ending, which is what makes the Desk offer "Close as unknown".
+            let lastSequence = cutOff?["lastSequence"]?.safeIntegerValue ?? -1
+            let events = try await second.json("events \(runId)", "events").objectValue ?? [:]
+            #expect(events["outcome"] == .string("ok"), "\(moment) round \(round): \(events)")
+            #expect(events["events"] == .array([]), "\(moment) round \(round): \(events)")
+            #expect(events["terminal"] == .null, "\(moment) round \(round): \(events)")
+            #expect(events["lost"] == .object(["fromSequence": .number(Double(lastSequence + 1)), "throughSequence": .null,
+                                               "reason": .string("restarted")]), "\(moment) round \(round): \(events)")
+
+            // The owner's "Close as unknown", saved: the reply now reads as cut
+            // off, with the saved text and sequence exactly as they were.
+            second.send("close \(runId)")
+            #expect(try await second.next("closed ") == "true", "\(moment) round \(round)")
+            let closedRecord = try await second.json("record", "record")
+            let closed = try #require(Self.run(closedRecord, runId), "\(moment) round \(round)")
+            let closure = closed["closure"]?.objectValue
+            #expect(closure?["kind"] == .string("unknown") && closure?["reason"] == .string("user-closed"),
+                    "\(moment) round \(round): \(String(describing: closure))")
+            var withoutClosure = closed
+            withoutClosure["closure"] = nil
+            #expect(withoutClosure == cutOff, "\(moment) round \(round): the closure adds itself and changes nothing else")
+            #expect(Self.text(closed) == kept, "\(moment) round \(round): the saved text is kept")
+            let closedStatus = try await second.json("status \(runId)", "status").objectValue ?? [:]
+            #expect(closedStatus["state"] == .string("unknown") && closedStatus["unknownReason"] == .string("exit-unrecorded"),
+                    "\(moment) round \(round): native still says it never recorded how it ended: \(closedStatus)")
+            second.send("busy")
+            #expect(try await second.next("busy ") == "false", "\(moment) round \(round): Send is no longer held")
+            #expect(world.chats.count == 1, "\(moment) round \(round): the recovery sent nothing")
 
             // The owner's Retry, then Send: a new run, new ids, one new chat.
             second.send("retry \(runId)")
@@ -347,7 +396,7 @@ struct LocalKillMidReplyProofTests {
             let after = try await second.json("record", "record")
             guard case .array(let runsAfter) = after else { throw ProofAppError.notMet("a record") }
             #expect(runsAfter.count == 3, "\(moment) round \(round)")
-            #expect(Self.run(after, runId) == cutOff, "\(moment) round \(round): the old run stays exactly as it was")
+            #expect(Self.run(after, runId) == closed, "\(moment) round \(round): the old run stays exactly as it was")
             #expect(Self.text(Self.run(after, retryId)) == "Your invented bakery is Maple Crumb.")
             let ids = runsAfter.compactMap { $0.objectValue?["assistantMessageId"]?.stringValue }
             #expect(Set(ids).count == 3, "\(moment) round \(round): no reply recorded twice")

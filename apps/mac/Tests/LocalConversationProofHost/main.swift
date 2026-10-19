@@ -21,9 +21,13 @@ import Foundation
 //   start <runId>      `start <outcome> <reason|->`
 //   status <runId>     `status <reply JSON>`
 //   record             `record <conversationRuns JSON>`
-//   retry <runId>      the owner's Retry then Send: a new prepared run with
-//                      new ids and the same message, then its start:
-//                      `prepared <newRunId>`, `start <outcome> <reason|->`
+//   events <runId>     `events <reply JSON>`, from the saved lastSequence
+//   busy               `busy <true|false>`: whether the Desk would hold Send
+//   close <runId>      "Close as unknown", saved: `closed <true|false>`
+//   retry <runId>      the owner's Retry then Send, under the Desk's rules:
+//                      `retry refused <not-retryable|busy>`, or a new
+//                      prepared run with new ids and the same message, then
+//                      its start: `prepared <newRunId>`, `start <outcome> <reason|->`
 //   quit               the app's quit, as the Desk session does it:
 //                      `quit reachedBound=<bool>`, then exit 0
 // And on its own, after each pushed event's save has returned:
@@ -199,12 +203,73 @@ actor Page {
         return Invented.runId
     }
 
-    /// Retry, then Send: the message back in the composer and sent again as
-    /// a new run with new ids. Its context is the session's completed runs,
-    /// so a cut-off reply is never sent as context. The old run is left
-    /// exactly as it is.
-    func retry(_ oldRunId: String) async throws -> String {
+    // The Desk's own rules, ported line for line so this stand-in cannot do
+    // what the page would not (the page side is checked in the Desk's
+    // `local-conversation.test.mjs`, "a reply cut off by a crash ...").
+
+    /// `isConversationRunClosed` (domain/conversation-runs.ts): a recorded
+    /// ending, or a saved closure.
+    static func isClosed(_ run: [String: JSONValue]) -> Bool {
+        ["completed", "stopped", "failed"].contains(run["phase"]?.stringValue ?? "") || run["closure"] != nil
+    }
+
+    /// `canRetryLocalRun` (domain/local-participant.ts): a local run whose
+    /// reply ended without completing: closed by the owner, stopped or
+    /// failed.
+    static func canRetry(_ run: [String: JSONValue]) -> Bool {
+        guard run["participant"]?.objectValue?["id"] == .string("ollama-local") else { return false }
+        if let closure = run["closure"]?.objectValue {
+            return !(closure["kind"] == .string("interrupted")
+                     && closure["terminalEvent"]?.objectValue?["type"] == .string("completed"))
+        }
+        return ["stopped", "failed"].contains(run["phase"]?.stringValue ?? "")
+    }
+
+    /// `busy` (app/use-conversation-runs.tsx), its saved-record part: Send
+    /// waits while any run of the session is not closed.
+    func busy(_ sessionId: String) -> Bool {
+        runs.contains { value in
+            guard let run = value.objectValue, run["sessionId"] == .string(sessionId) else { return false }
+            return !Self.isClosed(run)
+        }
+    }
+
+    var sessionBusy: Bool { busy(Invented.sessionId) }
+
+    /// What the restored page reads for an unfinished run, after `status`:
+    /// `participant.events` from the saved `lastSequence`.
+    func events(_ runId: String) async -> HostResponse {
+        let after = run(runId)?["lastSequence"] ?? .number(0)
+        return await ask(.participantEvents, ["workspaceHandle": .string(handle), "runId": .string(runId),
+                                              "sessionId": .string(Invented.sessionId), "afterSequence": after,
+                                              "maxEvents": .number(64)])
+    }
+
+    /// "Close as unknown" (`closeConversationRun` with `{kind: 'unknown',
+    /// reason: 'user-closed', at}`), saved: the saved text and sequence stay,
+    /// and nothing is claimed about how the reply ended. Native never reads
+    /// closures (contract section 13); it only saves the record.
+    func closeAsUnknown(_ runId: String) async throws -> Bool {
+        guard let index = runs.firstIndex(where: { $0.objectValue?["runId"] == .string(runId) }),
+              var run = runs[index].objectValue, !Self.isClosed(run) else { return false }
+        let at = max(now(), run["updatedAt"]?.stringValue ?? "")
+        run["closure"] = .object(["kind": .string("unknown"), "reason": .string("user-closed"), "at": .string(at)])
+        var next = runs
+        next[index] = .object(run)
+        try await save(next)
+        return true
+    }
+
+    /// Retry, then Send, each under the Desk's rule: Retry only when
+    /// `canRetryLocalRun`, Send only when the session is not busy. The
+    /// message goes again as a new run with new ids; its context is the
+    /// session's completed runs, so a cut-off reply is never sent as
+    /// context. The old run is left exactly as it is. Nil with the reason
+    /// when the page would refuse.
+    func retry(_ oldRunId: String) async throws -> (runId: String?, refusal: String?) {
         guard let old = run(oldRunId), case .array(let input)? = old["inputChunks"] else { throw PageError.save("no run \(oldRunId)") }
+        guard Self.canRetry(old) else { return (nil, "not-retryable") }
+        guard !sessionBusy else { return (nil, "busy") }
         let context = runs.compactMap { value -> String? in
             guard let run = value.objectValue, run["phase"] == .string("completed") else { return nil }
             return run["runId"]?.stringValue
@@ -213,7 +278,7 @@ actor Page {
         let next = Self.prepared(runId, user: newId(), assistant: newId(), input: input.compactMap(\.stringValue),
                                  context: context, at: now())
         try await save(runs + [.object(next)], claim: runId)
-        return runId
+        return (runId, nil)
     }
 
     func start(_ runId: String) async -> HostResponse? {
@@ -343,9 +408,16 @@ Task {
             say("status " + String(decoding: await page.status(words[1]).canonicalData(), as: UTF8.self))
         case ("record"?, 1):
             say("record " + String(decoding: await page.record.canonicalData(), as: UTF8.self))
+        case ("events"?, 2):
+            say("events " + String(decoding: await page.events(words[1]).canonicalData(), as: UTF8.self))
+        case ("busy"?, 1):
+            say("busy \(await page.sessionBusy)")
+        case ("close"?, 2):
+            do { say("closed \(try await page.closeAsUnknown(words[1]))") } catch { fail("close: \(error)") }
         case ("retry"?, 2):
-            let runId: String
-            do { runId = try await page.retry(words[1]) } catch { fail("retry: \(error)") }
+            let result: (runId: String?, refusal: String?)
+            do { result = try await page.retry(words[1]) } catch { fail("retry: \(error)") }
+            guard let runId = result.runId else { say("retry refused \(result.refusal ?? "-")"); continue }
             say("prepared \(runId)")
             say(startLine(await page.start(runId)))
         case ("quit"?, 1):

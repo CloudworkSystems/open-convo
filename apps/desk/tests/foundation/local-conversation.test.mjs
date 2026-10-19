@@ -77,6 +77,26 @@ if (options.choice) stored.sessions[0].participantChoice = options.choice;
 const host = window.__localHost = {
   availability: options.availability, starts: [], stops: [], requests: [], saves: [], runs: new Map(), stopReply: 'stopped',
 };
+// A conversation reopened after the app was killed mid-reply (step 3 PR 5):
+// an earlier completed turn, and a turn whose saved reply stops at sequence
+// 2 with no ending. The host answers for it as the Mac does after a crash:
+// status unknown / exit-unrecorded, events lost (restarted) with no ending.
+if (options.restored) {
+  const sessionId = stored.sessions[0].id;
+  const at = stored.updatedAt;
+  const run = (ids, input, extra) => ({ version: 1, runId: ids[0], sessionId, userMessageId: ids[1], assistantMessageId: ids[2],
+    participant: options.choice, inputChunks: [input], outputChunks: [], lastSequence: 0, phase: 'prepared', createdAt: at,
+    updatedAt: at, contextRunIds: [], ...extra });
+  const earlier = run(options.restored.earlier, 'Invented earlier question.',
+    { phase: 'completed', outputChunks: ['Invented earlier answer.'], lastSequence: 3 });
+  const cut = run(options.restored.cut, 'Invented question cut off by a crash.',
+    { phase: 'running', outputChunks: ['Invented partial reply '], lastSequence: 2, contextRunIds: [earlier.runId] });
+  // A workspace that holds runs is schema 2, as the page saves it.
+  stored.schemaVersion = 2;
+  stored.capabilities = { mode: 'synthetic', provider: 'runtime-selected', native: 'unavailable' };
+  stored.conversationRuns = [earlier, cut];
+  host.runs.set(cut.runId, { runId: cut.runId, sessionId, sequence: 2, events: [], terminal: null, crashed: true });
+}
 let active = true;
 const invalidations = new Set();
 const lifecycle = { isActive: () => active,
@@ -124,11 +144,14 @@ function answer(request) {
     }
     case 'participant.status':
       if (!run) return { outcome: 'refused', reason: 'unknown-run' };
+      if (run.crashed) return { outcome: 'ok', runId: run.runId, state: 'unknown', lastSequence: null, terminal: null, groupCleared: null, unknownReason: 'exit-unrecorded' };
       return run.terminal
         ? { outcome: 'ok', runId: run.runId, state: 'exited', lastSequence: run.terminal.sequence, terminal: run.terminal, groupCleared: true, unknownReason: null }
         : { outcome: 'ok', runId: run.runId, state: 'running', lastSequence: run.sequence, terminal: null, groupCleared: null, unknownReason: null };
     case 'participant.events': {
       const after = payload.afterSequence;
+      if (run.crashed) return { outcome: 'ok', runId: run.runId, events: [], more: false, lastSequence: null,
+        lost: { fromSequence: after + 1, throughSequence: null, reason: 'restarted' }, terminal: null };
       const list = run.events.filter((event) => event.sequence > after).slice(0, payload.maxEvents);
       const last = list.length ? list.at(-1).sequence : after;
       return { outcome: 'ok', runId: run.runId, events: list, more: last < run.sequence, lastSequence: run.sequence, lost: null, terminal: null };
@@ -166,12 +189,12 @@ const ready = { outcome: 'ok', participants: [claude,
 routes: [{ route: 'ollama-local', state: 'ready', reason: null }] };
 const down = (reason) => ({ outcome: 'ok', participants: [claude], routes: [{ route: 'ollama-local', state: 'unavailable', reason }] });
 
-async function fixture({ availability = ready, choice, refuseStart, holdStarted } = {}) {
+async function fixture({ availability = ready, choice, refuseStart, holdStarted, restored } = {}) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
   const errors = []; const outside = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.addInitScript((value) => { window.__localOptions = value; }, { availability, choice, refuseStart, holdStarted });
+  await page.addInitScript((value) => { window.__localOptions = value; }, { availability, choice, refuseStart, holdStarted, restored });
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
     if (url.origin !== origin) { outside.push(url.origin); return route.abort(); }
@@ -252,6 +275,58 @@ test('Stop ends a local reply, keeps its text and offers Retry, which only refil
     const [old, fresh] = (await f.host()).starts;
     assert.notEqual(old.payload.runId, fresh.payload.runId, 'a retried message is a new run with new ids');
     assert.deepEqual(fresh.saved.contextRunIds, [], 'a stopped reply is not sent as context');
+    f.check();
+  } finally { await f.close(); }
+});
+
+test('a reply cut off by a crash: the reopened Desk holds Send and Retry until Close as unknown is saved, then Retry sends exactly one new run', async () => {
+  const restored = {
+    earlier: ['24000000-0000-4000-8000-000000000001', '24000000-0000-4000-8000-000000000002', '24000000-0000-4000-8000-000000000003'],
+    cut: ['24000000-0000-4000-8000-000000000011', '24000000-0000-4000-8000-000000000012', '24000000-0000-4000-8000-000000000013'],
+  };
+  const f = await fixture({ choice: local, restored });
+  try {
+    const { page } = f;
+    const cut = page.locator(`[data-run-id="${restored.cut[0]}"]`);
+    const box = page.getByRole('textbox', { name: 'Your message', exact: true });
+    const sendButton = page.getByRole('button', { name: 'Send message', exact: true });
+    await expect(cut).toContainText('Invented partial reply');
+    // The restored page reads status, then events, and is offered only
+    // Close as unknown: no Retry yet, and Send waits on the unfinished run.
+    await expect(page.getByRole('button', { name: 'Close as unknown', exact: true })).toBeVisible();
+    await expect.poll(async () => (await f.host()).requests.filter((r) => r === 'participant.events').length).toBeGreaterThan(0);
+    await expect(page.getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0);
+    await box.fill('Invented other message.');
+    await expect(sendButton).toBeDisabled();
+    await box.fill('');
+    const before = (await f.stored()).conversationRuns.find((run) => run.runId === restored.cut[0]);
+    assert.equal(before.closure, undefined);
+
+    await page.getByRole('button', { name: 'Close as unknown', exact: true }).click();
+    await expect(cut).toContainText('Reply cut off. The text so far is kept; the Mac never recorded how it ended.');
+    await expect.poll(async () => (await f.stored()).conversationRuns.find((run) => run.runId === restored.cut[0])?.closure?.kind).toBe('unknown');
+    const closed = (await f.stored()).conversationRuns.find((run) => run.runId === restored.cut[0]);
+    assert.equal(closed.closure.reason, 'user-closed');
+    const { closure: _closure, ...rest } = closed;
+    assert.deepEqual(rest, before, 'the closure changes nothing else: text, sequence and phase are kept');
+    await box.fill('Invented other message.');
+    await expect(sendButton).toBeEnabled();
+    await box.fill('');
+
+    await page.getByRole('button', { name: 'Retry', exact: true }).click();
+    await expect(box).toHaveValue('Invented question cut off by a crash.');
+    assert.equal((await f.host()).starts.length, 0, 'Retry never sends on its own');
+    await sendButton.click();
+    await expect.poll(async () => (await f.host()).starts.length).toBe(1);
+    const [fresh] = (await f.host()).starts;
+    assert.notEqual(fresh.payload.runId, restored.cut[0], 'a retried message is a new run with new ids');
+    assert.deepEqual(fresh.payload.inputChunks.join(''), 'Invented question cut off by a crash.');
+    assert.deepEqual(fresh.saved.contextRunIds, [restored.earlier[0]], 'the earlier completed turn is context; the cut-off one is not');
+    await f.emit('text', { text: 'Invented retried reply.' });
+    await f.emit('completed');
+    await expect.poll(async () => (await f.stored()).conversationRuns.find((run) => run.runId === fresh.payload.runId)?.phase).toBe('completed');
+    assert.deepEqual((await f.stored()).conversationRuns.find((run) => run.runId === restored.cut[0]), closed, 'the old run stays as it was');
+    assert.equal((await f.host()).starts.length, 1, 'exactly one new start');
     f.check();
   } finally { await f.close(); }
 });

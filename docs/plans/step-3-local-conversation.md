@@ -229,12 +229,22 @@ PR 2). In short:
    exact point, chosen by handshake, never by timing: before Ollama
    answered, and after one, three or six saved pieces of the reply (with a
    seventh in flight). A fresh app on the same folder then finds: the run
-   cut off (`unknown`, `exit-unrecorded`) with exactly the saved text, no
+   unknown to native (`exit-unrecorded`) with exactly the saved text, no
    reply recorded twice, one `/api/chat` for it, and its leftover alias
-   swept at launch. Retry sends exactly one new chat with the same context
-   and message, completes, and leaves the old run unchanged. A graceful
-   quit mid-reply records `stopped` (`local-stop`), not cut off, deletes
-   the alias itself, and keeps one chat. Two rounds per moment by default
+   swept at launch. Then the Desk's own recovery (Codex round 1 on #65):
+   until the owner closes the run, Retry is refused and Send waits, by the
+   Desk's rules (`canRetryLocalRun`, `busy`); the restored page's events
+   read answers `lost` `restarted` with no ending, which offers "Close as
+   unknown"; the saved closure keeps the text and changes nothing else,
+   and Send is free. Only then does Retry send exactly one new chat with
+   the same context and message, complete, and leave the closed run
+   unchanged. Those rules live in the Desk's TypeScript, so the stand-in
+   ports them and a Desk browser test (`local-conversation.test.mjs`)
+   shows the real page doing the same with a crashed run: Retry hidden and
+   Send disabled, "Close as unknown" saving the closure and showing "Reply
+   cut off", then Retry and Send making one new run. A graceful quit
+   mid-reply records `stopped` (`local-stop`), not cut off, deletes the
+   alias itself, and keeps one chat. Two rounds per moment by default
    (`LOCAL_PROOF_ROUNDS` raises it). No product code changed; the package
    gains the test-only app, and the dependency tripwire names it.
 
