@@ -84,3 +84,5 @@ which commands, if any, it may run there.
 - Preserve other agents' edits and unsaved work. No force-push, history
   rewriting or deletion of the owner's work.
 - License choice is the owner's decision and is still open. Do not add one.
+
+<!-- gate-test scratch: this line exists only on the gate-test branch. -->
