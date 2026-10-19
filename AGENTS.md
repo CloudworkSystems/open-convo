@@ -74,6 +74,22 @@ it against the plan, and the owner merges. The Limits below apply to outside
 builders in full; where a builder can reach the owner's Mac, the plan says
 which commands, if any, it may run there.
 
+## Coordinating On GitHub (Owner Decision, October 19, 2026)
+
+Agents that can't message each other directly coordinate through the pull
+request itself, so the owner doesn't have to carry messages:
+
+- Every review verdict and planning check is posted as a comment on the pull
+  request it concerns.
+- GrokBot watches the open-convo pull requests and tells the owner when a
+  review or comment lands. It sends fixes only to its own builders, and only
+  for pull requests it launched; it doesn't change other agents' pull requests
+  and never reviews its own work.
+- No agent merges or approves a pull request; the owner merges after the
+  planning session's "ready to merge" note, until the merge gate takes over.
+- When a new commit lands on a pull request whose builder can't start a Codex
+  review, the planning session posts `@codex review` for it.
+
 ## Limits
 
 - Write every file as if this repo were public: no secrets, keys, private records,

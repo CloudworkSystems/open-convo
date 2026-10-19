@@ -6,6 +6,11 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 19:** Agents coordinate on GitHub: verdicts are posted on the pull
+  request; GrokBot watches open-convo pull requests, reports to the owner and
+  sends fixes only to its own builders for pull requests it launched; no agent
+  merges or approves; the planning session starts Codex reviews a builder
+  can't (AGENTS.md "Coordinating On GitHub").
 - **Oct 16:** Step 3 local conversation: Retry puts the cut-off message back
   in the message box and the owner presses Send (nothing resends on its own);
   the Claude entry stays out of the model picker until the Claude Code adapter
