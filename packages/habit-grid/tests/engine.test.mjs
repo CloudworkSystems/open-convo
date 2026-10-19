@@ -1,0 +1,670 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  HabitGrid, mergePeople, serializePerson, deserializePerson, viewPerson, buildGrid, renderSvg,
+  compareStamps, contrastRatio, SCHEMA_VERSION, DAY_STATES, WEEK_STATUSES, RANGE_DAYS, EMBER,
+} from '../src/index.mjs';
+
+const TODAY = '2026-03-18';
+const CLOCK = Date.UTC(2026, 2, 18);
+const BANNED = /failed|broke|score/i;
+
+function fixed(deviceId, time = CLOCK) {
+  return new HabitGrid({ deviceId, now: () => time });
+}
+function at(iso) {
+  const [year, month, day] = iso.split('-').map(Number);
+  return Date.UTC(year, month - 1, day);
+}
+function square(grid, date) {
+  const found = grid.squares.find(item => item.date === date);
+  assert.ok(found, date);
+  return found;
+}
+function columnDates(grid) {
+  return grid.columns.map(column => column.squares.map(item => item.date));
+}
+function message(fn) {
+  try { fn(); } catch (error) { return error.message; }
+  assert.fail('expected a throw');
+}
+function converges(left, right) {
+  const beforeLeft = structuredClone(left);
+  const beforeRight = structuredClone(right);
+  const merged = mergePeople(left, right);
+  assert.deepEqual(merged, mergePeople(right, left));
+  assert.deepEqual(mergePeople(merged, merged), merged);
+  assert.deepEqual(left, beforeLeft);
+  assert.deepEqual(right, beforeRight);
+  return merged;
+}
+function walk(value, found) {
+  if (typeof value === 'string') found.push(value);
+  else if (Array.isArray(value)) value.forEach(item => walk(item, found));
+  else if (value && typeof value === 'object') {
+    for (const [key, item] of Object.entries(value)) {
+      found.push(key);
+      walk(item, found);
+    }
+  }
+}
+function assertClean(value) {
+  const found = [];
+  walk(value, found);
+  for (const text of found) assert.equal(BANNED.test(text), false, text);
+}
+
+test('1. each kind shades none, partial and full, and a count without a target has no full level', () => {
+  const engine = fixed('phone-a');
+  const id = engine.createPerson('River', { id: 'river' });
+  const span = { today: TODAY, start: '2026-03-01', end: '2026-03-08' };
+  engine.addTracker(id, { name: 'Vitamins', kind: 'done', color: 'magenta', startedOn: '2026-03-01' }, { trackerId: 'vitamins' });
+  engine.addTracker(id, { name: 'Water', kind: 'count', color: 'coral', target: 8, unit: 'glasses', startedOn: '2026-03-01' }, { trackerId: 'water' });
+  engine.addTracker(id, { name: 'Pages', kind: 'count', color: 'amber', target: null, startedOn: '2026-03-01' }, { trackerId: 'pages' });
+  engine.addTracker(id, { name: 'Exercise', kind: 'amount', color: 'coral', target: 30, unit: 'minutes', startedOn: '2026-03-01' }, { trackerId: 'exercise' });
+
+  engine.logCheckIn(id, 'vitamins', { date: '2026-03-02', value: 0.5, checkInId: 'v-partial' });
+  engine.logCheckIn(id, 'vitamins', { date: '2026-03-03', checkInId: 'v-full' });
+  for (const [date, value, checkInId] of [
+    ['2026-03-02', 2, 'w2'], ['2026-03-03', 4, 'w4'], ['2026-03-04', 6, 'w6'], ['2026-03-05', 8, 'w8'], ['2026-03-06', 9, 'w9'],
+  ]) engine.logCheckIn(id, 'water', { date, value, checkInId });
+  for (const [date, value, checkInId] of [
+    ['2026-03-02', 2, 'p2'], ['2026-03-03', 4, 'p4'], ['2026-03-04', 6, 'p6'], ['2026-03-05', 8, 'p8'], ['2026-03-06', 3, 'p3'],
+  ]) engine.logCheckIn(id, 'pages', { date, value, checkInId });
+  engine.logCheckIn(id, 'exercise', { date: '2026-03-02', value: 10, checkInId: 'e10' });
+  engine.logCheckIn(id, 'exercise', { date: '2026-03-02', value: 10, checkInId: 'e10b' });
+  engine.logCheckIn(id, 'exercise', { date: '2026-03-03', value: 15, checkInId: 'e15' });
+  engine.logCheckIn(id, 'exercise', { date: '2026-03-04', value: 30, checkInId: 'e30' });
+
+  const vitamins = engine.grid(id, 'vitamins', span);
+  assert.deepEqual([square(vitamins, '2026-03-01').state, square(vitamins, '2026-03-01').shade], ['empty', 0]);
+  assert.deepEqual([square(vitamins, '2026-03-02').state, square(vitamins, '2026-03-02').shade], ['partial', 2]);
+  assert.deepEqual([square(vitamins, '2026-03-03').state, square(vitamins, '2026-03-03').shade], ['full', 4]);
+
+  const water = engine.grid(id, 'water', span);
+  assert.equal(water.fullLevel, true);
+  assert.deepEqual([square(water, '2026-03-01').state, square(water, '2026-03-01').shade], ['empty', 0]);
+  assert.deepEqual([square(water, '2026-03-02').state, square(water, '2026-03-02').shade], ['partial', 1]);
+  assert.deepEqual([square(water, '2026-03-03').state, square(water, '2026-03-03').shade], ['partial', 2]);
+  assert.deepEqual([square(water, '2026-03-04').state, square(water, '2026-03-04').shade], ['partial', 3]);
+  assert.deepEqual([square(water, '2026-03-05').state, square(water, '2026-03-05').shade], ['full', 4]);
+  assert.equal(square(water, '2026-03-06').state, 'full');
+
+  const exercise = engine.grid(id, 'exercise', span);
+  assert.equal(square(exercise, '2026-03-01').state, 'empty');
+  assert.equal(square(exercise, '2026-03-02').value, 20);
+  assert.deepEqual([square(exercise, '2026-03-02').state, square(exercise, '2026-03-02').shade], ['partial', 3]);
+  assert.deepEqual([square(exercise, '2026-03-03').state, square(exercise, '2026-03-03').shade], ['partial', 2]);
+  assert.deepEqual([square(exercise, '2026-03-04').state, square(exercise, '2026-03-04').shade], ['full', 4]);
+
+  const pages = engine.grid(id, 'pages', span);
+  assert.equal(pages.fullLevel, false);
+  assert.equal(pages.target, null);
+  assert.deepEqual([square(pages, '2026-03-02').state, square(pages, '2026-03-02').shade], ['done', 1]);
+  assert.deepEqual([square(pages, '2026-03-03').state, square(pages, '2026-03-03').shade], ['done', 2]);
+  assert.deepEqual([square(pages, '2026-03-06').state, square(pages, '2026-03-06').shade], ['done', 2]);
+  assert.deepEqual([square(pages, '2026-03-04').state, square(pages, '2026-03-04').shade], ['done', 3]);
+  assert.deepEqual([square(pages, '2026-03-05').state, square(pages, '2026-03-05').shade], ['done', 4]);
+  assert.equal(pages.squares.some(item => item.state === 'full'), false);
+});
+
+test('2. chosen days rest off-days, and times-per-week meets at three without judging the current week early', () => {
+  const engine = fixed('phone-a');
+  const id = engine.createPerson('River', { id: 'river' });
+  engine.addTracker(id, {
+    name: 'Stretch', kind: 'done', schedule: { type: 'days', days: ['friday', 'monday', 'wednesday'] }, startedOn: '2026-03-02',
+  }, { trackerId: 'stretch' });
+  for (const date of ['2026-03-02', '2026-03-04', '2026-03-06', '2026-03-09', '2026-03-13', '2026-03-16']) {
+    engine.logCheckIn(id, 'stretch', { date, checkInId: `stretch-${date}` });
+  }
+  const chosen = engine.grid(id, 'stretch', { today: '2026-03-16', start: '2026-03-02', end: '2026-03-16' });
+  assert.equal(square(chosen, '2026-03-03').state, 'rest');
+  assert.equal(square(chosen, '2026-03-03').due, false);
+  assert.equal(square(chosen, '2026-03-12').state, 'rest');
+  assert.equal(square(chosen, '2026-03-11').state, 'empty');
+  assert.equal(square(chosen, '2026-03-11').due, true);
+  assert.equal(square(chosen, '2026-03-13').state, 'full');
+  assert.deepEqual(chosen.streaks, { current: 2, longest: 4, unit: 'day' });
+  assert.equal(chosen.squares.some(item => item.state === 'rest' && item.weekday !== 'monday' && item.weekday !== 'wednesday' && item.weekday !== 'friday' && item.date >= '2026-03-02' && item.date <= '2026-03-16' && item.state !== 'empty'), true);
+
+  engine.addTracker(id, {
+    name: 'Calls', kind: 'done', schedule: { type: 'timesPerWeek', times: 3 }, startedOn: '2026-02-22',
+  }, { trackerId: 'calls' });
+  for (const date of ['2026-02-23', '2026-02-25', '2026-03-02', '2026-03-04', '2026-03-06', '2026-03-09', '2026-03-11', '2026-03-13', '2026-03-16']) {
+    engine.logCheckIn(id, 'calls', { date, checkInId: `calls-${date}` });
+  }
+  const weekly = engine.grid(id, 'calls', { today: '2026-03-18', start: '2026-02-22', end: '2026-03-21' });
+  const weekOf = start => weekly.columns.find(column => column.weekStart === start);
+  assert.equal(square(weekly, '2026-02-24').state, 'open');
+  assert.equal(square(weekly, '2026-03-02').state, 'done');
+  assert.equal(square(weekly, '2026-03-03').state, 'open');
+  assert.equal(weekOf('2026-02-22').doneDays, 2);
+  assert.equal(weekOf('2026-02-22').status, 'unmet');
+  assert.equal(weekOf('2026-03-01').doneDays, 3);
+  assert.equal(weekOf('2026-03-01').met, true);
+  assert.equal(weekOf('2026-03-01').status, 'met');
+  assert.equal(weekOf('2026-03-15').status, 'inProgress');
+  assert.equal(weekOf('2026-03-15').met, false);
+  assert.deepEqual(weekly.streaks, { current: 2, longest: 2, unit: 'week' });
+  assert.notEqual(weekly.streaks.current, 6);
+
+  const saturday = engine.grid(id, 'calls', { today: '2026-03-21', start: '2026-03-15', end: '2026-03-21' });
+  assert.equal(saturday.columns[0].status, 'inProgress');
+  const ended = engine.grid(id, 'calls', { today: '2026-03-22', start: '2026-02-22', end: '2026-03-22' });
+  assert.equal(ended.columns.find(column => column.weekStart === '2026-03-15').status, 'unmet');
+  assert.deepEqual(ended.streaks, { current: 0, longest: 2, unit: 'week' });
+
+  engine.logCheckIn(id, 'calls', { date: '2026-03-17', checkInId: 'calls-17' });
+  engine.logCheckIn(id, 'calls', { date: '2026-03-18', checkInId: 'calls-18' });
+  const reached = engine.grid(id, 'calls', { today: '2026-03-18', start: '2026-03-15', end: '2026-03-21' });
+  assert.equal(reached.columns[0].met, true);
+  assert.equal(reached.columns[0].doneDays, 3);
+  assert.equal(reached.columns[0].status, 'inProgress');
+});
+
+test('3. rest days do not end a streak, a missed due day does, across month and year boundaries', () => {
+  const engine = fixed('phone-a', at('2026-01-06'));
+  const id = engine.createPerson('River', { id: 'river' });
+  engine.addTracker(id, { name: 'Vitamins', kind: 'done', startedOn: '2025-12-28' }, { trackerId: 'vitamins' });
+  for (const date of ['2025-12-28', '2025-12-29', '2025-12-30', '2025-12-31', '2026-01-02', '2026-01-04', '2026-01-05', '2026-01-06']) {
+    engine.logCheckIn(id, 'vitamins', { date, checkInId: `v-${date}` });
+  }
+  engine.markRest(id, '2026-01-01', { restId: 'new-year' });
+  const grid = engine.grid(id, 'vitamins', { start: '2025-12-28', end: '2026-01-06' });
+  assert.deepEqual(columnDates(grid)[0], ['2025-12-28', '2025-12-29', '2025-12-30', '2025-12-31', '2026-01-01', '2026-01-02', '2026-01-03']);
+  assert.equal(square(grid, '2026-01-01').state, 'rest');
+  assert.equal(square(grid, '2026-01-01').due, false);
+  assert.equal(square(grid, '2026-01-03').state, 'empty');
+  assert.equal(square(grid, '2026-01-03').due, true);
+  assert.equal(square(grid, '2025-12-31').state, 'full');
+  assert.equal(square(grid, '2026-01-02').state, 'full');
+  assert.deepEqual(grid.streaks, { current: 3, longest: 5, unit: 'day' });
+  assert.deepEqual(engine.grid(id, 'vitamins', { start: '2026-01-04', end: '2026-01-06' }).streaks, grid.streaks);
+
+  const today = fixed('phone-a');
+  const other = today.createPerson('Quinn', { id: 'quinn' });
+  today.addTracker(other, { name: 'Walk', kind: 'done', startedOn: '2026-03-16' }, { trackerId: 'walk' });
+  today.logCheckIn(other, 'walk', { date: '2026-03-16', checkInId: 'walk-16' });
+  today.logCheckIn(other, 'walk', { date: '2026-03-17', checkInId: 'walk-17' });
+  assert.deepEqual(today.grid(other, 'walk', { start: '2026-03-16', end: TODAY }).streaks, { current: 2, longest: 2, unit: 'day' });
+  today.deleteCheckIn(other, 'walk-17');
+  assert.deepEqual(today.grid(other, 'walk', { start: '2026-03-16', end: TODAY }).streaks, { current: 0, longest: 1, unit: 'day' });
+});
+
+test('4. Sunday and Monday week starts lay out leap day and daylight-saving weeks', () => {
+  const engine = fixed('phone-a');
+  const id = engine.createPerson('River', { id: 'river' });
+  engine.addTracker(id, { name: 'Vitamins', kind: 'done', startedOn: '2024-02-01' }, { trackerId: 'vitamins' });
+  const range = { start: '2024-02-26', end: '2024-03-11', today: '2024-03-20' };
+  const sunday = engine.grid(id, 'vitamins', range);
+  assert.deepEqual(sunday.rows, ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']);
+  assert.equal(sunday.weekStartsOn, 'sunday');
+  assert.deepEqual(columnDates(sunday), [
+    ['2024-02-25', '2024-02-26', '2024-02-27', '2024-02-28', '2024-02-29', '2024-03-01', '2024-03-02'],
+    ['2024-03-03', '2024-03-04', '2024-03-05', '2024-03-06', '2024-03-07', '2024-03-08', '2024-03-09'],
+    ['2024-03-10', '2024-03-11', '2024-03-12', '2024-03-13', '2024-03-14', '2024-03-15', '2024-03-16'],
+  ]);
+  assert.equal(square(sunday, '2024-02-29').weekday, 'thursday');
+  assert.equal(square(sunday, '2024-03-10').weekday, 'sunday');
+
+  engine.setWeekStartsOn(id, 'monday');
+  const monday = engine.grid(id, 'vitamins', range);
+  assert.deepEqual(monday.rows, ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']);
+  assert.deepEqual(columnDates(monday), [
+    ['2024-02-26', '2024-02-27', '2024-02-28', '2024-02-29', '2024-03-01', '2024-03-02', '2024-03-03'],
+    ['2024-03-04', '2024-03-05', '2024-03-06', '2024-03-07', '2024-03-08', '2024-03-09', '2024-03-10'],
+    ['2024-03-11', '2024-03-12', '2024-03-13', '2024-03-14', '2024-03-15', '2024-03-16', '2024-03-17'],
+  ]);
+  assert.equal(square(monday, '2024-02-29').weekday, 'thursday');
+  assert.equal(square(monday, '2024-03-10').weekday, 'sunday');
+  assert.equal(square(monday, '2024-03-11').weekday, 'monday');
+
+  engine.setWeekStartsOn(id, 'sunday');
+  const fall = engine.grid(id, 'vitamins', { start: '2024-11-03', end: '2024-11-09', today: '2024-11-20' });
+  assert.deepEqual(columnDates(fall), [['2024-11-03', '2024-11-04', '2024-11-05', '2024-11-06', '2024-11-07', '2024-11-08', '2024-11-09']]);
+  engine.setWeekStartsOn(id, 'monday');
+  const fallMonday = engine.grid(id, 'vitamins', { start: '2024-11-02', end: '2024-11-04', today: '2024-11-20' });
+  assert.deepEqual(fallMonday.squares.map(item => item.date).filter(date => date >= '2024-11-02' && date <= '2024-11-04'), ['2024-11-02', '2024-11-03', '2024-11-04']);
+
+  const phone = engine.grid(id, 'vitamins', { surface: 'phone', today: TODAY });
+  const mac = engine.grid(id, 'vitamins', { surface: 'mac', today: TODAY });
+  const wall = engine.grid(id, 'vitamins', { surface: 'wall', today: TODAY });
+  assert.equal(phone.start, '2025-12-17');
+  assert.equal(phone.end, TODAY);
+  assert.equal(RANGE_DAYS.phone, 92);
+  assert.equal(mac.start, '2025-09-17');
+  assert.equal(mac.end, TODAY);
+  assert.equal(RANGE_DAYS.mac, 183);
+  assert.equal(wall.start, mac.start);
+  assert.ok(phone.squares.some(item => item.date < phone.start && item.inRange === false));
+  assert.equal(square(phone, phone.start).inRange, true);
+});
+
+test('5. checking a stack writes usual amounts only, and members can be logged alone', () => {
+  const engine = fixed('phone-a');
+  const id = engine.createPerson('River', { id: 'river' });
+  engine.addTracker(id, { name: 'Vitamins', kind: 'done', usualAmount: 5, startedOn: '2026-03-01' }, { trackerId: 'vitamins' });
+  engine.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses', startedOn: '2026-03-01' }, { trackerId: 'water' });
+  engine.addTracker(id, { name: 'Stretch', kind: 'amount', target: 30, unit: 'minutes', usualAmount: 30, startedOn: '2026-03-01' }, { trackerId: 'stretch' });
+  const stack = engine.addStack(id, { name: 'Morning', members: ['water', 'vitamins', 'stretch'] }, { stackId: 'morning' });
+  const before = engine.getPerson(id);
+  const checked = engine.checkStack(id, stack, { date: '2026-03-10' });
+  assert.deepEqual(checked.needsValue, [{ trackerId: 'water', name: 'Water', kind: 'count' }]);
+  assert.deepEqual(checked.written.map(item => [item.trackerId, item.value, item.kind]), [['stretch', 30, 'amount'], ['vitamins', 1, 'done']]);
+  assert.equal(engine.view(id).checkIns.some(item => item.trackerId === 'water'), false);
+  assert.equal(square(engine.grid(id, 'vitamins', { start: '2026-03-10', end: '2026-03-10' }), '2026-03-10').state, 'full');
+  assert.deepEqual([square(engine.grid(id, 'stretch', { start: '2026-03-10', end: '2026-03-10' }), '2026-03-10').state, square(engine.grid(id, 'stretch', { start: '2026-03-10', end: '2026-03-10' }), '2026-03-10').value], ['full', 30]);
+  assert.equal(square(engine.stackGrid(id, stack, { start: '2026-03-10', end: '2026-03-10' }), '2026-03-10').state, 'partial');
+  assert.notDeepEqual(engine.getPerson(id).checkIns.length, before.checkIns.length);
+
+  engine.logCheckIn(id, 'water', { date: '2026-03-10', value: 8, checkInId: 'water-alone' });
+  engine.logCheckIn(id, 'vitamins', { date: '2026-03-11', checkInId: 'vitamins-alone' });
+  assert.equal(square(engine.grid(id, 'water', { start: '2026-03-10', end: '2026-03-11' }), '2026-03-10').state, 'full');
+  assert.equal(square(engine.grid(id, 'vitamins', { start: '2026-03-10', end: '2026-03-11' }), '2026-03-11').state, 'full');
+  assert.equal(square(engine.stackGrid(id, stack, { start: '2026-03-10', end: '2026-03-10' }), '2026-03-10').state, 'full');
+  const empty = engine.checkStack(id, stack, { date: '2026-03-12' });
+  assert.equal(empty.needsValue[0].trackerId, 'water');
+  assert.equal(engine.view(id).checkIns.filter(item => item.date === '2026-03-12' && item.trackerId === 'water').length, 0);
+});
+
+test('6. editing and removing check-ins, Trash and restore', () => {
+  const engine = fixed('phone-a');
+  const id = engine.createPerson('River', { id: 'river' });
+  engine.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses', startedOn: '2026-03-01' }, { trackerId: 'water' });
+  engine.logCheckIn(id, 'water', { date: '2026-03-04', value: 1, checkInId: 'keep' });
+  engine.logCheckIn(id, 'water', { date: '2026-03-04', value: 17.5, checkInId: 'drop' });
+  assert.equal(square(engine.grid(id, 'water', { start: '2026-03-04', end: '2026-03-05' }), '2026-03-04').value, 18.5);
+  engine.editCheckIn(id, 'drop', { value: 3, date: '2026-03-05' });
+  assert.equal(square(engine.grid(id, 'water', { start: '2026-03-04', end: '2026-03-05' }), '2026-03-04').value, 1);
+  assert.equal(square(engine.grid(id, 'water', { start: '2026-03-04', end: '2026-03-05' }), '2026-03-05').value, 3);
+  engine.deleteCheckIn(id, 'drop');
+  assert.equal(engine.view(id).checkIns.some(item => item.id === 'drop'), false);
+  assert.equal(engine.view(id, { trash: true }).checkIns[0].id, 'drop');
+  assert.equal(square(engine.grid(id, 'water', { start: '2026-03-04', end: '2026-03-05' }), '2026-03-05').value, 0);
+  engine.restoreCheckIn(id, 'drop');
+  assert.equal(engine.view(id).checkIns.find(item => item.id === 'drop').value, 3);
+  engine.deleteCheckIn(id, 'drop');
+  engine.emptyTrash(id);
+  assert.equal(engine.view(id, { trash: true }).checkIns.length, 0);
+  assert.deepEqual(engine.getPerson(id).checkIns.find(item => item.id === 'drop').fields, {});
+  assert.throws(() => engine.restoreCheckIn(id, 'drop'), /emptied/);
+  const offline = fixed('phone-b');
+  offline.load(serializePerson({
+    ...engine.getPerson(id),
+    checkIns: engine.getPerson(id).checkIns.map(item => item.id === 'drop' ? {
+      id: 'drop',
+      life: { value: true, stamp: { counter: 1, time: 1, device: 'phone-b' } },
+      purge: null,
+      fields: {
+        trackerId: { value: 'water', stamp: { counter: 1, time: 1, device: 'phone-b' } },
+        date: { value: '2026-03-05', stamp: { counter: 1, time: 1, device: 'phone-b' } },
+        value: { value: 17.5, stamp: { counter: 1, time: 1, device: 'phone-b' } },
+        source: { value: 'manual', stamp: { counter: 1, time: 1, device: 'phone-b' } },
+      },
+    } : item),
+  }));
+  engine.importPerson(offline.getPerson(id));
+  assert.equal(engine.view(id).checkIns.some(item => item.id === 'drop'), false);
+  assert.ok(!engine.save(id).includes('17.5'));
+});
+
+test('7. engine text has no grading words', () => {
+  const engine = fixed('phone-a');
+  const id = engine.createPerson('River', { id: 'river' });
+  engine.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses', schedule: { type: 'timesPerWeek', times: 3 }, startedOn: '2026-03-01' }, { trackerId: 'water' });
+  engine.addTracker(id, { name: 'Vitamins', kind: 'done', startedOn: '2026-03-01' }, { trackerId: 'vitamins' });
+  engine.addStack(id, { name: 'Morning', members: ['vitamins'] }, { stackId: 'morning' });
+  engine.logCheckIn(id, 'water', { date: '2026-03-02', value: 3, checkInId: 'w' });
+  engine.markRest(id, '2026-03-03', { trackerId: 'vitamins', restId: 'rest' });
+  const produced = [
+    engine.view(id),
+    engine.view(id, { trash: true }),
+    engine.grid(id, 'water'),
+    engine.grid(id, 'vitamins'),
+    engine.stackGrid(id, 'morning'),
+    engine.svg(id, 'water'),
+    engine.stackSvg(id, 'morning'),
+    engine.checkStack(id, 'morning'),
+    engine.save(id),
+    DAY_STATES.join(' '),
+    WEEK_STATUSES.join(' '),
+    message(() => deserializePerson('{"schemaVersion":99}')),
+    message(() => engine.logCheckIn(id, 'water', { value: 1, source: 'voice' })),
+    message(() => engine.addTracker(id, { name: 'Bad', kind: 'amount', unit: '' })),
+    message(() => mergePeople(engine.getPerson(id), { ...engine.getPerson(id), id: 'other' })),
+  ];
+  for (const value of produced) assertClean(value);
+});
+
+test('8. SVG contrast and shapes distinguish rest and full days', () => {
+  const engine = fixed('phone-a');
+  const id = engine.createPerson('River', { id: 'river' });
+  engine.addTracker(id, { name: 'Water <glasses> & more', kind: 'count', color: 'coral', target: 4, unit: 'glasses', startedOn: '2026-03-16' }, { trackerId: 'water' });
+  engine.addTracker(id, { name: 'Pages', kind: 'count', color: 'magenta', startedOn: '2026-03-16' }, { trackerId: 'pages' });
+  engine.logCheckIn(id, 'water', { date: '2026-03-17', value: 2, checkInId: 'partial' });
+  engine.logCheckIn(id, 'water', { date: '2026-03-18', value: 4, checkInId: 'full' });
+  engine.logCheckIn(id, 'pages', { date: '2026-03-16', value: 3, checkInId: 'done' });
+  engine.markRest(id, '2026-03-19', { restId: 'rest' });
+  const span = { start: '2026-03-16', end: '2026-03-20' };
+  const water = renderSvg(engine.grid(id, 'water', span));
+  const pages = renderSvg(engine.grid(id, 'pages', { ...span, today: TODAY }));
+  const pale = renderSvg({ ...engine.grid(id, 'water', span), color: '#15110f' });
+  assert.equal(water.includes('href='), false);
+  assert.equal(water.includes('url('), false);
+  assert.match(water, /&lt;glasses&gt;/);
+  assert.match(water, /&amp;/);
+  for (const svg of [water, pages, pale]) auditSvg(svg);
+  const full = group(water, 'check');
+  const rest = group(water, 'rest');
+  const open = group(water, 'dashed');
+  const partial = group(water, 'bars');
+  const empty = group(water, 'outline');
+  const done = group(pages, 'diamond');
+  assert.match(full, /<path /);
+  assert.match(rest, /<circle /);
+  assert.match(rest, /<line /);
+  assert.doesNotMatch(rest, /<path /);
+  assert.match(open, /stroke-dasharray="2 2"/);
+  assert.match(done, /<polygon /);
+  assert.match(partial, /data-shade="2"/);
+  assert.equal(partial.match(/fill="#[0-9a-f]{6}"/g).length, 2);
+  assert.match(empty, /fill="none"/);
+  assert.ok(contrastRatio('#ffffff', '#000000') > 20);
+  assert.ok(contrastRatio(EMBER.coral, EMBER.background) > 4.5);
+  assert.ok(contrastRatio(EMBER.magenta, EMBER.background) >= 3);
+  assert.ok(contrastRatio(EMBER.text, EMBER.background) > 4.5);
+});
+
+function group(svg, shape) {
+  const match = svg.match(new RegExp(`<g\\b[^>]*data-shape="${shape}"[\\s\\S]*?<\\/g>`));
+  assert.ok(match, shape);
+  return match[0];
+}
+function localContrast(foreground, background) {
+  const lum = hex => {
+    const channels = [1, 3, 5].map(offset => {
+      const byte = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
+      return byte <= 0.04045 ? byte / 12.92 : ((byte + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+  };
+  const lighter = Math.max(lum(foreground), lum(background));
+  const darker = Math.min(lum(foreground), lum(background));
+  return (lighter + 0.05) / (darker + 0.05);
+}
+function auditSvg(svg) {
+  const tags = svg.match(/<(?:rect|circle|path|line|polygon|text)\b[^>]*>/g) ?? [];
+  assert.ok(tags.length > 4);
+  for (const tag of tags) {
+    const role = /data-role="([^"]+)"/.exec(tag)?.[1];
+    if (role === 'background' || !role) continue;
+    const against = /data-against="(#[0-9a-f]{6})"/.exec(tag)?.[1];
+    const fill = /fill="(#[0-9a-f]{6}|none)"/.exec(tag)?.[1];
+    const stroke = /stroke="(#[0-9a-f]{6})"/ .exec(tag)?.[1];
+    const color = fill && fill !== 'none' ? fill : stroke;
+    assert.ok(color && against, tag);
+    const minimum = role === 'text' ? 4.5 : 3;
+    assert.ok(localContrast(color, against) >= minimum, `${color} on ${against}`);
+  }
+}
+
+test('9. merge is commutative and keeps separate check-ins by ID', () => {
+  const a = fixed('phone-a', 100);
+  const b = fixed('phone-b', 100);
+  const id = a.createPerson('River', { id: 'river' });
+  a.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  a.addTracker(id, { name: 'Vitamins', kind: 'done' }, { trackerId: 'vitamins' });
+  a.addStack(id, { name: 'Morning' }, { stackId: 'morning' });
+  b.importPerson(a.getPerson(id));
+  a.editTracker(id, 'water', { name: 'River water' });
+  a.setWeekStartsOn(id, 'monday');
+  a.setStackMember(id, 'morning', 'water', true);
+  b.editTracker(id, 'vitamins', { color: 'amber' });
+  b.renamePerson(id, 'Cedar');
+  b.setStackMember(id, 'morning', 'vitamins', true);
+  b.markRest(id, '2026-04-01', { restId: 'away' });
+  let merged = converges(a.getPerson(id), b.getPerson(id));
+  a.importPerson(merged);
+  const view = a.view(id);
+  assert.equal(view.name, 'Cedar');
+  assert.equal(view.weekStartsOn, 'monday');
+  assert.equal(view.trackers.find(item => item.id === 'water').name, 'River water');
+  assert.equal(view.trackers.find(item => item.id === 'vitamins').color, 'amber');
+  assert.deepEqual(view.stacks[0].members, ['vitamins', 'water']);
+  assert.equal(view.restDays[0].date, '2026-04-01');
+
+  const tie = fixed('phone-a', 100);
+  const other = fixed('phone-b', 100);
+  const tieId = tie.createPerson('River', { id: 'river' });
+  tie.addTracker(tieId, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  other.importPerson(tie.getPerson(tieId));
+  tie.editTracker(tieId, 'water', { name: 'A water' });
+  other.editTracker(tieId, 'water', { name: 'B water' });
+  tie.importPerson(converges(tie.getPerson(tieId), other.getPerson(tieId)));
+  assert.equal(tie.view(tieId).trackers[0].name, 'B water');
+
+  const early = fixed('phone-a', 100);
+  const behind = fixed('behind', -10_000_000);
+  const skew = early.createPerson('River', { id: 'river' });
+  early.addTracker(skew, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  behind.importPerson(early.getPerson(skew));
+  early.editTracker(skew, 'water', { name: 'Earlier' });
+  behind.importPerson(early.getPerson(skew));
+  behind.editTracker(skew, 'water', { name: 'Later' });
+  early.importPerson(converges(early.getPerson(skew), behind.getPerson(skew)));
+  assert.equal(early.view(skew).trackers[0].name, 'Later');
+  assert.equal(compareStamps({ counter: 2, time: 1, device: 'a' }, { counter: 1, time: 9_000_000, device: 'z' }), 1);
+
+  const left = fixed('phone-a', 100);
+  const right = fixed('phone-b', 100);
+  const shared = left.createPerson('River', { id: 'river' });
+  left.addTracker(shared, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  left.logCheckIn(shared, 'water', { date: '2026-03-04', value: 2, checkInId: 'glass' });
+  right.importPerson(left.getPerson(shared));
+  left.editCheckIn(shared, 'glass', { value: 5 });
+  right.importPerson(left.getPerson(shared));
+  right.deleteCheckIn(shared, 'glass');
+  left.importPerson(converges(left.getPerson(shared), right.getPerson(shared)));
+  assert.equal(left.view(shared).checkIns.length, 0);
+  left.restoreCheckIn(shared, 'glass');
+  right.importPerson(converges(left.getPerson(shared), right.getPerson(shared)));
+  assert.equal(right.view(shared).checkIns[0].value, 5);
+
+  const home = fixed('phone-a', 100);
+  const away = fixed('phone-b', 100);
+  const person = home.createPerson('River', { id: 'river' });
+  home.addTracker(person, { name: 'Old water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  home.logCheckIn(person, 'water', { date: '2026-03-04', value: 2, checkInId: 'glass' });
+  away.importPerson(home.getPerson(person));
+  home.deleteCheckIn(person, 'glass');
+  home.emptyTrash(person);
+  home.importPerson(converges(home.getPerson(person), away.getPerson(person)));
+  assert.equal(home.view(person).checkIns.length, 0);
+  assert.equal(home.view(person, { trash: true }).checkIns.length, 0);
+  assert.deepEqual(home.getPerson(person).checkIns.find(item => item.id === 'glass').fields, {});
+  const third = fixed('phone-c', 100);
+  third.load(home.save(person));
+  third.importPerson(away.getPerson(person));
+  assert.deepEqual(third.view(person), home.view(person));
+
+  home.deletePerson(person);
+  home.emptyTrash(person);
+  const wiped = home.getPerson(person);
+  home.importPerson(converges(home.getPerson(person), away.getPerson(person)));
+  assert.deepEqual(home.getPerson(person), wiped);
+  home.renamePerson(person, 'New trackers');
+  home.addTracker(person, { name: 'Fresh water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'fresh' });
+  home.importPerson(away.getPerson(person));
+  assert.equal(home.view(person).deleted, false);
+  assert.deepEqual(home.view(person).trackers.map(item => item.id), ['fresh']);
+  assert.ok(!home.save(person).includes('Old water'));
+
+  const phone = fixed('phone-a', CLOCK);
+  const tablet = fixed('tablet-b', CLOCK);
+  const who = phone.createPerson('River', { id: 'river' });
+  phone.addTracker(who, { name: 'Water', kind: 'count', target: 8, unit: 'glasses', startedOn: '2026-03-01' }, { trackerId: 'water' });
+  tablet.importPerson(phone.getPerson(who));
+  phone.logCheckIn(who, 'water', { date: '2026-03-04', value: 1, checkInId: 'from-phone' });
+  tablet.logCheckIn(who, 'water', { date: '2026-03-04', value: 1, checkInId: 'from-tablet' });
+  phone.editCheckIn(who, 'from-phone', { value: 3 });
+  tablet.editCheckIn(who, 'from-tablet', { source: 'manual' });
+  const both = converges(phone.getPerson(who), tablet.getPerson(who));
+  const day = buildGrid(both, 'water', { today: TODAY, start: '2026-03-01', end: '2026-03-08' });
+  assert.equal(square(day, '2026-03-04').value, 4);
+  assert.equal(both.checkIns.filter(item => item.life.value).length, 2);
+  assert.equal(JSON.stringify(both).includes('dayTotal'), false);
+  const again = fixed('phone-c', CLOCK);
+  const saved = serializePerson(both);
+  again.load(saved);
+  again.load(saved);
+  assert.equal(again.getPerson(who).checkIns.length, 2);
+  assert.equal(square(again.grid(who, 'water', { start: '2026-03-01', end: '2026-03-08' }), '2026-03-04').value, 4);
+
+  const one = fixed('phone-a', 100);
+  const two = fixed('phone-b', 100);
+  const three = fixed('phone-c', 100);
+  const groupId = one.createPerson('River', { id: 'river' });
+  one.addTracker(groupId, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  two.importPerson(one.getPerson(groupId));
+  three.importPerson(one.getPerson(groupId));
+  one.editTracker(groupId, 'water', { name: 'From one' });
+  two.logCheckIn(groupId, 'water', { date: '2026-03-04', value: 1, checkInId: 'from-two' });
+  three.deleteTracker(groupId, 'water');
+  three.emptyTrash(groupId);
+  const snapshots = [one, two, three].map(device => device.getPerson(groupId));
+  const reference = mergePeople(mergePeople(snapshots[0], snapshots[1]), snapshots[2]);
+  for (const [i, j, k] of [[0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]) {
+    assert.deepEqual(mergePeople(mergePeople(snapshots[i], snapshots[j]), snapshots[k]), reference);
+  }
+});
+
+test('10. saving and loading round-trips, and an unknown schemaVersion is refused', () => {
+  const engine = fixed('phone-a');
+  const id = engine.createPerson('River', { id: 'river', weekStartsOn: 'monday' });
+  engine.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses', schedule: { type: 'days', days: ['wednesday', 'monday'] }, startedOn: '2026-03-01' }, { trackerId: 'water' });
+  engine.logCheckIn(id, 'water', { date: '2026-03-02', value: 2, checkInId: 'glass' });
+  engine.addStack(id, { name: 'Morning', members: ['water'] }, { stackId: 'morning' });
+  const before = engine.getPerson(id);
+  assert.equal(before.schemaVersion, SCHEMA_VERSION);
+  assert.deepEqual(deserializePerson(serializePerson(before)), before);
+  const other = fixed('phone-b');
+  other.load(engine.save(id));
+  assert.deepEqual(other.getPerson(id), before);
+  assert.throws(() => deserializePerson('{"schemaVersion":99}'), /Unsupported schemaVersion; expected 1\./);
+  assert.throws(() => deserializePerson('{'), /Invalid person JSON/);
+  assert.throws(() => deserializePerson('{"schemaVersion":1}'), /Invalid record/);
+  const malformed = structuredClone(before);
+  malformed.checkIns[0].fields.value.value = 'many';
+  assert.throws(() => deserializePerson(JSON.stringify(malformed)), /Invalid field value/);
+  const voiced = structuredClone(before);
+  voiced.checkIns[0].fields.source.value = 'voice';
+  const loaded = deserializePerson(JSON.stringify(voiced));
+  assert.equal(loaded.checkIns[0].fields.source.value, 'voice');
+  assert.throws(() => engine.logCheckIn(id, 'water', { value: 1, source: 'automatic' }), /Only manual/);
+});
+
+test('people stay independent, invalid edits are atomic, and returned snapshots are copies', () => {
+  const engine = fixed('phone-a');
+  const id = engine.createPerson('River', { id: 'river' });
+  engine.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  const before = engine.getPerson(id);
+  const other = engine.createPerson('Quinn', { id: 'quinn' });
+  engine.addTracker(other, { name: 'Walk', kind: 'done' }, { trackerId: 'walk' });
+  engine.deletePerson(other);
+  assert.deepEqual(engine.getPerson(id), before);
+  assert.deepEqual(engine.personIds(), [id]);
+  assert.deepEqual(engine.personIds({ trash: true }), [other]);
+  assert.throws(() => engine.editTracker(id, 'water', { target: 'eight' }), /Count target/);
+  assert.throws(() => engine.addTracker(id, { name: 'Duplicate', kind: 'done' }, { trackerId: 'water' }), /already exists/);
+  assert.throws(() => engine.setWeekStartsOn(id, 'friday'), /Unknown week start/);
+  assert.throws(() => engine.addTracker(id, { name: 'Lift', kind: 'amount', target: 20 }), /need a unit/);
+  assert.throws(() => engine.addTracker(id, { name: 'Done', kind: 'done', target: 2 }), /do not use a target/);
+  assert.deepEqual(engine.getPerson(id), before);
+  const copy = engine.getPerson(id);
+  copy.fields.name.value = 'Mutated';
+  assert.deepEqual(engine.getPerson(id), before);
+  const grid = engine.grid(id, 'water', { start: '2026-03-01', end: '2026-03-07' });
+  grid.squares[0].state = 'full';
+  assert.equal(engine.grid(id, 'water', { start: '2026-03-01', end: '2026-03-07' }).squares[0].state, 'open');
+});
+
+test('prototype-like IDs, hostile text, purge re-add and stamp key order stay plain data', () => {
+  const engine = fixed('phone-a');
+  const hostile = '" <tag> & 🥕 \\ \n' + 'z'.repeat(10_000);
+  const id = engine.createPerson(hostile, { id: 'river' });
+  engine.addTracker(id, { name: hostile, kind: 'count', unit: hostile, color: '#F37A4A' }, { trackerId: '__proto__' });
+  engine.logCheckIn(id, '__proto__', { date: '2026-03-04', value: 1, checkInId: 'constructor' });
+  engine.addStack(id, { name: hostile }, { stackId: 'constructor' });
+  engine.setStackMember(id, 'constructor', '__proto__', true);
+  assert.equal({}.polluted, undefined);
+  const other = fixed('phone-b');
+  other.load(engine.save(id));
+  assert.equal(other.view(id).name, hostile);
+  assert.equal(other.view(id).trackers[0].name, hostile);
+  assert.equal(other.view(id).trackers[0].color, '#f37a4a');
+  assert.equal(other.view(id).stacks[0].members[0], '__proto__');
+  const svg = other.svg(id, '__proto__', { start: '2026-03-01', end: '2026-03-07' });
+  assert.match(svg, /&lt;tag&gt;/);
+  assert.equal(svg.includes('<tag>'), false);
+
+  const home = fixed('phone-a', 100);
+  const away = fixed('phone-b', 100);
+  const person = home.createPerson('River', { id: 'river' });
+  home.addTracker(person, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  away.importPerson(home.getPerson(person));
+  home.deleteTracker(person, 'water');
+  home.emptyTrash(person);
+  home.addTracker(person, { name: 'Fresh water', kind: 'count', target: 4, unit: 'cups' }, { trackerId: 'water' });
+  home.importPerson(converges(home.getPerson(person), away.getPerson(person)));
+  assert.equal(home.view(person).trackers[0].name, 'Fresh water');
+  assert.equal(home.view(person).trackers[0].unit, 'cups');
+
+  const original = home.getPerson(person);
+  const reordered = JSON.parse(home.save(person), (key, value) => {
+    if (value && typeof value === 'object' && Object.hasOwn(value, 'counter')) return { device: value.device, time: value.time, counter: value.counter };
+    return value;
+  });
+  assert.deepEqual(mergePeople(original, reordered), original);
+  const corrupt = structuredClone(original);
+  corrupt.trackers[0].fields.name.value = 'Changed without a new stamp';
+  assert.throws(() => mergePeople(original, corrupt), /Conflicting values/);
+});
+
+test('three-device histories converge under every delivery order', () => {
+  let seed = 261016;
+  const next = limit => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed % limit; };
+  for (let run = 0; run < 30; run += 1) {
+    const devices = [fixed('phone-a', 100), fixed('phone-b', 100), fixed('phone-c', -100000)];
+    const id = devices[0].createPerson('River', { id: 'river' });
+    devices[0].addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+    devices[0].addTracker(id, { name: 'Vitamins', kind: 'done' }, { trackerId: 'vitamins' });
+    devices[0].addStack(id, { name: 'Morning', members: ['water'] }, { stackId: 'morning' });
+    devices[1].importPerson(devices[0].getPerson(id));
+    devices[2].importPerson(devices[0].getPerson(id));
+    for (let step = 0; step < 10; step += 1) {
+      const device = devices[next(3)];
+      const live = device.view(id);
+      switch (next(8)) {
+        case 0: device.renamePerson(id, `River ${run}-${step}`); break;
+        case 1: device.setWeekStartsOn(id, next(2) ? 'monday' : 'sunday'); break;
+        case 2: if (live.trackers.some(item => item.id === 'water')) device.editTracker(id, 'water', { name: `Water ${step}` }); break;
+        case 3: device.logCheckIn(id, 'water', { date: `2026-03-${String((step % 27) + 1).padStart(2, '0')}`, value: 1, checkInId: `log-${run}-${step}` }); break;
+        case 4: {
+          const checkIn = live.checkIns[0];
+          if (checkIn) device.deleteCheckIn(id, checkIn.id);
+          break;
+        }
+        case 5: device.emptyTrash(id); break;
+        case 6: device.markRest(id, `2026-04-${String((step % 27) + 1).padStart(2, '0')}`, { restId: `rest-${run}-${step}` }); break;
+        case 7: device.importPerson(devices[next(3)].getPerson(id)); break;
+        default: break;
+      }
+    }
+    const snapshots = devices.map(device => device.getPerson(id));
+    for (const copy of snapshots) assert.deepEqual(mergePeople(copy, copy), copy, `self merge run ${run}`);
+    const expected = mergePeople(mergePeople(snapshots[0], snapshots[1]), snapshots[2]);
+    for (const [i, j, k] of [[0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]) {
+      assert.deepEqual(mergePeople(mergePeople(snapshots[i], snapshots[j]), snapshots[k]), expected, `delivery order run ${run}`);
+    }
+  }
+});
