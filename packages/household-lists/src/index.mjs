@@ -71,6 +71,7 @@ function mergeItem(a, b, listPurge) {
 // midpoint gives concurrent moves distinct keys without moving other items.
 const POSITION_DIGITS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 function positionBetween(lower, upper) {
+  if (lower !== null && upper !== null && lex(lower, upper) >= 0) fail('Custom positions must be distinct and ordered.');
   let prefix = '';
   for (let i = 0; ; i++) {
     const low = i < (lower?.length ?? 0) ? POSITION_DIGITS.indexOf(lower[i]) : 0;
@@ -123,7 +124,7 @@ export function mergeLists(left, right) {
   };
   // A purged list needs only its own permanent marker; its cutoff also fences old items.
   if (!result.life.value && result.purge && compareStamps(result.life.stamp, result.purge) === 0) result.items = [];
-  return canonical(result);
+  return canonical(validate(result));
 }
 
 function validStamp(stamp) {
@@ -149,11 +150,20 @@ function validate(list) {
   validateRecord(list, listTypes);
   if (!Array.isArray(list.items) || !object(list.sections)) fail('Invalid items or sections in list file.');
   const ids = new Set();
+  const positions = new Set();
   for (const item of list.items) {
     validateRecord(item, itemTypes);
     if (own(item, 'pendingLife') && (!object(item.pendingLife) || typeof item.pendingLife.value !== 'boolean' || !validStamp(item.pendingLife.stamp) || !item.purge)) fail('Invalid pending item event in list file.');
     if (ids.has(item.id)) fail('Duplicate item ID in list file.');
     ids.add(item.id);
+    // Include recoverable Trash entries: restoring one must remain draggable.
+    // Engine-generated keys carry a unique stamp/ID suffix; tied imported keys
+    // have no representable midpoint and are refused rather than misordered.
+    if (Object.keys(item.fields).length && hasItemContent(item, list.purge)) {
+      const position = customPosition(item);
+      if (positions.has(position)) fail('Duplicate Custom position in list file.');
+      positions.add(position);
+    }
   }
   for (const entry of Object.values(list.sections)) {
     if (!object(entry) || (entry.value !== null && typeof entry.value !== 'string') || !validStamp(entry.stamp)) fail('Invalid section map entry in list file.');

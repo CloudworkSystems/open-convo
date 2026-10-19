@@ -170,8 +170,11 @@ Older snapshots may omit `customPosition`: the engine derives an initial key
 from `added`, so first use of Custom matches as-added without rewriting files.
 
 Position keys use `0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz`
-in ASCII order, are nonempty, and never end in `0`. Compare keys lexically;
-ID breaks ties. A move picks a fractional string between its neighbors and
+in ASCII order, are nonempty, and never end in `0`. Compare keys lexically.
+Keys must be distinct across active and recoverable Trash items. Loading,
+importing, or merging colliding keys is refused with `Duplicate Custom position
+in list file.` Engine-generated keys include a unique stamp/ID suffix and do
+not collide; external writers must preserve that uniqueness. A move picks a fractional string between its neighbors and
 appends a unique stamp/ID suffix. It never renumbers unaffected items or uses
 floating-point ranks, so repeated insertions do not exhaust numeric precision.
 The initial key/suffix encoding is `G`, fourteen lowercase hex digits of the
@@ -230,7 +233,7 @@ not reconstructed from an older copy. A future UI should present missing
 metadata with defaults (the list view already defaults name/sort).
 
 Serialization preserves snapshots exactly, including tombstones. Loading
-checks the schema, field types, IDs, duplicate item IDs, and stamps. Unknown
+checks the schema, field types, IDs, duplicate item IDs/Custom positions, and stamps. Unknown
 versions fail with `Unsupported schemaVersion; expected 1.` No migration is
 silently attempted. Importing clears local undo history for that list, since
 undoing an old snapshot after external changes would overwrite unseen work.

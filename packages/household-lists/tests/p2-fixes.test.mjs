@@ -142,3 +142,26 @@ test('suppressed post-purge edits cannot be restored or moved, but permit a full
   assert.equal(item.text, 'Whole new milk'); assert.equal(item.note, '');
   a.undo(id); assertDeleted(a.getList(id), 'milk');
 });
+
+test('duplicate Custom positions are refused atomically when loading or importing', () => {
+  const {a, id} = fixture(); const snapshot = a.getList(id);
+  snapshot.items.find(item => item.id === 'milk').fields.customPosition.value = 'A';
+  snapshot.items.find(item => item.id === 'apples').fields.customPosition.value = 'A';
+  assert.throws(() => deserializeList(JSON.stringify(snapshot)), /Duplicate Custom position/);
+  const before = a.getList(id);
+  assert.throws(() => a.importList(snapshot), /Duplicate Custom position/);
+  assert.deepEqual(a.getList(id), before);
+});
+
+test('merging individually valid files cannot introduce tied Custom positions', () => {
+  const {a, b, id} = fixture();
+  const x = a.getList(id), y = b.getList(id);
+  const milk = x.items.find(item => item.id === 'milk').fields.customPosition;
+  const apples = y.items.find(item => item.id === 'apples').fields.customPosition;
+  milk.value = 'A'; milk.stamp = {counter: 100, time: 100, device: 'a'};
+  apples.value = 'A'; apples.stamp = {counter: 100, time: 100, device: 'b'};
+  // Each file has exactly one item at A. Only the merged union collides.
+  deserializeList(JSON.stringify(x)); deserializeList(JSON.stringify(y));
+  assert.throws(() => mergeLists(x, y), /Duplicate Custom position/);
+  assert.throws(() => mergeLists(y, x), /Duplicate Custom position/);
+});
