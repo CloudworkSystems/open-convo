@@ -217,6 +217,36 @@ PR 2). In short:
 5. **Proof and owner trial.** A scripted kill-mid-reply proof (no duplicate
    replies, nothing resent, cut-off replies labeled), then a short checklist
    for the owner: talk, quit, reopen, continue.
+   *Built in PR 5 (October 18):* the proof
+   (`LocalKillMidReplyProofTests`). A test-only app,
+   `LocalConversationProofHost` (debug builds only, never bundled), runs the
+   app's own lane (`LocalConversationLane.makeCoordinator`: the real
+   coordinator and `OllamaClient`), the real host, router and encrypted
+   store, and a small page stand-in that saves each streamed event as the
+   Desk does. Ollama is a fake on a loopback port in the test process, so
+   it outlives each app and logs every request. Each round prepares a turn
+   with an earlier turn as context, starts it, and SIGKILLs the app at an
+   exact point, chosen by handshake, never by timing: before Ollama
+   answered, and after one, three or six saved pieces of the reply (with a
+   seventh in flight). A fresh app on the same folder then finds: the run
+   unknown to native (`exit-unrecorded`) with exactly the saved text, no
+   reply recorded twice, one `/api/chat` for it, and its leftover alias
+   swept at launch. Then the Desk's own recovery (Codex round 1 on #65):
+   until the owner closes the run, Retry is refused and Send waits, by the
+   Desk's rules (`canRetryLocalRun`, `busy`); the restored page's events
+   read answers `lost` `restarted` with no ending, which offers "Close as
+   unknown"; the saved closure keeps the text and changes nothing else,
+   and Send is free. Only then does Retry send exactly one new chat with
+   the same context and message, complete, and leave the closed run
+   unchanged. Those rules live in the Desk's TypeScript, so the stand-in
+   ports them and a Desk browser test (`local-conversation.test.mjs`)
+   shows the real page doing the same with a crashed run: Retry hidden and
+   Send disabled, "Close as unknown" saving the closure and showing "Reply
+   cut off", then Retry and Send making one new run. A graceful quit
+   mid-reply records `stopped` (`local-stop`), not cut off, deletes the
+   alias itself, and keeps one chat. Two rounds per moment by default
+   (`LOCAL_PROOF_ROUNDS` raises it). No product code changed; the package
+   gains the test-only app, and the dependency tripwire names it.
 
 ## Model Trial (October 15)
 

@@ -394,14 +394,19 @@ struct ProcessLauncherGateTests {
         // coordinator does not.
         #expect(dependencies["LocalModelRoute"] == ["DeskHost", "ParticipantProcess"])
         let localDependents = dependencies.filter { $0.value.contains("LocalModelRoute") }.keys.sorted()
-        #expect(localDependents == ["LocalModelRouteTests", "ParticipantAppWiring", "ParticipantProcessTests"], "\(localDependents)")
+        // Step 3 PR 5: the kill-mid-reply proof's app (test-only, debug
+        // builds only, never bundled) links it to reach the fake's port.
+        #expect(localDependents == ["LocalConversationProofHost", "LocalModelRouteTests", "ParticipantAppWiring", "ParticipantProcessTests"],
+                "\(localDependents)")
         // Step 3 PR 4b: the app's one lane. Exactly these modules, and only
         // the app (and this test target) link it. The Desk window kit and
         // the hosts still know no participant module.
         #expect(dependencies["ParticipantAppWiring"]
                     == ["DeskHost", "LocalModelRoute", "ParticipantCoordinator", "ParticipantProcess", "TrueConvoIdentity"])
         let wiringDependents = dependencies.filter { $0.value.contains("ParticipantAppWiring") }.keys.sorted()
-        #expect(wiringDependents == ["ParticipantProcessTests", "VoiceCursorMac"], "\(wiringDependents)")
+        // Besides the app, only tests: this target and the kill-mid-reply
+        // proof's app (step 3 PR 5), which runs the app's own lane.
+        #expect(wiringDependents == ["LocalConversationProofHost", "ParticipantProcessTests", "VoiceCursorMac"], "\(wiringDependents)")
         let appParticipantModules = (dependencies["VoiceCursorMac"] ?? []).filter { $0.hasPrefix("Participant") || $0 == "LocalModelRoute" }
         #expect(appParticipantModules == ["ParticipantAppWiring"], "the app links the lane wiring and nothing else of the participant path")
         for name in ["DeskWindowKit", "DeskHost", "DeskHostWebKit", "DeskBundleManifest"] {

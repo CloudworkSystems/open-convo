@@ -1,6 +1,6 @@
 # Status
 
-Updated October 16, 2026. The short version of where the build is. The full
+Updated October 18, 2026. The short version of where the build is. The full
 plan is in [PLAN.md](PLAN.md).
 
 ## Now
@@ -34,8 +34,9 @@ invented chats only, while the step 2 trial is pending. Scope:
 | PR 3c: Local start, alias lifecycle, lock and quit (inactive) | Merged (#50) |
 | PR 4a: Desk wiring: local model picker, context, reply, Stop, Retry (nothing turned on) | Merged (#54) |
 | PR 4b: Turn on the local route in the Mac app (True Convo Test only), default `qwen3:8b` | Merged (#61) |
-| PR 4c: Fake-Ollama host cases in the shared local vectors (26 cases, both sides) | In review |
-| PR 5: Proof and owner trial ([checklist](docs/plans/step-3-owner-trial.md)) | Not started |
+| PR 4c: Fake-Ollama host cases in the shared local vectors (26 cases, both sides) | Merged (#62) |
+| PR 5: Scripted kill-mid-reply proof | In review |
+| PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-3-owner-trial.md)) | Waiting on the owner |
 
 ## Done
 

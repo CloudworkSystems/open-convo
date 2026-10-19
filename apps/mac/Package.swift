@@ -147,6 +147,17 @@ let package = Package(
             dependencies: ["ParticipantSupervisorCore"],
             path: "Sources/ParticipantTestFakes/PausingSupervisor"
         ),
+        // Step 3, PR 5: the kill-mid-reply proof's app (the app's own lane,
+        // through the Desk's lane seam, its host and store, with the test's
+        // fake Ollama), which a test SIGKILLs mid-reply. Debug builds only
+        // (it reaches internals through @testable), never bundled, and kept
+        // under Tests/ so the Sources gates (no @testable, no HostRouter)
+        // still cover all product code.
+        .executableTarget(
+            name: "LocalConversationProofHost",
+            dependencies: ["DeskHost", "LocalModelRoute", "ParticipantAppWiring"],
+            path: "Tests/LocalConversationProofHost"
+        ),
         // Prints the shipping availability answer, run by a test with invented
         // environment, arguments, defaults and files.
         .executableTarget(
