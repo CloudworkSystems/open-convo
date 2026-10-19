@@ -150,6 +150,7 @@ function canonical(person) {
   };
 }
 const SHAPE_KEYS = ['kind', 'target', 'unit'];
+const TRACKER_KEYS = ['name', 'color', 'kind', 'target', 'unit', 'usualAmount', 'schedule', 'startedOn'];
 function trackerShapeValid(fields) {
   if (!object(fields) || !object(fields.kind) || !object(fields.target) || !object(fields.unit)) return false;
   const kind = fields.kind.value;
@@ -160,6 +161,9 @@ function trackerShapeValid(fields) {
   if (kind === 'count') return target === null || positive(target);
   return target === null;
 }
+function trackerComplete(fields) {
+  return TRACKER_KEYS.every(key => object(fields?.[key]) && validStamp(fields[key].stamp)) && trackerShapeValid(fields);
+}
 function shapeStamp(record) {
   let stamp = null;
   for (const key of SHAPE_KEYS) {
@@ -168,13 +172,19 @@ function shapeStamp(record) {
   }
   return stamp;
 }
-function shapeSurvivesPurge(record, purge) {
-  return SHAPE_KEYS.every(key => record?.fields?.[key] && compareStamps(record.fields[key].stamp, purge) > 0);
+function trackerSurvives(record, cutoff) {
+  return trackerComplete(record?.fields) && TRACKER_KEYS.every(key => compareStamps(record.fields[key].stamp, cutoff) > 0);
 }
-function resolveTrackerShape(merged, left, right, purge) {
-  if (!object(merged.fields) || Object.keys(merged.fields).length === 0 || trackerShapeValid(merged.fields)) return merged;
-  const candidates = [left, right].filter(record => trackerShapeValid(record?.fields) && shapeSurvivesPurge(record, purge));
-  if (candidates.length === 0) return merged;
+function tombstoneRecord(id, purge) {
+  return { id, fields: {}, life: { value: false, stamp: clone(purge) }, purge: clone(purge) };
+}
+function resolveTrackerShape(merged, left, right, parentPurge) {
+  const cutoff = latest(latest(left?.purge ?? null, right?.purge ?? null), parentPurge);
+  if (trackerComplete(merged.fields)) return merged;
+  const empty = !object(merged.fields) || Object.keys(merged.fields).length === 0;
+  if (empty && merged.life?.value !== true) return merged;
+  const candidates = [left, right].filter(record => trackerSurvives(record, cutoff));
+  if (candidates.length === 0) return cutoff ? tombstoneRecord(merged.id, cutoff) : merged;
   candidates.sort((one, two) => compareStamps(shapeStamp(two), shapeStamp(one)));
   const winner = candidates[0];
   const other = candidates[1];
@@ -182,6 +192,8 @@ function resolveTrackerShape(merged, left, right, purge) {
     fail('Conflicting values share a version stamp. Use a unique device ID per writer.');
   }
   for (const key of SHAPE_KEYS) merged.fields[key] = clone(winner.fields[key]);
+  for (const key of TRACKER_KEYS) if (!merged.fields[key]) merged.fields[key] = clone(winner.fields[key]);
+  if (!trackerComplete(merged.fields)) return cutoff ? tombstoneRecord(merged.id, cutoff) : merged;
   return merged;
 }
 function mergeRecord(a, b, parentPurge, withMembers) {

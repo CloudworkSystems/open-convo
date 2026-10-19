@@ -230,7 +230,8 @@ drops `date` from a live check-in fails at load with
 on its own when the result is a real tracker. When the separate winners would
 describe no real tracker (an amount tracker with an empty target, for
 example), the newer complete shape is kept as a group. A purged field is
-never copied back. The merged tracker can be edited again.
+never copied back. If the cutoff leaves no complete shape, the tracker becomes
+a purged marker. The merged tracker can be edited again.
 
 ## Undo
 

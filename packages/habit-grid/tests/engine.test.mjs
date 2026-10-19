@@ -690,6 +690,39 @@ test('concurrent shape edits stay a real tracker, and a lone target change still
   assert.equal(fields.target.value, 10);
   assert.equal(fields.kind.value, 'count');
   assert.equal(fields.name.value, 'From tablet');
+
+  const home = fixed('phone-a', 100);
+  const away = fixed('phone-b', 100);
+  const wiped = home.createPerson('River', { id: 'river' });
+  home.addTracker(wiped, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  away.importPerson(home.getPerson(wiped));
+  home.deleteTracker(wiped, 'water');
+  home.emptyTrash(wiped);
+  away.renamePerson(wiped, 'River two');
+  away.renamePerson(wiped, 'River three');
+  away.renamePerson(wiped, 'River four');
+  away.editTracker(wiped, 'water', { target: null });
+  const fenced = converges(home.getPerson(wiped), away.getPerson(wiped));
+  assert.deepEqual(fenced.trackers.find(item => item.id === 'water').fields, {});
+
+  const kept = fixed('phone-a', 100);
+  const partial = fixed('phone-b', 100);
+  const person = kept.createPerson('River', { id: 'river' });
+  kept.addTracker(person, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  partial.importPerson(kept.getPerson(person));
+  kept.deleteTracker(person, 'water');
+  kept.emptyTrash(person);
+  kept.addTracker(person, { name: 'Fresh water', kind: 'amount', target: 30, unit: 'minutes' }, { trackerId: 'water' });
+  partial.renamePerson(person, 'River two');
+  partial.renamePerson(person, 'River three');
+  partial.renamePerson(person, 'River four');
+  partial.renamePerson(person, 'River five');
+  partial.editTracker(person, 'water', { target: null });
+  const replaced = converges(kept.getPerson(person), partial.getPerson(person));
+  assert.equal(replaced.trackers[0].fields.kind.value, 'amount');
+  assert.equal(replaced.trackers[0].fields.target.value, 30);
+  assert.equal(replaced.trackers[0].fields.unit.value, 'minutes');
+  assert.equal(replaced.trackers[0].fields.name.value, 'Fresh water');
 });
 
 test('three-device histories converge under every delivery order', () => {
