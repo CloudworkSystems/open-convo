@@ -217,6 +217,26 @@ PR 2). In short:
 5. **Proof and owner trial.** A scripted kill-mid-reply proof (no duplicate
    replies, nothing resent, cut-off replies labeled), then a short checklist
    for the owner: talk, quit, reopen, continue.
+   *Built in PR 5 (October 18):* the proof
+   (`LocalKillMidReplyProofTests`). A test-only app,
+   `LocalConversationProofHost` (debug builds only, never bundled), runs the
+   app's own lane (`LocalConversationLane.makeCoordinator`: the real
+   coordinator and `OllamaClient`), the real host, router and encrypted
+   store, and a small page stand-in that saves each streamed event as the
+   Desk does. Ollama is a fake on a loopback port in the test process, so
+   it outlives each app and logs every request. Each round prepares a turn
+   with an earlier turn as context, starts it, and SIGKILLs the app at an
+   exact point, chosen by handshake, never by timing: before Ollama
+   answered, and after one, three or six saved pieces of the reply (with a
+   seventh in flight). A fresh app on the same folder then finds: the run
+   cut off (`unknown`, `exit-unrecorded`) with exactly the saved text, no
+   reply recorded twice, one `/api/chat` for it, and its leftover alias
+   swept at launch. Retry sends exactly one new chat with the same context
+   and message, completes, and leaves the old run unchanged. A graceful
+   quit mid-reply records `stopped` (`local-stop`), not cut off, deletes
+   the alias itself, and keeps one chat. Two rounds per moment by default
+   (`LOCAL_PROOF_ROUNDS` raises it). No product code changed; the package
+   gains the test-only app, and the dependency tripwire names it.
 
 ## Model Trial (October 15)
 
