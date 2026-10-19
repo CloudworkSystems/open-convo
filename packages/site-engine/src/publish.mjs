@@ -1,8 +1,11 @@
 import { randomBytes } from "node:crypto";
-import { lstat, mkdir, rename, realpath, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, rename, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { SiteEngineError } from "./errors.mjs";
+
+const MARKER_FILE = "site-engine.txt";
+const MARKER_TEXT = "Built by Open Convo Site Engine.\n";
 
 function isInside(parent, child) {
   const rel = path.relative(parent, child);
@@ -43,6 +46,7 @@ export async function publishSite(outPath, files, factsPath) {
   if (existing && !existing.isDirectory()) {
     throw new SiteEngineError("Output path is a file, not a folder.");
   }
+  if (existing?.isDirectory()) await assertEarlierBuild(destination);
 
   const scratch = await createScratch(realParent);
   let published = false;
@@ -56,12 +60,43 @@ export async function publishSite(outPath, files, factsPath) {
       await mkdir(path.dirname(target), { recursive: true });
       await writeFile(target, file.contents);
     }
+    await writeFile(path.join(scratch, MARKER_FILE), MARKER_TEXT);
     await replaceDirectory(scratch, destination, existing !== null);
     published = true;
   } catch (error) {
     if (!published) await rm(scratch, { recursive: true, force: true });
     if (error instanceof SiteEngineError) throw error;
     throw new SiteEngineError("Output folder could not be written.");
+  }
+}
+
+async function assertEarlierBuild(destination) {
+  let names;
+  try {
+    names = await readdir(destination);
+  } catch {
+    throw new SiteEngineError("Output folder could not be opened.");
+  }
+  if (names.length === 0) return;
+
+  const markerPath = path.join(destination, MARKER_FILE);
+  let info;
+  try {
+    info = await lstat(markerPath);
+  } catch {
+    throw new SiteEngineError(`Output folder is not an earlier Site Engine build: ${path.basename(destination)}`);
+  }
+  if (info.isSymbolicLink() || !info.isFile()) {
+    throw new SiteEngineError(`Output folder is not an earlier Site Engine build: ${path.basename(destination)}`);
+  }
+  let text;
+  try {
+    text = await readFile(markerPath, "utf8");
+  } catch {
+    throw new SiteEngineError(`Output folder is not an earlier Site Engine build: ${path.basename(destination)}`);
+  }
+  if (text !== MARKER_TEXT) {
+    throw new SiteEngineError(`Output folder is not an earlier Site Engine build: ${path.basename(destination)}`);
   }
 }
 
