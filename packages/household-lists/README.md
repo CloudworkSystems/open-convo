@@ -56,6 +56,11 @@ ones; dropping tombstones would break the offline-deletion guarantee.
 - `addItem(id, fields, {itemId}?)` returns a permanent item ID. `text` is
   required; optional `quantity`, `note`, `section`, `addedBy` default to empty
   strings and `checked` defaults to false. All strings are preserved exactly.
+- `moveItem(id, itemId, {beforeId = null}?)` changes only that item's Custom
+  position: move before another active item, or omit `beforeId` to move to the
+  end. Select `setSort(id, 'custom')` to display the saved order. Moves can be
+  saved while another sort is displayed; they never change the as-added order.
+  Missing/deleted targets and moving before oneself are refused atomically.
 - `editItem(id, itemId, fields)` updates only supplied fields;
   `setChecked(id, itemId, boolean)` changes checking independently of text.
 - `deleteItem(id, itemId)` moves to Trash; `restoreItem(id, itemId)` restores
@@ -89,14 +94,25 @@ ones; dropping tombstones would break the offline-deletion guarantee.
 - `emptyTrash(id)` permanently removes the list's recoverable deleted items;
   if the list itself is deleted, it removes all list content instead.
 
-Sort settings are `alphabetical` (default), `section`, and `added`.
+Sort settings are `alphabetical` (default), `section`, `added`, and `custom`.
 `SORT_ORDERS` lists the library's supported orders; use a list view's
 `availableSortOrders` for the orders currently offered to that list. Selecting
 `section` while disabled throws a plain error. Switching sections off when
-`section` is saved uses an effective `alphabetical` fallback without changing
-the saved sort register. Switching back on resumes that saved order and the
-saved sections/map. An explicit `setSort` replaces the saved preference.
-Disabling sections leaves an existing `added` or `alphabetical` sort in effect.
+`section` is saved writes `sort: 'alphabetical'` with the toggle's stamp.
+Switching back on restores saved sections/map but **leaves A-to-Z saved**;
+select section sort explicitly to use it again. Undo of the toggle restores
+both settings. The view still provides an alphabetical fallback for legacy or
+concurrently merged snapshots that combine sections-off with a section sort.
+Disabling sections leaves `added`, `alphabetical`, or `custom` sorting alone.
+
+Custom starts in the as-added order and appends new items after the last saved
+position, including recoverable Trash items. Moves survive text/check edits,
+Trash/restore, switching sorts, saving/loading and undo. Each move stamps one
+item's position: different items' moves both survive merge, and higher stamps
+win for the same item. Concurrent insertions into the same gap use distinct
+position keys; their deterministic key order settles their relative placement.
+Offline moves refer to the positions known on that phone, so a concurrent move
+of their target need not preserve adjacency after merge.
 Alphabetical keys ignore Unicode combining accents, case and a leading numeric
 quantity (integers, decimals, fractions, optional `x`/`×`). These keys are only
 for comparison: stored text is never rewritten. Section names sort
@@ -146,9 +162,27 @@ so distinct additions survive together. A null value is an undo removal of a
 custom override (revealing the starter word, if any).
 
 Each `items` entry is `{id, life, purge, fields}`. Its fields are `text`,
-`quantity`, `note`, `section`, `addedBy`, `checked`, and `added`; the last is a
-stamp-valued register containing the original birth stamp. Each list/item's
-`life` is a boolean register: true means present, false means deleted.
+`quantity`, `note`, `section`, `addedBy`, `checked`, `added`, and `customPosition`.
+`added` is a stamp-valued register containing the original birth stamp.
+`customPosition` is an engine-managed string-valued register; neither it nor
+`added` can be supplied to add/edit. Both are omitted from the plain item view.
+Older snapshots may omit `customPosition`: the engine derives an initial key
+from `added`, so first use of Custom matches as-added without rewriting files.
+
+Position keys use `0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz`
+in ASCII order, are nonempty, and never end in `0`. Compare keys lexically;
+ID breaks ties. A move picks a fractional string between its neighbors and
+appends a unique stamp/ID suffix. It never renumbers unaffected items or uses
+floating-point ranks, so repeated insertions do not exhaust numeric precision.
+The initial key/suffix encoding is `G`, fourteen lowercase hex digits of the
+counter, fourteen hex digits of `time + Number.MAX_SAFE_INTEGER` (integer
+arithmetic), device text, ID text, and `V`. Encode each text as a sequence of
+`1` plus four hex digits per UTF-16 code unit, terminated by `0`. This preserves
+the birth stamp's counter/time/device/ID order, including clock skew and Unicode
+IDs. New additions use that initial key when it is beyond the last known
+position; otherwise they allocate a fractional key after the last position.
+
+Each list/item's `life` is a boolean register: true means present, false means deleted.
 Every local item edit also writes true to item and list life. List settings
 write true to list life; deletion writes false. Highest stamp wins per
 register. This preserves simultaneous check and text edits and lets a later
@@ -172,7 +206,22 @@ A purged list keeps `schemaVersion`, `id`, false `life`, `purge`, empty
 `fields`, empty `sections`, and empty `items`. Its cutoff also fences all older
 item content. During merge only fields with stamps above the relevant item/list
 cutoff survive. An old offline copy cannot restore that content or put it back
-in recoverable Trash. Cutoffs are never compacted or removed in this slice.
+in recoverable Trash. A purged item stays deleted unless **both** its text and
+birth (`added`) registers are newer than the cutoff: only a full re-add restores
+it. A later check, note, text-only edit, or Custom move cannot create a blank
+row or a partial item. This also applies to purges created by undoing an add.
+
+When post-purge edits lack full content, the item keeps `life: false` stamped
+at the cutoff. An optional boolean register `pendingLife` preserves the latest
+post-purge event, and `fields` retain only registers above the cutoff. These
+are sync metadata, not a recoverable Trash entry; views hide them in both active
+items and Trash, and restore/edit/move is refused. Merging always compares
+`pendingLife ?? life` before deriving whether full content exists. Retaining
+these newer registers prevents delivery order from changing the result when a
+third copy supplies a full re-add. The logical clock observes pending event
+stamps as well. `addItem` may replace this suppressed entry with fresh complete
+content, and emptying Trash again erases pending edits with a newer cutoff.
+Cutoffs are never compacted or removed in this slice.
 A deliberate fresh `addItem` may reuse an emptied item's permanent `itemId`
 with new text and defaults; it retains the cutoff. A purged list can similarly
 be reactivated by a later rename/new item; erased fields stay erased. New
@@ -215,4 +264,7 @@ words, atomic invalid operations, immutable returned snapshots, explicit re-add,
 self merge, deterministic three-device histories under all delivery orders,
 concurrent undo versus offline edits/deletions, structural stamp comparison,
 multi-word suggestions, sections off/on with sort fallback, toggle persistence/
-merge/undo/legacy defaults, and concurrent equal-counter clock skew.
+merge/undo/legacy defaults, concurrent equal-counter clock skew, higher-stamp
+offline checks against purges/undone additions, three-copy re-add delivery
+orders, all of plan test 4 for Custom (including move conflicts and undo),
+repeated insertion into the same gap, and saving A-to-Z when sections turn off.

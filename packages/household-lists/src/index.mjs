@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 export const SCHEMA_VERSION = 1;
-export const SORT_ORDERS = Object.freeze(['alphabetical', 'section', 'added']);
+export const SORT_ORDERS = Object.freeze(['alphabetical', 'section', 'added', 'custom']);
 export const STARTER_SECTIONS = Object.freeze({
   apple: 'produce', apples: 'produce', banana: 'produce', bananas: 'produce',
   carrot: 'produce', carrots: 'produce', milk: 'dairy', cheese: 'dairy',
@@ -43,14 +43,58 @@ function records(a, b, purge = null) {
   }
   return result;
 }
+// After a purge, only a complete new add (text and birth stamp) can restore
+// an item. Checking, notes and moves alone must never create a blank row.
+function hasItemContent(item, listPurge = null) {
+  const purge = latest(item.purge, listPurge);
+  return !purge || (compareStamps(item.fields.text?.stamp, purge) > 0 &&
+    compareStamps(item.fields.added?.stamp, purge) > 0);
+}
 function mergeItem(a, b, listPurge) {
   if (!a) a = {id: b.id, fields: {}, life: b.life, purge: null};
   if (!b) b = {id: a.id, fields: {}, life: a.life, purge: null};
   const ownPurge = latest(a.purge, b.purge);
   const purge = latest(ownPurge, listPurge);
-  const life = register(a.life, b.life);
-  if (compareStamps(life.stamp, purge) <= 0) return {id: a.id, fields: {}, life: {value: false, stamp: clone(purge)}, purge: clone(purge)};
-  return {id: a.id, fields: records(a.fields, b.fields, purge), life, purge: clone(ownPurge)};
+  const life = register(a.pendingLife ?? a.life, b.pendingLife ?? b.life);
+  const marker = {id: a.id, fields: {}, life: {value: false, stamp: clone(purge)}, purge: clone(purge)};
+  if (compareStamps(life.stamp, purge) <= 0) return marker;
+  const result = {id: a.id, fields: records(a.fields, b.fields, purge), life, purge: clone(ownPurge)};
+  if (purge && !hasItemContent(result, listPurge)) {
+    // Retain post-purge registers and the latest event for later full re-adds.
+    // Discarding them here would make a three-copy merge order-dependent.
+    return {...marker, fields: result.fields, pendingLife: life};
+  }
+  return result;
+}
+
+// Dense, ASCII-ordered position keys. Appending a unique stamp suffix to a
+// midpoint gives concurrent moves distinct keys without moving other items.
+const POSITION_DIGITS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+function positionBetween(lower, upper) {
+  let prefix = '';
+  for (let i = 0; ; i++) {
+    const low = i < (lower?.length ?? 0) ? POSITION_DIGITS.indexOf(lower[i]) : 0;
+    const high = i < (upper?.length ?? 0) ? POSITION_DIGITS.indexOf(upper[i]) : 61;
+    if (high - low > 1) return prefix + POSITION_DIGITS[Math.floor((low + high) / 2)];
+    prefix += POSITION_DIGITS[low];
+    if (low < high) upper = null;
+  }
+}
+function stampPosition(stamp, id) {
+  const hex = value => value.toString(16).padStart(14, '0');
+  // A leading 1 on each code unit and a 0 terminator preserve prefix order.
+  const text = value => value.split('').map(char => '1' + char.charCodeAt(0).toString(16).padStart(4, '0')).join('') + '0';
+  return 'G' + hex(BigInt(stamp.counter)) + hex(BigInt(stamp.time) + BigInt(Number.MAX_SAFE_INTEGER)) + text(stamp.device) + text(id) + 'V';
+}
+function customPosition(item) {
+  return item.fields.customPosition?.value ?? stampPosition(item.fields.added?.value ?? item.life.stamp, item.id);
+}
+const compareCustom = (a, b) => lex(customPosition(a), customPosition(b)) || lex(a.id, b.id);
+function appendPosition(list, stamp, itemId) {
+  const birth = stampPosition(stamp, itemId);
+  const last = list.items.filter(item => hasItemContent(item, list.purge) && Object.keys(item.fields).length)
+    .map(customPosition).sort().at(-1);
+  return !last || lex(birth, last) > 0 ? birth : positionBetween(last, null) + birth;
 }
 function canonical(list) {
   const result = clone(list);
@@ -86,14 +130,14 @@ function validStamp(stamp) {
   return object(stamp) && Number.isSafeInteger(stamp.counter) && stamp.counter > 0 &&
     Number.isSafeInteger(stamp.time) && typeof stamp.device === 'string' && stamp.device.length > 0;
 }
-const itemTypes = {text: 'string', quantity: 'string', note: 'string', section: 'string', addedBy: 'string', checked: 'boolean', added: 'stamp'};
+const itemTypes = {text: 'string', quantity: 'string', note: 'string', section: 'string', addedBy: 'string', checked: 'boolean', added: 'stamp', customPosition: 'position'};
 const listTypes = {name: 'string', sort: 'sort', sectionsEnabled: 'boolean'};
 function validateFields(fields, types) {
   if (!object(fields)) fail('Invalid fields in list file.');
   for (const [key, entry] of Object.entries(fields)) {
     if (!own(types, key) || !object(entry) || !validStamp(entry.stamp)) fail('Invalid field or version stamp in list file.');
     const type = types[key];
-    if (type === 'stamp' ? !validStamp(entry.value) : type === 'sort' ? !SORT_ORDERS.includes(entry.value) : typeof entry.value !== type) fail('Invalid field value in list file.');
+    if (type === 'position' ? !(typeof entry.value === 'string' && /^[0-9A-Za-z]+$/.test(entry.value) && !entry.value.endsWith('0')) : type === 'stamp' ? !validStamp(entry.value) : type === 'sort' ? !SORT_ORDERS.includes(entry.value) : typeof entry.value !== type) fail('Invalid field value in list file.');
   }
 }
 function validateRecord(record, types) {
@@ -107,6 +151,7 @@ function validate(list) {
   const ids = new Set();
   for (const item of list.items) {
     validateRecord(item, itemTypes);
+    if (own(item, 'pendingLife') && (!object(item.pendingLife) || typeof item.pendingLife.value !== 'boolean' || !validStamp(item.pendingLife.stamp) || !item.purge)) fail('Invalid pending item event in list file.');
     if (ids.has(item.id)) fail('Duplicate item ID in list file.');
     ids.add(item.id);
   }
@@ -125,14 +170,14 @@ function stamps(list) {
   const result = [list.life.stamp, list.purge];
   for (const entry of [...Object.values(list.fields), ...Object.values(list.sections)]) result.push(entry.stamp);
   for (const item of list.items) {
-    result.push(item.life.stamp, item.purge);
+    result.push(item.life.stamp, item.purge, item.pendingLife?.stamp);
     for (const entry of Object.values(item.fields)) { result.push(entry.stamp); if (validStamp(entry.value)) result.push(entry.value); }
   }
   return result.filter(Boolean);
 }
 const values = fields => Object.fromEntries(Object.entries(fields).map(([key, entry]) => [key, clone(entry.value)]));
 function itemView(item) {
-  const {added, ...fields} = values(item.fields);
+  const {added, customPosition, ...fields} = values(item.fields);
   return {id: item.id, ...fields};
 }
 export function viewList(list, {trash = false} = {}) {
@@ -140,10 +185,10 @@ export function viewList(list, {trash = false} = {}) {
   const fields = values(list.fields);
   const sectionsEnabled = fields.sectionsEnabled ?? false;
   const sort = !sectionsEnabled && fields.sort === 'section' ? 'alphabetical' : fields.sort ?? 'alphabetical';
-  const items = list.items.filter(item => item.life.value !== trash && Object.keys(item.fields).length).slice();
+  const items = list.items.filter(item => item.life.value !== trash && hasItemContent(item, list.purge) && Object.keys(item.fields).length).slice();
   const order = (a, b) => compareStamps(a.fields.added?.value, b.fields.added?.value) || lex(a.id, b.id);
   const alpha = (a, b) => lex(sortKey(a.fields.text?.value ?? ''), sortKey(b.fields.text?.value ?? '')) || order(a, b);
-  items.sort(sort === 'added' ? order : sort === 'section' ? (a, b) => {
+  items.sort(sort === 'custom' ? compareCustom : sort === 'added' ? order : sort === 'section' ? (a, b) => {
     const sa = normalized(a.fields.section?.value ?? '').trim();
     const sb = normalized(b.fields.section?.value ?? '').trim();
     return lex(!sa, !sb) || lex(sa, sb) || alpha(a, b);
@@ -202,6 +247,7 @@ export class HouseholdLists {
     if (typeof enabled !== 'boolean') fail('Sections enabled must be a boolean.');
     return this.#change(id, (list, stamp) => {
       list.fields.sectionsEnabled = {value: enabled, stamp};
+      if (!enabled && list.fields.sort?.value === 'section') list.fields.sort = {value: 'alphabetical', stamp};
       list.life = {value: true, stamp};
     });
   }
@@ -225,10 +271,10 @@ export class HouseholdLists {
     if (!own(fields, 'text')) fail('Item text is required.');
     this.#change(id, (list, stamp) => {
       const existing = list.items.findIndex(item => item.id === itemId);
-      if (existing >= 0 && Object.keys(list.items[existing].fields).length) fail('Item ID already exists; restore the existing item.');
+      if (existing >= 0 && hasItemContent(list.items[existing], list.purge) && Object.keys(list.items[existing].fields).length) fail('Item ID already exists; restore the existing item.');
       const purge = existing >= 0 ? list.items[existing].purge : null;
       if (existing >= 0) list.items.splice(existing, 1);
-      const data = {text: fields.text, quantity: '', note: '', section: '', addedBy: '', checked: false, ...fields, added: stamp};
+      const data = {text: fields.text, quantity: '', note: '', section: '', addedBy: '', checked: false, ...fields, added: stamp, customPosition: appendPosition(list, stamp, itemId)};
       list.items.push({id: itemId, life: {value: true, stamp}, purge, fields: Object.fromEntries(Object.entries(data).map(([key, value]) => [key, {value, stamp}]))});
       list.life = {value: true, stamp};
     });
@@ -237,23 +283,38 @@ export class HouseholdLists {
   #checkItemFields(fields) {
     if (!object(fields)) fail('Item fields must be an object.');
     for (const [key, value] of Object.entries(fields)) {
-      if (!own(itemTypes, key) || key === 'added' || typeof value !== itemTypes[key]) fail('Invalid item field.');
+      if (!own(itemTypes, key) || (key === 'added' || key === 'customPosition') || typeof value !== itemTypes[key]) fail('Invalid item field.');
     }
   }
   editItem(id, itemId, fields) {
     this.#checkItemFields(fields);
     return this.#change(id, (list, stamp) => {
       const item = list.items.find(item => item.id === itemId) ?? fail('Item not found.');
-      if (item.purge && !Object.keys(item.fields).length) fail('Item was emptied from Trash; add a new item.');
+      if (item.purge && (!hasItemContent(item, list.purge) || !Object.keys(item.fields).length)) fail('Item was emptied from Trash; add a new item.');
       for (const [key, value] of Object.entries(fields)) item.fields[key] = {value, stamp};
       item.life = {value: true, stamp}; list.life = {value: true, stamp};
+    });
+  }
+  moveItem(id, itemId, {beforeId = null} = {}) {
+    return this.#change(id, (list, stamp) => {
+      const items = list.items.filter(item => item.life.value && hasItemContent(item, list.purge) && Object.keys(item.fields).length).sort(compareCustom);
+      const item = items.find(item => item.id === itemId) ?? fail('Active item not found.');
+      if (beforeId === itemId) fail('An item cannot be moved before itself.');
+      const remaining = items.filter(item => item.id !== itemId);
+      const index = beforeId === null ? remaining.length : remaining.findIndex(item => item.id === beforeId);
+      if (index < 0) fail('Move target not found.');
+      const lower = index ? customPosition(remaining[index - 1]) : null;
+      const upper = index < remaining.length ? customPosition(remaining[index]) : null;
+      item.fields.customPosition = {value: positionBetween(lower, upper) + stampPosition(stamp, itemId), stamp};
+      item.life = {value: true, stamp};
+      list.life = {value: true, stamp};
     });
   }
   setChecked(id, itemId, checked) { return this.editItem(id, itemId, {checked}); }
   deleteItem(id, itemId) {
     return this.#change(id, (list, stamp) => {
       const item = list.items.find(item => item.id === itemId) ?? fail('Item not found.');
-      if (!Object.keys(item.fields).length) fail('Item was emptied from Trash.');
+      if (!hasItemContent(item, list.purge) || !Object.keys(item.fields).length) fail('Item was emptied from Trash.');
       item.life = {value: false, stamp}; list.life = {value: true, stamp};
     });
   }
@@ -269,7 +330,7 @@ export class HouseholdLists {
         list.fields = {}; list.sections = {}; list.items = []; list.purge = stamp; list.life = {value: false, stamp};
       } else {
         for (const item of list.items) if (!item.life.value) {
-          item.fields = {}; item.purge = stamp; item.life = {value: false, stamp};
+          item.fields = {}; item.purge = stamp; item.life = {value: false, stamp}; delete item.pendingLife;
         }
       }
     });
@@ -316,17 +377,18 @@ export class HouseholdLists {
     for (const item of after.items) {
       const previous = previousItems.get(item.id);
       const target = targets.get(item.id);
-      if (!previous || (!Object.keys(previous.fields).length && Object.keys(item.fields).length)) {
+      if (!previous || ((!hasItemContent(previous, before.purge) || !Object.keys(previous.fields).length) && Object.keys(item.fields).length)) {
         target.fields = {};
         target.life = {value: false, stamp};
         target.purge = stamp;
+        delete target.pendingLife;
         continue;
       }
       if (compareStamps(previous.life.stamp, item.life.stamp)) {
         target.life = compensate(previous.life, item.life, target.life);
       }
       undoFields(target.fields, previous.fields, item.fields, {
-        text: '', quantity: '', note: '', section: '', addedBy: '', checked: false,
+        text: '', quantity: '', note: '', section: '', addedBy: '', checked: false, customPosition: customPosition(previous),
       });
     }
     history.pop();
