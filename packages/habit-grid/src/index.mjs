@@ -149,6 +149,41 @@ function canonical(person) {
     restDays: person.restDays.map(record => canonicalRecord(record, false)).sort(byId),
   };
 }
+const SHAPE_KEYS = ['kind', 'target', 'unit'];
+function trackerShapeValid(fields) {
+  if (!object(fields) || !object(fields.kind) || !object(fields.target) || !object(fields.unit)) return false;
+  const kind = fields.kind.value;
+  const target = fields.target.value;
+  const unit = fields.unit.value;
+  if (!KINDS.includes(kind) || typeof unit !== 'string') return false;
+  if (kind === 'amount') return positive(target) && unit.length > 0;
+  if (kind === 'count') return target === null || positive(target);
+  return target === null;
+}
+function shapeStamp(record) {
+  let stamp = null;
+  for (const key of SHAPE_KEYS) {
+    const entry = record?.fields?.[key];
+    if (entry?.stamp) stamp = latest(stamp, entry.stamp);
+  }
+  return stamp;
+}
+function shapeSurvivesPurge(record, purge) {
+  return SHAPE_KEYS.every(key => record?.fields?.[key] && compareStamps(record.fields[key].stamp, purge) > 0);
+}
+function resolveTrackerShape(merged, left, right, purge) {
+  if (!object(merged.fields) || Object.keys(merged.fields).length === 0 || trackerShapeValid(merged.fields)) return merged;
+  const candidates = [left, right].filter(record => trackerShapeValid(record?.fields) && shapeSurvivesPurge(record, purge));
+  if (candidates.length === 0) return merged;
+  candidates.sort((one, two) => compareStamps(shapeStamp(two), shapeStamp(one)));
+  const winner = candidates[0];
+  const other = candidates[1];
+  if (other && compareStamps(shapeStamp(winner), shapeStamp(other)) === 0 && SHAPE_KEYS.some(key => !sameValue(winner.fields[key].value, other.fields[key].value))) {
+    fail('Conflicting values share a version stamp. Use a unique device ID per writer.');
+  }
+  for (const key of SHAPE_KEYS) merged.fields[key] = clone(winner.fields[key]);
+  return merged;
+}
 function mergeRecord(a, b, parentPurge, withMembers) {
   if (!a) a = { id: b.id, fields: {}, life: b.life, purge: null, ...(withMembers ? { members: {} } : {}) };
   if (!b) b = { id: a.id, fields: {}, life: a.life, purge: null, ...(withMembers ? { members: {} } : {}) };
@@ -164,11 +199,16 @@ function mergeRecord(a, b, parentPurge, withMembers) {
   if (withMembers) result.members = records(a.members ?? {}, b.members ?? {}, purge);
   return result;
 }
-function mergeCollection(left, right, parentPurge, withMembers) {
+function mergeCollection(left, right, parentPurge, withMembers, resolveShape = false) {
   const ids = [...new Set([...left, ...right].map(record => record.id))].sort();
   const a = new Map(left.map(record => [record.id, record]));
   const b = new Map(right.map(record => [record.id, record]));
-  return ids.map(id => mergeRecord(a.get(id), b.get(id), parentPurge, withMembers));
+  return ids.map(id => {
+    const leftRecord = a.get(id);
+    const rightRecord = b.get(id);
+    const merged = mergeRecord(leftRecord, rightRecord, parentPurge, withMembers);
+    return resolveShape ? resolveTrackerShape(merged, leftRecord, rightRecord, parentPurge) : merged;
+  });
 }
 
 /** Pure, commutative merge of two copies of the same person file. Neither input changes. */
@@ -183,7 +223,7 @@ export function mergePeople(left, right) {
     life: compareStamps(life.stamp, purge) <= 0 ? { value: false, stamp: clone(purge) } : life,
     purge: clone(purge),
     fields: records(left.fields, right.fields, purge),
-    trackers: mergeCollection(left.trackers, right.trackers, purge, false),
+    trackers: mergeCollection(left.trackers, right.trackers, purge, false, true),
     stacks: mergeCollection(left.stacks, right.stacks, purge, true),
     checkIns: mergeCollection(left.checkIns, right.checkIns, purge, false),
     restDays: mergeCollection(left.restDays, right.restDays, purge, false),
@@ -247,9 +287,18 @@ function validateFields(fields, types) {
     if (!types[key](entry.value)) fail('Invalid field value in person file.');
   }
 }
-function validateRecord(record, types, withMembers) {
+function contentBearing(record, withMembers) {
+  if (record.life.value) return true;
+  if (object(record.fields) && Object.keys(record.fields).length > 0) return true;
+  return withMembers && object(record.members) && Object.keys(record.members).length > 0;
+}
+function validateRecord(record, types, withMembers, checkShape = false) {
   if (!object(record) || typeof record.id !== 'string' || !record.id || !object(record.life) || typeof record.life.value !== 'boolean' || !validStamp(record.life.stamp) || (record.purge !== null && !validStamp(record.purge))) fail('Invalid record in person file.');
   validateFields(record.fields, types);
+  if (contentBearing(record, withMembers)) {
+    for (const key of Object.keys(types)) if (!own(record.fields, key)) fail('Incomplete record in person file.');
+    if (checkShape && !trackerShapeValid(record.fields)) fail('Invalid tracker shape in person file.');
+  }
   if (withMembers) {
     if (!object(record.members)) fail('Invalid stack members in person file.');
     for (const [key, entry] of Object.entries(record.members)) {
@@ -268,14 +317,14 @@ function validate(person) {
   if (!object(person) || person.schemaVersion !== SCHEMA_VERSION) fail(`Unsupported schemaVersion; expected ${SCHEMA_VERSION}.`);
   if (typeof person.id !== 'string' || !person.id || !object(person.life) || typeof person.life.value !== 'boolean' || !validStamp(person.life.stamp) || (person.purge !== null && !validStamp(person.purge))) fail('Invalid record in person file.');
   validateFields(person.fields, personFieldTypes);
-  for (const [key, label, types, withMembers] of [
-    ['trackers', 'tracker', trackerFieldTypes, false],
-    ['stacks', 'stack', stackFieldTypes, true],
-    ['checkIns', 'check-in', checkInFieldTypes, false],
-    ['restDays', 'rest day', restFieldTypes, false],
+  for (const [key, label, types, withMembers, checkShape] of [
+    ['trackers', 'tracker', trackerFieldTypes, false, true],
+    ['stacks', 'stack', stackFieldTypes, true, false],
+    ['checkIns', 'check-in', checkInFieldTypes, false, false],
+    ['restDays', 'rest day', restFieldTypes, false, false],
   ]) {
     if (!Array.isArray(person[key])) fail(`Invalid ${label} records in person file.`);
-    for (const record of person[key]) validateRecord(record, types, withMembers);
+    for (const record of person[key]) validateRecord(record, types, withMembers, checkShape);
     uniqueIds(person[key], label);
   }
   return person;
@@ -353,9 +402,11 @@ function shadeOf(value, target, highest) {
 function valuesFor(person, trackerId) {
   const values = new Map();
   for (const checkIn of person.checkIns) {
-    if (!checkIn.life.value || !present(checkIn) || checkIn.fields.trackerId.value !== trackerId) continue;
-    const date = checkIn.fields.date.value;
-    values.set(date, round6((values.get(date) ?? 0) + checkIn.fields.value.value));
+    if (!checkIn.life.value || !present(checkIn) || checkIn.fields.trackerId?.value !== trackerId) continue;
+    const date = checkIn.fields.date?.value;
+    const amount = checkIn.fields.value?.value;
+    if (!validDate(date) || !nonNegative(amount)) continue;
+    values.set(date, round6((values.get(date) ?? 0) + amount));
   }
   return values;
 }
@@ -363,9 +414,11 @@ function restsFor(person, trackerId) {
   const dates = new Set();
   for (const rest of person.restDays) {
     if (!rest.life.value || !present(rest)) continue;
-    const target = rest.fields.trackerId.value;
+    const target = rest.fields.trackerId?.value;
+    const date = rest.fields.date?.value;
+    if (!validDate(date)) continue;
     if (target && target !== trackerId) continue;
-    dates.add(rest.fields.date.value);
+    dates.add(date);
   }
   return dates;
 }

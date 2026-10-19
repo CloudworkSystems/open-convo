@@ -556,6 +556,23 @@ test('10. saving and loading round-trips, and an unknown schemaVersion is refuse
   const malformed = structuredClone(before);
   malformed.checkIns[0].fields.value.value = 'many';
   assert.throws(() => deserializePerson(JSON.stringify(malformed)), /Invalid field value/);
+  const missingDate = structuredClone(before);
+  delete missingDate.checkIns[0].fields.date;
+  assert.throws(() => deserializePerson(JSON.stringify(missingDate)), /Incomplete record in person file/);
+  assert.throws(() => engine.importPerson(missingDate), /Incomplete record in person file/);
+  const missingKind = structuredClone(before);
+  delete missingKind.trackers[0].fields.kind;
+  assert.throws(() => deserializePerson(JSON.stringify(missingKind)), /Incomplete record in person file/);
+  const impossible = structuredClone(before);
+  impossible.trackers[0].fields.kind.value = 'amount';
+  impossible.trackers[0].fields.target.value = null;
+  impossible.trackers[0].fields.unit.value = 'minutes';
+  assert.throws(() => deserializePerson(JSON.stringify(impossible)), /Invalid tracker shape in person file/);
+  const purged = structuredClone(before);
+  purged.checkIns[0].fields = {};
+  purged.checkIns[0].life = { value: false, stamp: purged.checkIns[0].life.stamp };
+  purged.checkIns[0].purge = purged.checkIns[0].life.stamp;
+  assert.equal(deserializePerson(JSON.stringify(purged)).checkIns[0].fields.date, undefined);
   const voiced = structuredClone(before);
   voiced.checkIns[0].fields.source.value = 'voice';
   const loaded = deserializePerson(JSON.stringify(voiced));
@@ -628,6 +645,51 @@ test('prototype-like IDs, hostile text, purge re-add and stamp key order stay pl
   const corrupt = structuredClone(original);
   corrupt.trackers[0].fields.name.value = 'Changed without a new stamp';
   assert.throws(() => mergePeople(original, corrupt), /Conflicting values/);
+});
+
+test('concurrent shape edits stay a real tracker, and a lone target change still merges by stamp', () => {
+  const phone = fixed('phone-a', 100);
+  const tablet = fixed('phone-b', 100);
+  const id = phone.createPerson('River', { id: 'river' });
+  phone.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  tablet.importPerson(phone.getPerson(id));
+  phone.editTracker(id, 'water', { kind: 'amount', target: 30, unit: 'minutes' });
+  tablet.editTracker(id, 'water', { target: null });
+  const merged = converges(phone.getPerson(id), tablet.getPerson(id));
+  const shape = merged.trackers[0].fields;
+  assert.equal(shape.kind.value, 'count');
+  assert.equal(shape.target.value, null);
+  assert.equal(shape.unit.value, 'glasses');
+  const editor = fixed('phone-c', 100);
+  editor.importPerson(merged);
+  editor.editTracker(id, 'water', { name: 'Still editable' });
+  assert.equal(editor.view(id).trackers[0].name, 'Still editable');
+  assert.equal(editor.view(id).trackers[0].kind, 'count');
+
+  const rewritten = fixed('phone-a', 100);
+  const clearing = fixed('phone-b', 100);
+  const again = rewritten.createPerson('River', { id: 'river' });
+  rewritten.addTracker(again, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  clearing.importPerson(rewritten.getPerson(again));
+  clearing.editTracker(again, 'water', { target: null });
+  rewritten.importPerson(clearing.getPerson(again));
+  rewritten.editTracker(again, 'water', { kind: 'amount', target: 30, unit: 'minutes' });
+  const newerShape = converges(rewritten.getPerson(again), clearing.getPerson(again));
+  assert.equal(newerShape.trackers[0].fields.kind.value, 'amount');
+  assert.equal(newerShape.trackers[0].fields.target.value, 30);
+  assert.equal(newerShape.trackers[0].fields.unit.value, 'minutes');
+
+  const later = fixed('phone-a', 100);
+  const other = fixed('phone-b', 100);
+  const plain = later.createPerson('River', { id: 'river' });
+  later.addTracker(plain, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  other.importPerson(later.getPerson(plain));
+  later.editTracker(plain, 'water', { target: 10 });
+  other.editTracker(plain, 'water', { name: 'From tablet' });
+  const fields = converges(later.getPerson(plain), other.getPerson(plain)).trackers[0].fields;
+  assert.equal(fields.target.value, 10);
+  assert.equal(fields.kind.value, 'count');
+  assert.equal(fields.name.value, 'From tablet');
 });
 
 test('three-device histories converge under every delivery order', () => {

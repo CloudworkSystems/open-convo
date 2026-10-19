@@ -218,8 +218,19 @@ day's value is their sum. There is no stored day-total field.
 
 Serialization preserves engine snapshots exactly, including tombstones.
 Loading checks the schema, field types, IDs, duplicate IDs, and stamps.
-Unknown versions fail with `Unsupported schemaVersion; expected 1.` No
-migration is attempted.
+A record that is present or still in Trash must include every field for its
+type. A purged marker has empty fields and may omit them. A saved file that
+drops `date` from a live check-in fails at load with
+`Incomplete record in person file.` A tracker whose `kind`, `target`, and
+`unit` cannot describe that kind fails with
+`Invalid tracker shape in person file.` Unknown versions fail with
+`Unsupported schemaVersion; expected 1.` No migration is attempted.
+
+`kind`, `target`, and `unit` stay one shape. Merge still compares each field
+on its own when the result is a real tracker. When the separate winners would
+describe no real tracker (an amount tracker with an empty target, for
+example), the newer complete shape is kept as a group. A purged field is
+never copied back. The merged tracker can be edited again.
 
 ## Undo
 
