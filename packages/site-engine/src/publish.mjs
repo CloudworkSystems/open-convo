@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
-import { lstat, mkdir, readdir, readFile, rename, realpath, rm, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, mkdir, open, readdir, rename, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { SiteEngineError } from "./errors.mjs";
@@ -89,14 +90,31 @@ async function assertEarlierBuild(destination) {
   if (info.isSymbolicLink() || !info.isFile()) {
     throw new SiteEngineError(`Output folder is not an earlier Site Engine build: ${path.basename(destination)}`);
   }
-  let text;
+  const markerLength = Buffer.byteLength(MARKER_TEXT);
+  if (info.size !== markerLength) refuseUnmarked(destination);
+  await readExactMarker(markerPath, markerLength, destination);
+}
+
+function refuseUnmarked(destination) {
+  throw new SiteEngineError(`Output folder is not an earlier Site Engine build: ${path.basename(destination)}`);
+}
+
+async function readExactMarker(markerPath, markerLength, destination) {
+  let handle;
   try {
-    text = await readFile(markerPath, "utf8");
+    handle = await open(markerPath, constants.O_RDONLY | constants.O_NOFOLLOW);
   } catch {
-    throw new SiteEngineError(`Output folder is not an earlier Site Engine build: ${path.basename(destination)}`);
+    refuseUnmarked(destination);
   }
-  if (text !== MARKER_TEXT) {
-    throw new SiteEngineError(`Output folder is not an earlier Site Engine build: ${path.basename(destination)}`);
+  try {
+    const buf = Buffer.alloc(markerLength);
+    const { bytesRead } = await handle.read(buf, 0, markerLength, 0);
+    if (bytesRead !== markerLength || buf.toString("utf8") !== MARKER_TEXT) refuseUnmarked(destination);
+  } catch (error) {
+    if (error instanceof SiteEngineError) throw error;
+    refuseUnmarked(destination);
+  } finally {
+    await handle.close();
   }
 }
 

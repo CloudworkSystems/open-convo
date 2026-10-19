@@ -1086,13 +1086,25 @@ test("an existing folder is replaced only when it is an earlier Site Engine buil
 
     const fake = path.join(root, "fake");
     await mkdir(fake);
-    await writeFile(path.join(fake, "site-engine.txt"), "not a build\n");
+    const oversized = Buffer.alloc(1024 * 1024, 0x61);
+    await writeFile(path.join(fake, "site-engine.txt"), oversized);
     await writeFile(path.join(fake, "keep.txt"), "KEEP-THIS-9f3a\n");
     const wrong = run(factsPath, fake);
     assert.notEqual(wrong.status, 0);
     assert.match(wrong.stderr, /Output folder is not an earlier Site Engine build: fake/);
+    assert.equal((await stat(path.join(fake, "site-engine.txt"))).size, oversized.length);
     assert.equal(await readFile(path.join(fake, "keep.txt"), "utf8"), "KEEP-THIS-9f3a\n");
     assert.equal(existsSync(path.join(fake, "index.html")), false);
+
+    const mismatched = path.join(root, "mismatched");
+    await mkdir(mismatched);
+    const sameLength = Buffer.alloc(Buffer.byteLength(marker), 0x62);
+    await writeFile(path.join(mismatched, "site-engine.txt"), sameLength);
+    await writeFile(path.join(mismatched, "keep.txt"), "KEEP-LENGTH-9f3a\n");
+    const mismatchRun = run(factsPath, mismatched);
+    assert.notEqual(mismatchRun.status, 0);
+    assert.match(mismatchRun.stderr, /Output folder is not an earlier Site Engine build: mismatched/);
+    assert.equal(await readFile(path.join(mismatched, "keep.txt"), "utf8"), "KEEP-LENGTH-9f3a\n");
 
     const linked = path.join(root, "linked");
     await mkdir(linked);
