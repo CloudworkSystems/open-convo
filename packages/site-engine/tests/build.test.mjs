@@ -9,6 +9,8 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 
+import { publishSite } from "../src/publish.mjs";
+
 const CLI = fileURLToPath(new URL("../src/build.mjs", import.meta.url));
 const FIXTURES = fileURLToPath(new URL("../fixtures/", import.meta.url));
 const FIXED_URLS = [
@@ -1115,6 +1117,52 @@ test("an existing folder is replaced only when it is an earlier Site Engine buil
     assert.notEqual(linkRun.status, 0);
     assert.match(linkRun.stderr, /Output folder is not an earlier Site Engine build: linked/);
     assert.equal(await readFile(path.join(linked, "keep.txt"), "utf8"), "KEEP-LINK-9f3a\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a folder that changes after the first check is restored", async () => {
+  const root = await tempDir();
+  try {
+    const factsPath = path.join(root, "facts.json");
+    await writeFile(factsPath, "{}\n");
+    const files = [{ path: "index.html", contents: "<p>Should not land</p>" }];
+
+    const emptied = path.join(root, "emptied");
+    await mkdir(emptied);
+    await assert.rejects(
+      () =>
+        publishSite(emptied, files, factsPath, {
+          beforeReplace: async (destination) => {
+            await writeFile(path.join(destination, "notes.txt"), "UNRELATED-SWAP-9f3a\n");
+          },
+        }),
+      /Output folder is not an earlier Site Engine build: emptied/,
+    );
+    assert.equal(await readFile(path.join(emptied, "notes.txt"), "utf8"), "UNRELATED-SWAP-9f3a\n");
+    assert.equal(existsSync(path.join(emptied, "index.html")), false);
+    assert.equal(existsSync(path.join(emptied, "site-engine.txt")), false);
+
+    const swapped = path.join(root, "swapped");
+    await mkdir(swapped);
+    await writeFile(path.join(swapped, "site-engine.txt"), "Built by Open Convo Site Engine.\n");
+    await assert.rejects(
+      () =>
+        publishSite(swapped, files, factsPath, {
+          beforeReplace: async (destination) => {
+            await rm(destination, { recursive: true, force: true });
+            await mkdir(destination);
+            await writeFile(path.join(destination, "notes.txt"), "REPLACED-FOLDER-9f3a\n");
+          },
+        }),
+      /Output folder is not an earlier Site Engine build: swapped/,
+    );
+    assert.equal(await readFile(path.join(swapped, "notes.txt"), "utf8"), "REPLACED-FOLDER-9f3a\n");
+    assert.equal(existsSync(path.join(swapped, "index.html")), false);
+
+    const leftovers = (await readdir(root)).filter((name) => name.startsWith(".site-engine-"));
+    assert.deepEqual(leftovers, []);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

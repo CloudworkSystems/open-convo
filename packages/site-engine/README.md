@@ -32,8 +32,10 @@ characters in an email are percent-encoded in the mailto link; the address
 on the page stays as written.
 
 `--out` replaces a folder only when that folder is missing, empty, or already
-holds `site-engine.txt` from an earlier build. Any other existing folder is
-left as it is. The tests use `sharp` only to build and decode sample WebP
-files. The build command itself does not.
+holds `site-engine.txt` from an earlier build. That check runs again on the
+folder after it has been moved aside, and the folder is put back when it is
+no longer an earlier build. Any other existing folder is left as it is. The
+tests use `sharp` (Apache-2.0) only to build and decode sample WebP files.
+The build command itself does not import it. Node 20.9 or newer is required.
 
 This slice does not publish, host, take payment, or call a model.

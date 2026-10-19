@@ -14,7 +14,7 @@ function isInside(parent, child) {
   return rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
 }
 
-export async function publishSite(outPath, files, factsPath) {
+export async function publishSite(outPath, files, factsPath, options = {}) {
   const parent = path.dirname(outPath);
   let parentInfo;
   try {
@@ -62,6 +62,7 @@ export async function publishSite(outPath, files, factsPath) {
       await writeFile(target, file.contents);
     }
     await writeFile(path.join(scratch, MARKER_FILE), MARKER_TEXT);
+    if (options.beforeReplace) await options.beforeReplace(destination);
     await replaceDirectory(scratch, destination, existing !== null);
     published = true;
   } catch (error) {
@@ -71,48 +72,46 @@ export async function publishSite(outPath, files, factsPath) {
   }
 }
 
-async function assertEarlierBuild(destination) {
+async function assertEarlierBuild(directory, displayName = path.basename(directory)) {
   let names;
   try {
-    names = await readdir(destination);
+    names = await readdir(directory);
   } catch {
     throw new SiteEngineError("Output folder could not be opened.");
   }
   if (names.length === 0) return;
 
-  const markerPath = path.join(destination, MARKER_FILE);
+  const markerPath = path.join(directory, MARKER_FILE);
   let info;
   try {
     info = await lstat(markerPath);
   } catch {
-    throw new SiteEngineError(`Output folder is not an earlier Site Engine build: ${path.basename(destination)}`);
+    refuseUnmarked(displayName);
   }
-  if (info.isSymbolicLink() || !info.isFile()) {
-    throw new SiteEngineError(`Output folder is not an earlier Site Engine build: ${path.basename(destination)}`);
-  }
+  if (info.isSymbolicLink() || !info.isFile()) refuseUnmarked(displayName);
   const markerLength = Buffer.byteLength(MARKER_TEXT);
-  if (info.size !== markerLength) refuseUnmarked(destination);
-  await readExactMarker(markerPath, markerLength, destination);
+  if (info.size !== markerLength) refuseUnmarked(displayName);
+  await readExactMarker(markerPath, markerLength, displayName);
 }
 
-function refuseUnmarked(destination) {
-  throw new SiteEngineError(`Output folder is not an earlier Site Engine build: ${path.basename(destination)}`);
+function refuseUnmarked(displayName) {
+  throw new SiteEngineError(`Output folder is not an earlier Site Engine build: ${displayName}`);
 }
 
-async function readExactMarker(markerPath, markerLength, destination) {
+async function readExactMarker(markerPath, markerLength, displayName) {
   let handle;
   try {
     handle = await open(markerPath, constants.O_RDONLY | constants.O_NOFOLLOW);
   } catch {
-    refuseUnmarked(destination);
+    refuseUnmarked(displayName);
   }
   try {
     const buf = Buffer.alloc(markerLength);
     const { bytesRead } = await handle.read(buf, 0, markerLength, 0);
-    if (bytesRead !== markerLength || buf.toString("utf8") !== MARKER_TEXT) refuseUnmarked(destination);
+    if (bytesRead !== markerLength || buf.toString("utf8") !== MARKER_TEXT) refuseUnmarked(displayName);
   } catch (error) {
     if (error instanceof SiteEngineError) throw error;
-    refuseUnmarked(destination);
+    refuseUnmarked(displayName);
   } finally {
     await handle.close();
   }
@@ -131,10 +130,10 @@ async function createScratch(parent) {
   throw new SiteEngineError("Output folder could not be written.");
 }
 
-// The previous folder is moved aside, the new folder takes its name, and only
-// then is the previous folder deleted. A failure in the middle moves the
-// previous folder back. The swap is two renames on the same parent, so a
-// failed build does not leave a half-written site in the output path.
+// The previous folder is moved aside and checked again before the new folder
+// takes its name. A folder that is no longer an earlier build is moved back.
+// The swap is two renames on the same parent, so a failed build does not leave
+// a half-written site in the output path.
 async function replaceDirectory(scratch, destination, hadExisting) {
   const backup = path.join(
     path.dirname(destination),
@@ -145,11 +144,23 @@ async function replaceDirectory(scratch, destination, hadExisting) {
     if (hadExisting) {
       await rename(destination, backup);
       movedAside = true;
+      const moved = await lstat(backup);
+      if (!moved.isDirectory()) refuseUnmarked(path.basename(destination));
+      await assertEarlierBuild(backup, path.basename(destination));
     }
     await rename(scratch, destination);
     movedAside = false;
-  } catch {
-    if (movedAside) await rename(backup, destination).catch(() => {});
+  } catch (error) {
+    if (movedAside) {
+      try {
+        await rename(backup, destination);
+      } catch {
+        throw new SiteEngineError(
+          "Output folder could not be replaced. The previous folder was left in place.",
+        );
+      }
+    }
+    if (error instanceof SiteEngineError) throw error;
     throw new SiteEngineError(
       "Output folder could not be replaced. The previous folder was left in place.",
     );
