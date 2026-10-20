@@ -102,9 +102,10 @@ automatically once checks 1, 2 and 4 pass.
   now: the session that opened the pull request posts `@codex review` from the
   owner's account after each push. Giving the bot its own Codex account is to
   be tried later and may involve spending.
-- **Designated reviewer (coming).** For Codex-built modules, Claude is the
-  plan's designated reviewer, and a separate pull request is teaching
-  `codex-approved` to accept that reviewer in place of Codex. Until then,
+- **Designated reviewer (planned).** For Codex-built modules, Claude is the
+  plan's designated reviewer. Letting `codex-approved` accept that reviewer
+  in place of Codex is planned and needs the owner's approval before it's
+  built. Until then,
   Codex's review still gates those pull requests and Claude also reviews them.
 - **"Up to date" side effect.** `main` requires a branch to be up to date
   before it merges, so every merge puts the other open pull requests out of

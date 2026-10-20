@@ -63,10 +63,10 @@ reads from and writes to `CloudworkSystems/open-convo`.
     Claude fixes every P1 and P2, or explains in the pull request why one does
     not apply. Only the owner decides to merge with findings still open.
   - *Codex-built work* is reviewed by the plan's designated reviewer (Claude
-    for Codex-built modules). A separate pull request is teaching the
-    `codex-approved` check to accept that reviewer in place of Codex. Until
-    it lands, Codex's review still gates the merge and Claude also posts a
-    review, so no agent's review is the only one on its own work.
+    for Codex-built modules). Letting the `codex-approved` check accept that
+    reviewer in place of Codex is planned and needs the owner's approval
+    before it's built. Until then, Codex's review still gates the merge and
+    Claude also posts a review, so no agent's review is the only one on its own work.
   - A green "Ready to merge" button means no conflicts, not approval. Claude
     tells the owner in chat when a pull request waits on his approval.
 - *Proposed October 15, pending the owner's approval at merge:* every review,
