@@ -89,6 +89,8 @@ fails for pull requests opened under the owner's login (GitHub doesn't hold
 an owner-opened PR for the code owner), which is how cloud Claude opens them
 today. Next: the bot's token, then reconnect Claude's GitHub link as the bot
 and rerun 3, 4 and 6. Until those pass, the owner merges by hand.
+Plan for letting a plan's designated reviewer satisfy the gate (option 2a):
+[docs/plans/merge-gate-designated-reviewer.md](docs/plans/merge-gate-designated-reviewer.md). In review.
 
 ## Owner Decisions
 
