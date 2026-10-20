@@ -100,7 +100,8 @@ has tried it. Each step ends with something the owner can try.
    teaches, corrects and forgets something real and sees it respected.
 
 **Right after step 3, in this order (owner decision, October 15):**
-1. The **Claude Code adapter** (above).
+1. The **Claude Code adapter** (above). Scope and pull requests:
+   [docs/plans/claude-code-adapter.md](docs/plans/claude-code-adapter.md).
 2. A thin first version of the **Canvas/Atlas/Navigator** knowledge view,
    reading the durable session records. Moved up from step 11. Navigator
    search and sorting stays at step 7.

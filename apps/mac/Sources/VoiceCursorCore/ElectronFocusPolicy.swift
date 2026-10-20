@@ -118,7 +118,8 @@ public enum PasteDeliveryCheck {
     public enum Route: Equatable {
         /// Put the text straight into the text box (Cmd+V if that fails).
         case accessibilityThenKeystroke
-        /// No usable text box in the target app: send Cmd+V.
+        /// No usable text box in the target app, or the app draws its text
+        /// boxes with a web engine (see WebEditorDetection): send Cmd+V.
         case keystrokeOnly
         /// The target app is not in front: type nothing, keep the text on
         /// the clipboard for the owner.
@@ -129,15 +130,81 @@ public enum PasteDeliveryCheck {
     /// `targetIsRunning` is false when the target app has quit. Either way
     /// nothing is typed: the app now in front is some other app, and Cmd+V
     /// (and a Return after it) must never reach it.
+    ///
+    /// `targetUsesWebEditor` is true for Electron and Chromium apps. Their
+    /// text boxes accept an Accessibility insert and report success without
+    /// the page's editor ever seeing the text, so they get Cmd+V only. The
+    /// "is it the target, is it in front" checks run first and are unchanged.
     public static func route(
         targetProcessIdentifier: Int32?,
         targetIsRunning: Bool = true,
         frontmostProcessIdentifier: Int32?,
-        elementProcessIdentifier: Int32?
+        elementProcessIdentifier: Int32?,
+        targetUsesWebEditor: Bool = false
     ) -> Route {
         guard let targetProcessIdentifier, targetIsRunning else { return .clipboardOnly }
         guard frontmostProcessIdentifier == targetProcessIdentifier else { return .clipboardOnly }
+        guard !targetUsesWebEditor else { return .keystrokeOnly }
         guard elementProcessIdentifier == targetProcessIdentifier else { return .keystrokeOnly }
         return .accessibilityThenKeystroke
+    }
+}
+
+/// Tells whether an app draws its text boxes with a web engine (Electron,
+/// or Chromium itself). Pure rules, so tests can prove them.
+///
+/// Why: in these apps the message box is a web page editor (React,
+/// ProseMirror and the like). Setting the selected text through
+/// Accessibility is handed to the page in the background and reported as
+/// a success at once, before the page has done anything with it. The
+/// editor keeps its own copy of the text and often never takes the change,
+/// so the pill says "pasted" and nothing shows. Cmd+V goes through the
+/// page's normal paste handling, which these editors always honour.
+///
+/// The check reads the app's bundle, not a list of names: every Electron or
+/// Chromium app ships a framework holding Chromium's resource pack, even
+/// when the framework is renamed (the Codex app ships "Codex Framework").
+/// A short list of known apps backs that up.
+public enum WebEditorDetection {
+    /// A file every Electron and Chromium framework carries in its
+    /// Resources folder.
+    public static let engineMarkerResource = "chrome_100_percent.pak"
+
+    /// Framework names that are a web engine whatever their contents.
+    public static let engineFrameworkNames: Set<String> = [
+        "Electron Framework.framework",
+        "Chromium Embedded Framework.framework",
+    ]
+
+    /// Apps known to be Electron or Chromium, in case the bundle cannot be
+    /// read (for example the app moved while it was running).
+    public static let knownBundleIdentifiers: Set<String> = [
+        "com.anthropic.claudefordesktop", // Claude
+        "com.openai.codex", // Codex
+        "com.tinyspeck.slackmacgap", // Slack
+        "com.microsoft.VSCode", // Visual Studio Code
+        "com.todesktop.230313mzl4w4u92", // Cursor
+        "com.hnc.Discord", // Discord
+        "md.obsidian", // Obsidian
+        "com.google.Chrome", // Google Chrome
+        "com.brave.Browser", // Brave
+        "com.microsoft.edgemac", // Microsoft Edge
+        "company.thebrowser.Browser", // Arc
+    ]
+
+    /// `frameworkNames` lists the entries in the app's Contents/Frameworks
+    /// folder; `frameworkHasEngineMarker` answers whether one of them holds
+    /// `engineMarkerResource`. Native apps (TextEdit, Notes, Mail) have no
+    /// such framework and keep the Accessibility insert.
+    public static func usesWebEditor(
+        bundleIdentifier: String?,
+        frameworkNames: [String],
+        frameworkHasEngineMarker: (String) -> Bool
+    ) -> Bool {
+        if let bundleIdentifier, knownBundleIdentifiers.contains(bundleIdentifier) { return true }
+        for name in frameworkNames where name.hasSuffix(".framework") {
+            if engineFrameworkNames.contains(name) || frameworkHasEngineMarker(name) { return true }
+        }
+        return false
     }
 }

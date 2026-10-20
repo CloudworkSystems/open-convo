@@ -186,3 +186,14 @@ test('a malformed review state never approves', () => {
   const bad = { user: codex, updated_at: '2026-10-15T02:00:00Z', body: '<!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 {not json} -->' };
   assert.equal(evaluateCodexSignal({ headSha: HEAD, comments: [bad] }).approved, false);
 });
+
+test('no workflow job or job name is called codex-approved (only the status may carry that name)', async () => {
+  const { readdirSync, readFileSync: read } = await import('node:fs');
+  const dir = new URL('../../workflows/', import.meta.url);
+  for (const file of readdirSync(dir)) {
+    const text = read(new URL(file, dir), 'utf8');
+    const jobs = text.split(/^jobs:\s*$/m)[1] ?? '';
+    assert.doesNotMatch(jobs, /^  codex-approved:\s*$/m, `${file} has a job keyed codex-approved`);
+    assert.doesNotMatch(jobs, /^\s+name:\s*['"]?codex-approved['"]?\s*$/m, `${file} has a job named codex-approved`);
+  }
+});

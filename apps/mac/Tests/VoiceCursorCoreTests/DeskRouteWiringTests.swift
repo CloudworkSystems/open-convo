@@ -22,6 +22,17 @@ struct DeskRouteWiringTests {
         throw NSError(domain: "DeskRouteWiringTests", code: 1)
     }
 
+    @Test("The pill's paste asks whether the target is Electron or Chromium before choosing a route")
+    func pasteRouteKnowsAboutWebEditors() throws {
+        let source = try source()
+        let perform = try body("private static func performPaste(", in: source)
+        #expect(perform.contains("let usesWebEditor = applicationUsesWebEditor(targetApplication)"))
+        #expect(perform.contains("targetUsesWebEditor: usesWebEditor"))
+        // The Accessibility insert runs only on the route that allows it.
+        #expect(source.components(separatedBy: "insertUsingAccessibility(text)").count - 1 == 1)
+        #expect(source.contains("if allowAccessibilityInsert, insertUsingAccessibility(text) {"))
+    }
+
     @Test("A Desk recording clears any stale live preview and never updates one")
     func deskRouteNeverFeedsALivePreview() throws {
         let source = try source()
