@@ -3,19 +3,23 @@
 Written October 15, 2026 by the planning session at the owner's request.
 Revised the same day after Codex's first review (five P1s, answered under
 "Codex Round 1" below) and three owner decisions. Session name:
-`OC-261015-merge-gate`. Until this is finished and tried, the owner keeps
-merging every pull request by hand.
+`OC-261015-merge-gate`. The gate has been on for `main` since October 20,
+2026; see "Status" below.
 
 ## Why
 
 As more modules are built at once, the owner can't spend the day merging pull
 requests. Merging should happen by itself, but only when GitHub itself can
 prove the review and tests are done. A written rule isn't enough, because
-today every agent signs in to GitHub as the owner (`CloudworkSystems`, the repo
-owner and its only admin), so GitHub can't tell agents apart and any agent
-could change the rules.
+before the gate every agent signed in to GitHub as the owner (`CloudworkSystems`,
+the repo owner and its only admin), so GitHub couldn't tell agents apart and
+any agent could change the rules.
 
 ## The Design In One Picture
+
+This is the setup as it is now (October 20, 2026): `cloudwork-bot` exists
+with Write access and builders sign in as it; cloud Claude is still on the
+owner's connection until it is switched.
 
 | Who | Signs in as | Access |
 | --- | --- | --- |
