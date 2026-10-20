@@ -6243,6 +6243,30 @@ final class DictationController {
     /// to finish). An error from an older task is the result of our own
     /// cancel, not a problem to show.
     private var recognitionGeneration = 0
+    /// The short extra listening after the owner's Stop, so the last word
+    /// isn't cut off (see StopTailPolicy). Main thread only.
+    private lazy var stopTail = StopTailSequencer(schedule: DictationController.mainQueueScheduler)
+    /// Set while the tail runs: the tap still feeds the speech engine and the
+    /// recording, but no longer moves the pill's meter or schedules an
+    /// auto-stop. Guarded by sliceCountLock (the tap runs on an audio thread).
+    private var tapInStopTail = false
+    /// After the tail: waiting for Apple's older engine's last words.
+    private var finalResultWait: FinalResultWait?
+    /// The recognition task whose last words the final wait is for (by
+    /// its generation), so a late "canceled" from an older task can't end
+    /// the wait early.
+    private var stopFinalWaitGeneration: Int?
+    /// The newest recognition task that already gave its final words or an
+    /// error; such a task has nothing more to hand back after Stop.
+    private var endedRecognitionGeneration = -1
+    /// The finish of the dictation now stopping waits here for its words.
+    private var captureEnd: OneShotResult<String>?
+
+    static let mainQueueScheduler: StopTailScheduler = { delay, work in
+        let item = DispatchWorkItem(block: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+        return { item.cancel() }
+    }
     /// The last finished dictation's text, for the menu's Copy Last
     /// Dictation. Kept in memory only.
     private(set) var lastDictationText: String?
@@ -6276,8 +6300,10 @@ final class DictationController {
     /// Whether the recording now running or finishing is a Desk recording.
     var isDeskRecording: Bool { deskRoute != nil && isBusy }
 
+    /// False from the moment of Stop, even while the tail is still
+    /// listening: to the rest of the app the dictation has stopped.
     var isRecording: Bool {
-        audioEngine.isRunning
+        audioEngine.isRunning && !stopTail.isInTail
     }
 
     var isBusy: Bool {
@@ -6290,7 +6316,7 @@ final class DictationController {
 
     func toggle() {
         if isRecording {
-            stop()
+            stop(source: .owner)
         } else if !isProcessing {
             start()
         }
@@ -6721,7 +6747,12 @@ final class DictationController {
             sliceCountTotal = 0
             sliceCountAtOrAboveNearSilent = 0
             sliceCountAtOrAboveStrictSilent = 0
+            tapInStopTail = false
             sliceCountLock.unlock()
+            stopTail.reset()
+            finalResultWait = nil
+            stopFinalWaitGeneration = nil
+            captureEnd = nil
             liveListenerHadError = false
             firstFinalAt = nil
             currentCaptureMode = captureMode
@@ -6762,7 +6793,7 @@ final class DictationController {
                 let transcriber = OpenAIRealtimeTranscriber()
                 transcriber.onReady = { [weak self] in
                     DispatchQueue.main.async {
-                        guard let self, self.currentProvider == .openAIRealtime, self.audioEngine.isRunning else { return }
+                        guard let self, self.currentProvider == .openAIRealtime, self.isRecording else { return }
                         self.onStatus("OpenAI Realtime: streaming")
                     }
                 }
@@ -6780,7 +6811,7 @@ final class DictationController {
                     DispatchQueue.main.async {
                         guard let self, self.currentProvider == .openAIRealtime else { return }
                         RunLog.write("openai-realtime.ui-error", error.localizedDescription)
-                        if self.audioEngine.isRunning {
+                        if self.isRecording {
                             self.onStatus("OpenAI Realtime failed")
                         }
                     }
@@ -6805,7 +6836,7 @@ final class DictationController {
                     self.handleSpeechAnalyzerTranscript(text, isFinal: isFinal)
                 }
                 engine.onStatus = { [weak self, weak engine] text in
-                    guard let self, let engine, self.speechAnalyzerEngine === engine, self.audioEngine.isRunning else { return }
+                    guard let self, let engine, self.speechAnalyzerEngine === engine, self.isRecording else { return }
                     self.onStatus(text)
                 }
                 engine.onError = { [weak self, weak engine] message in
@@ -6847,7 +6878,11 @@ final class DictationController {
                 if sliceDBFS >= SilentRecordingPolicy.strictSilentThresholdDBFS {
                     self.sliceCountAtOrAboveStrictSilent += 1
                 }
+                let inStopTail = self.tapInStopTail
                 self.sliceCountLock.unlock()
+                // During the tail after Stop the pill shows "Finishing…":
+                // the meter stays still and nothing schedules an auto-stop.
+                guard !inStopTail else { return }
                 let spectrum = Self.visualSpectrumSamples(from: speechBuffer, count: 42)
                 self.onAudioLevel(level)
                 self.onAudioWaveform(spectrum, level)
@@ -6909,10 +6944,14 @@ final class DictationController {
                 }
                 let combinedText = self.combinedTranscript()
                 self.latestTranscript = combinedText
-                if self.deskRoute == nil { TextInjector.updateLivePreview(combinedText) }
-                self.scheduleAutoStopIfNeeded(for: combinedText)
-                self.onTranscript(combinedText)
-                self.onStatus(combinedText.isEmpty ? "Listening" : combinedText)
+                // After Stop (the tail and the final wait) words are only
+                // collected: nothing is typed, and the pill keeps "Finishing…".
+                if self.isRecording {
+                    if self.deskRoute == nil { TextInjector.updateLivePreview(combinedText) }
+                    self.scheduleAutoStopIfNeeded(for: combinedText)
+                    self.onTranscript(combinedText)
+                    self.onStatus(combinedText.isEmpty ? "Listening" : combinedText)
+                }
 
                 if result.isFinal {
                     self.scheduleRecognitionRestart(
@@ -6925,6 +6964,13 @@ final class DictationController {
 
             if let error = error as NSError? {
                 self.handleRecognitionError(error, generation: generation)
+            }
+            if result?.isFinal == true || error != nil {
+                self.endedRecognitionGeneration = max(self.endedRecognitionGeneration, generation)
+                // After Stop, the finish waits for this task's last words (or an error).
+                if generation == self.stopFinalWaitGeneration {
+                    self.finalResultWait?.signal()
+                }
             }
         }
 
@@ -6966,7 +7012,7 @@ final class DictationController {
         }
         currentRecognitionTranscript = normalized
         latestTranscript = normalized
-        if audioEngine.isRunning {
+        if isRecording {
             if deskRoute == nil { TextInjector.updateLivePreview(normalized) }
             scheduleAutoStopIfNeeded(for: normalized)
         }
@@ -6977,7 +7023,7 @@ final class DictationController {
     /// Rough words from Apple On-Device (New) go to the floating bubble only;
     /// this engine never types them into the app while you talk.
     private func handleSpeechAnalyzerTranscript(_ text: String, isFinal: Bool) {
-        guard currentProvider == .appleSpeechAnalyzer, audioEngine.isRunning else { return }
+        guard currentProvider == .appleSpeechAnalyzer, isRecording else { return }
         let normalized = text
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -6996,7 +7042,7 @@ final class DictationController {
 
     private func handleSpeechAnalyzerError(_ message: String) {
         RunLog.write("speech-analyzer.ui-error", "id=\(sessionId) message=\"\(message)\"")
-        guard currentProvider == .appleSpeechAnalyzer, audioEngine.isRunning else { return }
+        guard currentProvider == .appleSpeechAnalyzer, isRecording else { return }
         liveListenerHadError = true
         let status = "\(currentProvider.label): \(message)"
         if latestTranscript.isEmpty {
@@ -7061,11 +7107,9 @@ final class DictationController {
     private func livePasteFinalizedSegmentIfNeeded(_ segment: String, reason: String) {
         let cleaned = cleanedDictationText(segment)
         guard !cleaned.isEmpty else { return }
-        guard Settings.livePasteAppleFinals else { return }
-        guard !Settings.liveInsertApplePartials else { return }
-        guard currentProvider == .appleLocal, currentCaptureMode == .appleLive else { return }
-        guard Settings.completionAction == .autoPaste || Settings.completionAction == .autoSubmit else { return }
-        guard deskRoute == nil else { return }
+        guard livePastesFinishedSegmentsThisSession else { return }
+        // Never after Stop: nothing is pasted live once the dictation stopped.
+        guard isRecording else { return }
 
         let text = SavedCorrections.preview(
             cleaned,
@@ -7080,6 +7124,17 @@ final class DictationController {
         DispatchQueue.main.async {
             TextInjector.paste(text + " ")
         }
+    }
+
+    /// Whether this dictation pastes Apple's finished segments while it runs
+    /// (the older live-paste mode).
+    private var livePastesFinishedSegmentsThisSession: Bool {
+        Settings.livePasteAppleFinals
+            && !Settings.liveInsertApplePartials
+            && currentProvider == .appleLocal
+            && currentCaptureMode == .appleLive
+            && (Settings.completionAction == .autoPaste || Settings.completionAction == .autoSubmit)
+            && deskRoute == nil
     }
 
     private func combinedTranscript() -> String {
@@ -7247,14 +7302,24 @@ final class DictationController {
         return bestChannel
     }
 
-    func stop() {
-        guard isRecording else { return }
+    /// `.owner` (the dictation key, letting go of a hold key, hiding the pill)
+    /// keeps listening for a short tail so the last word isn't cut off.
+    /// `.automatic` (safety stop, auto-stop, engine error) stops at once.
+    func stop(source: StopTailPolicy.StopSource = .automatic) {
+        guard isRecording else {
+            if stopTail.isInTail {
+                RunLog.write("dictation.stop.repeat-ignored", "id=\(sessionId) reason=finishing-tail")
+            }
+            return
+        }
+        let tailSeconds = StopTailPolicy.tailSeconds(
+            source: source,
+            livePastesFinishedSegments: livePastesFinishedSegmentsThisSession
+        )
 
-        if let segment = promoteCurrentRecognitionTranscript(reason: "stop") {
+        if tailSeconds == 0, let segment = promoteCurrentRecognitionTranscript(reason: "stop") {
             livePasteFinalizedSegmentIfNeeded(segment, reason: "stop")
         }
-        latestTranscript = combinedTranscript()
-        let fallbackTranscript = latestTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
         let url = recordingURL
         let retainAudioForHarvest = url.flatMap { ownedRecordings.retainsCapture($0) } ?? false
         let sessionStartedAt = startedAt
@@ -7279,10 +7344,10 @@ final class DictationController {
         let liveListenerHadErrorAtStop = liveListenerHadError
         let livePasted = didLivePasteFinalText
         let activeRealtimeTranscriber = realtimeTranscriber
-        if provider == .openAIRealtime {
-            realtimeTranscriber = nil
-        }
-        RunLog.write("dictation.stop.requested", "id=\(id) provider=\(provider.rawValue) durationMs=\(durationMs)")
+        RunLog.write(
+            "dictation.stop.requested",
+            "id=\(id) provider=\(provider.rawValue) durationMs=\(durationMs) tailMs=\(Int(tailSeconds * 1000))"
+        )
 
         TextInjector.freezeLivePreviewPartials()
         // A Desk recording never started a live preview: nothing to commit.
@@ -7297,18 +7362,37 @@ final class DictationController {
             "cursor-target.archived",
             targetContext.map { "id=\(id) \($0.logDetail)" } ?? "id=\(id) target=missing"
         )
-        stopWithoutArchive(
-            closeRealtime: provider != .openAIRealtime,
-            closeSpeechAnalyzer: provider != .appleSpeechAnalyzer,
-            keepRecordingForFinalization: true
-        )
-        // Order for Apple On-Device (New): the audio engine is stopped and the
-        // tap removed just above, so the engine already has the last buffer
-        // (the tap holds the engine itself, not this property). Only then,
-        // in the task below, does finishAndWait end the analyzer's input,
-        // flush the converter, and finish. It is finished, not cancelled.
+        // Everything above (live typing frozen, safety checks, the target)
+        // is settled at the moment of Stop, as before. Capture itself ends
+        // in endCaptureAfterStop: after the tail for the owner's Stop, at
+        // once (inside this call) for a stop True Convo made by itself.
+        // Order for Apple On-Device (New): the tap holds the engine itself
+        // (not this property), so it still gets the tail's audio. The audio
+        // engine is stopped and the tap removed before the task below reads
+        // the words, so the engine already has the last buffer. Only then
+        // does finishAndWait end the analyzer's input, flush the converter,
+        // and finish. It is finished, not cancelled.
         let activeSpeechAnalyzerEngine = speechAnalyzerEngine
         speechAnalyzerEngine = nil
+        let captureEnd = OneShotResult<String>()
+        self.captureEnd = captureEnd
+        let tailDecision = stopTail.stop(tailSeconds: tailSeconds) { [weak self] in
+            guard let self else {
+                captureEnd.resolve(nil)
+                return
+            }
+            self.endCaptureAfterStop(
+                provider: provider,
+                sessionId: id,
+                finishEngineGracefully: tailSeconds > 0,
+                result: captureEnd
+            )
+        }
+        if case .tail = tailDecision {
+            sliceCountLock.lock()
+            tapInStopTail = true
+            sliceCountLock.unlock()
+        }
         let finalizesInBackground = deskRouteAtStop == nil && (livePreviewStopResult != .inactive || guardedFinalPasteAtStop)
         if finalizesInBackground {
             isProcessing = true
@@ -7335,6 +7419,10 @@ final class DictationController {
         finalizationTask = Task {
             var releasedRecording = false
             defer { if !releasedRecording, let url { self.finishOwnedRecording(url) } }
+            guard !Task.isCancelled, !self.recordingProcesses.isClosed else { return }
+            // The words heard up to the end of capture (after the tail).
+            // nil: the capture was dropped (True Convo is quitting).
+            guard let fallbackTranscript = await self.wordsAtEndOfCapture(captureEnd) else { return }
             guard !Task.isCancelled, !self.recordingProcesses.isClosed else { return }
             var finalText = fallbackTranscript
             var model = modelAtStop
@@ -7735,6 +7823,86 @@ final class DictationController {
         }
     }
 
+    /// Ends capture after Stop (after the tail, if there was one) and hands
+    /// the words heard to the finish. After a tail, Apple's older engine is
+    /// told the audio is over and given a moment to return its last words,
+    /// instead of being cancelled with them still inside. A stop without a
+    /// tail ends capture exactly as before.
+    private func endCaptureAfterStop(
+        provider: DictationProvider,
+        sessionId id: String,
+        finishEngineGracefully: Bool,
+        result: OneShotResult<String>
+    ) {
+        sliceCountLock.lock()
+        tapInStopTail = false
+        sliceCountLock.unlock()
+        let currentGeneration = recognitionGeneration
+        guard finishEngineGracefully,
+              let request,
+              task != nil,
+              endedRecognitionGeneration < currentGeneration
+        else {
+            completeCaptureEnd(provider: provider, result: result)
+            return
+        }
+        // No more audio after this: stop the microphone, then end the input.
+        // An error from here on is the result of True Convo's own ending.
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        if tapInstalled {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            tapInstalled = false
+        }
+        stopFinalWaitGeneration = currentGeneration
+        recognitionGeneration += 1
+        request.endAudio()
+        let waitStartedAt = Date()
+        finalResultWait = FinalResultWait(
+            timeoutSeconds: StopTailPolicy.finalResultWaitSeconds,
+            schedule: Self.mainQueueScheduler
+        ) { [weak self] outcome in
+            guard let self else {
+                result.resolve(nil)
+                return
+            }
+            self.finalResultWait = nil
+            self.stopFinalWaitGeneration = nil
+            RunLog.write(
+                "speech.recognition.stop-final",
+                "id=\(id) outcome=\(outcome.rawValue) waitMs=\(milliseconds(between: waitStartedAt, and: Date()))"
+            )
+            // Quitting resolves the result itself.
+            guard outcome != .cancelled else { return }
+            self.completeCaptureEnd(provider: provider, result: result)
+        }
+    }
+
+    private func completeCaptureEnd(provider: DictationProvider, result: OneShotResult<String>) {
+        promoteCurrentRecognitionTranscript(reason: "stop")
+        latestTranscript = combinedTranscript()
+        let words = latestTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+        stopWithoutArchive(
+            closeRealtime: provider != .openAIRealtime,
+            closeSpeechAnalyzer: provider != .appleSpeechAnalyzer,
+            keepRecordingForFinalization: true
+        )
+        if provider == .openAIRealtime {
+            // The finish holds this stream; it ends it after its last words.
+            realtimeTranscriber = nil
+        }
+        result.resolve(words)
+    }
+
+    private func wordsAtEndOfCapture(_ result: OneShotResult<String>) async -> String? {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async {
+                result.whenResolved { continuation.resume(returning: $0) }
+            }
+        }
+    }
+
     /// A safety stop (a click, another key, or a different app in front) kept
     /// the finished text from being typed. Nothing is dropped: it is in
     /// history and in the menu's Copy Last Dictation. It goes on the clipboard
@@ -7865,6 +8033,15 @@ final class DictationController {
     /// Stop without starting delayed transcription during application shutdown.
     func shutdown() {
         finalizationTask?.cancel()
+        // A tail still listening after Stop is dropped at once: nothing more
+        // is captured, and the finish waiting for its words ends.
+        if stopTail.discard() {
+            RunLog.write("dictation.stop-tail.discarded", "id=\(sessionId) reason=shutdown")
+        }
+        finalResultWait?.cancel()
+        finalResultWait = nil
+        stopFinalWaitGeneration = nil
+        captureEnd?.resolve(nil)
         // No converter may start after this point, and existing owned writers
         // must exit before shutdown removes their input/output files.
         recordingProcesses.cancelAndWait()
@@ -9964,13 +10141,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func stopDictation(hidePill: Bool = true) {
+    /// `immediate` is for safety stops: they end capture at once. The
+    /// owner's Stop listens a moment longer (the pill already shows
+    /// "Finishing…") so the last word isn't cut off.
+    private func stopDictation(hidePill: Bool = true, immediate: Bool = false) {
         extendHotKeyCooldown(seconds: 0.25, reason: "stop-requested")
         let provider = Settings.provider
         liveTranscriptWindow.showProcessing(
             detail: provider.isPostStopProvider ? "Transcribing (\(provider.label))…" : "Finishing…"
         )
-        controller.stop()
+        controller.stop(source: immediate ? .automatic : .owner)
     }
 
     private func stopDictationAfterExternalLivePreviewGuard(reason: String) {
@@ -9978,7 +10158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         RunLog.write("dictation.external-guard.stop-requested", "reason=\(reason)")
         liveTranscriptWindow.showGuarded()
         updateStatus("Stopped safely after edit")
-        stopDictation()
+        stopDictation(immediate: true)
         refreshDictationControls()
     }
 

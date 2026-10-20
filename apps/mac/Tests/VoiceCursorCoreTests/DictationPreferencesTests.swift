@@ -113,7 +113,7 @@ struct DictationPreferencesTests {
         #expect(!finalize.contains("Settings.archiveFormat"), "The conversion must use the same format as output registration.")
         #expect(finalize.contains("processes: processes"))
 
-        let stop = try functionBody("func stop() {\n        guard isRecording", in: source)
+        let stop = try functionBody("func stop(source: StopTailPolicy.StopSource = .automatic) {\n        guard isRecording", in: source)
         #expect(stop.contains("let retainAudioForHarvest = url.flatMap { ownedRecordings.retainsCapture($0) } ?? false"))
         #expect(!stop.contains("Settings.dictationPreferences.retainAudioForHarvest"), "Finalization must use the original capture policy, including conversion and failures.")
         #expect(stop.components(separatedBy: "Settings.archiveFormat").count == 2)
@@ -155,6 +155,39 @@ struct DictationPreferencesTests {
             let body = try functionBody(signature, in: source)
             #expect(body.contains("guard let self, !self.recordingProcesses.isClosed else { return }"), "Delayed permission callbacks must honor the permanent shutdown gate.")
         }
+    }
+
+    @Test("Only the owner's Stop gets the listening tail; safety stops and quitting end capture at once")
+    func stopTailWiring() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent("Sources/VoiceCursorMac/main.swift"), encoding: .utf8)
+
+        let stopDictation = try functionBody("private func stopDictation(hidePill: Bool = true, immediate: Bool = false)", in: source)
+        #expect(stopDictation.contains("controller.stop(source: immediate ? .automatic : .owner)"))
+        let safetyStop = try functionBody("private func stopDictationAfterExternalLivePreviewGuard(", in: source)
+        #expect(safetyStop.contains("stopDictation(immediate: true)"), "A safety stop must not wait for a tail.")
+        #expect(!source.contains("self.stop(source: .owner)"), "Auto-stops and engine errors stop at once.")
+
+        let stop = try functionBody("func stop(source: StopTailPolicy.StopSource = .automatic) {\n        guard isRecording", in: source)
+        // Live typing is frozen and the safety checks are read at the moment
+        // of Stop, before the tail starts.
+        let freeze = try #require(stop.range(of: "TextInjector.freezeLivePreviewPartials()"))
+        let guardCheck = try #require(stop.range(of: "TextInjector.hasExternalFinalPasteGuard"))
+        let tail = try #require(stop.range(of: "stopTail.stop(tailSeconds: tailSeconds)"))
+        #expect(freeze.lowerBound < tail.lowerBound && guardCheck.lowerBound < tail.lowerBound)
+        // The finish reads the words only after capture ended.
+        let words = try #require(stop.range(of: "await self.wordsAtEndOfCapture(captureEnd)"))
+        let finalText = try #require(stop.range(of: "var finalText = fallbackTranscript"))
+        #expect(words.lowerBound < finalText.lowerBound)
+
+        let shutdown = try functionBody("func shutdown()", in: source)
+        let discard = try #require(shutdown.range(of: "stopTail.discard()"))
+        let writerStop = try #require(shutdown.range(of: "stopWithoutArchive()"))
+        #expect(discard.lowerBound < writerStop.lowerBound)
+        #expect(shutdown.contains("captureEnd?.resolve(nil)"))
+
+        let livePaste = try functionBody("private func livePasteFinalizedSegmentIfNeeded(", in: source)
+        #expect(livePaste.contains("guard isRecording else { return }"), "Nothing is pasted live after Stop.")
     }
 
     private func functionBody(_ signature: String, in source: String) throws -> String {
