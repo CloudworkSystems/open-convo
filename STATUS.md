@@ -83,9 +83,11 @@ Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:
-[docs/plans/merge-gate.md](docs/plans/merge-gate.md). Checks built but not
-switched on; next, the owner's bot account and the scratch-branch tests.
-Until those pass, the owner merges by hand.
+[docs/plans/merge-gate.md](docs/plans/merge-gate.md). Switched on for `main`
+October 20 after the scratch-branch tests passed. The bot account
+(`cloudwork-bot`) exists and builders open pull requests with it. Codex doesn't
+review the bot's pull requests yet; until it does, the session that opened the
+pull request asks for each Codex review from the owner's account.
 
 ## Owner Decisions
 

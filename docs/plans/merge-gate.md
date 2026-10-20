@@ -83,6 +83,29 @@ pushed**, so the owner always approves the final version.
 Everything else (module code, tests, design notes, annotations) merges
 automatically once checks 1, 2 and 4 pass.
 
+## Status (October 20, 2026)
+
+**On.** The owner approved switching the gate on for `main` on October 20.
+
+- **Scratch tests passed** on `gate-scratch`: tests 1 to 6 below, plus a
+  forged-status test (a `codex-approved` status set with a token, not by
+  GitHub Actions, did not satisfy the gate). Test 6 (a new commit dismisses
+  the owner's approval) passed on #79.
+- **Codex ignores the bot's pull requests.** Codex skips both automatic
+  review and `@codex review` comments on pull requests opened by
+  `cloudwork-bot`, because the bot has no Codex account. Owner decision for
+  now: the session that opened the pull request posts `@codex review` from the
+  owner's account after each push. Giving the bot its own Codex account is to
+  be tried later and may involve spending.
+- **"Up to date" side effect.** `main` requires a branch to be up to date
+  before it merges, so every merge puts the other open pull requests out of
+  date. Each update is a new commit, which needs a new Codex review before
+  `codex-approved` passes again.
+- **Blank review decision.** GitHub's `reviewDecision` field is blank on a
+  pull request that needs no review, which is every pull request that touches
+  no protected path. That is expected, not a fault. A protected-path pull
+  request shows `REVIEW_REQUIRED` until the owner approves its latest commit.
+
 ## What The Owner Does (Only He Can)
 
 These involve accounts and credentials, so the owner does them himself; the
