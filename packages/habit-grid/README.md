@@ -224,7 +224,10 @@ A record that is present or still in Trash must include every field for its
 type, unless a purge cutoff left a fragment whose surviving fields are newer
 than that cutoff. A field or stack member stamped at or before that cutoff is
 refused even when the record is otherwise complete, with `Field is older than
-its purge cutoff.` A purged marker has empty fields and may omit them. A saved
+its purge cutoff.` A nested record uses the later of its own cutoff and the
+person's cutoff. A life register at or before that cutoff is refused unless
+the record is already an empty purged marker, with `Life is older than its
+purge cutoff.` A purged marker has empty fields and may omit them. A saved
 file that drops `date` from a live check-in with no cutoff fails at load with
 `Incomplete record in person file.` A person who is live or still in Trash
 must include `name` and `weekStartsOn` unless a purge fragment explains the

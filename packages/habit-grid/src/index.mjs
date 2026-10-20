@@ -279,25 +279,36 @@ function contentBearing(record, withMembers) {
 function recordEntries(record, withMembers) {
   return [...Object.values(record.fields), ...(withMembers ? Object.values(record.members ?? {}) : [])];
 }
-function stampsAfterPurge(record, withMembers) {
-  if (!validStamp(record.purge)) return true;
-  return recordEntries(record, withMembers).every(entry => compareStamps(entry.stamp, record.purge) > 0);
+function purgeCutoff(record, parentPurge) {
+  const own = validStamp(record.purge) ? record.purge : null;
+  const parent = validStamp(parentPurge) ? parentPurge : null;
+  if (!own) return parent;
+  if (!parent) return own;
+  return latest(own, parent);
 }
-function survivingFragment(record, types, withMembers) {
-  if (!validStamp(record.purge)) return false;
+function survivingFragment(record, types, withMembers, purge) {
+  if (!validStamp(purge)) return false;
   const keys = Object.keys(types);
   if (keys.every(key => own(record.fields, key))) return false;
   const entries = recordEntries(record, withMembers);
   if (entries.length === 0) return false;
-  return entries.every(entry => compareStamps(entry.stamp, record.purge) > 0);
+  return entries.every(entry => compareStamps(entry.stamp, purge) > 0);
 }
-function requireCompleteOrFragment(record, types, withMembers) {
+function emptyPurgedMarker(record, withMembers, purge) {
+  if (record.life.value || compareStamps(record.life.stamp, purge) !== 0) return false;
+  if (!validStamp(record.purge) || compareStamps(record.purge, purge) !== 0) return false;
+  if (Object.keys(record.fields).length > 0) return false;
+  return !withMembers || Object.keys(record.members ?? {}).length === 0;
+}
+function requireCompleteOrFragment(record, types, withMembers, parentPurge = null) {
+  const purge = purgeCutoff(record, parentPurge);
+  if (purge && recordEntries(record, withMembers).some(entry => compareStamps(entry.stamp, purge) <= 0)) fail('Field is older than its purge cutoff.');
+  if (purge && compareStamps(record.life.stamp, purge) <= 0 && !emptyPurgedMarker(record, withMembers, purge)) fail('Life is older than its purge cutoff.');
   if (!contentBearing(record, withMembers)) return;
-  if (!stampsAfterPurge(record, withMembers)) fail('Field is older than its purge cutoff.');
   const complete = Object.keys(types).every(key => own(record.fields, key));
-  if (!complete && !survivingFragment(record, types, withMembers)) fail('Incomplete record in person file.');
+  if (!complete && !survivingFragment(record, types, withMembers, purge)) fail('Incomplete record in person file.');
 }
-function validateRecord(record, types, withMembers, checkShape = false) {
+function validateRecord(record, types, withMembers, checkShape = false, parentPurge = null) {
   if (!object(record) || typeof record.id !== 'string' || !record.id || !object(record.life) || typeof record.life.value !== 'boolean' || !validStamp(record.life.stamp) || (record.purge !== null && !validStamp(record.purge))) fail('Invalid record in person file.');
   validateFields(record.fields, types);
   if (withMembers) {
@@ -306,7 +317,7 @@ function validateRecord(record, types, withMembers, checkShape = false) {
       if (!key || !object(entry) || typeof entry.value !== 'boolean' || !validStamp(entry.stamp)) fail('Invalid stack member in person file.');
     }
   } else if (own(record, 'members')) fail('Invalid record in person file.');
-  requireCompleteOrFragment(record, types, withMembers);
+  requireCompleteOrFragment(record, types, withMembers, parentPurge);
   if (checkShape && contentBearing(record, withMembers)) {
     const shapeKeys = SHAPE_KEYS.filter(key => own(record.fields, key));
     if (shapeKeys.length > 0 && (shapeKeys.length < SHAPE_KEYS.length || !trackerShapeValid(record.fields))) fail('Invalid tracker shape in person file.');
@@ -331,7 +342,7 @@ function validate(person) {
     ['restDays', 'rest day', restFieldTypes, false, false],
   ]) {
     if (!Array.isArray(person[key])) fail(`Invalid ${label} records in person file.`);
-    for (const record of person[key]) validateRecord(record, types, withMembers, checkShape);
+    for (const record of person[key]) validateRecord(record, types, withMembers, checkShape, person.purge);
     uniqueIds(person[key], label);
   }
   return person;

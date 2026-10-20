@@ -1009,3 +1009,78 @@ test('renderSvg escapes square date, state, and shade', () => {
   assert.match(plain, /data-state="open"/);
   assert.match(plain, /data-shade="0"/);
 });
+
+test('a person purge cutoff fences nested tracker fields and stack members', () => {
+  const engine = fixed('phone-a', 100);
+  const id = engine.createPerson('River', { id: 'river' });
+  engine.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  engine.addStack(id, { name: 'Morning', members: ['water'] }, { stackId: 'morning' });
+  const prior = engine.getPerson(id);
+  engine.deletePerson(id);
+  engine.emptyTrash(id);
+  const erased = engine.getPerson(id);
+  const cutoff = erased.purge;
+  const fresh = { counter: cutoff.counter + 4, time: cutoff.time + 4, device: 'phone-b' };
+  const revived = structuredClone(erased);
+  revived.life = { value: true, stamp: { ...fresh } };
+  revived.fields = {
+    name: { value: 'River', stamp: { ...fresh } },
+    weekStartsOn: { value: 'sunday', stamp: { ...fresh } },
+  };
+  const tracker = structuredClone(prior.trackers[0]);
+  tracker.purge = null;
+  tracker.life = { value: true, stamp: { ...fresh } };
+  revived.trackers = [tracker];
+  assert.throws(() => deserializePerson(JSON.stringify(revived)), /Field is older than its purge cutoff/);
+  assert.throws(() => mergePeople(revived, revived), /Field is older than its purge cutoff/);
+  assert.equal(viewPerson(erased).trackers.length, 0);
+
+  for (const entry of Object.values(tracker.fields)) entry.stamp = { ...fresh };
+  const stack = structuredClone(prior.stacks[0]);
+  stack.purge = null;
+  stack.life = { value: true, stamp: { ...fresh } };
+  stack.fields.name.stamp = { ...fresh };
+  revived.stacks = [stack];
+  assert.throws(() => deserializePerson(JSON.stringify(revived)), /Field is older than its purge cutoff/);
+
+  for (const entry of Object.values(stack.members)) entry.stamp = { ...fresh };
+  const loaded = deserializePerson(JSON.stringify(revived));
+  const merged = mergePeople(loaded, loaded);
+  assert.deepEqual(mergePeople(merged, merged), merged);
+  assert.equal(merged.trackers[0].life.value, true);
+  assert.equal(merged.trackers[0].fields.name.value, 'Water');
+  assert.equal(viewPerson(loaded).trackers[0].name, 'Water');
+  assert.deepEqual(viewPerson(merged).stacks[0].members, ['water']);
+});
+
+test('a true life register at or before its purge cutoff is refused', () => {
+  const engine = fixed('phone-a', 100);
+  const id = engine.createPerson('River', { id: 'river' });
+  engine.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  const prior = engine.getPerson(id);
+  engine.deleteTracker(id, 'water');
+  engine.emptyTrash(id);
+  const revived = structuredClone(engine.getPerson(id));
+  const cutoff = revived.trackers[0].purge;
+  const fresh = { counter: cutoff.counter + 3, time: cutoff.time + 3, device: 'phone-b' };
+  revived.trackers[0].life = { value: true, stamp: { counter: cutoff.counter, time: cutoff.time, device: cutoff.device } };
+  revived.trackers[0].fields = Object.fromEntries(Object.entries(prior.trackers[0].fields).map(([key, entry]) => [key, { value: entry.value, stamp: { ...fresh } }]));
+  assert.throws(() => deserializePerson(JSON.stringify(revived)), /Life is older than its purge cutoff/);
+  assert.throws(() => mergePeople(revived, revived), /Life is older than its purge cutoff/);
+
+  const personPurge = { counter: fresh.counter + 2, time: fresh.time + 2, device: 'phone-a' };
+  const afterPerson = { counter: personPurge.counter + 2, time: personPurge.time + 2, device: 'phone-b' };
+  const personCutoff = structuredClone(prior);
+  personCutoff.purge = personPurge;
+  personCutoff.life = { value: true, stamp: { ...afterPerson } };
+  for (const entry of Object.values(personCutoff.fields)) entry.stamp = { ...afterPerson };
+  personCutoff.trackers[0].purge = null;
+  for (const entry of Object.values(personCutoff.trackers[0].fields)) entry.stamp = { ...afterPerson };
+  personCutoff.trackers[0].life = { value: true, stamp: { ...personPurge } };
+  assert.throws(() => deserializePerson(JSON.stringify(personCutoff)), /Life is older than its purge cutoff/);
+
+  revived.trackers[0].life = { value: true, stamp: { ...fresh } };
+  const loaded = deserializePerson(JSON.stringify(revived));
+  assert.deepEqual(mergePeople(loaded, loaded), loaded);
+  assert.equal(viewPerson(loaded).trackers[0].name, 'Water');
+});
