@@ -290,7 +290,7 @@ function validateRecord(record, types, withMembers, checkShape = false) {
   if (contentBearing(record, withMembers)) {
     const complete = Object.keys(types).every(key => own(record.fields, key));
     if (!complete && !survivingFragment(record, types, withMembers)) fail('Incomplete record in person file.');
-    if (complete && checkShape && !trackerShapeValid(record.fields)) fail('Invalid tracker shape in person file.');
+    if (checkShape && SHAPE_KEYS.every(key => own(record.fields, key)) && !trackerShapeValid(record.fields)) fail('Invalid tracker shape in person file.');
   }
   if (withMembers) {
     if (!object(record.members)) fail('Invalid stack members in person file.');
@@ -586,7 +586,7 @@ export function buildGrid(person, trackerId, options = {}) {
 }
 function liveStack(person, stackId) {
   const stack = person.stacks.find(record => record.id === stackId);
-  if (!stack || !stack.life.value || !present(stack)) fail('Stack not found.');
+  if (!stack || !stack.life.value || !fieldsPresent(stack.fields, RECORD_KEYS.stack)) fail('Stack not found.');
   return stack;
 }
 function stackMembers(person, stack) {
@@ -820,9 +820,10 @@ function editable(records, id, label) {
   if (record.purge && !present(record)) fail(`${label} was emptied from Trash.`);
   return record;
 }
-function active(records, id, label) {
+function active(records, id, label, keys) {
   const record = editable(records, id, label);
   if (!record.life.value) fail(`${label} is in Trash.`);
+  if (!fieldsPresent(record.fields, keys)) fail(`${label} not found.`);
   return record;
 }
 function stampedFields(entries, stamp) {
@@ -932,7 +933,7 @@ export class HabitGrid {
     });
     this.#change(personId, (person, stamp) => {
       const index = person.trackers.findIndex(record => record.id === trackerId);
-      if (index >= 0 && present(person.trackers[index])) fail('Tracker ID already exists.');
+      if (index >= 0 && fieldsPresent(person.trackers[index].fields, RECORD_KEYS.tracker)) fail('Tracker ID already exists.');
       const purge = index >= 0 ? person.trackers[index].purge : null;
       if (index >= 0) person.trackers.splice(index, 1);
       person.trackers.push({
@@ -984,12 +985,12 @@ export class HabitGrid {
     for (const member of members) identity(member, 'Stack member');
     this.#change(personId, (person, stamp) => {
       const index = person.stacks.findIndex(record => record.id === stackId);
-      if (index >= 0 && present(person.stacks[index])) fail('Stack ID already exists.');
+      if (index >= 0 && fieldsPresent(person.stacks[index].fields, RECORD_KEYS.stack)) fail('Stack ID already exists.');
       const purge = index >= 0 ? person.stacks[index].purge : null;
       if (index >= 0) person.stacks.splice(index, 1);
       const memberMap = {};
       for (const member of [...new Set(members)].sort()) {
-        if (!person.trackers.some(record => record.id === member && record.life.value && present(record))) fail('Tracker not found.');
+        if (!person.trackers.some(record => record.id === member && record.life.value && fieldsPresent(record.fields, RECORD_KEYS.tracker))) fail('Tracker not found.');
         setOwn(memberMap, member, { value: true, stamp: clone(stamp) });
       }
       person.stacks.push({ id: stackId, life: { value: true, stamp }, purge, fields: stampedFields([['name', input.name]], stamp), members: memberMap });
@@ -1011,7 +1012,7 @@ export class HabitGrid {
     if (typeof included !== 'boolean') fail('Stack membership must be a boolean.');
     return this.#change(personId, (person, stamp) => {
       const stack = editable(person.stacks, stackId, 'Stack');
-      if (included && !person.trackers.some(record => record.id === trackerId && record.life.value && present(record))) fail('Tracker not found.');
+      if (included && !person.trackers.some(record => record.id === trackerId && record.life.value && fieldsPresent(record.fields, RECORD_KEYS.tracker))) fail('Tracker not found.');
       setOwn(stack.members, trackerId, { value: included, stamp });
       stack.life = { value: true, stamp };
       person.life = { value: true, stamp };
@@ -1034,7 +1035,7 @@ export class HabitGrid {
   logCheckIn(personId, trackerId, { date, value, source = 'manual', checkInId = randomUUID() } = {}) {
     identity(checkInId, 'Check-in ID');
     if (source !== 'manual') fail('Only manual check-ins can be written in this version.');
-    const tracker = active(this.#get(personId).trackers, trackerId, 'Tracker');
+    const tracker = active(this.#get(personId).trackers, trackerId, 'Tracker', RECORD_KEYS.tracker);
     const day = date ?? this.#today();
     if (!validDate(day)) fail('Invalid date.');
     let amount = value;
@@ -1045,7 +1046,7 @@ export class HabitGrid {
     if (!nonNegative(amount)) fail('Check-in value must be zero or greater.');
     this.#change(personId, (person, stamp) => {
       const index = person.checkIns.findIndex(record => record.id === checkInId);
-      if (index >= 0 && present(person.checkIns[index])) fail('Check-in ID already exists.');
+      if (index >= 0 && fieldsPresent(person.checkIns[index].fields, RECORD_KEYS.checkIn)) fail('Check-in ID already exists.');
       const purge = index >= 0 ? person.checkIns[index].purge : null;
       if (index >= 0) person.checkIns.splice(index, 1);
       person.checkIns.push({
@@ -1066,7 +1067,7 @@ export class HabitGrid {
     if (own(input, 'trackerId')) identity(input.trackerId, 'Tracker ID');
     return this.#change(personId, (person, stamp) => {
       const checkIn = editable(person.checkIns, checkInId, 'Check-in');
-      if (own(input, 'trackerId')) active(person.trackers, input.trackerId, 'Tracker');
+      if (own(input, 'trackerId')) active(person.trackers, input.trackerId, 'Tracker', RECORD_KEYS.tracker);
       for (const key of ['trackerId', 'date', 'value', 'source']) {
         if (own(input, key)) checkIn.fields[key] = { value: input[key], stamp: clone(stamp) };
       }
@@ -1093,12 +1094,12 @@ export class HabitGrid {
     if (trackerId) identity(trackerId, 'Tracker ID');
     identity(restId, 'Rest day ID');
     const person = this.#get(personId);
-    if (trackerId) active(person.trackers, trackerId, 'Tracker');
+    if (trackerId) active(person.trackers, trackerId, 'Tracker', RECORD_KEYS.tracker);
     const existing = person.restDays.find(rest => rest.life.value && fieldsPresent(rest.fields, RECORD_KEYS.rest) && rest.fields.date.value === date && rest.fields.trackerId.value === trackerId);
     if (existing) return existing.id;
     this.#change(personId, (draft, stamp) => {
       const index = draft.restDays.findIndex(record => record.id === restId);
-      if (index >= 0 && present(draft.restDays[index])) fail('Rest day ID already exists.');
+      if (index >= 0 && fieldsPresent(draft.restDays[index].fields, RECORD_KEYS.rest)) fail('Rest day ID already exists.');
       const purge = index >= 0 ? draft.restDays[index].purge : null;
       if (index >= 0) draft.restDays.splice(index, 1);
       draft.restDays.push({
@@ -1129,7 +1130,7 @@ export class HabitGrid {
     const day = date ?? this.#today();
     if (!validDate(day)) fail('Invalid date.');
     const person = this.#get(personId);
-    const stack = active(person.stacks, stackId, 'Stack');
+    const stack = active(person.stacks, stackId, 'Stack', RECORD_KEYS.stack);
     const memberIds = Object.entries(stack.members ?? {}).filter(([, entry]) => entry.value).map(([id]) => id).sort();
     const plan = [];
     const needsValue = [];

@@ -819,6 +819,47 @@ test('concurrent shape edits stay a real tracker, and a lone target change still
   assert.equal(shown.grid(personId, 'water', { start: '2026-03-01', end: '2026-03-08' }).squares.find(item => item.date === '2026-03-05').value, 9);
 });
 
+test('a purge fragment is not an active tracker, and an impossible shape fragment is refused', () => {
+  const home = fixed('phone-a', 100);
+  const away = fixed('phone-b', 100);
+  const id = home.createPerson('River', { id: 'river' });
+  home.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  away.importPerson(home.getPerson(id));
+  home.deleteTracker(id, 'water');
+  home.emptyTrash(id);
+  away.renamePerson(id, 'River two');
+  away.renamePerson(id, 'River three');
+  away.renamePerson(id, 'River four');
+  away.editTracker(id, 'water', { name: 'Hidden water' });
+  const hidden = fixed('phone-c', 100);
+  hidden.importPerson(converges(home.getPerson(id), away.getPerson(id)));
+  assert.equal(hidden.view(id).trackers.length, 0);
+  assert.throws(() => hidden.logCheckIn(id, 'water', { date: '2026-03-04', value: 1 }), /Tracker not found/);
+  assert.throws(() => hidden.markRest(id, '2026-03-04', { trackerId: 'water' }), /Tracker not found/);
+  hidden.addTracker(id, { name: 'Fresh', kind: 'count', target: 4, unit: 'cups' }, { trackerId: 'water' });
+  assert.equal(hidden.view(id).trackers[0].name, 'Fresh');
+  assert.equal(hidden.view(id).trackers[0].unit, 'cups');
+  hidden.logCheckIn(id, 'water', { date: '2026-03-04', value: 1, checkInId: 'cup' });
+  assert.equal(hidden.grid(id, 'water', { start: '2026-03-01', end: '2026-03-08' }).squares.find(item => item.date === '2026-03-04').value, 1);
+
+  const base = fixed('phone-a', 100);
+  const person = base.createPerson('River', { id: 'shape' });
+  base.addTracker(person, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  const snap = base.getPerson(person);
+  const tracker = snap.trackers.find(item => item.id === 'water');
+  const stamp = tracker.fields.kind.stamp;
+  tracker.purge = { counter: 1, time: stamp.time, device: stamp.device };
+  for (const key of ['name', 'color', 'usualAmount', 'schedule', 'startedOn']) delete tracker.fields[key];
+  tracker.fields.kind.value = 'amount';
+  tracker.fields.target.value = null;
+  tracker.fields.unit.value = 'minutes';
+  assert.throws(() => deserializePerson(JSON.stringify(snap)), /Invalid tracker shape/);
+  tracker.fields.target.value = 30;
+  const loaded = deserializePerson(JSON.stringify(snap));
+  assert.equal(loaded.trackers.find(item => item.id === 'water').fields.kind.value, 'amount');
+  assert.equal(viewPerson(loaded).trackers.length, 0);
+});
+
 test('three-device histories converge under every delivery order', () => {
   let seed = 261016;
   const next = limit => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed % limit; };

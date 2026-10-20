@@ -232,9 +232,12 @@ Merge compares those fields on their own, and because they share a stamp the
 newest shape write wins together. Every merge order agrees. A purged field is
 never copied back. A cutoff can leave a record with only the fields stamped
 after it. That fragment stays in the file so a later replica can fill the
-gaps, and it stays out of the live grid and the live view until every field
-is present. A saved file that drops `date` from a live check-in with no
-cutoff still fails at load.
+gaps, and it stays out of the live grid, the live view, and the commands
+that log a check-in or mark a rest day. A new tracker with that same
+permanent ID can replace the fragment. If `kind`, `target`, and `unit` are
+all present, they must still describe a real tracker, even when another
+field is missing. A saved file that drops `date` from a live check-in with
+no cutoff still fails at load.
 
 ## Undo
 
