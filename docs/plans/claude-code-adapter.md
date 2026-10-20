@@ -101,9 +101,10 @@ do for the local model. The real True Convo app is unchanged.
    refuses to run when it sees an API key, key helper, other provider or
    base URL (`provider-override`). Logs hold ids, event types, byte counts
    and fixed reasons only, never text or account fields.
-7. **Invented data only** until the step 2 trial passes. After that, real
-   conversations go to Claude only by the owner's choice in that
-   conversation (question 6).
+7. **Invented data only** until two trials have passed: step 2's trial
+   and this adapter's own owner trial. After both, a real conversation goes
+   to Claude only when the owner picks Claude in that conversation
+   (question 6). (Codex P1 on #75.)
 
 ## Lifecycle, Same As Step 3
 
@@ -150,19 +151,29 @@ Sections 1-20 stay in force; every existing vector stays byte-identical.
      paid-usage owner and the approval state, inactive.
    - **3c** Context and launch: Claude runs take `contextRunIds`, the
      stdin layout, the real launcher through the supervisor in place of
-     `ClaudeNotConnected`, tested against the fake CLI only.
-4. **Desk wiring.** **4a** Picker entry, "not on this Mac" labels, the
-   "sends N earlier turns" line, both consent screens, plain messages for
-   every reason, Retry for Claude runs; nothing turned on. **4b** Turn it
-   on in True Convo Test (`LocalConversationLane` gains the real launcher);
-   the Claude entry joins the picker only here (see "October 16 decision").
-5. **Proof and owner trial.** The scripted proofs below, section 16's
-   acceptance checks with one live run on invented text after the owner's
-   OK, then the owner's checklist.
+     `ClaudeNotConnected`, still inactive, tested against the fake CLI
+     only. Includes the fake-CLI host cases and the tools refusal (below).
+4. **Desk wiring.**
+   - **4a** Picker entry, "not on this Mac" labels, the "sends N earlier
+     turns" line, both consent screens, plain messages for every reason,
+     Retry for Claude runs; nothing turned on. Includes the consent proof
+     (below).
+   - **4-proof** The fake-CLI kill proof (below), through the real app
+     wiring with the launcher still off for the real CLI.
+   - **4b** Turn it on in True Convo Test (`LocalConversationLane` gains
+     the real launcher); the Claude entry joins the picker only here (see
+     "October 16 decision"). **PR 4b may merge only after every safety
+     proof below has passed** in 3c, 4a and 4-proof. (Codex P1 on #75.)
+5. **Live check and owner trial.** Section 16's acceptance checks with one
+   live run on invented text after the owner's OK, then the owner's
+   checklist. No safety proof waits for this pull request.
 
 ## Proofs
 
-- **Fake-CLI kill proof**, built like step 3's `LocalKillMidReplyProofTests`:
+Every proof that guards safety runs against the fake CLI and passes before
+PR 4b turns anything on. Only section 16's live run waits for PR 5.
+
+- **Fake-CLI kill proof** (PR 4-proof), built like step 3's `LocalKillMidReplyProofTests`:
   a test app runs the real lane, supervisor and store with a fake CLI that
   streams scripted events. SIGKILL the app at exact points (before the
   first piece, after one, three and six), chosen by handshake, never by
@@ -170,12 +181,17 @@ Sections 1-20 stay in force; every existing vector stays byte-identical.
   no reply saved twice, one spawn for the run, no live fake or supervisor
   within 10 seconds. Then Close as unknown, Retry and Send make exactly one
   new run. A graceful quit records `stopped` and one spawn.
-- **Fake-CLI host cases** in the new vectors file: overflow held and
+- **Fake-CLI host cases** in the new vectors file (PR 3c): overflow held and
   released, overflow signal, tools in init, a provider override, an
   oversize reply, Stop before and after the first piece, lock, supervisor loss.
-- **Nothing leaves without consent:** tests that no spawn happens without
-  both gates, and that the CLI never receives an API key or proxy setting.
-- **Section 16 acceptance**, on invented text, with the owner present for
+- **Tools refused** (PR 3c): a fake CLI that reports any tool, MCP server,
+  skill or plugin at start is stopped before any text is kept, and the
+  argument list always carries the no-tools flags.
+- **Nothing leaves without consent** (PR 4a, rechecked in 4-proof): no
+  spawn happens unless both gates are passed, a revoked approval or an
+  ended paid-usage confirmation stops the next spawn, and the CLI never
+  receives an API key or proxy setting.
+- **Section 16 acceptance** (PR 5, the one live step), on invented text, with the owner present for
   the one live run: argv and init values, inert `@file` and `/config`
   input, nothing new under `~/.claude`, kill -9 cleanup, Stop during a
   blocked save.
@@ -208,18 +224,31 @@ What counts as "works" is the owner's call (question 1).
 ## Open Questions For The Owner
 
 1. **When does Claude appear in the picker?** *Recommend:* in True Convo
-   Test when PR 4b merges, after the fake-CLI proofs pass, so the trial can
-   run. The real app waits until this trial passes. Trade-off: it is
+   Test when PR 4b merges, which it may do only after every fake-CLI safety
+   proof has passed, so the trial can run. The real app waits until this trial passes. Trade-off: it is
    visible before a live run has been checked; it stays unusable until both
    gates pass.
 2. **The D1 choice: may True Convo run `claude auth status`?** It is the
    only local way to learn "signed in, on a plan, no API key", but on Team
    or Enterprise plans it can fetch settings from Anthropic and run a
-   helper they name. The full options are in True Convo's D1 review record
-   (not moved). *Recommend* option 2 from that record: run it behind a
-   proxy address the app holds closed, so that fetch fails, and accept only
-   Pro and Max plans for now. Trade-off: Team and Enterprise logins can't
-   use the adapter yet.
+   helper program they name. True Convo's D1 record (not moved) lists four
+   options, most protective first:
+   1. Let macOS block all network use for that one check, and accept only
+      Pro and Max plans.
+   2. Point that one check at a proxy address the app holds closed, so the
+      fetch fails, and accept only Pro and Max plans.
+   3. Run the check normally and refuse non-Pro/Max plans afterwards (one
+      fetch per launch can still happen).
+   4. Keep refusing, so Claude is never available (today's setting).
+
+   *Recommend* option 1, with option 2 as a backup, the order Codex already
+   recommended there. Trade-offs: Team and Enterprise logins can't use the
+   adapter; option 1 relies on a macOS tool Apple calls deprecated and must
+   be retested on each macOS version. Neither option alone guarantees that
+   no helper ever runs: one changed on the Mac between the check and the
+   run, or a login changed in that gap, isn't caught. So the owner's
+   choice also accepts a narrower promise, written into the contract and
+   reviewed by Codex.
 3. **Section 17's limits: 5 runs per confirmation, 4,096 bytes per send.**
    With earlier turns included, 4,096 bytes is about two short exchanges.
    *Recommend:* keep 5 runs for the first trial and raise the byte bound to
@@ -236,8 +265,9 @@ What counts as "works" is the owner's call (question 1).
    small re-pin pull request each time, re-recording section 16's init
    values. Trade-off: Claude can be unavailable for a day or two after an
    update.
-6. **Real conversations after step 2's trial.** *Recommend:* invented only
-   until this adapter's own trial passes too; then real conversations go to
-   Claude only when the owner picks Claude in that conversation.
+6. **When may real conversations go to Claude?** The plan requires both
+   trials, step 2's and this adapter's, and then the owner picking Claude
+   in that conversation (safety model, item 7). *Recommend:* keep it that
+   way. Trade-off: real use waits for both trials.
 7. **Which Claude model?** *Recommend:* one pinned model per app build,
    chosen by the owner at PR 3c; no model menu inside Claude yet.

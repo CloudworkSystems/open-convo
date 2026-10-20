@@ -1,6 +1,6 @@
 # Status
 
-Updated October 19, 2026. The short version of where the build is. The full
+Updated October 20, 2026. The short version of where the build is. The full
 plan is in [PLAN.md](PLAN.md).
 
 ## Now
