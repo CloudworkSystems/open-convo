@@ -6,3 +6,5 @@ for the owner even when `tests` and `codex-approved` pass. Do not merge.
 
 Second commit, added after Codex's clean review, for merge-gate test 5: the
 `codex-approved` status must go back to pending for this new head.
+
+Practice line added for merge-gate test 6 (stale owner approval). Invented content.
