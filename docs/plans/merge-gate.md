@@ -46,7 +46,8 @@ A pull request merges itself when all of these are true:
 3. **The owner approved the latest version**, but only if it touches a
    protected path (below). Any new commit after his approval cancels it.
 4. Auto-merge is switched on for the pull request (the author does this when
-   opening it).
+   opening it; for outside builders, the planning session does it after its
+   plan check passes).
 
 No bot holds admin, so no bot can turn these rules off.
 
@@ -101,6 +102,10 @@ automatically once checks 1, 2 and 4 pass.
   now: the session that opened the pull request posts `@codex review` from the
   owner's account after each push. Giving the bot its own Codex account is to
   be tried later and may involve spending.
+- **Designated reviewer (coming).** For Codex-built modules, Claude is the
+  plan's designated reviewer, and a separate pull request is teaching
+  `codex-approved` to accept that reviewer in place of Codex. Until then,
+  Codex's review still gates those pull requests and Claude also reviews them.
 - **"Up to date" side effect.** `main` requires a branch to be up to date
   before it merges, so every merge puts the other open pull requests out of
   date. Each update is a new commit, which needs a new Codex review before
@@ -156,7 +161,8 @@ and `codex-approved` passed. So while cloud Claude opens PRs as the owner,
 protected paths bind only the bot, not Claude. The gate is not switched on
 for `main` until test 3 passes with a bot-opened PR. If Claude can't be moved
 to the bot, the owner merges Claude's protected-path PRs himself with
-auto-merge off.
+auto-merge off. (Later: test 3 passed with a bot-opened PR and the gate went
+on October 20; builders now open PRs as the bot. See "Status".)
 
 ## What The Building Session Builds
 
@@ -188,7 +194,8 @@ Results so far (October 19, on `gate-test`, protected like `main` will be):
 1 pass (#66), 2 pass (#67), 5 pass (#69), 3 fails for owner-opened PRs (#68,
 see Cloud Claude), 4 and 6 wait for the bot. Also found and fixed on the way:
 an emoji in a status description that GitHub rejected (#63) and the computing
-job sharing the check's name (#70).
+job sharing the check's name (#70). Final results (October 20, on
+`gate-scratch`, with bot-opened PRs): all six pass; see "Status".
 
 Run on a scratch branch protected exactly like `main`, with invented changes:
 
