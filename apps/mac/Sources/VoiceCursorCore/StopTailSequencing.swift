@@ -195,3 +195,57 @@ public final class OneShotResult<Value> {
         }
     }
 }
+
+/// What a dictation captured, read when capture really ended (after the
+/// tail and Apple's last words), not at the moment of Stop. Words or loud
+/// sound that arrive during the tail count as evidence of speech, so the
+/// silent-recording guard never throws away the very words the tail kept.
+public struct CaptureEndEvidence: Equatable {
+    /// The words heard up to the end of capture.
+    public var words: String
+    /// When the live listener first heard words, if it did.
+    public var firstPartialAt: Date?
+    public var firstFinalAt: Date?
+    public var totalSlices: Int
+    public var slicesAtOrAboveNearSilent: Int
+    public var slicesAtOrAboveStrictSilent: Int
+    public var liveListenerHadError: Bool
+    /// From the start of the dictation to the end of capture, tail included.
+    public var capturedSeconds: Double
+
+    public init(
+        words: String,
+        firstPartialAt: Date?,
+        firstFinalAt: Date?,
+        totalSlices: Int,
+        slicesAtOrAboveNearSilent: Int,
+        slicesAtOrAboveStrictSilent: Int,
+        liveListenerHadError: Bool,
+        capturedSeconds: Double
+    ) {
+        self.words = words
+        self.firstPartialAt = firstPartialAt
+        self.firstFinalAt = firstFinalAt
+        self.totalSlices = totalSlices
+        self.slicesAtOrAboveNearSilent = slicesAtOrAboveNearSilent
+        self.slicesAtOrAboveStrictSilent = slicesAtOrAboveStrictSilent
+        self.liveListenerHadError = liveListenerHadError
+        self.capturedSeconds = capturedSeconds
+    }
+
+    /// The silent-recording guard's verdict on this capture.
+    /// - Parameters:
+    ///   - appleLiveCapture: Apple's live listener ran for this dictation.
+    ///   - speechEngineHeardWords: Apple On-Device (New) returned words at
+    ///     its finish.
+    public func treatAsNoSpeech(appleLiveCapture: Bool, speechEngineHeardWords: Bool) -> Bool {
+        SilentRecordingPolicy.treatAsNoSpeech(
+            liveListenerRanWithoutError: appleLiveCapture && !liveListenerHadError,
+            liveListenerHeardWords: firstPartialAt != nil || speechEngineHeardWords,
+            recordingSeconds: capturedSeconds,
+            slicesAtOrAboveNearSilent: slicesAtOrAboveNearSilent,
+            slicesAtOrAboveStrictSilent: slicesAtOrAboveStrictSilent,
+            totalSlices: totalSlices
+        )
+    }
+}

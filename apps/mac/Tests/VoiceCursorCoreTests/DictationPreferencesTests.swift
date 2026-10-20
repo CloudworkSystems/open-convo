@@ -176,9 +176,40 @@ struct DictationPreferencesTests {
         let tail = try #require(stop.range(of: "stopTail.stop(tailSeconds: tailSeconds)"))
         #expect(freeze.lowerBound < tail.lowerBound && guardCheck.lowerBound < tail.lowerBound)
         // The finish reads the words only after capture ended.
-        let words = try #require(stop.range(of: "await self.wordsAtEndOfCapture(captureEnd)"))
+        let words = try #require(stop.range(of: "await self.evidenceAtEndOfCapture(captureEnd)"))
         let finalText = try #require(stop.range(of: "var finalText = fallbackTranscript"))
         #expect(words.lowerBound < finalText.lowerBound)
+        // Codex P1 on #82: speech evidence is read when capture ends, never
+        // at the moment of Stop, so the tail's words and sound count.
+        let beforeTail = String(stop[..<tail.lowerBound])
+        for early in ["sliceCountTotal", "sliceCountAtOrAboveNearSilent", "self.firstPartialAt", "liveListenerHadError"] {
+            #expect(!beforeTail.contains(early), "\(early) must not be read before the tail")
+        }
+        let silentGuard = try #require(stop.range(of: "evidence.treatAsNoSpeech("))
+        #expect(words.lowerBound < silentGuard.lowerBound)
+        let end = try functionBody("private func completeCaptureEnd(", in: source)
+        let micOff = try #require(end.range(of: "stopWithoutArchive("))
+        let slices = try #require(end.range(of: "let totalSlices = sliceCountTotal"))
+        #expect(micOff.lowerBound < slices.lowerBound, "No slice is counted after the evidence is read.")
+        #expect(end.contains("firstPartialAt: firstPartialAt"))
+        #expect(end.contains("liveListenerHadError: liveListenerHadError"))
+
+        // Codex P2 on #82: while finishing, no engine puts live words or a
+        // listening status on the pill (it keeps "Finishing…").
+        let realtime = try functionBody("private func handleRealtimeTranscript(", in: source)
+        let realtimeGate = try #require(realtime.range(of: "guard isRecording else { return }"))
+        let realtimeWords = try #require(realtime.range(of: "onTranscript(normalized)"))
+        let realtimeCollect = try #require(realtime.range(of: "latestTranscript = normalized"))
+        #expect(realtimeCollect.lowerBound < realtimeGate.lowerBound && realtimeGate.lowerBound < realtimeWords.lowerBound)
+        let analyzer = try functionBody("private func handleSpeechAnalyzerTranscript(", in: source)
+        #expect(analyzer.contains("guard currentProvider == .appleSpeechAnalyzer, isRecording else { return }"))
+        let apple = try functionBody("private func startRecognitionSession(", in: source)
+        let appleGate = try #require(apple.range(of: "if self.isRecording {"))
+        let appleWords = try #require(apple.range(of: "self.onTranscript(combinedText)"))
+        #expect(appleGate.lowerBound < appleWords.lowerBound)
+        let recognitionError = try functionBody("private func handleRecognitionError(", in: source)
+        #expect(recognitionError.contains("if isRecording { onStatus(error.localizedDescription) }"))
+        #expect(!source.contains("self.audioEngine.isRunning else { return }\n                        self.onStatus"))
 
         let shutdown = try functionBody("func shutdown()", in: source)
         let discard = try #require(shutdown.range(of: "stopTail.discard()"))

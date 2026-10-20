@@ -6260,7 +6260,7 @@ final class DictationController {
     /// error; such a task has nothing more to hand back after Stop.
     private var endedRecognitionGeneration = -1
     /// The finish of the dictation now stopping waits here for its words.
-    private var captureEnd: OneShotResult<String>?
+    private var captureEnd: OneShotResult<CaptureEndEvidence>?
 
     static let mainQueueScheduler: StopTailScheduler = { delay, work in
         let item = DispatchWorkItem(block: work)
@@ -6994,7 +6994,9 @@ final class DictationController {
         )
         if shown {
             liveListenerHadError = true
-            onStatus(error.localizedDescription)
+            // After Stop the pill keeps "Finishing…"; the error is still
+            // counted for the finish.
+            if isRecording { onStatus(error.localizedDescription) }
         }
     }
 
@@ -7012,10 +7014,11 @@ final class DictationController {
         }
         currentRecognitionTranscript = normalized
         latestTranscript = normalized
-        if isRecording {
-            if deskRoute == nil { TextInjector.updateLivePreview(normalized) }
-            scheduleAutoStopIfNeeded(for: normalized)
-        }
+        // After Stop (the tail and the stream's finish) words are only
+        // collected: the pill keeps "Finishing…".
+        guard isRecording else { return }
+        if deskRoute == nil { TextInjector.updateLivePreview(normalized) }
+        scheduleAutoStopIfNeeded(for: normalized)
         onTranscript(normalized)
         onStatus(normalized.isEmpty ? "OpenAI Realtime: streaming" : normalized)
     }
@@ -7334,14 +7337,9 @@ final class DictationController {
         // A Desk recording inserts nothing: its words go only to the Desk.
         let completionActionAtStop = deskRouteAtStop == nil ? Settings.completionAction : .archiveOnly
         let stopProcessingStartedAt = Date()
-        let firstPartialAt = self.firstPartialAt
-        let firstFinalAt = self.firstFinalAt
-        sliceCountLock.lock()
-        let slicesTotalAtStop = sliceCountTotal
-        let slicesNearAtStop = sliceCountAtOrAboveNearSilent
-        let slicesStrictAtStop = sliceCountAtOrAboveStrictSilent
-        sliceCountLock.unlock()
-        let liveListenerHadErrorAtStop = liveListenerHadError
+        // Words heard, loudness and listener errors are read when capture
+        // ends (after the tail), in completeCaptureEnd, so the tail's speech
+        // counts for the silent-recording guard.
         let livePasted = didLivePasteFinalText
         let activeRealtimeTranscriber = realtimeTranscriber
         RunLog.write(
@@ -7374,7 +7372,7 @@ final class DictationController {
         // and finish. It is finished, not cancelled.
         let activeSpeechAnalyzerEngine = speechAnalyzerEngine
         speechAnalyzerEngine = nil
-        let captureEnd = OneShotResult<String>()
+        let captureEnd = OneShotResult<CaptureEndEvidence>()
         self.captureEnd = captureEnd
         let tailDecision = stopTail.stop(tailSeconds: tailSeconds) { [weak self] in
             guard let self else {
@@ -7420,10 +7418,13 @@ final class DictationController {
             var releasedRecording = false
             defer { if !releasedRecording, let url { self.finishOwnedRecording(url) } }
             guard !Task.isCancelled, !self.recordingProcesses.isClosed else { return }
-            // The words heard up to the end of capture (after the tail).
-            // nil: the capture was dropped (True Convo is quitting).
-            guard let fallbackTranscript = await self.wordsAtEndOfCapture(captureEnd) else { return }
+            // The words and speech evidence up to the end of capture (after
+            // the tail). nil: the capture was dropped (True Convo is quitting).
+            guard let evidence = await self.evidenceAtEndOfCapture(captureEnd) else { return }
             guard !Task.isCancelled, !self.recordingProcesses.isClosed else { return }
+            let fallbackTranscript = evidence.words
+            let firstPartialAt = evidence.firstPartialAt
+            let firstFinalAt = evidence.firstFinalAt
             var finalText = fallbackTranscript
             var model = modelAtStop
             var postStopTranscriptionMs: Int?
@@ -7538,19 +7539,16 @@ final class DictationController {
             // for watching..."). See SilentRecordingPolicy for the rule. Words
             // from Apple On-Device (New) count as heard even when they arrived
             // after the key was released (its model can finish loading late).
+            // The evidence includes the tail after Stop.
             let liveListenerHeardWords = firstPartialAt != nil || speechEngineHeardWords
             if !finalText.isEmpty,
-               SilentRecordingPolicy.treatAsNoSpeech(
-                   liveListenerRanWithoutError: captureMode == .appleLive && !liveListenerHadErrorAtStop,
-                   liveListenerHeardWords: liveListenerHeardWords,
-                   recordingSeconds: Double(durationMs) / 1000,
-                   slicesAtOrAboveNearSilent: slicesNearAtStop,
-                   slicesAtOrAboveStrictSilent: slicesStrictAtStop,
-                   totalSlices: slicesTotalAtStop
+               evidence.treatAsNoSpeech(
+                   appleLiveCapture: captureMode == .appleLive,
+                   speechEngineHeardWords: speechEngineHeardWords
                ) {
                 RunLog.write(
                     "dictation.silent-recording",
-                    "id=\(id) slices=\(slicesTotalAtStop) speechLoud=\(slicesNearAtStop) quietSpeech=\(slicesStrictAtStop) listenerError=\(liveListenerHadErrorAtStop) heardWords=\(liveListenerHeardWords) droppedChars=\(finalText.count)"
+                    "id=\(id) slices=\(evidence.totalSlices) speechLoud=\(evidence.slicesAtOrAboveNearSilent) quietSpeech=\(evidence.slicesAtOrAboveStrictSilent) listenerError=\(evidence.liveListenerHadError) heardWords=\(liveListenerHeardWords) droppedChars=\(finalText.count)"
                 )
                 finalText = ""
             }
@@ -7832,7 +7830,7 @@ final class DictationController {
         provider: DictationProvider,
         sessionId id: String,
         finishEngineGracefully: Bool,
-        result: OneShotResult<String>
+        result: OneShotResult<CaptureEndEvidence>
     ) {
         sliceCountLock.lock()
         tapInStopTail = false
@@ -7879,10 +7877,10 @@ final class DictationController {
         }
     }
 
-    private func completeCaptureEnd(provider: DictationProvider, result: OneShotResult<String>) {
+    private func completeCaptureEnd(provider: DictationProvider, result: OneShotResult<CaptureEndEvidence>) {
         promoteCurrentRecognitionTranscript(reason: "stop")
         latestTranscript = combinedTranscript()
-        let words = latestTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Stop the microphone first so no slice is counted after this read.
         stopWithoutArchive(
             closeRealtime: provider != .openAIRealtime,
             closeSpeechAnalyzer: provider != .appleSpeechAnalyzer,
@@ -7892,10 +7890,24 @@ final class DictationController {
             // The finish holds this stream; it ends it after its last words.
             realtimeTranscriber = nil
         }
-        result.resolve(words)
+        sliceCountLock.lock()
+        let totalSlices = sliceCountTotal
+        let nearSlices = sliceCountAtOrAboveNearSilent
+        let strictSlices = sliceCountAtOrAboveStrictSilent
+        sliceCountLock.unlock()
+        result.resolve(CaptureEndEvidence(
+            words: latestTranscript.trimmingCharacters(in: .whitespacesAndNewlines),
+            firstPartialAt: firstPartialAt,
+            firstFinalAt: firstFinalAt,
+            totalSlices: totalSlices,
+            slicesAtOrAboveNearSilent: nearSlices,
+            slicesAtOrAboveStrictSilent: strictSlices,
+            liveListenerHadError: liveListenerHadError,
+            capturedSeconds: Date().timeIntervalSince(startedAt)
+        ))
     }
 
-    private func wordsAtEndOfCapture(_ result: OneShotResult<String>) async -> String? {
+    private func evidenceAtEndOfCapture(_ result: OneShotResult<CaptureEndEvidence>) async -> CaptureEndEvidence? {
         await withCheckedContinuation { continuation in
             DispatchQueue.main.async {
                 result.whenResolved { continuation.resume(returning: $0) }

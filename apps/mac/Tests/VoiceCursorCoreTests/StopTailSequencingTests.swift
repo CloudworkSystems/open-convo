@@ -252,3 +252,69 @@ struct OneShotResultTests {
         #expect(result.isResolved)
     }
 }
+
+@Suite("Speech evidence at the end of capture")
+struct CaptureEndEvidenceTests {
+    private let start = Date(timeIntervalSince1970: 1_000)
+
+    @Test("A one-word dictation whose only speech arrives during the tail is not treated as no speech")
+    func oneWordInTailIsKept() {
+        // At the moment of Stop: nothing heard yet, only quiet slices.
+        let atStop = CaptureEndEvidence(
+            words: "",
+            firstPartialAt: nil,
+            firstFinalAt: nil,
+            totalSlices: 40,
+            slicesAtOrAboveNearSilent: 2,
+            slicesAtOrAboveStrictSilent: 3,
+            liveListenerHadError: false,
+            capturedSeconds: 0.8
+        )
+        #expect(atStop.treatAsNoSpeech(appleLiveCapture: true, speechEngineHeardWords: false),
+                "the old snapshot at Stop would have dropped the word")
+
+        // At the end of capture: the word and its loud slices came in the tail.
+        let atEnd = CaptureEndEvidence(
+            words: "invented",
+            firstPartialAt: start.addingTimeInterval(1.0),
+            firstFinalAt: nil,
+            totalSlices: 65,
+            slicesAtOrAboveNearSilent: 14,
+            slicesAtOrAboveStrictSilent: 16,
+            liveListenerHadError: false,
+            capturedSeconds: 1.3
+        )
+        #expect(!atEnd.treatAsNoSpeech(appleLiveCapture: true, speechEngineHeardWords: false))
+    }
+
+    @Test("Loud tail slices alone keep the words when the listener can't be trusted")
+    func loudTailSlicesCount() {
+        let atEnd = CaptureEndEvidence(
+            words: "sample",
+            firstPartialAt: nil,
+            firstFinalAt: nil,
+            totalSlices: 60,
+            slicesAtOrAboveNearSilent: 11,
+            slicesAtOrAboveStrictSilent: 12,
+            liveListenerHadError: true,
+            capturedSeconds: 1.2
+        )
+        #expect(!atEnd.treatAsNoSpeech(appleLiveCapture: true, speechEngineHeardWords: false))
+    }
+
+    @Test("Real silence is still treated as no speech")
+    func silenceStillDropped() {
+        let silent = CaptureEndEvidence(
+            words: "invented filler text",
+            firstPartialAt: nil,
+            firstFinalAt: nil,
+            totalSlices: 300,
+            slicesAtOrAboveNearSilent: 1,
+            slicesAtOrAboveStrictSilent: 2,
+            liveListenerHadError: false,
+            capturedSeconds: 6.5
+        )
+        #expect(silent.treatAsNoSpeech(appleLiveCapture: true, speechEngineHeardWords: false))
+        #expect(!silent.treatAsNoSpeech(appleLiveCapture: false, speechEngineHeardWords: true))
+    }
+}
