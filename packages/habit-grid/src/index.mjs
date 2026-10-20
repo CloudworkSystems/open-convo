@@ -161,66 +161,38 @@ function trackerShapeValid(fields) {
   if (kind === 'count') return target === null || positive(target);
   return target === null;
 }
-function trackerComplete(fields) {
-  return TRACKER_KEYS.every(key => object(fields?.[key]) && validStamp(fields[key].stamp)) && trackerShapeValid(fields);
+const RECORD_KEYS = Object.freeze({
+  tracker: TRACKER_KEYS,
+  stack: ['name'],
+  checkIn: ['trackerId', 'date', 'value', 'source'],
+  rest: ['date', 'trackerId'],
+});
+function fieldsPresent(fields, keys) {
+  return keys.every(key => object(fields?.[key]) && validStamp(fields[key].stamp));
 }
-function shapeStamp(record) {
-  let stamp = null;
-  for (const key of SHAPE_KEYS) {
-    const entry = record?.fields?.[key];
-    if (entry?.stamp) stamp = latest(stamp, entry.stamp);
-  }
-  return stamp;
+function tombstoneRecord(id, purge, withMembers) {
+  const dead = { id, fields: {}, life: { value: false, stamp: clone(purge) }, purge: clone(purge) };
+  if (withMembers) dead.members = {};
+  return dead;
 }
-function trackerSurvives(record, cutoff) {
-  return trackerComplete(record?.fields) && TRACKER_KEYS.every(key => compareStamps(record.fields[key].stamp, cutoff) > 0);
-}
-function tombstoneRecord(id, purge) {
-  return { id, fields: {}, life: { value: false, stamp: clone(purge) }, purge: clone(purge) };
-}
-function resolveTrackerShape(merged, left, right, parentPurge) {
-  const cutoff = latest(latest(left?.purge ?? null, right?.purge ?? null), parentPurge);
-  if (trackerComplete(merged.fields)) return merged;
-  const empty = !object(merged.fields) || Object.keys(merged.fields).length === 0;
-  if (empty && merged.life?.value !== true) return merged;
-  const candidates = [left, right].filter(record => trackerSurvives(record, cutoff));
-  if (candidates.length === 0) return cutoff ? tombstoneRecord(merged.id, cutoff) : merged;
-  candidates.sort((one, two) => compareStamps(shapeStamp(two), shapeStamp(one)));
-  const winner = candidates[0];
-  const other = candidates[1];
-  if (other && compareStamps(shapeStamp(winner), shapeStamp(other)) === 0 && SHAPE_KEYS.some(key => !sameValue(winner.fields[key].value, other.fields[key].value))) {
-    fail('Conflicting values share a version stamp. Use a unique device ID per writer.');
-  }
-  for (const key of SHAPE_KEYS) merged.fields[key] = clone(winner.fields[key]);
-  for (const key of TRACKER_KEYS) if (!merged.fields[key]) merged.fields[key] = clone(winner.fields[key]);
-  if (!trackerComplete(merged.fields)) return cutoff ? tombstoneRecord(merged.id, cutoff) : merged;
-  return merged;
-}
-function mergeRecord(a, b, parentPurge, withMembers) {
+function mergeRecord(a, b, parentPurge, withMembers, recordKind) {
   if (!a) a = { id: b.id, fields: {}, life: b.life, purge: null, ...(withMembers ? { members: {} } : {}) };
   if (!b) b = { id: a.id, fields: {}, life: a.life, purge: null, ...(withMembers ? { members: {} } : {}) };
   const ownPurge = latest(a.purge, b.purge);
   const purge = latest(ownPurge, parentPurge);
   const life = register(a.life, b.life);
-  if (compareStamps(life.stamp, purge) <= 0) {
-    const dead = { id: a.id, fields: {}, life: { value: false, stamp: clone(purge) }, purge: clone(purge) };
-    if (withMembers) dead.members = {};
-    return dead;
-  }
+  if (compareStamps(life.stamp, purge) <= 0) return tombstoneRecord(a.id, purge, withMembers);
   const result = { id: a.id, fields: records(a.fields, b.fields, purge), life, purge: clone(ownPurge) };
   if (withMembers) result.members = records(a.members ?? {}, b.members ?? {}, purge);
+  const filled = result.life.value || Object.keys(result.fields).length > 0 || (withMembers && Object.keys(result.members).length > 0);
+  if (purge && filled && !fieldsPresent(result.fields, RECORD_KEYS[recordKind])) return tombstoneRecord(a.id, purge, withMembers);
   return result;
 }
-function mergeCollection(left, right, parentPurge, withMembers, resolveShape = false) {
+function mergeCollection(left, right, parentPurge, withMembers, recordKind) {
   const ids = [...new Set([...left, ...right].map(record => record.id))].sort();
   const a = new Map(left.map(record => [record.id, record]));
   const b = new Map(right.map(record => [record.id, record]));
-  return ids.map(id => {
-    const leftRecord = a.get(id);
-    const rightRecord = b.get(id);
-    const merged = mergeRecord(leftRecord, rightRecord, parentPurge, withMembers);
-    return resolveShape ? resolveTrackerShape(merged, leftRecord, rightRecord, parentPurge) : merged;
-  });
+  return ids.map(id => mergeRecord(a.get(id), b.get(id), parentPurge, withMembers, recordKind));
 }
 
 /** Pure, commutative merge of two copies of the same person file. Neither input changes. */
@@ -235,10 +207,10 @@ export function mergePeople(left, right) {
     life: compareStamps(life.stamp, purge) <= 0 ? { value: false, stamp: clone(purge) } : life,
     purge: clone(purge),
     fields: records(left.fields, right.fields, purge),
-    trackers: mergeCollection(left.trackers, right.trackers, purge, false, true),
-    stacks: mergeCollection(left.stacks, right.stacks, purge, true),
-    checkIns: mergeCollection(left.checkIns, right.checkIns, purge, false),
-    restDays: mergeCollection(left.restDays, right.restDays, purge, false),
+    trackers: mergeCollection(left.trackers, right.trackers, purge, false, 'tracker'),
+    stacks: mergeCollection(left.stacks, right.stacks, purge, true, 'stack'),
+    checkIns: mergeCollection(left.checkIns, right.checkIns, purge, false, 'checkIn'),
+    restDays: mergeCollection(left.restDays, right.restDays, purge, false, 'rest'),
   };
   if (!result.life.value && result.purge && compareStamps(result.life.stamp, result.purge) === 0) {
     result.trackers = [];
@@ -774,7 +746,10 @@ function cellShapes(square, ink, mark, outline, text) {
     parts.push(`<rect width="14" height="14" rx="3" fill="${ink}" data-against="${EMBER.background}" data-role="graphic"/>`);
     parts.push(`<path d="M3.2 7.2 L6 10.1 L10.8 4.2" fill="none" stroke="${mark}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" data-against="${ink}" data-role="graphic"/>`);
   } else if (square.state === 'done') {
-    parts.push(`<polygon points="7,1 13,7 7,13 1,7" fill="${ink}" data-against="${EMBER.background}" data-role="graphic"/>`);
+    const shade = Math.max(1, Math.min(4, square.shade || 1));
+    const radius = [3, 4, 5, 6][shade - 1];
+    parts.push(`<polygon points="7,1 13,7 7,13 1,7" fill="none" stroke="${outline}" stroke-width="1.4" data-against="${EMBER.background}" data-role="graphic"/>`);
+    parts.push(`<polygon points="7,${7 - radius} ${7 + radius},7 7,${7 + radius} ${7 - radius},7" fill="${ink}" data-against="${EMBER.background}" data-role="graphic"/>`);
   } else if (square.state === 'rest') {
     parts.push(`<circle cx="7" cy="7" r="4.5" fill="none" stroke="${text}" stroke-width="1.6" data-against="${EMBER.background}" data-role="graphic"/>`);
     parts.push(`<line x1="3.2" y1="7" x2="10.8" y2="7" stroke="${text}" stroke-width="1.6" stroke-linecap="round" data-against="${EMBER.background}" data-role="graphic"/>`);
@@ -810,7 +785,7 @@ export function renderSvg(grid) {
   const chunks = [];
   chunks.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="habit-title habit-desc">`);
   chunks.push(`<title id="habit-title">${escapeXml(grid.name || 'Habit grid')}</title>`);
-  chunks.push(`<desc id="habit-desc">${escapeXml(`Days from ${grid.start} to ${grid.end}. Week starts on ${grid.weekStartsOn}. Full days show a check mark. Rest days show a circle and a bar. Done days show a diamond. Partial days show bars. Open days are dashed. Empty days are an outline.`)}</desc>`);
+  chunks.push(`<desc id="habit-desc">${escapeXml(`Days from ${grid.start} to ${grid.end}. Week starts on ${grid.weekStartsOn}. Full days show a check mark. Rest days show a circle and a bar. Done days show a diamond that grows with the shade. Partial days show bars. Open days are dashed. Empty days are an outline.`)}</desc>`);
   chunks.push(`<rect width="${width}" height="${height}" fill="${background}" data-role="background"/>`);
   grid.rows.forEach((weekday, index) => {
     const y = top + index * (cell + gap) + 11;
@@ -970,8 +945,9 @@ export class HabitGrid {
     const next = assertTrackerShape({ ...current, ...input });
     return this.#change(personId, (person, stamp) => {
       const tracker = editable(person.trackers, trackerId, 'Tracker');
+      const shapeTouched = SHAPE_KEYS.some(key => own(input, key));
       for (const key of ['name', 'color', 'kind', 'target', 'unit', 'usualAmount', 'schedule', 'startedOn']) {
-        if (own(input, key)) tracker.fields[key] = { value: next[key], stamp: clone(stamp) };
+        if (own(input, key) || (shapeTouched && SHAPE_KEYS.includes(key))) tracker.fields[key] = { value: next[key], stamp: clone(stamp) };
       }
       tracker.life = { value: true, stamp };
       person.life = { value: true, stamp };

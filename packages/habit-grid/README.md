@@ -160,7 +160,7 @@ image, or stylesheet. Ember values come from `brand/tokens.css`: page
 amber `#f7b267`. A tracker color that would fall under WCAG AA non-text
 contrast (3:1) against the page is lightened. Small labels use the cream text
 color (above 4.5:1). Full days add a check mark. Rest days add a circle and a
-bar. Done days are a diamond. Partial days are bars. Open days are dashed.
+bar. Done days are a diamond that grows from shade 1 to shade 4. Partial days are bars. Open days are dashed.
 Empty days are an outline. Shape does not depend on color alone.
 
 ## JSON schema version 1
@@ -226,12 +226,12 @@ drops `date` from a live check-in fails at load with
 `Invalid tracker shape in person file.` Unknown versions fail with
 `Unsupported schemaVersion; expected 1.` No migration is attempted.
 
-`kind`, `target`, and `unit` stay one shape. Merge still compares each field
-on its own when the result is a real tracker. When the separate winners would
-describe no real tracker (an amount tracker with an empty target, for
-example), the newer complete shape is kept as a group. A purged field is
-never copied back. If the cutoff leaves no complete shape, the tracker becomes
-a purged marker. The merged tracker can be edited again.
+Changing `kind`, `target`, or `unit` writes all three again at the same stamp.
+Merge compares those fields on their own, and because they share a stamp the
+newest shape write wins together. Every merge order agrees. A purged field is
+never copied back. If a cutoff leaves a tracker, stack, check-in, or rest day
+missing a field, that record becomes a purged marker again, so a later save
+still loads.
 
 ## Undo
 

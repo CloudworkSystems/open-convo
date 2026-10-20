@@ -343,7 +343,10 @@ test('8. SVG contrast and shapes distinguish rest and full days', () => {
   engine.addTracker(id, { name: 'Pages', kind: 'count', color: 'magenta', startedOn: '2026-03-16' }, { trackerId: 'pages' });
   engine.logCheckIn(id, 'water', { date: '2026-03-17', value: 2, checkInId: 'partial' });
   engine.logCheckIn(id, 'water', { date: '2026-03-18', value: 4, checkInId: 'full' });
-  engine.logCheckIn(id, 'pages', { date: '2026-03-16', value: 3, checkInId: 'done' });
+  engine.logCheckIn(id, 'pages', { date: '2026-03-16', value: 1, checkInId: 'low' });
+  engine.logCheckIn(id, 'pages', { date: '2026-03-17', value: 2, checkInId: 'mid' });
+  engine.logCheckIn(id, 'pages', { date: '2026-03-18', value: 3, checkInId: 'high' });
+  engine.logCheckIn(id, 'pages', { date: '2026-03-20', value: 4, checkInId: 'top' });
   engine.markRest(id, '2026-03-19', { restId: 'rest' });
   const span = { start: '2026-03-16', end: '2026-03-20' };
   const water = renderSvg(engine.grid(id, 'water', span));
@@ -360,6 +363,12 @@ test('8. SVG contrast and shapes distinguish rest and full days', () => {
   const partial = group(water, 'bars');
   const empty = group(water, 'outline');
   const done = group(pages, 'diamond');
+  const diamonds = [...pages.matchAll(/<g\b[^>]*data-shade="([1-4])"[^>]*data-shape="diamond"[\s\S]*?<\/g>/g)];
+  const points = Object.fromEntries(diamonds.map(match => [match[1], /points="([^"]+)" fill="#/.exec(match[0])[1]]));
+  assert.deepEqual(Object.keys(points).sort(), ['1', '2', '3', '4']);
+  assert.equal(points['1'], '7,4 10,7 7,10 4,7');
+  assert.equal(points['4'], '7,1 13,7 7,13 1,7');
+  assert.notEqual(points['2'], points['3']);
   assert.match(full, /<path /);
   assert.match(rest, /<circle /);
   assert.match(rest, /<line /);
@@ -719,10 +728,56 @@ test('concurrent shape edits stay a real tracker, and a lone target change still
   partial.renamePerson(person, 'River five');
   partial.editTracker(person, 'water', { target: null });
   const replaced = converges(kept.getPerson(person), partial.getPerson(person));
-  assert.equal(replaced.trackers[0].fields.kind.value, 'amount');
-  assert.equal(replaced.trackers[0].fields.target.value, 30);
-  assert.equal(replaced.trackers[0].fields.unit.value, 'minutes');
+  assert.equal(replaced.trackers[0].fields.kind.value, 'count');
+  assert.equal(replaced.trackers[0].fields.target.value, null);
+  assert.equal(replaced.trackers[0].fields.unit.value, 'glasses');
   assert.equal(replaced.trackers[0].fields.name.value, 'Fresh water');
+  assert.equal(replaced.trackers[0].fields.kind.stamp.counter, replaced.trackers[0].fields.target.stamp.counter);
+  assert.equal(replaced.trackers[0].fields.kind.stamp.counter, replaced.trackers[0].fields.unit.stamp.counter);
+
+  const writers = ['phone-a', 'phone-b', 'phone-c'].map(deviceId => fixed(deviceId, 100));
+  const shared = writers[0].createPerson('River', { id: 'river' });
+  writers[0].addTracker(shared, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  writers[1].importPerson(writers[0].getPerson(shared));
+  writers[2].importPerson(writers[0].getPerson(shared));
+  writers[0].editTracker(shared, 'water', { kind: 'amount', target: 30, unit: 'minutes' });
+  writers[1].editTracker(shared, 'water', { target: null });
+  writers[2].editTracker(shared, 'water', { target: 10 });
+  const copies = writers.map(device => device.getPerson(shared));
+  const orders = [
+    [0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0],
+  ];
+  const agreed = mergePeople(mergePeople(copies[0], copies[1]), copies[2]);
+  for (const [i, j, k] of orders) {
+    assert.deepEqual(mergePeople(mergePeople(copies[i], copies[j]), copies[k]), agreed);
+  }
+  assert.equal(agreed.trackers[0].fields.kind.value, 'count');
+  assert.equal(agreed.trackers[0].fields.target.value, 10);
+  assert.equal(agreed.trackers[0].fields.unit.value, 'glasses');
+  const after = fixed('phone-d', 100);
+  after.importPerson(agreed);
+  after.editTracker(shared, 'water', { name: 'Agreed' });
+  assert.equal(after.view(shared).trackers[0].name, 'Agreed');
+  assert.equal(after.view(shared).trackers[0].target, 10);
+
+  const homeLog = fixed('phone-a', 100);
+  const awayLog = fixed('phone-b', 100);
+  const logged = homeLog.createPerson('River', { id: 'river' });
+  homeLog.addTracker(logged, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  homeLog.logCheckIn(logged, 'water', { date: '2026-03-04', value: 2, checkInId: 'glass' });
+  awayLog.importPerson(homeLog.getPerson(logged));
+  homeLog.deleteCheckIn(logged, 'glass');
+  homeLog.emptyTrash(logged);
+  awayLog.renamePerson(logged, 'River two');
+  awayLog.renamePerson(logged, 'River three');
+  awayLog.renamePerson(logged, 'River four');
+  awayLog.editCheckIn(logged, 'glass', { value: 9 });
+  const fencedLog = converges(homeLog.getPerson(logged), awayLog.getPerson(logged));
+  assert.deepEqual(fencedLog.checkIns.find(item => item.id === 'glass').fields, {});
+  const reloaded = fixed('phone-c', 100);
+  reloaded.load(serializePerson(fencedLog));
+  assert.equal(reloaded.view(logged).checkIns.length, 0);
+  assert.equal(reloaded.grid(logged, 'water', { start: '2026-03-01', end: '2026-03-08' }).squares.find(item => item.date === '2026-03-04').value, 0);
 });
 
 test('three-device histories converge under every delivery order', () => {
