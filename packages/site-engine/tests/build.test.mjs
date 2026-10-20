@@ -7,6 +7,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import sharp from "sharp";
+
+import { publishSite } from "../src/publish.mjs";
 
 const CLI = fileURLToPath(new URL("../src/build.mjs", import.meta.url));
 const FIXTURES = fileURLToPath(new URL("../fixtures/", import.meta.url));
@@ -277,7 +280,7 @@ function iccPng() {
 
 function iccWebp() {
   const vp8x = Buffer.alloc(10);
-  vp8x[0] = 0x02;
+  vp8x[0] = 0x02 | 0x10 | 0x20;
   const chunks = Buffer.concat([
     riffChunk("VP8X", vp8x),
     riffChunk("ICCP", Buffer.from("ICC-AUTHOR-9f3a profile-desc")),
@@ -382,6 +385,7 @@ test("1. a complete facts file builds and every required file exists", async () 
       "images/1.png",
       "index.html",
       "robots.txt",
+      "site-engine.txt",
       "site.css",
       "sitemap.xml",
     ]);
@@ -401,7 +405,13 @@ test("1. a complete facts file builds and every required file exists", async () 
     const tutorOut = path.join(root, "tutor");
     const tutor = run(path.join(FIXTURES, "northglass-tutoring.facts.json"), tutorOut);
     assert.equal(tutor.status, 0, tutor.stderr);
-    assert.deepEqual(await filesIn(tutorOut), ["index.html", "robots.txt", "site.css", "sitemap.xml"]);
+    assert.deepEqual(await filesIn(tutorOut), [
+      "index.html",
+      "robots.txt",
+      "site-engine.txt",
+      "site.css",
+      "sitemap.xml",
+    ]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -703,7 +713,7 @@ test("12. a rebuild drops removed images, and a failed rebuild leaves the last g
     const withoutPath = await writeJson(root, without, "without.json");
     assert.equal(run(withoutPath, out).status, 0);
     const names = await filesIn(out);
-    assert.deepEqual(names, ["index.html", "robots.txt", "site.css", "sitemap.xml"]);
+    assert.deepEqual(names, ["index.html", "robots.txt", "site-engine.txt", "site.css", "sitemap.xml"]);
     const html = await readFile(path.join(out, "index.html"), "utf8");
     assert.equal(html.includes("TRACE-RYE-PHOTO-9f3a"), false);
     assert.equal(html.includes("images/1.png"), false);
@@ -785,7 +795,8 @@ test("13. JPEG and PNG metadata, including GPS, is removed from the built images
     assert.deepEqual(pngChunkTypes(iccPngOut), ["IHDR", "IDAT", "IEND"]);
     const iccWebpOut = await readFile(path.join(out, "images/6.webp"));
     assert.equal(textOf(iccWebpOut).includes("ICCP"), false);
-    assert.equal(iccWebpOut[20] & 0x02, 0);
+    assert.equal(iccWebpOut[20] & 0x20, 0);
+    assert.equal(iccWebpOut[20] & 0x12, 0x12);
     const progressive = await readFile(path.join(out, "images/7.jpg"));
     assert.equal(textOf(progressive).includes("SCAN2-KEEP"), true);
     assert.equal(progressive.filter((byte, index) => byte === 0xff && progressive[index + 1] === 0xda).length, 2);
@@ -856,7 +867,9 @@ test("ICC profiles in PNG, JPEG, and WebP are removed", async () => {
       if (tag === "VP8X") flags = webp[offset + 8];
       offset += 8 + size + (size % 2);
     }
-    assert.equal(flags & 0x02, 0);
+    assert.equal(flags & 0x20, 0);
+    assert.equal(flags & 0x10, 0x10);
+    assert.equal(flags & 0x02, 0x02);
     for (const bytes of [png, jpeg, webp]) {
       const text = textOf(bytes);
       assert.equal(text.includes("ICC-AUTHOR-9f3a"), false);
@@ -905,6 +918,302 @@ test("mailto links percent-encode reserved characters", async () => {
     assert.match(html, />notes\?draft&amp;1#box@northglass-tutoring\.example</);
     assert.equal(jsonLd(html).email, email);
     assert.equal(html.includes("mailto:notes?draft"), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+function parseWebpChunks(buf) {
+  const chunks = [];
+  let offset = 12;
+  while (offset + 8 <= buf.length) {
+    const tag = buf.toString("ascii", offset, offset + 4);
+    const size = buf.readUInt32LE(offset + 4);
+    chunks.push({ tag, data: Buffer.from(buf.subarray(offset + 8, offset + 8 + size)) });
+    offset += 8 + size + (size % 2);
+  }
+  return chunks;
+}
+
+function assembleWebp(chunks) {
+  const body = Buffer.concat(chunks.map((chunk) => riffChunk(chunk.tag, chunk.data)));
+  const header = Buffer.alloc(12);
+  header.write("RIFF", 0, "ascii");
+  header.writeUInt32LE(4 + body.length, 4);
+  header.write("WEBP", 8, "ascii");
+  return Buffer.concat([header, body]);
+}
+
+function withWebpMetadata(buf) {
+  const chunks = parseWebpChunks(buf);
+  const header = chunks.find((chunk) => chunk.tag === "VP8X");
+  assert.ok(header);
+  header.data[0] |= 0x04 | 0x08 | 0x20;
+  const next = [];
+  for (const chunk of chunks) {
+    next.push(chunk);
+    if (chunk.tag === "VP8X") next.push({ tag: "ICCP", data: Buffer.from("OC-MARKER-WEBP-ICC-9f3a") });
+  }
+  next.push({ tag: "EXIF", data: Buffer.from("OC-MARKER-WEBP-EXIF-9f3a") });
+  next.push({ tag: "XMP ", data: Buffer.from("OC-MARKER-WEBP-XMP-9f3a") });
+  return assembleWebp(next);
+}
+
+function vp8xFlags(buf) {
+  return parseWebpChunks(buf).find((chunk) => chunk.tag === "VP8X").data[0];
+}
+
+async function transparentWebp() {
+  const width = 8;
+  const height = 8;
+  const raw = Buffer.alloc(width * height * 4);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const pixel = (y * width + x) * 4;
+      raw[pixel] = 200;
+      raw[pixel + 1] = 30;
+      raw[pixel + 2] = 40;
+      raw[pixel + 3] = x < 4 ? 0 : 255;
+    }
+  }
+  const encoded = await sharp(raw, { raw: { width, height, channels: 4 } })
+    .webp({ quality: 100, alphaQuality: 100 })
+    .toBuffer();
+  return withWebpMetadata(encoded);
+}
+
+async function animatedWebp() {
+  const width = 8;
+  const height = 8;
+  const red = Buffer.alloc(width * height * 4);
+  const blue = Buffer.alloc(width * height * 4);
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    red[pixel * 4] = 220;
+    red[pixel * 4 + 1] = 15;
+    red[pixel * 4 + 2] = 15;
+    red[pixel * 4 + 3] = 255;
+    blue[pixel * 4] = 15;
+    blue[pixel * 4 + 1] = 15;
+    blue[pixel * 4 + 2] = 220;
+    blue[pixel * 4 + 3] = pixel === 0 ? 0 : 255;
+  }
+  const encoded = await sharp(Buffer.concat([red, blue]), {
+    raw: { width, height: height * 2, channels: 4, pageHeight: height },
+  })
+    .webp({ lossless: true, loop: 0, delay: [50, 80] })
+    .toBuffer();
+  return withWebpMetadata(encoded);
+}
+
+test("a transparent WebP and an animated WebP still decode after metadata is removed", async () => {
+  const root = await tempDir();
+  try {
+    await writeFile(path.join(root, "logo.webp"), await transparentWebp());
+    await writeFile(path.join(root, "sign.webp"), await animatedWebp());
+    const facts = await loadFixture("marrow-lane-bakery.facts.json");
+    facts.images = [
+      { file: "logo.webp", alt: "A fictional transparent mark" },
+      { file: "sign.webp", alt: "A fictional animated sign" },
+    ];
+    const out = path.join(root, "site");
+    const result = run(await writeJson(root, facts), out);
+    assert.equal(result.status, 0, result.stderr);
+
+    const still = await readFile(path.join(out, "images/1.webp"));
+    const animation = await readFile(path.join(out, "images/2.webp"));
+    for (const bytes of [still, animation]) {
+      const text = textOf(bytes);
+      assert.equal(text.includes("OC-MARKER-WEBP-EXIF-9f3a"), false);
+      assert.equal(text.includes("OC-MARKER-WEBP-XMP-9f3a"), false);
+      assert.equal(text.includes("OC-MARKER-WEBP-ICC-9f3a"), false);
+      const flags = vp8xFlags(bytes);
+      assert.equal(flags & 0x04, 0);
+      assert.equal(flags & 0x08, 0);
+      assert.equal(flags & 0x20, 0);
+    }
+    assert.equal(vp8xFlags(still) & 0x10, 0x10);
+    const decoded = await sharp(still).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    assert.equal(decoded.info.width, 8);
+    assert.equal(decoded.info.height, 8);
+    assert.equal(decoded.data[3], 0);
+    assert.equal(decoded.data[19], 255);
+
+    assert.equal(vp8xFlags(animation) & 0x02, 0x02);
+    assert.equal(vp8xFlags(animation) & 0x10, 0x10);
+    const meta = await sharp(animation, { animated: true }).metadata();
+    assert.equal(meta.pages, 2);
+    assert.deepEqual(meta.delay, [50, 80]);
+    const frames = await sharp(animation, { animated: true, pages: -1 })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    assert.equal(frames.info.pages, 2);
+    const frameSize = frames.info.width * frames.info.pageHeight * 4;
+    assert.deepEqual([...frames.data.subarray(0, 4)], [220, 15, 15, 255]);
+    assert.equal(frames.data[frameSize + 3], 0);
+    assert.deepEqual([...frames.data.subarray(frameSize + 4, frameSize + 8)], [15, 15, 220, 255]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("an existing folder is replaced only when it is an earlier Site Engine build", async () => {
+  const root = await tempDir();
+  try {
+    const facts = await loadFixture("northglass-tutoring.facts.json");
+    const factsPath = await writeJson(root, facts);
+    const marker = "Built by Open Convo Site Engine.\n";
+
+    const precious = path.join(root, "precious");
+    await mkdir(precious);
+    await writeFile(path.join(precious, "notes.txt"), "UNRELATED-NOTES-9f3a\n");
+    const refused = run(factsPath, precious);
+    assert.notEqual(refused.status, 0);
+    assert.match(refused.stderr, /Output folder is not an earlier Site Engine build: precious/);
+    assert.equal(await readFile(path.join(precious, "notes.txt"), "utf8"), "UNRELATED-NOTES-9f3a\n");
+    assert.equal(existsSync(path.join(precious, "index.html")), false);
+    assert.equal(existsSync(path.join(precious, "site-engine.txt")), false);
+
+    const empty = path.join(root, "empty");
+    await mkdir(empty);
+    assert.equal(run(factsPath, empty).status, 0);
+    assert.equal(await readFile(path.join(empty, "site-engine.txt"), "utf8"), marker);
+
+    facts.tagline = "A second fictional term";
+    const againPath = await writeJson(root, facts, "again.json");
+    assert.equal(run(againPath, empty).status, 0);
+    const rebuilt = await readFile(path.join(empty, "index.html"), "utf8");
+    assert.match(rebuilt, /A second fictional term/);
+    assert.equal(await readFile(path.join(empty, "site-engine.txt"), "utf8"), marker);
+
+    const fake = path.join(root, "fake");
+    await mkdir(fake);
+    const oversized = Buffer.alloc(1024 * 1024, 0x61);
+    await writeFile(path.join(fake, "site-engine.txt"), oversized);
+    await writeFile(path.join(fake, "keep.txt"), "KEEP-THIS-9f3a\n");
+    const wrong = run(factsPath, fake);
+    assert.notEqual(wrong.status, 0);
+    assert.match(wrong.stderr, /Output folder is not an earlier Site Engine build: fake/);
+    assert.equal((await stat(path.join(fake, "site-engine.txt"))).size, oversized.length);
+    assert.equal(await readFile(path.join(fake, "keep.txt"), "utf8"), "KEEP-THIS-9f3a\n");
+    assert.equal(existsSync(path.join(fake, "index.html")), false);
+
+    const mismatched = path.join(root, "mismatched");
+    await mkdir(mismatched);
+    const sameLength = Buffer.alloc(Buffer.byteLength(marker), 0x62);
+    await writeFile(path.join(mismatched, "site-engine.txt"), sameLength);
+    await writeFile(path.join(mismatched, "keep.txt"), "KEEP-LENGTH-9f3a\n");
+    const mismatchRun = run(factsPath, mismatched);
+    assert.notEqual(mismatchRun.status, 0);
+    assert.match(mismatchRun.stderr, /Output folder is not an earlier Site Engine build: mismatched/);
+    assert.equal(await readFile(path.join(mismatched, "keep.txt"), "utf8"), "KEEP-LENGTH-9f3a\n");
+
+    const linked = path.join(root, "linked");
+    await mkdir(linked);
+    await writeFile(path.join(root, "elsewhere.txt"), marker);
+    await symlink(path.join(root, "elsewhere.txt"), path.join(linked, "site-engine.txt"));
+    await writeFile(path.join(linked, "keep.txt"), "KEEP-LINK-9f3a\n");
+    const linkRun = run(factsPath, linked);
+    assert.notEqual(linkRun.status, 0);
+    assert.match(linkRun.stderr, /Output folder is not an earlier Site Engine build: linked/);
+    assert.equal(await readFile(path.join(linked, "keep.txt"), "utf8"), "KEEP-LINK-9f3a\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a folder that changes after the first check is restored", async () => {
+  const root = await tempDir();
+  try {
+    const factsPath = path.join(root, "facts.json");
+    await writeFile(factsPath, "{}\n");
+    const files = [{ path: "index.html", contents: "<p>Should not land</p>" }];
+
+    const emptied = path.join(root, "emptied");
+    await mkdir(emptied);
+    await assert.rejects(
+      () =>
+        publishSite(emptied, files, factsPath, {
+          beforeReplace: async (destination) => {
+            await writeFile(path.join(destination, "notes.txt"), "UNRELATED-SWAP-9f3a\n");
+          },
+        }),
+      /Output folder is not an earlier Site Engine build: emptied/,
+    );
+    assert.equal(await readFile(path.join(emptied, "notes.txt"), "utf8"), "UNRELATED-SWAP-9f3a\n");
+    assert.equal(existsSync(path.join(emptied, "index.html")), false);
+    assert.equal(existsSync(path.join(emptied, "site-engine.txt")), false);
+
+    const swapped = path.join(root, "swapped");
+    await mkdir(swapped);
+    await writeFile(path.join(swapped, "site-engine.txt"), "Built by Open Convo Site Engine.\n");
+    await assert.rejects(
+      () =>
+        publishSite(swapped, files, factsPath, {
+          beforeReplace: async (destination) => {
+            await rm(destination, { recursive: true, force: true });
+            await mkdir(destination);
+            await writeFile(path.join(destination, "notes.txt"), "REPLACED-FOLDER-9f3a\n");
+          },
+        }),
+      /Output folder is not an earlier Site Engine build: swapped/,
+    );
+    assert.equal(await readFile(path.join(swapped, "notes.txt"), "utf8"), "REPLACED-FOLDER-9f3a\n");
+    assert.equal(existsSync(path.join(swapped, "index.html")), false);
+
+    const leftovers = (await readdir(root)).filter((name) => name.startsWith(".site-engine-"));
+    assert.deepEqual(leftovers, []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a named pipe is refused instead of waiting for a writer", async () => {
+  const root = await tempDir();
+  try {
+    const made = spawnSync("mkfifo", [path.join(root, "photo.webp")]);
+    assert.equal(made.status, 0, made.stderr);
+    const facts = await loadFixture("northglass-tutoring.facts.json");
+    facts.images = [{ file: "photo.webp", alt: "A fictional picture" }];
+    const out = path.join(root, "site");
+    const result = spawnSync(process.execPath, [CLI, "--facts", await writeJson(root, facts), "--out", out], {
+      encoding: "utf8",
+      timeout: 3000,
+    });
+    assert.equal(result.error, undefined);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Image is not a file: photo\.webp/);
+    assert.equal(existsSync(out), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a JFXX header is removed and a plain JFIF header is kept", async () => {
+  const root = await tempDir();
+  try {
+    const parts = [Buffer.from([0xff, 0xd8])];
+    parts.push(jpegSegment(0xe0, jfifPayload()));
+    parts.push(
+      jpegSegment(
+        0xe0,
+        Buffer.concat([Buffer.from("JFXX\0"), Buffer.from([0x10]), Buffer.from("HIDDEN-JFXX-9f3a")]),
+      ),
+    );
+    parts.push(jpegSegment(0xc0, Buffer.from([0x08, 0x00, 0x01, 0x00, 0x01, 0x01, 0x01, 0x11, 0x00])));
+    parts.push(jpegSegment(0xda, Buffer.from([0x01, 0x01, 0x00, 0x00, 0x3f, 0x00])));
+    parts.push(Buffer.from([0x00, 0xff, 0xd9]));
+    await writeFile(path.join(root, "card.jpg"), Buffer.concat(parts));
+    const facts = await loadFixture("marrow-lane-bakery.facts.json");
+    facts.images = [{ file: "card.jpg", alt: "A fictional card" }];
+    const out = path.join(root, "site");
+    const result = run(await writeJson(root, facts), out);
+    assert.equal(result.status, 0, result.stderr);
+    const jpeg = await readFile(path.join(out, "images/1.jpg"));
+    const text = textOf(jpeg);
+    assert.equal(text.includes("JFIF"), true);
+    assert.equal(text.includes("JFXX"), false);
+    assert.equal(text.includes("HIDDEN-JFXX-9f3a"), false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

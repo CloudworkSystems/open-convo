@@ -66,7 +66,9 @@ export async function readImageFile(factsDir, file) {
   }
 
   let current = root;
-  for (const segment of file.split("/")) {
+  const segments = file.split("/");
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
     current = path.join(current, segment);
     if (!isInside(root, current)) fail(`Image is outside the facts folder: ${file}`);
     let info;
@@ -77,6 +79,7 @@ export async function readImageFile(factsDir, file) {
       fail(`Image file was not found: ${file}`);
     }
     if (info.isSymbolicLink()) fail(`Image is a symbolic link: ${file}`);
+    if (index === segments.length - 1 && !info.isFile()) fail(`Image is not a file: ${file}`);
   }
 
   const realFile = await realpath(current).catch(() => null);
@@ -164,7 +167,8 @@ function stripJpeg(buf) {
     if (offset + 2 > buf.length) throw new Error("jpeg truncated");
     const length = buf.readUInt16BE(offset);
     if (length < 2 || offset + length > buf.length) throw new Error("jpeg truncated");
-    const drop = shouldDropJpegSegment(marker);
+    const segment = buf.subarray(offset, offset + length);
+    const drop = shouldDropJpegSegment(marker, segment);
     if (!drop) {
       parts.push(Buffer.from([0xff, marker]));
       parts.push(buf.subarray(offset, offset + length));
@@ -180,12 +184,19 @@ function stripJpeg(buf) {
   throw new Error("jpeg truncated");
 }
 
-// APP0 (JFIF) and APP14 (Adobe color transform) stay. Every other APP
-// segment is dropped, including ICC profiles: a profile can carry a
-// description, a copyright line, a device name, or private fields.
-function shouldDropJpegSegment(marker) {
+// A plain 14-byte JFIF APP0 stays, and so does APP14 (Adobe color transform).
+// JFXX and a JFIF thumbnail are dropped: both can carry extra bytes. Every
+// other APP segment is dropped too, including ICC profiles.
+function shouldDropJpegSegment(marker, segment) {
   if (marker === 0xfe) return true;
+  if (marker === 0xe0) return !isPlainJfif(segment);
   return marker >= 0xe1 && marker <= 0xef && marker !== 0xee;
+}
+
+function isPlainJfif(segment) {
+  if (segment.length !== 16) return false;
+  if (segment.toString("ascii", 2, 7) !== "JFIF\0") return false;
+  return segment[14] === 0 && segment[15] === 0;
 }
 
 // Entropy runs until the next real marker. That marker may be another scan,
@@ -265,9 +276,9 @@ function stripWebp(buf) {
       throw new Error("webp chunk");
     } else if (tag === "VP8X") {
       if (data.length < 10) throw new Error("webp vp8x");
-      data[0] &= ~0x02;
-      data[0] &= ~0x08;
-      data[0] &= ~0x10;
+      // Least-significant bit first: 0x02 animation, 0x04 XMP, 0x08 EXIF,
+      // 0x10 alpha, 0x20 ICC. Only the metadata flags are cleared.
+      data[0] &= ~(0x04 | 0x08 | 0x20);
       chunks.push(riffChunk(tag, data));
     } else {
       chunks.push(riffChunk(tag, data));
