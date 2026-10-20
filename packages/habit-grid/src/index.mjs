@@ -276,31 +276,41 @@ function contentBearing(record, withMembers) {
   if (object(record.fields) && Object.keys(record.fields).length > 0) return true;
   return withMembers && object(record.members) && Object.keys(record.members).length > 0;
 }
+function recordEntries(record, withMembers) {
+  return [...Object.values(record.fields), ...(withMembers ? Object.values(record.members ?? {}) : [])];
+}
+function stampsAfterPurge(record, withMembers) {
+  if (!validStamp(record.purge)) return true;
+  return recordEntries(record, withMembers).every(entry => compareStamps(entry.stamp, record.purge) > 0);
+}
 function survivingFragment(record, types, withMembers) {
   if (!validStamp(record.purge)) return false;
   const keys = Object.keys(types);
   if (keys.every(key => own(record.fields, key))) return false;
-  const entries = [...Object.values(record.fields), ...(withMembers ? Object.values(record.members ?? {}) : [])];
+  const entries = recordEntries(record, withMembers);
   if (entries.length === 0) return false;
   return entries.every(entry => compareStamps(entry.stamp, record.purge) > 0);
+}
+function requireCompleteOrFragment(record, types, withMembers) {
+  if (!contentBearing(record, withMembers)) return;
+  if (!stampsAfterPurge(record, withMembers)) fail('Field is older than its purge cutoff.');
+  const complete = Object.keys(types).every(key => own(record.fields, key));
+  if (!complete && !survivingFragment(record, types, withMembers)) fail('Incomplete record in person file.');
 }
 function validateRecord(record, types, withMembers, checkShape = false) {
   if (!object(record) || typeof record.id !== 'string' || !record.id || !object(record.life) || typeof record.life.value !== 'boolean' || !validStamp(record.life.stamp) || (record.purge !== null && !validStamp(record.purge))) fail('Invalid record in person file.');
   validateFields(record.fields, types);
-  if (contentBearing(record, withMembers)) {
-    const complete = Object.keys(types).every(key => own(record.fields, key));
-    if (!complete && !survivingFragment(record, types, withMembers)) fail('Incomplete record in person file.');
-    if (checkShape) {
-      const shapeKeys = SHAPE_KEYS.filter(key => own(record.fields, key));
-      if (shapeKeys.length > 0 && (shapeKeys.length < SHAPE_KEYS.length || !trackerShapeValid(record.fields))) fail('Invalid tracker shape in person file.');
-    }
-  }
   if (withMembers) {
     if (!object(record.members)) fail('Invalid stack members in person file.');
     for (const [key, entry] of Object.entries(record.members)) {
       if (!key || !object(entry) || typeof entry.value !== 'boolean' || !validStamp(entry.stamp)) fail('Invalid stack member in person file.');
     }
   } else if (own(record, 'members')) fail('Invalid record in person file.');
+  requireCompleteOrFragment(record, types, withMembers);
+  if (checkShape && contentBearing(record, withMembers)) {
+    const shapeKeys = SHAPE_KEYS.filter(key => own(record.fields, key));
+    if (shapeKeys.length > 0 && (shapeKeys.length < SHAPE_KEYS.length || !trackerShapeValid(record.fields))) fail('Invalid tracker shape in person file.');
+  }
 }
 function uniqueIds(records, label) {
   const ids = new Set();
@@ -313,6 +323,7 @@ function validate(person) {
   if (!object(person) || person.schemaVersion !== SCHEMA_VERSION) fail(`Unsupported schemaVersion; expected ${SCHEMA_VERSION}.`);
   if (typeof person.id !== 'string' || !person.id || !object(person.life) || typeof person.life.value !== 'boolean' || !validStamp(person.life.stamp) || (person.purge !== null && !validStamp(person.purge))) fail('Invalid record in person file.');
   validateFields(person.fields, personFieldTypes);
+  requireCompleteOrFragment(person, personFieldTypes, false);
   for (const [key, label, types, withMembers, checkShape] of [
     ['trackers', 'tracker', trackerFieldTypes, false, true],
     ['stacks', 'stack', stackFieldTypes, true, false],
@@ -808,7 +819,7 @@ export function renderSvg(grid) {
       const x = left + columnIndex * (cell + gap);
       const y = top + rowIndex * (cell + gap);
       const drawn = cellShapes(square, ink, mark, outline, text);
-      chunks.push(`<g data-date="${square.date}" data-state="${square.state}" data-shade="${square.shade}" data-shape="${drawn.shape}" transform="translate(${x} ${y})">${drawn.body}</g>`);
+      chunks.push(`<g data-date="${escapeXml(square.date)}" data-state="${escapeXml(square.state)}" data-shade="${escapeXml(square.shade)}" data-shape="${escapeXml(drawn.shape)}" transform="translate(${x} ${y})">${drawn.body}</g>`);
     });
   });
   chunks.push('</svg>');

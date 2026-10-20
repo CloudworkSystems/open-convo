@@ -926,3 +926,86 @@ test('three-device histories converge under every delivery order', () => {
     }
   }
 });
+
+test('a complete record cannot revive a field at or before its purge cutoff', () => {
+  const engine = fixed('phone-a', 100);
+  const id = engine.createPerson('River', { id: 'river' });
+  engine.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  const prior = engine.getPerson(id);
+  engine.deleteTracker(id, 'water');
+  engine.emptyTrash(id);
+  const erased = engine.getPerson(id);
+  const revived = structuredClone(erased);
+  const cutoff = revived.trackers[0].purge;
+  const fresh = { counter: cutoff.counter + 3, time: cutoff.time + 3, device: 'phone-b' };
+  revived.trackers[0].life = { value: true, stamp: fresh };
+  revived.trackers[0].fields = Object.fromEntries(Object.entries(prior.trackers[0].fields).map(([key, entry]) => [key, { value: entry.value, stamp: { ...fresh } }]));
+  revived.trackers[0].fields.name.stamp = { counter: cutoff.counter, time: cutoff.time, device: cutoff.device };
+  assert.throws(() => deserializePerson(JSON.stringify(revived)), /Field is older than its purge cutoff/);
+  assert.throws(() => engine.importPerson(revived), /Field is older than its purge cutoff/);
+  assert.throws(() => mergePeople(revived, revived), /Field is older than its purge cutoff/);
+  assert.equal(engine.view(id).trackers.length, 0);
+
+  revived.trackers[0].fields.name.stamp = { ...fresh };
+  const loaded = deserializePerson(JSON.stringify(revived));
+  assert.deepEqual(mergePeople(loaded, loaded), loaded);
+  const reader = fixed('phone-c', 100);
+  reader.importPerson(loaded);
+  assert.equal(reader.view(id).trackers[0].name, 'Water');
+  assert.equal(reader.view(id).trackers.length, 1);
+});
+
+test('a saved person without a purge cutoff must include name and week start', () => {
+  const engine = fixed('phone-a', 100);
+  const id = engine.createPerson('River', { id: 'river', weekStartsOn: 'monday' });
+  const saved = engine.getPerson(id);
+  const missingName = structuredClone(saved);
+  delete missingName.fields.name;
+  assert.throws(() => deserializePerson(JSON.stringify(missingName)), /Incomplete record in person file/);
+  assert.throws(() => engine.importPerson(missingName), /Incomplete record in person file/);
+  const missingWeek = structuredClone(saved);
+  delete missingWeek.fields.weekStartsOn;
+  assert.throws(() => deserializePerson(JSON.stringify(missingWeek)), /Incomplete record in person file/);
+  const trashed = structuredClone(saved);
+  trashed.life = { value: false, stamp: { counter: 9, time: 9, device: 'phone-a' } };
+  delete trashed.fields.weekStartsOn;
+  assert.throws(() => deserializePerson(JSON.stringify(trashed)), /Incomplete record in person file/);
+
+  engine.deletePerson(id);
+  engine.emptyTrash(id);
+  const purged = deserializePerson(JSON.stringify(engine.getPerson(id)));
+  assert.equal(purged.fields.name, undefined);
+  assert.equal(purged.fields.weekStartsOn, undefined);
+  const fragment = structuredClone(purged);
+  const stamp = { counter: fragment.purge.counter + 1, time: fragment.purge.time + 1, device: 'phone-b' };
+  fragment.life = { value: true, stamp };
+  fragment.fields = { name: { value: 'River', stamp } };
+  const kept = deserializePerson(JSON.stringify(fragment));
+  assert.equal(kept.fields.name.value, 'River');
+  assert.equal(kept.fields.weekStartsOn, undefined);
+});
+
+test('renderSvg escapes square date, state, and shade', () => {
+  const svg = renderSvg({
+    name: 'Water',
+    color: 'coral',
+    start: '2026-03-01',
+    end: '2026-03-01',
+    weekStartsOn: 'sunday',
+    rows: ['sunday'],
+    columns: [{ squares: [{ date: 'x" onmouseover="alert(1)', state: 'full" onclick="alert(1)', shade: '1"><script>' }] }],
+  });
+  assert.doesNotMatch(svg, /onmouseover="/);
+  assert.doesNotMatch(svg, /onclick="/);
+  assert.doesNotMatch(svg, /<script>/);
+  assert.match(svg, /data-date="x&quot; onmouseover=&quot;alert\(1\)"/);
+  assert.match(svg, /data-state="full&quot; onclick=&quot;alert\(1\)"/);
+  assert.match(svg, /data-shade="1&quot;&gt;&lt;script&gt;"/);
+  const engine = fixed('phone-a');
+  const id = engine.createPerson('River', { id: 'river' });
+  engine.addTracker(id, { name: 'Water', kind: 'done', startedOn: '2026-03-18' }, { trackerId: 'water' });
+  const plain = engine.svg(id, 'water', { start: '2026-03-18', end: '2026-03-18' });
+  assert.match(plain, /data-date="2026-03-18"/);
+  assert.match(plain, /data-state="open"/);
+  assert.match(plain, /data-shade="0"/);
+});

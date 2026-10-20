@@ -155,7 +155,9 @@ who has started.
 ## SVG
 
 `renderSvg(grid)` returns one self-contained SVG. It does not load a font,
-image, or stylesheet. Ember values come from `brand/tokens.css`: page
+image, or stylesheet. Square `date`, `state`, and `shade` are escaped before
+they are written into attributes, so a hand-built grid cannot add an event
+handler. Ember values come from `brand/tokens.css`: page
 `#15110f`, text `#f7f2ee`, body `#cec3bc`, magenta `#c8298b`, coral `#f37a4a`,
 amber `#f7b267`. A tracker color that would fall under WCAG AA non-text
 contrast (3:1) against the page is lightened. Small labels use the cream text
@@ -220,9 +222,13 @@ Serialization preserves engine snapshots exactly, including tombstones.
 Loading checks the schema, field types, IDs, duplicate IDs, and stamps.
 A record that is present or still in Trash must include every field for its
 type, unless a purge cutoff left a fragment whose surviving fields are newer
-than that cutoff. A purged marker has empty fields and may omit them. A saved
+than that cutoff. A field or stack member stamped at or before that cutoff is
+refused even when the record is otherwise complete, with `Field is older than
+its purge cutoff.` A purged marker has empty fields and may omit them. A saved
 file that drops `date` from a live check-in with no cutoff fails at load with
-`Incomplete record in person file.` A tracker whose `kind`, `target`, and
+`Incomplete record in person file.` A person who is live or still in Trash
+must include `name` and `weekStartsOn` unless a purge fragment explains the
+gap; dropping either fails the same way. A tracker whose `kind`, `target`, and
 `unit` cannot describe that kind fails with
 `Invalid tracker shape in person file.` Unknown versions fail with
 `Unsupported schemaVersion; expected 1.` No migration is attempted.
