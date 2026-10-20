@@ -1,6 +1,6 @@
 # Status
 
-Updated October 18, 2026. The short version of where the build is. The full
+Updated October 20, 2026. The short version of where the build is. The full
 plan is in [PLAN.md](PLAN.md).
 
 ## Now
@@ -37,6 +37,7 @@ invented chats only, while the step 2 trial is pending. Scope:
 | PR 4c: Fake-Ollama host cases in the shared local vectors (26 cases, both sides) | Merged (#62) |
 | PR 5: Scripted kill-mid-reply proof | In review |
 | PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-3-owner-trial.md)) | Waiting on the owner |
+| Trial fixes (Stop, Ollama notice) | In review |
 
 ## Done
 

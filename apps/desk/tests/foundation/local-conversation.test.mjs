@@ -264,7 +264,7 @@ test('Stop ends a local reply, keeps its text and offers Retry, which only refil
     await f.emit('text', { text: 'Invented partial' });
     await expect(page.locator('[data-run-id]')).toContainText('Invented partial');
     await page.getByRole('button', { name: 'Stop', exact: true }).click();
-    await expect(page.locator('[data-run-id]')).toContainText('Stopped. The reply so far is kept.');
+    await expect(page.locator('[data-run-id]')).toContainText('Stopped on this Mac. The reply so far is kept.');
     await expect(page.locator('[data-run-id]')).toContainText('This Mac · stays on this Mac');
     assert.equal((await f.host()).stops.length, 1);
     await page.getByRole('button', { name: 'Retry', exact: true }).click();
@@ -275,6 +275,47 @@ test('Stop ends a local reply, keeps its text and offers Retry, which only refil
     const [old, fresh] = (await f.host()).starts;
     assert.notEqual(old.payload.runId, fresh.payload.runId, 'a retried message is a new run with new ids');
     assert.deepEqual(fresh.saved.contextRunIds, [], 'a stopped reply is not sent as context');
+    f.check();
+  } finally { await f.close(); }
+});
+
+test('step 3 trial: while a reply is being written, Send becomes a visible Stop that ends it from the keyboard', async () => {
+  const f = await fixture({ choice: local });
+  try {
+    const { page } = f;
+    await f.send('Invented question with a long reply.');
+    await expect.poll(async () => (await f.host()).starts.length).toBe(1);
+    // A long reply scrolls the transcript's own Stop out of view: this is
+    // what the owner hit in the trial.
+    await f.emit('text', { text: Array.from({ length: 80 }, (_, line) => `Invented reply line ${line + 1}.`).join('\n') });
+    await expect(page.locator('[data-run-id]')).toContainText('Invented reply line 80.');
+    await expect(page.locator('.run-stop')).not.toBeInViewport();
+    const composerStop = page.getByRole('button', { name: 'Stop reply', exact: true });
+    await expect(composerStop).toBeVisible();
+    await expect(composerStop).toBeInViewport();
+    await expect(composerStop).toHaveText('Stop');
+    await expect(composerStop).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Send message', exact: true })).toHaveCount(0);
+    assert.ok(await composerStop.evaluate((element) => parseFloat(getComputedStyle(element).fontSize)) >= 13, 'Stop is normal-size text');
+    await composerStop.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('[data-run-id]')).toContainText('Stopped on this Mac. The reply so far is kept.');
+    assert.equal((await f.host()).stops.length, 1, 'the composer Stop uses the same single stop request');
+    // Once the stop is saved, the same button is Send again.
+    await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Stop reply', exact: true })).toHaveCount(0);
+    await expect(page.locator('[data-run-id]')).toContainText('Invented reply line 80.');
+    // The reply's status is inside the reply, under its heading and above its
+    // text, in larger text; the details row below it uses the past tense.
+    const reply = page.getByRole('article', { name: 'Local invented-model:7b response' });
+    const status = reply.locator('.run-phase');
+    await expect(status).toHaveText('Stopped on this Mac. The reply so far is kept.');
+    await expect(status).not.toContainText(/provider/i);
+    assert.ok(await status.evaluate((element) => parseFloat(getComputedStyle(element).fontSize)) >= 15, 'the status is the most prominent line of the reply');
+    assert.ok((await status.boundingBox()).y < (await reply.locator('.run-output').boundingBox()).y, 'the status comes before the reply text');
+    assert.ok((await reply.locator('.run-participant').boundingBox()).y > (await reply.locator('.run-output').boundingBox()).y, 'the details come after the reply text');
+    await expect(reply.locator('.run-participant')).toContainText('Where it ran');
+    await expect(reply.locator('.run-participant')).not.toContainText('Running on');
     f.check();
   } finally { await f.close(); }
 });
@@ -355,6 +396,22 @@ test('with Ollama not running, the picker and composer say why and nothing is se
     await expect(page.getByRole('button', { name: /^Model and participant/ })).toContainText('Ollama · invented-model:7b');
     await page.getByRole('textbox', { name: 'Your message', exact: true }).fill('Invented question.');
     await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
+    // Step 3 trial: the reason is a visible notice at the top of the message
+    // box, in normal-size text, announced as a status, and tied to Send.
+    const notice = page.locator('.composer-notice');
+    await expect(notice).toBeVisible();
+    await expect(notice).toBeInViewport();
+    await expect(notice).toHaveText('Ollama is not running on this Mac. Open Ollama, then check again. Your draft is kept.');
+    await expect(page.locator('.composer').getByRole('status')).toContainText('Ollama is not running on this Mac.');
+    assert.ok(await notice.evaluate((element) => parseFloat(getComputedStyle(element).fontSize)) >= 13, 'the notice is normal-size text');
+    const noticeBox = await notice.boundingBox();
+    const boxBounds = await page.getByRole('textbox', { name: 'Your message', exact: true }).boundingBox();
+    assert.ok(noticeBox.y + noticeBox.height <= boxBounds.y + 1, 'the notice sits right above the message box');
+    await expect(page.getByRole('button', { name: 'Send message', exact: true }))
+      .toHaveAccessibleDescription('Ollama is not running on this Mac. Open Ollama, then check again. Your draft is kept.');
+    await expect(page.locator('.conversation-footnote')).not.toContainText('Ollama');
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toHaveValue('Invented question.');
     await page.getByRole('button', { name: /^Model and participant/ }).click();
     await expect(page.getByRole('dialog').locator('[data-local-route-notice]')).toContainText('Ollama is not running on this Mac.');
     assert.deepEqual((await f.host()).starts, []);

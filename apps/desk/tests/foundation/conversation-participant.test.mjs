@@ -556,7 +556,8 @@ test('streamed output survives an unrelated save failure and global Retry saves 
     assert.equal(savedRun(f).outputChunks.join(''), 'Already saved reply prefix and text received after the warning');
     assert.equal(f.stored.drafts[sessionId], draft);
     await expect(transcript(f.page).locator('[data-save-state="saved"]')).toBeVisible();
-    await expect(transcript(f.page).getByText('Saved through update 3.', { exact: true })).toBeVisible();
+    await expect(transcript(f.page).getByText('Saved on this Mac.', { exact: true })).toBeVisible();
+    await expect(transcript(f.page).locator('.run-save-state')).toHaveAttribute('data-saved-sequence', '3');
     assert.equal(f.calls.starts.length, 1);
     await f.check();
   } finally { await f.close(); }
@@ -996,8 +997,11 @@ test('a definite checkpoint conflict preserves the response and names unsaved wo
     await expect(f.page.getByRole('button', { name: 'Reconcile original save', exact: true })).toHaveCount(0);
     await expect(f.page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
     await expect(f.page.getByRole('textbox', { name: 'Your message', exact: true })).toBeDisabled();
-    await expect(f.page.locator('.conversation-footnote')).toContainText('Your draft is retained.');
-    await expect(f.page.locator('.conversation-footnote')).not.toContainText('editable');
+    // Step 3 trial: the reason sits in a visible notice at the top of the
+    // message box, not in the fine print under it.
+    await expect(f.page.locator('.composer-notice')).toContainText('Your draft is retained.');
+    await expect(f.page.locator('.composer-notice')).not.toContainText('editable');
+    await expect(f.page.locator('.conversation-footnote')).not.toContainText('Your draft is retained.');
     await expect(f.page.locator('.conversation-footnote')).toContainText('Do not enter private data.');
     assert.equal(savedRun(f).lastSequence, 1);
     assert.equal(f.calls.starts.length, 1);

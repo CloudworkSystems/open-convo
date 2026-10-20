@@ -12,7 +12,7 @@ import { Navigation, type SessionRevealRequest } from './Navigation';
 import type { ParticipantChoice } from '../domain/participant-choices';
 import type { ParticipantIdentity } from '../domain/conversation-run-types';
 import type { LocalCatalogView } from '../domain/local-participant';
-import { Conversation } from './Conversation';
+import { Conversation, type ComposerStop } from './Conversation';
 import { GoalPanel } from './GoalPanel';
 import { Canvas, Atlas } from './NexusViews';
 import { UserOptions } from './UserOptions';
@@ -51,6 +51,7 @@ export interface DeskFoundationProps {
   onParticipantPickerClose?: () => void;
   onParticipantSelect?: (sessionId: string, participant: ParticipantIdentity) => void;
   participantBusy?: boolean; participantSendUnavailable?: boolean; participantSendBlockedReason?: string;
+  participantStop?: ComposerStop; participantSendWaitingReason?: string;
   onDomainPurposeChange: (goalId: string, purpose: string, expectedPurpose?: string) => void;
   onGoalDraftChange: (goalId: string, field: GoalDraftField, value: string | null) => void;
   onWorkCreate: (goalId: string, title: string) => void;
@@ -384,7 +385,8 @@ export function DeskFoundation(props: DeskFoundationProps) {
                 participantLocalCatalog={props.participantLocalCatalog}
                 onParticipantPickerOpen={props.onParticipantPickerOpen} onParticipantPickerClose={props.onParticipantPickerClose}
                 participantBusy={props.participantBusy} participantSendUnavailable={props.participantSendUnavailable}
-                participantSendBlockedReason={props.participantSendBlockedReason} />
+                participantSendBlockedReason={props.participantSendBlockedReason}
+                participantStop={props.participantStop} participantSendWaitingReason={props.participantSendWaitingReason} />
                 : <section className="navigator-empty"><FolderIcon name={goal?.icon} size={32} /><span className="eyebrow">SESSION FOLDER</span>
                   <div className="navigator-domain-heading"><h2>{goal?.title ?? 'Ungrouped sessions'}</h2>
                     {goal && <button type="button" className="icon-button domain-title-rename" aria-label="Rename folder" title="Rename folder" disabled={readOnly}
