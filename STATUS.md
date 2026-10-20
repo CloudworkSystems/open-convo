@@ -83,9 +83,12 @@ Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:
-[docs/plans/merge-gate.md](docs/plans/merge-gate.md). Checks built but not
-switched on; next, the owner's bot account and the scratch-branch tests.
-Until those pass, the owner merges by hand.
+[docs/plans/merge-gate.md](docs/plans/merge-gate.md). Checks are live but
+not required on `main`. Scratch tests on `gate-test`: 1, 2 and 5 pass; 3
+fails for pull requests opened under the owner's login (GitHub doesn't hold
+an owner-opened PR for the code owner), which is how cloud Claude opens them
+today. Next: the bot's token, then reconnect Claude's GitHub link as the bot
+and rerun 3, 4 and 6. Until those pass, the owner merges by hand.
 
 ## Owner Decisions
 

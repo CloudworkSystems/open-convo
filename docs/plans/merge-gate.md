@@ -117,8 +117,17 @@ pull requests, because GitHub doesn't let an author approve their own.
 
 Fix, tried during the scratch tests: reconnect the Claude GitHub connection
 as `cloudwork-bot`. Cloud Claude then has Write only, like the other builders.
-The settings changes in this plan are made before that switch, while the
-session can still make them.
+(Cloud sessions turned out unable to change repo settings or branch
+protection at all, so the owner makes those changes himself in the browser.)
+
+**Found in scratch test 3 (#68, October 19):** GitHub does not hold a pull
+request for code-owner review when the code owner opened it. A PR opened
+under the owner's login that changed `AGENTS.md` merged itself once `tests`
+and `codex-approved` passed. So while cloud Claude opens PRs as the owner,
+protected paths bind only the bot, not Claude. The gate is not switched on
+for `main` until test 3 passes with a bot-opened PR. If Claude can't be moved
+to the bot, the owner merges Claude's protected-path PRs himself with
+auto-merge off.
 
 ## What The Building Session Builds
 
@@ -145,6 +154,12 @@ session can still make them.
    place instead of every pull request. The owner pins it once.
 
 ## Tests Before Turning It On
+
+Results so far (October 19, on `gate-test`, protected like `main` will be):
+1 pass (#66), 2 pass (#67), 5 pass (#69), 3 fails for owner-opened PRs (#68,
+see Cloud Claude), 4 and 6 wait for the bot. Also found and fixed on the way:
+an emoji in a status description that GitHub rejected (#63) and the computing
+job sharing the check's name (#70).
 
 Run on a scratch branch protected exactly like `main`, with invented changes:
 
