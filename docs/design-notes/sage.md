@@ -88,6 +88,46 @@ September 2026 and built a catalog of roughly 300 entries.
 5. **Fine-tuning a local model (later).** Gated on enough data, the training
    filter below, and a terms check. Not before.
 
+## Pattern To Follow: The Lab Notebook (Owner, October 20)
+
+The owner chose a published research agent as the model for how Sage runs:
+"An autonomous agentic framework for cross-campaign generalization and sensor
+shift adaptation" (Domenico et al., *Machine Learning: Science and
+Technology*, doi 10.1088/2632-2153/ae9fb7), called MOSAN. Its results are
+compared mostly with the authors' own earlier system in one narrow field, so
+it is a design pattern to follow, not proof. What Sage takes from it:
+
+- **A notebook per run, not one long conversation.** Each Sage run writes a
+  new append-only record (the receipt above, extended). Nothing is edited
+  afterwards; corrections are new entries. This keeps the original purpose
+  from being buried under logs.
+- **Separate roles that never share a conversation**, each reading the
+  notebook and writing only its own section:
+  - *Analyst:* states what happened, from receipts and history only. No
+    strategy, no interpretation (foundations: source, fact, interpretation and
+    proposal stay labeled apart).
+  - *Proposer:* Sage itself, proposing lessons, rules and tests that can be
+    proven wrong.
+  - *Critic:* the checker, keeping, revising or rejecting each proposal against
+    the evidence, without seeing Sage's reasoning.
+  - *Doer:* applies an approved change, with a fixed step budget, and sees only
+    what it needs.
+  - *Summarizer:* writes a short lesson for the next run, itself checked before
+    it is kept.
+- **A step budget** on every run, so a stuck loop stops and reports instead of
+  wandering.
+- **Memory of what worked.** Sage keeps a weighted record of which kinds of
+  change helped which kinds of task (this feeds use 4, routing). Weights move
+  with evidence and never on their own.
+- **Borrowed hints stay provisional.** When Sage starts on a new project, it may
+  borrow the best lessons from similar past projects as clearly marked,
+  temporary hints. They guide proposals but never count as evidence, and they
+  are dropped when the run is saved, so a project's record holds only its own
+  evidence.
+
+The owner still approves every promotion, and nothing here changes the
+training filter or the guardrails below.
+
 ## Test Harness, Modeled On Jeff's Scoreboard
 
 Jeff's Stage 1 scoreboard already had the right shape and is the template:
