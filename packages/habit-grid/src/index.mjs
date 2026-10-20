@@ -182,10 +182,10 @@ function mergeRecord(a, b, parentPurge, withMembers, recordKind) {
   const purge = latest(ownPurge, parentPurge);
   const life = register(a.life, b.life);
   if (compareStamps(life.stamp, purge) <= 0) return tombstoneRecord(a.id, purge, withMembers);
-  const result = { id: a.id, fields: records(a.fields, b.fields, purge), life, purge: clone(ownPurge) };
+  const result = { id: a.id, fields: records(a.fields, b.fields, purge), life, purge: clone(purge) };
   if (withMembers) result.members = records(a.members ?? {}, b.members ?? {}, purge);
-  const filled = result.life.value || Object.keys(result.fields).length > 0 || (withMembers && Object.keys(result.members).length > 0);
-  if (purge && filled && !fieldsPresent(result.fields, RECORD_KEYS[recordKind])) return tombstoneRecord(a.id, purge, withMembers);
+  const kept = Object.keys(result.fields).length > 0 || (withMembers && Object.keys(result.members).length > 0);
+  if (purge && !kept) return tombstoneRecord(a.id, purge, withMembers);
   return result;
 }
 function mergeCollection(left, right, parentPurge, withMembers, recordKind) {
@@ -276,12 +276,21 @@ function contentBearing(record, withMembers) {
   if (object(record.fields) && Object.keys(record.fields).length > 0) return true;
   return withMembers && object(record.members) && Object.keys(record.members).length > 0;
 }
+function survivingFragment(record, types, withMembers) {
+  if (!validStamp(record.purge)) return false;
+  const keys = Object.keys(types);
+  if (keys.every(key => own(record.fields, key))) return false;
+  const entries = [...Object.values(record.fields), ...(withMembers ? Object.values(record.members ?? {}) : [])];
+  if (entries.length === 0) return false;
+  return entries.every(entry => compareStamps(entry.stamp, record.purge) > 0);
+}
 function validateRecord(record, types, withMembers, checkShape = false) {
   if (!object(record) || typeof record.id !== 'string' || !record.id || !object(record.life) || typeof record.life.value !== 'boolean' || !validStamp(record.life.stamp) || (record.purge !== null && !validStamp(record.purge))) fail('Invalid record in person file.');
   validateFields(record.fields, types);
   if (contentBearing(record, withMembers)) {
-    for (const key of Object.keys(types)) if (!own(record.fields, key)) fail('Incomplete record in person file.');
-    if (checkShape && !trackerShapeValid(record.fields)) fail('Invalid tracker shape in person file.');
+    const complete = Object.keys(types).every(key => own(record.fields, key));
+    if (!complete && !survivingFragment(record, types, withMembers)) fail('Incomplete record in person file.');
+    if (complete && checkShape && !trackerShapeValid(record.fields)) fail('Invalid tracker shape in person file.');
   }
   if (withMembers) {
     if (!object(record.members)) fail('Invalid stack members in person file.');
@@ -323,8 +332,8 @@ export function deserializePerson(json) {
 
 const fieldValues = fields => Object.fromEntries(Object.entries(fields).map(([key, entry]) => [key, clone(entry.value)]));
 function present(record) { return object(record) && object(record.fields) && Object.keys(record.fields).length > 0; }
-function visible(records, trash) {
-  return records.filter(record => record.life.value !== trash && present(record)).slice().sort(byId);
+function visible(records, trash, keys) {
+  return records.filter(record => record.life.value !== trash && present(record) && keys.every(key => own(record.fields, key))).slice().sort(byId);
 }
 export function viewPerson(person, { trash = false } = {}) {
   validate(person);
@@ -334,14 +343,14 @@ export function viewPerson(person, { trash = false } = {}) {
     name: fields.name ?? '',
     weekStartsOn: fields.weekStartsOn ?? 'sunday',
     deleted: !person.life.value,
-    trackers: visible(person.trackers, trash).map(record => ({ id: record.id, ...fieldValues(record.fields) })),
-    stacks: visible(person.stacks, trash).map(record => ({
+    trackers: visible(person.trackers, trash, RECORD_KEYS.tracker).map(record => ({ id: record.id, ...fieldValues(record.fields) })),
+    stacks: visible(person.stacks, trash, RECORD_KEYS.stack).map(record => ({
       id: record.id,
       ...fieldValues(record.fields),
       members: Object.entries(record.members ?? {}).filter(([, entry]) => entry.value).map(([id]) => id).sort(),
     })),
-    checkIns: visible(person.checkIns, trash).map(record => ({ id: record.id, ...fieldValues(record.fields) })).sort((a, b) => lex(a.date, b.date) || lex(a.id, b.id)),
-    restDays: visible(person.restDays, trash).map(record => ({ id: record.id, ...fieldValues(record.fields) })).sort((a, b) => lex(a.date, b.date) || lex(a.id, b.id)),
+    checkIns: visible(person.checkIns, trash, RECORD_KEYS.checkIn).map(record => ({ id: record.id, ...fieldValues(record.fields) })).sort((a, b) => lex(a.date, b.date) || lex(a.id, b.id)),
+    restDays: visible(person.restDays, trash, RECORD_KEYS.rest).map(record => ({ id: record.id, ...fieldValues(record.fields) })).sort((a, b) => lex(a.date, b.date) || lex(a.id, b.id)),
   };
 }
 
@@ -386,7 +395,7 @@ function shadeOf(value, target, highest) {
 function valuesFor(person, trackerId) {
   const values = new Map();
   for (const checkIn of person.checkIns) {
-    if (!checkIn.life.value || !present(checkIn) || checkIn.fields.trackerId?.value !== trackerId) continue;
+    if (!checkIn.life.value || !fieldsPresent(checkIn.fields, RECORD_KEYS.checkIn) || checkIn.fields.trackerId.value !== trackerId) continue;
     const date = checkIn.fields.date?.value;
     const amount = checkIn.fields.value?.value;
     if (!validDate(date) || !nonNegative(amount)) continue;
@@ -397,7 +406,7 @@ function valuesFor(person, trackerId) {
 function restsFor(person, trackerId) {
   const dates = new Set();
   for (const rest of person.restDays) {
-    if (!rest.life.value || !present(rest)) continue;
+    if (!rest.life.value || !fieldsPresent(rest.fields, RECORD_KEYS.rest)) continue;
     const target = rest.fields.trackerId?.value;
     const date = rest.fields.date?.value;
     if (!validDate(date)) continue;
@@ -408,7 +417,7 @@ function restsFor(person, trackerId) {
 }
 function readTracker(person, trackerId) {
   const tracker = person.trackers.find(record => record.id === trackerId);
-  if (!tracker || !tracker.life.value || !present(tracker)) fail('Tracker not found.');
+  if (!tracker || !tracker.life.value || !fieldsPresent(tracker.fields, RECORD_KEYS.tracker)) fail('Tracker not found.');
   const fields = fieldValues(tracker.fields);
   if (!KINDS.includes(fields.kind)) fail('Tracker is missing a kind.');
   if (!validSchedule(fields.schedule)) fail('Tracker is missing a schedule.');
@@ -587,7 +596,7 @@ function stackMembers(person, stack) {
     .sort()
     .flatMap(id => {
       const tracker = person.trackers.find(record => record.id === id);
-      return tracker && tracker.life.value && present(tracker) ? [readTracker(person, id)] : [];
+      return tracker && tracker.life.value && fieldsPresent(tracker.fields, RECORD_KEYS.tracker) ? [readTracker(person, id)] : [];
     });
 }
 function combineDays(memberDays) {
@@ -1085,7 +1094,7 @@ export class HabitGrid {
     identity(restId, 'Rest day ID');
     const person = this.#get(personId);
     if (trackerId) active(person.trackers, trackerId, 'Tracker');
-    const existing = person.restDays.find(rest => rest.life.value && present(rest) && rest.fields.date.value === date && rest.fields.trackerId.value === trackerId);
+    const existing = person.restDays.find(rest => rest.life.value && fieldsPresent(rest.fields, RECORD_KEYS.rest) && rest.fields.date.value === date && rest.fields.trackerId.value === trackerId);
     if (existing) return existing.id;
     this.#change(personId, (draft, stamp) => {
       const index = draft.restDays.findIndex(record => record.id === restId);
@@ -1126,7 +1135,7 @@ export class HabitGrid {
     const needsValue = [];
     for (const trackerId of memberIds) {
       const tracker = person.trackers.find(record => record.id === trackerId);
-      if (!tracker || !tracker.life.value || !present(tracker)) continue;
+      if (!tracker || !tracker.life.value || !fieldsPresent(tracker.fields, RECORD_KEYS.tracker)) continue;
       const kind = tracker.fields.kind.value;
       if (kind === 'done') plan.push({ trackerId, kind, value: 1, name: tracker.fields.name.value });
       else if (positive(tracker.fields.usualAmount?.value)) plan.push({ trackerId, kind, value: tracker.fields.usualAmount.value, name: tracker.fields.name.value });

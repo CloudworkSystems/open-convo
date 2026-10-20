@@ -219,8 +219,9 @@ day's value is their sum. There is no stored day-total field.
 Serialization preserves engine snapshots exactly, including tombstones.
 Loading checks the schema, field types, IDs, duplicate IDs, and stamps.
 A record that is present or still in Trash must include every field for its
-type. A purged marker has empty fields and may omit them. A saved file that
-drops `date` from a live check-in fails at load with
+type, unless a purge cutoff left a fragment whose surviving fields are newer
+than that cutoff. A purged marker has empty fields and may omit them. A saved
+file that drops `date` from a live check-in with no cutoff fails at load with
 `Incomplete record in person file.` A tracker whose `kind`, `target`, and
 `unit` cannot describe that kind fails with
 `Invalid tracker shape in person file.` Unknown versions fail with
@@ -229,9 +230,11 @@ drops `date` from a live check-in fails at load with
 Changing `kind`, `target`, or `unit` writes all three again at the same stamp.
 Merge compares those fields on their own, and because they share a stamp the
 newest shape write wins together. Every merge order agrees. A purged field is
-never copied back. If a cutoff leaves a tracker, stack, check-in, or rest day
-missing a field, that record becomes a purged marker again, so a later save
-still loads.
+never copied back. A cutoff can leave a record with only the fields stamped
+after it. That fragment stays in the file so a later replica can fill the
+gaps, and it stays out of the live grid and the live view until every field
+is present. A saved file that drops `date` from a live check-in with no
+cutoff still fails at load.
 
 ## Undo
 

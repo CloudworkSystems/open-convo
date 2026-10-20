@@ -712,7 +712,14 @@ test('concurrent shape edits stay a real tracker, and a lone target change still
   away.renamePerson(wiped, 'River four');
   away.editTracker(wiped, 'water', { target: null });
   const fenced = converges(home.getPerson(wiped), away.getPerson(wiped));
-  assert.deepEqual(fenced.trackers.find(item => item.id === 'water').fields, {});
+  const fencedTracker = fenced.trackers.find(item => item.id === 'water');
+  assert.equal(fencedTracker.fields.kind.value, 'count');
+  assert.equal(fencedTracker.fields.target.value, null);
+  assert.equal(fencedTracker.fields.name, undefined);
+  const fencedView = fixed('phone-c', 100);
+  fencedView.importPerson(fenced);
+  assert.equal(fencedView.view(wiped).trackers.length, 0);
+  assert.equal(fencedView.save(wiped).includes('"kind"'), true);
 
   const kept = fixed('phone-a', 100);
   const partial = fixed('phone-b', 100);
@@ -773,11 +780,43 @@ test('concurrent shape edits stay a real tracker, and a lone target change still
   awayLog.renamePerson(logged, 'River four');
   awayLog.editCheckIn(logged, 'glass', { value: 9 });
   const fencedLog = converges(homeLog.getPerson(logged), awayLog.getPerson(logged));
-  assert.deepEqual(fencedLog.checkIns.find(item => item.id === 'glass').fields, {});
+  const glass = fencedLog.checkIns.find(item => item.id === 'glass');
+  assert.equal(glass.fields.value.value, 9);
+  assert.equal(glass.fields.date, undefined);
   const reloaded = fixed('phone-c', 100);
   reloaded.load(serializePerson(fencedLog));
   assert.equal(reloaded.view(logged).checkIns.length, 0);
   assert.equal(reloaded.grid(logged, 'water', { start: '2026-03-01', end: '2026-03-08' }).squares.find(item => item.date === '2026-03-04').value, 0);
+
+  const logs = ['phone-a', 'phone-b', 'phone-c'].map(deviceId => fixed(deviceId, 100));
+  const personId = logs[0].createPerson('River', { id: 'river' });
+  logs[0].addTracker(personId, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  logs[0].logCheckIn(personId, 'water', { date: '2026-03-04', value: 2, checkInId: 'glass' });
+  logs[1].importPerson(logs[0].getPerson(personId));
+  logs[2].importPerson(logs[0].getPerson(personId));
+  logs[0].deleteCheckIn(personId, 'glass');
+  logs[0].emptyTrash(personId);
+  for (const device of [logs[1], logs[2]]) {
+    device.renamePerson(personId, 'River two');
+    device.renamePerson(personId, 'River three');
+    device.renamePerson(personId, 'River four');
+  }
+  logs[1].editCheckIn(personId, 'glass', { value: 9, source: 'manual' });
+  logs[2].editCheckIn(personId, 'glass', { date: '2026-03-05', trackerId: 'water' });
+  const logCopies = logs.map(device => device.getPerson(personId));
+  const joined = mergePeople(mergePeople(logCopies[0], logCopies[1]), logCopies[2]);
+  for (const [i, j, k] of [[0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]) {
+    assert.deepEqual(mergePeople(mergePeople(logCopies[i], logCopies[j]), logCopies[k]), joined);
+  }
+  const joinedGlass = joined.checkIns.find(item => item.id === 'glass');
+  assert.equal(joinedGlass.fields.value.value, 9);
+  assert.equal(joinedGlass.fields.date.value, '2026-03-05');
+  assert.equal(joinedGlass.fields.trackerId.value, 'water');
+  assert.equal(joinedGlass.fields.source.value, 'manual');
+  const shown = fixed('phone-d', 100);
+  shown.importPerson(joined);
+  assert.equal(shown.view(personId).checkIns[0].value, 9);
+  assert.equal(shown.grid(personId, 'water', { start: '2026-03-01', end: '2026-03-08' }).squares.find(item => item.date === '2026-03-05').value, 9);
 });
 
 test('three-device histories converge under every delivery order', () => {
