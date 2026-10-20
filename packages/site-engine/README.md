@@ -10,6 +10,7 @@ node packages/site-engine/src/build.mjs --facts <facts.json> --out <folder>
 From this folder:
 
 ```bash
+npm install
 npm test
 node src/build.mjs --facts fixtures/marrow-lane-bakery.facts.json --out /tmp/marrow-lane
 ```
@@ -24,8 +25,17 @@ coral `#f37a4a`). The page names Atkinson Hyperlegible Next when that font is
 already installed, then a system serif. It does not ship font files or request
 anything from the network. Photos may be JPEG, PNG, or WebP. AVIF is refused.
 Color profiles are removed from photos, because a profile can carry a name
-or a device id. A progressive JPEG keeps every scan. Reserved characters in
-an email are percent-encoded in the mailto link; the address on the page
-stays as written.
+or a device id. On a WebP, only the EXIF, XMP, and color-profile flags are
+cleared, so transparency and animation stay. A progressive JPEG keeps every
+scan. A plain JFIF header is kept; other APP0 headers are not. Reserved
+characters in an email are percent-encoded in the mailto link; the address
+on the page stays as written.
+
+`--out` replaces a folder only when that folder is missing, empty, or already
+holds `site-engine.txt` from an earlier build. That check runs again on the
+folder after it has been moved aside, and the folder is put back when it is
+no longer an earlier build. Any other existing folder is left as it is. The
+tests use `sharp` (Apache-2.0) only to build and decode sample WebP files.
+The build command itself does not import it. Node 20.9 or newer is required.
 
 This slice does not publish, host, take payment, or call a model.
