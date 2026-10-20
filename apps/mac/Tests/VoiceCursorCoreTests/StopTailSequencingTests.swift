@@ -38,22 +38,73 @@ private final class FakeClock {
 
 @Suite("Stop tail policy")
 struct StopTailPolicyTests {
-    @Test("The owner's Stop listens about half a second longer")
-    func ownerStopGetsTail() {
-        let seconds = StopTailPolicy.tailSeconds(source: .owner, livePastesFinishedSegments: false)
+    private func tail(
+        _ timing: StopTailPolicy.InsertionTiming,
+        _ action: StopTailPolicy.CompletionAction,
+        preview: Bool = false,
+        livePaste: Bool = false,
+        source: StopTailPolicy.StopSource = .owner
+    ) -> TimeInterval {
+        StopTailPolicy.tailSeconds(
+            source: source,
+            insertionTiming: timing,
+            completionAction: action,
+            livePreviewActive: preview,
+            livePastesFinishedSegments: livePaste
+        )
+    }
+
+    @Test("Final Paste Only: the owner's Stop listens about half a second longer, for every action",
+          arguments: StopTailPolicy.CompletionAction.allCases)
+    func finalPasteOnlyGetsTail(action: StopTailPolicy.CompletionAction) {
+        let seconds = tail(.finalPasteOnly, action)
         #expect(seconds == StopTailPolicy.ownerStopTailSeconds)
         #expect(seconds >= 0.4 && seconds <= 0.6)
     }
 
-    @Test("Safety stops, auto-stops and engine errors still stop at once")
-    func automaticStopHasNoTail() {
-        #expect(StopTailPolicy.tailSeconds(source: .automatic, livePastesFinishedSegments: false) == 0)
-        #expect(StopTailPolicy.tailSeconds(source: .automatic, livePastesFinishedSegments: true) == 0)
+    @Test("Live Typewriter with Paste or Paste and Submit stops at once: live words are committed (and Return sent) at Stop",
+          arguments: [StopTailPolicy.CompletionAction.autoPaste, .autoSubmit])
+    func liveTypingStopsAtOnce(action: StopTailPolicy.CompletionAction) {
+        #expect(tail(.liveTypewriter, action) == 0)
     }
 
-    @Test("The old live-paste mode keeps stopping at once")
-    func livePasteModeHasNoTail() {
-        #expect(StopTailPolicy.tailSeconds(source: .owner, livePastesFinishedSegments: true) == 0)
+    @Test("Live Typewriter with Copy or Archive types nothing live, so it keeps the tail",
+          arguments: [StopTailPolicy.CompletionAction.clipboard, .archiveOnly])
+    func liveTypewriterWithoutTypingGetsTail(action: StopTailPolicy.CompletionAction) {
+        #expect(tail(.liveTypewriter, action) == StopTailPolicy.ownerStopTailSeconds)
+    }
+
+    @Test("Any running live preview stops at once, whatever the settings say",
+          arguments: StopTailPolicy.InsertionTiming.allCases, StopTailPolicy.CompletionAction.allCases)
+    func runningPreviewStopsAtOnce(timing: StopTailPolicy.InsertionTiming, action: StopTailPolicy.CompletionAction) {
+        #expect(tail(timing, action, preview: true) == 0)
+    }
+
+    @Test("The old live-paste mode stops at once",
+          arguments: StopTailPolicy.InsertionTiming.allCases, StopTailPolicy.CompletionAction.allCases)
+    func livePasteModeHasNoTail(timing: StopTailPolicy.InsertionTiming, action: StopTailPolicy.CompletionAction) {
+        #expect(tail(timing, action, livePaste: true) == 0)
+    }
+
+    @Test("Safety stops, auto-stops and engine errors still stop at once",
+          arguments: StopTailPolicy.InsertionTiming.allCases, StopTailPolicy.CompletionAction.allCases)
+    func automaticStopHasNoTail(timing: StopTailPolicy.InsertionTiming, action: StopTailPolicy.CompletionAction) {
+        #expect(tail(timing, action, source: .automatic) == 0)
+    }
+
+    @Test("A tail never runs while live text is in the app or a live-mode Return is pending")
+    func neverWithLiveTextOrPendingSubmit() {
+        for timing in StopTailPolicy.InsertionTiming.allCases {
+            for action in StopTailPolicy.CompletionAction.allCases {
+                for preview in [false, true] {
+                    for livePaste in [false, true] {
+                        let liveText = preview || livePaste || (timing == .liveTypewriter && (action == .autoPaste || action == .autoSubmit))
+                        let seconds = tail(timing, action, preview: preview, livePaste: livePaste)
+                        #expect((seconds > 0) == !liveText, "\(timing) \(action) preview=\(preview) livePaste=\(livePaste)")
+                    }
+                }
+            }
+        }
     }
 }
 

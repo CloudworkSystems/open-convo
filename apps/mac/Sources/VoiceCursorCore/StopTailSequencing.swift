@@ -26,13 +26,50 @@ public enum StopTailPolicy {
         case automatic
     }
 
+    /// How the dictation's words reach the app.
+    public enum InsertionTiming: Equatable, CaseIterable {
+        /// Nothing is typed while you talk; the finished text is pasted once.
+        case finalPasteOnly
+        /// Words are typed into the app while you talk.
+        case liveTypewriter
+    }
+
+    /// What happens to the finished text.
+    public enum CompletionAction: Equatable, CaseIterable {
+        case autoPaste
+        case autoSubmit
+        case clipboard
+        case archiveOnly
+
+        /// Live typing only runs for actions that type into the app.
+        var typesIntoApp: Bool { self == .autoPaste || self == .autoSubmit }
+    }
+
     /// Seconds of extra listening for this stop; 0 means stop at once.
     ///
-    /// The old "live paste finished segments" mode pastes the words heard so
-    /// far at the moment of Stop. A tail there would hear the same words
-    /// again, so that mode keeps stopping at once.
-    public static func tailSeconds(source: StopSource, livePastesFinishedSegments: Bool) -> TimeInterval {
-        guard source == .owner, !livePastesFinishedSegments else { return 0 }
+    /// The tail is only for dictations where nothing is typed while you
+    /// talk. When live words are already in the app, Stop commits them (and,
+    /// for Paste and Submit, sends Return) at once, so words heard in a tail
+    /// could arrive after that and be typed into the wrong place or never
+    /// sent. Those modes stop at once, exactly as before the tail existed.
+    /// - Parameters:
+    ///   - insertionTiming: the insertion setting for this dictation.
+    ///   - completionAction: the completion action for this dictation (a
+    ///     Desk recording counts as archive only: it types nothing).
+    ///   - livePreviewActive: a live preview is running in the app right
+    ///     now (checked too, in case it started despite the setting).
+    ///   - livePastesFinishedSegments: the older mode that pastes Apple's
+    ///     finished segments while you talk.
+    public static func tailSeconds(
+        source: StopSource,
+        insertionTiming: InsertionTiming,
+        completionAction: CompletionAction,
+        livePreviewActive: Bool,
+        livePastesFinishedSegments: Bool
+    ) -> TimeInterval {
+        guard source == .owner else { return 0 }
+        guard !livePreviewActive, !livePastesFinishedSegments else { return 0 }
+        if insertionTiming == .liveTypewriter, completionAction.typesIntoApp { return 0 }
         return ownerStopTailSeconds
     }
 }

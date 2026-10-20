@@ -93,6 +93,18 @@ enum ArchiveFormat: String, CaseIterable {
     }
 }
 
+extension CompletionAction {
+    /// The same action, as the stop-tail policy names it.
+    var stopTailKind: StopTailPolicy.CompletionAction {
+        switch self {
+        case .autoPaste: return .autoPaste
+        case .autoSubmit: return .autoSubmit
+        case .clipboard: return .clipboard
+        case .archiveOnly: return .archiveOnly
+        }
+    }
+}
+
 enum CompletionAction: String, CaseIterable {
     case autoPaste = "auto-paste"
     case autoSubmit = "auto-submit"
@@ -7315,8 +7327,15 @@ final class DictationController {
             }
             return
         }
+        // Only when nothing is typed while you talk (Final Paste Only, or a
+        // Desk recording): live modes stop at once, as before (Codex P1 x2
+        // on #82: tail words must never be typed after the live words were
+        // committed or after Return).
         let tailSeconds = StopTailPolicy.tailSeconds(
             source: source,
+            insertionTiming: InsertionTiming.current == .finalPasteOnly ? .finalPasteOnly : .liveTypewriter,
+            completionAction: deskRoute == nil ? Settings.completionAction.stopTailKind : .archiveOnly,
+            livePreviewActive: deskRoute == nil && TextInjector.isLivePreviewActive,
             livePastesFinishedSegments: livePastesFinishedSegmentsThisSession
         )
 

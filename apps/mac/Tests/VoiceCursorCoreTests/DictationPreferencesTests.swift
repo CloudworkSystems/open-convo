@@ -169,6 +169,17 @@ struct DictationPreferencesTests {
         #expect(!source.contains("self.stop(source: .owner)"), "Auto-stops and engine errors stop at once.")
 
         let stop = try functionBody("func stop(source: StopTailPolicy.StopSource = .automatic) {\n        guard isRecording", in: source)
+        // Codex round 2 on #82: live modes skip the tail. The policy sees the
+        // insertion setting, the action, a running live preview and the
+        // live-paste mode, and is decided before anything is committed.
+        let policy = try #require(stop.range(of: "StopTailPolicy.tailSeconds("))
+        #expect(stop.contains("insertionTiming: InsertionTiming.current == .finalPasteOnly ? .finalPasteOnly : .liveTypewriter"))
+        #expect(stop.contains("livePreviewActive: deskRoute == nil && TextInjector.isLivePreviewActive"))
+        #expect(stop.contains("livePastesFinishedSegments: livePastesFinishedSegmentsThisSession"))
+        let commit = try #require(stop.range(of: "TextInjector.commitLivePreviewForImmediateStop("))
+        let liveSubmit = try #require(stop.range(of: "timing=immediate-stop"))
+        #expect(policy.lowerBound < commit.lowerBound && policy.lowerBound < liveSubmit.lowerBound)
+        #expect(source.contains("static var isLivePreviewActive: Bool {\n        livePreviewInputMode != nil\n    }"))
         // Live typing is frozen and the safety checks are read at the moment
         // of Stop, before the tail starts.
         let freeze = try #require(stop.range(of: "TextInjector.freezeLivePreviewPartials()"))
