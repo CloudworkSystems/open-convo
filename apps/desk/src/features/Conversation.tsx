@@ -12,6 +12,12 @@ import { useDeskDictationView } from '../app/use-desk-dictation';
 const MIN_DRAFT_HEIGHT = 78;
 const MIN_MESSAGES_HEIGHT = 120;
 
+/** While this conversation's reply is being written, Send becomes Stop (step 3 trial). */
+export interface ComposerStop {
+  stopping: boolean;
+  stop: () => void;
+}
+
 export function Conversation({
   goal,
   session,
@@ -29,6 +35,8 @@ export function Conversation({
   participantBusy = false,
   participantSendUnavailable = false,
   participantSendBlockedReason,
+  participantStop,
+  participantSendWaitingReason,
 }: {
   goal?: Goal;
   session?: Session;
@@ -53,6 +61,8 @@ export function Conversation({
   participantBusy?: boolean;
   participantSendUnavailable?: boolean;
   participantSendBlockedReason?: string;
+  participantStop?: ComposerStop;
+  participantSendWaitingReason?: string;
 }) {
   const conversation = useRef<HTMLElement>(null);
   const scrollArea = useRef<HTMLDivElement>(null);
@@ -90,6 +100,9 @@ export function Conversation({
   const responseRunning = messages.some((message) => message.sessionId === session?.id && message.status === 'running');
   const canSend = !readOnly && Boolean(session) && Boolean(draft.trim()) && !responseRunning
     && !participantBusy && !participantSendUnavailable;
+  // Shown only while there is a draft to send, so the brief save after every
+  // reply doesn't flash a line under an empty message box.
+  const sendWaitingReason = !participantStop && draft.trim() ? participantSendWaitingReason : undefined;
   const resizeDraft = (height: number) => setDraftHeight(Math.round(Math.max(MIN_DRAFT_HEIGHT, Math.min(maxDraftHeight, height))));
   const sendDraft = () => {
     if (!canSend || !session || composing.current) return;
@@ -310,6 +323,14 @@ export function Conversation({
             </div>
           </div>)}
         </div>}
+        {/* Step 3 trial: why Send is unavailable, in normal-size text at the
+            top of the message box rather than fine print under it. The live
+            region stays mounted so a new reason is announced. */}
+        <div className="composer-notice-region" role="status" aria-live="polite" aria-atomic="true">
+          {participantSendBlockedReason
+            ? <p className="composer-notice" id="send-blocked-reason">{participantSendBlockedReason}</p>
+            : sendWaitingReason && <p className="composer-wait" id="send-waiting-reason">{sendWaitingReason}</p>}
+        </div>
         <label className="sr-only" htmlFor="message-draft">
           Your message
         </label>
@@ -321,7 +342,8 @@ export function Conversation({
           disabled={!session || readOnly}
           placeholder={participantMode ? 'Write an invented message…' : "What's on your mind? Try a sample idea…"}
           rows={3}
-          aria-describedby={participantSendBlockedReason ? 'message-shortcuts send-blocked-reason' : 'message-shortcuts'}
+          aria-describedby={participantSendBlockedReason ? 'message-shortcuts send-blocked-reason'
+            : sendWaitingReason ? 'message-shortcuts send-waiting-reason' : 'message-shortcuts'}
           onChange={(event) => session && onDraftChange(session.id, event.target.value)}
           onFocus={(event) => reportDraftSelection(event.currentTarget, true)}
           onSelect={(event) => reportDraftSelection(event.currentTarget, document.activeElement === event.currentTarget)}
@@ -363,21 +385,26 @@ export function Conversation({
             type="button" className="secondary-button" aria-disabled={participantAvailabilityChecking || undefined}
             onClick={() => { if (!participantAvailabilityChecking) onParticipantPickerOpen(); }}
           >Check participant availability</button>}
+          {/* One button element in both modes, so keyboard focus stays on it
+              when Send turns into Stop and back. */}
           <button
-            type="submit"
-            className="primary-button send-button"
-            disabled={!canSend}
-            aria-label={participantMode ? 'Send message' : 'Send demo message'}
-            aria-describedby={participantSendBlockedReason ? 'send-blocked-reason' : undefined}
+            type={participantStop ? 'button' : 'submit'}
+            className={participantStop ? 'primary-button send-button stop-button' : 'primary-button send-button'}
+            disabled={participantStop ? false : !canSend}
+            aria-disabled={participantStop?.stopping || undefined}
+            aria-label={participantStop ? participantStop.stopping ? 'Stopping reply' : 'Stop reply'
+              : participantMode ? 'Send message' : 'Send demo message'}
+            aria-describedby={participantStop ? undefined : participantSendBlockedReason ? 'send-blocked-reason'
+              : sendWaitingReason ? 'send-waiting-reason' : undefined}
+            onClick={participantStop ? () => { if (!participantStop.stopping) participantStop.stop(); } : undefined}
           >
-            Send
+            {participantStop ? participantStop.stopping ? 'Stopping…' : 'Stop' : 'Send'}
           </button>
         </div>
       </form>
       <p className="conversation-footnote">
         {participantMode ? 'Participant proof · invented messages only. Do not enter private data.'
           : "A demo reply tests the flow. It doesn't call an AI model."}
-        {participantSendBlockedReason && <><br /><span id="send-blocked-reason">{participantSendBlockedReason}</span></>}
       </p>
     </section>
   );

@@ -37,6 +37,7 @@ invented chats only, while the step 2 trial is pending. Scope:
 | PR 4c: Fake-Ollama host cases in the shared local vectors (26 cases, both sides) | Merged (#62) |
 | PR 5: Scripted kill-mid-reply proof | Merged (#65) |
 | PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-3-owner-trial.md)) | Waiting on the owner |
+| Trial fixes (Stop, Ollama notice) | In review |
 
 **Next build: the Claude Code adapter** (right after step 3; invented
 chats only). Scope:

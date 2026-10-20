@@ -76,6 +76,8 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
   const output = run.outputChunks.join('');
   const terminal = run.phase === 'completed' || run.phase === 'stopped' || run.phase === 'failed';
   const closed = isConversationRunClosed(run);
+  // The details row speaks in the past tense once the reply has ended.
+  const ended = terminal || closed || stopState === 'confirmed';
   const cleanupPending = cleanupState === 'unknown' || cleanupState === 'owned';
   const stopDisabled = !canStop || (!cleanupPending && (terminal || closed || stopState === 'confirmed')) || stopState === 'requesting';
   const local = isLocalParticipant(run.participant);
@@ -108,11 +110,13 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
   const prefixMismatch = savedOutput !== undefined && !prefixMatches;
   const pendingOutput = prefixMatches ? output.slice(savedOutput!.length) : undefined;
   const pending = checkpointPending || !sequenceConfirmed || savedSequence !== run.lastSequence || Boolean(pendingOutput);
-  const pendingLabel = checkpointPending && savedSequence === run.lastSequence && !pendingOutput
-    ? 'Run status changes are not yet saved.' : 'Newer updates are not yet saved.';
-  const saveLabel = prefixMismatch ? 'Save status could not be verified for this response.'
-    : !sequenceConfirmed ? 'Save not yet confirmed.'
-    : `Saved through update ${savedSequence}.${pending ? ` ${pendingLabel}` : ''}`;
+  // Plain words for the owner (step 3 trial): the update count stays in
+  // data-saved-sequence for checks, never in the visible text.
+  const saveLabel = prefixMismatch ? 'This Mac couldn’t check whether this reply is saved.'
+    : !sequenceConfirmed ? 'This reply isn’t saved yet.'
+    : !pending ? 'Saved on this Mac.'
+    : checkpointPending && savedSequence === run.lastSequence && !pendingOutput ? 'The reply is saved, but its latest status isn’t saved yet.'
+    : 'Some of this reply isn’t saved yet.';
   // A local run has no provider process (contract section 20.4): its Stop
   // cancels the request on this Mac and answers groupCleared true, so a
   // confirmed cleanup needs no line at all, and the other states are worded
@@ -129,37 +133,36 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
 
   return (
     <section className="run-transcript" aria-label="Run transcript" data-run-id={run.runId} data-session-id={run.sessionId}>
-      <header className="run-transcript-heading">
-        <p id={statusId} ref={statusTarget} tabIndex={-1} data-run-status="true" className="run-phase" role="status" aria-live="polite" aria-atomic="true">{phase}</p>
-        <button type="button" className="run-stop" disabled={stopDisabled} onClick={() => {
-          statusTarget.current?.focus({ preventScroll: true });
-          statusTarget.current?.scrollIntoView({ block: 'nearest' });
-          onStop();
-        }} aria-describedby={statusId}>
-          {stopLabel}
-        </button>
-      </header>
-      {!local && run.closure?.kind === 'interrupted' && (run.closure.terminalEvent.type === 'stopped' || run.closure.terminalEvent.type === 'failed')
-        && <p className="run-empty">{terminalLabel(run.closure.terminalEvent.type, run.closure.terminalEvent.reason, run.participant.executionHost)}</p>}
-      {run.closure?.kind === 'interrupted' && <p className="run-empty" data-interruption-reason>
-        {run.closure.reason === 'workspace-limit'
-          ? 'This workspace reached its storage limit. The retained response is incomplete.'
-          : 'Some response updates could not be verified. The retained response is incomplete.'}
-      </p>}
-      {run.cleanupAcknowledgment && <p className="run-empty" data-cleanup-acknowledgment>{local
-        ? 'You chose to continue without confirming this reply ended on this Mac.'
-        : 'Unreachable cleanup acknowledged locally. This does not confirm that the participant stopped or that provider work was cancelled.'}</p>}
-      {cleanupLine && <p className="run-empty" data-cleanup-state={cleanupState}>{cleanupLine}</p>}
       <article className="run-message" aria-label="Your message" data-message-id={run.userMessageId}>
         <h3>You</h3>
         <div className="run-message-text" dir="auto">{run.inputChunks.join('')}</div>
       </article>
       <article className="run-message" aria-label={`${local ? `${sentLocally ? 'Local' : 'Ollama'} ${localModelName(run.participant)}` : run.participant.label} response`} data-message-id={run.assistantMessageId}>
         <h3>{local ? `${sentLocally ? 'Local' : 'Ollama'} · ${localModelName(run.participant)}` : run.participant.label}</h3>
-        <dl className="run-participant">
-          <div><dt>Model</dt><dd>{local ? localModelName(run.participant) : run.participant.model}</dd></div>
-          <div><dt>Running on</dt><dd>{local ? sentLocally ? 'This Mac · stays on this Mac' : 'No reply started' : run.participant.executionHost}</dd></div>
-        </dl>
+        {/* Step 3 trial: the reply's status comes first, right under its
+            heading and above its text, so it can't be confused with the
+            details row below. */}
+        <header className="run-transcript-heading">
+          <p id={statusId} ref={statusTarget} tabIndex={-1} data-run-status="true" className="run-phase" role="status" aria-live="polite" aria-atomic="true">{phase}</p>
+          <button type="button" className="run-stop" disabled={stopDisabled} onClick={() => {
+            statusTarget.current?.focus({ preventScroll: true });
+            statusTarget.current?.scrollIntoView({ block: 'nearest' });
+            onStop();
+          }} aria-describedby={statusId}>
+            {stopLabel}
+          </button>
+        </header>
+        {!local && run.closure?.kind === 'interrupted' && (run.closure.terminalEvent.type === 'stopped' || run.closure.terminalEvent.type === 'failed')
+          && <p className="run-empty">{terminalLabel(run.closure.terminalEvent.type, run.closure.terminalEvent.reason, run.participant.executionHost)}</p>}
+        {run.closure?.kind === 'interrupted' && <p className="run-empty" data-interruption-reason>
+          {run.closure.reason === 'workspace-limit'
+            ? 'This workspace reached its storage limit. The retained response is incomplete.'
+            : 'Some response updates could not be verified. The retained response is incomplete.'}
+        </p>}
+        {run.cleanupAcknowledgment && <p className="run-empty" data-cleanup-acknowledgment>{local
+          ? 'You chose to continue without confirming this reply ended on this Mac.'
+          : 'Unreachable cleanup acknowledged locally. This does not confirm that the participant stopped or that provider work was cancelled.'}</p>}
+        {cleanupLine && <p className="run-empty" data-cleanup-state={cleanupState}>{cleanupLine}</p>}
         {output ? (
           <div className="run-message-text run-output" dir="auto" aria-live="off">
             {prefixMatches
@@ -168,8 +171,13 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
               : output}
           </div>
         ) : <p className="run-empty">{emptyOutput}</p>}
+        <dl className="run-participant">
+          <div><dt>Model</dt><dd>{local ? localModelName(run.participant) : run.participant.model}</dd></div>
+          <div><dt>{ended ? 'Where it ran' : 'Where it runs'}</dt><dd>{local ? sentLocally ? 'This Mac · stays on this Mac' : 'No reply started' : run.participant.executionHost}</dd></div>
+        </dl>
       </article>
-      <div className="run-save-state" aria-live="off" data-save-state={prefixMismatch ? 'unknown' : pending ? 'pending' : 'saved'}>
+      <div className="run-save-state" aria-live="off" data-save-state={prefixMismatch ? 'unknown' : pending ? 'pending' : 'saved'}
+        data-saved-sequence={sequenceConfirmed ? savedSequence : undefined}>
         <p>{saveLabel}</p>
         {saving && <p>Saving…</p>}
         {!prefixMismatch && pendingOutput && <p id={pendingLabelId}>Highlighted, dotted-underlined text is not yet saved.</p>}
