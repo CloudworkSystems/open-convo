@@ -106,4 +106,53 @@ struct ElectronFocusPolicyTests {
     func settleDelay() {
         #expect(PasteSubmitSequencing.settleDelayAfterPaste == 0.15)
     }
+
+    @Test("An Electron or Chromium target gets Cmd+V only, never an Accessibility insert")
+    func webEditorTargetIsKeystrokeOnly() {
+        // Even with a usable text box in the target app.
+        #expect(PasteDeliveryCheck.route(targetProcessIdentifier: 42, frontmostProcessIdentifier: 42, elementProcessIdentifier: 42, targetUsesWebEditor: true) == .keystrokeOnly)
+        #expect(PasteDeliveryCheck.route(targetProcessIdentifier: 42, frontmostProcessIdentifier: 42, elementProcessIdentifier: nil, targetUsesWebEditor: true) == .keystrokeOnly)
+        #expect(PasteDeliveryCheck.route(targetProcessIdentifier: 42, frontmostProcessIdentifier: 42, elementProcessIdentifier: 7, targetUsesWebEditor: true) == .keystrokeOnly)
+        // Return still follows a Cmd+V that was sent.
+        #expect(PasteSubmitSequencing.shouldPressReturn(after: .keystrokePosted))
+    }
+
+    @Test("A native target keeps the Accessibility insert, with Cmd+V as the fallback")
+    func nativeTargetKeepsAccessibilityFirst() {
+        #expect(PasteDeliveryCheck.route(targetProcessIdentifier: 42, frontmostProcessIdentifier: 42, elementProcessIdentifier: 42, targetUsesWebEditor: false) == .accessibilityThenKeystroke)
+    }
+
+    @Test("Electron and Chromium targets still get nothing when not in front or quit")
+    func webEditorTargetKeepsSafetyChecks() {
+        #expect(PasteDeliveryCheck.route(targetProcessIdentifier: 42, frontmostProcessIdentifier: 7, elementProcessIdentifier: 42, targetUsesWebEditor: true) == .clipboardOnly)
+        #expect(PasteDeliveryCheck.route(targetProcessIdentifier: 42, frontmostProcessIdentifier: nil, elementProcessIdentifier: nil, targetUsesWebEditor: true) == .clipboardOnly)
+        #expect(PasteDeliveryCheck.route(targetProcessIdentifier: 42, targetIsRunning: false, frontmostProcessIdentifier: 42, elementProcessIdentifier: 42, targetUsesWebEditor: true) == .clipboardOnly)
+        #expect(PasteDeliveryCheck.route(targetProcessIdentifier: nil, frontmostProcessIdentifier: 7, elementProcessIdentifier: 7, targetUsesWebEditor: true) == .clipboardOnly)
+    }
+
+    @Test("Known Electron apps are recognised by bundle ID alone")
+    func knownAppsAreWebEditors() {
+        for bundleIdentifier in ["com.anthropic.claudefordesktop", "com.openai.codex", "com.tinyspeck.slackmacgap", "com.microsoft.VSCode", "com.todesktop.230313mzl4w4u92"] {
+            #expect(WebEditorDetection.usesWebEditor(bundleIdentifier: bundleIdentifier, frameworkNames: [], frameworkHasEngineMarker: { _ in false }))
+        }
+    }
+
+    @Test("Any app shipping an Electron or Chromium framework is recognised, even renamed")
+    func frameworkMarksWebEditor() {
+        #expect(WebEditorDetection.usesWebEditor(bundleIdentifier: "com.example.someapp", frameworkNames: ["Electron Framework.framework"], frameworkHasEngineMarker: { _ in false }))
+        #expect(WebEditorDetection.usesWebEditor(bundleIdentifier: "com.example.someapp", frameworkNames: ["Chromium Embedded Framework.framework"], frameworkHasEngineMarker: { _ in false }))
+        // A renamed engine framework is found by Chromium's resource pack inside it.
+        #expect(WebEditorDetection.usesWebEditor(bundleIdentifier: "com.example.someapp", frameworkNames: ["Sparkle.framework", "Example Framework.framework"], frameworkHasEngineMarker: { $0 == "Example Framework.framework" }))
+        // No bundle ID at all still works from the framework.
+        #expect(WebEditorDetection.usesWebEditor(bundleIdentifier: nil, frameworkNames: ["Electron Framework.framework"], frameworkHasEngineMarker: { _ in false }))
+    }
+
+    @Test("Native apps are not web editors")
+    func nativeAppsAreNotWebEditors() {
+        #expect(!WebEditorDetection.usesWebEditor(bundleIdentifier: "com.apple.TextEdit", frameworkNames: [], frameworkHasEngineMarker: { _ in true }))
+        #expect(!WebEditorDetection.usesWebEditor(bundleIdentifier: "com.example.nativeapp", frameworkNames: ["Sparkle.framework", "Example Kit.framework"], frameworkHasEngineMarker: { _ in false }))
+        // Only .framework entries are looked at.
+        #expect(!WebEditorDetection.usesWebEditor(bundleIdentifier: "com.example.nativeapp", frameworkNames: ["libexample.dylib"], frameworkHasEngineMarker: { _ in true }))
+        #expect(!WebEditorDetection.usesWebEditor(bundleIdentifier: nil, frameworkNames: [], frameworkHasEngineMarker: { _ in true }))
+    }
 }

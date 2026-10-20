@@ -95,3 +95,45 @@
 }
 .adjustable-composer .dictation-held-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .adjustable-composer .dictation-ready { color: var(--tca-status-success); }
+
+/* Step 3 trial: why Send is unavailable, in normal-size text at the top of
+   the message box. Empty when there is nothing to say. */
+.adjustable-composer .composer-notice-region:empty { display: none; }
+.adjustable-composer .composer-notice-region { padding: 0 12px 6px; }
+.adjustable-composer .composer-notice {
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--tca-status-warning);
+  border-left-width: 4px;
+  border-radius: 8px;
+  color: var(--tca-text-primary);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.adjustable-composer .composer-wait {
+  margin: 0;
+  padding: 2px 5px;
+  color: var(--tca-text-body);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* While a reply is being written, Send becomes a clearly labelled Stop. */
+.adjustable-composer .send-button.stop-button {
+  gap: 7px;
+  min-height: 36px;
+  padding: 7px 16px;
+  font-size: 13px;
+}
+.adjustable-composer .send-button.stop-button::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: currentColor;
+}
+.adjustable-composer .send-button.stop-button[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: default;
+}

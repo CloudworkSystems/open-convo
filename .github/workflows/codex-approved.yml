@@ -32,7 +32,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  codex-approved:
+  # Named differently from the `codex-approved` status on purpose: a job's
+  # check run carries the job's name, and a job named `codex-approved` would
+  # report "success" whenever it merely ran, next to the real status. Branch
+  # protection must only ever see the status this job posts.
+  evaluate-codex:
+    name: evaluate-codex
     # Only Codex's own comments can change the result, so other comments are
     # skipped (skipped jobs bill no minutes).
     if: >-
