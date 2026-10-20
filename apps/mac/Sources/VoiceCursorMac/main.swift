@@ -5187,19 +5187,23 @@ enum TextInjector {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
                     guard pasteStillCurrent(text, token: token, stage: "insert", afterPaste: afterPaste) else { return }
                     // Type only into the target app, and only while it is in
-                    // front (see PasteDeliveryCheck).
+                    // front (see PasteDeliveryCheck). Electron and Chromium
+                    // apps get Cmd+V only (see WebEditorDetection).
+                    let usesWebEditor = applicationUsesWebEditor(targetApplication)
                     let route = PasteDeliveryCheck.route(
                         targetProcessIdentifier: targetApplication.processIdentifier,
                         targetIsRunning: isStillRunning(targetApplication),
                         frontmostProcessIdentifier: NSWorkspace.shared.frontmostApplication?.processIdentifier,
-                        elementProcessIdentifier: targetElement.flatMap { elementProcessIdentifier($0) }
+                        elementProcessIdentifier: targetElement.flatMap { elementProcessIdentifier($0) },
+                        targetUsesWebEditor: usesWebEditor
                     )
                     let step: PasteSubmitSequencing.PasteStep
                     switch route {
                     case .accessibilityThenKeystroke:
                         step = pasteIntoActiveApplication(text)
                     case .keystrokeOnly:
-                        RunLog.write("completion.ax-insert.skipped", "reason=element-not-in-target")
+                        let reason = usesWebEditor ? "web-editor" : "element-not-in-target"
+                        RunLog.write("completion.ax-insert.skipped", "reason=\(reason)")
                         step = pasteIntoActiveApplication(text, allowAccessibilityInsert: false)
                     case .clipboardOnly:
                         let reason = isStillRunning(targetApplication) ? "target-not-frontmost" : "target-quit"
@@ -5223,6 +5227,41 @@ enum TextInjector {
         assert(route == .clipboardOnly)
         let step = keepOnClipboardOnly(text, reason: targetApplication == nil ? "no-target" : "target-quit")
         afterPaste?(step)
+    }
+
+    /// Answers per app bundle, so the bundle is read once, not on every paste.
+    private static var webEditorAnswers: [String: Bool] = [:]
+
+    /// True when the app is built on Electron or Chromium (see
+    /// WebEditorDetection). Reads only folder and file names inside the
+    /// app's own bundle.
+    private static func applicationUsesWebEditor(_ application: NSRunningApplication) -> Bool {
+        let bundleIdentifier = application.bundleIdentifier
+        guard let bundleURL = application.bundleURL else {
+            return WebEditorDetection.usesWebEditor(
+                bundleIdentifier: bundleIdentifier,
+                frameworkNames: [],
+                frameworkHasEngineMarker: { _ in false }
+            )
+        }
+        let cacheKey = bundleURL.path
+        if let known = webEditorAnswers[cacheKey] { return known }
+        let frameworksURL = bundleURL.appendingPathComponent("Contents/Frameworks", isDirectory: true)
+        let frameworkNames = (try? FileManager.default.contentsOfDirectory(atPath: frameworksURL.path)) ?? []
+        let answer = WebEditorDetection.usesWebEditor(
+            bundleIdentifier: bundleIdentifier,
+            frameworkNames: frameworkNames,
+            frameworkHasEngineMarker: { name in
+                let marker = frameworksURL
+                    .appendingPathComponent(name, isDirectory: true)
+                    .appendingPathComponent("Resources", isDirectory: true)
+                    .appendingPathComponent(WebEditorDetection.engineMarkerResource)
+                return FileManager.default.fileExists(atPath: marker.path)
+            }
+        )
+        webEditorAnswers[cacheKey] = answer
+        RunLog.write("completion.paste.engine", "\(describe(application)) web-editor=\(answer)")
+        return answer
     }
 
     /// True while the target app is still running under the same process ID.
