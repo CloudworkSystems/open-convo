@@ -101,10 +101,12 @@ automatically once checks 1, 2 and 4 pass.
   before it merges, so every merge puts the other open pull requests out of
   date. Each update is a new commit, which needs a new Codex review before
   `codex-approved` passes again.
-- **Blank review decision.** GitHub's `reviewDecision` field is blank on a
-  pull request that needs no review, which is every pull request that touches
-  no protected path. That is expected, not a fault. A protected-path pull
-  request shows `REVIEW_REQUIRED` until the owner approves its latest commit.
+- **Blank review decision.** On #79, a protected-path pull request,
+  GitHub's `reviewDecision` field showed blank, not `REVIEW_REQUIRED`, even
+  though GitHub still enforced the code-owner approval. So anything that reads
+  that field can't rely on it to spot pull requests waiting on the owner.
+  Follow-up (not changed now): check the "needs the owner" list's script
+  against this.
 
 ## What The Owner Does (Only He Can)
 
