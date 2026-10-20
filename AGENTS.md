@@ -85,10 +85,16 @@ request itself, so the owner doesn't have to carry messages:
   review or comment lands. It sends fixes only to its own builders, and only
   for pull requests it launched; it doesn't change other agents' pull requests
   and never reviews its own work.
-- No agent merges or approves a pull request; the owner merges after the
-  planning session's "ready to merge" note, until the merge gate takes over.
+- No agent merges or approves a pull request; the owner merges, until the
+  merge gate takes over. Outside-builder pull requests wait for a "Ready to
+  merge" planning check (from the planning session or the PR steward); every
+  other pull request follows the Review Loop above as before.
+- The PR steward, an hourly Claude scheduled task on the owner's account,
+  requests Codex reviews, reviews Codex-built pull requests, sends fix
+  requests to Codex, posts planning checks, and keeps one "Needs the owner"
+  issue current. It only comments; it never merges, approves or changes code.
 - When a new commit lands on a pull request whose builder can't start a Codex
-  review, the planning session posts `@codex review` for it.
+  review, the planning session or the PR steward posts `@codex review` for it.
 
 ## Limits
 
