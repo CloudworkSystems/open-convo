@@ -43,6 +43,7 @@ struct StopTailPolicyTests {
         _ action: StopTailPolicy.CompletionAction,
         preview: Bool = false,
         livePaste: Bool = false,
+        alreadyInApp: Bool = false,
         source: StopTailPolicy.StopSource = .owner
     ) -> TimeInterval {
         StopTailPolicy.tailSeconds(
@@ -50,8 +51,17 @@ struct StopTailPolicyTests {
             insertionTiming: timing,
             completionAction: action,
             livePreviewActive: preview,
-            livePastesFinishedSegments: livePaste
+            livePastesFinishedSegments: livePaste,
+            liveTextAlreadyInApp: alreadyInApp
         )
+    }
+
+    @Test("Live words already put in the app this dictation mean no tail, even after the setting was turned off",
+          arguments: StopTailPolicy.InsertionTiming.allCases, StopTailPolicy.CompletionAction.allCases)
+    func liveTextAlreadyInAppStopsAtOnce(timing: StopTailPolicy.InsertionTiming, action: StopTailPolicy.CompletionAction) {
+        // For example: a segment was live-pasted, then Live Paste was turned
+        // off before Stop. The settings now look like Final Paste Only.
+        #expect(tail(timing, action, alreadyInApp: true) == 0)
     }
 
     @Test("Final Paste Only: the owner's Stop listens about half a second longer, for every action",
@@ -98,9 +108,13 @@ struct StopTailPolicyTests {
             for action in StopTailPolicy.CompletionAction.allCases {
                 for preview in [false, true] {
                     for livePaste in [false, true] {
-                        let liveText = preview || livePaste || (timing == .liveTypewriter && (action == .autoPaste || action == .autoSubmit))
-                        let seconds = tail(timing, action, preview: preview, livePaste: livePaste)
-                        #expect((seconds > 0) == !liveText, "\(timing) \(action) preview=\(preview) livePaste=\(livePaste)")
+                        for alreadyInApp in [false, true] {
+                            let liveText = preview || livePaste || alreadyInApp
+                                || (timing == .liveTypewriter && (action == .autoPaste || action == .autoSubmit))
+                            let seconds = tail(timing, action, preview: preview, livePaste: livePaste, alreadyInApp: alreadyInApp)
+                            #expect((seconds > 0) == !liveText,
+                                    "\(timing) \(action) preview=\(preview) livePaste=\(livePaste) alreadyInApp=\(alreadyInApp)")
+                        }
                     }
                 }
             }
@@ -351,6 +365,25 @@ struct CaptureEndEvidenceTests {
             capturedSeconds: 1.2
         )
         #expect(!atEnd.treatAsNoSpeech(appleLiveCapture: true, speechEngineHeardWords: false))
+    }
+
+    @Test("The archived length includes the tail after Stop")
+    func durationIncludesTail() {
+        // Stop at 0.8 s, then a 0.5 s tail: history says 1.3 s, not 0.8 s.
+        let tailed = CaptureEndEvidence(
+            words: "invented",
+            firstPartialAt: nil,
+            firstFinalAt: nil,
+            totalSlices: 65,
+            slicesAtOrAboveNearSilent: 14,
+            slicesAtOrAboveStrictSilent: 16,
+            liveListenerHadError: false,
+            capturedSeconds: 0.8 + StopTailPolicy.ownerStopTailSeconds
+        )
+        #expect(tailed.durationMs == 1300)
+        var noTail = tailed
+        noTail.capturedSeconds = 0.8
+        #expect(noTail.durationMs == 800)
     }
 
     @Test("Real silence is still treated as no speech")

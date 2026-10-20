@@ -60,15 +60,19 @@ public enum StopTailPolicy {
     ///     now (checked too, in case it started despite the setting).
     ///   - livePastesFinishedSegments: the older mode that pastes Apple's
     ///     finished segments while you talk.
+    ///   - liveTextAlreadyInApp: this dictation already typed or pasted live
+    ///     words into the app (a live preview started, or a finished segment
+    ///     was live-pasted), whatever the settings say now.
     public static func tailSeconds(
         source: StopSource,
         insertionTiming: InsertionTiming,
         completionAction: CompletionAction,
         livePreviewActive: Bool,
-        livePastesFinishedSegments: Bool
+        livePastesFinishedSegments: Bool,
+        liveTextAlreadyInApp: Bool
     ) -> TimeInterval {
         guard source == .owner else { return 0 }
-        guard !livePreviewActive, !livePastesFinishedSegments else { return 0 }
+        guard !livePreviewActive, !livePastesFinishedSegments, !liveTextAlreadyInApp else { return 0 }
         if insertionTiming == .liveTypewriter, completionAction.typesIntoApp { return 0 }
         return ownerStopTailSeconds
     }
@@ -249,6 +253,10 @@ public struct CaptureEndEvidence: Equatable {
     public var liveListenerHadError: Bool
     /// From the start of the dictation to the end of capture, tail included.
     public var capturedSeconds: Double
+
+    /// The dictation's length for history: up to the end of capture, so a
+    /// tail after Stop is counted like the rest of the recording.
+    public var durationMs: Int { Int((max(capturedSeconds, 0) * 1000).rounded(.down)) }
 
     public init(
         words: String,

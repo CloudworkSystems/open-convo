@@ -176,6 +176,20 @@ struct DictationPreferencesTests {
         #expect(stop.contains("insertionTiming: InsertionTiming.current == .finalPasteOnly ? .finalPasteOnly : .liveTypewriter"))
         #expect(stop.contains("livePreviewActive: deskRoute == nil && TextInjector.isLivePreviewActive"))
         #expect(stop.contains("livePastesFinishedSegments: livePastesFinishedSegmentsThisSession"))
+        // Codex round 3 on #82: what this dictation already did, not only
+        // the settings now.
+        #expect(stop.contains("liveTextAlreadyInApp: deskRoute == nil && (didLivePasteFinalText || TextInjector.livePreviewStartedThisSession)"))
+        let begin = try functionBody("static func beginLivePreviewIfNeeded(", in: source)
+        #expect(begin.components(separatedBy: "livePreviewStartedThisSession = true").count == 3, "both live preview kinds mark the session")
+        #expect(begin.hasPrefix("{\n        livePreviewStartedThisSession = false"))
+        // The archived length is the captured length, tail included.
+        #expect(stop.contains("durationMs: evidence.durationMs,"))
+        #expect(!stop.contains("durationMs: durationMs,"))
+        let endAfterStop = try functionBody("private func endCaptureAfterStop(", in: source)
+        let micOffAt = try #require(endAfterStop.range(of: "micStoppedAt = Date()"))
+        let endAudio = try #require(endAfterStop.range(of: "request.endAudio()"))
+        #expect(micOffAt.lowerBound < endAudio.lowerBound)
+        #expect(try functionBody("private func completeCaptureEnd(", in: source).contains("capturedSeconds: captureEndedAt.timeIntervalSince(startedAt)"))
         let commit = try #require(stop.range(of: "TextInjector.commitLivePreviewForImmediateStop("))
         let liveSubmit = try #require(stop.range(of: "timing=immediate-stop"))
         #expect(policy.lowerBound < commit.lowerBound && policy.lowerBound < liveSubmit.lowerBound)

@@ -4225,7 +4225,12 @@ enum TextInjector {
     }
 
     /// `allowed: false` (a Desk recording) resets the state and starts nothing.
+    /// A live preview started during this dictation, so live words may be
+    /// in the app even if it has since been committed or cleared.
+    private(set) static var livePreviewStartedThisSession = false
+
     static func beginLivePreviewIfNeeded(allowed: Bool = true) {
+        livePreviewStartedThisSession = false
         livePreviewRequiresFinalPaste = false
         livePreviewGuardReason = nil
         externalFinalPasteGuardReason = nil
@@ -4261,6 +4266,7 @@ enum TextInjector {
             livePreviewElement = targetElement
             livePreviewStartRange = range ?? CFRange(location: 0, length: 0)
             livePreviewInputMode = .keyboardCompatibility
+            livePreviewStartedThisSession = true
             livePreviewAcceptsPartials = true
             livePreviewStartedWithSelection = livePreviewCorrectionReplacementArmed || (range?.length ?? 0) > 0
             livePreviewText = ""
@@ -4281,6 +4287,7 @@ enum TextInjector {
         livePreviewElement = targetElement
         livePreviewStartRange = range
         livePreviewInputMode = .accessibility
+        livePreviewStartedThisSession = true
         livePreviewAcceptsPartials = true
         livePreviewStartedWithSelection = livePreviewCorrectionReplacementArmed || range.length > 0
         livePreviewText = ""
@@ -6273,6 +6280,9 @@ final class DictationController {
     private var endedRecognitionGeneration = -1
     /// The finish of the dictation now stopping waits here for its words.
     private var captureEnd: OneShotResult<CaptureEndEvidence>?
+    /// When the microphone stopped after a tail (before Apple's last words
+    /// were awaited), so the recorded length doesn't include that wait.
+    private var micStoppedAt: Date?
 
     static let mainQueueScheduler: StopTailScheduler = { delay, work in
         let item = DispatchWorkItem(block: work)
@@ -6765,6 +6775,7 @@ final class DictationController {
             finalResultWait = nil
             stopFinalWaitGeneration = nil
             captureEnd = nil
+            micStoppedAt = nil
             liveListenerHadError = false
             firstFinalAt = nil
             currentCaptureMode = captureMode
@@ -7336,7 +7347,8 @@ final class DictationController {
             insertionTiming: InsertionTiming.current == .finalPasteOnly ? .finalPasteOnly : .liveTypewriter,
             completionAction: deskRoute == nil ? Settings.completionAction.stopTailKind : .archiveOnly,
             livePreviewActive: deskRoute == nil && TextInjector.isLivePreviewActive,
-            livePastesFinishedSegments: livePastesFinishedSegmentsThisSession
+            livePastesFinishedSegments: livePastesFinishedSegmentsThisSession,
+            liveTextAlreadyInApp: deskRoute == nil && (didLivePasteFinalText || TextInjector.livePreviewStartedThisSession)
         )
 
         if tailSeconds == 0, let segment = promoteCurrentRecognitionTranscript(reason: "stop") {
@@ -7654,7 +7666,8 @@ final class DictationController {
             let entry = ArchiveEntry(
                 id: id,
                 timestamp: timestamp,
-                durationMs: durationMs,
+                // Up to the end of capture, tail included (Codex on #82).
+                durationMs: evidence.durationMs,
                 text: cleanedText,
                 audioPath: retainedAudioPath,
                 contentPacketPath: Archive.contentPacketURL(for: id).path,
@@ -7872,6 +7885,7 @@ final class DictationController {
             audioEngine.inputNode.removeTap(onBus: 0)
             tapInstalled = false
         }
+        micStoppedAt = Date()
         stopFinalWaitGeneration = currentGeneration
         recognitionGeneration += 1
         request.endAudio()
@@ -7899,6 +7913,7 @@ final class DictationController {
     private func completeCaptureEnd(provider: DictationProvider, result: OneShotResult<CaptureEndEvidence>) {
         promoteCurrentRecognitionTranscript(reason: "stop")
         latestTranscript = combinedTranscript()
+        let captureEndedAt = micStoppedAt ?? Date()
         // Stop the microphone first so no slice is counted after this read.
         stopWithoutArchive(
             closeRealtime: provider != .openAIRealtime,
@@ -7922,7 +7937,7 @@ final class DictationController {
             slicesAtOrAboveNearSilent: nearSlices,
             slicesAtOrAboveStrictSilent: strictSlices,
             liveListenerHadError: liveListenerHadError,
-            capturedSeconds: Date().timeIntervalSince(startedAt)
+            capturedSeconds: captureEndedAt.timeIntervalSince(startedAt)
         ))
     }
 
