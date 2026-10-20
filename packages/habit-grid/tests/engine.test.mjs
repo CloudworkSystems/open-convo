@@ -858,6 +858,34 @@ test('a purge fragment is not an active tracker, and an impossible shape fragmen
   const loaded = deserializePerson(JSON.stringify(snap));
   assert.equal(loaded.trackers.find(item => item.id === 'water').fields.kind.value, 'amount');
   assert.equal(viewPerson(loaded).trackers.length, 0);
+
+  const split = structuredClone(snap);
+  for (const key of Object.keys(split.trackers[0].fields)) {
+    if (key !== 'kind') delete split.trackers[0].fields[key];
+  }
+  assert.throws(() => deserializePerson(JSON.stringify(split)), /Invalid tracker shape/);
+  const otherHalf = structuredClone(snap);
+  for (const key of Object.keys(otherHalf.trackers[0].fields)) {
+    if (key !== 'target' && key !== 'unit') delete otherHalf.trackers[0].fields[key];
+  }
+  otherHalf.trackers[0].fields.target.value = null;
+  assert.throws(() => deserializePerson(JSON.stringify(otherHalf)), /Invalid tracker shape/);
+
+  const left = base.getPerson(person);
+  const right = base.getPerson(person);
+  const leftShape = left.trackers[0].fields;
+  const rightShape = right.trackers[0].fields;
+  const shapeStamp = { ...leftShape.kind.stamp };
+  for (const key of ['kind', 'target', 'unit']) leftShape[key].stamp = { ...shapeStamp, counter: 5 };
+  leftShape.kind.value = 'amount';
+  leftShape.target.value = 30;
+  leftShape.unit.value = 'minutes';
+  rightShape.kind.stamp = { ...shapeStamp, counter: 4 };
+  rightShape.target.value = null;
+  rightShape.target.stamp = { ...shapeStamp, counter: 6 };
+  rightShape.unit.stamp = { ...shapeStamp, counter: 4 };
+  assert.throws(() => mergePeople(left, right), /Invalid tracker shape/);
+  assert.throws(() => mergePeople(right, left), /Invalid tracker shape/);
 });
 
 test('three-device histories converge under every delivery order', () => {

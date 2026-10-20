@@ -218,7 +218,7 @@ export function mergePeople(left, right) {
     result.checkIns = [];
     result.restDays = [];
   }
-  return canonical(result);
+  return validate(canonical(result));
 }
 
 function validSchedule(value) {
@@ -290,7 +290,10 @@ function validateRecord(record, types, withMembers, checkShape = false) {
   if (contentBearing(record, withMembers)) {
     const complete = Object.keys(types).every(key => own(record.fields, key));
     if (!complete && !survivingFragment(record, types, withMembers)) fail('Incomplete record in person file.');
-    if (checkShape && SHAPE_KEYS.every(key => own(record.fields, key)) && !trackerShapeValid(record.fields)) fail('Invalid tracker shape in person file.');
+    if (checkShape) {
+      const shapeKeys = SHAPE_KEYS.filter(key => own(record.fields, key));
+      if (shapeKeys.length > 0 && (shapeKeys.length < SHAPE_KEYS.length || !trackerShapeValid(record.fields))) fail('Invalid tracker shape in person file.');
+    }
   }
   if (withMembers) {
     if (!object(record.members)) fail('Invalid stack members in person file.');
