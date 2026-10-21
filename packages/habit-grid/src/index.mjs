@@ -212,7 +212,9 @@ function attachEmptied(record, left, right) {
 }
 function attachFenced(record, left, right) {
   const fenced = latest(validStamp(left?.fenced) ? left.fenced : null, validStamp(right?.fenced) ? right.fenced : null);
-  if (validStamp(fenced)) record.fenced = clone(fenced);
+  if (!validStamp(fenced)) return record;
+  if (validStamp(record.purge) && compareStamps(fenced, record.purge) < 0) return record;
+  record.fenced = clone(fenced);
   return record;
 }
 function mergeCollection(left, right, parentPurge, withMembers, recordKind) {

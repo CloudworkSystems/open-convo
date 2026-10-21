@@ -278,7 +278,8 @@ History stamped at or before that empty is refused too. A purge that matches
 a tracker cutoff and has neither `emptied` nor `fenced` is refused, including
 an older file from one Trash call that emptied the check-in and a tracker
 together. A `fenced` stamp with no `emptied` must equal that check-in's purge
-and a tracker cutoff.
+and a tracker cutoff. When a later person cutoff supersedes that fence, the
+check-in records the newer cutoff as its fence, so a reused check-in still merges.
 
 Check-ins merge as records by ID. The same ID arriving twice counts once.
 Two devices' different IDs on the same tracker and date both survive, and the
