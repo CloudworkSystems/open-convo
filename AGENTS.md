@@ -33,9 +33,7 @@ reads from and writes to `CloudworkSystems/open-convo`.
 - When the owner says "save this round" (or similar), Codex writes the round to
   `docs/annotations/<session-name>.md` without being asked for the format:
   one numbered item per annotation with the screen, the exact element or area,
-  the owner's words, and the requested change, on lines labeled `Screen:`,
-  `Element:`, `Owner's words:` and `Change:`, plus `Screenshot:` naming its
-  screenshots (the labels `packages/annotation-rounds` checks). Each marked screenshot is saved
+  the owner's words, and the requested change. Each marked screenshot is saved
   next to it as `<session-name>-01.png`, `-02.png` and so on. Codex changes no
   code, then commits only those files on a branch named
   `<session-name>-annotations` and opens a pull request with auto-merge on.

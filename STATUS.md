@@ -81,11 +81,11 @@ First real use after step 5, synced through iCloud with the owner's approval.
 the review findings.
 Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
-**Annotation rounds checker** (Code), GrokBot (team A) builds, Codex reviews; plan in review: [docs/plans/annotation-rounds.md](docs/plans/annotation-rounds.md).
+**Annotation rounds checker** (Code), GrokBot (team A) builds, Codex reviews; plan in review in its own pull request (`OC-261021-plan-annotation-rounds`).
 
-**Site Engine: what will change** (Business), GrokBot (team B) builds, Codex reviews; plan in review: [docs/plans/site-engine-diff.md](docs/plans/site-engine-diff.md).
+**Site Engine: what will change** (Business), GrokBot (team B) builds, Codex reviews; plan in review in its own pull request (`OC-261021-plan-site-engine-diff`).
 
-**Visibility report** (Business), GrokBot (team C) builds, Codex reviews; plan in review: [docs/plans/visibility-report.md](docs/plans/visibility-report.md).
+**Visibility report** (Business), GrokBot (team C) builds, Codex reviews; plan in review in its own pull request (`OC-261021-plan-visibility-report`).
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:
@@ -101,7 +101,7 @@ by folder so new packages are covered automatically.
 
 **Building faster** (more outside modules, parallel lanes, a dogfooding
 cadence): approved by the owner October 21. The limit of three outside
-modules and the three module plans above merge with the plan; the other
+modules merges with the plan; each module plan above and the other
 changes follow in their own pull requests. Plan:
 [docs/plans/scale-up.md](docs/plans/scale-up.md).
 

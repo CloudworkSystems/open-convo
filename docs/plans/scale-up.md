@@ -4,10 +4,10 @@ Written October 21, 2026 by a building session. Session name:
 `OC-261021-scale-up-plan`. Status: approved. The owner agreed to the
 direction on October 21 and said yes to all six recommendations at the end
 the same day. The pull request that adds this plan also records the
-approvals in [decisions.md](../decisions.md), raises the outside-builder
-limit in AGENTS.md and adds the three module plans, so the plan and the
-decisions log merge together. The other approved changes ((b) to (e)) land
-in their own pull requests.
+approvals in [decisions.md](../decisions.md) and raises the outside-builder
+limit in AGENTS.md, so the plan and the decisions log merge together. Each
+of the three module plans in (a) has its own plan pull request, and the
+other approved changes ((b) to (e)) land in their own pull requests.
 
 ## Why
 
@@ -74,17 +74,23 @@ an obvious later home in the Desk.
    [visibility-agent.md](../design-notes/visibility-agent.md). *Later in the
    Desk:* a report page for each business space.
 
-**First step.** The planning session writes the three short plans (one per
-module, each with its builder rules and the GrokBot team assigned), Codex
-reviews them, and the owner merges them along with the limit change.
+**First step.** Each module gets its own short plan in its own pull request
+(with its builder rules and the GrokBot team assigned: annotation rounds,
+team A; Site Engine "what changes", team B; visibility report, team C).
+Codex reviews each one, and a team starts as soon as its plan merges, so
+the three don't wait on each other.
 
 ## (b) Narrow The Mac App's Protected Paths (Later Building PR)
 
 **Why.** Most Mac pull requests wait for the owner only because they touch
 `main.swift`, which holds a little sensitive code among a lot of ordinary
-code. Moving the sensitive parts out of it into a few clearly named,
-protected folders lets `main.swift` lose its protection, so ordinary Desk and
-dictation changes stop waiting on him.
+code. `main.swift` stays protected for good, because it is where the app is
+put together, and a check that reads source text can't reliably prove that
+an unprotected start-up file never reaches paid calls or keys. Instead, the
+*ordinary* code moves out of it: Desk, dictation and other everyday code
+goes into new, unprotected files, and `main.swift` shrinks to the wiring,
+paid-path and API-key code that needs the owner. Ordinary changes then touch
+only the new files and stop waiting on him.
 
 **Every reason a file is protected today** (from `.github/CODEOWNERS`). The
 refactor keeps every one of these reasons covered:
@@ -101,23 +107,20 @@ refactor keeps every one of these reasons covered:
 | `Package.swift` | Decides which modules link, including the paid path, and declares the safety tests |
 | `DeskSessionParticipantTests.swift` | Forbids linking the participant path |
 
-Only `main.swift` loses protection, and only once **both** of its reasons are
-gone: the storage and paid-path wiring, and every paid-API request and
-API-key lookup, have moved into files that CODEOWNERS protects, **and no
-unprotected file calls into that protected paid-cloud or API-key code at
-all**. Moving the code isn't enough on its own: if `main.swift` could still
-call a protected wrapper, an ordinary pull request could switch on paid use
-with a stored key by adding one call, without touching a protected file. So
-the app's start-up call into the paid path moves into a protected file too,
-and `main.swift` keeps no reference to it. Every other entry above stays as
-it is.
+`main.swift` keeps its protection permanently, and every other entry above
+stays as it is. Protection narrows only for code that moves *out of* a
+protected file into a new file, and only when none of that file's reasons
+for protection moves with it: no storage or key code, no paid-path wiring,
+no paid-API request and no API-key lookup. A new file that holds any of
+those is protected too, by name or by a new CODEOWNERS entry in the same
+pull request.
 
-We chose "no calls at all" over allowing one named, protected entry point
-with a listed set of callers, because it is simpler: the check is a single
-list of forbidden names, with no allow-list of callers to keep current, and
-it fails safe. If the refactor can't remove every such call, `main.swift`
-simply stays protected and the owner keeps approving those pull requests, as
-today.
+We chose this over a source-scan test that would let `main.swift` lose
+protection, because such a scan only finds the text it looks for: an
+unprotected file could build a provider address piece by piece, use a
+different networking call, or read a differently named key, and the scan
+would pass. Keeping the one file that assembles the app protected needs no
+such test and fails safe.
 
 **What stays protected.** `Package.swift` stays owner-protected, along with
 any other build or test manifest that decides which modules link into the
@@ -136,8 +139,8 @@ by side.
 **How we check it.** The app already links `ParticipantAppWiring` on
 purpose, so the check is "nothing changed", not "nothing is linked":
 
-- The pull request only moves files and changes `.github/CODEOWNERS`. No
-  code changes inside the moved files.
+- The pull request only moves code into new files and adds
+  `.github/CODEOWNERS` entries. No behavior changes in the moved code.
 - Which targets link which is identical before and after: run
   `swift package describe --type json` in `apps/mac` on `main` and on the
   branch, and the targets and their dependencies match exactly. The pull
@@ -148,24 +151,12 @@ purpose, so the check is "nothing changed", not "nothing is linked":
   tripwire in `ParticipantWireTests`, `DeskSessionParticipantTests` and the
   `VoiceCursorPolicyCheck` command. Where a test names a moved file by its
   path, only that path string changes, and the pull request lists each one.
-- No paid-API or API-key code is left in an unprotected file. A new
-  source-scan test (itself protected, like `PaidUsageGateTests`) lists every
-  Swift file under `apps/mac/Sources` that CODEOWNERS doesn't protect and
-  fails if any of them names a paid provider host (`api.openai.com`,
-  `api.groq.com`, `api.anthropic.com` and the like), sends a `URLSession`
-  request to one, names an API key (`_API_KEY`, `apiKeyName`,
-  `requiredAPIKeyName`) or reads one from Keychain or the environment. It
-  must pass on the branch; on today's `main` it would fail on `main.swift`,
-  which shows the check works.
-- No unprotected file calls into protected paid-cloud or API-key code. The
-  same protected test also fails if any of those unprotected files names a
-  type or function declared in a protected paid-cloud, paid-use or API-key
-  file (the `Participant*`, `*PaidUsage*`, `*Availability*`, `*Wiring*`,
-  `*OpenAI*`, `*Realtime*`, `*Groq*`, `*Anthropic*`, `*APIKey*` and
-  `*Keychain*` entries above, plus wherever the cloud transcription request
-  moves). The test builds that list of names by reading the protected files
-  themselves, so a new wrapper is covered without editing the test. Until
-  this passes, `main.swift` stays protected.
+- The pull request lists every block moved out of `main.swift` and each
+  other protected file, and for each says why it holds none of the reasons
+  in the table above. The owner approves that list along with the change
+  (the pull request touches protected files, so it needs him anyway).
+- `.github/CODEOWNERS` still names `main.swift` and every other entry
+  above; the pull request only adds entries, never removes one.
 - The full `swift test` suite in `apps/mac` passes.
 
 **First step.** A building pull request after the Claude Code adapter's
