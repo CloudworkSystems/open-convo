@@ -77,8 +77,7 @@ Engine; implemented, tests pass; awaiting Claude review and planning check. Plan
 [docs/plans/household-lists-engine.md](docs/plans/household-lists-engine.md).
 First real use after step 5, synced through iCloud with the owner's approval.
 
-**Habit grid engine** (Personal), starts when Site Engine or the household
-lists engine finishes.
+**Habit grid engine** (Personal), implemented; tests pass; awaiting Codex review and the planning check.
 Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
