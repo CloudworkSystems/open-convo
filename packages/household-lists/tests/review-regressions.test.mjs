@@ -79,16 +79,18 @@ test('sections default off; toggles preserve saved sections/sort with alphabetic
   const {a, id} = pair();
   a.editItem(id, 'milk', {section: 'dairy'}); a.editItem(id, 'apples', {section: 'produce'}); a.setSectionWord(id, 'tofu', 'chilled');
   const stored = a.getList(id), off = a.view(id);
-  assert.equal(off.sectionsEnabled, false); assert.deepEqual(off.availableSortOrders, ['alphabetical', 'added']);
+  assert.equal(off.sectionsEnabled, false); assert.deepEqual(off.availableSortOrders, ['alphabetical', 'added', 'custom']);
   assert.deepEqual(off.sectionMap, {}); assert.ok(off.items.every(i => i.section === ''));
   assert.equal(a.suggestSection(id, 'Milk'), null); assert.throws(() => a.setSort(id, 'section'), /disabled/i);
   a.setSectionsEnabled(id, true); a.setSort(id, 'section'); const on = a.view(id);
-  assert.equal(on.sectionsEnabled, true); assert.deepEqual(on.availableSortOrders, ['alphabetical', 'section', 'added']);
+  assert.equal(on.sectionsEnabled, true); assert.deepEqual(on.availableSortOrders, ['alphabetical', 'section', 'added', 'custom']);
   assert.deepEqual(on.items.map(i => i.id), ['milk', 'apples']); assert.equal(a.suggestSection(id, 'tofu'), 'chilled');
   a.setSectionsEnabled(id, false);
   assert.equal(a.view(id).sort, 'alphabetical'); assert.deepEqual(a.view(id).items.map(i => i.id), ['apples', 'milk']);
-  assert.equal(a.getList(id).fields.sort.value, 'section'); assert.deepEqual(a.getList(id).items, stored.items); assert.deepEqual(a.getList(id).sections, stored.sections);
-  a.setSectionsEnabled(id, true); assert.deepEqual(a.view(id), on);
+  assert.equal(a.getList(id).fields.sort.value, 'alphabetical'); assert.deepEqual(a.getList(id).items, stored.items); assert.deepEqual(a.getList(id).sections, stored.sections);
+  a.setSectionsEnabled(id, true); assert.equal(a.view(id).sort, 'alphabetical');
+  assert.deepEqual(a.view(id).sectionMap, on.sectionMap);
+  assert.deepEqual(a.view(id).items, on.items.slice().sort((a, b) => a.text.localeCompare(b.text)));
   a.setSort(id, 'added'); a.setSectionsEnabled(id, false); assert.equal(a.view(id).sort, 'added');
 });
 test('section setting persists, merges per field, supports undo and is independent per list', () => {
@@ -132,7 +134,7 @@ test('concurrent section toggles resolve the same field by stamp and ignore remo
   a.setSort(id, 'section'); a.editItem(id, 'milk', {section: 'dairy'});
   const view = merged(a, b, id);
   assert.equal(view.sectionsEnabled, false); assert.equal(view.sort, 'alphabetical');
-  assert.deepEqual(view.availableSortOrders, ['alphabetical', 'added']);
+  assert.deepEqual(view.availableSortOrders, ['alphabetical', 'added', 'custom']);
   assert.ok(view.items.every(item => item.section === ''));
   assert.deepEqual(view.sectionMap, {});
 });
