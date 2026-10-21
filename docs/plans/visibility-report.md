@@ -59,6 +59,11 @@ the file's device and inode numbers).
 - `schemaVersion: 1`.
 - `business`: `name`, and optionally `siteUrl` (a complete `https://`
   address).
+- **Dates.** Every date (`reportDate`, `checkedOn`, `websiteCheckedOn`) is
+  written `YYYY-MM-DD` and must be a real calendar date: it must match that
+  pattern exactly, parse as a UTC date, and format back to the same text
+  (so `2026-02-30`, `2026-02-29`, `2026-13-01` and `2026-00-10` are
+  refused, and `2028-02-29` is accepted). A refused date names its field.
 - `reportDate`: the date the report is for (`YYYY-MM-DD`). The report uses
   this date, never the computer's clock, so the same file always gives the
   same report.
@@ -79,6 +84,13 @@ the file's device and inode numbers).
   'Who repairs bikes in Hearthwick?'". **Every finding, whatever its status,
   must have a `url` or a `locator`**, or the file is refused, because claims
   under "What's working" need provenance too.
+- **Listing comparisons cite both sides.** A `listing-details-match`
+  finding compares a listing with the website, so it needs two sources:
+  `source` is where the listing was read, and `websiteSource` (same shape
+  and rules: a label plus a `url` or a `locator`) is where the website was
+  read, with its own `websiteCheckedOn` (not after `reportDate`). Both are
+  required for this kind, whatever the status, and refused on every other
+  kind.
 
 Check kinds (fixed list; this plan sets each kind's fields, and the
 package's schema implements them exactly):
@@ -104,7 +116,8 @@ naming the finding's `id` and the field, because it isn't a mismatch.
 
 **No hidden or line-breaking characters in displayed text.** Every text
 field the report can show is checked when the file is read:
-`business.name`, `source.label`, `source.locator`, `source.url`, and every
+`business.name`, `source.label`, `source.locator`, `source.url`, the same
+three in `websiteSource`, and every
 text field in `details` (`service`, `assistant`, `question`,
 `wrongDetails`, and each mismatch's `listing` and `website`). These are
 refused, with a plain message naming the finding's `id` (where there is
@@ -178,7 +191,8 @@ its problems, and the report names every problem in it.
   same order. Every count in the report (the summary's "We found 4 things
   to fix", and how many are in the fix list and under "Also found") counts
   ranked findings the same way.
-- A finding checked more than 30 days before `reportDate` keeps its place
+- A finding checked more than 30 days before `reportDate` (for a listing
+  comparison, either side) keeps its place
   but is marked "Check again before acting: found *date*", because facts go
   stale.
 - Findings with status `unknown` are never ranked; they are listed under
@@ -194,7 +208,9 @@ its problems, and the report names every problem in it.
 - The fix list: for each problem, what's wrong, why it matters, and what to
   do, in plain words from fixed templates per kind, plus where it was found
   and when (the source label, then its link, or its locator in quotation
-  marks when there is no link, and `checkedOn`). Every entry in every
+  marks when there is no link, and `checkedOn`). A listing comparison
+  cites both: "Listing: *source* (*checkedOn*); website: *websiteSource*
+  (*websiteCheckedOn*)", each written the same way. Every entry in every
   section (fix list, "Also found", "Couldn't check" and "What's working")
   cites its source with a link or a locator and its date, as the design
   note requires.
@@ -258,6 +274,16 @@ addresses and 555 phone numbers). At least:
    or `/`, and a numeric `id`, each with a plain message. Ids `item-10`,
    `item-9`, `B-2` and `a-1` on problems of the same rank come out as
    `B-2`, `a-1`, `item-10`, `item-9`.
+8b. Dates: `2026-02-30`, `2026-13-01`, `2026-02-29`, `2026-00-10`,
+   `2026-1-05` and `2026-01-05T00:00` are each refused in `reportDate`,
+   `checkedOn` and `websiteCheckedOn`, naming the field; `2028-02-29` is
+   accepted.
+8c. Listing comparisons: a `listing-details-match` finding without
+   `websiteSource`, or whose `websiteSource` has neither a `url` nor a
+   `locator`, or with `websiteCheckedOn` after `reportDate`, is refused;
+   `websiteSource` on any other kind is refused; the Markdown shows both
+   sources with their dates; a website side checked 31 days before
+   `reportDate` marks the finding "Check again before acting".
 9. The renderer's own wording contains no grading or promise words. The
    test scans every fixed sentence and template the package defines, and a
    full report rendered from findings whose text fields hold only neutral
