@@ -108,15 +108,21 @@ folder) in the round's own folder and its first bytes are the PNG signature.
 It never reads, copies or changes any other file, and it writes only the
 files named by `--json` and `--md`.
 
-**Output paths can never overwrite an input.** Before reading anything else,
-the checker refuses (with a plain message, writing nothing) when `--json` or
-`--md` is the same file as the round file, as any file in the round's
-folder named like a screenshot of this round, or as each other. Paths are
-compared after resolving them fully (relative paths, `..` and symbolic
-links), and for files that already exist, by device and inode number, so a
-hard link to an input counts as the same file. An existing output file with
-more than one hard link is refused too, because writing it would change
-another name for the same file.
+**Output paths can never overwrite an input.** The protected inputs are
+the round file, every file in the round's folder named like a screenshot
+of this round, and **every screenshot name the round mentions**, including
+names that break the naming pattern, sit in a subfolder, use `..` or are
+absolute paths (each is resolved against the round's folder). The checker
+reads the round, collects these names, and only then decides whether it
+may write; it refuses (with a plain message, writing nothing) when
+`--json` or `--md` is the same file as any protected input, or as each
+other. Two paths are the same file when they are equal after resolving
+them fully (relative paths, `..` and symbolic links), or, when both
+exist, when they have the same device and inode number, so a hard link to
+an input counts as the same file. An existing output file with more than
+one hard link is refused too, because writing it would change another name
+for the same file. These names are only resolved and compared; the
+checker still never reads a screenshot outside the round's folder.
 
 **The owner's words are data, never instructions.** The checker copies them
 exactly into the output and acts on nothing they say.
@@ -176,6 +182,10 @@ tiny blank PNG files made in the test). At least:
 10. Exit code is 0 with only warnings and 1 with any error.
 11. Output paths: `--json` or `--md` naming the round file or a screenshot
     directly, through `..`, through a symbolic link, or through a hard link;
+    naming a file the round lists as a screenshot under a name that breaks
+    the pattern (`notes.png`), in a subfolder (`shots/a.png`), through
+    `../other.png` or as an absolute path, whether it exists (compared by
+    device and inode) or not (compared by resolved path);
     `--json` and `--md` naming the same file; and an existing output file
     with a second hard link elsewhere are each refused, and every input file
     is byte-for-byte unchanged afterwards.
