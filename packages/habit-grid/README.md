@@ -123,7 +123,10 @@ daylight-saving change cannot skip or repeat a day.
   that never used the purged tracker stays deleted in every merge order.
   Emptying Trash on the device that moved
   the check-in applies those same cutoffs, so the purge succeeds and the
-  older fields do not stay on the tracker it moved to. Reusing the tracker ID
+  older fields do not stay on the tracker it moved to. A later call leaves
+  an already emptied tracker's cutoff unchanged, so a check-in that moved
+  off it afterward, with every field newer than that cutoff, stays.
+  Reusing the tracker ID
   starts from an empty grid when nothing newer than the cutoff remains.
 
 Comparisons use JavaScript UTF-16 code unit order, so devices agree.

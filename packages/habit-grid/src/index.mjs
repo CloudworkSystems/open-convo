@@ -1415,9 +1415,9 @@ export class HabitGrid {
         person.purge = stamp;
         person.life = { value: false, stamp };
       } else {
-        const purged = new Set(person.trackers.filter(record => !record.life.value).map(record => record.id));
+        const alreadyEmptied = new Set(person.trackers.filter(record => !record.life.value && validStamp(record.purge) && Object.keys(record.fields).length === 0).map(record => record.id));
         for (const collection of [person.trackers, person.stacks, person.checkIns, person.restDays]) {
-          for (const record of collection) if (!record.life.value) {
+          for (const record of collection) if (!record.life.value && !(collection === person.trackers && alreadyEmptied.has(record.id))) {
             record.fields = {};
             if (record.members) record.members = {};
             delete record.formerTrackers;
@@ -1426,14 +1426,21 @@ export class HabitGrid {
           }
         }
         const cutoffs = new Map();
-        for (const trackerId of purged) cutoffs.set(trackerId, stamp);
+        for (const tracker of person.trackers) {
+          if (tracker.life.value) continue;
+          cutoffs.set(tracker.id, alreadyEmptied.has(tracker.id) ? tracker.purge : stamp);
+        }
         for (const record of [...person.checkIns, ...person.restDays]) {
           installFence(record, fenceAgainst(record, cutoffsForRecord(record, cutoffs)));
         }
         for (const stack of person.stacks) {
           if (!stack.members) continue;
           const members = {};
-          for (const [id, entry] of Object.entries(stack.members)) if (!purged.has(id)) setOwn(members, id, entry);
+          for (const [id, entry] of Object.entries(stack.members)) {
+            const cutoff = cutoffs.get(id);
+            if (cutoff && compareStamps(entry.stamp, cutoff) <= 0) continue;
+            setOwn(members, id, entry);
+          }
           stack.members = members;
         }
       }

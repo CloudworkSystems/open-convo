@@ -1576,3 +1576,36 @@ test('a purged tracker in one history does not resurrect a newer deletion from a
   }
   assert.deepEqual(mergePeople(joined, joined), joined);
 });
+
+test('emptying Trash again does not renew an already emptied tracker cutoff', () => {
+  const home = fixed('phone-a', 100);
+  const away = fixed('phone-b', 100);
+  const id = home.createPerson('River', { id: 'river' });
+  home.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  home.addTracker(id, { name: 'Steps', kind: 'count', target: 8, unit: 'steps' }, { trackerId: 'steps' });
+  away.importPerson(home.getPerson(id));
+  home.deleteTracker(id, 'water');
+  home.emptyTrash(id);
+  const cutoff = home.getPerson(id).trackers.find(item => item.id === 'water').purge;
+  away.renamePerson(id, 'River two');
+  away.renamePerson(id, 'River three');
+  away.renamePerson(id, 'River four');
+  away.logCheckIn(id, 'water', { date: '2026-03-04', value: 5, checkInId: 'glass' });
+  away.editCheckIn(id, 'glass', { trackerId: 'steps' });
+  away.addStack(id, { name: 'Morning', members: ['water', 'steps'] }, { stackId: 'morning' });
+  home.importPerson(away.getPerson(id));
+  const span = { start: '2026-03-01', end: '2026-03-08' };
+  assert.equal(home.view(id).checkIns[0].value, 5);
+  assert.equal(home.view(id, { trash: true }).trackers.length, 0);
+  const marker = home.getPerson(id).trackers.find(item => item.id === 'water');
+  assert.deepEqual(marker.purge, cutoff);
+  home.emptyTrash(id);
+  const glass = home.getPerson(id).checkIns.find(item => item.id === 'glass');
+  assert.equal(glass.life.value, true);
+  assert.equal(glass.fields.value.value, 5);
+  assert.equal(glass.fields.date.value, '2026-03-04');
+  assert.equal(glass.formerTrackers.water.value, true);
+  assert.equal(square(home.grid(id, 'steps', span), '2026-03-04').value, 5);
+  assert.deepEqual(home.getPerson(id).trackers.find(item => item.id === 'water'), marker);
+  assert.deepEqual(home.view(id).stacks[0].members, ['steps', 'water']);
+});
