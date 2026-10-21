@@ -81,6 +81,8 @@ First real use after step 5, synced through iCloud with the owner's approval.
 lists engine finishes.
 Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
+**Annotation rounds checker** (Code): plan in review; GrokBot team A starts after this plan and #94 merge.
+
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:
 [docs/plans/merge-gate.md](docs/plans/merge-gate.md). Switched on for `main`

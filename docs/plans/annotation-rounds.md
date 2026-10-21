@@ -87,6 +87,9 @@ node packages/annotation-rounds/src/check.mjs <round.md> [--json <file>] [--md <
    whoever saved the round to use the labels.
 3. **Checks each item** and reports, in plain words:
    - a missing or empty screen, element, owner's words or change;
+   - a label used more than once in one item (for example two `Change:`
+     lines, or `Change:` and `Requested change:`), an error naming the item
+     and the label; the checker never picks one of them;
    - item numbers that repeat, skip or run out of order;
    - a screenshot that is named but not present beside the round file;
    - a screenshot whose name doesn't follow `<session-name>-NN.png` (two
@@ -148,7 +151,10 @@ tiny blank PNG files made in the test). At least:
 1. A complete round with screenshots passes with no problems; its JSON and
    Markdown match saved expected files exactly.
 2. Each missing field (screen, element, owner's words, change) is an error
-   naming the item number and the field.
+   naming the item number and the field. A repeated field in one item (two
+   `Change:` lines; `Change:` and `Requested change:`; two `Screenshot:`
+   lines) is an error naming the item and the label, and the JSON keeps
+   neither value as the item's field.
 3. Label variants (bold, no bold, different case, the listed synonyms) all
    read the same.
 4. A named screenshot that isn't there is an error; a present but unnamed
