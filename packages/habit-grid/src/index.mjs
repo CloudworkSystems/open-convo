@@ -279,11 +279,20 @@ function rememberLeftBehind(history, source, keptFields) {
   rememberTracker(history, tracker.value, tracker.stamp);
 }
 function rememberCheckInTrackers(merged, leftRecord, rightRecord) {
+  const purge = latest(leftRecord?.purge, rightRecord?.purge);
   const history = records(leftRecord?.formerTrackers ?? {}, rightRecord?.formerTrackers ?? {}, null);
   rememberLeftBehind(history, leftRecord, merged.fields);
   rememberLeftBehind(history, rightRecord, merged.fields);
   const losing = losingTracker(leftRecord, rightRecord);
   if (losing) rememberTracker(history, losing.value, losing.stamp);
+  const kept = Object.values(merged.fields ?? {});
+  const cutoff = latest(purge, merged.purge);
+  const newerEpoch = kept.length > 0 && kept.every(entry => compareStamps(entry.stamp, cutoff) > 0);
+  if (newerEpoch) {
+    for (const id of Object.keys(history)) {
+      if (compareStamps(history[id].stamp, cutoff) <= 0) delete history[id];
+    }
+  }
   const current = merged.fields?.trackerId?.value;
   if (typeof current === 'string' && own(history, current)) delete history[current];
   if (Object.keys(history).length > 0) merged.formerTrackers = history;
@@ -1419,7 +1428,14 @@ export class HabitGrid {
   }
   emptyTrash(id) {
     return this.#change(id, (person, stamp) => {
-      if (!person.life.value) {
+    if (!person.life.value) {
+      const alreadyEmpty = validStamp(person.purge)
+        && Object.keys(person.fields).length === 0
+        && person.trackers.length === 0
+        && person.stacks.length === 0
+        && person.checkIns.length === 0
+        && person.restDays.length === 0;
+      if (!alreadyEmpty) {
         person.fields = {};
         person.trackers = [];
         person.stacks = [];
@@ -1427,7 +1443,8 @@ export class HabitGrid {
         person.restDays = [];
         person.purge = stamp;
         person.life = { value: false, stamp };
-      } else {
+      }
+    } else {
         const alreadyEmptied = new Set(person.trackers.filter(record => !record.life.value && validStamp(record.purge) && Object.keys(record.fields).length === 0).map(record => record.id));
         for (const collection of [person.trackers, person.stacks, person.checkIns, person.restDays]) {
           for (const record of collection) if (!record.life.value && !(collection === person.trackers && alreadyEmptied.has(record.id))) {

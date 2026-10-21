@@ -131,7 +131,9 @@ daylight-saving change cannot skip or repeat a day.
   older fields do not stay on the tracker it moved to. A later call leaves
   an already emptied tracker's cutoff unchanged, so a check-in that moved
   off it afterward, with every field newer than that cutoff, stays.
-  Reusing the tracker ID
+  A later call also leaves an already emptied person's cutoff unchanged, so
+  a name written on another device after that first empty still revives the
+  person. Reusing the tracker ID
   starts from an empty grid when nothing newer than the cutoff remains.
 
 Comparisons use JavaScript UTF-16 code unit order, so devices agree.
@@ -254,7 +256,9 @@ keeps `schemaVersion`, `id`, false `life`, `purge`, empty `fields`, and empty
 collections. During merge, only fields stamped after the cutoff survive. An
 old offline copy cannot restore purged content. Cutoffs are not removed in
 this slice. A fresh `addTracker` or `logCheckIn` may reuse an emptied ID; the
-cutoff stays, and only the new fields survive.
+cutoff stays, and only the new fields survive. Former-tracker history stamped
+at or before that check-in cutoff stays erased too, so an older copy cannot
+attach the reused check-in to a tracker it left before the empty.
 
 Check-ins merge as records by ID. The same ID arriving twice counts once.
 Two devices' different IDs on the same tracker and date both survive, and the
