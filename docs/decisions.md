@@ -6,6 +6,25 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 21:** Scale-up plan approved ([docs/plans/scale-up.md](plans/scale-up.md)).
+  Up to three outside modules at a time, each with its own builder or builder
+  team; modules waiting only on review fixes don't count. None is waiting
+  only on review fixes today: the habit grid merged as #74 and the
+  household lists fixes merged as #71, both on October 21. GrokBot's three teams build annotation
+  rounds (team A), Site Engine "what will change" (team B) and the
+  visibility report (team C), each from its own plan, which has its own plan
+  pull request, with Codex reviewing. Two Claude building lanes run now (main step; Desk and
+  dogfooding), with an infra lane added after the auto-update job merges.
+  Standing approval to rebuild True Convo Test on the owner's Mac when it is
+  idle and the Test app isn't running: Test app only, built from `main`, old
+  build kept if a build fails, in a window from 2 to 6 AM Eastern.
+  Narrowing the Mac app's protected paths is approved in principle but
+  deferred to its own plan, written when the refactor is ready; until then
+  all current CODEOWNERS protection stays as it is, and nothing unprotects
+  any Mac file. Agents add approvals to one daily "Needs the
+  owner" list instead of pinging, which the owner reads at 8:00 AM Eastern;
+  urgent items still come in chat. The rebuild and the daily list each run
+  as a scheduled task on the owner's Mac.
 - **Oct 21:** Pi Durable (MIT, from the makers of Pi) is the foundational
   multi-agent framework for step 6, accepted as experimental: pinned to an
   exact version, reached only through Open Convo's own thin layer, attribution
