@@ -80,7 +80,7 @@ First real use after step 5, synced through iCloud with the owner's approval.
 **Habit grid engine** (Personal), implemented; tests pass; awaiting Codex review and the planning check.
 Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
-**Site Engine: what will change** (Business): plan in review; GrokBot team B starts after this plan and #94 merge.
+**Site Engine: what will change** (Business): plan approved; GrokBot team B starts once #94 merges.
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:
