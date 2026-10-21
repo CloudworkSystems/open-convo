@@ -1,5 +1,20 @@
 # Foundations
 
+## Why We Build This
+
+**I built True Convo to put myself in the driver's seat of my own AI. Open
+Convo is here to help you build your version.**
+
+**The tool fits the person.** True Convo bends to how its owner works, not the
+other way around. It augments people rather than replacing them: AI does the
+work, the owner supplies the why.
+
+*(Ideas from Douglas Engelbart's "Augmenting Human Intellect" and Gerald
+Weinberg's tailor story in "The Psychology of Computer Programming", by way of
+Jake Van Cleef's "What Do We Build Now That AI Can Do the Work?")*
+
+## About This File
+
 Written October 15, 2026 by the planning session, after the owner reviewed
 every concept from earlier True Convo planning and decided what to keep. These
 are the rules every module is built on. Plans in `docs/plans/` and notes in
@@ -109,6 +124,15 @@ white-labeled install, each member is the owner of their own data.
   clips and voice can be shared in from any app on the Mac or iPhone. They land
   as sources in a separate inbox and don't count as the owner's experience
   until acted on.
+- **Every source gets the right handling, and the owner can change it.** A
+  small judge model (Jev to start) looks at what came in and proposes how to
+  process it: transcribe a video, pull the text and images from a page, read a
+  receipt, describe a photo. It also proposes where the result might go. Every
+  result comes back in the same shape: what it is, what was done to it, links
+  to what the owner already has, and an "unchecked" label until the owner
+  looks. Where it goes is only proposed, never filed on its own. When the owner
+  corrects a choice, that correction becomes the default for that kind of
+  source (the owner's correction is what's kept, not the judge's answer).
 - **Assistant tuning is separate** from facts about the owner.
 - **Bring an old conversation forward** as a summary that separates facts,
   decisions, open questions and stale parts; the owner picks what comes along.
