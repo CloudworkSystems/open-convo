@@ -304,7 +304,8 @@ function rememberLeftBehind(history, source, keptFields) {
 function ownEmptyStamp(record, trackerCutoffs, parentPurge) {
   if (!record) return null;
   if (validStamp(record.emptied)) return record.emptied;
-  if (!validStamp(record.purge) || validStamp(record.fenced)) return null;
+  if (!validStamp(record.purge)) return null;
+  if (validStamp(record.fenced) && compareStamps(record.fenced, record.purge) === 0) return null;
   if (validStamp(parentPurge) && compareStamps(record.purge, parentPurge) === 0) return null;
   if (object(record.formerTrackers) && Object.keys(record.formerTrackers).length > 0) return null;
   for (const cutoff of trackerCutoffs.values()) {
@@ -581,6 +582,11 @@ function assertTrackerChildCutoffs(person) {
     }
   }
   for (const record of person.checkIns) {
+    if (validStamp(record.fenced) && !validStamp(record.emptied)) {
+      const matchesPurge = validStamp(record.purge) && compareStamps(record.fenced, record.purge) === 0;
+      const matchesTracker = [...cutoffs.values()].some(cutoff => compareStamps(record.fenced, cutoff) === 0);
+      if (!matchesPurge || !matchesTracker) fail('Invalid check-in fence stamp in person file.');
+    }
     if (validStamp(record.emptied) || validStamp(record.fenced) || !validStamp(record.purge)) continue;
     for (const cutoff of cutoffs.values()) {
       if (compareStamps(record.purge, cutoff) === 0) fail('Invalid check-in purge provenance in person file.');

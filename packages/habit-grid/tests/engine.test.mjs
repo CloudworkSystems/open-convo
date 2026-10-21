@@ -2054,3 +2054,26 @@ test('a legacy check-in empty that shares a tracker cutoff is refused', () => {
   assert.throws(() => mergePeople(legacy, legacy), /Invalid check-in purge provenance/);
   assert.throws(() => mergePeople(legacy, away.getPerson(id)), /Invalid check-in purge provenance/);
 });
+
+test('a fence stamp that does not match the check-in purge is refused', () => {
+  const engine = fixed('phone-a', 100);
+  const id = engine.createPerson('River', { id: 'river' });
+  engine.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  engine.addTracker(id, { name: 'Steps', kind: 'count', target: 8, unit: 'steps' }, { trackerId: 'steps' });
+  engine.logCheckIn(id, 'water', { date: '2026-03-04', value: 5, checkInId: 'glass' });
+  engine.editCheckIn(id, 'glass', { trackerId: 'steps' });
+  const older = engine.getPerson(id);
+  const glass = older.checkIns.find(item => item.id === 'glass');
+  glass.purge = { counter: 1, time: 100, device: 'phone-a' };
+  glass.fenced = { counter: 1, time: 50, device: 'phone-a' };
+  delete glass.emptied;
+  assert.throws(() => deserializePerson(JSON.stringify(older)), /Invalid check-in fence stamp/);
+  assert.throws(() => mergePeople(older, older), /Invalid check-in fence stamp/);
+
+  const named = engine.getPerson(id);
+  const moved = named.checkIns.find(item => item.id === 'glass');
+  moved.purge = { counter: 1, time: 100, device: 'phone-a' };
+  moved.fenced = { counter: 1, time: 100, device: 'phone-a' };
+  delete moved.emptied;
+  assert.throws(() => deserializePerson(JSON.stringify(named)), /Invalid check-in fence stamp/);
+});
