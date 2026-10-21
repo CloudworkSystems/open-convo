@@ -120,18 +120,67 @@ listed, created by `github-actions[bot]`.) The workflow already has
   "no agent deletes or edits another account's review comments" (section
   6), so such a deletion breaks a written rule.
 
+**One evaluation per pull request at a time.** Today the workflow's
+concurrency group is the pull request number for event runs, but `all` for
+hourly and blank manual runs. So an hourly run could post success for a head
+right after a per-pull-request run recorded a P1 on it. The build changes
+this:
+
+- **Per-PR lock.** Concurrency moves to the job level, keyed only on the
+  pull request (`codex-approved-pr-<number>`), with `cancel-in-progress:
+  false`.
+- **Scheduled and blank runs.** A first job lists the open pull requests.
+  A matrix job then evaluates each one under that same per-PR key. Job-level
+  concurrency can use the matrix value, so no extra token permission is
+  needed. GitHub keeps at most one running and one waiting run per group, and
+  a newer waiting run replaces an older one. That's safe, because every run
+  re-reads everything from scratch, and a replaced run posts nothing.
+- **Compare and set.** Just before posting success, the gate re-reads the
+  head's status history, Codex's reviews and Codex's inline comments. It
+  posts success only if none of them changed since its first read.
+  Otherwise it starts the evaluation over.
+- **What's left.** A Codex P1 could land in the second or so between that
+  final read and the success status. Codex's summary comment edit then
+  queues another run for the pull request, which records the P1 and posts
+  pending. Auto-merge respects that only if it hasn't merged yet. A merge
+  needs `tests` and, on protected paths, the owner's approval too, so it
+  rarely follows within seconds, but it can. If it does, section 3's merge
+  workflow lists the late P1 at the top of that pull request's entry in the
+  issue, flagged for a fix. It is never silently dropped.
+
 ## 3. Where Deferred P2s And P3s Go
 
-The workflow token can't write issues, and it should stay that way. So the
-gate only *reports* deferred findings: the count in the status
-description, plus a link. The build adds a read-only script,
-`.github/scripts/deferred-findings.mjs`, that lists a merged pull request's
-deferred findings with links. After a docs-only pull request merges with
-deferred findings, the PR keeper (a session, as the bot) runs it and adds
-one comment to a single open issue, **Deferred doc findings**. The issue
-holds one comment per merged pull request. Fixing a finding later means
-ticking it in that comment. Everything stays in one place, written by one
-account, and checkable against the script's output.
+**Recommended: a small merge-time workflow (option a).** It's
+`.github/workflows/deferred-findings.yml`, on `pull_request_target: closed`,
+and runs only when the pull request merged. Like the gate, it runs `main`'s
+copy and never checks out pull request code. It reads Codex's reviews and
+inline comments from the API, keeps only trusted ones (#88's edit rule), and
+appends one comment to the single open issue titled **Deferred doc
+findings**:
+
+- the merged head;
+- each deferred P2 and P3 with its link;
+- any P1 found there after the gate's final read (see "What's left").
+
+**Permissions.** `issues: write`, `pull-requests: read`, `contents: read`,
+nothing else. It's a separate workflow, so the gate keeps its read-only
+token.
+
+**Safety.**
+- Pull request text never reaches a shell. The script passes it to the API
+  as data.
+- The comment opens with a marker, `<!-- deferred:pr-<number> -->`. A
+  re-run skips any pull request that already has one, and a manual run
+  (`workflow_dispatch` with a number) catches up on missed ones.
+- If there isn't exactly one open issue with that title, the run fails
+  loudly rather than guessing.
+
+**Why (a) over a daily keeper copying from status descriptions.** It records
+every merge with no session involved. It reads the findings themselves, not
+a 140-character summary. It also leaves one auditable trail: one run log
+and one comment per merge. The cost is one more workflow file with
+`issues: write`, pushed with the owner's login. Fixing a finding later
+means ticking it in that comment.
 
 ## 4. What Stays The Same
 
@@ -173,6 +222,14 @@ change:
   head commit, evaluated fresh; a marker on the review the owner dismissed,
   cleared; a marker status posted by the bot, blocks (never passes);
 - under the alternative only: `STATUS.md` alone with a P2 only, pending;
+- compare and set: the status history or reviews change between the first
+  and final read, so no success is posted;
+- concurrency: every job that evaluates a pull request in
+  `codex-approved.yml` uses the per-PR key, and none uses a shared key such
+  as `all` (a text check on the workflow file, like today's job-name check);
+- deferred findings: the comment body for a merged pull request lists its
+  P2s and P3s, skips untrusted comments, flags a late P1, and is skipped
+  when the marker is already present;
 - the existing suite unchanged, with code pull requests on the full rule.
 
 ## 6. Rollout
@@ -188,12 +245,16 @@ It also adds the rule that no agent deletes or edits another account's
 review comments.
 `AGENTS.md` is a code-owner path, so the owner approves both changes
 together. The build pull request touches `.github/`, so it is itself held
-to the full rule. No workflow change is expected. The files list, reviews,
-review comments and status history are all readable with today's
-permissions, and the record uses the existing `statuses: write`. Codex's
-reviews already re-run the gate through its summary comment edit. If a
-workflow change does turn out to be needed, the owner's login pushes that
-one commit, as with #87. Before
+to the full rule.
+
+It also changes workflow files: the concurrency change in
+`codex-approved.yml`, and the new `deferred-findings.yml`. The bot's token
+can't push those, so the owner's login pushes that one commit, as with #87.
+The scripts, tests and `AGENTS.md` are pushed by the bot. The issue
+**Deferred doc findings** is opened once, by the bot, before merge. The
+gate itself needs no new permission: the files list, reviews, review
+comments and status history are all readable today, and the record uses
+the existing `statuses: write`. Before
 merging, do a read-only dry run on #94, #97, #98 and #99. It posts no
 statuses, and the pull request lists each one's verdict before and after,
 plus its deferred findings.
