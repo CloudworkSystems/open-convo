@@ -89,6 +89,10 @@ fails for pull requests opened under the owner's login (GitHub doesn't hold
 an owner-opened PR for the code owner), which is how cloud Claude opens them
 today. Next: the bot's token, then reconnect Claude's GitHub link as the bot
 and rerun 3, 4 and 6. Until those pass, the owner merges by hand.
+October 20 fix (OC-261020-gate-package-tests): `tests` now also runs
+`npm test` for every other folder in `packages/` that a pull request changes
+(Site Engine, household lists, and new ones such as the habit grid), found
+by folder so new packages are covered automatically.
 
 ## Owner Decisions
 
