@@ -1203,9 +1203,9 @@ test('svg title ids differ by grid', () => {
   const span = { start: '2026-03-18', end: '2026-03-18' };
   const water = engine.svg(id, 'water', span);
   const walk = engine.svg(id, 'walk', span);
-  assert.match(water, /id="habit-5_river-5_water-10_2026-03-18-title"/);
-  assert.match(water, /aria-labelledby="habit-5_river-5_water-10_2026-03-18-title habit-5_river-5_water-10_2026-03-18-desc"/);
-  assert.match(walk, /id="habit-5_river-4_walk-10_2026-03-18-title"/);
+  assert.match(water, /id="habit-7_tracker-5_river-5_water-10_2026-03-18-title"/);
+  assert.match(water, /aria-labelledby="habit-7_tracker-5_river-5_water-10_2026-03-18-title habit-7_tracker-5_river-5_water-10_2026-03-18-desc"/);
+  assert.match(walk, /id="habit-7_tracker-5_river-4_walk-10_2026-03-18-title"/);
   assert.equal(water.includes('id="habit-title"'), false);
   const other = fixed('phone-b');
   const glen = other.createPerson('Glen', { id: 'glen' });
@@ -1213,10 +1213,15 @@ test('svg title ids differ by grid', () => {
   other.addStack(glen, { name: 'Morning', members: ['water'] }, { stackId: 'morning' });
   engine.addStack(id, { name: 'Morning', members: ['water'] }, { stackId: 'morning' });
   const glenWater = other.svg(glen, 'water', span);
-  assert.match(glenWater, /id="habit-4_glen-5_water-10_2026-03-18-title"/);
-  assert.equal(water.includes('habit-4_glen-5_water-10_2026-03-18-title'), false);
-  assert.match(engine.stackSvg(id, 'morning', span), /id="habit-5_river-7_morning-10_2026-03-18-title"/);
-  assert.match(other.stackSvg(glen, 'morning', span), /id="habit-4_glen-7_morning-10_2026-03-18-title"/);
+  assert.match(glenWater, /id="habit-7_tracker-4_glen-5_water-10_2026-03-18-title"/);
+  assert.equal(water.includes('habit-7_tracker-4_glen-5_water-10_2026-03-18-title'), false);
+  assert.match(engine.stackSvg(id, 'morning', span), /id="habit-5_stack-5_river-7_morning-10_2026-03-18-title"/);
+  assert.match(other.stackSvg(glen, 'morning', span), /id="habit-5_stack-4_glen-7_morning-10_2026-03-18-title"/);
+  engine.addStack(id, { name: 'Water stack', members: ['water'] }, { stackId: 'water' });
+  const waterStack = engine.stackSvg(id, 'water', span);
+  assert.match(waterStack, /id="habit-5_stack-5_river-5_water-10_2026-03-18-title"/);
+  assert.equal(water.includes('id="habit-5_stack-5_river-5_water-10_2026-03-18-title"'), false);
+  assert.equal(waterStack.includes('id="habit-7_tracker-5_river-5_water-10_2026-03-18-title"'), false);
   const base = engine.grid(id, 'water', span);
   const titleId = (personId, gridId) => {
     const svg = renderSvg({ ...base, personId, id: gridId });
