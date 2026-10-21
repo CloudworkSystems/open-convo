@@ -141,5 +141,5 @@ unless unavoidable (listed with license); no repo license file.
 
 A different agent reviews it as code until Codex gives a 👍; the planning
 session checks it against this document and gives the owner a short try-it
-note; the owner merges. Done when the tests pass with one command, Codex has
+note, then switches on auto-merge, and the merge gate merges it. Done when the tests pass with one command, Codex has
 given a 👍, and the planning check finds nothing missing.

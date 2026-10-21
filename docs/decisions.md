@@ -6,6 +6,19 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 20:** The merge gate is on for `main` (scratch tests passed).
+  Builders open pull requests as `cloudwork-bot`. Until the bot has Codex
+  access, the session that opened a bot pull request asks for each Codex
+  review from the owner's account (option 2; a Codex account for the bot is
+  to be tried later). Docs and plans get a Codex review, and after its
+  findings are folded in, a clean follow-up review of the latest commit
+  before the gate merges them. Letting the gate accept a plan's designated
+  reviewer in place of Codex (Claude for Codex-built modules) is planned and
+  needs the owner's approval before it's built; until then, Codex's review still gates Codex-built pull requests and Claude also
+  reviews them, so no agent's review is the only one on its own work. Outside
+  builders don't switch on auto-merge; the planning session does after its
+  plan check passes. Main-build authors switch it on when they open a pull
+  request.
 - **Oct 16:** Step 3 local conversation: Retry puts the cut-off message back
   in the message box and the owner presses Send (nothing resends on its own);
   the Claude entry stays out of the model picker until the Claude Code adapter
