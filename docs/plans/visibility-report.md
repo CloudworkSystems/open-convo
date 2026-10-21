@@ -190,6 +190,14 @@ its problems, and the report names every problem in it.
   characters that would make a link, image, heading, list item or HTML tag
   are escaped; only source URLs that passed the `https://` check become
   links.
+- **Link addresses are made safe before they go in the Markdown.** A source
+  URL is written as a link destination wrapped in angle brackets
+  (`[label](<https://...>)`), after percent-encoding every `<` (`%3C`), `>`
+  (`%3E`), space (`%20`), `(` (`%28`), `)` (`%29`) and backslash (`%5C`).
+  A URL containing a line break, tab or any other control character
+  (U+0000 to U+001F, U+007F to U+009F, U+2028, U+2029) can't be made safe
+  and is refused when the findings file is read, with a plain message
+  naming the finding's `id`. The JSON form keeps the URL exactly as given.
 - The JSON form (`schemaVersion: 1`) holds the same ranked list with each
   problem's group, position, sentences and source, and the other sections.
 - Same input gives byte-identical output.
@@ -238,23 +246,51 @@ addresses and 555 phone numbers). At least:
    Bikes" with a locator mentioning a review score, and the report shows
    both exactly as given (escaped as plain text) without being refused.
 10. Hostile text in a finding (`[link](https://evil.example)`, `# heading`,
-    `<img src=x>`) appears escaped and adds no link, heading or tag.
+    `<img src=x>`) appears escaped and adds no link, heading or tag. Source
+    URLs with `)`, `(`, `<`, `>`, a space and a backslash
+    (`https://a.example/x) [y](https://evil.example`) render as exactly
+    one link, wrapped in `<...>` with those characters percent-encoded, and
+    a source URL with a line break, a tab or U+2028 is refused with a
+    message naming the finding.
 11. No network, enforced at run time. Every test runs with network access
-    blocked: a shared test setup replaces `globalThis.fetch`,
-    `net.connect`, `net.createConnection`, `tls.connect`, `http.request`,
-    `http.get`, `https.request`, `https.get`, `dns.lookup` and
-    `dns.promises.lookup` with functions that record the call and throw.
-    After each test, the setup asserts that none were called; one test
-    calls `fetch` on purpose to show the guard throws. The command also
-    reads no file other than the findings file (a test checks which files
-    it opens by stubbing `fs` reads the same way).
+    blocked. A shared test setup replaces each network entry point that
+    Node 22's built-in modules offer with a function that records the call
+    and throws:
+    - globals: `fetch` and `WebSocket` (Node 22's `fetch` uses the bundled
+      undici internally, so stubbing `fetch` covers it; if an `undici`
+      package is ever importable, its `fetch`, `request`, `stream`,
+      `connect`, `Client`, `Pool` and `Agent` are stubbed too);
+    - `net`: `connect`, `createConnection` and `Socket.prototype.connect`;
+    - `tls`: `connect` and `TLSSocket.prototype.connect`;
+    - `http` and `https`: `request` and `get`;
+    - `http2`: `connect`;
+    - `dgram`: `createSocket`;
+    - `dns` and `dns/promises`: `lookup`, `resolve` and every other
+      `resolve*` function;
+    - `inspector`: `open` (it listens on a port);
+    - no spawning: `child_process` (`spawn`, `exec`, `execFile`, `fork`
+      and their `Sync` forms), `cluster.fork` and `worker_threads.Worker`,
+      because a child process or worker would run without these stubs.
+
+    After each test, the setup asserts that none were called; one test calls
+    `fetch` and one calls `net.connect` on purpose to show the guard throws.
+    The command also reads no file other than the findings file (a test
+    checks which files it opens by stubbing `fs` reads the same way).
+
+    The list follows Node 22's built-in modules. A snapshot test keeps it
+    current: the package holds a list of every name in
+    `module.builtinModules` on Node 22, each marked "network or process:
+    stubbed above" or "no network". The test fails if the running Node has
+    a built-in that isn't in the snapshot, so a new built-in that might
+    reach the network can't arrive unnoticed; whoever updates the snapshot
+    adds its entry points to the list above first.
 
     Why stubs, not Node's permission model: the tests workflow runs Node
     22, and in Node 22 the permission model (`--experimental-permission`,
-    later `--permission`) limits file system, child processes and workers
-    but has no network permission, so it can't block a network call.
-    Stubbing every network entry point works on Node 22 and fails loudly
-    if anything tries.
+    later `--permission`) limits the file system, child processes and
+    workers but has no network permission, so it can't block a network
+    call. Stubbing every network entry point works on Node 22 and fails
+    loudly if anything tries.
 12. Output paths: `--json` or `--md` naming the findings file (directly,
     through `..`, through a symbolic link, or through a hard link), and
     `--json` and `--md` naming the same file, are each refused, and the
