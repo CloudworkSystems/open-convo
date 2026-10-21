@@ -2155,3 +2155,49 @@ test('a person purge drops tracker history kept by an older fence', () => {
   assert.equal(kept.fields.value.value, 9);
   assert.equal(later.view(id).checkIns.find(item => item.id === 'glass').value, 9);
 });
+
+test('a person purge keeps filtering tracker history on a later merge', () => {
+  const home = fixed('phone-a', 100);
+  const earlier = fixed('phone-b', 100);
+  const away = fixed('phone-c', 100);
+  const id = home.createPerson('River', { id: 'river' });
+  home.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  home.addTracker(id, { name: 'Steps', kind: 'count', target: 8, unit: 'steps' }, { trackerId: 'steps' });
+  home.addTracker(id, { name: 'Pages', kind: 'count', target: 8, unit: 'pages' }, { trackerId: 'pages' });
+  home.logCheckIn(id, 'water', { date: '2026-03-04', value: 5, checkInId: 'glass' });
+  home.editCheckIn(id, 'glass', { trackerId: 'steps' });
+  earlier.importPerson(home.getPerson(id));
+  const stale = earlier.getPerson(id);
+  home.deleteTracker(id, 'steps');
+  home.emptyTrash(id);
+  const fenced = home.getPerson(id);
+  away.importPerson(fenced);
+  away.deletePerson(id);
+  away.emptyTrash(id);
+  away.renamePerson(id, 'Glen');
+  away.setWeekStartsOn(id, 'monday');
+  away.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  away.addTracker(id, { name: 'Pages', kind: 'count', target: 8, unit: 'pages' }, { trackerId: 'pages' });
+  away.logCheckIn(id, 'pages', { date: '2026-03-05', value: 9, checkInId: 'glass' });
+  const revived = away.getPerson(id);
+  const copies = [fenced, revived, stale];
+  const joined = mergePeople(mergePeople(copies[0], copies[1]), copies[2]);
+  for (const [i, j, k] of [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]) {
+    const merged = mergePeople(mergePeople(copies[i], copies[j]), copies[k]);
+    const glass = merged.checkIns.find(item => item.id === 'glass');
+    assert.equal(glass.life.value, true);
+    assert.equal(glass.fields.trackerId.value, 'pages');
+    assert.equal(glass.fields.value.value, 9);
+    assert.equal(glass.formerTrackers, undefined);
+    assert.deepEqual(merged, joined);
+  }
+  assert.deepEqual(mergePeople(joined, joined), joined);
+  const later = fixed('phone-d', 100);
+  later.importPerson(joined);
+  later.deleteTracker(id, 'water');
+  later.emptyTrash(id);
+  const kept = later.getPerson(id).checkIns.find(item => item.id === 'glass');
+  assert.equal(kept.life.value, true);
+  assert.equal(kept.fields.value.value, 9);
+  assert.equal(later.view(id).checkIns.find(item => item.id === 'glass').value, 9);
+});
