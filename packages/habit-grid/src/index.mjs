@@ -201,8 +201,6 @@ function mergeRecord(a, b, parentPurge, withMembers, recordKind) {
   if (compareStamps(life.stamp, purge) <= 0) return finish(tombstoneRecord(a.id, purge, withMembers));
   const result = { id: a.id, fields: records(a.fields, b.fields, purge), life, purge: clone(purge) };
   if (withMembers) result.members = records(a.members ?? {}, b.members ?? {}, purge);
-  const kept = Object.keys(result.fields).length > 0 || (withMembers && Object.keys(result.members).length > 0);
-  if (purge && !kept) return finish(tombstoneRecord(a.id, purge, withMembers));
   return finish(result);
 }
 function attachEmptied(record, left, right) {
@@ -500,19 +498,24 @@ function survivingFragment(record, types, withMembers, purge) {
   if (entries.length === 0) return false;
   return entries.every(entry => compareStamps(entry.stamp, purge) > 0);
 }
+function lifeAfterPurge(record, withMembers, purge) {
+  if (!validStamp(purge) || record.life.value !== true || compareStamps(record.life.stamp, purge) <= 0) return false;
+  if (Object.keys(record.fields).length > 0) return false;
+  return !withMembers || Object.keys(record.members ?? {}).length === 0;
+}
 function emptyPurgedMarker(record, withMembers, purge) {
   if (record.life.value || compareStamps(record.life.stamp, purge) !== 0) return false;
   if (!validStamp(record.purge) || compareStamps(record.purge, purge) !== 0) return false;
   if (Object.keys(record.fields).length > 0) return false;
   return !withMembers || Object.keys(record.members ?? {}).length === 0;
 }
-function requireCompleteOrFragment(record, types, withMembers, parentPurge = null) {
+function requireCompleteOrFragment(record, types, withMembers, parentPurge = null, allowLifeOnly = false) {
   const purge = purgeCutoff(record, parentPurge);
   if (purge && recordEntries(record, withMembers).some(entry => compareStamps(entry.stamp, purge) <= 0)) fail('Field is older than its purge cutoff.');
   if (purge && compareStamps(record.life.stamp, purge) <= 0 && !emptyPurgedMarker(record, withMembers, purge)) fail('Life is older than its purge cutoff.');
   if (!contentBearing(record, withMembers)) return;
   const complete = Object.keys(types).every(key => own(record.fields, key));
-  if (!complete && !survivingFragment(record, types, withMembers, purge)) fail('Incomplete record in person file.');
+  if (!complete && !survivingFragment(record, types, withMembers, purge) && !(allowLifeOnly && lifeAfterPurge(record, withMembers, purge))) fail('Incomplete record in person file.');
 }
 function validateRecord(record, types, withMembers, checkShape = false, parentPurge = null) {
   if (!object(record) || typeof record.id !== 'string' || !record.id || !object(record.life) || typeof record.life.value !== 'boolean' || !validStamp(record.life.stamp) || (record.purge !== null && !validStamp(record.purge))) fail('Invalid record in person file.');
@@ -523,7 +526,7 @@ function validateRecord(record, types, withMembers, checkShape = false, parentPu
       if (!key || !object(entry) || typeof entry.value !== 'boolean' || !validStamp(entry.stamp)) fail('Invalid stack member in person file.');
     }
   } else if (own(record, 'members')) fail('Invalid record in person file.');
-  requireCompleteOrFragment(record, types, withMembers, parentPurge);
+  requireCompleteOrFragment(record, types, withMembers, parentPurge, true);
   if (checkShape && contentBearing(record, withMembers)) {
     const shapeKeys = SHAPE_KEYS.filter(key => own(record.fields, key));
     if (shapeKeys.length > 0 && (shapeKeys.length < SHAPE_KEYS.length || !trackerShapeValid(record.fields))) fail('Invalid tracker shape in person file.');
@@ -1425,7 +1428,7 @@ export class HabitGrid {
     return checkInId;
   }
   editCheckIn(personId, checkInId, input = {}) {
-    if (!object(input)) fail('Check-in changes must be an object.');
+    if (!object(input) || Object.keys(input).length === 0) fail('Check-in changes are empty.');
     assertKnownFields(input, RECORD_KEYS.checkIn, 'check-in');
     if (own(input, 'source') && input.source !== 'manual') fail('Only manual check-ins can be written in this version.');
     if (own(input, 'date') && !validDate(input.date)) fail('Invalid date.');

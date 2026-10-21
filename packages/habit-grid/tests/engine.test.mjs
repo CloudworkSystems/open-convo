@@ -2240,3 +2240,59 @@ test('a person purge filters tracker history when this merge records the fence',
   assert.equal(kept.fields.value.value, 9);
   assert.equal(later.view(id).checkIns.find(item => item.id === 'glass').value, 9);
 });
+
+test('a restored tracker keeps its newer life when a purge clears its fields', () => {
+  const restore = fixed('phone-b', 100);
+  const purge = fixed('phone-a', 100);
+  const edit = fixed('phone-c', 100);
+  const id = restore.createPerson('River', { id: 'river' });
+  restore.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  purge.importPerson(restore.getPerson(id));
+  edit.importPerson(restore.getPerson(id));
+  restore.deleteTracker(id, 'water');
+  for (const name of ['River two', 'River three', 'River four', 'River five', 'River six']) restore.renamePerson(id, name);
+  restore.restoreTracker(id, 'water');
+  purge.deleteTracker(id, 'water');
+  purge.emptyTrash(id);
+  edit.renamePerson(id, 'Cedar');
+  edit.editTracker(id, 'water', { name: 'Fresh water' });
+  const restored = restore.getPerson(id);
+  const purged = purge.getPerson(id);
+  const edited = edit.getPerson(id);
+  const waterLife = restored.trackers.find(item => item.id === 'water').life;
+  const pairwise = converges(restored, purged);
+  const hidden = pairwise.trackers.find(item => item.id === 'water');
+  assert.equal(hidden.life.value, true);
+  assert.equal(compareStamps(hidden.life.stamp, waterLife.stamp), 0);
+  assert.deepEqual(hidden.fields, {});
+  assert.equal(viewPerson(pairwise).trackers.length, 0);
+  const copies = [restored, purged, edited];
+  const joined = mergePeople(mergePeople(copies[0], copies[1]), copies[2]);
+  for (const [i, j, k] of [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]) {
+    const merged = mergePeople(mergePeople(copies[i], copies[j]), copies[k]);
+    const water = merged.trackers.find(item => item.id === 'water');
+    assert.equal(water.life.value, true);
+    assert.equal(compareStamps(water.life.stamp, waterLife.stamp), 0);
+    assert.equal(water.fields.name.value, 'Fresh water');
+    assert.equal(viewPerson(merged).trackers.length, 0);
+    assert.deepEqual(merged, joined);
+  }
+  assert.deepEqual(mergePeople(joined, joined), joined);
+});
+
+test('an empty check-in edit does not restore a deleted check-in', () => {
+  const engine = fixed('phone-a', 100);
+  const id = engine.createPerson('River', { id: 'river' });
+  engine.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  engine.logCheckIn(id, 'water', { date: '2026-03-04', value: 5, checkInId: 'glass' });
+  engine.deleteCheckIn(id, 'glass');
+  const before = engine.getPerson(id);
+  assert.equal(engine.view(id).checkIns.length, 0);
+  assert.throws(() => engine.editCheckIn(id, 'glass', {}), /Check-in changes are empty/);
+  assert.throws(() => engine.editCheckIn(id, 'glass'), /Check-in changes are empty/);
+  assert.deepEqual(engine.getPerson(id), before);
+  assert.equal(engine.view(id).checkIns.length, 0);
+  assert.equal(engine.view(id, { trash: true }).checkIns.length, 1);
+  engine.editCheckIn(id, 'glass', { value: 9 });
+  assert.equal(engine.view(id).checkIns.find(item => item.id === 'glass').value, 9);
+});

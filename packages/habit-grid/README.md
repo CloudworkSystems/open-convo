@@ -83,7 +83,8 @@ daylight-saving change cannot skip or repeat a day.
   engine does not invent one.
 - `editCheckIn(personId, checkInId, fields)` updates only the supplied fields.
   `deleteCheckIn` moves it to Trash. `restoreCheckIn` brings it back.
-  Editing a recoverable deleted check-in also restores it.
+  Editing a recoverable deleted check-in with a supplied field also restores it.
+  An empty edit is refused and the file stays unchanged.
   A key outside `trackerId`, `date`, `value`, and `source` is refused and the
   file stays unchanged.
 - `markRest(personId, date, { trackerId = '', restId }?)` marks one date.
@@ -316,7 +317,10 @@ Changing `kind`, `target`, or `unit` writes all three again at the same stamp.
 Merge compares those fields on their own, and because they share a stamp the
 newest shape write wins together. Every merge order agrees. A purged field is
 never copied back. A cutoff can leave a record with only the fields stamped
-after it. That fragment stays in the file so a later replica can fill the
+after it. A tracker, stack, check-in, or rest day keeps a life stamp newer than
+that cutoff when no field survives, and it stays hidden until a newer
+field arrives. Every merge order keeps that life. An emptied person still
+refuses `addTracker`, `addStack`, and `markRest`. That fragment stays in the file so a later replica can fill the
 gaps, and it stays out of the live grid, the live view, and the commands
 that log a check-in or mark a rest day. A new tracker with that same
 permanent ID can replace the fragment. `kind`, `target`, and `unit` travel
