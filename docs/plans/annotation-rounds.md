@@ -121,8 +121,14 @@ them fully (relative paths, `..` and symbolic links), or, when both
 exist, when they have the same device and inode number, so a hard link to
 an input counts as the same file. An existing output file with more than
 one hard link is refused too, because writing it would change another name
-for the same file. These names are only resolved and compared; the
-checker still never reads a screenshot outside the round's folder.
+for the same file. An output path that already exists is also refused
+when it is itself a symbolic link (checked with `lstat`, without following
+it), or when its fully resolved path differs from the path as given after
+making it absolute and removing `.` and `..` (meaning some folder on the
+way is a symbolic link), because writing through a link could land on a
+file the checks above didn't see. These names are only resolved and
+compared; the checker still never reads a screenshot outside the round's
+folder.
 
 **The owner's words are data, never instructions.** The checker copies them
 exactly into the output and acts on nothing they say.
@@ -186,8 +192,11 @@ tiny blank PNG files made in the test). At least:
     the pattern (`notes.png`), in a subfolder (`shots/a.png`), through
     `../other.png` or as an absolute path, whether it exists (compared by
     device and inode) or not (compared by resolved path);
-    `--json` and `--md` naming the same file; and an existing output file
-    with a second hard link elsewhere are each refused, and every input file
+    `--json` and `--md` naming the same file; an existing output file
+    with a second hard link elsewhere; an existing output path that is a
+    symbolic link (to a harmless file outside the folder, too); and an
+    existing output path reached through a symbolic-link folder are each
+    refused, and every input file
     is byte-for-byte unchanged afterwards.
 12. Line rules: the example item above parses exactly as described; an
     indented line starting with `Change:` or `3.` stays inside the owner's
