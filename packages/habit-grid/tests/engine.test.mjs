@@ -1609,3 +1609,29 @@ test('emptying Trash again does not renew an already emptied tracker cutoff', ()
   assert.deepEqual(home.getPerson(id).trackers.find(item => item.id === 'water'), marker);
   assert.deepEqual(home.view(id).stacks[0].members, ['steps', 'water']);
 });
+
+test('restoring a hidden purge fragment is refused and leaves the file unchanged', () => {
+  const home = fixed('phone-a', 100);
+  const away = fixed('phone-b', 100);
+  const id = home.createPerson('River', { id: 'river' });
+  home.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  away.importPerson(home.getPerson(id));
+  home.deleteTracker(id, 'water');
+  home.emptyTrash(id);
+  away.renamePerson(id, 'River two');
+  away.renamePerson(id, 'River three');
+  away.renamePerson(id, 'River four');
+  away.editTracker(id, 'water', { name: 'Hidden water' });
+  const hidden = fixed('phone-c', 100);
+  hidden.importPerson(converges(home.getPerson(id), away.getPerson(id)));
+  assert.equal(hidden.view(id).trackers.length, 0);
+  assert.equal(hidden.getPerson(id).trackers.find(item => item.id === 'water').fields.name.value, 'Hidden water');
+  const before = hidden.getPerson(id);
+  assert.throws(() => hidden.restoreTracker(id, 'water'), /Tracker not found/);
+  assert.deepEqual(hidden.getPerson(id), before);
+  assert.throws(() => hidden.logCheckIn(id, 'water', { date: '2026-03-04', value: 1 }), /Tracker not found/);
+  hidden.addTracker(id, { name: 'Steps', kind: 'count', target: 8, unit: 'steps' }, { trackerId: 'steps' });
+  hidden.deleteTracker(id, 'steps');
+  hidden.restoreTracker(id, 'steps');
+  assert.deepEqual(hidden.view(id).trackers.map(item => item.name), ['Steps']);
+});

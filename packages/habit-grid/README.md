@@ -114,7 +114,8 @@ daylight-saving change cannot skip or repeat a day.
   another device, stays purged. A tracker cutoff drops only the check-in or
   rest fields stamped at or before it. A newer partial check-in stays in the
   file and stays hidden until another replica fills the missing fields, and
-  every merge order keeps that completed check-in. Moving a check-in keeps
+  every merge order keeps that completed check-in. Restore refuses a hidden
+  fragment and leaves the file unchanged. Moving a check-in keeps
   every tracker it left, including one it only visited in the middle of a
   longer move. Merge applies each of those cutoffs before it keeps the new
   tracker id, in either merge order, so fields that were not written again

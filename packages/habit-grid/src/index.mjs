@@ -1055,6 +1055,11 @@ function active(records, id, label, keys) {
   if (!fieldsPresent(record.fields, keys)) fail(`${label} not found.`);
   return record;
 }
+function restorable(records, id, label, keys) {
+  const record = editable(records, id, label);
+  if (!fieldsPresent(record.fields, keys)) fail(`${label} not found.`);
+  return record;
+}
 function stampedFields(entries, stamp) {
   const fields = {};
   for (const [key, value] of entries) setOwn(fields, key, { value: clone(canonicalizeValue(key, value)), stamp: clone(stamp) });
@@ -1204,7 +1209,7 @@ export class HabitGrid {
   }
   restoreTracker(personId, trackerId) {
     return this.#change(personId, (person, stamp) => {
-      const tracker = editable(person.trackers, trackerId, 'Tracker');
+      const tracker = restorable(person.trackers, trackerId, 'Tracker', RECORD_KEYS.tracker);
       tracker.life = { value: true, stamp };
       person.life = { value: true, stamp };
     });
@@ -1259,7 +1264,7 @@ export class HabitGrid {
   }
   restoreStack(personId, stackId) {
     return this.#change(personId, (person, stamp) => {
-      const stack = editable(person.stacks, stackId, 'Stack');
+      const stack = restorable(person.stacks, stackId, 'Stack', RECORD_KEYS.stack);
       stack.life = { value: true, stamp };
       person.life = { value: true, stamp };
     });
@@ -1321,7 +1326,7 @@ export class HabitGrid {
   }
   restoreCheckIn(personId, checkInId) {
     return this.#change(personId, (person, stamp) => {
-      const checkIn = editable(person.checkIns, checkInId, 'Check-in');
+      const checkIn = restorable(person.checkIns, checkInId, 'Check-in', RECORD_KEYS.checkIn);
       checkIn.life = { value: true, stamp };
       person.life = { value: true, stamp };
     });
@@ -1358,7 +1363,7 @@ export class HabitGrid {
   }
   restoreRest(personId, restId) {
     return this.#change(personId, (person, stamp) => {
-      const rest = editable(person.restDays, restId, 'Rest day');
+      const rest = restorable(person.restDays, restId, 'Rest day', RECORD_KEYS.rest);
       rest.life = { value: true, stamp };
       person.life = { value: true, stamp };
     });
