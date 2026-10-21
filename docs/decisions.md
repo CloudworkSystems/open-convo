@@ -11,6 +11,11 @@ full plan and history are in [PLAN.md](../PLAN.md).
   switch on auto-merge, and it may post the `@codex review` fallback when a
   builder can't start a Codex review. It still never merges, approves or
   changes code.
+- **Oct 20:** Sage follows the lab-notebook pattern from the MOSAN research
+  agent (Sagnelli et al.): a notebook per run, separate roles (analyst,
+  proposer, critic, doer with a step budget, checked summarizer), a weighted
+  memory of what worked, and borrowed hints that stay provisional and inside
+  their memory space (docs/design-notes/sage.md).
 - **Oct 20:** The merge gate is on for `main` (scratch tests passed).
   Builders open pull requests as `cloudwork-bot`. Until the bot has Codex
   access, the session that opened a bot pull request asks for each Codex
