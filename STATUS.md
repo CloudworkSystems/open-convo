@@ -1,6 +1,6 @@
 # Status
 
-Updated October 20, 2026. The short version of where the build is. The full
+Updated October 21, 2026. The short version of where the build is. The full
 plan is in [PLAN.md](PLAN.md).
 
 ## Now
@@ -91,6 +91,9 @@ October 20 fix (OC-261020-gate-package-tests): `tests` now also runs
 `npm test` for every other folder in `packages/` that a pull request changes
 (Site Engine, household lists, and new ones such as the habit grid), found
 by folder so new packages are covered automatically.
+Planned (October 21): docs-only pull requests pass `codex-approved` with no
+open P1, with P2s and P3s carried as follow-ups. Plan:
+[docs/plans/merge-gate-docs-p1.md](docs/plans/merge-gate-docs-p1.md).
 
 ## Owner Decisions
 
