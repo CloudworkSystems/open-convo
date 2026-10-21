@@ -6,6 +6,25 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 21:** Scale-up plan approved ([docs/plans/scale-up.md](plans/scale-up.md)).
+  Up to three outside modules at a time, each with its own builder or builder
+  team; modules waiting only on review fixes (today the habit grid and the
+  household lists fixes) don't count. GrokBot's three teams build annotation
+  rounds (team A), Site Engine "what will change" (team B) and the
+  visibility report (team C), each from its own plan in `docs/plans/`, with
+  Codex reviewing. Two Claude building lanes run now (main step; Desk and
+  dogfooding), with an infra lane added after the auto-update job merges.
+  Standing approval to rebuild True Convo Test on the owner's Mac when it is
+  idle and the Test app isn't running: Test app only, built from `main`, old
+  build kept if a build fails; the time window is still to be set by the
+  owner. The Mac app's protected paths will be narrowed by one refactor pull
+  request after the Claude Code adapter's first code pull request, and only
+  when it passes the plan's checks (files only moved, identical linking,
+  every safety test passing, and a new protected test finding no paid-API
+  or API-key code in unprotected files; it still
+  needs the owner's approval). Agents add approvals to one daily "Needs the
+  owner" list instead of pinging; urgent items still come in chat; the time
+  of day is still to be set by the owner.
 - **Oct 21:** The PR steward counts as part of the planning side: after its
   own passing planning check on an outside builder's pull request, it may
   switch on auto-merge, and it may post the `@codex review` fallback when a
