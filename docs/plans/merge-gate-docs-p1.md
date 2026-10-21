@@ -31,9 +31,20 @@ into `docs/` uses the code rule. So does a deleted file. If the files list is
 cut short (GitHub stops at 3,000 files) or can't be read, the code rule
 applies.
 
-`AGENTS.md`, `CLAUDE.md`, `PLAN.md`, `docs/plans/` and `docs/decisions.md`
-qualify. They are code-owner paths, so the owner still approves every
-change to them, and that approval is the real safeguard for the rules.
+**Default (recommended, awaiting the owner; see question 3):** the P1-only
+rule also needs at least one changed file on a code-owner path:
+`AGENTS.md`, `CLAUDE.md`, `PLAN.md`, `docs/plans/`, `docs/decisions.md`, or
+any other `.md` file `CODEOWNERS` assigns to the owner. The gate checks this
+with the existing `codeowners.mjs`. A protected file makes GitHub require
+the owner's approval for the *whole* pull request, so a plan pull request
+that also adds a `STATUS.md` line still qualifies. A pull request that
+touches only unprotected docs (`STATUS.md`, `README.md`, other `docs/`
+files) keeps the full clean rule. That closes the deleted-comment gap
+(section 2): every pull request the relaxed rule lets through also waits
+for the owner.
+
+**Alternative:** every docs-only pull request qualifies, protected or not,
+and the gap is accepted.
 
 ## 2. How The Gate Reads Severity
 
@@ -76,10 +87,13 @@ The status then reads, within GitHub's 140 characters, for example:
 `Docs-only: no P1 on abc1234. Deferred: 2 P2, 1 P3.` Its link points to the
 Codex review, so anyone can open the deferred findings.
 
-**Known gap.** Anyone with Write access can delete a Codex comment. If a
-review held a P1 and a P2, deleting the P1 leaves only the P2, and the
-pull request would pass. Deleting every comment still fails closed (step 4).
-GitHub records no deletion event the gate can read. See owner question 3.
+**Deleted-comment gap.** Anyone with Write access can delete a Codex
+comment. If a review held a P1 and a P2, deleting the P1 leaves only the
+P2. Deleting every comment still fails closed (step 4). GitHub records no
+deletion event the gate can read. Under the default in section 1, every
+pull request that could pass this way also needs the owner's approval, and
+he sees the review. Under the alternative, the gap stays open on
+unprotected docs. See owner question 3.
 
 ## 3. Where Deferred P2s And P3s Go
 
@@ -102,8 +116,8 @@ account, and checkable against the script's output.
 - Code pull requests still need a fully clean Codex result on the head.
   Nothing about them changes.
 - #88's edit rule and #90's dismissal rule still apply to every signal.
-- AGENTS.md's "one Codex review round" for plans is unchanged. This rule
-  lets that round's P2s and P3s wait instead of blocking.
+- Code-owner rules in `CODEOWNERS` are unchanged. `AGENTS.md`'s wording
+  changes, but only in the build pull request (section 6).
 
 ## 5. Tests The Build Pull Request Must Add
 
@@ -116,6 +130,8 @@ change:
   pending;
 - docs plus code (for example `docs/x.md` and `apps/desk/a.ts`), P2 only:
   pending (code rule);
+- under the default: `STATUS.md` alone with a P2 only, pending (full rule);
+  `docs/plans/x.md` plus `STATUS.md` with a P2 only, passes;
 - a Codex comment edited by the bot, such as a P1 badge rewritten to P2:
   pending (#88);
 - a rename from `apps/` to `docs/`: code rule;
@@ -131,8 +147,16 @@ change:
 
 ## 6. Rollout
 
-One bot pull request changes `.github/scripts/` only. No workflow change
-is expected: the files list, reviews and review comments are all readable
+One bot pull request carries the script change **and**, in the same
+pull request, the `AGENTS.md` Review Loop update. The script can't land
+without it, or the gate would pass pull requests that the written rules
+still forbid. The `AGENTS.md` change rewrites the "Plans and other docs"
+bullet: docs-only pull requests that qualify under section 1 need no open
+P1 on the head. Their P2s and P3s go to the "Deferred doc findings" issue
+(section 3) instead of being fixed first. Code pull requests are unchanged.
+`AGENTS.md` is a code-owner path, so the owner approves both changes
+together. The build pull request touches `.github/`, so it is itself held
+to the full rule. No workflow change is expected: the files list, reviews and review comments are all readable
 with today's `pull-requests: read`, and Codex's reviews already re-run the
 gate through its summary comment edit. If a workflow change does turn out
 to be needed, the owner's login pushes that one commit, as with #87. Before
@@ -148,11 +172,15 @@ plus its deferred findings.
 2. **Should annotation rounds with screenshots qualify?** *Recommendation:
    not yet.* Images keep the code rule. Revisit if annotation pull requests
    start looping.
-3. **What about the deleted-comment gap?** It matters only on unprotected
-   docs paths: `STATUS.md`, `README.md`, and `docs/` outside `plans/` and
-   `decisions.md`. *Recommendation: accept it, and add one line to
-   AGENTS.md: no agent deletes or edits another account's review comments.*
-   Those paths need no code-owner approval, but they hold no rules.
+3. **What about the deleted-comment gap? (Awaiting owner.)**
+   *Recommendation, and the plan's default:* the P1-only rule applies
+   only to pull requests that touch a code-owner doc (section 1).
+   Unprotected docs alone keep the full clean rule, so the owner's
+   approval covers every pull request the relaxed rule passes.
+   *Alternative:* accept the gap on unprotected docs, and add a line to
+   `AGENTS.md` saying no agent deletes or edits another account's review
+   comments. The build follows the default unless the owner picks the
+   alternative.
 4. **Should a P1 on any earlier review of the same head still block?**
    *Recommendation: yes*, as specified above.
 5. **Should deferred findings have a cap, such as five P2s turning the
