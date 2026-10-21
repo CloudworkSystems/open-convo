@@ -2,6 +2,7 @@
 // Uses the workflow's own GITHUB_TOKEN; never logs it.
 
 const API = process.env.GITHUB_API_URL || 'https://api.github.com';
+const GRAPHQL = process.env.GITHUB_GRAPHQL_URL || `${API}/graphql`;
 
 export function repoFromEnv() {
   const full = process.env.GITHUB_REPOSITORY;
@@ -44,10 +45,20 @@ export function client(token = process.env.GITHUB_TOKEN) {
     return items;
   }
 
+  // GraphQL answers errors with status 200, so they're checked here.
+  async function graphql(query, variables) {
+    const { data } = await request('POST', GRAPHQL, { query, variables });
+    if (!data || data.errors?.length) {
+      throw new Error(`GraphQL failed: ${JSON.stringify(data?.errors ?? null).slice(0, 300)}`);
+    }
+    return data.data;
+  }
+
   return {
     get: (path) => request('GET', path).then((r) => r.data),
     post: (path, body) => request('POST', path, body).then((r) => r.data),
     patch: (path, body) => request('PATCH', path, body).then((r) => r.data),
     all,
+    graphql,
   };
 }
