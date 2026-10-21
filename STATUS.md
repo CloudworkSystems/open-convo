@@ -73,7 +73,7 @@ builds, Codex reviews). Plan:
 In review.
 
 **Household lists engine** (Family and Home), built by Codex alongside Site
-Engine; P2 follow-up implements the October 17 plan and purge guard; awaiting Claude review and planning check. Plan:
+Engine; P2 follow-up implements the October 17 plan and purge guard; the fixes merged as #71 on October 21. Plan:
 [docs/plans/household-lists-engine.md](docs/plans/household-lists-engine.md).
 First real use after step 5, synced through iCloud with the owner's approval.
 

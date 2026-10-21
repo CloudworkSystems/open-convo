@@ -80,108 +80,17 @@ team A; Site Engine "what changes", team B; visibility report, team C).
 Codex reviews each one, and a team starts as soon as its plan merges, so
 the three don't wait on each other.
 
-## (b) Narrow The Mac App's Protected Paths (Later Building PR)
+## (b) Narrow The Mac App's Protected Paths (Deferred)
 
 **Why.** Most Mac pull requests wait for the owner only because they touch
 `main.swift`, which holds a little sensitive code among a lot of ordinary
-code. `main.swift` stays protected for good, because it is where the app is
-put together, and a check that reads source text can't reliably prove that
-an unprotected file never reaches paid calls or keys. Instead, the
-*ordinary* code moves out into **separate targets**: Desk, dictation and
-other everyday code goes into new modules, each in its own folder under
-`apps/mac/Sources/` with its own entry in `Package.swift`, and the app
-imports them. `main.swift` shrinks to the wiring, paid-path and API-key
-code that needs the owner. Ordinary changes then touch only the new
-modules and stop waiting on him.
+code. Narrowing which files need his approval would let ordinary Desk and
+dictation changes stop waiting on him.
 
-**Every reason a file is protected today** (from `.github/CODEOWNERS`). The
-refactor keeps every one of these reasons covered:
-
-| Protected | Why |
-| --- | --- |
-| `AGENTS.md`, `CLAUDE.md`, `.github/` | The rules, the checks and CODEOWNERS itself |
-| `PLAN.md`, `docs/plans/`, `docs/decisions.md` | Owner decisions |
-| `ArchiveProtection` and its tests; files named `*Keychain*`, `*KeyProvider*`, `*Recovery*`, `*Cipher*`, `*Encryption*`, `*Seal*`, `ProofStore*`; `PayloadHash.swift`, `DeskSession.swift`, `DeskPaths.swift`, `DeskKeptStoreTests.swift` | Keys, encryption, recovery and protected storage |
-| `Participant*` modules and files, `ParticipantProcessTests`; files named `*PaidUsage*`, `*Availability*`, `*Wiring*` | Anything that can run a paid AI model, decide whether it is available, confirm or end paid use, or wire it into the app |
-| Files named `*OpenAI*`, `*Realtime*`, `*Groq*`, `*Anthropic*`, `*APIKey*` | Other paid cloud calls and API keys |
-| `ProtectionProofTests` | The storage protection proof |
-| `main.swift` | Two reasons: it wires storage and the paid path into the app, and it holds the OpenAI and Groq batch transcription requests and the API-key lookups (environment and Keychain) |
-| `Package.swift` | Decides which modules link, including the paid path, and declares the safety tests |
-| `DeskSessionParticipantTests.swift` | Forbids linking the participant path |
-
-`main.swift` keeps its protection permanently, and every other entry above
-stays as it is. **The whole app folder, `apps/mac/Sources/VoiceCursorMac/`,
-becomes protected too**, with one CODEOWNERS entry for the folder. The
-reason: `Package.swift` compiles every file in that folder into the app
-automatically, so a new, unprotected file added there would be compiled
-into the same module as the paid path and the API-key code, and could call
-them directly. Protecting the folder means nothing joins the app module
-without the owner.
-
-Protection narrows only for the new, separate targets. A new target is
-unprotected only when all of these hold:
-- it holds none of the reasons in the table above (no storage or key code,
-  no paid-path wiring, no paid-API request, no API-key lookup);
-- it depends on nothing in the paid or participant path (no `Participant*`
-  target, no `ParticipantAppWiring`) and on no protected-storage target;
-- the existing link-guard tests (`PaidUsageGateTests`,
-  `DeskSessionParticipantTests` and the `VoiceCursorPolicyCheck` command)
-  cover it, so linking it to the paid path later fails a test. Adding that
-  link would also need a `Package.swift` change, which the owner approves.
-
-A target that doesn't meet all three stays protected with its own
-CODEOWNERS entry in the same pull request.
-
-We chose this over a source-scan test that would let `main.swift` lose
-protection, because such a scan only finds the text it looks for: an
-unprotected file could build a provider address piece by piece, use a
-different networking call, or read a differently named key, and the scan
-would pass. Module boundaries are enforced by the compiler and the
-existing link-guard tests instead, and they fail safe.
-
-**What stays protected.** `Package.swift` stays owner-protected, along with
-any other build or test manifest that decides which modules link into the
-app or declares the safety tests. It decides whether the app links the paid
-participant path (`ParticipantAppWiring`) and declares the tests that catch
-a forbidden link; if anyone could change it without approval, the paid path
-could be linked in and its tests dropped. Protection narrows only for
-ordinary source files. Most Mac pull requests don't touch `Package.swift`,
-so the approval burden still drops.
-
-**Cost and risk.** One careful refactor that itself needs his approval (it
-touches every protected file). The risk is moving sensitive code somewhere
-unprotected; the pull request lists every move and the CODEOWNERS change side
-by side.
-
-**How we check it.** The app already links `ParticipantAppWiring` on
-purpose, so the check is "nothing changed", not "nothing is linked":
-
-- The pull request only moves code into new targets, adds their entries to
-  `Package.swift`, and adds `.github/CODEOWNERS` entries. No behavior
-  changes in the moved code.
-- Linking is unchanged except for the new targets: run
-  `swift package describe --type json` in `apps/mac` on `main` and on the
-  branch. Every existing target keeps exactly its dependencies, except that
-  the app target also depends on the new targets; each new target depends
-  on nothing in the paid, participant or protected-storage set. The pull
-  request includes both outputs or their comparison.
-- Every existing link-guard and safety test passes, none removed, skipped
-  or weakened: `PaidUsageGateTests` (which reads `Package.swift` and the
-  app's sources), `LocalConversationLaneTests`, `ProcessLauncherTests`, the
-  tripwire in `ParticipantWireTests`, `DeskSessionParticipantTests` and the
-  `VoiceCursorPolicyCheck` command. Where a test names a moved file by its
-  path, only that path string changes, and the pull request lists each one.
-- The pull request lists every block moved out of `main.swift` and each
-  other protected file, the new target it went to, and why that target
-  meets the three conditions above. The owner approves that list along with the change
-  (the pull request touches protected files, so it needs him anyway).
-- `.github/CODEOWNERS` still names `main.swift` and every other entry
-  above, and adds `/apps/mac/Sources/VoiceCursorMac/`; the pull request
-  only adds entries, never removes one.
-- The full `swift test` suite in `apps/mac` passes.
-
-**First step.** A building pull request after the Claude Code adapter's
-first code pull request, not this one.
+**Deferred.** Narrowing the Mac app's protected paths is deferred to its
+own plan, written when the refactor is ready. Until then all current
+CODEOWNERS protection stays as it is; nothing in this plan unprotects any
+Mac file.
 
 ## (c) Parallel Building Lanes
 
@@ -261,7 +170,8 @@ The owner said yes to all six recommendations on October 21.
 5. **Narrow the protected paths with a refactor (b)?** Recommendation: yes,
    as one building pull request after the adapter's first code pull request.
    **Answer:** yes, including updating a test's path string where it names
-   a moved file.
+   a moved file. How it is done is deferred to its own plan (see (b));
+   until then no Mac file loses protection.
 6. **One daily "Needs the owner" list instead of pings?** Recommendation:
    yes; tell us the time of day you want to read it. **Answer:** yes, at
    8:00 AM Eastern; it runs as a scheduled task on the owner's Mac.
