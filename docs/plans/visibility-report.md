@@ -49,10 +49,20 @@ node packages/visibility-report/src/report.mjs --findings <findings.json> [--jso
 **It never overwrites its input or one output with the other.** Before
 reading anything else, it refuses (with a plain message, writing nothing)
 when `--json` or `--md` names the findings file, or when `--json` and `--md`
-name the same file. Paths are compared after resolving them fully, so a
-relative path, a `..`, a symbolic link or a hard link to the same file
-counts as the same file (for files that already exist, the check compares
-the file's device and inode numbers).
+name the same file. Two paths count as the same file when any of these
+holds:
+- they are equal after resolving them fully (a relative path, a `..` or a
+  symbolic link);
+- both exist and have the same device and inode numbers (a hard link);
+- their fully resolved paths are equal after Unicode NFC normalization and
+  lowercasing, because on a case-insensitive file system (the macOS
+  default) `Report.md` and `report.md` are one file even before either
+  exists.
+
+The same three rules apply to every pair: each output against the findings
+file, and the two outputs against each other. On a case-sensitive file
+system the third rule may refuse two paths that are really different; that
+is deliberate, since a refusal costs only a renamed output.
 
 ## The Findings File
 
@@ -226,10 +236,25 @@ its problems, and the report names every problem in it.
   characters that would make a link, image, heading, list item or HTML tag
   are escaped; only source URLs that passed the `https://` check become
   links.
+- **Bare web and email addresses in text stay plain.** Some Markdown
+  renderers (GitHub's among them) turn a bare `https://...`, `www....` or
+  email address in ordinary text into a clickable link. So in every text
+  field copied from the findings (names, labels, locators, details), each
+  word that could become one is written as an inline code span, which
+  renders as readable plain text and is never turned into a link. A word
+  here is a run of characters without spaces, and it is wrapped when it
+  contains `://`, starts with `www.` (any case), starts with `mailto:` or
+  `xmpp:`, or contains `@`. The code span uses a run of backticks one
+  longer than the longest run of backticks inside the word, with a space
+  on each side when the word starts or ends with a backtick, as CommonMark
+  requires; the word's own characters are not otherwise escaped inside it.
+  Only source URLs, written as links as below, are clickable.
 - **Link addresses are made safe before they go in the Markdown.** A source
   URL is written as a link destination wrapped in angle brackets
   (`[label](<https://...>)`), after percent-encoding every `<` (`%3C`), `>`
-  (`%3E`), space (`%20`), `(` (`%28`), `)` (`%29`) and backslash (`%5C`).
+  (`%3E`), space (`%20`), `(` (`%28`), `)` (`%29`), backslash (`%5C`) and
+  `&` (`%26`, so an entity such as `&copy;` can't be decoded inside the
+  link).
   A URL containing a line break, tab or any other control character
   (U+0000 to U+001F, U+007F to U+009F, U+2028, U+2029) can't be made safe
   and is refused when the findings file is read, with a plain message
@@ -297,7 +322,16 @@ addresses and 555 phone numbers). At least:
     (`https://a.example/x) [y](https://evil.example`) render as exactly
     one link, wrapped in `<...>` with those characters percent-encoded, and
     a source URL with a line break, a tab or U+2028 is refused with a
-    message naming the finding.
+    message naming the finding. A source URL containing `&copy;` and
+    `&amp;` renders with each `&` as `%26`, and the rendered link's address
+    contains no `©`.
+10a. Bare addresses: a business name, a locator and a `wrongDetails` text
+    containing `https://evil.example/x`, `www.evil.example`,
+    `owner@evil.example`, `mailto:owner@evil.example` and a word with a
+    backtick in it each come out as inline code spans, and rendering the
+    report with a GitHub-flavored Markdown renderer (a dev dependency for
+    tests only, listed with its license) produces no link other than the
+    source links.
 11. No network, enforced at run time. Every test runs with network access
     blocked. A shared test setup replaces each network entry point that
     Node 22's built-in modules offer with a function that records the call
@@ -338,8 +372,10 @@ addresses and 555 phone numbers). At least:
     call. Stubbing every network entry point works on Node 22 and fails
     loudly if anything tries.
 12. Output paths: `--json` or `--md` naming the findings file (directly,
-    through `..`, through a symbolic link, or through a hard link), and
-    `--json` and `--md` naming the same file, are each refused, and the
+    through `..`, through a symbolic link, through a hard link, or with
+    different letter case, such as `FINDINGS.json` for `findings.json`),
+    and `--json` and `--md` naming the same file (including `Out.md` and
+    `out.md`, neither of which exists yet), are each refused, and the
     findings file is byte-for-byte unchanged afterwards.
 13. Details and status: for each kind, details that record each problem in
     its row give exactly that rank; a status that disagrees with the details
