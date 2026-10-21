@@ -234,8 +234,9 @@ its problems, and the report names every problem in it.
   shown as given; this rule is about the renderer's words, not the data.
 - **Text from the findings is shown as plain text.** In the Markdown,
   characters that would make a link, image, heading, list item or HTML tag
-  are escaped; only source URLs that passed the `https://` check become
-  links.
+  are escaped, and every `&` is written as `&amp;`, so text such as
+  `&copy;` shows literally instead of becoming `©`. Only source URLs that
+  passed the `https://` check become links.
 - **Bare web and email addresses in text stay plain.** Some Markdown
   renderers (GitHub's among them) turn a bare `https://...`, `www....` or
   email address in ordinary text into a clickable link. So in every text
@@ -247,14 +248,19 @@ its problems, and the report names every problem in it.
   `xmpp:`, or contains `@`. The code span uses a run of backticks one
   longer than the longest run of backticks inside the word, with a space
   on each side when the word starts or ends with a backtick, as CommonMark
-  requires; the word's own characters are not otherwise escaped inside it.
+  requires; the word's own characters, `&` included, are not otherwise
+  escaped inside it, because CommonMark shows code spans exactly as written
+  and decodes no entities there.
   Only source URLs, written as links as below, are clickable.
 - **Link addresses are made safe before they go in the Markdown.** A source
   URL is written as a link destination wrapped in angle brackets
   (`[label](<https://...>)`), after percent-encoding every `<` (`%3C`), `>`
-  (`%3E`), space (`%20`), `(` (`%28`), `)` (`%29`), backslash (`%5C`) and
-  `&` (`%26`, so an entity such as `&copy;` can't be decoded inside the
-  link).
+  (`%3E`), space (`%20`), `(` (`%28`), `)` (`%29`) and backslash (`%5C`).
+  Every `&` is written as the entity `&amp;`: CommonMark decodes it back to
+  `&`, so the link's address is exactly the URL (a query string such as
+  `?a=1&b=2` keeps both parameters), while something like `&copy;` in the
+  URL becomes `&amp;copy;` and is never decoded into `©`. (Percent-encoding
+  `&` as `%26` would change what the link points to, so it isn't used.)
   A URL containing a line break, tab or any other control character
   (U+0000 to U+001F, U+007F to U+009F, U+2028, U+2029) can't be made safe
   and is refused when the findings file is read, with a plain message
@@ -322,9 +328,13 @@ addresses and 555 phone numbers). At least:
     (`https://a.example/x) [y](https://evil.example`) render as exactly
     one link, wrapped in `<...>` with those characters percent-encoded, and
     a source URL with a line break, a tab or U+2028 is refused with a
-    message naming the finding. A source URL containing `&copy;` and
-    `&amp;` renders with each `&` as `%26`, and the rendered link's address
-    contains no `©`.
+    message naming the finding. Rendering the Markdown with the
+    GitHub-flavored renderer from test 10a: a source URL ending
+    `?a=1&b=2` gives a link whose address ends exactly `?a=1&b=2`; a source
+    URL containing `&copy;` gives a link whose address contains `&copy;`
+    and no `©`; a business name, label and locator containing `&copy;` and
+    `AT&T` show exactly that text, with no `©`; and the same inside a word
+    wrapped as a code span shows `&copy;` as written.
 10a. Bare addresses: a business name, a locator and a `wrongDetails` text
     containing `https://evil.example/x`, `www.evil.example`,
     `owner@evil.example`, `mailto:owner@evil.example` and a word with a
