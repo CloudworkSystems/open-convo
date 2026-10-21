@@ -174,10 +174,10 @@ who has started.
 
 `renderSvg(grid)` returns one self-contained SVG. It does not load a font,
 image, or stylesheet. The title and description ids are built from the grid type, the person
-id, the grid id, and the start date. Each piece keeps its own length and
-escapes other characters, so a tracker and a stack that share an id, `ab`
-and `a.b`, or `a-b` with `c` and `a` with `b-c`, do not share an id on one
-page. Square `date`, `state`, and `shade` are escaped before
+id, the grid id, and the start and end dates. Each piece keeps its own length and
+escapes other characters, so a tracker and a stack that share an id, two
+ranges with the same start and a different end, `ab` and `a.b`, or `a-b`
+with `c` and `a` with `b-c`, do not share an id on one page. Square `date`, `state`, and `shade` are escaped before
 they are written into attributes, so a hand-built grid cannot add an event
 handler. Ember values come from `brand/tokens.css`: page
 `#15110f`, text `#f7f2ee`, body `#cec3bc`, magenta `#c8298b`, coral `#f37a4a`,

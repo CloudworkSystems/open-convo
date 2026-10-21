@@ -923,7 +923,7 @@ export function renderSvg(grid) {
   const initials = { sunday: 'S', monday: 'M', tuesday: 'T', wednesday: 'W', thursday: 'T', friday: 'F', saturday: 'S' };
   const chunks = [];
   const namespace = grid.kind === 'stack' ? 'stack' : 'tracker';
-  const label = `habit-${svgIdPart(namespace)}-${svgIdPart(grid.personId)}-${svgIdPart(grid.id ?? 'grid')}-${svgIdPart(grid.start)}`;
+  const label = `habit-${svgIdPart(namespace)}-${svgIdPart(grid.personId)}-${svgIdPart(grid.id ?? 'grid')}-${svgIdPart(grid.start)}-${svgIdPart(grid.end)}`;
   chunks.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="${label}-title ${label}-desc">`);
   chunks.push(`<title id="${label}-title">${escapeXml(grid.name || 'Habit grid')}</title>`);
   chunks.push(`<desc id="${label}-desc">${escapeXml(`Days from ${grid.start} to ${grid.end}. Week starts on ${grid.weekStartsOn}. Full days show a check mark. Rest days show a circle and a bar. Done days show a diamond that grows with the shade. Partial days show bars. Open days are dashed. Empty days are an outline.`)}</desc>`);
