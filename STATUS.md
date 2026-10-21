@@ -77,8 +77,7 @@ Engine; implemented, tests pass; its review fixes are in review as #71. Plan:
 [docs/plans/household-lists-engine.md](docs/plans/household-lists-engine.md).
 First real use after step 5, synced through iCloud with the owner's approval.
 
-**Habit grid engine** (Personal), in review as #74; its builder is fixing
-the review findings.
+**Habit grid engine** (Personal), implemented; tests pass; awaiting Codex review and the planning check.
 Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
 **Annotation rounds checker** (Code), GrokBot (team A) builds, Codex reviews; plan in review in its own pull request (`OC-261021-plan-annotation-rounds`).
