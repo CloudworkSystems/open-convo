@@ -78,8 +78,10 @@ reads from and writes to `CloudworkSystems/open-convo`.
     pull request's own changes the same needs no new Claude review. Any
     session that finds an open P1 or P2 in Claude's review may switch
     auto-merge off, with a comment saying why.
-  - A green "Ready to merge" button means no conflicts, not approval. Claude
-    tells the owner in chat when a pull request waits on his approval.
+  - A green "Ready to merge" button means no conflicts, not approval. Pull
+    requests waiting on the owner's approval go on the daily 8 AM "Needs the
+    owner" list; Claude messages him in chat only for urgent or blocked items
+    (owner decision, October 21).
 - *Proposed October 15, pending the owner's approval at merge:* every review,
   by any agent or the owner, asks two questions of each change. Does it break
   a rule of this system? Does it fix a problem the owner actually has?
