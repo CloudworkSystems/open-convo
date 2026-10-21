@@ -325,9 +325,12 @@ Pure-function tests beside the existing gate tests:
    reviewers? *Recommend Codex only; simpler, and builders can split PRs.*
 5. **Bad markers:** leave the status pending with a reason, rather than red?
    *Recommend pending; red stays stuck until the next event and adds noise.*
-6. **Today's gate, edited Codex comments:** fix the hole described in
-   "Today's Gate: Deletion And Editing" now, in its own small pull request
-   ahead of 2a? *Recommend yes; the gate is live on `main`.*
+6. **Today's gate, dismissed Codex reviews:** treat a dismissed Codex
+   review as blocking unless the owner account dismissed it, as 2a does for
+   findings reviews? *Recommend yes, in its own small pull request; today
+   Codex posts "Comment" reviews, which can't be dismissed, so this only
+   guards against a future change in how Codex reviews.* (The editing hole
+   in "Today's Gate" needs no new pull request: #88 fixes it.)
 7. **STATUS.md in builder pull requests:** builders leave it alone and the
    planning session updates it (A), or a per-module paragraph exception (B)?
    *Recommend A: simpler and safer gate code, at the cost of one small docs
@@ -351,9 +354,7 @@ way. Checked against the script:
   the summary) is a *clean* signal, so deleting one can only remove a
   reason to pass. Reactions can only be removed by their author.
   Remaining edge: the script skips `DISMISSED` reviews. If Codex ever posted
-  "Request changes", the bot could dismiss it. Recommend treating a
-  dismissed Codex review as blocking unless the owner dismissed it, as for
-  2a.
+  "Request changes", the bot could dismiss it (owner question 6).
 - **Editing: a real hole.** Write users can edit other accounts' comments,
   and an edited comment keeps its original author. The bot could edit any
   old Codex comment on a pull request to read "Didn't find any major issues"
@@ -362,14 +363,13 @@ way. Checked against the script:
   `codex-approved` green. Editing the summary comment's review-state block
   could do the same through signal 2. The author is shown correctly; the
   words aren't Codex's.
-- **Recommended fix (code, its own pull request, not this one):** accept a
-  Codex comment as a signal only if every edit to it was made by Codex.
-  GitHub's GraphQL API lists each edit and its editor (`userContentEdits`).
-  Ignore the comment if any editor isn't Codex, or if the edit history can't
-  be read. The summary comment is edited by Codex itself, so "never edited"
-  alone would break signals 2 and 3. Add tests for an edited clean comment
-  and an edited review state. Until then, a builder could slip a pull
-  request past Codex, though protected paths still need the owner.
+- **Fixed by #88** (`OC-261020-gate-edited-comments`, waiting for the
+  owner's approval; no new pull request needed). It accepts a Codex comment
+  as a signal only if GitHub's edit history (`userContentEdits`) shows Codex
+  made every edit, and it fails closed when the history can't be read.
+  (A plain "never edited" rule wouldn't work, because Codex edits its own
+  summary comment.) Until #88 merges, a builder could slip a pull request
+  past Codex, though protected paths still need the owner.
 
 ## Codex Rounds (P1s Written In As Requirements)
 
