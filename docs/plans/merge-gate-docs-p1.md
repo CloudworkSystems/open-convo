@@ -153,14 +153,26 @@ this:
 **Recommended: a small merge-time workflow (option a).** It's
 `.github/workflows/deferred-findings.yml`, on `pull_request_target: closed`,
 and runs only when the pull request merged. Like the gate, it runs `main`'s
-copy and never checks out pull request code. It reads Codex's reviews and
-inline comments from the API, keeps only trusted ones (#88's edit rule), and
-appends one comment to the single open issue titled **Deferred doc
-findings**:
+copy and never checks out pull request code.
+
+**Which pull requests.** It uses the same docs-only classification as the
+gate (section 1, including the scope the owner picks in question 3), from
+the same shared module. Any other pull request is skipped with a log line
+and nothing is written: code pull requests can't merge with open findings
+anyway.
+
+**Which findings.** It reads only the findings on the merged head commit:
+the Codex reviews whose `commit_id` is that head (minus any the owner
+dismissed, per #90), and their inline comments, matched by review as in
+section 2. It keeps only trusted comments (#88's edit rule). Findings on
+earlier commits are left out, because a later commit may have fixed them
+and the gate never judged them on the merged head. It then appends one
+comment to the single open issue titled **Deferred doc findings**:
 
 - the merged head;
-- each deferred P2 and P3 with its link;
-- any P1 found there after the gate's final read (see "What's left").
+- each deferred P2 and P3 on that head, with its link;
+- any P1 on that head found after the gate's final read (see "What's
+  left").
 
 **Permissions.** `issues: write`, `pull-requests: read`, `contents: read`,
 nothing else. It's a separate workflow, so the gate keeps its read-only
@@ -230,6 +242,11 @@ change:
 - deferred findings: the comment body for a merged pull request lists its
   P2s and P3s, skips untrusted comments, flags a late P1, and is skipped
   when the marker is already present;
+- deferred findings only on the merged head: a P2 on an earlier commit is
+  left out;
+- deferred findings only for docs-only pull requests: a merged code pull
+  request (or, under the alternative, an unprotected docs pull request)
+  writes nothing;
 - the existing suite unchanged, with code pull requests on the full rule.
 
 ## 6. Rollout
