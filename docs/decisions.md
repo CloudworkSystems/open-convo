@@ -6,6 +6,11 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 21:** Pi Durable (MIT, from the makers of Pi) is the foundational
+  multi-agent framework for step 6, accepted as experimental: pinned to an
+  exact version, reached only through Open Convo's own thin layer, attribution
+  headers off, storage in the owner's protected space, and every tool marked
+  safe or unsafe to run twice (docs/design-notes/durable-agents.md).
 - **Oct 21:** The PR steward counts as part of the planning side: after its
   own passing planning check on an outside builder's pull request, it may
   switch on auto-merge, and it may post the `@codex review` fallback when a
