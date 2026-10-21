@@ -267,7 +267,11 @@ tracker and emptying it later does not remove the reused check-in. A cutoff
 copied from another tracker's fence is not that empty, so it does not erase
 history of a different tracker the check-in left. A replica that merely lacks
 one of those trackers, and whose purge was copied from a different tracker's
-fence, does not erase it either.
+fence, does not erase it either. A file saved before `emptied` was stored
+still counts when that purge is the check-in's own: it is not the person
+cutoff, and it is not the cutoff of a tracker the check-in still names. An
+`emptied` stamp with no purge, or newer than the check-in's purge, is refused.
+History stamped at or before that empty is refused too.
 
 Check-ins merge as records by ID. The same ID arriving twice counts once.
 Two devices' different IDs on the same tracker and date both survive, and the

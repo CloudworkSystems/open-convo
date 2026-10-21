@@ -142,7 +142,7 @@ function canonicalRecord(record, withMembers, withHistory = false) {
   return result;
 }
 function canonical(person) {
-  return {
+  return migrateLegacyEmptied({
     schemaVersion: SCHEMA_VERSION,
     id: person.id,
     life: clone(person.life),
@@ -152,7 +152,17 @@ function canonical(person) {
     stacks: person.stacks.map(record => canonicalRecord(record, true)).sort(byId),
     checkIns: person.checkIns.map(record => canonicalRecord(record, false, true)).sort(byId),
     restDays: person.restDays.map(record => canonicalRecord(record, false)).sort(byId),
-  };
+  });
+}
+function migrateLegacyEmptied(person) {
+  const cutoffs = new Map();
+  for (const tracker of person.trackers) if (validStamp(tracker.purge)) cutoffs.set(tracker.id, tracker.purge);
+  for (const record of person.checkIns) {
+    if (validStamp(record.emptied)) continue;
+    const emptied = ownEmptyStamp(record, cutoffs, person.purge);
+    if (emptied) record.emptied = clone(emptied);
+  }
+  return person;
 }
 const SHAPE_KEYS = ['kind', 'target', 'unit'];
 const TRACKER_KEYS = ['name', 'color', 'kind', 'target', 'unit', 'usualAmount', 'schedule', 'startedOn'];
@@ -269,7 +279,7 @@ function mergeFencedChildren(left, right, parentPurge, cutoffs, recordKind) {
       false,
       recordKind,
     );
-    if (recordKind === 'checkIn') rememberCheckInTrackers(merged, leftRecord, rightRecord);
+    if (recordKind === 'checkIn') rememberCheckInTrackers(merged, leftRecord, rightRecord, cutoffs, parentPurge);
     return fencedByTracker(merged, cutoffs);
   });
 }
@@ -285,24 +295,48 @@ function rememberLeftBehind(history, source, keptFields) {
   if (keptFields && own(keptFields, 'trackerId') && keptFields.trackerId.value === tracker.value) return;
   rememberTracker(history, tracker.value, tracker.stamp);
 }
-function purgeErasedHistory(record, stamp) {
-  if (!validStamp(record?.emptied) || compareStamps(stamp, record.emptied) > 0) return null;
-  return record.emptied;
+function ownEmptyStamp(record, trackerCutoffs, parentPurge) {
+  if (!record) return null;
+  if (validStamp(record.emptied)) return record.emptied;
+  if (!validStamp(record.purge)) return null;
+  if (validStamp(parentPurge) && compareStamps(record.purge, parentPurge) === 0) return null;
+  if (object(record.formerTrackers) && Object.keys(record.formerTrackers).length > 0) return null;
+  const associated = associatedTrackerIds(record);
+  for (const id of associated) {
+    const cutoff = trackerCutoffs.get(id);
+    if (cutoff && compareStamps(record.purge, cutoff) === 0) return null;
+  }
+  if (associated.length === 0) {
+    for (const cutoff of trackerCutoffs.values()) {
+      if (compareStamps(record.purge, cutoff) === 0) return null;
+    }
+  }
+  return record.purge;
 }
-function rememberCheckInTrackers(merged, leftRecord, rightRecord) {
+function purgeErasedHistory(record, stamp, trackerCutoffs, parentPurge) {
+  const emptied = ownEmptyStamp(record, trackerCutoffs, parentPurge);
+  if (!emptied || compareStamps(stamp, emptied) > 0) return null;
+  return emptied;
+}
+function rememberCheckInTrackers(merged, leftRecord, rightRecord, trackerCutoffs, parentPurge) {
   const history = records(leftRecord?.formerTrackers ?? {}, rightRecord?.formerTrackers ?? {}, null);
   rememberLeftBehind(history, leftRecord, merged.fields);
   rememberLeftBehind(history, rightRecord, merged.fields);
   const losing = losingTracker(leftRecord, rightRecord);
   if (losing) rememberTracker(history, losing.value, losing.stamp);
   const kept = Object.values(merged.fields ?? {});
+  const emptied = latest(
+    ownEmptyStamp(leftRecord, trackerCutoffs, parentPurge),
+    ownEmptyStamp(rightRecord, trackerCutoffs, parentPurge),
+  );
+  if (validStamp(emptied)) merged.emptied = clone(emptied);
   for (const id of Object.keys(history)) {
     const cutoff = latest(
-      purgeErasedHistory(leftRecord, history[id].stamp),
-      purgeErasedHistory(rightRecord, history[id].stamp),
+      purgeErasedHistory(leftRecord, history[id].stamp, trackerCutoffs, parentPurge),
+      purgeErasedHistory(rightRecord, history[id].stamp, trackerCutoffs, parentPurge),
     );
     const newerEpoch = kept.length > 0 && kept.every(entry => compareStamps(entry.stamp, cutoff) > 0);
-    if (cutoff && newerEpoch) delete history[id];
+    if (cutoff && (kept.length === 0 || newerEpoch)) delete history[id];
   }
   const current = merged.fields?.trackerId?.value;
   if (typeof current === 'string' && own(history, current)) delete history[current];
@@ -497,6 +531,12 @@ function validate(person) {
 function validateEmptied(record, allowed) {
   if (!own(record, 'emptied')) return;
   if (!allowed || !validStamp(record.emptied)) fail('Invalid check-in empty stamp in person file.');
+  if (!validStamp(record.purge) || compareStamps(record.emptied, record.purge) > 0) fail('Invalid check-in empty stamp in person file.');
+  const history = record.formerTrackers;
+  if (!object(history)) return;
+  for (const entry of Object.values(history)) {
+    if (object(entry) && validStamp(entry.stamp) && compareStamps(entry.stamp, record.emptied) <= 0) fail('Check-in history is older than its empty stamp.');
+  }
 }
 function validateCheckInHistory(record, allowed) {
   if (!own(record, 'formerTrackers')) return;

@@ -1931,3 +1931,65 @@ test('a check-in emptied with its former tracker does not lose the reused check-
   purged.emptyTrash(again);
   assert.equal(purged.view(again).checkIns.find(item => item.id === 'glass').value, 9);
 });
+
+test('a legacy check-in purge still erases history saved before the empty was recorded', () => {
+  const home = fixed('phone-a', 100);
+  const away = fixed('phone-b', 100);
+  const id = home.createPerson('River', { id: 'river' });
+  home.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  home.addTracker(id, { name: 'Steps', kind: 'count', target: 8, unit: 'steps' }, { trackerId: 'steps' });
+  away.importPerson(home.getPerson(id));
+  home.logCheckIn(id, 'water', { date: '2026-03-04', value: 5, checkInId: 'glass' });
+  home.editCheckIn(id, 'glass', { trackerId: 'steps' });
+  away.importPerson(home.getPerson(id));
+  home.deleteCheckIn(id, 'glass');
+  home.deleteTracker(id, 'water');
+  home.emptyTrash(id);
+  const glassPurge = home.getPerson(id).checkIns.find(item => item.id === 'glass').purge;
+  home.logCheckIn(id, 'steps', { date: '2026-03-05', value: 9, checkInId: 'glass' });
+  const legacy = home.getPerson(id);
+  delete legacy.checkIns.find(item => item.id === 'glass').emptied;
+  const joined = converges(legacy, away.getPerson(id));
+  const glass = joined.checkIns.find(item => item.id === 'glass');
+  assert.equal(glass.life.value, true);
+  assert.equal(glass.fields.value.value, 9);
+  assert.equal(glass.formerTrackers, undefined);
+  assert.equal(compareStamps(glass.emptied, glassPurge), 0);
+  const revived = fixed('phone-c', 100);
+  revived.importPerson(joined);
+  revived.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  revived.deleteTracker(id, 'water');
+  revived.emptyTrash(id);
+  assert.equal(revived.view(id).checkIns.find(item => item.id === 'glass').value, 9);
+});
+
+test('an empty stamp that disagrees with the check-in purge is refused', () => {
+  const engine = fixed('phone-a', 100);
+  const id = engine.createPerson('River', { id: 'river' });
+  engine.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  engine.addTracker(id, { name: 'Steps', kind: 'count', target: 8, unit: 'steps' }, { trackerId: 'steps' });
+  engine.logCheckIn(id, 'water', { date: '2026-03-04', value: 5, checkInId: 'glass' });
+  engine.editCheckIn(id, 'glass', { trackerId: 'steps' });
+  const olderHistory = engine.getPerson(id);
+  const glass = olderHistory.checkIns.find(item => item.id === 'glass');
+  glass.purge = null;
+  glass.emptied = { counter: 1, time: 100, device: 'phone-a' };
+  glass.formerTrackers.water.stamp = { counter: 1, time: 100, device: 'phone-a' };
+  assert.throws(() => deserializePerson(JSON.stringify(olderHistory)), /Invalid check-in empty stamp/);
+  assert.throws(() => mergePeople(olderHistory, olderHistory), /Invalid check-in empty stamp/);
+
+  const ahead = engine.getPerson(id);
+  const moved = ahead.checkIns.find(item => item.id === 'glass');
+  moved.purge = { counter: 1, time: 100, device: 'phone-a' };
+  moved.emptied = { counter: 2, time: 100, device: 'phone-a' };
+  delete moved.formerTrackers;
+  assert.throws(() => deserializePerson(JSON.stringify(ahead)), /Invalid check-in empty stamp/);
+
+  const staleHistory = engine.getPerson(id);
+  const kept = staleHistory.checkIns.find(item => item.id === 'glass');
+  kept.purge = { counter: 1, time: 100, device: 'phone-a' };
+  kept.emptied = { counter: 1, time: 100, device: 'phone-a' };
+  kept.formerTrackers.water.stamp = { counter: 1, time: 100, device: 'phone-a' };
+  assert.throws(() => deserializePerson(JSON.stringify(staleHistory)), /Check-in history is older than its empty stamp/);
+  assert.throws(() => mergePeople(staleHistory, staleHistory), /Check-in history is older than its empty stamp/);
+});
