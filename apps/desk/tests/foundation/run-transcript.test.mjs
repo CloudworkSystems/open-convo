@@ -108,13 +108,18 @@ test('shows only the exact persisted prefix and pending tail, including a saved 
   const page = await open(t);
   assert.equal(await page.locator('[data-saved-output]').textContent(), 'Saved prefix');
   assert.equal(await page.locator('[data-pending-output]').textContent(), ' and pending tail');
-  await expect(page.locator('.run-save-state')).toContainText('Saved through update 2. Newer updates are not yet saved.');
+  await expect(page.locator('.run-save-state')).toContainText('Some of this reply isn’t saved yet.');
+  await expect(page.locator('.run-save-state')).toHaveAttribute('data-saved-sequence', '2');
   await page.evaluate(() => window.renderTranscript({ savedSequence: 0, savedOutput: '' }));
-  await expect(page.locator('.run-save-state')).toContainText('Saved through update 0.');
+  await expect(page.locator('.run-save-state')).toContainText('Some of this reply isn’t saved yet.');
+  await expect(page.locator('.run-save-state')).toHaveAttribute('data-saved-sequence', '0');
   assert.equal(await page.locator('[data-pending-output]').textContent(), 'Saved prefix and pending tail');
   await page.evaluate(() => window.renderTranscript({ savedSequence: 4, savedOutput: 'Saved prefix and pending tail' }));
   await expect(page.locator('.run-save-state')).toHaveAttribute('data-save-state', 'saved');
-  await expect(page.locator('.run-save-state')).toHaveText('Saved through update 4.');
+  await expect(page.locator('.run-save-state')).toHaveAttribute('data-saved-sequence', '4');
+  await expect(page.locator('.run-save-state')).toHaveText('Saved on this Mac.');
+  // Step 3 trial: the internal update count is never shown as words.
+  await expect(page.locator('.run-save-state')).not.toContainText('update');
 });
 
 test('the exact pending tail is visibly marked and described in light and dark themes without changing response text', async (t) => {
@@ -143,10 +148,10 @@ test('does not guess a text boundary or display a mismatched saved prefix', asyn
   const props = fixture(); delete props.savedOutput;
   const page = await open(t, props);
   assert.equal(await page.locator('[data-saved-output], [data-pending-output]').count(), 0);
-  await expect(page.locator('.run-save-state')).toContainText('Newer updates are not yet saved.');
+  await expect(page.locator('.run-save-state')).toContainText('Some of this reply isn’t saved yet.');
   await page.evaluate(() => window.renderTranscript({ savedOutput: 'unrelated invented response' }));
   await expect(page.locator('.run-save-state')).toHaveAttribute('data-save-state', 'unknown');
-  await expect(page.locator('.run-save-state')).toContainText('could not be verified');
+  await expect(page.locator('.run-save-state')).toContainText('couldn’t check whether this reply is saved');
   assert.equal(await page.locator('.run-output').textContent(), props.run.outputChunks.join(''));
   await expect(page.getByRole('region', { name: 'Run transcript' })).not.toContainText('unrelated invented response');
 });
@@ -154,7 +159,7 @@ test('does not guess a text boundary or display a mismatched saved prefix', asyn
 test('Stop remains clickable during blocked saving and an unknown result requires an explicit retry', async (t) => {
   const props = fixture(); props.saving = true; props.error = 'Invented storage failure'; props.savedSequence = null;
   const page = await open(t, props);
-  await expect(page.locator('.run-save-state')).toContainText('Save not yet confirmed.');
+  await expect(page.locator('.run-save-state')).toContainText('This reply isn’t saved yet.');
   await expect(page.getByRole('alert')).toHaveText('Invented storage failure');
   await page.getByRole('button', { name: 'Stop', exact: true }).click();
   assert.equal(await page.evaluate(() => window.stopCalls), 1);
@@ -209,7 +214,7 @@ test('closed or interrupted runs keep their literal prefix and never claim a com
   const page = await open(t, props);
   await expect(page.getByRole('status')).toHaveText('Closed with outcome unknown');
   await expect(page.locator('.run-save-state')).toHaveAttribute('data-save-state', 'pending');
-  await expect(page.locator('.run-save-state')).toContainText('Run status changes are not yet saved.');
+  await expect(page.locator('.run-save-state')).toContainText('The reply is saved, but its latest status isn’t saved yet.');
   await page.evaluate(() => window.renderTranscript({ checkpointPending: false }));
   await expect(page.locator('.run-save-state')).toHaveAttribute('data-save-state', 'saved');
   await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeDisabled();
@@ -471,7 +476,7 @@ test('a stopped local reply with cleared cleanup shows no provider line, and Sto
   props.stopState = 'confirmed';
   props.canStop = false;
   const page = await open(t, props);
-  await expect(page.getByRole('status')).toHaveText('Stopped. The reply so far is kept.');
+  await expect(page.getByRole('status')).toHaveText('Stopped on this Mac. The reply so far is kept.');
   await expect(page.locator('[data-cleanup-state]')).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Run transcript' })).not.toContainText(/provider|cancellation|process/i);
   // Stop confirmed while the run's own ending is still on its way.

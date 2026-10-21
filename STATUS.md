@@ -1,6 +1,6 @@
 # Status
 
-Updated October 18, 2026. The short version of where the build is. The full
+Updated October 20, 2026. The short version of where the build is. The full
 plan is in [PLAN.md](PLAN.md).
 
 ## Now
@@ -35,8 +35,17 @@ invented chats only, while the step 2 trial is pending. Scope:
 | PR 4a: Desk wiring: local model picker, context, reply, Stop, Retry (nothing turned on) | Merged (#54) |
 | PR 4b: Turn on the local route in the Mac app (True Convo Test only), default `qwen3:8b` | Merged (#61) |
 | PR 4c: Fake-Ollama host cases in the shared local vectors (26 cases, both sides) | Merged (#62) |
-| PR 5: Scripted kill-mid-reply proof | In review |
+| PR 5: Scripted kill-mid-reply proof | Merged (#65) |
 | PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-3-owner-trial.md)) | Waiting on the owner |
+| Trial fixes (Stop, Ollama notice) | In review |
+
+**Next build: the Claude Code adapter** (right after step 3; invented
+chats only). Scope:
+[docs/plans/claude-code-adapter.md](docs/plans/claude-code-adapter.md).
+
+| Part | State |
+| --- | --- |
+| PR 1: Scope | In review |
 
 ## Done
 
@@ -51,7 +60,7 @@ invented chats only, while the step 2 trial is pending. Scope:
 
 ## Next
 
-- The Claude Code adapter, right after step 3.
+- The Claude Code adapter (started; see Now).
 - Then a thin Canvas/Atlas/Navigator knowledge view.
 4. Clarity tools in the conversation ("Wait—what?" on a local model).
 5. Chosen memory in separate spaces.
@@ -74,9 +83,15 @@ Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:
-[docs/plans/merge-gate.md](docs/plans/merge-gate.md). Checks built but not
-switched on; next, the owner's bot account and the scratch-branch tests.
-Until those pass, the owner merges by hand.
+[docs/plans/merge-gate.md](docs/plans/merge-gate.md). Switched on for `main`
+October 20 after the scratch-branch tests passed. The bot account
+(`cloudwork-bot`) exists and builders open pull requests with it. Codex doesn't
+review the bot's pull requests yet; until it does, the session that opened the
+pull request asks for each Codex review from the owner's account.
+October 20 fix (OC-261020-gate-package-tests): `tests` now also runs
+`npm test` for every other folder in `packages/` that a pull request changes
+(Site Engine, household lists, and new ones such as the habit grid), found
+by folder so new packages are covered automatically.
 
 ## Owner Decisions
 

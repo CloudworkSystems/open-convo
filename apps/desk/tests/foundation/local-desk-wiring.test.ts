@@ -331,7 +331,8 @@ test('a local reply counts as started only after the Mac reported started', () =
   assert.deepEqual([stoppedBefore, failedBefore, runningNow, stoppedAfter, run('Q.', 'A.')].map(localRunStarted), [false, false, true, true, true]);
   assert.equal(localRunOutcome(stoppedBefore), 'Stopped before any reply started.');
   assert.match(localRunOutcome(failedBefore)!, /^No reply started/);
-  assert.equal(localRunOutcome(stoppedAfter), 'Stopped. The reply so far is kept.');
+  assert.equal(localRunOutcome(stoppedAfter), 'Stopped on this Mac. The reply so far is kept.');
+  assert.equal(localRunOutcome({ ...stoppedAfter, reason: 'stop-incomplete' }), 'Stopped. The reply so far is kept.');
 });
 
 // Step 3 PR 4b: the owner's default model and the hidden Claude entry (decisions, October 16).

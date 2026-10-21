@@ -243,7 +243,9 @@ export function localRunOutcome(run: Readonly<ConversationRun>): string | undefi
   if (run.closure?.kind === 'unknown') return 'Reply cut off. The text so far is kept; the Mac never recorded how it ended.';
   switch (run.phase) {
     case 'completed': return 'Reply complete · stayed on this Mac';
-    case 'stopped': return 'Stopped. The reply so far is kept.';
+    // Contract section 20.4 / 10: a confirmed local Stop reads "Stopped on
+    // this Mac"; a local run has no provider, so no provider wording.
+    case 'stopped': return run.reason === 'local-stop' ? 'Stopped on this Mac. The reply so far is kept.' : 'Stopped. The reply so far is kept.';
     case 'failed':
       switch (run.reason) {
         case 'reply-too-long': return 'Reply cut off: it reached the length limit for one conversation.';
