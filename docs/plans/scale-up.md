@@ -78,11 +78,20 @@ reviews them, and the owner merges them along with the limit change.
 ## (b) Narrow The Mac App's Protected Paths (Later Building PR)
 
 **Why.** Most Mac pull requests wait for the owner only because they touch
-`main.swift` or `Package.swift`, which hold a little sensitive wiring among
-a lot of ordinary code. Moving keys, encryption, recovery, participant
-launching and paid-usage code into a few clearly named folders lets
-CODEOWNERS protect just those, so ordinary Desk and dictation changes stop
-waiting on him.
+`main.swift`, which holds a little sensitive wiring among a lot of ordinary
+code. Moving keys, encryption, recovery, participant launching and
+paid-usage code out of it into a few clearly named folders lets CODEOWNERS
+protect just those, so ordinary Desk and dictation changes stop waiting on
+him.
+
+**What stays protected.** `Package.swift` stays owner-protected, along with
+any other build or test manifest that decides which modules link into the
+app or declares the safety tests. It decides whether the app links the paid
+participant path (`ParticipantAppWiring`) and declares the tests that catch
+a forbidden link; if anyone could change it without approval, the paid path
+could be linked in and its tests dropped. Protection narrows only for
+ordinary source files. Most Mac pull requests don't touch `Package.swift`,
+so the approval burden still drops.
 
 **Cost and risk.** One careful refactor that itself needs his approval (it
 touches every protected file). The risk is moving sensitive code somewhere
