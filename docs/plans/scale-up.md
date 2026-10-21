@@ -244,11 +244,12 @@ The owner said yes to all six recommendations on October 21.
 4. **Give a standing approval for the idle-time True Convo Test rebuild?**
    Recommendation: yes, Test app only, in a time window you set, building
    only from `main`, with the old build kept if a build fails.
-   **Answer:** yes; the time window is still to be set.
+   **Answer:** yes, from 2 to 6 AM Eastern; it runs as a scheduled task on
+   the owner's Mac.
 5. **Narrow the protected paths with a refactor (b)?** Recommendation: yes,
    as one building pull request after the adapter's first code pull request.
    **Answer:** yes, including updating a test's path string where it names
    a moved file.
 6. **One daily "Needs the owner" list instead of pings?** Recommendation:
-   yes; tell us the time of day you want to read it. **Answer:** yes; the
-   time of day is still to be set.
+   yes; tell us the time of day you want to read it. **Answer:** yes, at
+   8:00 AM Eastern; it runs as a scheduled task on the owner's Mac.

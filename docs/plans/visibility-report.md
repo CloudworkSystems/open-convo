@@ -60,7 +60,9 @@ the file's device and inode numbers).
 - `reportDate`: the date the report is for (`YYYY-MM-DD`). The report uses
   this date, never the computer's clock, so the same file always gives the
   same report.
-- `findings`: a list. Each finding has an `id`, a `check` (one of the kinds
+- `findings`: a list. Each finding has an `id` (unique in the file: a
+  repeated `id` is refused with a plain message naming it, because the
+  ranking breaks ties by `id`), a `check` (one of the kinds
   below), a `status` (`ok`, `problem` or `unknown`), the details for its
   kind, and where and when it was found: `source` and `checkedOn`
   (`YYYY-MM-DD`, not after `reportDate`).
@@ -176,9 +178,10 @@ addresses and 555 phone numbers). At least:
    date.
 8. The schema refuses an unknown field (with a marker string that then
    appears in no output), an unknown check kind, a missing `reportDate`, a
-   `checkedOn` after `reportDate`, a source URL that isn't `https://`, and a
-   `problem` or `unknown` finding with neither a `url` nor a `locator`, each
-   with a plain message.
+   `checkedOn` after `reportDate`, a source URL that isn't `https://`, a
+   `problem` or `unknown` finding with neither a `url` nor a `locator`, and
+   two findings with the same `id` (the message names the repeated `id`),
+   each with a plain message.
 9. Output contains no grading or promise words (a test scans for words such
    as "grade", "score", "guarantee", "failing", "#1").
 10. Hostile text in a finding (`[link](https://evil.example)`, `# heading`,
