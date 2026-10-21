@@ -1,6 +1,8 @@
 # Design Note: Durable, Proactive Agents
 
-Written October 12, 2026. Status: guidance for the Top Five, not a new build step.
+Written October 12, 2026; decision changed October 21, 2026 (owner). Status:
+Pi Durable is adopted as the agent runtime for step 6; the ideas below still
+guide the Top Five.
 
 ## Why This Note Exists
 
@@ -13,15 +15,70 @@ person to approve the deploy.
 
 This note records what Open Convo should take from that, and what it should not.
 
-## Decision
+## Decision (Owner, October 21, 2026)
 
-- **Do not depend on Pi Durable yet.** It is weeks old and labeled experimental;
-  even the video's author will not run it in production before a stable release.
-  Open Convo is meant to be a dependable core others build on.
-- **Borrow its design now.** The ideas below cost little to adopt while building
-  the Top Five and keep the door open to Pi Durable, or something like it, later.
-- Revisit when Pi Durable has a stable release, or when step 6 (Claude and Codex
-  together with scoped delegation) starts.
+**Pi Durable is the foundational multi-agent framework for True Convo,
+accepted as experimental.** It replaces the October 12 decision ("do not
+depend on it yet"). It arrives with step 6, where agents come in; it does not
+jump the build order.
+
+Read from the library itself (`github.com/earendil-works/pi`,
+`packages/durable`, MIT, version 1.3.0 at the time, Node 22.19 or later):
+
+- Every message, model turn, tool call and state change is saved before
+  anything is shown. Tasks save a checkpoint at every step, so after a crash
+  or restart the work picks up where it stopped.
+- Storage is one SQLite file (or JSONL, IndexedDB, or a Cloudflare Durable
+  Object). Conversations are transcripts of entries that never change; they
+  can be forked.
+- It already has an inbox, steering a run while it works, subagents in the
+  foreground and background, child tasks, background compaction, a reviewer
+  example, a sandbox per conversation, and hooks that can stop a tool call for
+  approval before it runs. A task that crashes five times in a row is parked,
+  not retried forever.
+- It is marked **Experimental**: the API changes without notice between
+  releases, and its newest database upgrade cannot be rolled back.
+
+The safety caveats in IndyDevDan's demo apps (a device token that gives shell
+access, plain HTTP between home devices, a command guard off by default) belong
+to those apps, not to the library.
+
+### Conditions
+
+1. **Pin an exact version** and upgrade only on purpose, with a test pass and a
+   backup of its storage first (upgrades can't be rolled back).
+2. **Wrap it.** Open Convo modules talk to a thin layer of our own, never to Pi
+   Durable's API directly (replaceable layers), so a breaking change or a
+   replacement touches one layer.
+3. **Nothing announces itself.** Turn off the attribution headers it sends to
+   model providers by default, and keep its telemetry off unless the owner
+   turns it on.
+4. **Its storage lives in the owner's protected space** (step 2), not as a loose
+   file beside the app.
+5. **Every tool says whether it is safe to run twice.** Pi Durable resumes after
+   a crash; the README is explicit that a tool with outside effects (sending,
+   spending, deleting) needs its own protection against running twice. Those
+   tools also stop for the owner's approval.
+6. **Approvals and the action check go through our layer**, so the approval
+   card and Jeff's check (see `capabilities-and-primitives.md`) work the same
+   whichever runtime is underneath.
+
+### How It Meets Durable Sessions
+
+Foundations asks every session to carry a lasting identity: its lifespan, its
+origin, the provenance of everything in it, and its direction (purpose). Pi
+Durable gives the first two layers for free and leaves the last two to us:
+
+| Durable-session need | Pi Durable gives | We add |
+| --- | --- | --- |
+| Lifespan: survives crashes, renames, model switches | Saved-before-shown entries, checkpointed tasks, a session identity that survives reopen, reset, compaction and model changes | Renames and archive as our own records |
+| Provenance: who or what produced each message and result | Entries that never change, each task owned by its conversation or another task, which model ran each turn | The source labels (raw source, owner-approved fact, AI interpretation, proposal) and which provider advised through Jeff |
+| Lineage: where it came from, what split off | Forks, child conversations, subagents and child tasks, all linked | The link back to the item or conversation that started it |
+| Direction: what it is for, and drift | Nothing; it runs what it is given | Purpose stored as a document beside the transcript, editable, with revisions; drift flagged and an offer to split into a linked session |
+
+So Pi Durable is the durable record; the session's purpose and its labels are
+True Convo's, stored as Pi Durable documents through our layer so they are
+saved with the same guarantees.
 
 ## Ideas to Borrow, Mapped to the Top Five
 
@@ -96,6 +153,9 @@ on the protected store and under the owner's approval.
   agents deploy unreviewed. Open Convo keeps the owner as the final step.
 
 ## Sources
+
+- Pi Durable source and README: https://github.com/earendil-works/pi/tree/main/packages/durable
+- Syntax, "You need to check out Pi Durable" (YouTube, `BLRReTwV8Fc`), October 2026.
 
 - IndyDevDan, "Pi Durable PROACTIVE Agents: Jev Triggers My ON-CALL Pi Agent"
   (YouTube, `DNDYYHsypZg`).
