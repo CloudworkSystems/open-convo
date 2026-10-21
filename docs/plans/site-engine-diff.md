@@ -77,6 +77,21 @@ Fields the facts schema allows today (`schema/facts.schema.json`):
   only"` also says what search engines will see: "Search engines will see an
   online business, with no address" (the JSON-LD type moves from
   `LocalBusiness` to `Organization`), or the reverse.
+
+  `location` is optional, and `renderPage` and `buildJsonLd` in
+  `src/render.mjs` treat its three forms like this: a street address shows
+  a Location section with the address and makes the JSON-LD a
+  `LocalBusiness` with a `PostalAddress`; `"Online only"` shows a Location
+  section reading "Online only" and makes it an `Organization`; no
+  `location` shows no Location section and makes it an `Organization`. So:
+  - No location to `"Online only"`: "New Location section: Online only".
+    The reverse: "Location section removed (it said: Online only)".
+    Search engines see no change, so no search-engine sentence.
+  - No location to a street address: "New Location section: *the
+    address*", plus "Search engines will see a local business at this
+    address". The reverse: "Location section removed (it said: *the
+    address*)", plus "Search engines will see an online business, with no
+    address".
 - **Contact:** phone, email and booking link, each added, removed or changed.
 - **Social links**, matched by address: added, removed, or the label changes.
 - **Photos**, matched by their contents after metadata is removed (what
@@ -110,11 +125,17 @@ The JSON form (`schemaVersion: 1`) lists the same changes, each with the
 area, the kind (`added`, `removed` or `changed`), the field path, the old and
 new values, and the plain sentence. Same input gives byte-identical output.
 
-**Each change stays on one line.** The schema allows line breaks and tabs in
-text (descriptions can have paragraphs), so in the printed list a value is
-shown with a backslash written as `\\`, a line break as `\n`, a carriage
-return as `\r` and a tab as `\t`. No value can start a new line of the
-list. The JSON form keeps every value exactly as the facts hold it.
+**Each change stays on one line.** The schema's `CONTROL_CHARS` check
+(`src/schema.mjs`) still allows tab, line feed and carriage return, and it
+allows every character above U+007F, including ones that some programs
+treat as a line break. So in the printed list a value is shown with a
+backslash written as `\\`, a line feed as `\n`, a carriage return as `\r`,
+a tab as `\t`, and every other character that can break or hide a line
+written as a `\u` escape with four hex digits (for example `\u0085`): the
+C1 controls U+0080 to U+009F (including U+0085, next line), U+2028 (line
+separator) and U+2029 (paragraph separator), plus any control character
+the schema might allow later. No value can start a new line of the list.
+The JSON form keeps every value exactly as the facts hold it.
 
 ## Tests (Must Pass, Run By One Command)
 
@@ -128,7 +149,10 @@ invented variants beside them). At least:
    tagline, a new service, a removed service, a price change, an hours
    change, a new day, a closed day, `"By appointment"`, a street change,
    street address to `"Online only"` (with the search-engine sentence),
-   contact, a social link, colors and site address.
+   contact, a social link, colors and site address. Also the location
+   forms: no location to `"Online only"` and back, and no location to a
+   street address and back, each give exactly the sentences under
+   "Location", with the search-engine sentence only for the address cases.
 3. A renamed service shows as one removed and one new. A reordering alone of
    each list (photos, services, hours, social links) shows exactly one
    order sentence for that list, and a reordering plus a price change shows
@@ -141,7 +165,9 @@ invented variants beside them). At least:
    change (and the same for swapped hours entries with the same days).
 5. One-line output: a description change whose old and new text contain a
    line break, a carriage return, a tab and a backslash prints as one line
-   with `\n`, `\r`, `\t` and `\\`; the JSON holds the exact text.
+   with `\n`, `\r`, `\t` and `\\`; the JSON holds the exact text. The same
+   for U+0085, U+2028, U+2029 and U+009B, which print as `\u0085`,
+   `\u2028`, `\u2029` and `\u009b`.
 6. Order: one file pair changing the tagline, a photo, a service, the hours,
    social links, colors and the site address lists the changes in exactly
    the order under "What It Does".
