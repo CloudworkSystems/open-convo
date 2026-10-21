@@ -241,7 +241,9 @@ A **register** is `{value, stamp}`. Person fields are `name` and
 `members` map of tracker ID to a boolean register. Check-in fields are
 `trackerId`, `date`, `value`, and `source`. A check-in may also keep
 `formerTrackers`, a map of every tracker it left, each `{value: true, stamp}`
-from that move. Rest fields are `date` and
+from that move. A check-in may also keep `emptied`, a stamp written only when
+that check-in is emptied from Trash. Copying a tracker fence onto `purge`
+does not set it. Rest fields are `date` and
 `trackerId` (empty means every tracker).
 
 Each record is `{id, life, purge, fields}` and a stack also has `members`.
@@ -256,13 +258,16 @@ keeps `schemaVersion`, `id`, false `life`, `purge`, empty `fields`, and empty
 collections. During merge, only fields stamped after the cutoff survive. An
 old offline copy cannot restore purged content. Cutoffs are not removed in
 this slice. A fresh `addTracker` or `logCheckIn` may reuse an emptied ID; the
-cutoff stays, and only the new fields survive. Former-tracker history stamped
-at or before that check-in cutoff stays erased too, so an older copy cannot
-attach the reused check-in to a tracker it left before the empty. A cutoff
-copied from another tracker's fence does not erase history of a different
-tracker the check-in left. A replica that merely lacks one of those trackers,
-and whose purge was copied from a different tracker's fence, does not erase
-it either.
+cutoff stays, and only the new fields survive. Emptying a check-in records
+that empty on the check-in itself, including when the same Trash call also
+empties a tracker it left, so the two stamps can match. Former-tracker history
+stamped at or before that empty stays erased, and an older copy cannot attach
+the reused check-in to a tracker it left before the empty. Re-creating that
+tracker and emptying it later does not remove the reused check-in. A cutoff
+copied from another tracker's fence is not that empty, so it does not erase
+history of a different tracker the check-in left. A replica that merely lacks
+one of those trackers, and whose purge was copied from a different tracker's
+fence, does not erase it either.
 
 Check-ins merge as records by ID. The same ID arriving twice counts once.
 Two devices' different IDs on the same tracker and date both survive, and the

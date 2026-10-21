@@ -137,6 +137,7 @@ function canonicalRecord(record, withMembers, withHistory = false) {
   if (withHistory) {
     const history = records(record.formerTrackers ?? {}, {});
     if (Object.keys(history).length > 0) result.formerTrackers = history;
+    if (own(record, 'emptied')) result.emptied = clone(record.emptied);
   }
   return result;
 }
@@ -185,12 +186,18 @@ function mergeRecord(a, b, parentPurge, withMembers, recordKind) {
   const ownPurge = latest(a.purge, b.purge);
   const purge = latest(ownPurge, parentPurge);
   const life = register(a.life, b.life);
-  if (compareStamps(life.stamp, purge) <= 0) return tombstoneRecord(a.id, purge, withMembers);
+  const finish = record => recordKind === 'checkIn' ? attachEmptied(record, a, b) : record;
+  if (compareStamps(life.stamp, purge) <= 0) return finish(tombstoneRecord(a.id, purge, withMembers));
   const result = { id: a.id, fields: records(a.fields, b.fields, purge), life, purge: clone(purge) };
   if (withMembers) result.members = records(a.members ?? {}, b.members ?? {}, purge);
   const kept = Object.keys(result.fields).length > 0 || (withMembers && Object.keys(result.members).length > 0);
-  if (purge && !kept) return tombstoneRecord(a.id, purge, withMembers);
-  return result;
+  if (purge && !kept) return finish(tombstoneRecord(a.id, purge, withMembers));
+  return finish(result);
+}
+function attachEmptied(record, left, right) {
+  const emptied = latest(validStamp(left?.emptied) ? left.emptied : null, validStamp(right?.emptied) ? right.emptied : null);
+  if (validStamp(emptied)) record.emptied = clone(emptied);
+  return record;
 }
 function mergeCollection(left, right, parentPurge, withMembers, recordKind) {
   const ids = [...new Set([...left, ...right].map(record => record.id))].sort();
@@ -262,7 +269,7 @@ function mergeFencedChildren(left, right, parentPurge, cutoffs, recordKind) {
       false,
       recordKind,
     );
-    if (recordKind === 'checkIn') rememberCheckInTrackers(merged, leftRecord, rightRecord, cutoffs);
+    if (recordKind === 'checkIn') rememberCheckInTrackers(merged, leftRecord, rightRecord);
     return fencedByTracker(merged, cutoffs);
   });
 }
@@ -278,16 +285,11 @@ function rememberLeftBehind(history, source, keptFields) {
   if (keptFields && own(keptFields, 'trackerId') && keptFields.trackerId.value === tracker.value) return;
   rememberTracker(history, tracker.value, tracker.stamp);
 }
-function purgeErasedHistory(record, id, stamp, trackerCutoffs) {
-  if (!record || !validStamp(record.purge) || compareStamps(stamp, record.purge) > 0) return null;
-  const history = record.formerTrackers;
-  if (object(history) && own(history, id) && compareStamps(history[id].stamp, record.purge) <= 0) return null;
-  for (const cutoff of trackerCutoffs.values()) {
-    if (compareStamps(record.purge, cutoff) === 0) return null;
-  }
-  return record.purge;
+function purgeErasedHistory(record, stamp) {
+  if (!validStamp(record?.emptied) || compareStamps(stamp, record.emptied) > 0) return null;
+  return record.emptied;
 }
-function rememberCheckInTrackers(merged, leftRecord, rightRecord, trackerCutoffs) {
+function rememberCheckInTrackers(merged, leftRecord, rightRecord) {
   const history = records(leftRecord?.formerTrackers ?? {}, rightRecord?.formerTrackers ?? {}, null);
   rememberLeftBehind(history, leftRecord, merged.fields);
   rememberLeftBehind(history, rightRecord, merged.fields);
@@ -296,8 +298,8 @@ function rememberCheckInTrackers(merged, leftRecord, rightRecord, trackerCutoffs
   const kept = Object.values(merged.fields ?? {});
   for (const id of Object.keys(history)) {
     const cutoff = latest(
-      purgeErasedHistory(leftRecord, id, history[id].stamp, trackerCutoffs),
-      purgeErasedHistory(rightRecord, id, history[id].stamp, trackerCutoffs),
+      purgeErasedHistory(leftRecord, history[id].stamp),
+      purgeErasedHistory(rightRecord, history[id].stamp),
     );
     const newerEpoch = kept.length > 0 && kept.every(entry => compareStamps(entry.stamp, cutoff) > 0);
     if (cutoff && newerEpoch) delete history[id];
@@ -323,10 +325,13 @@ function installFence(record, fenced) {
   record.fields = fenced.fields;
   if (fenced.formerTrackers && Object.keys(fenced.formerTrackers).length > 0) record.formerTrackers = fenced.formerTrackers;
   else delete record.formerTrackers;
+  if (validStamp(fenced.emptied)) record.emptied = fenced.emptied;
+  else delete record.emptied;
 }
 function carryHistory(record, source) {
   const history = source?.formerTrackers;
   if (history && Object.keys(history).length > 0) record.formerTrackers = clone(history);
+  if (validStamp(source?.emptied)) record.emptied = clone(source.emptied);
   return record;
 }
 function fenceAgainst(record, cutoffList) {
@@ -482,11 +487,16 @@ function validate(person) {
     for (const record of person[key]) {
       validateRecord(record, types, withMembers, checkShape, person.purge);
       validateCheckInHistory(record, key === 'checkIns');
+      validateEmptied(record, key === 'checkIns');
     }
     uniqueIds(person[key], label);
   }
   assertTrackerChildCutoffs(person);
   return person;
+}
+function validateEmptied(record, allowed) {
+  if (!own(record, 'emptied')) return;
+  if (!allowed || !validStamp(record.emptied)) fail('Invalid check-in empty stamp in person file.');
 }
 function validateCheckInHistory(record, allowed) {
   if (!own(record, 'formerTrackers')) return;
@@ -1094,7 +1104,7 @@ function collectStamps(person) {
   for (const entry of Object.values(person.fields ?? {})) stamps.push(entry.stamp);
   for (const collection of [person.trackers, person.stacks, person.checkIns, person.restDays]) {
     for (const record of collection ?? []) {
-      stamps.push(record.life?.stamp, record.purge);
+      stamps.push(record.life?.stamp, record.purge, record.emptied);
       for (const entry of Object.values(record.fields ?? {})) stamps.push(entry.stamp);
       for (const entry of Object.values(record.members ?? {})) stamps.push(entry.stamp);
       for (const entry of Object.values(record.formerTrackers ?? {})) stamps.push(entry?.stamp);
@@ -1309,14 +1319,18 @@ export class HabitGrid {
     this.#change(personId, (person, stamp) => {
       const index = person.checkIns.findIndex(record => record.id === checkInId);
       if (index >= 0 && fieldsPresent(person.checkIns[index].fields, RECORD_KEYS.checkIn)) fail('Check-in ID already exists.');
-      const purge = index >= 0 ? person.checkIns[index].purge : null;
+      const previous = index >= 0 ? person.checkIns[index] : null;
+      const purge = previous ? previous.purge : null;
+      const emptied = previous && validStamp(previous.emptied) ? previous.emptied : null;
       if (index >= 0) person.checkIns.splice(index, 1);
-      person.checkIns.push({
+      const created = {
         id: checkInId,
         life: { value: true, stamp },
         purge,
         fields: stampedFields([['trackerId', trackerId], ['date', day], ['value', amount], ['source', 'manual']], stamp),
-      });
+      };
+      if (emptied) created.emptied = emptied;
+      person.checkIns.push(created);
       person.life = { value: true, stamp };
     });
     return checkInId;
@@ -1462,6 +1476,7 @@ export class HabitGrid {
             delete record.formerTrackers;
             record.purge = stamp;
             record.life = { value: false, stamp };
+            if (collection === person.checkIns) record.emptied = stamp;
           }
         }
         const cutoffs = new Map();
