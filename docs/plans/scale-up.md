@@ -86,11 +86,13 @@ the three don't wait on each other.
 `main.swift`, which holds a little sensitive code among a lot of ordinary
 code. `main.swift` stays protected for good, because it is where the app is
 put together, and a check that reads source text can't reliably prove that
-an unprotected start-up file never reaches paid calls or keys. Instead, the
-*ordinary* code moves out of it: Desk, dictation and other everyday code
-goes into new, unprotected files, and `main.swift` shrinks to the wiring,
-paid-path and API-key code that needs the owner. Ordinary changes then touch
-only the new files and stop waiting on him.
+an unprotected file never reaches paid calls or keys. Instead, the
+*ordinary* code moves out into **separate targets**: Desk, dictation and
+other everyday code goes into new modules, each in its own folder under
+`apps/mac/Sources/` with its own entry in `Package.swift`, and the app
+imports them. `main.swift` shrinks to the wiring, paid-path and API-key
+code that needs the owner. Ordinary changes then touch only the new
+modules and stop waiting on him.
 
 **Every reason a file is protected today** (from `.github/CODEOWNERS`). The
 refactor keeps every one of these reasons covered:
@@ -108,19 +110,34 @@ refactor keeps every one of these reasons covered:
 | `DeskSessionParticipantTests.swift` | Forbids linking the participant path |
 
 `main.swift` keeps its protection permanently, and every other entry above
-stays as it is. Protection narrows only for code that moves *out of* a
-protected file into a new file, and only when none of that file's reasons
-for protection moves with it: no storage or key code, no paid-path wiring,
-no paid-API request and no API-key lookup. A new file that holds any of
-those is protected too, by name or by a new CODEOWNERS entry in the same
-pull request.
+stays as it is. **The whole app folder, `apps/mac/Sources/VoiceCursorMac/`,
+becomes protected too**, with one CODEOWNERS entry for the folder. The
+reason: `Package.swift` compiles every file in that folder into the app
+automatically, so a new, unprotected file added there would be compiled
+into the same module as the paid path and the API-key code, and could call
+them directly. Protecting the folder means nothing joins the app module
+without the owner.
+
+Protection narrows only for the new, separate targets. A new target is
+unprotected only when all of these hold:
+- it holds none of the reasons in the table above (no storage or key code,
+  no paid-path wiring, no paid-API request, no API-key lookup);
+- it depends on nothing in the paid or participant path (no `Participant*`
+  target, no `ParticipantAppWiring`) and on no protected-storage target;
+- the existing link-guard tests (`PaidUsageGateTests`,
+  `DeskSessionParticipantTests` and the `VoiceCursorPolicyCheck` command)
+  cover it, so linking it to the paid path later fails a test. Adding that
+  link would also need a `Package.swift` change, which the owner approves.
+
+A target that doesn't meet all three stays protected with its own
+CODEOWNERS entry in the same pull request.
 
 We chose this over a source-scan test that would let `main.swift` lose
 protection, because such a scan only finds the text it looks for: an
 unprotected file could build a provider address piece by piece, use a
 different networking call, or read a differently named key, and the scan
-would pass. Keeping the one file that assembles the app protected needs no
-such test and fails safe.
+would pass. Module boundaries are enforced by the compiler and the
+existing link-guard tests instead, and they fail safe.
 
 **What stays protected.** `Package.swift` stays owner-protected, along with
 any other build or test manifest that decides which modules link into the
@@ -139,11 +156,14 @@ by side.
 **How we check it.** The app already links `ParticipantAppWiring` on
 purpose, so the check is "nothing changed", not "nothing is linked":
 
-- The pull request only moves code into new files and adds
-  `.github/CODEOWNERS` entries. No behavior changes in the moved code.
-- Which targets link which is identical before and after: run
+- The pull request only moves code into new targets, adds their entries to
+  `Package.swift`, and adds `.github/CODEOWNERS` entries. No behavior
+  changes in the moved code.
+- Linking is unchanged except for the new targets: run
   `swift package describe --type json` in `apps/mac` on `main` and on the
-  branch, and the targets and their dependencies match exactly. The pull
+  branch. Every existing target keeps exactly its dependencies, except that
+  the app target also depends on the new targets; each new target depends
+  on nothing in the paid, participant or protected-storage set. The pull
   request includes both outputs or their comparison.
 - Every existing link-guard and safety test passes, none removed, skipped
   or weakened: `PaidUsageGateTests` (which reads `Package.swift` and the
@@ -152,11 +172,12 @@ purpose, so the check is "nothing changed", not "nothing is linked":
   `VoiceCursorPolicyCheck` command. Where a test names a moved file by its
   path, only that path string changes, and the pull request lists each one.
 - The pull request lists every block moved out of `main.swift` and each
-  other protected file, and for each says why it holds none of the reasons
-  in the table above. The owner approves that list along with the change
+  other protected file, the new target it went to, and why that target
+  meets the three conditions above. The owner approves that list along with the change
   (the pull request touches protected files, so it needs him anyway).
 - `.github/CODEOWNERS` still names `main.swift` and every other entry
-  above; the pull request only adds entries, never removes one.
+  above, and adds `/apps/mac/Sources/VoiceCursorMac/`; the pull request
+  only adds entries, never removes one.
 - The full `swift test` suite in `apps/mac` passes.
 
 **First step.** A building pull request after the Claude Code adapter's

@@ -19,11 +19,13 @@ full plan and history are in [PLAN.md](../PLAN.md).
   build kept if a build fails, in a window from 2 to 6 AM Eastern. The Mac
   app's protected paths will be narrowed by one refactor pull request after
   the Claude Code adapter's first code pull request: ordinary code moves out
-  of `main.swift` and other protected files into new, unprotected files,
-  while `main.swift` and every existing protected entry stay protected for
-  good. It must pass the plan's checks (code only moved, identical linking,
-  every safety test passing, CODEOWNERS entries only added) and still needs
-  the owner's approval. Agents add approvals to one daily "Needs the
+  of `main.swift` and other protected files into separate targets (their
+  own folders and modules) that can't link the paid or participant path,
+  which the existing link-guard tests enforce. `main.swift`, the whole
+  `apps/mac/Sources/VoiceCursorMac/` folder and every existing protected
+  entry stay protected for good. It must pass the plan's checks (code only
+  moved, no new links to the paid path, every safety test passing,
+  CODEOWNERS entries only added) and still needs the owner's approval. Agents add approvals to one daily "Needs the
   owner" list instead of pinging, which the owner reads at 8:00 AM Eastern;
   urgent items still come in chat. The rebuild and the daily list each run
   as a scheduled task on the owner's Mac.
