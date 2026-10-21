@@ -90,28 +90,45 @@ Fields the facts schema allows today (`schema/facts.schema.json`):
   These transition sentences replace the per-day sentences: a switch
   between forms never also lists "New hours" or "No longer open" lines, or
   an hours order sentence.
-- **Location:** each changed address line by name ("Street: 18 Marrow Lane
-  becomes 20 Marrow Lane"). A switch between a street address and `"Online
-  only"` also says what search engines will see: "Search engines will see an
-  online business, with no address" (the JSON-LD type moves from
-  `LocalBusiness` to `Organization`), or the reverse.
+- **Location.** `location` is optional and has three forms, which
+  `renderPage` and `buildJsonLd` in `src/render.mjs` show like this:
+  - a street address: a Location section with three lines (street; city,
+    region and postal code; country), and search engines see a
+    `LocalBusiness` with a `PostalAddress`;
+  - `"Online only"`: a Location section reading "Online only", and search
+    engines see an `Organization` with no address;
+  - no `location`: no Location section, and search engines see an
+    `Organization` with no address.
 
-  `location` is optional, and `renderPage` and `buildJsonLd` in
-  `src/render.mjs` treat its three forms like this: a street address shows
-  a Location section with the address and makes the JSON-LD a
-  `LocalBusiness` with a `PostalAddress`; `"Online only"` shows a Location
-  section reading "Online only" and makes it an `Organization`; no
-  `location` shows no Location section and makes it an `Organization`. So:
-  - No location to `"Online only"`: "New Location section: Online only".
-    The reverse: "Location section removed (it said: Online only)".
-    Search engines see no change, so no search-engine sentence.
-  - No location to a street address: "New Location section: *the
-    address*", plus "Search engines will see a local business at this
-    address". The reverse: "Location section removed (it said: *the
-    address*)", plus "Search engines will see an online business, with no
-    address".
+  In the sentences below, *the address* is written as "street, city, region
+  postal code, country" on one line (for example "18 Marrow Lane,
+  Hearthwick, Northglass 00000, Freedonia"). Every pair of forms has
+  exactly these sentences, in this order, and nothing else for location:
+
+  | From | To | Sentences |
+  | --- | --- | --- |
+  | Address | Address | One per changed line, by name: "Street: 18 Marrow Lane becomes 20 Marrow Lane" (and the same for City, Region, Postal code, Country). No search-engine sentence. |
+  | Address | `"Online only"` | "Location: *the address* becomes Online only"; then "Search engines will see an online business, with no address". |
+  | `"Online only"` | Address | "Location: Online only becomes *the address*"; then "Search engines will see a local business at this address". |
+  | None | `"Online only"` | "New Location section: Online only". No search-engine sentence (they see an online business before and after). |
+  | `"Online only"` | None | "Location section removed (it said: Online only)". No search-engine sentence. |
+  | None | Address | "New Location section: *the address*"; then "Search engines will see a local business at this address". |
+  | Address | None | "Location section removed (it said: *the address*)"; then "Search engines will see an online business, with no address". |
+  | Same form, no change | | Nothing. |
+
 - **Contact:** phone, email and booking link, each added, removed or changed.
 - **Social links**, matched by address: added, removed, or the label changes.
+- **Sections that appear or disappear.** Services, photos and social links
+  are optional lists that the schema never allows to be empty, and the
+  Contact section shows only when at least one of phone, email or booking
+  link is set. When one of these sections appears, the list says "New
+  *name* section:" followed by its entries (for example "New Services
+  section: Rye loaf; Morning bun"); when one disappears, "*Name* section
+  removed (it said: *its entries*)". These replace the per-entry "New" and
+  "removed" sentences and any order sentence for that list. Hours and
+  Location follow their own tables above. Together with the always-present
+  name, tagline and About section, this covers every section the page can
+  show.
 - **Photos**, matched by their contents after metadata is removed (what
   `prepareImages` produces): "New photo: *alt text*"; "Photo removed: *alt
   text*"; "Photo description changes: *old alt* becomes *new alt*"; "Photo
@@ -167,10 +184,13 @@ invented variants beside them). At least:
    tagline, a new service, a removed service, a price change, an hours
    change, a new day, a closed day, `"By appointment"`, a street change,
    street address to `"Online only"` (with the search-engine sentence),
-   contact, a social link, colors and site address. Also the location
-   forms: no location to `"Online only"` and back, and no location to a
-   street address and back, each give exactly the sentences under
-   "Location", with the search-engine sentence only for the address cases.
+   contact, a social link, colors and site address.
+   Every row of the Location table gives exactly its sentences, in order,
+   and nothing else for location (address to `"Online only"` and back,
+   `"Online only"` to none and back, address to none and back, and one
+   changed address line). Each of services, photos, social links and
+   contact, appearing and disappearing, gives exactly its one section
+   sentence and no per-entry or order sentence.
    And the hours forms: all six transitions between no hours,
    `"By appointment"` and a list of hours each give exactly the one
    sentence under "Hours", with no per-day or order sentence alongside.
