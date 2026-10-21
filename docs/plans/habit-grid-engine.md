@@ -4,8 +4,8 @@ Written October 16, 2026 by the planning session from the owner's decisions
 (all recommendations accepted). Session name: `OC-261016-habit-grid-engine`.
 Umbrella: Personal (also a wall-hub tile). Built by an outside builder under
 AGENTS.md "Outside Builders" (up to three outside modules at a time since
-October 21, 2026). It started after Site Engine and is in review as #74,
-waiting only on review fixes, so it doesn't count toward the three.
+October 21, 2026). It started after Site Engine and merged as #74 on
+October 21, so it no longer counts toward the three.
 
 ## Why
 
