@@ -50,7 +50,8 @@ reads from and writes to `CloudworkSystems/open-convo`.
   `cloudwork-bot`, so the owner can approve their protected-path pull
   requests. Until the bot has Codex access, the session that opened a pull
   request asks for each Codex review (`@codex review`) from the owner's
-  account after every push.
+  account after every push; if it can't (for example, an outside builder),
+  the planning session or the PR steward asks instead.
 - **How far review goes depends on what the pull request contains.**
   - *Any pull request that changes code* follows the code path below, even
     when it also changes docs.
