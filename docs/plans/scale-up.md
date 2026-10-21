@@ -1,10 +1,11 @@
 # Building Faster (Scale-Up Plan)
 
 Written October 21, 2026 by a building session. Session name:
-`OC-261021-scale-up-plan`. Status: proposal. The owner agreed to the
-direction on October 21; nothing here changes AGENTS.md or
-[decisions.md](../decisions.md) until he answers the questions at the end.
-Each approved change then lands in its own pull request.
+`OC-261021-scale-up-plan`. Status: approved. The owner agreed to the
+direction on October 21 and said yes to all six recommendations at the end
+the same day. This plan changes nothing in AGENTS.md or
+[decisions.md](../decisions.md) itself; each approved change lands in its own
+pull request.
 
 ## Why
 
@@ -78,11 +79,30 @@ reviews them, and the owner merges them along with the limit change.
 ## (b) Narrow The Mac App's Protected Paths (Later Building PR)
 
 **Why.** Most Mac pull requests wait for the owner only because they touch
-`main.swift`, which holds a little sensitive wiring among a lot of ordinary
-code. Moving keys, encryption, recovery, participant launching and
-paid-usage code out of it into a few clearly named folders lets CODEOWNERS
-protect just those, so ordinary Desk and dictation changes stop waiting on
-him.
+`main.swift`, which holds a little sensitive code among a lot of ordinary
+code. Moving the sensitive parts out of it into a few clearly named,
+protected folders lets `main.swift` lose its protection, so ordinary Desk and
+dictation changes stop waiting on him.
+
+**Every reason a file is protected today** (from `.github/CODEOWNERS`). The
+refactor keeps every one of these reasons covered:
+
+| Protected | Why |
+| --- | --- |
+| `AGENTS.md`, `CLAUDE.md`, `.github/` | The rules, the checks and CODEOWNERS itself |
+| `PLAN.md`, `docs/plans/`, `docs/decisions.md` | Owner decisions |
+| `ArchiveProtection` and its tests; files named `*Keychain*`, `*KeyProvider*`, `*Recovery*`, `*Cipher*`, `*Encryption*`, `*Seal*`, `ProofStore*`; `PayloadHash.swift`, `DeskSession.swift`, `DeskPaths.swift`, `DeskKeptStoreTests.swift` | Keys, encryption, recovery and protected storage |
+| `Participant*` modules and files, `ParticipantProcessTests`; files named `*PaidUsage*`, `*Availability*`, `*Wiring*` | Anything that can run a paid AI model, decide whether it is available, confirm or end paid use, or wire it into the app |
+| Files named `*OpenAI*`, `*Realtime*`, `*Groq*`, `*Anthropic*`, `*APIKey*` | Other paid cloud calls and API keys |
+| `ProtectionProofTests` | The storage protection proof |
+| `main.swift` | Two reasons: it wires storage and the paid path into the app, and it holds the OpenAI and Groq batch transcription requests and the API-key lookups (environment and Keychain) |
+| `Package.swift` | Decides which modules link, including the paid path, and declares the safety tests |
+| `DeskSessionParticipantTests.swift` | Forbids linking the participant path |
+
+Only `main.swift` loses protection, and only once **both** of its reasons are
+gone: the storage and paid-path wiring, and every paid-API request and
+API-key lookup, have moved into files that CODEOWNERS protects. Every other
+entry above stays as it is.
 
 **What stays protected.** `Package.swift` stays owner-protected, along with
 any other build or test manifest that decides which modules link into the
@@ -113,6 +133,15 @@ purpose, so the check is "nothing changed", not "nothing is linked":
   tripwire in `ParticipantWireTests`, `DeskSessionParticipantTests` and the
   `VoiceCursorPolicyCheck` command. Where a test names a moved file by its
   path, only that path string changes, and the pull request lists each one.
+- No paid-API or API-key code is left in an unprotected file. A new
+  source-scan test (itself protected, like `PaidUsageGateTests`) lists every
+  Swift file under `apps/mac/Sources` that CODEOWNERS doesn't protect and
+  fails if any of them names a paid provider host (`api.openai.com`,
+  `api.groq.com`, `api.anthropic.com` and the like), sends a `URLSession`
+  request to one, names an API key (`_API_KEY`, `apiKeyName`,
+  `requiredAPIKeyName`) or reads one from Keychain or the environment. It
+  must pass on the branch; on today's `main` it would fail on `main.swift`,
+  which shows the check works.
 - The full `swift test` suite in `apps/mac` passes.
 
 **First step.** A building pull request after the Claude Code adapter's
@@ -173,20 +202,29 @@ still reach him in chat.
 **Cost and risk.** An approval can wait up to a day. Lanes (c) and the
 smaller protected paths (b) mean fewer items wait on him at all.
 
-## Owner Questions
+## Owner Questions (Answered October 21)
+
+The owner said yes to all six recommendations on October 21.
+
 
 1. **Raise the outside-builder limit to three, one per GrokBot team?**
    Recommendation: yes, for GrokBot's teams, with each team its own module,
    folder and branch. Modules already waiting only on review fixes (habit
    grid, household lists fixes) don't count toward the three.
+   **Answer:** yes.
 2. **Which three modules?** Recommendation: annotation rounds, Site Engine
-   "what changes", and the visibility report, as above.
+   "what changes", and the visibility report, as above. **Answer:** yes.
 3. **Run two or three building lanes?** Recommendation: two now (main step,
    Desk and dogfooding); add the infra lane after option B merges.
+   **Answer:** yes.
 4. **Give a standing approval for the idle-time True Convo Test rebuild?**
    Recommendation: yes, Test app only, in a time window you set, building
    only from `main`, with the old build kept if a build fails.
+   **Answer:** yes; the time window is still to be set.
 5. **Narrow the protected paths with a refactor (b)?** Recommendation: yes,
    as one building pull request after the adapter's first code pull request.
+   **Answer:** yes, including updating a test's path string where it names
+   a moved file.
 6. **One daily "Needs the owner" list instead of pings?** Recommendation:
-   yes; tell us the time of day you want to read it.
+   yes; tell us the time of day you want to read it. **Answer:** yes; the
+   time of day is still to be set.

@@ -94,7 +94,8 @@ October 20 fix (OC-261020-gate-package-tests): `tests` now also runs
 by folder so new packages are covered automatically.
 
 **Building faster** (more outside modules, parallel lanes, a dogfooding
-cadence): proposal awaiting the owner. Plan:
+cadence): approved by the owner October 21; the changes follow in their own
+pull requests. Plan:
 [docs/plans/scale-up.md](docs/plans/scale-up.md).
 
 ## Owner Decisions
