@@ -88,6 +88,10 @@ October 20 after the scratch-branch tests passed. The bot account
 (`cloudwork-bot`) exists and builders open pull requests with it. Codex doesn't
 review the bot's pull requests yet; until it does, the session that opened the
 pull request asks for each Codex review from the owner's account.
+October 20 fix (OC-261020-gate-package-tests): `tests` now also runs
+`npm test` for every other folder in `packages/` that a pull request changes
+(Site Engine, household lists, and new ones such as the habit grid), found
+by folder so new packages are covered automatically.
 
 ## Owner Decisions
 

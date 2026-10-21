@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { evaluateCodexSignal, CODEX_LOGIN } from '../codex-signal.mjs';
 import { parseCodeowners, protectedFiles } from '../codeowners.mjs';
+import { packagesToTest, listPackages, OWN_JOB } from '../package-changes.mjs';
 
 const HEAD = '7af6dd5bd9'.padEnd(40, 'a');
 const OLD = '572b68d313'.padEnd(40, 'b');
@@ -196,4 +198,43 @@ test('no workflow job or job name is called codex-approved (only the status may 
     assert.doesNotMatch(jobs, /^  codex-approved:\s*$/m, `${file} has a job keyed codex-approved`);
     assert.doesNotMatch(jobs, /^\s+name:\s*['"]?codex-approved['"]?\s*$/m, `${file} has a job named codex-approved`);
   }
+});
+
+// `tests` check: packages outside the dedicated jobs.
+const PKGS = ['clarity', 'habit-grid', 'household-lists', 'site-engine'];
+
+test('a change inside a package runs that package only', () => {
+  assert.deepEqual(packagesToTest(['packages/site-engine/src/build.mjs'], PKGS), ['site-engine']);
+  assert.deepEqual(packagesToTest(['packages/household-lists/README.md', 'packages/habit-grid/package.json'], PKGS), ['habit-grid', 'household-lists']);
+});
+
+test('changes outside packages run no package', () => {
+  assert.deepEqual(packagesToTest(['STATUS.md', 'apps/desk/src/app/App.tsx', 'packages-old/x.mjs', 'packages/site-engine-copy/x'], PKGS), []);
+  assert.deepEqual(packagesToTest([], PKGS), []);
+});
+
+test('a change to the checks, or a manual run, runs every package', () => {
+  assert.deepEqual(packagesToTest(['.github/workflows/tests.yml'], PKGS), ['habit-grid', 'household-lists', 'site-engine']);
+  assert.deepEqual(packagesToTest([], PKGS, { all: true }), ['habit-grid', 'household-lists', 'site-engine']);
+});
+
+test('packages with their own job are not run twice', () => {
+  assert.deepEqual(packagesToTest(['packages/clarity/src/index.mjs'], PKGS), []);
+  assert.ok(OWN_JOB.has('clarity'));
+});
+
+test('a package folder name unsafe for workflow paths is refused', () => {
+  assert.throws(() => packagesToTest(['.github/x'], ['ok', 'bad name; rm -rf']));
+});
+
+test('every package in this repo with a package.json is found', () => {
+  const found = listPackages(fileURLToPath(new URL('../../../packages/', import.meta.url)));
+  for (const name of ['clarity', 'household-lists', 'site-engine']) assert.ok(found.includes(name), name);
+});
+
+test('the tests check waits for every other job in tests.yml', () => {
+  const text = readFileSync(new URL('../../workflows/tests.yml', import.meta.url), 'utf8');
+  const jobs = [...(text.split(/^jobs:\s*$/m)[1] ?? '').matchAll(/^  ([A-Za-z0-9_-]+):\s*$/gm)].map((m) => m[1]);
+  const needs = (text.match(/^  tests:\s*\n    needs: \[([^\]]*)\]/m) ?? [])[1]?.split(',').map((s) => s.trim()) ?? [];
+  assert.deepEqual(needs.sort(), jobs.filter((j) => j !== 'tests').sort());
 });
