@@ -69,6 +69,8 @@ daylight-saving change cannot skip or repeat a day.
   above zero and a unit. A done tracker stores no target.
 - `editTracker`, `deleteTracker`, `restoreTracker` change one tracker.
   Editing or restoring a recoverable deleted tracker brings it back.
+  A key outside `name`, `color`, `kind`, `target`, `unit`, `usualAmount`,
+  `schedule`, and `startedOn` is refused and the file stays unchanged.
 - `addStack(personId, { name, members = [] }, { stackId }?)`, `renameStack`,
   `setStackMember(personId, stackId, trackerId, included)`, `deleteStack`,
   `restoreStack`. Membership is its own stamped boolean per tracker, so two
@@ -82,6 +84,8 @@ daylight-saving change cannot skip or repeat a day.
 - `editCheckIn(personId, checkInId, fields)` updates only the supplied fields.
   `deleteCheckIn` moves it to Trash. `restoreCheckIn` brings it back.
   Editing a recoverable deleted check-in also restores it.
+  A key outside `trackerId`, `date`, `value`, and `source` is refused and the
+  file stays unchanged.
 - `markRest(personId, date, { trackerId = '', restId }?)` marks one date.
   An empty `trackerId` applies to every tracker. The same date and tracker
   mark returns the existing record. `deleteRest` and `restoreRest` use Trash.

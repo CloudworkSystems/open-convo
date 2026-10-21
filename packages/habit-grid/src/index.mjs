@@ -1060,6 +1060,11 @@ function restorable(records, id, label, keys) {
   if (!fieldsPresent(record.fields, keys)) fail(`${label} not found.`);
   return record;
 }
+function assertKnownFields(input, keys, label) {
+  for (const key of Object.keys(input)) {
+    if (!keys.includes(key)) fail(`Unknown ${label} field.`);
+  }
+}
 function stampedFields(entries, stamp) {
   const fields = {};
   for (const [key, value] of entries) setOwn(fields, key, { value: clone(canonicalizeValue(key, value)), stamp: clone(stamp) });
@@ -1188,6 +1193,7 @@ export class HabitGrid {
   }
   editTracker(personId, trackerId, input) {
     if (!object(input) || Object.keys(input).length === 0) fail('Tracker changes are empty.');
+    assertKnownFields(input, TRACKER_KEYS, 'tracker');
     const current = fieldValues(editable(this.#get(personId).trackers, trackerId, 'Tracker').fields);
     const next = assertTrackerShape({ ...current, ...input });
     return this.#change(personId, (person, stamp) => {
@@ -1298,6 +1304,7 @@ export class HabitGrid {
   }
   editCheckIn(personId, checkInId, input = {}) {
     if (!object(input)) fail('Check-in changes must be an object.');
+    assertKnownFields(input, RECORD_KEYS.checkIn, 'check-in');
     if (own(input, 'source') && input.source !== 'manual') fail('Only manual check-ins can be written in this version.');
     if (own(input, 'date') && !validDate(input.date)) fail('Invalid date.');
     if (own(input, 'value') && !nonNegative(input.value)) fail('Check-in value must be zero or greater.');

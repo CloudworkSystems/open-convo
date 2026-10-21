@@ -1635,3 +1635,30 @@ test('restoring a hidden purge fragment is refused and leaves the file unchanged
   hidden.restoreTracker(id, 'steps');
   assert.deepEqual(hidden.view(id).trackers.map(item => item.name), ['Steps']);
 });
+
+test('an unknown edit field does not revive a deleted tracker or check-in', () => {
+  const engine = fixed('phone-a', 100);
+  const id = engine.createPerson('River', { id: 'river' });
+  engine.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  engine.logCheckIn(id, 'water', { date: '2026-03-04', value: 5, checkInId: 'glass' });
+  engine.deleteCheckIn(id, 'glass');
+  const beforeCheckIn = engine.getPerson(id);
+  assert.equal(engine.view(id).checkIns.length, 0);
+  assert.throws(() => engine.editCheckIn(id, 'glass', { trackerID: 'steps' }), /Unknown check-in field/);
+  assert.deepEqual(engine.getPerson(id), beforeCheckIn);
+  assert.equal(engine.view(id).checkIns.length, 0);
+  assert.throws(() => engine.editCheckIn(id, 'glass', { value: 9, trackerID: 'steps' }), /Unknown check-in field/);
+  assert.deepEqual(engine.getPerson(id), beforeCheckIn);
+
+  engine.deleteTracker(id, 'water');
+  const beforeTracker = engine.getPerson(id);
+  assert.equal(engine.view(id).trackers.length, 0);
+  assert.throws(() => engine.editTracker(id, 'water', { namee: 'Nope' }), /Unknown tracker field/);
+  assert.deepEqual(engine.getPerson(id), beforeTracker);
+  assert.equal(engine.view(id).trackers.length, 0);
+
+  engine.editCheckIn(id, 'glass', { value: 9 });
+  assert.equal(engine.view(id).checkIns.find(item => item.id === 'glass').value, 9);
+  engine.editTracker(id, 'water', { name: 'Fresh water' });
+  assert.equal(engine.view(id).trackers[0].name, 'Fresh water');
+});
