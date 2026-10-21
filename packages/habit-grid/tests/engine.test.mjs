@@ -1515,3 +1515,27 @@ test('a check-in moved across three trackers keeps a purged middle tracker from 
   assert.equal(square(reader.grid(id, 'steps', span), '2026-03-04').value, 0);
   assert.equal(square(reader.grid(id, 'pages', span), '2026-03-04').value, 0);
 });
+
+test('emptying Trash fences a check-in that already moved off the deleted tracker', () => {
+  const engine = fixed('phone-a', 100);
+  const id = engine.createPerson('River', { id: 'river' });
+  engine.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  engine.addTracker(id, { name: 'Steps', kind: 'count', target: 8, unit: 'steps' }, { trackerId: 'steps' });
+  engine.logCheckIn(id, 'water', { date: '2026-03-04', value: 5, checkInId: 'glass' });
+  engine.editCheckIn(id, 'glass', { trackerId: 'steps' });
+  engine.deleteTracker(id, 'water');
+  engine.emptyTrash(id);
+  const span = { start: '2026-03-01', end: '2026-03-08' };
+  assert.equal(engine.view(id).checkIns.length, 0);
+  assert.equal(engine.view(id, { trash: true }).checkIns.length, 0);
+  assert.equal(square(engine.grid(id, 'steps', span), '2026-03-04').value, 0);
+  const glass = engine.getPerson(id).checkIns.find(item => item.id === 'glass');
+  assert.equal(glass.fields.date, undefined);
+  assert.equal(glass.fields.value, undefined);
+  assert.equal(glass.fields.source, undefined);
+  assert.equal(glass.formerTrackers.water.value, true);
+  assert.doesNotThrow(() => engine.save(id));
+  engine.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  assert.equal(square(engine.grid(id, 'water', span), '2026-03-04').value, 0);
+  assert.equal(square(engine.grid(id, 'steps', span), '2026-03-04').value, 0);
+});

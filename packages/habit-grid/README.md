@@ -118,7 +118,9 @@ daylight-saving change cannot skip or repeat a day.
   every tracker it left, including one it only visited in the middle of a
   longer move. Merge applies each of those cutoffs before it keeps the new
   tracker id, in either merge order, so fields that were not written again
-  do not show up on the new tracker. Reusing the tracker ID
+  do not show up on the new tracker. Emptying Trash on the device that moved
+  the check-in applies those same cutoffs, so the purge succeeds and the
+  older fields do not stay on the tracker it moved to. Reusing the tracker ID
   starts from an empty grid when nothing newer than the cutoff remains.
 
 Comparisons use JavaScript UTF-16 code unit order, so devices agree.

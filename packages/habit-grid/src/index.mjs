@@ -293,6 +293,14 @@ function losingTracker(left, right) {
 function fencedByTracker(record, cutoffs) {
   return fenceAgainst(record, cutoffsForRecord(record, cutoffs));
 }
+function installFence(record, fenced) {
+  if (!fenced || fenced === record) return;
+  record.life = fenced.life;
+  record.purge = fenced.purge;
+  record.fields = fenced.fields;
+  if (fenced.formerTrackers && Object.keys(fenced.formerTrackers).length > 0) record.formerTrackers = fenced.formerTrackers;
+  else delete record.formerTrackers;
+}
 function carryHistory(record, source) {
   const history = source?.formerTrackers;
   if (history && Object.keys(history).length > 0) record.formerTrackers = clone(history);
@@ -1403,7 +1411,6 @@ export class HabitGrid {
         person.life = { value: false, stamp };
       } else {
         const purged = new Set(person.trackers.filter(record => !record.life.value).map(record => record.id));
-        const pointsAt = record => purged.has(record.fields?.trackerId?.value);
         for (const collection of [person.trackers, person.stacks, person.checkIns, person.restDays]) {
           for (const record of collection) if (!record.life.value) {
             record.fields = {};
@@ -1413,11 +1420,10 @@ export class HabitGrid {
             record.life = { value: false, stamp };
           }
         }
-        for (const record of [...person.checkIns, ...person.restDays]) if (pointsAt(record)) {
-          record.fields = {};
-          delete record.formerTrackers;
-          record.purge = stamp;
-          record.life = { value: false, stamp };
+        const cutoffs = new Map();
+        for (const trackerId of purged) cutoffs.set(trackerId, stamp);
+        for (const record of [...person.checkIns, ...person.restDays]) {
+          installFence(record, fenceAgainst(record, cutoffsForRecord(record, cutoffs)));
         }
         for (const stack of person.stacks) {
           if (!stack.members) continue;
