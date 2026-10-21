@@ -68,6 +68,10 @@ reads from and writes to `CloudworkSystems/open-convo`.
     reviewer in place of Codex is planned and needs the owner's approval
     before it's built. Until then, Codex's review still gates the merge and
     Claude also posts a review, so no agent's review is the only one on its own work.
+    Because Claude's review doesn't gate the merge yet, the planning session
+    or the PR steward switches on auto-merge only after Claude's review of the
+    latest commit has no P1s; until then it stays off. Any session that finds
+    a P1 in Claude's review may switch auto-merge off, with a comment saying why.
   - A green "Ready to merge" button means no conflicts, not approval. Claude
     tells the owner in chat when a pull request waits on his approval.
 - *Proposed October 15, pending the owner's approval at merge:* every review,
