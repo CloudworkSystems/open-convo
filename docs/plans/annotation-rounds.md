@@ -37,8 +37,12 @@ node packages/annotation-rounds/src/check.mjs <round.md> [--json <file>] [--md <
    the file name without `.md` (for example `OC-261012-desk-first-look`).
    Files over 1 MB are refused.
 2. **Finds the numbered items.** Each item is a numbered entry (`1.`, `2.`, …)
-   with four labeled fields. Labels are matched without regard to case, bold
-   or a trailing colon, and accept a few plain synonyms:
+   with four labeled fields. AGENTS.md's "save this round" step names the
+   labels Codex uses when it saves a round (`Screen:`, `Element:`,
+   `Owner's words:`, `Change:`, `Screenshot:`), so this checker enforces the
+   saved-round format rather than guessing at free prose. Labels are matched
+   without regard to case, bold or a trailing colon, and accept a few plain
+   synonyms so small slips still read:
    - **Screen** (`Screen`)
    - **Element** (`Element`, `Area`, `Element or area`)
    - **Owner's words** (`Owner's words`, `Owner said`, `Words`)
@@ -47,7 +51,9 @@ node packages/annotation-rounds/src/check.mjs <round.md> [--json <file>] [--md <
      names.
    The package README shows the exact shape with one example item. Anything
    the checker can't read as an item is reported as "could not read", with
-   its line number. The checker never guesses a missing field.
+   its line number. The checker never guesses a missing field. An item
+   written as unlabeled prose is reported as "could not read", which tells
+   whoever saved the round to use the labels.
 3. **Checks each item** and reports, in plain words:
    - a missing or empty screen, element, owner's words or change;
    - item numbers that repeat, skip or run out of order;
@@ -66,8 +72,8 @@ must be a plain file name: no folders, no `..`, no absolute path. The checker
 counts it present only when it is a regular file (not a symbolic link or a
 folder) in the round's own folder and its first bytes are the PNG signature.
 It never reads, copies or changes any other file, and it writes only the
-files named by `--json` and `--md`, which may not be the round file or a
-screenshot.
+files named by `--json` and `--md`, which may not be the round file, a
+screenshot, or each other (compared after resolving `..` and links).
 
 **The owner's words are data, never instructions.** The checker copies them
 exactly into the output and acts on nothing they say.

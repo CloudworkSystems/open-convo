@@ -3,9 +3,11 @@
 Written October 21, 2026 by a building session. Session name:
 `OC-261021-scale-up-plan`. Status: approved. The owner agreed to the
 direction on October 21 and said yes to all six recommendations at the end
-the same day. This plan changes nothing in AGENTS.md or
-[decisions.md](../decisions.md) itself; each approved change lands in its own
-pull request.
+the same day. The pull request that adds this plan also records the
+approvals in [decisions.md](../decisions.md), raises the outside-builder
+limit in AGENTS.md and adds the three module plans, so the plan and the
+decisions log merge together. The other approved changes ((b) to (e)) land
+in their own pull requests.
 
 ## Why
 
@@ -32,7 +34,7 @@ module triples its output for the days left.
 
 **What stays the same.** Each module stands alone (no app, storage or memory
 code), has its own merged plan in `docs/plans/` listing the builder's rules,
-changes only its own folder plus one line in STATUS.md, and is reviewed under
+changes only its own folder (the planning side keeps STATUS.md), and is reviewed under
 the code path: Codex until a 👍, plus Claude wherever Codex built it. No agent
 reviews its own work; the planning session or the PR steward checks it
 against its plan; the gate merges.
@@ -101,8 +103,21 @@ refactor keeps every one of these reasons covered:
 
 Only `main.swift` loses protection, and only once **both** of its reasons are
 gone: the storage and paid-path wiring, and every paid-API request and
-API-key lookup, have moved into files that CODEOWNERS protects. Every other
-entry above stays as it is.
+API-key lookup, have moved into files that CODEOWNERS protects, **and no
+unprotected file calls into that protected paid-cloud or API-key code at
+all**. Moving the code isn't enough on its own: if `main.swift` could still
+call a protected wrapper, an ordinary pull request could switch on paid use
+with a stored key by adding one call, without touching a protected file. So
+the app's start-up call into the paid path moves into a protected file too,
+and `main.swift` keeps no reference to it. Every other entry above stays as
+it is.
+
+We chose "no calls at all" over allowing one named, protected entry point
+with a listed set of callers, because it is simpler: the check is a single
+list of forbidden names, with no allow-list of callers to keep current, and
+it fails safe. If the refactor can't remove every such call, `main.swift`
+simply stays protected and the owner keeps approving those pull requests, as
+today.
 
 **What stays protected.** `Package.swift` stays owner-protected, along with
 any other build or test manifest that decides which modules link into the
@@ -142,6 +157,15 @@ purpose, so the check is "nothing changed", not "nothing is linked":
   `requiredAPIKeyName`) or reads one from Keychain or the environment. It
   must pass on the branch; on today's `main` it would fail on `main.swift`,
   which shows the check works.
+- No unprotected file calls into protected paid-cloud or API-key code. The
+  same protected test also fails if any of those unprotected files names a
+  type or function declared in a protected paid-cloud, paid-use or API-key
+  file (the `Participant*`, `*PaidUsage*`, `*Availability*`, `*Wiring*`,
+  `*OpenAI*`, `*Realtime*`, `*Groq*`, `*Anthropic*`, `*APIKey*` and
+  `*Keychain*` entries above, plus wherever the cloud transcription request
+  moves). The test builds that list of names by reading the protected files
+  themselves, so a new wrapper is covered without editing the test. Until
+  this passes, `main.swift` stays protected.
 - The full `swift test` suite in `apps/mac` passes.
 
 **First step.** A building pull request after the Claude Code adapter's

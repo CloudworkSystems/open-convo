@@ -44,6 +44,14 @@ node packages/visibility-report/src/report.mjs --findings <findings.json> [--jso
 3. **Writes the report** as Markdown and JSON. With no `--md` or `--json`, it
    prints the Markdown.
 
+**It never overwrites its input or one output with the other.** Before
+reading anything else, it refuses (with a plain message, writing nothing)
+when `--json` or `--md` names the findings file, or when `--json` and `--md`
+name the same file. Paths are compared after resolving them fully, so a
+relative path, a `..`, a symbolic link or a hard link to the same file
+counts as the same file (for files that already exist, the check compares
+the file's device and inode numbers).
+
 ## The Findings File
 
 - `schemaVersion: 1`.
@@ -54,9 +62,14 @@ node packages/visibility-report/src/report.mjs --findings <findings.json> [--jso
   same report.
 - `findings`: a list. Each finding has an `id`, a `check` (one of the kinds
   below), a `status` (`ok`, `problem` or `unknown`), the details for its
-  kind, and where and when it was found: `source` (`{ label, url? }`, `url`
-  a complete `https://` address) and `checkedOn` (`YYYY-MM-DD`, not after
-  `reportDate`).
+  kind, and where and when it was found: `source` and `checkedOn`
+  (`YYYY-MM-DD`, not after `reportDate`).
+- `source` is `{ label, url?, locator? }`. `url` is a complete `https://`
+  address. `locator` is plain text saying exactly where to look again when
+  there is no stable web address, for example "Asked Claude on 2026-10-14:
+  'Who repairs bikes in Hearthwick?'". **Every finding whose status is
+  `problem` or `unknown` must have a `url` or a `locator`**, or the file is
+  refused; only `ok` findings may have a label alone.
 
 Check kinds (fixed list; the schema in the package is the single authority):
 
@@ -70,25 +83,39 @@ Check kinds (fixed list; the schema in the package is the single authority):
 
 ## Ranking Rules (Fixed And Tested)
 
-Only findings with status `problem` are ranked. Each kind and detail falls
-in one fixed group, and the fix list runs group by group:
+Only findings with status `problem` are ranked. Findings with status `ok`
+or `unknown` have no group, no effort and no place in the fix list.
 
-1. **Wrong information customers act on:** a listing whose address, phone or
-   hours differ from the website; an AI assistant that gives wrong details.
-2. **Hard to find:** no listing on a named service; not mentioned by an AI
-   assistant; no website, or a site that doesn't work on a phone.
-3. **Weak trust signals:** few reviews (fewer than 10), none in the last 90
-   days, or reviews with no reply.
-4. **Polish:** a listing whose name is written differently; a missing page
-   title or description; no visible way to contact.
+Every problem a finding can record has a fixed group, a fixed effort and a
+fixed rank, set here and nowhere else:
+
+| Rank | Problem | Kind | Group | Effort |
+| --- | --- | --- | --- | --- |
+| 1 | Listing hours differ from the website | `listing-details-match` | 1 | Quick |
+| 2 | Listing phone differs from the website | `listing-details-match` | 1 | Quick |
+| 3 | Listing address differs from the website | `listing-details-match` | 1 | Medium |
+| 4 | An AI assistant gives wrong details | `ai-mention` | 1 | Slow |
+| 5 | No listing on a named service | `listing-present` | 2 | Medium |
+| 6 | No website | `website-basics` | 2 | Slow |
+| 7 | Website doesn't work on a phone | `website-basics` | 2 | Slow |
+| 8 | Not mentioned by an AI assistant | `ai-mention` | 2 | Slow |
+| 9 | Reviews with no reply | `reviews` | 3 | Quick |
+| 10 | No reviews in the last 90 days | `reviews` | 3 | Medium |
+| 11 | Fewer than 10 reviews | `reviews` | 3 | Medium |
+| 12 | Listing name written differently | `listing-details-match` | 4 | Quick |
+| 13 | Website has no page title | `website-basics` | 4 | Quick |
+| 14 | Website has no description | `website-basics` | 4 | Quick |
+| 15 | No visible way to contact | `website-basics` | 4 | Quick |
+
+The groups are: 1, wrong information customers act on; 2, hard to find;
+3, weak trust signals; 4, polish. Inside a group, quicker fixes come first
+(quick, then medium, then slow), and the rank column already follows that
+rule, so the ranking is simply: sort problems by rank, then by `id`. The
+same findings always give the same order, whatever order they arrive in.
 
 A finding that records more than one problem (for example a listing whose
-phone and name both differ) is ranked once, in the group of its most
-serious problem, and the report names every problem in it.
-
-Inside a group, quicker fixes come first, using a fixed effort per kind
-(stated in the package README), then the order of the kinds in the table
-above, then `id`. The same findings always give the same order.
+phone and name both differ) is ranked once, at the lowest rank number among
+its problems, and the report names every problem in it.
 
 - The **fix list** shows the first five problems. The rest appear under
   "Also found", in the same order.
@@ -106,9 +133,10 @@ above, then `id`. The same findings always give the same order.
   4 things to fix. The first two affect customers right now.").
 - The fix list: for each problem, what's wrong, why it matters, and what to
   do, in plain words from fixed templates per kind, plus where it was found
-  and when (the source label, its link when there is one, and `checkedOn`).
-  Every claim in the report cites its finding's source and date, as the
-  design note requires.
+  and when (the source label, then its link, or its locator in quotation
+  marks when there is no link, and `checkedOn`). Every problem and every
+  "Couldn't check" entry cites its source with a link or a locator and its
+  date, as the design note requires.
 - "Also found", "Couldn't check" and "What's working" sections.
 - **No grades, scores, guarantees or alarm words.** The report shows what was
   found and what to do; it never gives a letter grade or a number score,
@@ -133,20 +161,24 @@ addresses and 555 phone numbers). At least:
    saved expected files exactly.
 2. Group order: one problem from each group, given in reverse order, comes
    out in group order.
-3. Inside a group, quicker fixes come first, then kind order, then `id`.
-   Shuffling the input order never changes the output.
+3. All fifteen problems in the rank table, given in shuffled order, come out
+   in rank order; two problems of the same rank come out by `id`; a finding
+   with two problems takes the lower rank number and names both. Shuffling
+   the input order never changes the output.
 4. Only five problems are in the fix list; the sixth and later go under
    "Also found".
 5. A finding checked 31 days before `reportDate` is marked "Check again
    before acting"; one checked 30 days before is not.
 6. `unknown` findings appear only under "Couldn't check"; `ok` findings only
    under "What's working".
-7. Every ranked problem in the Markdown shows its source label and
-   `checkedOn` date.
+7. Every ranked problem and every "Couldn't check" entry in the Markdown
+   shows its source label, its link or quoted locator, and its `checkedOn`
+   date.
 8. The schema refuses an unknown field (with a marker string that then
    appears in no output), an unknown check kind, a missing `reportDate`, a
-   `checkedOn` after `reportDate`, and a source URL that isn't `https://`,
-   each with a plain message.
+   `checkedOn` after `reportDate`, a source URL that isn't `https://`, and a
+   `problem` or `unknown` finding with neither a `url` nor a `locator`, each
+   with a plain message.
 9. Output contains no grading or promise words (a test scans for words such
    as "grade", "score", "guarantee", "failing", "#1").
 10. Hostile text in a finding (`[link](https://evil.example)`, `# heading`,
@@ -154,6 +186,10 @@ addresses and 555 phone numbers). At least:
 11. The code makes no network requests and reads no file other than the
     findings file (a test checks the package's source files import no
     network module).
+12. Output paths: `--json` or `--md` naming the findings file (directly,
+    through `..`, through a symbolic link, or through a hard link), and
+    `--json` and `--md` naming the same file, are each refused, and the
+    findings file is byte-for-byte unchanged afterwards.
 
 ## Out Of Scope For This Slice
 

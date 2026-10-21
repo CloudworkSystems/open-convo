@@ -73,12 +73,12 @@ builds, Codex reviews). Plan:
 In review.
 
 **Household lists engine** (Family and Home), built by Codex alongside Site
-Engine; implemented, tests pass; awaiting Claude review and planning check. Plan:
+Engine; implemented, tests pass; its review fixes are in review as #71. Plan:
 [docs/plans/household-lists-engine.md](docs/plans/household-lists-engine.md).
 First real use after step 5, synced through iCloud with the owner's approval.
 
-**Habit grid engine** (Personal), starts when Site Engine or the household
-lists engine finishes.
+**Habit grid engine** (Personal), in review as #74; its builder is fixing
+the review findings.
 Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
 **Annotation rounds checker** (Code), GrokBot (team A) builds, Codex reviews; plan in review: [docs/plans/annotation-rounds.md](docs/plans/annotation-rounds.md).
@@ -100,8 +100,9 @@ October 20 fix (OC-261020-gate-package-tests): `tests` now also runs
 by folder so new packages are covered automatically.
 
 **Building faster** (more outside modules, parallel lanes, a dogfooding
-cadence): approved by the owner October 21; the changes follow in their own
-pull requests. Plan:
+cadence): approved by the owner October 21. The limit of three outside
+modules and the three module plans above merge with the plan; the other
+changes follow in their own pull requests. Plan:
 [docs/plans/scale-up.md](docs/plans/scale-up.md).
 
 ## Owner Decisions

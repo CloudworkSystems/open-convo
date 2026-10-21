@@ -43,9 +43,10 @@ and the same as a function, `diffFacts(oldPath, newPath)`, exported from
    gives, says which file (current or new) was refused, and lists no
    changes. A preview never shows a change the build would not publish.
 2. **Compares the two checked fact sets** and lists each change in plain
-   words, one line each, in a fixed order that follows the page from top to
-   bottom (name, tagline, description, services, hours, location, contact,
-   social links, photos, colors, then site address).
+   words, one line each, in the order `renderPage` in `src/render.mjs` lays
+   out the visible page: name, tagline, description (About), photos,
+   services, hours, location, contact, social links. Changes that aren't a
+   page section come last: colors, then site address.
 3. **Writes nothing.** It reads the two facts files and the images beside
    them, prints the list (or JSON with `--json`), and exits. It never calls
    `publishSite`, never touches an output folder, and has no `--out` option.
@@ -64,9 +65,7 @@ Fields the facts schema allows today (`schema/facts.schema.json`):
   *old* becomes *new*".
 - **Services**, matched by name: "New service: Gift cards"; "Service
   removed: Morning bun"; "Price of Rye loaf: $9 becomes $10"; "Price of Rye
-  loaf removed"; "Description of Rye loaf changes" followed by the old and
-  new text. A renamed service shows as one removed and one new. A change of
-  order alone is "The order of services changes".
+  loaf removed"; "Description of Rye loaf: *old* becomes *new*". A renamed service shows as one removed and one new.
 - **Hours**, matched by `days`: "Hours on Sat: 08:00–13:00 becomes
   10:00–14:00"; "New hours: Sun 09:00–12:00"; "No longer open: Sat". A switch
   between a list of hours and `"By appointment"` is said plainly ("Hours
@@ -84,6 +83,18 @@ Fields the facts schema allows today (`schema/facts.schema.json`):
   replaced: *alt text*" when the file name stays but the picture differs.
   Metadata-only changes (for example new GPS data that the build strips
   anyway) are not changes, because the published page doesn't change.
+- **Order of every list.** The page shows photos, services, hours and social
+  links in the order the facts list them, so order is a change. When the
+  entries found in both files appear in a different order, one sentence
+  says so for that list ("The order of photos changes", and the same for
+  services, hours and social links), whether or not anything else in the
+  list changed.
+- **Repeated keys.** The schema doesn't require list keys to be unique (two
+  services can share a name, two hours entries the same `days`, two social
+  links the same address, two photos the same picture). Entries that share
+  a key are paired by position among the entries with that key: the first
+  old "Rye loaf" with the first new "Rye loaf", the second with the second,
+  and any left over are added or removed.
 - **Colors:** "Accent color: #f37a4a becomes #2f6f4f", using the colors
   after defaults are applied, so filling in a default value is no change.
 - **Site address** (`siteUrl`): "Site address: *old* becomes *new*. The
@@ -93,8 +104,12 @@ Fields the facts schema allows today (`schema/facts.schema.json`):
 The JSON form (`schemaVersion: 1`) lists the same changes, each with the
 area, the kind (`added`, `removed` or `changed`), the field path, the old and
 new values, and the plain sentence. Same input gives byte-identical output.
-Text is printed as plain text exactly as the facts hold it (the schema
-already refuses control characters).
+
+**Each change stays on one line.** The schema allows line breaks and tabs in
+text (descriptions can have paragraphs), so in the printed list a value is
+shown with a backslash written as `\\`, a line break as `\n`, a carriage
+return as `\r` and a tab as `\t`. No value can start a new line of the
+list. The JSON form keeps every value exactly as the facts hold it.
 
 ## Tests (Must Pass, Run By One Command)
 
@@ -109,23 +124,34 @@ invented variants beside them). At least:
    change, a new day, a closed day, `"By appointment"`, a street change,
    street address to `"Online only"` (with the search-engine sentence),
    contact, a social link, colors and site address.
-3. A renamed service shows as one removed and one new; a reordering alone
-   shows one order sentence.
-4. Photos: a new photo, a removed photo, an alt-text change, a replaced
+3. A renamed service shows as one removed and one new. A reordering alone of
+   each list (photos, services, hours, social links) shows exactly one
+   order sentence for that list, and a reordering plus a price change shows
+   both.
+4. Repeated keys: two services named "Rye loaf" with different prices, two
+   hours entries for the same days, and a repeated social address each pair
+   by position; adding a third "Rye loaf" shows one new service.
+5. One-line output: a description change whose old and new text contain a
+   line break, a carriage return, a tab and a backslash prints as one line
+   with `\n`, `\r`, `\t` and `\\`; the JSON holds the exact text.
+6. Order: one file pair changing the tagline, a photo, a service, the hours,
+   social links, colors and the site address lists the changes in exactly
+   the order under "What It Does".
+7. Photos: a new photo, a removed photo, an alt-text change, a replaced
    picture under the same file name, and a metadata-only change (no change
    reported).
-5. Filling in a brand color with its default value reports no change.
-6. Every refusal the build makes is also a diff refusal with the build's
+8. Filling in a brand color with its default value reports no change.
+9. Every refusal the build makes is also a diff refusal with the build's
    message, for either file, and lists no changes: an unknown field (with a
    marker string that then appears in no output), a missing required field,
    failing contrast, an unsafe link, an unsafe image path, a symbolic-link
    image, an image whose contents don't match its name, invalid JSON and an
    oversized file.
-7. The diff writes nothing: a test runs it inside a temporary folder and
-   finds the folder exactly as before, and `diff.mjs` never imports
-   `publish.mjs`.
-8. The existing build tests pass unchanged.
-9. Same input twice gives byte-identical text and JSON.
+10. The diff writes nothing: a test runs it inside a temporary folder and
+    finds the folder exactly as before, and `diff.mjs` never imports
+    `publish.mjs`.
+11. The existing build tests pass unchanged.
+12. Same input twice gives byte-identical text and JSON.
 
 ## Out Of Scope For This Slice
 
