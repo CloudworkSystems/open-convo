@@ -278,20 +278,23 @@ function rememberLeftBehind(history, source, keptFields) {
   if (keptFields && own(keptFields, 'trackerId') && keptFields.trackerId.value === tracker.value) return;
   rememberTracker(history, tracker.value, tracker.stamp);
 }
+function purgeErasedHistory(record, id, stamp) {
+  if (!record || !validStamp(record.purge) || compareStamps(stamp, record.purge) > 0) return null;
+  const history = record.formerTrackers;
+  if (object(history) && own(history, id) && compareStamps(history[id].stamp, record.purge) <= 0) return null;
+  return record.purge;
+}
 function rememberCheckInTrackers(merged, leftRecord, rightRecord) {
-  const purge = latest(leftRecord?.purge, rightRecord?.purge);
   const history = records(leftRecord?.formerTrackers ?? {}, rightRecord?.formerTrackers ?? {}, null);
   rememberLeftBehind(history, leftRecord, merged.fields);
   rememberLeftBehind(history, rightRecord, merged.fields);
   const losing = losingTracker(leftRecord, rightRecord);
   if (losing) rememberTracker(history, losing.value, losing.stamp);
   const kept = Object.values(merged.fields ?? {});
-  const cutoff = latest(purge, merged.purge);
-  const newerEpoch = kept.length > 0 && kept.every(entry => compareStamps(entry.stamp, cutoff) > 0);
-  if (newerEpoch) {
-    for (const id of Object.keys(history)) {
-      if (compareStamps(history[id].stamp, cutoff) <= 0) delete history[id];
-    }
+  for (const id of Object.keys(history)) {
+    const cutoff = latest(purgeErasedHistory(leftRecord, id, history[id].stamp), purgeErasedHistory(rightRecord, id, history[id].stamp));
+    const newerEpoch = kept.length > 0 && kept.every(entry => compareStamps(entry.stamp, cutoff) > 0);
+    if (cutoff && newerEpoch) delete history[id];
   }
   const current = merged.fields?.trackerId?.value;
   if (typeof current === 'string' && own(history, current)) delete history[current];

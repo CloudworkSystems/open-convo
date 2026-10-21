@@ -1725,6 +1725,40 @@ test('a due day after today stays open when a check-in is already stored', () =>
   assert.deepEqual(shown(morning, '2026-03-20'), { state: 'open', shade: 0, due: false, value: 0 });
 });
 
+test('a tracker fence does not erase another tracker from check-in history', () => {
+  const mover = fixed('phone-m', 100);
+  const purgerA = fixed('phone-a', 100);
+  const purgerB = fixed('phone-b', 100);
+  const id = mover.createPerson('River', { id: 'river' });
+  mover.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  mover.addTracker(id, { name: 'Steps', kind: 'count', target: 8, unit: 'steps' }, { trackerId: 'steps' });
+  mover.addTracker(id, { name: 'Pages', kind: 'count', target: 8, unit: 'pages' }, { trackerId: 'pages' });
+  purgerA.importPerson(mover.getPerson(id));
+  purgerB.importPerson(mover.getPerson(id));
+  mover.logCheckIn(id, 'water', { date: '2026-03-04', value: 5, checkInId: 'glass' });
+  mover.editCheckIn(id, 'glass', { trackerId: 'steps' });
+  mover.editCheckIn(id, 'glass', { trackerId: 'pages' });
+  for (const name of ['River two', 'River three', 'River four', 'River five']) purgerA.renamePerson(id, name);
+  purgerA.deleteTracker(id, 'water');
+  purgerA.emptyTrash(id);
+  for (const name of ['River two', 'River three', 'River four', 'River five', 'River six', 'River seven']) mover.renamePerson(id, name);
+  mover.editCheckIn(id, 'glass', { trackerId: 'pages', date: '2026-03-05', value: 9, source: 'manual' });
+  for (const name of ['Glen two', 'Glen three', 'Glen four', 'Glen five', 'Glen six', 'Glen seven', 'Glen eight', 'Glen nine', 'Glen ten', 'Glen eleven']) purgerB.renamePerson(id, name);
+  purgerB.deleteTracker(id, 'steps');
+  purgerB.emptyTrash(id);
+  const copies = [mover, purgerA, purgerB].map(device => device.getPerson(id));
+  const joined = mergePeople(mergePeople(copies[0], copies[1]), copies[2]);
+  for (const [i, j, k] of [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]) {
+    const merged = mergePeople(mergePeople(copies[i], copies[j]), copies[k]);
+    const glass = merged.checkIns.find(item => item.id === 'glass');
+    assert.equal(glass.life.value, false);
+    assert.equal(glass.formerTrackers.steps.value, true);
+    assert.equal(viewPerson(merged).checkIns.length, 0);
+    assert.deepEqual(merged, joined);
+  }
+  assert.deepEqual(mergePeople(joined, joined), joined);
+});
+
 test('emptying Trash again does not renew an already emptied person cutoff', () => {
   const home = fixed('phone-a', 100);
   const away = fixed('phone-b', 100);
