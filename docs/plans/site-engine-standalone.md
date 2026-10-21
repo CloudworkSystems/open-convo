@@ -1,5 +1,7 @@
 # Site Engine, Standalone First Slice (PRD)
 
+Status: In progress (Oct 21): in review (see STATUS.md).
+
 Written October 15, 2026 by the planning session. Session name:
 `OC-261015-site-engine-standalone`. Design background:
 [docs/design-notes/site-engine.md](../design-notes/site-engine.md).

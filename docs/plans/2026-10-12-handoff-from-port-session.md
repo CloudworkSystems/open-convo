@@ -1,5 +1,7 @@
 # Handoff: Port Session to the Building Session
 
+Status: Superseded by STATUS.md and PLAN.md (Oct 21): a one-time handoff note, kept as history.
+
 Written October 12, 2026 by the Claude session that froze True Convo, set up
 this repo and ported its pieces. That session has stopped at the owner's
 request. One Claude session builds from here, to avoid two sessions editing the

@@ -10,6 +10,9 @@
   update it in any pull request that changes the step or a part's state.
   Owner decisions: [docs/decisions.md](docs/decisions.md), which only the
   owner approves.
+- Some folders add their own `AGENTS.md` (with a `CLAUDE.md` pointing to it):
+  [docs/plans/](docs/plans/AGENTS.md) and [packages/](packages/AGENTS.md).
+  They only add that folder's rules; nothing in them loosens this file.
 
 ## Moving Code From True Convo
 

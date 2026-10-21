@@ -1,5 +1,7 @@
 # Claude Code Adapter Scope: Claude Joins The Conversation
 
+Status: Approved (Oct 21): scope merged; building starts after step 3 (see STATUS.md).
+
 Written October 19, 2026 by a building session. A proposal: the owner and
 the planning session can change it. PLAN.md is the authority. It comes
 "right after step 3" (owner decision, October 15) and has no step number of

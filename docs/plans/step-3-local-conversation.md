@@ -1,5 +1,7 @@
 # Step 3 Scope: One Real Conversation, Local First
 
+Status: In progress (Oct 21): all parts merged; owner's trial and trial fixes pending.
+
 Written October 15, 2026 by the building session, at the owner's request to
 start step 3 while his step 2 trial is pending. A proposal: the owner and the
 planning session can change it. PLAN.md step 3 is the authority.

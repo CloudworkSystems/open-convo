@@ -1,5 +1,7 @@
 # Merge Gate: Automatic Merging With Enforced Checks
 
+Status: Built (Oct 20): the gate is on for `main`; planned follow-ups are listed under "Status" below.
+
 Written October 15, 2026 by the planning session at the owner's request.
 Revised the same day after Codex's first review (five P1s, answered under
 "Codex Round 1" below) and three owner decisions. Session name:
