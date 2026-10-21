@@ -195,6 +195,13 @@ white-labeled install, each member is the owner of their own data.
   "wait," "look only" or "safe to start."
 - **Drift checkpoints:** stop regularly to ask whether the work has wandered,
   and list what a pass did not do.
+- **Recycle what goes stale.** A recycling pass regularly looks for what has
+  gone stale (docs that contradict this file or the decisions, wording about
+  finished work, dead code, merged branches, answered questions, unused
+  memory) and proposes each fix or removal with its reason. It never deletes
+  on its own; removing anything is approved like any irreversible step. It
+  starts as a weekly check on the repo and later becomes a built-in part of
+  the harness.
 - **Park ideas, don't chase them.** New ideas are captured in full, linked to
   what they depend on, and surface when those pieces exist; work returns to the
   current step.
