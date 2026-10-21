@@ -2,8 +2,8 @@
 
 Written October 20, 2026 at the owner's request. Session name:
 `OC-261020-designated-reviewer-plan`. Revised the same day after Codex's
-first, second and third reviews (findings written in as requirements; see
-"Codex Rounds").
+first, second and third reviews, and on October 21 after the fourth
+(findings written in as requirements; see "Codex Rounds").
 This is a plan only. Building it needs
 the owner's explicit approval, and the build changes `.github/`, which only
 the owner approves. Background: [merge-gate.md](merge-gate.md).
@@ -104,14 +104,14 @@ Designated review: 2 findings on 0123abc (details below).
 - **Edited by someone else blocks, marker or not (Codex round 3).** Why: a
   builder could rewrite a findings review's body so the marker disappears,
   and a review with no marker would otherwise be ignored. So any
-  owner-account review on a fully mapped pull request that **anyone other
-  than the owner account** has ever edited blocks that pull request,
-  whatever it says now and whatever commit it was on. (Unmapped and mixed
-  pull requests stay Codex-only; see Gate Logic.) The gate reads who
-  edited it from GitHub's GraphQL edit history (`lastEditedAt`, `editor` and
-  `userContentEdits` editors), the same way #88 checks Codex's comments in
-  `codex-signal.mjs`: every revision must be present and made by
-  `CloudworkSystems`. If the history can't be read in full (missing,
+  owner-account review on a pull request that touches a mapped path, which
+  **anyone other than the owner account** has ever edited, blocks that pull
+  request, whatever it says now and whatever commit it was on. (Pull
+  requests that touch no mapped path stay Codex-only; see Gate Logic.) The
+  gate reads who edited it from GitHub's GraphQL edit history
+  (`lastEditedAt`, `editor` and `userContentEdits` editors), the same way
+  #88 checks Codex's comments in `codex-signal.mjs`: every revision must be
+  present and made by `CloudworkSystems`. If the history can't be read in full (missing,
   partial, a deleted revision, or an editor GitHub no longer names), the
   review blocks. A review's edit history can't be erased, so nothing a
   builder does can unblock it; the work goes forward in a fresh pull
@@ -206,32 +206,40 @@ won't do, because Write users can add them. Example entry:
 
 - **Read from `main` only**, so a pull request editing the map can't affect
   its own result.
-- **Full coverage or nothing.** Every changed path must match one entry:
-  added, changed and deleted files, and **both the old and new names** of a
-  rename. One unmapped path, or paths from two different entries, and the pull
-  request falls back to Codex.
+- **Every changed path is checked** against the map: added, changed and
+  deleted files, and **both the old and new names** of a rename. If even
+  one path matches an entry, the pull request needs that entry's designated
+  reviewer (see Gate Logic). Unmapped paths alongside it don't remove that
+  need; they add Codex as a second required reviewer. If paths match two
+  different entries, each entry's reviewer must post a clean review.
 - **New files** are covered when they fall under a mapped folder; that's why
   entries are whole folders, not file lists.
 - **Never the rules.** The loader rejects entries that reach `.github/`,
   `AGENTS.md`, `CLAUDE.md`, `PLAN.md`, `docs/plans/` or `docs/decisions.md`.
-- If GitHub can't list every file (its limit is 3,000), Codex only.
+- If GitHub can't list every file (its limit is 3,000), the gate can't
+  tell whether a mapped path is touched, so it stays pending (fails
+  closed). Such a pull request should be split into smaller ones.
 
 ### STATUS.md In Builder Pull Requests
 
 Builder pull requests usually change their package and one line of
-`STATUS.md`. Under full coverage, that line alone would send them back to
-Codex. Two ways to handle it:
+`STATUS.md`. `STATUS.md` is unmapped, so that line alone would make the
+pull request need Codex's clean review on top of the designated reviewer's.
+Two ways to handle it:
 
 - **(A) Recommended: builders leave `STATUS.md` alone** on 2a pull requests;
   the planning session updates it in its own pull request after its check.
-  A 2a pull request that touches `STATUS.md` simply falls back to Codex
-  (fail closed, nothing breaks). Why: the gate stays a plain path match. No
+  A 2a pull request that touches `STATUS.md` anyway still needs the
+  designated reviewer, and also needs Codex clean (fail closed, nothing
+  breaks). Why: the gate stays a plain path match. No
   diff-reading code in a security check, and no way for a builder to word
   its own status. The planning session already checks each outside build
   and switches on auto-merge, so the status update fits there. Cost: one
   small extra docs pull request per milestone. This narrows AGENTS.md's
   "update STATUS.md in any pull request that changes a part's state" for 2a
-  pull requests; that wording change waits until #83 merges.
+  pull requests. #83 has merged, so that wording change can go into
+  AGENTS.md alongside the build, with the owner's approval (AGENTS.md is
+  owner-protected).
 - **(B) A shared-path exception:** each map entry names its module's
   `STATUS.md` paragraph (for example, the line starting
   `**Household lists engine**`), and the gate allows a `STATUS.md` change
@@ -242,20 +250,25 @@ Codex. Two ways to handle it:
 
 ## Gate Logic
 
-Which route can pass depends on the pull request's paths, and only one
-route applies to each pull request:
+What a pull request needs depends on which paths it touches (owner
+decision, October 21, replacing the earlier answer to question 4):
 
-- **Fully mapped** (every path covered by one map entry): **only the
-  designated-review route can pass.** `codex-approved` turns green only when
-  the matching valid clean review exists for the head, no designated
-  findings review cancels it, no owner-account review has been edited by
-  someone else, and Codex has no findings on the head. A clean result from
-  Codex alone never turns these green, though Codex findings still block.
-  Why (Codex round 3): otherwise a Codex-built pull request could pass on
-  Codex's own clean review before Claude had looked, or while Claude still
-  had findings, which is the self-review 2a exists to remove.
-- **Unmapped or mixed:** Codex only, exactly today's rule. Designated
-  reviews neither clear nor block these.
+- **Touches any mapped path:** it **requires** a valid clean review from
+  the designated reviewer of every map entry it touches, on the head, not
+  cancelled by a findings review, with no owner-account review edited by
+  someone else. Adding unmapped files never removes this requirement.
+- **Also touches unmapped paths** (for example `README.md` or
+  `STATUS.md`): it needs **both** the designated reviewer's clean review
+  **and** Codex clean on the head.
+- **Codex findings on the head always block**, on every pull request.
+- **Touches no mapped path:** Codex only, exactly today's rule. Owner
+  reviews and markers neither clear nor block these.
+
+So a clean result from Codex alone never clears a pull request that
+touches a mapped path. Why (Codex rounds 3 and 4): otherwise a Codex-built
+pull request could pass on Codex's own clean review, either directly or by
+adding one unmapped file such as `README.md` to fall back to Codex. Both
+reopen the self-review 2a exists to remove.
 
 A new commit changes the head, so the old marker no
 longer matches and the status goes back to pending. A marker from the wrong
@@ -282,8 +295,11 @@ Pure-function tests beside the existing gate tests:
 2. Forged clean review from `cloudwork-bot` (and a look-alike login):
    ignored.
 3. Stale clean review for the previous commit after a new push: pending.
-4. Mixed paths (one mapped, one not) with a valid review: Codex only.
-5. A rename from a mapped to an unmapped path: Codex only.
+4. Mixed paths (a mapped package plus `README.md`): a valid designated
+   clean review alone is pending; Codex clean alone is pending; both on the
+   head is success.
+5. A rename from a mapped to an unmapped path: counts as touching the
+   mapped path, so it needs the designated review and Codex clean.
 6. Owner-account review without the marker, or with a broken clean marker:
    pending.
 7. Edited clean review: blocks (and never counts as clean).
@@ -298,8 +314,8 @@ Pure-function tests beside the existing gate tests:
 14. An edited or malformed owner-account findings review: still blocks.
 15. A findings review from `cloudwork-bot`: ignored (neither blocks nor
     clears).
-16. A mapped pull request that also touches `STATUS.md`: Codex only (under
-    recommendation A).
+16. A mapped pull request that also touches `STATUS.md`, with Codex clean
+    and no designated review: pending. With both: success.
 17. Staging: `candidate_ref` from a non-owner actor, on a non-`main` run, or
     against a pull request not based on `gate-scratch` is refused, and it
     never posts `codex-approved`.
@@ -316,14 +332,21 @@ Pure-function tests beside the existing gate tests:
     designated review: pending (Codex alone never clears it).
 23. Fully mapped pull request with Codex clean on the head and a designated
     findings review on the head: pending.
-24. Unmapped pull request with Codex clean on the head: success, exactly as
-    today; an owner-account review there changes nothing.
-25. An owner-account review on a fully mapped pull request edited by
-    `cloudwork-bot`, with its marker removed: blocks. The same with a clean
-    marker added: blocks. One edited only by the owner account: no extra
+24. Pull request touching no mapped path with Codex clean on the head:
+    success, exactly as today; an owner-account review there changes
+    nothing.
+25. An owner-account review on a pull request touching a mapped path,
+    edited by `cloudwork-bot`, with its marker removed: blocks. The same
+    with a clean marker added: blocks. One edited only by the owner account: no extra
     block (the edited-marker rules above still apply).
 26. An owner-account review whose edit history can't be read in full
     (missing, partial, a deleted revision, or an unnamed editor): blocks.
+27. Mixed pull request (mapped package plus `README.md`) with a valid
+    designated clean review and a Codex findings review on the head:
+    pending (Codex findings always block).
+28. Paths from two different map entries: pending until each entry's
+    reviewer has a valid clean review on the head.
+29. More files than GitHub can list: pending, whatever the reviews say.
 
 ## Rollout
 
@@ -354,7 +377,8 @@ Pure-function tests beside the existing gate tests:
 
    The owner (or Claude acting as him with his go-ahead) then dispatches it
    against scratch pull requests covering tests 1 to 4, 6, 8, 12 to 14,
-   18 to 20 and 22 to 25, and compares results with the expected ones.
+   16, 18 to 20, 22 to 25 and 27 to 28, and compares results with the
+   expected ones.
 4. **Merge with an empty map**, so 2a is inert; the owner approves.
 5. **First real entry** (household lists) in its own small pull request the
    owner approves. Until then, 2b stays in force.
@@ -367,8 +391,14 @@ Pure-function tests beside the existing gate tests:
    the reviewer App exists? *Recommend yes.*
 3. **Codex findings on a 2a pull request:** if Codex comments anyway, do its
    findings still block? *Recommend yes; fails closed.*
-4. **Mixed pull requests:** fall back to Codex only, rather than requiring both
-   reviewers? *Recommend Codex only; simpler, and builders can split PRs.*
+4. **Mixed pull requests:** fall back to Codex only, or require both
+   reviewers? **Owner's answer (October 21, replacing the earlier
+   recommendation of Codex only): require both.** Any pull request touching
+   a mapped path needs the designated reviewer's clean review; if it also
+   touches unmapped paths, it needs Codex clean too. Codex findings always
+   block, and only pull requests with no mapped paths stay Codex-only. Why:
+   with a Codex-only fallback, a Codex-built pull request could add one
+   unmapped file and clear itself (Codex round 4).
 5. **Bad markers:** leave the status pending with a reason, rather than red?
    *Recommend pending; red stays stuck until the next event and adds noise.*
 6. **Today's gate, dismissed Codex reviews:** treat a dismissed Codex
@@ -387,7 +417,8 @@ Pure-function tests beside the existing gate tests:
    changes, or remove it? *Recommend keep: it's owner-only, posts a status
    nothing requires, and the next gate change needs it too.*
 9. **Habit grid plan wording:** it says the gate is Codex's 👍 though Codex
-   builds it. *Recommend aligning it with the household lists plan after #83.*
+   builds it. *Recommend aligning it with the household lists plan in its
+   own small docs pull request; #83 has merged, so nothing waits on it.*
 
 ## Today's Gate: Deletion And Editing
 
@@ -421,6 +452,20 @@ way. Checked against the script:
 
 ## Codex Rounds (Findings Written In As Requirements)
 
+Round 4:
+
+1. **Prevent mixed paths from bypassing designated review (Gate Logic):**
+   mixed pull requests fell back to Codex only, so a Codex-built pull
+   request could add any unmapped file (`README.md`, `STATUS.md`) and pass
+   on Codex's own clean result. Resolved by the owner's decision of
+   October 21: any pull request touching a mapped path requires the
+   designated reviewer's clean review; one that also touches unmapped paths
+   needs Codex clean as well; Codex findings always block; only pull
+   requests with no mapped paths stay Codex-only. A file list GitHub can't
+   return in full now stays pending instead of falling back to Codex
+   (Which Pull Requests; Gate Logic; question 4; tests 4, 5, 16 and 27 to
+   29).
+
 Round 3:
 
 1. **Require designated review for mapped pull requests (P1, Gate
@@ -429,7 +474,8 @@ Round 3:
    reviewed or while Claude had findings. Resolved: on fully mapped pull
    requests only the designated-review route can pass; Codex's clean result
    alone never does, though Codex findings still block. Unmapped and mixed
-   pull requests stay Codex-only (Gate Logic; tests 22 to 24).
+   pull requests stay Codex-only (Gate Logic; tests 22 to 24). Round 4
+   replaced the mixed-pull-request part: see above.
 2. **Block findings markers that are edited away (Findings Reviews):** a
    builder could rewrite a findings review to remove its marker. Resolved:
    any owner-account review on a fully mapped pull request that anyone
