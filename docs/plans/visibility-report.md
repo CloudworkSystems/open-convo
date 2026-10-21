@@ -97,7 +97,27 @@ Each kind's `details` has **subject** fields, which say what was checked and
 are always required, and **result** fields, which say what was found. Result
 fields are required when `status` is `ok` or `problem` and must be absent
 when it is `unknown`. No other fields are allowed. Text fields are 1 to 500
-characters; counts are whole numbers from 0 to 1,000,000.
+characters; counts are whole numbers from 0 to 1,000,000. A `mismatches`
+entry whose `listing` and `website` values are the same text (compared
+after removing leading and trailing spaces) is refused with a plain message
+naming the finding's `id` and the field, because it isn't a mismatch.
+
+**No hidden or line-breaking characters in displayed text.** Every text
+field the report can show is checked when the file is read:
+`business.name`, `source.label`, `source.locator`, `source.url`, and every
+text field in `details` (`service`, `assistant`, `question`,
+`wrongDetails`, and each mismatch's `listing` and `website`). These are
+refused, with a plain message naming the finding's `id` (where there is
+one) and the field's path (for example `findings[3].source.locator`):
+- U+0000 to U+001F, except a line feed (U+000A) in a multi-line field;
+- U+007F to U+009F;
+- U+2028 and U+2029.
+
+The multi-line fields are `wrongDetails` and a mismatch's `listing` and
+`website` (hours, for example, often run over several lines). In the
+Markdown, a line feed inside one of them is written as a line break within
+the same entry, indented so it can never start a new list item, heading or
+paragraph. Every other text field is single-line.
 
 | Kind | Subject | Result | Problems it can record (rank) |
 | --- | --- | --- | --- |
@@ -303,6 +323,15 @@ addresses and 555 phone numbers). At least:
     `count`, and `title` present when `hasWebsite` is false are each refused
     with a plain message naming the finding's `id`. A `reviews` finding
     with a count of 0 records ranks 10 and 11, takes rank 10 and names both.
+    A mismatch whose `listing` and `website` are equal (and equal apart
+    from surrounding spaces) is refused, naming the `id` and the field.
+14. Displayed text: for each checked field (`business.name`, a source
+    label, locator and URL, and each `details` text field), a U+0000, a tab,
+    a carriage return, a U+001B, a U+007F, a U+0085, a U+2028 and a U+2029
+    are each refused with a message naming the field's path; a line feed is
+    refused in a single-line field such as `business.name` and accepted in
+    `wrongDetails` and a mismatch's `listing`, where the Markdown keeps it
+    inside the same entry without starting a new item or heading.
 
 ## Out Of Scope For This Slice
 
