@@ -2,8 +2,8 @@
 
 Written October 20, 2026 at the owner's request. Session name:
 `OC-261020-designated-reviewer-plan`. Revised the same day after Codex's
-first, second and third reviews, and on October 21 after the fourth
-(findings written in as requirements; see "Codex Rounds").
+first, second and third reviews, and on October 21 after the fourth and
+fifth (findings written in as requirements; see "Codex Rounds").
 This is a plan only. Building it needs
 the owner's explicit approval, and the build changes `.github/`, which only
 the owner approves. Background: [merge-gate.md](merge-gate.md).
@@ -131,6 +131,15 @@ Designated review: 2 findings on 0123abc (details below).
   names, cancels every earlier clean review. A clean review counts only if
   it is on the head and comes strictly later than all of those; a tie in
   time fails closed (same as Codex today).
+- **Any later owner-account review cancels clean (Codex round 5).** Why:
+  the reviewer might post findings as an ordinary review, or as inline
+  comments, and forget or mistype the marker; the earlier clean verdict
+  would then still count and the pull request could auto-merge with an
+  open finding. So **any** owner-account review on the pull request
+  submitted after the latest clean review cancels it, whatever its body,
+  marker or inline comments, and whether it is on the same head or a later
+  commit. Only a fresh clean review submitted after it passes again. (A
+  tie in time still fails closed.)
 
 ### How Review Events Reach `main`'s Code
 
@@ -162,12 +171,16 @@ Written into each module plan that names a designated reviewer:
 
 1. Review the exact head commit; put its full SHA in the marker.
 2. Submit every verdict as a **review** of kind "Comment" with the marker.
-   Findings go in a `findings` review. **Ordinary comments don't count as
-   findings**: the gate can't read prose, so an unmarked finding doesn't
-   block the merge.
+   Findings go in a `findings` review. **Ordinary pull request comments
+   (not reviews) don't count as findings**: the gate can't read prose, so
+   a finding left only as an ordinary comment doesn't block the merge.
 3. After the builder fixes them, review the new head and submit a fresh
    review (`clean` or `findings`). Never edit a review; submit a new one.
-4. Submit reviews from the owner account only, and never on a pull request
+4. **If you post anything after clean, post clean again when you're
+   satisfied.** Any review you submit after a clean one, even a quick note
+   or an inline comment without a marker, cancels that clean verdict, and
+   the pull request waits until a new clean review comes after it.
+5. Submit reviews from the owner account only, and never on a pull request
    that account opened.
 
 **Risks.** The owner account is admin, so anything signed in as the owner
@@ -254,9 +267,11 @@ What a pull request needs depends on which paths it touches (owner
 decision, October 21, replacing the earlier answer to question 4):
 
 - **Touches any mapped path:** it **requires** a valid clean review from
-  the designated reviewer of every map entry it touches, on the head, not
-  cancelled by a findings review, with no owner-account review edited by
-  someone else. Adding unmapped files never removes this requirement.
+  the designated reviewer of every map entry it touches, on the head, with
+  **no owner-account review of any kind submitted after it** (a later
+  review, marked or not, on any commit, cancels it; see Findings Reviews),
+  and with no owner-account review edited by someone else. Adding unmapped
+  files never removes this requirement.
 - **Also touches unmapped paths** (for example `README.md` or
   `STATUS.md`): it needs **both** the designated reviewer's clean review
   **and** Codex clean on the head.
@@ -347,6 +362,11 @@ Pure-function tests beside the existing gate tests:
 28. Paths from two different map entries: pending until each entry's
     reviewer has a valid clean review on the head.
 29. More files than GitHub can list: pending, whatever the reviews say.
+30. A clean review, then a later owner-account "Comment" review with inline
+    findings and no marker (or a mistyped one), on the same head: pending.
+    The same with the later review on an earlier commit: pending.
+31. An unmarked owner-account review, then a fresh clean review on the
+    head submitted after it: success.
 
 ## Rollout
 
@@ -377,7 +397,7 @@ Pure-function tests beside the existing gate tests:
 
    The owner (or Claude acting as him with his go-ahead) then dispatches it
    against scratch pull requests covering tests 1 to 4, 6, 8, 12 to 14,
-   16, 18 to 20, 22 to 25 and 27 to 28, and compares results with the
+   16, 18 to 20, 22 to 25, 27, 28, 30 and 31, and compares results with the
    expected ones.
 4. **Merge with an empty map**, so 2a is inert; the owner approves.
 5. **First real entry** (household lists) in its own small pull request the
@@ -451,6 +471,18 @@ way. Checked against the script:
   owner-account reviews is modelled on it.
 
 ## Codex Rounds (Findings Written In As Requirements)
+
+Round 5:
+
+1. **Treat later unmarked reviews as cancelling clean verdicts (Findings
+   Reviews):** if the reviewer posted clean, then an ordinary review with
+   inline findings but no marker (or a mistyped one), the earlier clean
+   verdict still counted and the pull request could auto-merge with an open
+   finding. Resolved: any owner-account review submitted after the latest
+   clean review cancels it, whatever it says and whichever commit it is on;
+   only a fresh clean review afterwards passes. The reviewer instructions
+   say so (Findings Reviews; Instructions For The Designated Reviewer;
+   tests 30 and 31).
 
 Round 4:
 
