@@ -85,8 +85,8 @@ time (owner decision, October 16, 2026), each with a different builder.
 The builder works on a branch named after the session and opens a pull
 request; it never pushes to `main` (GitHub also blocks direct pushes, force
 pushes and deletion of `main`, for every account, since October 15, 2026). A different agent reviews it under the
-code path below (no agent reviews its own work), the planning session checks
-it against the plan and then switches on auto-merge (outside builders don't
+code path below (no agent reviews its own work), the planning session or the
+PR steward checks it against the plan and then switches on auto-merge (outside builders don't
 switch it on themselves), and the gate merges it. The Limits below apply to outside
 builders in full; where a builder can reach the owner's Mac, the plan says
 which commands, if any, it may run there.

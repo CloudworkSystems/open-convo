@@ -46,7 +46,8 @@ A pull request merges itself when all of these are true:
 3. **The owner approved the latest version**, but only if it touches a
    protected path (below). Any new commit after his approval cancels it.
 4. Auto-merge is switched on for the pull request (the author does this when
-   opening it; for outside builders, the planning session does it after its
+   opening it; for outside builders, the planning session or the PR steward
+   does it after its
    plan check passes).
 
 No bot holds admin, so no bot can turn these rules off.

@@ -6,6 +6,9 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 21:** The PR steward counts as part of the planning side: after its
+  own passing planning check on an outside builder's pull request, it may
+  switch on auto-merge. It still never merges, approves or changes code.
 - **Oct 20:** The merge gate is on for `main` (scratch tests passed).
   Builders open pull requests as `cloudwork-bot`. Until the bot has Codex
   access, the session that opened a bot pull request asks for each Codex
