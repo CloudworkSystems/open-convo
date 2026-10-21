@@ -1203,10 +1203,205 @@ test('svg title ids differ by grid', () => {
   const span = { start: '2026-03-18', end: '2026-03-18' };
   const water = engine.svg(id, 'water', span);
   const walk = engine.svg(id, 'walk', span);
-  assert.match(water, /id="habit-water-2026-03-18-title"/);
-  assert.match(walk, /id="habit-walk-2026-03-18-title"/);
+  assert.match(water, /id="habit-river-water-2026-03-18-title"/);
+  assert.match(water, /aria-labelledby="habit-river-water-2026-03-18-title habit-river-water-2026-03-18-desc"/);
+  assert.match(walk, /id="habit-river-walk-2026-03-18-title"/);
   assert.equal(water.includes('id="habit-title"'), false);
-  const hostile = renderSvg({ ...engine.grid(id, 'water', span), id: 'x" onload="alert(1)' });
+  const other = fixed('phone-b');
+  const glen = other.createPerson('Glen', { id: 'glen' });
+  other.addTracker(glen, { name: 'Water', kind: 'done', startedOn: '2026-03-18' }, { trackerId: 'water' });
+  other.addStack(glen, { name: 'Morning', members: ['water'] }, { stackId: 'morning' });
+  engine.addStack(id, { name: 'Morning', members: ['water'] }, { stackId: 'morning' });
+  const glenWater = other.svg(glen, 'water', span);
+  assert.match(glenWater, /id="habit-glen-water-2026-03-18-title"/);
+  assert.equal(water.includes('habit-glen-water-2026-03-18-title'), false);
+  assert.match(engine.stackSvg(id, 'morning', span), /id="habit-river-morning-2026-03-18-title"/);
+  assert.match(other.stackSvg(glen, 'morning', span), /id="habit-glen-morning-2026-03-18-title"/);
+  const hostile = renderSvg({ ...engine.grid(id, 'water', span), id: 'x" onload="alert(1)', personId: 'y" onload="alert(2)' });
   assert.equal(hostile.includes('onload="'), false);
-  assert.match(hostile, /id="habit-xonloadalert1-2026-03-18-title"/);
+  assert.match(hostile, /id="habit-yonloadalert2-xonloadalert1-2026-03-18-title"/);
+});
+
+test('tracker fencing keeps a post-cutoff check-in fragment until another replica completes it', () => {
+  const origin = fixed('phone-a', 100);
+  const id = origin.createPerson('River', { id: 'river' });
+  origin.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  const base = origin.getPerson(id);
+  origin.deleteTracker(id, 'water');
+  origin.emptyTrash(id);
+  const purger = origin.getPerson(id);
+  const cutoff = purger.trackers.find(item => item.id === 'water').purge;
+  const oldStamp = { counter: 1, time: 50, device: 'phone-b' };
+  const stampA = { counter: cutoff.counter + 1, time: cutoff.time + 1, device: 'phone-b' };
+  const stampB = { counter: cutoff.counter + 2, time: cutoff.time + 2, device: 'phone-c' };
+  const editorA = structuredClone(base);
+  const editorB = structuredClone(base);
+  editorA.checkIns.push({
+    id: 'glass',
+    life: { value: true, stamp: stampA },
+    purge: null,
+    fields: {
+      trackerId: { value: 'water', stamp: oldStamp },
+      date: { value: '2026-03-09', stamp: stampA },
+      value: { value: 7, stamp: stampA },
+      source: { value: 'manual', stamp: oldStamp },
+    },
+  });
+  editorB.checkIns.push({
+    id: 'glass',
+    life: { value: true, stamp: stampB },
+    purge: null,
+    fields: {
+      trackerId: { value: 'water', stamp: stampB },
+      date: { value: '2026-03-04', stamp: oldStamp },
+      value: { value: 5, stamp: oldStamp },
+      source: { value: 'manual', stamp: stampB },
+    },
+  });
+  editorA.restDays.push({
+    id: 'water-rest',
+    life: { value: true, stamp: stampA },
+    purge: null,
+    fields: {
+      date: { value: '2026-03-11', stamp: stampA },
+      trackerId: { value: 'water', stamp: oldStamp },
+    },
+  });
+  editorB.restDays.push({
+    id: 'water-rest',
+    life: { value: true, stamp: stampB },
+    purge: null,
+    fields: {
+      date: { value: '2026-03-05', stamp: oldStamp },
+      trackerId: { value: 'water', stamp: stampB },
+    },
+  });
+
+  const partial = mergePeople(purger, editorA);
+  const kept = partial.checkIns.find(item => item.id === 'glass');
+  assert.equal(kept.fields.value.value, 7);
+  assert.equal(kept.fields.date.value, '2026-03-09');
+  assert.equal(kept.fields.trackerId, undefined);
+  assert.equal(kept.fields.source, undefined);
+  assert.equal(kept.life.value, true);
+  assert.equal(viewPerson(partial).checkIns.length, 0);
+  assert.equal(viewPerson(partial).restDays.length, 0);
+  assert.equal(partial.restDays.find(item => item.id === 'water-rest').fields.date.value, '2026-03-11');
+
+  const copies = [purger, editorA, editorB];
+  const joined = mergePeople(mergePeople(copies[0], copies[1]), copies[2]);
+  for (const [i, j, k] of [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]) {
+    assert.deepEqual(mergePeople(mergePeople(copies[i], copies[j]), copies[k]), joined);
+  }
+  const glass = joined.checkIns.find(item => item.id === 'glass');
+  assert.equal(glass.fields.value.value, 7);
+  assert.equal(glass.fields.date.value, '2026-03-09');
+  assert.equal(glass.fields.trackerId.value, 'water');
+  assert.equal(glass.fields.source.value, 'manual');
+  assert.equal(joined.restDays.find(item => item.id === 'water-rest').fields.date.value, '2026-03-11');
+  assert.equal(viewPerson(joined).checkIns.length, 1);
+  assert.equal(viewPerson(joined).restDays[0].date, '2026-03-11');
+  assert.deepEqual(mergePeople(joined, joined), joined);
+
+  const reader = fixed('phone-d', 100);
+  reader.importPerson(joined);
+  reader.addTracker(id, { name: 'Steps', kind: 'count', target: 8, unit: 'steps' }, { trackerId: 'water' });
+  assert.equal(square(reader.grid(id, 'water', { start: '2026-03-01', end: '2026-03-12' }), '2026-03-09').value, 7);
+  assert.equal(square(reader.grid(id, 'water', { start: '2026-03-01', end: '2026-03-12' }), '2026-03-04').value, 0);
+});
+
+test('a child stamped before its tracker purge is refused at load', () => {
+  const engine = fixed('phone-a', 100);
+  const id = engine.createPerson('River', { id: 'river' });
+  engine.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  engine.addStack(id, { name: 'Morning', members: ['water'] }, { stackId: 'morning' });
+  engine.deleteTracker(id, 'water');
+  engine.emptyTrash(id);
+  const purged = engine.getPerson(id);
+  const cutoff = purged.trackers.find(item => item.id === 'water').purge;
+  const old = { counter: cutoff.counter, time: cutoff.time, device: cutoff.device };
+  const fresh = { counter: cutoff.counter + 3, time: cutoff.time + 3, device: 'phone-b' };
+  const stale = structuredClone(purged);
+  stale.checkIns = [{
+    id: 'glass',
+    life: { value: true, stamp: { counter: old.counter + 1, time: old.time + 1, device: 'phone-b' } },
+    purge: null,
+    fields: {
+      trackerId: { value: 'water', stamp: { ...old } },
+      date: { value: '2026-03-04', stamp: { ...old } },
+      value: { value: 5, stamp: { ...old } },
+      source: { value: 'manual', stamp: { ...old } },
+    },
+  }];
+  assert.throws(() => deserializePerson(JSON.stringify(stale)), /Field is older than its purge cutoff/);
+  assert.throws(() => mergePeople(stale, stale), /Field is older than its purge cutoff/);
+  assert.throws(() => viewPerson(stale), /Field is older than its purge cutoff/);
+
+  const lifeStale = structuredClone(stale);
+  for (const entry of Object.values(lifeStale.checkIns[0].fields)) entry.stamp = { ...fresh };
+  lifeStale.checkIns[0].life = { value: true, stamp: { ...old } };
+  assert.throws(() => deserializePerson(JSON.stringify(lifeStale)), /Life is older than its purge cutoff/);
+
+  const rest = structuredClone(purged);
+  rest.restDays = [{
+    id: 'water-rest',
+    life: { value: true, stamp: { ...fresh } },
+    purge: null,
+    fields: {
+      date: { value: '2026-03-05', stamp: { ...old } },
+      trackerId: { value: 'water', stamp: { ...old } },
+    },
+  }];
+  assert.throws(() => deserializePerson(JSON.stringify(rest)), /Field is older than its purge cutoff/);
+  assert.throws(() => mergePeople(rest, rest), /Field is older than its purge cutoff/);
+
+  const stack = structuredClone(purged);
+  stack.stacks[0].members.water = { value: true, stamp: { ...old } };
+  assert.throws(() => deserializePerson(JSON.stringify(stack)), /Field is older than its purge cutoff/);
+  assert.throws(() => mergePeople(stack, stack), /Field is older than its purge cutoff/);
+
+  const fragment = structuredClone(purged);
+  fragment.checkIns = [{
+    id: 'glass',
+    life: { value: true, stamp: { ...fresh } },
+    purge: { ...cutoff },
+    fields: {
+      trackerId: { value: 'water', stamp: { ...fresh } },
+      date: { value: '2026-03-09', stamp: { ...fresh } },
+      value: { value: 7, stamp: { ...fresh } },
+    },
+  }];
+  const loaded = deserializePerson(JSON.stringify(fragment));
+  assert.equal(viewPerson(loaded).checkIns.length, 0);
+  assert.equal(loaded.checkIns[0].fields.value.value, 7);
+  const reader = fixed('phone-c', 100);
+  reader.importPerson(loaded);
+  const stored = reader.getPerson(id);
+  assert.deepEqual(mergePeople(stored, stored), stored);
+  assert.equal(stored.checkIns[0].fields.value.value, 7);
+  assert.equal(reader.view(id).checkIns.length, 0);
+
+  const later = structuredClone(purged);
+  later.checkIns = [{
+    id: 'later',
+    life: { value: true, stamp: { ...fresh } },
+    purge: null,
+    fields: {
+      trackerId: { value: 'water', stamp: { ...fresh } },
+      date: { value: '2026-03-10', stamp: { ...fresh } },
+      value: { value: 2, stamp: { ...fresh } },
+      source: { value: 'manual', stamp: { ...fresh } },
+    },
+  }];
+  later.stacks[0].members.water = { value: true, stamp: { ...fresh } };
+  const accepted = deserializePerson(JSON.stringify(later));
+  assert.equal(viewPerson(accepted).checkIns[0].value, 2);
+  assert.deepEqual(viewPerson(accepted).stacks[0].members, ['water']);
+  const keeper = fixed('phone-d', 100);
+  keeper.importPerson(accepted);
+  const absorbed = mergePeople(keeper.getPerson(id), keeper.getPerson(id));
+  assert.deepEqual(mergePeople(absorbed, absorbed), absorbed);
+  assert.equal(absorbed.checkIns.find(item => item.id === 'later').fields.value.value, 2);
+  assert.equal(absorbed.checkIns.find(item => item.id === 'later').purge.counter, cutoff.counter);
+  assert.equal(viewPerson(absorbed).checkIns[0].value, 2);
 });

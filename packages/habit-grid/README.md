@@ -111,8 +111,11 @@ daylight-saving change cannot skip or repeat a day.
   deleted tracker also purges that tracker's check-ins and tracker-specific
   rest days, and drops the tracker from stack membership. A rest day with an
   empty tracker ID stays. An older check-in for that tracker, merged from
-  another device, stays purged. Reusing the tracker ID starts from an empty
-  grid.
+  another device, stays purged. A tracker cutoff drops only the check-in or
+  rest fields stamped at or before it. A newer partial check-in stays in the
+  file and stays hidden until another replica fills the missing fields, and
+  every merge order keeps that completed check-in. Reusing the tracker ID
+  starts from an empty grid when nothing newer than the cutoff remains.
 
 Comparisons use JavaScript UTF-16 code unit order, so devices agree.
 
@@ -170,8 +173,9 @@ who has started.
 ## SVG
 
 `renderSvg(grid)` returns one self-contained SVG. It does not load a font,
-image, or stylesheet. The title and description ids include the grid id, so
-two tiles on one page do not share an id. Square `date`, `state`, and `shade` are escaped before
+image, or stylesheet. The title and description ids include the person id
+and the grid id, so two people who reuse a tracker or stack id do not share
+an id on one page. Square `date`, `state`, and `shade` are escaped before
 they are written into attributes, so a hand-built grid cannot add an event
 handler. Ember values come from `brand/tokens.css`: page
 `#15110f`, text `#f7f2ee`, body `#cec3bc`, magenta `#c8298b`, coral `#f37a4a`,
@@ -241,7 +245,11 @@ type, unless a purge cutoff left a fragment whose surviving fields are newer
 than that cutoff. A field or stack member stamped at or before that cutoff is
 refused even when the record is otherwise complete, with `Field is older than
 its purge cutoff.` A nested record uses the later of its own cutoff and the
-person's cutoff. A life register at or before that cutoff is refused unless
+person's cutoff. A check-in, tracker-specific rest day, or stack membership
+stamped at or before the purge cutoff of the tracker it names is refused the
+same way, even when the person has no cutoff. A fragment whose remaining
+fields and life are newer than that tracker cutoff still loads and stays
+hidden. A life register at or before that cutoff is refused unless
 the record is already an empty purged marker, with `Life is older than its
 purge cutoff.` A purged marker has empty fields and may omit them. A saved
 file that drops `date` from a live check-in with no cutoff fails at load with

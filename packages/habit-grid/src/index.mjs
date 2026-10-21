@@ -229,9 +229,21 @@ function fencedByTracker(record, cutoffs) {
   const trackerId = record.fields?.trackerId?.value;
   const cutoff = typeof trackerId === 'string' ? cutoffs.get(trackerId) : null;
   if (!cutoff) return record;
+  const purge = latest(record.purge, cutoff);
   const stamps = [record.life?.stamp, ...Object.values(record.fields).map(entry => entry.stamp)];
-  if (stamps.every(stamp => compareStamps(stamp, cutoff) > 0)) return record;
-  return tombstoneRecord(record.id, latest(record.purge, cutoff), false);
+  const purgeAlreadyRecorded = validStamp(record.purge) && compareStamps(record.purge, purge) === 0;
+  if (purgeAlreadyRecorded && stamps.every(stamp => compareStamps(stamp, purge) > 0)) return record;
+  if (stamps.every(stamp => compareStamps(stamp, purge) > 0)) {
+    return { id: record.id, life: clone(record.life), purge: clone(purge), fields: clone(record.fields) };
+  }
+  const fields = {};
+  for (const [key, entry] of Object.entries(record.fields)) {
+    if (compareStamps(entry.stamp, purge) > 0) setOwn(fields, key, clone(entry));
+  }
+  if (compareStamps(record.life.stamp, purge) <= 0 || Object.keys(fields).length === 0) {
+    return tombstoneRecord(record.id, purge, false);
+  }
+  return { id: record.id, life: clone(record.life), purge: clone(purge), fields };
 }
 function fencedStack(stack, cutoffs) {
   const members = {};
@@ -367,7 +379,26 @@ function validate(person) {
     for (const record of person[key]) validateRecord(record, types, withMembers, checkShape, person.purge);
     uniqueIds(person[key], label);
   }
+  assertTrackerChildCutoffs(person);
   return person;
+}
+function assertTrackerChildCutoffs(person) {
+  const cutoffs = new Map();
+  for (const tracker of person.trackers) if (validStamp(tracker.purge)) cutoffs.set(tracker.id, tracker.purge);
+  for (const record of [...person.checkIns, ...person.restDays]) {
+    const trackerId = record.fields?.trackerId?.value;
+    const cutoff = typeof trackerId === 'string' ? cutoffs.get(trackerId) : null;
+    if (!cutoff) continue;
+    const purge = latest(record.purge, cutoff);
+    if (Object.values(record.fields).some(entry => compareStamps(entry.stamp, purge) <= 0)) fail('Field is older than its purge cutoff.');
+    if (compareStamps(record.life.stamp, purge) <= 0 && !emptyPurgedMarker(record, false, purge)) fail('Life is older than its purge cutoff.');
+  }
+  for (const stack of person.stacks) {
+    for (const [id, entry] of Object.entries(stack.members ?? {})) {
+      const cutoff = cutoffs.get(id);
+      if (cutoff && compareStamps(entry.stamp, cutoff) <= 0) fail('Field is older than its purge cutoff.');
+    }
+  }
 }
 export function serializePerson(person) { return JSON.stringify(validate(person)); }
 export function deserializePerson(json) {
@@ -882,7 +913,7 @@ export function renderSvg(grid) {
   const height = top + grid.rows.length * (cell + gap) + 8;
   const initials = { sunday: 'S', monday: 'M', tuesday: 'T', wednesday: 'W', thursday: 'T', friday: 'F', saturday: 'S' };
   const chunks = [];
-  const label = `habit-${String(`${grid.id ?? 'grid'}-${grid.start ?? ''}`).replace(/[^A-Za-z0-9_-]/g, '') || 'grid'}`;
+  const label = `habit-${String(`${grid.personId ?? ''}-${grid.id ?? 'grid'}-${grid.start ?? ''}`).replace(/[^A-Za-z0-9_-]/g, '') || 'grid'}`;
   chunks.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="${label}-title ${label}-desc">`);
   chunks.push(`<title id="${label}-title">${escapeXml(grid.name || 'Habit grid')}</title>`);
   chunks.push(`<desc id="${label}-desc">${escapeXml(`Days from ${grid.start} to ${grid.end}. Week starts on ${grid.weekStartsOn}. Full days show a check mark. Rest days show a circle and a bar. Done days show a diamond that grows with the shade. Partial days show bars. Open days are dashed. Empty days are an outline.`)}</desc>`);
