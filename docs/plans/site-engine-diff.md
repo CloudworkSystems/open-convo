@@ -69,9 +69,27 @@ Fields the facts schema allows today (`schema/facts.schema.json`):
   removed: Morning bun"; "Price of Rye loaf: $9 becomes $10"; "Price of Rye
   loaf removed"; "Description of Rye loaf: *old* becomes *new*". A renamed service shows as one removed and one new.
 - **Hours**, matched by `days`: "Hours on Sat: 08:00–13:00 becomes
-  10:00–14:00"; "New hours: Sun 09:00–12:00"; "No longer open: Sat". A switch
-  between a list of hours and `"By appointment"` is said plainly ("Hours
-  become: By appointment").
+  10:00–14:00"; "New hours: Sun 09:00–12:00"; "No longer open: Sat".
+
+  `hours` is optional, and the schema allows `"By appointment"` or a list of
+  one to fourteen entries (never an empty list). `renderPage` and
+  `buildJsonLd` in `src/render.mjs` treat the three forms like this: a list
+  shows an Hours section with one line per entry and gives search engines
+  `openingHoursSpecification`; `"By appointment"` shows an Hours section
+  reading "By appointment" and gives search engines `openingHours: "By
+  appointment"`; no `hours` shows no Hours section and gives search engines
+  no hours. So:
+  - No hours to `"By appointment"`: "New Hours section: By appointment".
+    The reverse: "Hours section removed (it said: By appointment)".
+  - No hours to a list: "New Hours section:" followed by each entry
+    ("Tue–Fri 07:00–14:00; Sat 08:00–13:00", in list order). The reverse:
+    "Hours section removed (it said: *the entries*)".
+  - A list to `"By appointment"`: "Hours become: By appointment (instead
+    of: *the entries*)". The reverse: "Hours become: *the entries*
+    (instead of: By appointment)".
+  These transition sentences replace the per-day sentences: a switch
+  between forms never also lists "New hours" or "No longer open" lines, or
+  an hours order sentence.
 - **Location:** each changed address line by name ("Street: 18 Marrow Lane
   becomes 20 Marrow Lane"). A switch between a street address and `"Online
   only"` also says what search engines will see: "Search engines will see an
@@ -153,6 +171,9 @@ invented variants beside them). At least:
    forms: no location to `"Online only"` and back, and no location to a
    street address and back, each give exactly the sentences under
    "Location", with the search-engine sentence only for the address cases.
+   And the hours forms: all six transitions between no hours,
+   `"By appointment"` and a list of hours each give exactly the one
+   sentence under "Hours", with no per-day or order sentence alongside.
 3. A renamed service shows as one removed and one new. A reordering alone of
    each list (photos, services, hours, social links) shows exactly one
    order sentence for that list, and a reordering plus a price change shows
