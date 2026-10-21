@@ -73,14 +73,18 @@ builds, Codex reviews). Plan:
 In review.
 
 **Household lists engine** (Family and Home), built by Codex alongside Site
-Engine; P2 follow-up implements the October 17 plan and purge guard; awaiting Claude review and planning check. Plan:
+Engine; P2 follow-up implements the October 17 plan and purge guard; the fixes merged as #71 on October 21. Plan:
 [docs/plans/household-lists-engine.md](docs/plans/household-lists-engine.md).
 First real use after step 5, synced through iCloud with the owner's approval.
 
-**Habit grid engine** (Personal), implemented; tests pass; awaiting Codex review and the planning check.
+**Habit grid engine** (Personal), merged as #74 on October 21.
 Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
 **Annotation rounds checker** (Code): plan approved; GrokBot team A starts once #94 merges.
+
+**Site Engine: what will change** (Business), GrokBot (team B) builds, Codex reviews; plan in review in its own pull request (`OC-261021-plan-site-engine-diff`).
+
+**Visibility report** (Business), GrokBot (team C) builds, Codex reviews; plan in review in its own pull request (`OC-261021-plan-visibility-report`).
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:
@@ -96,6 +100,12 @@ by folder so new packages are covered automatically.
 October 21 (OC-261021-owner-accepts-findings): the owner can accept the
 remaining Codex findings on one exact head commit by posting
 `owner-accepts-findings <full head sha>`; it satisfies only `codex-approved`.
+
+**Building faster** (more outside modules, parallel lanes, a dogfooding
+cadence): approved by the owner October 21. The limit of three outside
+modules merges with the plan; each module plan above and the other
+changes follow in their own pull requests. Plan:
+[docs/plans/scale-up.md](docs/plans/scale-up.md).
 
 ## Owner Decisions
 
