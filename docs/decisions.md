@@ -8,8 +8,9 @@ full plan and history are in [PLAN.md](../PLAN.md).
 
 - **Oct 21:** Scale-up plan approved ([docs/plans/scale-up.md](plans/scale-up.md)).
   Up to three outside modules at a time, each with its own builder or builder
-  team; modules waiting only on review fixes (today the household lists
-  fixes, #71) don't count. The habit grid merged as #74 on October 21. GrokBot's three teams build annotation
+  team; modules waiting only on review fixes don't count. None is waiting
+  only on review fixes today: the habit grid merged as #74 and the
+  household lists fixes merged as #71, both on October 21. GrokBot's three teams build annotation
   rounds (team A), Site Engine "what will change" (team B) and the
   visibility report (team C), each from its own plan, which has its own plan
   pull request, with Codex reviewing. Two Claude building lanes run now (main step; Desk and
