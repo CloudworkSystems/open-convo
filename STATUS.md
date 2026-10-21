@@ -80,7 +80,7 @@ First real use after step 5, synced through iCloud with the owner's approval.
 **Habit grid engine** (Personal), merged as #74 on October 21.
 Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
-**Annotation rounds checker** (Code), GrokBot (team A) builds, Codex reviews; plan in review in its own pull request (`OC-261021-plan-annotation-rounds`).
+**Annotation rounds checker** (Code): plan approved; GrokBot team A starts once #94 merges.
 
 **Site Engine: what will change** (Business), GrokBot (team B) builds, Codex reviews; plan in review in its own pull request (`OC-261021-plan-site-engine-diff`).
 
