@@ -1943,7 +1943,6 @@ test('a legacy check-in purge still erases history saved before the empty was re
   home.editCheckIn(id, 'glass', { trackerId: 'steps' });
   away.importPerson(home.getPerson(id));
   home.deleteCheckIn(id, 'glass');
-  home.deleteTracker(id, 'water');
   home.emptyTrash(id);
   const glassPurge = home.getPerson(id).checkIns.find(item => item.id === 'glass').purge;
   home.logCheckIn(id, 'steps', { date: '2026-03-05', value: 9, checkInId: 'glass' });
@@ -1957,7 +1956,6 @@ test('a legacy check-in purge still erases history saved before the empty was re
   assert.equal(compareStamps(glass.emptied, glassPurge), 0);
   const revived = fixed('phone-c', 100);
   revived.importPerson(joined);
-  revived.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
   revived.deleteTracker(id, 'water');
   revived.emptyTrash(id);
   assert.equal(revived.view(id).checkIns.find(item => item.id === 'glass').value, 9);
@@ -1992,4 +1990,41 @@ test('an empty stamp that disagrees with the check-in purge is refused', () => {
   kept.formerTrackers.water.stamp = { counter: 1, time: 100, device: 'phone-a' };
   assert.throws(() => deserializePerson(JSON.stringify(staleHistory)), /Check-in history is older than its empty stamp/);
   assert.throws(() => mergePeople(staleHistory, staleHistory), /Check-in history is older than its empty stamp/);
+});
+
+test('reusing a check-in fenced by one tracker keeps a move to another', () => {
+  const home = fixed('phone-a', 100);
+  const away = fixed('phone-b', 100);
+  const id = home.createPerson('River', { id: 'river' });
+  home.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  home.addTracker(id, { name: 'Steps', kind: 'count', target: 8, unit: 'steps' }, { trackerId: 'steps' });
+  home.addTracker(id, { name: 'Pages', kind: 'count', target: 8, unit: 'pages' }, { trackerId: 'pages' });
+  away.importPerson(home.getPerson(id));
+  home.logCheckIn(id, 'water', { date: '2026-03-04', value: 5, checkInId: 'glass' });
+  away.importPerson(home.getPerson(id));
+  away.editCheckIn(id, 'glass', { trackerId: 'steps' });
+  home.deleteTracker(id, 'water');
+  home.emptyTrash(id);
+  home.logCheckIn(id, 'pages', { date: '2026-03-05', value: 9, checkInId: 'glass' });
+  const reused = home.getPerson(id);
+  const moved = away.getPerson(id);
+  const joined = converges(reused, moved);
+  const glass = joined.checkIns.find(item => item.id === 'glass');
+  assert.equal(glass.life.value, true);
+  assert.equal(glass.fields.trackerId.value, 'pages');
+  assert.equal(glass.fields.value.value, 9);
+  assert.equal(glass.formerTrackers.steps.value, true);
+  assert.equal(glass.emptied, undefined);
+  const later = fixed('phone-c', 100);
+  later.importPerson(joined);
+  later.deleteTracker(id, 'steps');
+  later.emptyTrash(id);
+  assert.equal(later.getPerson(id).checkIns.find(item => item.id === 'glass').life.value, false);
+  assert.equal(later.view(id).checkIns.length, 0);
+  for (const name of ['Glen two', 'Glen three', 'Glen four', 'Glen five', 'Glen six']) away.renamePerson(id, name);
+  away.deleteTracker(id, 'steps');
+  away.emptyTrash(id);
+  const purged = converges(reused, away.getPerson(id));
+  assert.equal(purged.checkIns.find(item => item.id === 'glass').life.value, false);
+  assert.equal(viewPerson(purged).checkIns.length, 0);
 });

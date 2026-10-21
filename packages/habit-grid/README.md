@@ -269,7 +269,9 @@ history of a different tracker the check-in left. A replica that merely lacks
 one of those trackers, and whose purge was copied from a different tracker's
 fence, does not erase it either. A file saved before `emptied` was stored
 still counts when that purge is the check-in's own: it is not the person
-cutoff, and it is not the cutoff of a tracker the check-in still names. An
+cutoff, and it is not the cutoff of any tracker in the file. A purge copied
+from a tracker stays that tracker's fence after the check-in id is reused on
+another tracker, so a move saved on an older copy is kept. An
 `emptied` stamp with no purge, or newer than the check-in's purge, is refused.
 History stamped at or before that empty is refused too.
 

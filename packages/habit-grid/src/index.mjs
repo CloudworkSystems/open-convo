@@ -301,15 +301,8 @@ function ownEmptyStamp(record, trackerCutoffs, parentPurge) {
   if (!validStamp(record.purge)) return null;
   if (validStamp(parentPurge) && compareStamps(record.purge, parentPurge) === 0) return null;
   if (object(record.formerTrackers) && Object.keys(record.formerTrackers).length > 0) return null;
-  const associated = associatedTrackerIds(record);
-  for (const id of associated) {
-    const cutoff = trackerCutoffs.get(id);
-    if (cutoff && compareStamps(record.purge, cutoff) === 0) return null;
-  }
-  if (associated.length === 0) {
-    for (const cutoff of trackerCutoffs.values()) {
-      if (compareStamps(record.purge, cutoff) === 0) return null;
-    }
+  for (const cutoff of trackerCutoffs.values()) {
+    if (compareStamps(record.purge, cutoff) === 0) return null;
   }
   return record.purge;
 }
