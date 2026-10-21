@@ -18,16 +18,20 @@
 .run-transcript h3,
 .run-transcript dd { margin: 0; }
 
-.run-transcript .run-phase { font-size: 13px; }
+.run-transcript .run-phase { font-size: 15px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
 .run-transcript .run-phase:focus-visible { outline: 2px solid var(--tca-focus-ring); outline-offset: 4px; border-radius: 2px; }
 .run-transcript .run-message { min-width: 0; }
+/* Step 3 trial: the reply's status sits under its heading, above its text. */
+.run-transcript .run-message > .run-transcript-heading { margin-bottom: 10px; }
+.run-transcript .run-message > .run-empty + .run-empty,
+.run-transcript .run-message > .run-transcript-heading + .run-empty { margin-bottom: 8px; }
 .run-transcript h3 { margin-bottom: 6px; font-size: 14px; overflow-wrap: anywhere; }
 
 .run-transcript .run-participant {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 18px;
-  margin: 0 0 10px;
+  margin: 10px 0 0;
   color: var(--tca-text-muted);
   font-size: 12px;
 }

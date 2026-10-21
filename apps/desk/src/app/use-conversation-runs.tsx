@@ -592,6 +592,25 @@ export function useConversationRuns(options: RunWorkspace) {
     : options.runtime.participant?.identity.label;
   const participantMode = options.runtime.participantChoices !== undefined || !!selectedSession?.participantChoice
     || !!options.runtime.participant || options.state?.schemaVersion === 2;
+  // Step 3 trial: while this conversation's reply is being written, the
+  // composer's Send becomes Stop, wired to the same controller.stop() as the
+  // transcript's own Stop. Recovery states (Retry Stop, cleanup) stay in the
+  // transcript, next to the status that explains them.
+  const composerController = [...controllers.current.values()].find((controller) => {
+    const snapshot = controller.snapshot;
+    return snapshot.run.sessionId === selected && !isConversationRunClosed(snapshot.run)
+      && (snapshot.run.phase === 'prepared' || snapshot.run.phase === 'running')
+      && (['preparing', 'starting', 'running'].includes(snapshot.status) && snapshot.canStop
+        || snapshot.stopState === 'pending');
+  });
+  const composerStop = composerController ? {
+    stopping: composerController.snapshot.stopState === 'pending',
+    stop: () => { if (composerController.snapshot.canStop) void composerController.stop(); },
+  } : undefined;
+  const selectedBusy = selected ? busy(selected) : false;
+  const sendWaitingReason = !selected || !selectedBusy || composerStop ? undefined
+    : checkingSends.current.has(selected) ? 'Checking that the model is available…'
+    : 'Send is available again once the current reply has ended and is saved.';
   const hasUnconfirmed = () => cleanupPending() || localClosures.current.size > 0
     || [...runRecords().values()].some((run) => !isConversationRunClosed(run)) || [...controllers.current.values()].some((controller) => {
     const snapshot = controller.snapshot;
@@ -600,7 +619,7 @@ export function useConversationRuns(options: RunWorkspace) {
   return { send, refreshAvailability, confirmSaved, content, otherRunControls, hasUnconfirmed, canSaveEdits,
     participantLabel: participantMode ? choiceLabel ?? 'Participant unavailable' : undefined,
     selectedLocalProblem: selectedLocal && savedSelection && !options.runtime.participantAvailabilityChecking ? catalogBlock(savedSelection) : undefined,
-    busy: selected ? busy(selected) : false,
+    busy: selectedBusy, composerStop, sendWaitingReason,
     unavailable: participantMode && (!(selectedLocal ? options.runtime.participantForRun : options.runtime.participant) || options.blocked() || cleanupPending() || !!selectionBlock || inputTooLarge),
     sendBlockedReason: participantMode && options.blocked()
       ? 'Sending is paused until the workspace save is resolved. Your draft is retained.'

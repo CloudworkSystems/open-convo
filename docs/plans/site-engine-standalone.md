@@ -6,7 +6,8 @@ Written October 15, 2026 by the planning session. Session name:
 
 This is the first module built by an outside builder (see AGENTS.md, "Outside
 Builders"). GrokBot builds, Codex reviews, the planning session checks the
-result against this document, and the owner merges.
+result against this document and switches on auto-merge, and the merge gate
+merges it ([merge-gate.md](merge-gate.md)).
 
 ## Why This Slice, Why Now
 
@@ -176,7 +177,8 @@ breaking one is a stop-and-report event.
 3. The planning session checks the result against this document and gives the
    owner a short plain-language summary and a try-it checklist (open the sample
    page on the phone and the Mac, read it, try the failure tests).
-4. The owner merges with GitHub's button.
+4. The planning session switches on auto-merge; GitHub merges once the gate
+   passes (the owner approves only protected paths).
 
 ## Finish Line
 

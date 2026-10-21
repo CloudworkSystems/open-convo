@@ -21,11 +21,16 @@ jobs:
       desk: ${{ steps.diff.outputs.desk }}
       mac: ${{ steps.diff.outputs.mac }}
       gate: ${{ steps.diff.outputs.gate }}
+      # JSON list of the other packages/* folders to test (see the packages job).
+      packages: ${{ steps.diff.outputs.packages }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - id: diff
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
@@ -34,6 +39,8 @@ jobs:
           if [ -z "$BASE" ]; then
             # Manual run: test everything.
             for part in clarity desk mac gate; do echo "$part=true" >> "$GITHUB_OUTPUT"; done
+            packages=$(node .github/scripts/package-changes.mjs --all)
+            echo "packages=$packages" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           files=$(git diff --name-only "$(git merge-base "$BASE" "$HEAD")" "$HEAD")
@@ -46,6 +53,11 @@ jobs:
           # The Mac tests also read the Desk's shared fixtures.
           echo "mac=$([ "$all" = true ] && echo true || has '^(apps/mac/|apps/desk/tests/fixtures/)')" >> "$GITHUB_OUTPUT"
           echo "gate=$all" >> "$GITHUB_OUTPUT"
+          # Every other package with a package.json, found by folder, so new
+          # packages are covered without editing this file.
+          packages=$(echo "$files" | node .github/scripts/package-changes.mjs)
+          echo "Packages to test: $packages"
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
 
   clarity:
     needs: changes
@@ -144,10 +156,46 @@ jobs:
           node-version: 22
       - run: node --test .github/scripts/tests/*.test.mjs
 
+  # One run per changed package in packages/ that has no job of its own above
+  # (site-engine, household-lists, and new ones such as habit-grid).
+  packages:
+    needs: changes
+    if: needs.changes.outputs.packages != '[]'
+    name: package (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.changes.outputs.packages) }}
+    defaults:
+      run:
+        working-directory: packages/${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # npm ci needs a lockfile. A package with no dependencies has nothing to
+      # install; one with dependencies but no lockfile fails.
+      - name: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          elif node -e "const p = require('./package.json'); process.exit(Object.keys({ ...p.dependencies, ...p.devDependencies, ...p.optionalDependencies }).length ? 0 : 1)"; then
+            echo "This package has dependencies but no package-lock.json, so npm ci can't install them."
+            exit 1
+          else
+            echo "No dependencies to install."
+          fi
+      - run: npm test
+
   # The one check branch protection requires. Passes only if every part that
   # ran passed; parts with no changes are skipped.
   tests:
-    needs: [changes, clarity, desk, mac, fixtures, gate]
+    needs: [changes, clarity, desk, mac, fixtures, gate, packages]
     if: always()
     runs-on: ubuntu-latest
     steps:

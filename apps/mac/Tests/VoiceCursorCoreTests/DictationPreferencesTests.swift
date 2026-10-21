@@ -113,7 +113,7 @@ struct DictationPreferencesTests {
         #expect(!finalize.contains("Settings.archiveFormat"), "The conversion must use the same format as output registration.")
         #expect(finalize.contains("processes: processes"))
 
-        let stop = try functionBody("func stop() {\n        guard isRecording", in: source)
+        let stop = try functionBody("func stop(source: StopTailPolicy.StopSource = .automatic) {\n        guard isRecording", in: source)
         #expect(stop.contains("let retainAudioForHarvest = url.flatMap { ownedRecordings.retainsCapture($0) } ?? false"))
         #expect(!stop.contains("Settings.dictationPreferences.retainAudioForHarvest"), "Finalization must use the original capture policy, including conversion and failures.")
         #expect(stop.components(separatedBy: "Settings.archiveFormat").count == 2)
@@ -155,6 +155,95 @@ struct DictationPreferencesTests {
             let body = try functionBody(signature, in: source)
             #expect(body.contains("guard let self, !self.recordingProcesses.isClosed else { return }"), "Delayed permission callbacks must honor the permanent shutdown gate.")
         }
+    }
+
+    @Test("Only the owner's Stop gets the listening tail; safety stops and quitting end capture at once")
+    func stopTailWiring() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent("Sources/VoiceCursorMac/main.swift"), encoding: .utf8)
+
+        let stopDictation = try functionBody("private func stopDictation(hidePill: Bool = true, immediate: Bool = false)", in: source)
+        #expect(stopDictation.contains("controller.stop(source: immediate ? .automatic : .owner)"))
+        let safetyStop = try functionBody("private func stopDictationAfterExternalLivePreviewGuard(", in: source)
+        #expect(safetyStop.contains("stopDictation(immediate: true)"), "A safety stop must not wait for a tail.")
+        #expect(!source.contains("self.stop(source: .owner)"), "Auto-stops and engine errors stop at once.")
+
+        let stop = try functionBody("func stop(source: StopTailPolicy.StopSource = .automatic) {\n        guard isRecording", in: source)
+        // Codex round 2 on #82: live modes skip the tail. The policy sees the
+        // insertion setting, the action, a running live preview and the
+        // live-paste mode, and is decided before anything is committed.
+        let policy = try #require(stop.range(of: "StopTailPolicy.tailSeconds("))
+        #expect(stop.contains("insertionTiming: InsertionTiming.current == .finalPasteOnly ? .finalPasteOnly : .liveTypewriter"))
+        #expect(stop.contains("livePreviewActive: deskRoute == nil && TextInjector.isLivePreviewActive"))
+        #expect(stop.contains("livePastesFinishedSegments: livePastesFinishedSegmentsThisSession"))
+        // Codex round 3 on #82: what this dictation already did, not only
+        // the settings now.
+        #expect(stop.contains("liveTextAlreadyInApp: deskRoute == nil && (didLivePasteFinalText || TextInjector.livePreviewStartedThisSession)"))
+        let begin = try functionBody("static func beginLivePreviewIfNeeded(", in: source)
+        #expect(begin.components(separatedBy: "livePreviewStartedThisSession = true").count == 3, "both live preview kinds mark the session")
+        #expect(begin.hasPrefix("{\n        livePreviewStartedThisSession = false"))
+        // The archived length is the captured length, tail included.
+        #expect(stop.contains("durationMs: evidence.durationMs,"))
+        #expect(!stop.contains("durationMs: durationMs,"))
+        let endAfterStop = try functionBody("private func endCaptureAfterStop(", in: source)
+        let micOffAt = try #require(endAfterStop.range(of: "micStoppedAt = Date()"))
+        let endAudio = try #require(endAfterStop.range(of: "request.endAudio()"))
+        #expect(micOffAt.lowerBound < endAudio.lowerBound)
+        #expect(try functionBody("private func completeCaptureEnd(", in: source).contains("capturedSeconds: captureEndedAt.timeIntervalSince(startedAt)"))
+        let commit = try #require(stop.range(of: "TextInjector.commitLivePreviewForImmediateStop("))
+        let liveSubmit = try #require(stop.range(of: "timing=immediate-stop"))
+        #expect(policy.lowerBound < commit.lowerBound && policy.lowerBound < liveSubmit.lowerBound)
+        #expect(source.contains("static var isLivePreviewActive: Bool {\n        livePreviewInputMode != nil\n    }"))
+        // Live typing is frozen and the safety checks are read at the moment
+        // of Stop, before the tail starts.
+        let freeze = try #require(stop.range(of: "TextInjector.freezeLivePreviewPartials()"))
+        let guardCheck = try #require(stop.range(of: "TextInjector.hasExternalFinalPasteGuard"))
+        let tail = try #require(stop.range(of: "stopTail.stop(tailSeconds: tailSeconds)"))
+        #expect(freeze.lowerBound < tail.lowerBound && guardCheck.lowerBound < tail.lowerBound)
+        // The finish reads the words only after capture ended.
+        let words = try #require(stop.range(of: "await self.evidenceAtEndOfCapture(captureEnd)"))
+        let finalText = try #require(stop.range(of: "var finalText = fallbackTranscript"))
+        #expect(words.lowerBound < finalText.lowerBound)
+        // Codex P1 on #82: speech evidence is read when capture ends, never
+        // at the moment of Stop, so the tail's words and sound count.
+        let beforeTail = String(stop[..<tail.lowerBound])
+        for early in ["sliceCountTotal", "sliceCountAtOrAboveNearSilent", "self.firstPartialAt", "liveListenerHadError"] {
+            #expect(!beforeTail.contains(early), "\(early) must not be read before the tail")
+        }
+        let silentGuard = try #require(stop.range(of: "evidence.treatAsNoSpeech("))
+        #expect(words.lowerBound < silentGuard.lowerBound)
+        let end = try functionBody("private func completeCaptureEnd(", in: source)
+        let micOff = try #require(end.range(of: "stopWithoutArchive("))
+        let slices = try #require(end.range(of: "let totalSlices = sliceCountTotal"))
+        #expect(micOff.lowerBound < slices.lowerBound, "No slice is counted after the evidence is read.")
+        #expect(end.contains("firstPartialAt: firstPartialAt"))
+        #expect(end.contains("liveListenerHadError: liveListenerHadError"))
+
+        // Codex P2 on #82: while finishing, no engine puts live words or a
+        // listening status on the pill (it keeps "Finishing…").
+        let realtime = try functionBody("private func handleRealtimeTranscript(", in: source)
+        let realtimeGate = try #require(realtime.range(of: "guard isRecording else { return }"))
+        let realtimeWords = try #require(realtime.range(of: "onTranscript(normalized)"))
+        let realtimeCollect = try #require(realtime.range(of: "latestTranscript = normalized"))
+        #expect(realtimeCollect.lowerBound < realtimeGate.lowerBound && realtimeGate.lowerBound < realtimeWords.lowerBound)
+        let analyzer = try functionBody("private func handleSpeechAnalyzerTranscript(", in: source)
+        #expect(analyzer.contains("guard currentProvider == .appleSpeechAnalyzer, isRecording else { return }"))
+        let apple = try functionBody("private func startRecognitionSession(", in: source)
+        let appleGate = try #require(apple.range(of: "if self.isRecording {"))
+        let appleWords = try #require(apple.range(of: "self.onTranscript(combinedText)"))
+        #expect(appleGate.lowerBound < appleWords.lowerBound)
+        let recognitionError = try functionBody("private func handleRecognitionError(", in: source)
+        #expect(recognitionError.contains("if isRecording { onStatus(error.localizedDescription) }"))
+        #expect(!source.contains("self.audioEngine.isRunning else { return }\n                        self.onStatus"))
+
+        let shutdown = try functionBody("func shutdown()", in: source)
+        let discard = try #require(shutdown.range(of: "stopTail.discard()"))
+        let writerStop = try #require(shutdown.range(of: "stopWithoutArchive()"))
+        #expect(discard.lowerBound < writerStop.lowerBound)
+        #expect(shutdown.contains("captureEnd?.resolve(nil)"))
+
+        let livePaste = try functionBody("private func livePasteFinalizedSegmentIfNeeded(", in: source)
+        #expect(livePaste.contains("guard isRecording else { return }"), "Nothing is pasted live after Stop.")
     }
 
     private func functionBody(_ signature: String, in source: String) throws -> String {
