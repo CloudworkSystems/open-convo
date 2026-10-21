@@ -49,8 +49,9 @@ checks (Visibility Agent).
 - **Jeff is the one door for classifiers (owner, October 21).** Every typed
   question (yes or no, pick one, rate, sort this source) goes through Jeff, an
   adapter in Open Convo. Behind it sits whichever provider the owner chooses
-  for that kind of question: a local open-source decision model (candidates:
-  Laya, Apache 2.0, and Kev; to be checked), Jev, the OpenAI Decisions API,
+  for that kind of question: a local open-source decision model (Laya,
+  Apache 2.0, is the first local candidate, owner October 21; its license and
+  benchmarks are checked before adoption), Jev, the OpenAI Decisions API,
   Cloudflare's equivalent, or a small cloud model such as a Claude Haiku-class
   model. Modules ask Jeff, never a provider directly, so swapping providers
   changes no module. Jeff applies the caps, records which provider advised,
