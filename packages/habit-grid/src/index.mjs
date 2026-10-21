@@ -320,6 +320,9 @@ function purgeErasedHistory(record, stamp, trackerCutoffs, parentPurge) {
   if (!emptied || compareStamps(stamp, emptied) > 0) return null;
   return emptied;
 }
+function personPurgeCoversFence(record, parentPurge) {
+  return validStamp(parentPurge) && validStamp(record?.fenced) && compareStamps(record.fenced, parentPurge) <= 0;
+}
 function rememberCheckInTrackers(merged, leftRecord, rightRecord, trackerCutoffs, parentPurge) {
   const history = records(leftRecord?.formerTrackers ?? {}, rightRecord?.formerTrackers ?? {}, null);
   rememberLeftBehind(history, leftRecord, merged.fields);
@@ -332,8 +335,9 @@ function rememberCheckInTrackers(merged, leftRecord, rightRecord, trackerCutoffs
     ownEmptyStamp(rightRecord, trackerCutoffs, parentPurge),
   );
   if (validStamp(emptied)) merged.emptied = clone(emptied);
+  const covered = personPurgeCoversFence(leftRecord, parentPurge) || personPurgeCoversFence(rightRecord, parentPurge);
   for (const id of Object.keys(history)) {
-    if (validStamp(parentPurge) && compareStamps(history[id].stamp, parentPurge) <= 0) {
+    if (covered && compareStamps(history[id].stamp, parentPurge) <= 0) {
       delete history[id];
       continue;
     }
