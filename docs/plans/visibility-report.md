@@ -62,9 +62,13 @@ the file's device and inode numbers).
 - `reportDate`: the date the report is for (`YYYY-MM-DD`). The report uses
   this date, never the computer's clock, so the same file always gives the
   same report.
-- `findings`: a list. Each finding has an `id` (unique in the file: a
-  repeated `id` is refused with a plain message naming it, because the
-  ranking breaks ties by `id`), a `check` (one of the kinds
+- `findings`: a list. Each finding has an `id`: a string of 1 to 64
+  characters using only `A`–`Z`, `a`–`z`, `0`–`9`, `.`, `_` and `-`, unique
+  in the file. A repeated `id`, an `id` that breaks these rules, or an `id`
+  that isn't a string (a number, for example) is refused with a plain
+  message naming it. Ids are compared by plain character-code order (as
+  JavaScript's `<` compares strings; no locale or number-aware sorting), so
+  `B-2` comes before `a-1` and `item-10` before `item-9`. Then a `check` (one of the kinds
   below), a `status` (`ok`, `problem` or `unknown`), a `details` object for
   its kind (see "Details And Status" below), and where and when it was
   found: `source` and `checkedOn`
@@ -140,7 +144,8 @@ fixed rank, set here and nowhere else:
 The groups are: 1, wrong information customers act on; 2, hard to find;
 3, weak trust signals; 4, polish. Inside a group, quicker fixes come first
 (quick, then medium, then slow), and the rank column already follows that
-rule, so the ranking is simply: sort problems by rank, then by `id`. The
+rule, so the ranking is simply: sort problems by rank, then by `id` in
+character-code order. The
 same findings always give the same order, whatever order they arrive in.
 
 A finding that records more than one problem (for example a listing whose
@@ -220,9 +225,11 @@ addresses and 555 phone numbers). At least:
    appears in no output), an unknown check kind, a missing `reportDate`, a
    `checkedOn` after `reportDate`, a source URL that isn't `https://`, a
    finding of any status (including `ok`) with neither a `url` nor a
-   `locator`, and
-   two findings with the same `id` (the message names the repeated `id`),
-   each with a plain message.
+   `locator`, two findings with the same `id` (the message names the
+   repeated `id`), an empty `id`, a 65-character `id`, an `id` with a space
+   or `/`, and a numeric `id`, each with a plain message. Ids `item-10`,
+   `item-9`, `B-2` and `a-1` on problems of the same rank come out as
+   `B-2`, `a-1`, `item-10`, `item-9`.
 9. The renderer's own wording contains no grading or promise words. The
    test scans every fixed sentence and template the package defines, and a
    full report rendered from findings whose text fields hold only neutral
@@ -232,9 +239,22 @@ addresses and 555 phone numbers). At least:
    both exactly as given (escaped as plain text) without being refused.
 10. Hostile text in a finding (`[link](https://evil.example)`, `# heading`,
     `<img src=x>`) appears escaped and adds no link, heading or tag.
-11. The code makes no network requests and reads no file other than the
-    findings file (a test checks the package's source files import no
-    network module).
+11. No network, enforced at run time. Every test runs with network access
+    blocked: a shared test setup replaces `globalThis.fetch`,
+    `net.connect`, `net.createConnection`, `tls.connect`, `http.request`,
+    `http.get`, `https.request`, `https.get`, `dns.lookup` and
+    `dns.promises.lookup` with functions that record the call and throw.
+    After each test, the setup asserts that none were called; one test
+    calls `fetch` on purpose to show the guard throws. The command also
+    reads no file other than the findings file (a test checks which files
+    it opens by stubbing `fs` reads the same way).
+
+    Why stubs, not Node's permission model: the tests workflow runs Node
+    22, and in Node 22 the permission model (`--experimental-permission`,
+    later `--permission`) limits file system, child processes and workers
+    but has no network permission, so it can't block a network call.
+    Stubbing every network entry point works on Node 22 and fails loudly
+    if anything tries.
 12. Output paths: `--json` or `--md` naming the findings file (directly,
     through `..`, through a symbolic link, or through a hard link), and
     `--json` and `--md` naming the same file, are each refused, and the
