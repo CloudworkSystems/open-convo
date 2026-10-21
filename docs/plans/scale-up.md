@@ -96,7 +96,24 @@ so the approval burden still drops.
 **Cost and risk.** One careful refactor that itself needs his approval (it
 touches every protected file). The risk is moving sensitive code somewhere
 unprotected; the pull request lists every move and the CODEOWNERS change side
-by side, and a test fails if the paid path is linked into the app.
+by side.
+
+**How we check it.** The app already links `ParticipantAppWiring` on
+purpose, so the check is "nothing changed", not "nothing is linked":
+
+- The pull request only moves files and changes `.github/CODEOWNERS`. No
+  code changes inside the moved files.
+- Which targets link which is identical before and after: run
+  `swift package describe --type json` in `apps/mac` on `main` and on the
+  branch, and the targets and their dependencies match exactly. The pull
+  request includes both outputs or their comparison.
+- Every existing link-guard and safety test passes, none removed, skipped
+  or weakened: `PaidUsageGateTests` (which reads `Package.swift` and the
+  app's sources), `LocalConversationLaneTests`, `ProcessLauncherTests`, the
+  tripwire in `ParticipantWireTests`, `DeskSessionParticipantTests` and the
+  `VoiceCursorPolicyCheck` command. Where a test names a moved file by its
+  path, only that path string changes, and the pull request lists each one.
+- The full `swift test` suite in `apps/mac` passes.
 
 **First step.** A building pull request after the Claude Code adapter's
 first code pull request, not this one.
