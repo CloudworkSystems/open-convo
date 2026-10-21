@@ -6,6 +6,11 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 21:** The PR steward counts as part of the planning side: after its
+  own passing planning check on an outside builder's pull request, it may
+  switch on auto-merge, and it may post the `@codex review` fallback when a
+  builder can't start a Codex review. It still never merges, approves or
+  changes code.
 - **Oct 20:** The merge gate is on for `main` (scratch tests passed).
   Builders open pull requests as `cloudwork-bot`. Until the bot has Codex
   access, the session that opened a bot pull request asks for each Codex
@@ -19,6 +24,11 @@ full plan and history are in [PLAN.md](../PLAN.md).
   builders don't switch on auto-merge; the planning session does after its
   plan check passes. Main-build authors switch it on when they open a pull
   request.
+- **Oct 19:** Agents coordinate on GitHub: verdicts are posted on the pull
+  request; GrokBot watches open-convo pull requests, reports to the owner and
+  sends fixes only to its own builders for pull requests it launched; no agent
+  merges or approves; the planning session starts Codex reviews a builder
+  can't (the PR steward too, from Oct 21; AGENTS.md "Coordinating On GitHub").
 - **Oct 16:** Step 3 local conversation: Retry puts the cut-off message back
   in the message box and the owner presses Send (nothing resends on its own);
   the Claude entry stays out of the model picker until the Claude Code adapter

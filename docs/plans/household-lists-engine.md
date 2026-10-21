@@ -151,7 +151,7 @@ unless unavoidable (listed with license); no repo license file.
 
 A Claude session reviews it as code until it finds nothing open (Codex built
 it, so Codex does not review it); the planning
-session checks it against this document and gives the owner a short try-it
+session or the PR steward checks it against this document and gives the owner a short try-it
 note, then switches on auto-merge, and the merge gate merges it (letting the
 gate accept the designated reviewer is planned and needs the owner's
 approval; until then, Codex's review also gates it; see AGENTS.md). Done when the tests pass with one command, the Claude

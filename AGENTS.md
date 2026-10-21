@@ -45,12 +45,13 @@ reads from and writes to `CloudworkSystems/open-convo`.
   pull request when the gate passes: `tests` and `codex-approved` pass on the
   latest commit, and the owner approves any protected path in
   `.github/CODEOWNERS`. Authors in the main build switch on auto-merge when
-  they open a pull request; for outside builders, the planning session
-  switches it on after its plan check passes. Agents never merge by hand. Builders sign in to GitHub as
+  they open a pull request; for outside builders, the planning session (or
+  the PR steward) switches it on after its plan check passes. Agents never merge by hand. Builders sign in to GitHub as
   `cloudwork-bot`, so the owner can approve their protected-path pull
   requests. Until the bot has Codex access, the session that opened a pull
   request asks for each Codex review (`@codex review`) from the owner's
-  account after every push.
+  account after every push; if it can't (for example, an outside builder),
+  the planning session or the PR steward asks instead.
 - **How far review goes depends on what the pull request contains.**
   - *Any pull request that changes code* follows the code path below, even
     when it also changes docs.
@@ -85,11 +86,35 @@ time (owner decision, October 16, 2026), each with a different builder.
 The builder works on a branch named after the session and opens a pull
 request; it never pushes to `main` (GitHub also blocks direct pushes, force
 pushes and deletion of `main`, for every account, since October 15, 2026). A different agent reviews it under the
-code path below (no agent reviews its own work), the planning session checks
-it against the plan and then switches on auto-merge (outside builders don't
+code path below (no agent reviews its own work), the planning session or the
+PR steward checks it against the plan and then switches on auto-merge (outside builders don't
 switch it on themselves), and the gate merges it. The Limits below apply to outside
 builders in full; where a builder can reach the owner's Mac, the plan says
 which commands, if any, it may run there.
+
+## Coordinating On GitHub (Owner Decision, October 19, 2026)
+
+Agents that can't message each other directly coordinate through the pull
+request itself, so the owner doesn't have to carry messages:
+
+- Every review verdict and planning check is posted as a comment on the pull
+  request it concerns.
+- GrokBot watches the open-convo pull requests and tells the owner when a
+  review or comment lands. It sends fixes only to its own builders, and only
+  for pull requests it launched; it doesn't change other agents' pull requests
+  and never reviews its own work.
+- No agent merges or approves a pull request; the merge gate merges.
+  Outside-builder pull requests wait for a "Ready to merge" planning check
+  (from the planning session or the PR steward); whoever posts it switches on
+  auto-merge once the check passes. Every other pull request follows the
+  Review Loop above as before.
+- The PR steward, an hourly Claude scheduled task on the owner's account,
+  requests Codex reviews, reviews Codex-built pull requests, sends fix
+  requests to Codex, posts planning checks, and keeps one "Needs the owner"
+  issue current. It only comments and switches on auto-merge after a passing planning
+  check; it never merges, approves or changes code.
+- When a new commit lands on a pull request whose builder can't start a Codex
+  review, the planning session or the PR steward posts `@codex review` for it.
 
 ## Limits
 

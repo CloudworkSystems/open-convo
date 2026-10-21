@@ -140,6 +140,6 @@ unless unavoidable (listed with license); no repo license file.
 ## Review And Finish Line
 
 A different agent reviews it as code until Codex gives a 👍; the planning
-session checks it against this document and gives the owner a short try-it
+session or the PR steward checks it against this document and gives the owner a short try-it
 note, then switches on auto-merge, and the merge gate merges it. Done when the tests pass with one command, Codex has
 given a 👍, and the planning check finds nothing missing.
