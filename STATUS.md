@@ -93,6 +93,9 @@ October 20 fix (OC-261020-gate-package-tests): `tests` now also runs
 `npm test` for every other folder in `packages/` that a pull request changes
 (Site Engine, household lists, and new ones such as the habit grid), found
 by folder so new packages are covered automatically.
+October 21 (OC-261021-owner-accepts-findings): the owner can accept the
+remaining Codex findings on one exact head commit by posting
+`owner-accepts-findings <full head sha>`; it satisfies only `codex-approved`.
 
 ## Owner Decisions
 
