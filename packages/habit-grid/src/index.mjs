@@ -126,7 +126,7 @@ function canonicalizeFields(fields) {
   }
   return records(prepared, {});
 }
-function canonicalRecord(record, withMembers) {
+function canonicalRecord(record, withMembers, withHistory = false) {
   const result = {
     id: record.id,
     life: clone(record.life),
@@ -134,6 +134,10 @@ function canonicalRecord(record, withMembers) {
     fields: canonicalizeFields(record.fields),
   };
   if (withMembers) result.members = records(record.members ?? {}, {});
+  if (withHistory) {
+    const history = records(record.formerTrackers ?? {}, {});
+    if (Object.keys(history).length > 0) result.formerTrackers = history;
+  }
   return result;
 }
 function canonical(person) {
@@ -145,7 +149,7 @@ function canonical(person) {
     fields: canonicalizeFields(person.fields),
     trackers: person.trackers.map(record => canonicalRecord(record, false)).sort(byId),
     stacks: person.stacks.map(record => canonicalRecord(record, true)).sort(byId),
-    checkIns: person.checkIns.map(record => canonicalRecord(record, false)).sort(byId),
+    checkIns: person.checkIns.map(record => canonicalRecord(record, false, true)).sort(byId),
     restDays: person.restDays.map(record => canonicalRecord(record, false)).sort(byId),
   };
 }
@@ -227,9 +231,12 @@ export function mergePeople(left, right) {
 }
 function associatedTrackerIds(record) {
   const ids = [];
-  for (const key of ['trackerId', 'formerTrackerId']) {
-    const value = record?.fields?.[key]?.value;
-    if (typeof value === 'string' && value.length > 0) ids.push(value);
+  const current = record?.fields?.trackerId?.value;
+  if (typeof current === 'string' && current.length > 0) ids.push(current);
+  if (object(record?.formerTrackers)) {
+    for (const id of Object.keys(record.formerTrackers)) {
+      if (typeof id === 'string' && id.length > 0) ids.push(id);
+    }
   }
   return ids;
 }
@@ -250,13 +257,32 @@ function mergeFencedChildren(left, right, parentPurge, cutoffs, recordKind) {
     const rightRecord = b.get(id);
     const cutoffList = [...cutoffsForRecord(leftRecord, cutoffs), ...cutoffsForRecord(rightRecord, cutoffs)];
     const merged = mergeRecord(fenceAgainst(leftRecord, cutoffList), fenceAgainst(rightRecord, cutoffList), parentPurge, false, recordKind);
-    const losing = recordKind === 'checkIn' ? losingTracker(leftRecord, rightRecord) : null;
-    if (losing && merged.fields) {
-      const current = merged.fields.formerTrackerId;
-      if (!current || compareStamps(losing.stamp, current.stamp) > 0) setOwn(merged.fields, 'formerTrackerId', clone(losing));
-    }
+    if (recordKind === 'checkIn') rememberCheckInTrackers(merged, leftRecord, rightRecord);
     return fencedByTracker(merged, cutoffs);
   });
+}
+function rememberTracker(history, id, stamp) {
+  if (typeof id !== 'string' || id.length === 0 || !validStamp(stamp)) return;
+  const entry = { value: true, stamp: clone(stamp) };
+  const current = own(history, id) ? history[id] : undefined;
+  if (!current || compareStamps(entry.stamp, current.stamp) > 0) setOwn(history, id, entry);
+}
+function rememberLeftBehind(history, source, keptFields) {
+  const tracker = source?.fields?.trackerId;
+  if (!tracker || typeof tracker.value !== 'string' || tracker.value.length === 0) return;
+  if (keptFields && own(keptFields, 'trackerId') && keptFields.trackerId.value === tracker.value) return;
+  rememberTracker(history, tracker.value, tracker.stamp);
+}
+function rememberCheckInTrackers(merged, leftRecord, rightRecord) {
+  const history = records(leftRecord?.formerTrackers ?? {}, rightRecord?.formerTrackers ?? {}, null);
+  rememberLeftBehind(history, leftRecord, merged.fields);
+  rememberLeftBehind(history, rightRecord, merged.fields);
+  const losing = losingTracker(leftRecord, rightRecord);
+  if (losing) rememberTracker(history, losing.value, losing.stamp);
+  const current = merged.fields?.trackerId?.value;
+  if (typeof current === 'string' && own(history, current)) delete history[current];
+  if (Object.keys(history).length > 0) merged.formerTrackers = history;
+  else delete merged.formerTrackers;
 }
 function losingTracker(left, right) {
   const leftId = left?.fields?.trackerId;
@@ -267,6 +293,11 @@ function losingTracker(left, right) {
 function fencedByTracker(record, cutoffs) {
   return fenceAgainst(record, cutoffsForRecord(record, cutoffs));
 }
+function carryHistory(record, source) {
+  const history = source?.formerTrackers;
+  if (history && Object.keys(history).length > 0) record.formerTrackers = clone(history);
+  return record;
+}
 function fenceAgainst(record, cutoffList) {
   if (!record || cutoffList.length === 0) return record;
   let purge = record.purge;
@@ -275,16 +306,16 @@ function fenceAgainst(record, cutoffList) {
   const purgeAlreadyRecorded = validStamp(record.purge) && compareStamps(record.purge, purge) === 0;
   if (purgeAlreadyRecorded && stamps.every(stamp => compareStamps(stamp, purge) > 0)) return record;
   if (stamps.every(stamp => compareStamps(stamp, purge) > 0)) {
-    return { id: record.id, life: clone(record.life), purge: clone(purge), fields: clone(record.fields) };
+    return carryHistory({ id: record.id, life: clone(record.life), purge: clone(purge), fields: clone(record.fields) }, record);
   }
   const fields = {};
   for (const [key, entry] of Object.entries(record.fields)) {
     if (compareStamps(entry.stamp, purge) > 0) setOwn(fields, key, clone(entry));
   }
   if (compareStamps(record.life.stamp, purge) <= 0 || Object.keys(fields).length === 0) {
-    return tombstoneRecord(record.id, purge, false);
+    return carryHistory(tombstoneRecord(record.id, purge, false), record);
   }
-  return { id: record.id, life: clone(record.life), purge: clone(purge), fields };
+  return carryHistory({ id: record.id, life: clone(record.life), purge: clone(purge), fields }, record);
 }
 function fencedStack(stack, cutoffs) {
   const members = {};
@@ -335,19 +366,15 @@ const checkInFieldTypes = {
   value: nonNegative,
   source: value => SOURCES.includes(value),
 };
-const optionalCheckInFieldTypes = {
-  formerTrackerId: value => typeof value === 'string' && value.length > 0,
-};
 const restFieldTypes = {
   date: validDate,
   trackerId: value => typeof value === 'string',
 };
-function validateFields(fields, types, optional = {}) {
+function validateFields(fields, types) {
   if (!object(fields)) fail('Invalid fields in person file.');
-  const known = { ...types, ...optional };
   for (const [key, entry] of Object.entries(fields)) {
-    if (!own(known, key) || !object(entry) || !validStamp(entry.stamp)) fail('Invalid field or version stamp in person file.');
-    if (!known[key](entry.value)) fail('Invalid field value in person file.');
+    if (!own(types, key) || !object(entry) || !validStamp(entry.stamp)) fail('Invalid field or version stamp in person file.');
+    if (!types[key](entry.value)) fail('Invalid field value in person file.');
   }
 }
 function contentBearing(record, withMembers) {
@@ -387,9 +414,9 @@ function requireCompleteOrFragment(record, types, withMembers, parentPurge = nul
   const complete = Object.keys(types).every(key => own(record.fields, key));
   if (!complete && !survivingFragment(record, types, withMembers, purge)) fail('Incomplete record in person file.');
 }
-function validateRecord(record, types, withMembers, checkShape = false, parentPurge = null, optional = {}) {
+function validateRecord(record, types, withMembers, checkShape = false, parentPurge = null) {
   if (!object(record) || typeof record.id !== 'string' || !record.id || !object(record.life) || typeof record.life.value !== 'boolean' || !validStamp(record.life.stamp) || (record.purge !== null && !validStamp(record.purge))) fail('Invalid record in person file.');
-  validateFields(record.fields, types, optional);
+  validateFields(record.fields, types);
   if (withMembers) {
     if (!object(record.members)) fail('Invalid stack members in person file.');
     for (const [key, entry] of Object.entries(record.members)) {
@@ -421,12 +448,23 @@ function validate(person) {
     ['restDays', 'rest day', restFieldTypes, false, false],
   ]) {
     if (!Array.isArray(person[key])) fail(`Invalid ${label} records in person file.`);
-    const optional = key === 'checkIns' ? optionalCheckInFieldTypes : {};
-    for (const record of person[key]) validateRecord(record, types, withMembers, checkShape, person.purge, optional);
+    for (const record of person[key]) {
+      validateRecord(record, types, withMembers, checkShape, person.purge);
+      validateCheckInHistory(record, key === 'checkIns');
+    }
     uniqueIds(person[key], label);
   }
   assertTrackerChildCutoffs(person);
   return person;
+}
+function validateCheckInHistory(record, allowed) {
+  if (!own(record, 'formerTrackers')) return;
+  if (!allowed) fail('Invalid record in person file.');
+  const history = record.formerTrackers;
+  if (!object(history)) fail('Invalid check-in history in person file.');
+  for (const [key, entry] of Object.entries(history)) {
+    if (!key || !object(entry) || entry.value !== true || !validStamp(entry.stamp)) fail('Invalid check-in history in person file.');
+  }
 }
 function assertTrackerChildCutoffs(person) {
   const cutoffs = new Map();
@@ -1017,6 +1055,7 @@ function collectStamps(person) {
       stamps.push(record.life?.stamp, record.purge);
       for (const entry of Object.values(record.fields ?? {})) stamps.push(entry.stamp);
       for (const entry of Object.values(record.members ?? {})) stamps.push(entry.stamp);
+      for (const entry of Object.values(record.formerTrackers ?? {})) stamps.push(entry?.stamp);
     }
   }
   return stamps.filter(Boolean);
@@ -1248,8 +1287,10 @@ export class HabitGrid {
     return this.#change(personId, (person, stamp) => {
       const checkIn = editable(person.checkIns, checkInId, 'Check-in');
       if (own(input, 'trackerId')) active(person.trackers, input.trackerId, 'Tracker', RECORD_KEYS.tracker);
-      if (own(input, 'trackerId') && checkIn.fields.trackerId && input.trackerId !== checkIn.fields.trackerId.value && !checkIn.fields.formerTrackerId) {
-        checkIn.fields.formerTrackerId = { value: checkIn.fields.trackerId.value, stamp: clone(stamp) };
+      if (own(input, 'trackerId') && object(checkIn.fields.trackerId) && input.trackerId !== checkIn.fields.trackerId.value) {
+        const history = checkIn.formerTrackers ?? {};
+        rememberTracker(history, checkIn.fields.trackerId.value, stamp);
+        checkIn.formerTrackers = history;
       }
       for (const key of ['trackerId', 'date', 'value', 'source']) {
         if (own(input, key)) checkIn.fields[key] = { value: input[key], stamp: clone(stamp) };
@@ -1367,12 +1408,14 @@ export class HabitGrid {
           for (const record of collection) if (!record.life.value) {
             record.fields = {};
             if (record.members) record.members = {};
+            delete record.formerTrackers;
             record.purge = stamp;
             record.life = { value: false, stamp };
           }
         }
         for (const record of [...person.checkIns, ...person.restDays]) if (pointsAt(record)) {
           record.fields = {};
+          delete record.formerTrackers;
           record.purge = stamp;
           record.life = { value: false, stamp };
         }

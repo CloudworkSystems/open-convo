@@ -1443,7 +1443,7 @@ test('moving a check-in to a live tracker does not restore fields purged with th
   away.renamePerson(id, 'River');
   away.editCheckIn(id, 'glass', { trackerId: 'steps' });
   const moved = away.getPerson(id);
-  assert.equal(moved.checkIns.find(item => item.id === 'glass').fields.formerTrackerId.value, 'water');
+  assert.equal(moved.checkIns.find(item => item.id === 'glass').formerTrackers.water.value, true);
   assert.equal(moved.checkIns.find(item => item.id === 'glass').fields.trackerId.value, 'steps');
   const purger = home.getPerson(id);
   const span = { start: '2026-03-01', end: '2026-03-08' };
@@ -1475,4 +1475,43 @@ test('moving a check-in to a live tracker does not restore fields purged with th
     reader.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
     assert.equal(square(reader.grid(id, 'water', span), '2026-03-04').value, 0);
   }
+});
+
+test('a check-in moved across three trackers keeps a purged middle tracker from restoring old fields', () => {
+  const home = fixed('phone-a', 100);
+  const away = fixed('phone-b', 100);
+  const id = home.createPerson('River', { id: 'river' });
+  home.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  home.addTracker(id, { name: 'Steps', kind: 'count', target: 8, unit: 'steps' }, { trackerId: 'steps' });
+  home.addTracker(id, { name: 'Pages', kind: 'count', target: 8, unit: 'pages' }, { trackerId: 'pages' });
+  away.importPerson(home.getPerson(id));
+  away.logCheckIn(id, 'water', { date: '2026-03-04', value: 5, checkInId: 'glass' });
+  home.deleteTracker(id, 'steps');
+  home.emptyTrash(id);
+  away.editCheckIn(id, 'glass', { trackerId: 'steps' });
+  away.editCheckIn(id, 'glass', { trackerId: 'pages' });
+  const moved = away.getPerson(id);
+  const span = { start: '2026-03-01', end: '2026-03-08' };
+  const reader = fixed('phone-c', 100);
+  reader.importPerson(converges(home.getPerson(id), moved));
+  assert.equal(reader.view(id).checkIns.length, 0);
+  assert.equal(square(reader.grid(id, 'pages', span), '2026-03-04').value, 0);
+  const stored = reader.getPerson(id).checkIns.find(item => item.id === 'glass');
+  assert.equal(stored.fields.date, undefined);
+  assert.equal(stored.fields.value, undefined);
+  assert.equal(stored.fields.source, undefined);
+  const glass = moved.checkIns.find(item => item.id === 'glass');
+  assert.equal(glass.fields.trackerId.value, 'pages');
+  assert.equal(glass.fields.value.value, 5);
+  assert.equal(glass.formerTrackers.water.value, true);
+  assert.equal(glass.formerTrackers.steps.value, true);
+  assert.equal(stored.formerTrackers.water.value, true);
+  assert.equal(stored.formerTrackers.steps.value, true);
+  const leaked = structuredClone(moved);
+  const purgedSteps = structuredClone(home.getPerson(id).trackers.find(item => item.id === 'steps'));
+  leaked.trackers = leaked.trackers.map(item => item.id === 'steps' ? purgedSteps : item);
+  assert.throws(() => deserializePerson(JSON.stringify(leaked)), /Field is older than its purge cutoff/);
+  reader.addTracker(id, { name: 'Steps', kind: 'count', target: 8, unit: 'steps' }, { trackerId: 'steps' });
+  assert.equal(square(reader.grid(id, 'steps', span), '2026-03-04').value, 0);
+  assert.equal(square(reader.grid(id, 'pages', span), '2026-03-04').value, 0);
 });
