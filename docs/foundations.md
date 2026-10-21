@@ -125,7 +125,9 @@ white-labeled install, each member is the owner of their own data.
   as sources in a separate inbox and don't count as the owner's experience
   until acted on.
 - **Every source gets the right handling, and the owner can change it.** A
-  small judge model (Jev to start) looks at what came in and proposes how to
+  small judge model, reached through Jeff (the one adapter every classifier
+  goes through, so the model can be swapped; Jev to start), looks at what came
+  in and proposes how to
   process it: transcribe a video, pull the text and images from a page, read a
   receipt, describe a photo. It also proposes where the result might go. Every
   result comes back in the same shape: what it is, what was done to it, links

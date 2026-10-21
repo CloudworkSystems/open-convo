@@ -34,8 +34,8 @@ separate yes; Publish never sends or releases without approval.
 
 | Capability | Provider | From | When |
 | --- | --- | --- | --- |
-| `judge` (typed yes/no answers) | Jev, or OpenAI Decisions API ($2/month cap each, owner-approved) | capability-adapter | Step 6 |
-| `find_lines`, `rank_files` | Jev | capability-adapter | Step 6 |
+| `judge` (typed yes/no answers) | Through Jeff (below): a local open-source decision model, Jev, the OpenAI Decisions API, or a small cloud model; paid ones capped at $2/month each and owner-approved | capability-adapter | Step 6 |
+| `find_lines`, `rank_files` | Through Jeff (Jev to start) | capability-adapter | Step 6 |
 | `search_local`, `index_local` | EmbeddingGemma 2, on the Mac (search model; it does not chat or write) | capability-adapter | Step 6, or earlier for memory search |
 | `action_check` (pass, review or deny before an agent acts) | Jeff's local rules | capability-adapter + `tools/action-guard` | Step 6, private side only (see below) |
 | Design: `design_audit`, `design_polish`, `typeset`, layout and color passes | Impeccable (Apache 2.0, includes an anti-pattern detector) | `cloudwork_systems/.claude/skills/impeccable` v4.0.4 | Site Engine |
@@ -46,10 +46,19 @@ checks (Visibility Agent).
 
 ## Rules
 
-- **Jeff stays private.** True Convo's rules require a legal review before Jeff
-  is shared publicly, and Jeff never stores, learns from or copies Jev answers.
-  Jeff's rules live on the subscription side, not in Open Convo, until that
-  review is done.
+- **Jeff is the one door for classifiers (owner, October 21).** Every typed
+  question (yes or no, pick one, rate, sort this source) goes through Jeff, an
+  adapter in Open Convo. Behind it sits whichever provider the owner chooses
+  for that kind of question: a local open-source decision model (candidates:
+  Laya, Apache 2.0, and Kev; to be checked), Jev, the OpenAI Decisions API,
+  Cloudflare's equivalent, or a small cloud model such as a Claude Haiku-class
+  model. Modules ask Jeff, never a provider directly, so swapping providers
+  changes no module. Jeff applies the caps, records which provider advised,
+  and works with a local provider alone.
+- **What stays private.** Jeff's trained rules, and anything that learns from
+  decisions, stay on the subscription side until their legal review. Jeff
+  never stores, learns from or copies Jev answers (or any provider's answers
+  whose terms forbid it); only owner decisions are kept.
 - **Paid providers are optional,** approved by the owner, capped, and never a
   silent fallback; a capability with no approved provider returns an error.
 - **Third-party code keeps its license and credit.** Impeccable (Apache 2.0) and
