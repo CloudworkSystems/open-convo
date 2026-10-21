@@ -6,6 +6,11 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 20:** Sage follows the lab-notebook pattern from the MOSAN research
+  agent (Sagnelli et al.): a notebook per run, separate roles (analyst,
+  proposer, critic, doer with a step budget, checked summarizer), a weighted
+  memory of what worked, and borrowed hints that stay provisional and inside
+  their memory space (docs/design-notes/sage.md).
 - **Oct 21:** The PR steward counts as part of the planning side: after its
   own passing planning check on an outside builder's pull request, it may
   switch on auto-merge, and it may post the `@codex review` fallback when a

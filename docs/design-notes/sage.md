@@ -92,7 +92,7 @@ September 2026 and built a catalog of roughly 300 entries.
 
 The owner chose a published research agent as the model for how Sage runs:
 "An autonomous agentic framework for cross-campaign generalization and sensor
-shift adaptation" (Domenico et al., *Machine Learning: Science and
+shift adaptation" (Sagnelli et al., *Machine Learning: Science and
 Technology*, doi 10.1088/2632-2153/ae9fb7), called MOSAN. Its results are
 compared mostly with the authors' own earlier system in one narrow field, so
 it is a design pattern to follow, not proof. What Sage takes from it:
@@ -119,9 +119,12 @@ it is a design pattern to follow, not proof. What Sage takes from it:
 - **Memory of what worked.** Sage keeps a weighted record of which kinds of
   change helped which kinds of task (this feeds use 4, routing). Weights move
   with evidence and never on their own.
-- **Borrowed hints stay provisional.** When Sage starts on a new project, it may
-  borrow the best lessons from similar past projects as clearly marked,
-  temporary hints. They guide proposals but never count as evidence, and they
+- **Borrowed hints stay provisional, and stay inside their space.** When Sage
+  starts on a new project, it may borrow the best lessons from similar past
+  projects **in the same memory space** as clearly marked, temporary hints. A
+  hint from another space (for example, a business lesson for a Personal
+  project) is offered only after the owner approves that specific hint, as
+  with anything that moves between spaces. They guide proposals but never count as evidence, and they
   are dropped when the run is saved, so a project's record holds only its own
   evidence.
 
