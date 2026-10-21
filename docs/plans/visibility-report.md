@@ -72,9 +72,9 @@ the file's device and inode numbers).
 - `source` is `{ label, url?, locator? }`. `url` is a complete `https://`
   address. `locator` is plain text saying exactly where to look again when
   there is no stable web address, for example "Asked Claude on 2026-10-14:
-  'Who repairs bikes in Hearthwick?'". **Every finding whose status is
-  `problem` or `unknown` must have a `url` or a `locator`**, or the file is
-  refused; only `ok` findings may have a label alone.
+  'Who repairs bikes in Hearthwick?'". **Every finding, whatever its status,
+  must have a `url` or a `locator`**, or the file is refused, because claims
+  under "What's working" need provenance too.
 
 Check kinds (fixed list; this plan sets each kind's fields, and the
 package's schema implements them exactly):
@@ -158,7 +158,8 @@ its problems, and the report names every problem in it.
   stale.
 - Findings with status `unknown` are never ranked; they are listed under
   "Couldn't check".
-- Findings with status `ok` are summed up under "What's working".
+- Findings with status `ok` are listed under "What's working", each with
+  its source and date.
 
 ## The Report
 
@@ -168,9 +169,10 @@ its problems, and the report names every problem in it.
 - The fix list: for each problem, what's wrong, why it matters, and what to
   do, in plain words from fixed templates per kind, plus where it was found
   and when (the source label, then its link, or its locator in quotation
-  marks when there is no link, and `checkedOn`). Every problem and every
-  "Couldn't check" entry cites its source with a link or a locator and its
-  date, as the design note requires.
+  marks when there is no link, and `checkedOn`). Every entry in every
+  section (fix list, "Also found", "Couldn't check" and "What's working")
+  cites its source with a link or a locator and its date, as the design
+  note requires.
 - "Also found", "Couldn't check" and "What's working" sections.
 - **No grades, scores, guarantees or alarm words in the report's own
   wording.** Every sentence and template the renderer writes shows what was
@@ -211,13 +213,14 @@ addresses and 555 phone numbers). At least:
    before acting"; one checked 30 days before is not.
 6. `unknown` findings appear only under "Couldn't check"; `ok` findings only
    under "What's working".
-7. Every ranked problem and every "Couldn't check" entry in the Markdown
-   shows its source label, its link or quoted locator, and its `checkedOn`
+7. Every entry in every section, including "What's working", in the
+   Markdown shows its source label, its link or quoted locator, and its `checkedOn`
    date.
 8. The schema refuses an unknown field (with a marker string that then
    appears in no output), an unknown check kind, a missing `reportDate`, a
    `checkedOn` after `reportDate`, a source URL that isn't `https://`, a
-   `problem` or `unknown` finding with neither a `url` nor a `locator`, and
+   finding of any status (including `ok`) with neither a `url` nor a
+   `locator`, and
    two findings with the same `id` (the message names the repeated `id`),
    each with a plain message.
 9. The renderer's own wording contains no grading or promise words. The
