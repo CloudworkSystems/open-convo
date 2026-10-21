@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { evaluateCodexSignal, CODEX_LOGIN } from '../codex-signal.mjs';
+import { evaluateCodexSignal, editedOnlyByCodex, CODEX_LOGIN, CODEX_BOT_LOGIN } from '../codex-signal.mjs';
 import { parseCodeowners, protectedFiles } from '../codeowners.mjs';
 
 const HEAD = '7af6dd5bd9'.padEnd(40, 'a');
@@ -154,8 +154,19 @@ test('a summary without a completion time never approves through a thumbs-up', (
   assert.equal(r.approved, false);
 });
 
+// Edit records as GitHub's GraphQL API reports them.
+const codexEditor = { __typename: 'Bot', login: CODEX_BOT_LOGIN };
+const botEditor = { __typename: 'User', login: 'cloudwork-bot' };
+const neverEdited = { lastEditedAt: null, editor: null, userContentEdits: { totalCount: 0, nodes: [] } };
+const editedBy = (...editors) => ({
+  lastEditedAt: '2026-10-15T03:00:00Z',
+  editor: editors[0],
+  // Newest first, ending with the original version (its editor is the author).
+  userContentEdits: { totalCount: editors.length + 1, nodes: [...editors, codexEditor].map((editor) => ({ editor, deletedAt: null })) },
+});
+
 const stateComment = (sha, { findings = false, status = 'completed', at = '2026-10-15T02:00:00Z', user = codex } = {}) => ({
-  user, created_at: '2026-10-15T00:00:00Z', updated_at: at,
+  user, created_at: '2026-10-15T00:00:00Z', updated_at: at, edit_history: editedBy(codexEditor),
   body: `<!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 ${JSON.stringify({ code_review: { commit_sha: sha, has_any_findings: findings, has_unresolved_findings: findings, status } })} -->\n## Codex Review Summary`,
 });
 
@@ -195,5 +206,59 @@ test('no workflow job or job name is called codex-approved (only the status may 
     const jobs = text.split(/^jobs:\s*$/m)[1] ?? '';
     assert.doesNotMatch(jobs, /^  codex-approved:\s*$/m, `${file} has a job keyed codex-approved`);
     assert.doesNotMatch(jobs, /^\s+name:\s*['"]?codex-approved['"]?\s*$/m, `${file} has a job named codex-approved`);
+  }
+});
+
+// Anyone with write access (the builder bot included) can edit Codex's
+// comments, and GitHub keeps showing Codex as the author.
+
+test('an unedited clean comment on the head approves (with its edit record)', () => {
+  const r = evaluateCodexSignal({ headSha: HEAD, comments: [{ ...clean(HEAD, '2026-10-15T02:00:00Z'), edit_history: neverEdited }] });
+  assert.equal(r.approved, true);
+});
+
+test('a clean comment edited by the bot to name the head does not approve', () => {
+  // Codex approved an older commit; the bot rewrote the commit in the comment.
+  const forged = { ...clean(HEAD, '2026-10-15T02:00:00Z'), updated_at: '2026-10-15T03:00:00Z', edit_history: editedBy(botEditor) };
+  assert.equal(evaluateCodexSignal({ headSha: HEAD, comments: [forged] }).approved, false);
+});
+
+test('a review state forged by the bot does not approve', () => {
+  const forged = { ...stateComment(HEAD), edit_history: editedBy(botEditor) };
+  assert.equal(evaluateCodexSignal({ headSha: HEAD, comments: [forged] }).approved, false);
+});
+
+test('a bot edit stays disqualifying even if Codex edits the comment again later', () => {
+  const mixed = { ...stateComment(HEAD), edit_history: editedBy(codexEditor, botEditor) };
+  assert.equal(evaluateCodexSignal({ headSha: HEAD, comments: [mixed] }).approved, false);
+});
+
+test('a summary completion time forged by the bot does not let a thumbs-up approve', () => {
+  const forged = { ...summary(HEAD, '2026-10-15T01:30:00Z'), edit_history: editedBy(botEditor) };
+  const r = evaluateCodexSignal({ headSha: HEAD, comments: [forged], reactions: [thumb('2026-10-15T02:00:00Z')] });
+  assert.equal(r.approved, false);
+});
+
+test('Codex editing its own summary comment still counts', () => {
+  // Codex rewrites its summary comment many times per pull request.
+  assert.equal(evaluateCodexSignal({ headSha: HEAD, comments: [stateComment(HEAD)] }).approved, true);
+  const summaryEdited = { ...summary(HEAD, '2026-10-15T01:30:00Z'), edit_history: editedBy(codexEditor, codexEditor) };
+  assert.equal(evaluateCodexSignal({ headSha: HEAD, comments: [summaryEdited], reactions: [thumb('2026-10-15T02:00:00Z')] }).approved, true);
+});
+
+test('edits whose editor cannot be checked fail closed', () => {
+  const base = clean(HEAD, '2026-10-15T02:00:00Z');
+  const cases = {
+    'record missing': { ...base, edit_history: null },
+    'editor deleted (null)': { ...base, edit_history: editedBy(null) },
+    'partial history': { ...base, edit_history: { ...editedBy(codexEditor), userContentEdits: { totalCount: 150, nodes: editedBy(codexEditor).userContentEdits.nodes } } },
+    'edited with no revisions listed': { ...base, edit_history: { lastEditedAt: '2026-10-15T03:00:00Z', editor: codexEditor, userContentEdits: { totalCount: 0, nodes: [] } } },
+    'a revision deleted from history': { ...base, edit_history: { ...editedBy(codexEditor), userContentEdits: { totalCount: 2, nodes: [{ editor: codexEditor, deletedAt: '2026-10-15T04:00:00Z' }, { editor: codexEditor, deletedAt: null }] } } },
+    'look-alike user editor': { ...base, edit_history: editedBy({ __typename: 'User', login: CODEX_BOT_LOGIN }) },
+    'no record and changed since posting': { ...base, updated_at: '2026-10-15T03:00:00Z' },
+  };
+  for (const [name, comment] of Object.entries(cases)) {
+    assert.equal(editedOnlyByCodex(comment), false, name);
+    assert.equal(evaluateCodexSignal({ headSha: HEAD, comments: [comment] }).approved, false, name);
   }
 });

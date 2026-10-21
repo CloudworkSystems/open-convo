@@ -4,7 +4,7 @@
 
 import { readFileSync } from 'node:fs';
 import { client, repoFromEnv } from './github.mjs';
-import { evaluateCodexSignal } from './codex-signal.mjs';
+import { evaluateCodexSignal, CODEX_LOGIN } from './codex-signal.mjs';
 
 const CONTEXT = 'codex-approved';
 const gh = client();
@@ -21,11 +21,38 @@ function pullNumbersFromEvent() {
   return null; // schedule or manual run without a number: check every open PR
 }
 
+// Who edited each comment. The REST API only says *that* a comment changed,
+// not who changed it, and anyone with write access can edit Codex's comments.
+const EDIT_HISTORY = `query($ids: [ID!]!) {
+  nodes(ids: $ids) {
+    ... on IssueComment {
+      id
+      lastEditedAt
+      editor { __typename login }
+      userContentEdits(first: 100) { totalCount nodes { deletedAt editor { __typename login } } }
+    }
+  }
+}`;
+
+// Attaches `edit_history` to Codex's comments. A comment whose record can't be
+// read gets null, which makes the signal check ignore it (fails closed).
+async function withEditHistory(comments) {
+  const ids = comments.filter((c) => c.user?.login === CODEX_LOGIN && c.node_id).map((c) => c.node_id);
+  const history = new Map();
+  for (let i = 0; i < ids.length; i += 50) {
+    const data = await gh.graphql(EDIT_HISTORY, { ids: ids.slice(i, i + 50) });
+    for (const node of data?.nodes ?? []) {
+      if (node?.id) history.set(node.id, { lastEditedAt: node.lastEditedAt, editor: node.editor, userContentEdits: node.userContentEdits });
+    }
+  }
+  return comments.map((c) => ({ ...c, edit_history: history.get(c.node_id) ?? null }));
+}
+
 async function check(number) {
   const pr = await gh.get(`${base}/pulls/${number}`);
   if (pr.state !== 'open') return;
   const [comments, reviews, reactions] = await Promise.all([
-    gh.all(`${base}/issues/${number}/comments`),
+    gh.all(`${base}/issues/${number}/comments`).then(withEditHistory),
     gh.all(`${base}/pulls/${number}/reviews`),
     gh.all(`${base}/issues/${number}/reactions`),
   ]);
