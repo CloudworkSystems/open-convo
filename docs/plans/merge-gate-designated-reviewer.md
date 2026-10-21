@@ -2,8 +2,8 @@
 
 Written October 20, 2026 at the owner's request. Session name:
 `OC-261020-designated-reviewer-plan`. Revised the same day after Codex's
-first and second reviews (P1s written in as requirements; see "Codex
-Rounds").
+first, second and third reviews (findings written in as requirements; see
+"Codex Rounds").
 This is a plan only. Building it needs
 the owner's explicit approval, and the build changes `.github/`, which only
 the owner approves. Background: [merge-gate.md](merge-gate.md).
@@ -101,6 +101,28 @@ Designated review: 2 findings on 0123abc (details below).
   blocks in any state, even if malformed. An owner-account review with a
   marker of either kind that has been **edited** also blocks for its commit,
   so editing a findings review into a clean one only keeps the gate shut.
+- **Edited by someone else blocks, marker or not (Codex round 3).** Why: a
+  builder could rewrite a findings review's body so the marker disappears,
+  and a review with no marker would otherwise be ignored. So any
+  owner-account review on a fully mapped pull request that **anyone other
+  than the owner account** has ever edited blocks that pull request,
+  whatever it says now and whatever commit it was on. (Unmapped and mixed
+  pull requests stay Codex-only; see Gate Logic.) The gate reads who
+  edited it from GitHub's GraphQL edit history (`lastEditedAt`, `editor` and
+  `userContentEdits` editors), the same way #88 checks Codex's comments in
+  `codex-signal.mjs`: every revision must be present and made by
+  `CloudworkSystems`. If the history can't be read in full (missing,
+  partial, a deleted revision, or an editor GitHub no longer names), the
+  review blocks. A review's edit history can't be erased, so nothing a
+  builder does can unblock it; the work goes forward in a fresh pull
+  request, and the owner decides what happens to the old one.
+- **Can GitHub let a non-author edit a review at all?** GitHub's
+  documentation says anyone with write access can edit other people's
+  comments on pull requests, and a review's summary shows the same edit
+  menu, so we assume yes for the bot. We haven't tried it on this repo, and
+  the API's "update a review" call doesn't say it is author-only. The rule
+  stays either way: if GitHub refuses such edits, it never fires; if it
+  allows them, it closes the hole.
 - **Dismissed findings still block** unless the timeline shows the owner
   account dismissed it. ("Comment" reviews can't be dismissed at all; this
   covers a findings review posted as "Request changes" by mistake.)
@@ -220,10 +242,22 @@ Codex. Two ways to handle it:
 
 ## Gate Logic
 
-`codex-approved` turns green when **either** Codex is clean on the head
-(today's rule, unchanged) **or** the pull request is fully covered by one map
-entry, the matching valid marker exists for the head, and Codex has no
-findings on the head. A new commit changes the head, so the old marker no
+Which route can pass depends on the pull request's paths, and only one
+route applies to each pull request:
+
+- **Fully mapped** (every path covered by one map entry): **only the
+  designated-review route can pass.** `codex-approved` turns green only when
+  the matching valid clean review exists for the head, no designated
+  findings review cancels it, no owner-account review has been edited by
+  someone else, and Codex has no findings on the head. A clean result from
+  Codex alone never turns these green, though Codex findings still block.
+  Why (Codex round 3): otherwise a Codex-built pull request could pass on
+  Codex's own clean review before Claude had looked, or while Claude still
+  had findings, which is the self-review 2a exists to remove.
+- **Unmapped or mixed:** Codex only, exactly today's rule. Designated
+  reviews neither clear nor block these.
+
+A new commit changes the head, so the old marker no
 longer matches and the status goes back to pending. A marker from the wrong
 account, for an old commit, edited, or malformed is ignored, never success,
 and the status description says why (for example, "Marker ignored: not for
@@ -267,8 +301,8 @@ Pure-function tests beside the existing gate tests:
 16. A mapped pull request that also touches `STATUS.md`: Codex only (under
     recommendation A).
 17. Staging: `candidate_ref` from a non-owner actor, on a non-`main` run, or
-    against a pull request not based on `gate-test` is refused, and it never
-    posts `codex-approved`.
+    against a pull request not based on `gate-scratch` is refused, and it
+    never posts `codex-approved`.
 18. Deletion: a clean marker in an ordinary comment never counts, and
     removing a findings comment changes nothing, since only reviews count.
 19. A dismissed findings review: blocks unless the timeline shows the owner
@@ -278,6 +312,18 @@ Pure-function tests beside the existing gate tests:
 21. Workflow test: `designated-review-ping.yml` has no permissions and no
     checkout, and `codex-approved.yml`'s `workflow_run` path checks out the
     default branch.
+22. Fully mapped pull request with Codex clean on the head and no
+    designated review: pending (Codex alone never clears it).
+23. Fully mapped pull request with Codex clean on the head and a designated
+    findings review on the head: pending.
+24. Unmapped pull request with Codex clean on the head: success, exactly as
+    today; an owner-account review there changes nothing.
+25. An owner-account review on a fully mapped pull request edited by
+    `cloudwork-bot`, with its marker removed: blocks. The same with a clean
+    marker added: blocks. One edited only by the owner account: no extra
+    block (the edited-marker rules above still apply).
+26. An owner-account review whose edit history can't be read in full
+    (missing, partial, a deleted revision, or an unnamed editor): blocks.
 
 ## Rollout
 
@@ -298,7 +344,8 @@ Pure-function tests beside the existing gate tests:
      `CloudworkSystems`. Any other run ignores it. Ordinary pull request
      events never read it, so **no pull request can pick its own gate code**;
    - it runs only against a named scratch pull request whose base is
-     `gate-test`, and refuses any other;
+     `gate-scratch` (a scratch branch protected like `main`), and refuses
+     any other;
    - the candidate scripts run in a job with a **read-only** token and only
      print a verdict. A second job, using `main`'s code, posts that verdict
      as a status named `codex-approved-candidate`, which branch protection
@@ -306,9 +353,8 @@ Pure-function tests beside the existing gate tests:
      status, so it can't post `codex-approved` on anything.
 
    The owner (or Claude acting as him with his go-ahead) then dispatches it
-   against scratch pull requests covering tests 1 to 4, 6, 8, 12 to 14 and
-   18 to 20, and
-   compares results with the expected ones.
+   against scratch pull requests covering tests 1 to 4, 6, 8, 12 to 14,
+   18 to 20 and 22 to 25, and compares results with the expected ones.
 4. **Merge with an empty map**, so 2a is inert; the owner approves.
 5. **First real entry** (household lists) in its own small pull request the
    owner approves. Until then, 2b stays in force.
@@ -327,10 +373,12 @@ Pure-function tests beside the existing gate tests:
    *Recommend pending; red stays stuck until the next event and adds noise.*
 6. **Today's gate, dismissed Codex reviews:** treat a dismissed Codex
    review as blocking unless the owner account dismissed it, as 2a does for
-   findings reviews? *Recommend yes, in its own small pull request; today
-   Codex posts "Comment" reviews, which can't be dismissed, so this only
-   guards against a future change in how Codex reviews.* (The editing hole
-   in "Today's Gate" needs no new pull request: #88 fixes it.)
+   findings reviews? **Owner's answer (October 20): yes.** A dismissed Codex
+   review blocks unless the owner's account dismissed it. It will be built
+   in its own small pull request, separate from 2a. (Today Codex posts
+   "Comment" reviews, which can't be dismissed, so this guards against a
+   future change in how Codex reviews.) The editing hole in "Today's Gate"
+   needed no new pull request: #88 fixed it and has merged.
 7. **STATUS.md in builder pull requests:** builders leave it alone and the
    planning session updates it (A), or a per-module paragraph exception (B)?
    *Recommend A: simpler and safer gate code, at the cost of one small docs
@@ -354,7 +402,8 @@ way. Checked against the script:
   the summary) is a *clean* signal, so deleting one can only remove a
   reason to pass. Reactions can only be removed by their author.
   Remaining edge: the script skips `DISMISSED` reviews. If Codex ever posted
-  "Request changes", the bot could dismiss it (owner question 6).
+  "Request changes", the bot could dismiss it. The owner has decided this
+  gets closed in its own small pull request (owner question 6).
 - **Editing: a real hole.** Write users can edit other accounts' comments,
   and an edited comment keeps its original author. The bot could edit any
   old Codex comment on a pull request to read "Didn't find any major issues"
@@ -363,15 +412,33 @@ way. Checked against the script:
   `codex-approved` green. Editing the summary comment's review-state block
   could do the same through signal 2. The author is shown correctly; the
   words aren't Codex's.
-- **Fixed by #88** (`OC-261020-gate-edited-comments`, waiting for the
-  owner's approval; no new pull request needed). It accepts a Codex comment
-  as a signal only if GitHub's edit history (`userContentEdits`) shows Codex
-  made every edit, and it fails closed when the history can't be read.
-  (A plain "never edited" rule wouldn't work, because Codex edits its own
-  summary comment.) Until #88 merges, a builder could slip a pull request
-  past Codex, though protected paths still need the owner.
+- **Fixed by #88** (`OC-261020-gate-edited-comments`, now merged). It
+  accepts a Codex comment as a signal only if GitHub's edit history
+  (`userContentEdits`) shows Codex made every edit, and it fails closed when
+  the history can't be read. (A plain "never edited" rule wouldn't work,
+  because Codex edits its own summary comment.) 2a's rule for edited
+  owner-account reviews is modelled on it.
 
-## Codex Rounds (P1s Written In As Requirements)
+## Codex Rounds (Findings Written In As Requirements)
+
+Round 3:
+
+1. **Require designated review for mapped pull requests (P1, Gate
+   Logic):** as written, a fully mapped, Codex-built pull request could turn
+   `codex-approved` green on Codex's own clean result, before Claude
+   reviewed or while Claude had findings. Resolved: on fully mapped pull
+   requests only the designated-review route can pass; Codex's clean result
+   alone never does, though Codex findings still block. Unmapped and mixed
+   pull requests stay Codex-only (Gate Logic; tests 22 to 24).
+2. **Block findings markers that are edited away (Findings Reviews):** a
+   builder could rewrite a findings review to remove its marker. Resolved:
+   any owner-account review on a fully mapped pull request that anyone
+   other than the owner account has edited blocks it, marker or not, read
+   from GraphQL edit history as #88 does; unreadable history also blocks
+   (Findings Reviews; tests 25 and 26).
+
+Also this round: the owner answered question 6 (yes, its own pull request),
+and the staging base is now `gate-scratch`, since `gate-test` was deleted.
 
 Round 2:
 
