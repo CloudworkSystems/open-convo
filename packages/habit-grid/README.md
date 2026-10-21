@@ -282,8 +282,9 @@ and a tracker cutoff. When a later person cutoff supersedes that fence, the
 check-in records the newer cutoff as its fence, so a reused check-in still merges.
 Former-tracker history stamped at or before that person cutoff is cleared with
 the old fence, and every later merge applies the same cutoff, including after
-the check-in's fence stamp has been updated to it. Emptying one of those
-earlier trackers leaves the reused check-in in place.
+the check-in's fence stamp has been updated to it. The merge that first records
+that person cutoff as the fence clears the same history before it returns.
+Emptying one of those earlier trackers leaves the reused check-in in place.
 
 Check-ins merge as records by ID. The same ID arriving twice counts once.
 Two devices' different IDs on the same tracker and date both survive, and the

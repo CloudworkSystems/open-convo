@@ -288,7 +288,8 @@ function mergeFencedChildren(left, right, parentPurge, cutoffs, recordKind) {
       recordKind,
     );
     if (recordKind === 'checkIn') rememberCheckInTrackers(merged, leftRecord, rightRecord, cutoffs, parentPurge);
-    return fencedByTracker(merged, cutoffs, recordKind === 'checkIn');
+    const fenced = fencedByTracker(merged, cutoffs, recordKind === 'checkIn');
+    return recordKind === 'checkIn' ? dropHistoryCoveredByPersonPurge(fenced, parentPurge) : fenced;
   });
 }
 function rememberTracker(history, id, stamp) {
@@ -322,6 +323,14 @@ function purgeErasedHistory(record, stamp, trackerCutoffs, parentPurge) {
 }
 function personPurgeCoversFence(record, parentPurge) {
   return validStamp(parentPurge) && validStamp(record?.fenced) && compareStamps(record.fenced, parentPurge) <= 0;
+}
+function dropHistoryCoveredByPersonPurge(record, parentPurge) {
+  if (!personPurgeCoversFence(record, parentPurge) || !object(record.formerTrackers)) return record;
+  for (const id of Object.keys(record.formerTrackers)) {
+    if (compareStamps(record.formerTrackers[id].stamp, parentPurge) <= 0) delete record.formerTrackers[id];
+  }
+  if (Object.keys(record.formerTrackers).length === 0) delete record.formerTrackers;
+  return record;
 }
 function rememberCheckInTrackers(merged, leftRecord, rightRecord, trackerCutoffs, parentPurge) {
   const history = records(leftRecord?.formerTrackers ?? {}, rightRecord?.formerTrackers ?? {}, null);
