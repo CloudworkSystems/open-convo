@@ -11,6 +11,17 @@ full plan and history are in [PLAN.md](../PLAN.md).
   switch on auto-merge, and it may post the `@codex review` fallback when a
   builder can't start a Codex review. It still never merges, approves or
   changes code.
+- **Oct 21:** For Codex-built modules, the planning session or the PR steward
+  switches on auto-merge only when Claude's review of the latest commit has
+  no open P1 or P2 (fixed, or explained as not applying; P3s don't block);
+  until then auto-merge stays off. Claude's review counts only for the commit
+  it reviewed: whoever pushes a commit that changes the content switches
+  auto-merge off until Claude reviews the new head; an update from `main`
+  that leaves the pull request's own changes the same needs no new review.
+  Any session that finds an open P1 or P2 in Claude's review may switch
+  auto-merge off and comment why. (Claude's review
+  doesn't gate the merge yet, so otherwise a Codex-built pull request could
+  merge before Claude looks at it.)
 - **Oct 20:** Sage follows the lab-notebook pattern from the MOSAN research
   agent (Sagnelli et al.): a notebook per run, separate roles (analyst,
   proposer, critic, doer with a step budget, checked summarizer), a weighted
