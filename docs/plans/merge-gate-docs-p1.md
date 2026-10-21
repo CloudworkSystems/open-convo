@@ -31,20 +31,14 @@ into `docs/` uses the code rule. So does a deleted file. If the files list is
 cut short (GitHub stops at 3,000 files) or can't be read, the code rule
 applies.
 
-**Default (recommended, awaiting the owner; see question 3):** the P1-only
-rule also needs at least one changed file on a code-owner path:
-`AGENTS.md`, `CLAUDE.md`, `PLAN.md`, `docs/plans/`, `docs/decisions.md`, or
-any other `.md` file `CODEOWNERS` assigns to the owner. The gate checks this
-with the existing `codeowners.mjs`. A protected file makes GitHub require
-the owner's approval for the *whole* pull request, so a plan pull request
-that also adds a `STATUS.md` line still qualifies. A pull request that
-touches only unprotected docs (`STATUS.md`, `README.md`, other `docs/`
-files) keeps the full clean rule. That closes the deleted-comment gap
-(section 2): every pull request the relaxed rule lets through also waits
-for the owner.
-
-**Alternative:** every docs-only pull request qualifies, protected or not,
-and the gap is accepted.
+**Default (recommended, awaiting the owner; see question 3):** every
+docs-only pull request qualifies, protected or not. The durable P1 record
+(section 2) closes the deleted-comment gap without relying on the owner's
+approval. **Alternative:** only docs-only pull requests that touch a
+code-owner doc qualify (`AGENTS.md`, `CLAUDE.md`, `PLAN.md`, `docs/plans/`,
+`docs/decisions.md`, or another `.md` file `CODEOWNERS` assigns to the
+owner, checked with `codeowners.mjs`). Unprotected docs alone would keep the
+full clean rule.
 
 ## 2. How The Gate Reads Severity
 
@@ -52,8 +46,18 @@ Codex starts each inline finding with a badge, for example
 `**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Title**`.
 The review body itself carries no badge.
 
-For a docs-only pull request, `codex-signal.mjs` adds a third way to pass,
-next to today's signals:
+For a docs-only pull request, `codex-signal.mjs` checks in this order:
+
+- **A. The veto first.** If any finding on the head counts as P1 (steps
+  1 to 4 below), or the durable record shows one (below), the result is
+  pending. Nothing else is looked at. Today's clean receipt and 👍 can't
+  override the veto, even when Codex later gives the same head a clean
+  round.
+- **B. Then a clean signal is required.** That's today's receipt, review
+  state or 👍, or the P1-only pass in step 5.
+
+Code pull requests keep today's order unchanged: a later clean Codex round
+on the same head still passes.
 
 1. **Findings on the head.** These are Codex reviews whose `commit_id` is
    the head commit and whose state is not `APPROVED`. A dismissed review
@@ -87,13 +91,34 @@ The status then reads, within GitHub's 140 characters, for example:
 `Docs-only: no P1 on abc1234. Deferred: 2 P2, 1 P3.` Its link points to the
 Codex review, so anyone can open the deferred findings.
 
-**Deleted-comment gap.** Anyone with Write access can delete a Codex
-comment. If a review held a P1 and a P2, deleting the P1 leaves only the
-P2. Deleting every comment still fails closed (step 4). GitHub records no
-deletion event the gate can read. Under the default in section 1, every
-pull request that could pass this way also needs the owner's approval, and
-he sees the review. Under the alternative, the gap stays open on
-unprotected docs. See owner question 3.
+**Durable P1 record.** Anyone with Write access can delete a Codex comment,
+and GitHub records no deletion the gate can read. Owner approval doesn't
+help, because it can come before the findings or after a deletion. So the
+gate keeps its own record. Commit statuses can't be edited or deleted, and
+`GET /commits/{sha}/statuses` returns every status ever posted for a commit.
+(Checked read-only on `d855ce6`: both of its `codex-approved` statuses are
+listed, created by `github-actions[bot]`.) The workflow already has
+`statuses: write`.
+
+- Whenever the gate sees a P1 on a head commit, it posts that commit's
+  `codex-approved` status as pending, with a fixed marker:
+  `P1 seen: review <id>`.
+- On every later evaluation, it reads the full status list for the head
+  (all pages). Any status carrying the marker vetoes, even if the comment
+  is gone.
+- Only a new head commit starts fresh. The one other exception: the owner
+  dismissed the named review (#90's rule).
+- **Fake markers block.** A marker status posted by anyone, the bot
+  included, counts. Statuses are only ever used to block, never to pass,
+  so a fake can only hold a pull request back. Checking the creator
+  wouldn't help anyway: every workflow in the repo, including a pull
+  request's own run of `tests.yml`, posts as `github-actions[bot]`.
+- **What's left.** The record exists only if the gate ran while the P1
+  comment existed. The gate runs on Codex's summary comment edit, seconds
+  after each review, and hourly. A deletion inside that window is
+  possible, but needs a deliberate, fast act. AGENTS.md gains the rule
+  "no agent deletes or edits another account's review comments" (section
+  6), so such a deletion breaks a written rule.
 
 ## 3. Where Deferred P2s And P3s Go
 
@@ -130,8 +155,7 @@ change:
   pending;
 - docs plus code (for example `docs/x.md` and `apps/desk/a.ts`), P2 only:
   pending (code rule);
-- under the default: `STATUS.md` alone with a P2 only, pending (full rule);
-  `docs/plans/x.md` plus `STATUS.md` with a P2 only, passes;
+- `STATUS.md` alone, P2 only: passes under the default;
 - a Codex comment edited by the bot, such as a P1 badge rewritten to P2:
   pending (#88);
 - a rename from `apps/` to `docs/`: code rule;
@@ -143,6 +167,12 @@ change:
   (#90);
 - a finding whose comment `commit_id` moved forward but whose review is on
   the head: still counted;
+- the veto beats every path: a clean receipt plus a P1 on the head, pending;
+  a Codex 👍 plus a P1 on the head, pending;
+- durable record: P1 seen, then the comment deleted, still pending; a new
+  head commit, evaluated fresh; a marker on the review the owner dismissed,
+  cleared; a marker status posted by the bot, blocks (never passes);
+- under the alternative only: `STATUS.md` alone with a P2 only, pending;
 - the existing suite unchanged, with code pull requests on the full rule.
 
 ## 6. Rollout
@@ -154,12 +184,16 @@ still forbid. The `AGENTS.md` change rewrites the "Plans and other docs"
 bullet: docs-only pull requests that qualify under section 1 need no open
 P1 on the head. Their P2s and P3s go to the "Deferred doc findings" issue
 (section 3) instead of being fixed first. Code pull requests are unchanged.
+It also adds the rule that no agent deletes or edits another account's
+review comments.
 `AGENTS.md` is a code-owner path, so the owner approves both changes
 together. The build pull request touches `.github/`, so it is itself held
-to the full rule. No workflow change is expected: the files list, reviews and review comments are all readable
-with today's `pull-requests: read`, and Codex's reviews already re-run the
-gate through its summary comment edit. If a workflow change does turn out
-to be needed, the owner's login pushes that one commit, as with #87. Before
+to the full rule. No workflow change is expected. The files list, reviews,
+review comments and status history are all readable with today's
+permissions, and the record uses the existing `statuses: write`. Codex's
+reviews already re-run the gate through its summary comment edit. If a
+workflow change does turn out to be needed, the owner's login pushes that
+one commit, as with #87. Before
 merging, do a read-only dry run on #94, #97, #98 and #99. It posts no
 statuses, and the pull request lists each one's verdict before and after,
 plus its deferred findings.
@@ -172,15 +206,12 @@ plus its deferred findings.
 2. **Should annotation rounds with screenshots qualify?** *Recommendation:
    not yet.* Images keep the code rule. Revisit if annotation pull requests
    start looping.
-3. **What about the deleted-comment gap? (Awaiting owner.)**
-   *Recommendation, and the plan's default:* the P1-only rule applies
-   only to pull requests that touch a code-owner doc (section 1).
-   Unprotected docs alone keep the full clean rule, so the owner's
-   approval covers every pull request the relaxed rule passes.
-   *Alternative:* accept the gap on unprotected docs, and add a line to
-   `AGENTS.md` saying no agent deletes or edits another account's review
-   comments. The build follows the default unless the owner picks the
-   alternative.
+3. **Which docs-only pull requests get the P1-only rule? (Awaiting
+   owner.)** *Recommendation, and the plan's default:* all docs-only pull
+   requests. With the durable P1 record, this is now safe. *Alternative:*
+   only those touching a code-owner doc, with unprotected docs keeping the
+   full clean rule. The build follows the default unless the owner picks
+   the alternative.
 4. **Should a P1 on any earlier review of the same head still block?**
    *Recommendation: yes*, as specified above.
 5. **Should deferred findings have a cap, such as five P2s turning the
