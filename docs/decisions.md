@@ -6,6 +6,45 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 21:** The PR steward counts as part of the planning side: after its
+  own passing planning check on an outside builder's pull request, it may
+  switch on auto-merge, and it may post the `@codex review` fallback when a
+  builder can't start a Codex review. It still never merges, approves or
+  changes code.
+- **Oct 21:** For Codex-built modules, the planning session or the PR steward
+  switches on auto-merge only when Claude's review of the latest commit has
+  no open P1 or P2 (fixed, or explained as not applying; P3s don't block);
+  until then auto-merge stays off. Claude's review counts only for the commit
+  it reviewed: whoever pushes a commit that changes the content switches
+  auto-merge off until Claude reviews the new head; an update from `main`
+  that leaves the pull request's own changes the same needs no new review.
+  Any session that finds an open P1 or P2 in Claude's review may switch
+  auto-merge off and comment why. (Claude's review
+  doesn't gate the merge yet, so otherwise a Codex-built pull request could
+  merge before Claude looks at it.)
+- **Oct 20:** Sage follows the lab-notebook pattern from the MOSAN research
+  agent (Sagnelli et al.): a notebook per run, separate roles (analyst,
+  proposer, critic, doer with a step budget, checked summarizer), a weighted
+  memory of what worked, and borrowed hints that stay provisional and inside
+  their memory space (docs/design-notes/sage.md).
+- **Oct 20:** The merge gate is on for `main` (scratch tests passed).
+  Builders open pull requests as `cloudwork-bot`. Until the bot has Codex
+  access, the session that opened a bot pull request asks for each Codex
+  review from the owner's account (option 2; a Codex account for the bot is
+  to be tried later). Docs and plans get a Codex review, and after its
+  findings are folded in, a clean follow-up review of the latest commit
+  before the gate merges them. Letting the gate accept a plan's designated
+  reviewer in place of Codex (Claude for Codex-built modules) is planned and
+  needs the owner's approval before it's built; until then, Codex's review still gates Codex-built pull requests and Claude also
+  reviews them, so no agent's review is the only one on its own work. Outside
+  builders don't switch on auto-merge; the planning session does after its
+  plan check passes. Main-build authors switch it on when they open a pull
+  request.
+- **Oct 19:** Agents coordinate on GitHub: verdicts are posted on the pull
+  request; GrokBot watches open-convo pull requests, reports to the owner and
+  sends fixes only to its own builders for pull requests it launched; no agent
+  merges or approves; the planning session starts Codex reviews a builder
+  can't (the PR steward too, from Oct 21; AGENTS.md "Coordinating On GitHub").
 - **Oct 16:** Step 3 local conversation: Retry puts the cut-off message back
   in the message box and the owner presses Send (nothing resends on its own);
   the Claude entry stays out of the model picker until the Claude Code adapter

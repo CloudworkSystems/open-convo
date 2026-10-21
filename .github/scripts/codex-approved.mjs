@@ -1,10 +1,17 @@
 // Posts the `codex-approved` commit status on pull request head commits.
 // Runs only from the default branch's copy of the workflow (pull_request_target,
-// issue_comment, pull_request_review, schedule), never from pull request code.
+// issue_comment, schedule, workflow_dispatch), never from pull request code.
+//
+// No event fires when a review is dismissed (pull_request_review would run the
+// pull request's own copy of the workflow, so the gate doesn't use it). After
+// the owner dismisses a Codex review, run the codex-approved workflow by hand
+// (workflow_dispatch, optionally with the pull request number); otherwise the
+// hourly run picks it up within an hour. The delay can only hold a pull request
+// back, never let one through.
 
 import { readFileSync } from 'node:fs';
 import { client, repoFromEnv } from './github.mjs';
-import { evaluateCodexSignal } from './codex-signal.mjs';
+import { evaluateCodexSignal, CODEX_LOGIN } from './codex-signal.mjs';
 
 const CONTEXT = 'codex-approved';
 const gh = client();
@@ -21,15 +28,48 @@ function pullNumbersFromEvent() {
   return null; // schedule or manual run without a number: check every open PR
 }
 
+// Who edited each comment. The REST API only says *that* a comment changed,
+// not who changed it, and anyone with write access can edit Codex's comments.
+const EDIT_HISTORY = `query($ids: [ID!]!) {
+  nodes(ids: $ids) {
+    ... on IssueComment {
+      id
+      lastEditedAt
+      editor { __typename login }
+      userContentEdits(first: 100) { totalCount nodes { deletedAt editor { __typename login } } }
+    }
+  }
+}`;
+
+// Attaches `edit_history` to Codex's comments. A comment whose record can't be
+// read gets null, which makes the signal check ignore it (fails closed).
+async function withEditHistory(comments) {
+  const ids = comments.filter((c) => c.user?.login === CODEX_LOGIN && c.node_id).map((c) => c.node_id);
+  const history = new Map();
+  for (let i = 0; i < ids.length; i += 50) {
+    const data = await gh.graphql(EDIT_HISTORY, { ids: ids.slice(i, i + 50) });
+    for (const node of data?.nodes ?? []) {
+      if (node?.id) history.set(node.id, { lastEditedAt: node.lastEditedAt, editor: node.editor, userContentEdits: node.userContentEdits });
+    }
+  }
+  return comments.map((c) => ({ ...c, edit_history: history.get(c.node_id) ?? null }));
+}
+
 async function check(number) {
   const pr = await gh.get(`${base}/pulls/${number}`);
   if (pr.state !== 'open') return;
   const [comments, reviews, reactions] = await Promise.all([
-    gh.all(`${base}/issues/${number}/comments`),
+    gh.all(`${base}/issues/${number}/comments`).then(withEditHistory),
     gh.all(`${base}/pulls/${number}/reviews`),
     gh.all(`${base}/issues/${number}/reactions`),
   ]);
-  const { approved, reason } = evaluateCodexSignal({ headSha: pr.head.sha, comments, reviews, reactions });
+  // Who dismissed a Codex review. Fetched only when one is dismissed; if the
+  // timeline can't be read, the dismissed review keeps blocking.
+  const dismissed = reviews.some((r) => r.user?.login === CODEX_LOGIN && r.state === 'DISMISSED');
+  const dismissals = dismissed
+    ? (await gh.all(`${base}/issues/${number}/events`)).filter((e) => e.event === 'review_dismissed')
+    : [];
+  const { approved, reason } = evaluateCodexSignal({ headSha: pr.head.sha, comments, reviews, reactions, dismissals });
   const state = approved ? 'success' : 'pending';
 
   const current = await gh.get(`${base}/commits/${pr.head.sha}/status`);

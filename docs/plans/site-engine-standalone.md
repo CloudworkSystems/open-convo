@@ -5,8 +5,9 @@ Written October 15, 2026 by the planning session. Session name:
 [docs/design-notes/site-engine.md](../design-notes/site-engine.md).
 
 This is the first module built by an outside builder (see AGENTS.md, "Outside
-Builders"). GrokBot builds, Codex reviews, the planning session checks the
-result against this document, and the owner merges.
+Builders"). GrokBot builds, Codex reviews, the planning session or the PR
+steward checks the result against this document and switches on auto-merge, and the merge gate
+merges it ([merge-gate.md](merge-gate.md)).
 
 ## Why This Slice, Why Now
 
@@ -173,10 +174,12 @@ breaking one is a stop-and-report event.
 2. Codex reviews it on GitHub as code, round after round, until it finishes
    with a 👍. GrokBot fixes every P1 and P2 or explains in the pull request why
    one does not apply.
-3. The planning session checks the result against this document and gives the
+3. The planning session or the PR steward checks the result against this
+   document and gives the
    owner a short plain-language summary and a try-it checklist (open the sample
    page on the phone and the Mac, read it, try the failure tests).
-4. The owner merges with GitHub's button.
+4. Whichever of them did the check switches on auto-merge; GitHub merges once the gate
+   passes (the owner approves only protected paths).
 
 ## Finish Line
 
