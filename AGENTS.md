@@ -69,9 +69,15 @@ reads from and writes to `CloudworkSystems/open-convo`.
     before it's built. Until then, Codex's review still gates the merge and
     Claude also posts a review, so no agent's review is the only one on its own work.
     Because Claude's review doesn't gate the merge yet, the planning session
-    or the PR steward switches on auto-merge only after Claude's review of the
-    latest commit has no P1s; until then it stays off. Any session that finds
-    a P1 in Claude's review may switch auto-merge off, with a comment saying why.
+    or the PR steward switches on auto-merge only when Claude's review of the
+    latest commit has no open P1 or P2 (each fixed, or explained in the pull
+    request as not applying; P3s don't block); until then it stays off.
+    Claude's review counts only for the commit it reviewed: whoever pushes a
+    commit that changes the pull request's content switches auto-merge off
+    until Claude reviews the new head. An update from `main` that leaves the
+    pull request's own changes the same needs no new Claude review. Any
+    session that finds an open P1 or P2 in Claude's review may switch
+    auto-merge off, with a comment saying why.
   - A green "Ready to merge" button means no conflicts, not approval. Claude
     tells the owner in chat when a pull request waits on his approval.
 - *Proposed October 15, pending the owner's approval at merge:* every review,
