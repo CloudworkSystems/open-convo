@@ -1,7 +1,9 @@
 # Merge Gate: A Plan's Designated Reviewer Can Satisfy The Gate (Option 2a)
 
 Written October 20, 2026 at the owner's request. Session name:
-`OC-261020-designated-reviewer-plan`. This is a plan only. Building it needs
+`OC-261020-designated-reviewer-plan`. Revised the same day after Codex's
+first review (three P1s, written in as requirements; see "Codex Round 1").
+This is a plan only. Building it needs
 the owner's explicit approval, and the build changes `.github/`, which only
 the owner approves. Background: [merge-gate.md](merge-gate.md).
 
@@ -62,7 +64,44 @@ gate accepts a marker only if all of these hold:
    the owner's name.)
 3. The JSON parses, `verdict` is `clean`, `sha` equals the full current head,
    and `reviewer` matches the map entry (below).
-4. No later `findings` marker for the same head.
+4. It is posted strictly later than every findings marker that cancels it
+   (next section).
+
+### Findings Markers
+
+The reviewer records findings the same way, so the gate can see them:
+
+```
+Designated review: 2 findings on 0123abc (details below).
+<!-- oc-designated-review:v1 {"verdict":"findings","sha":"<40-character head>","reviewer":"claude","count":2} -->
+```
+
+- **Schema:** the same `v1` marker; `verdict` is `findings`; `sha` is a full
+  40-character commit; `reviewer` names the reviewer; `count` is a whole
+  number of 1 or more. The findings themselves are written in plain text in
+  the same comment (or as linked review comments).
+- **Author:** only owner-account markers are read; markers from any other
+  account are ignored either way, so a builder can't block or clear anyone.
+- **Fails closed:** an owner-account findings marker blocks even if edited or
+  malformed. Only clean markers need to be unedited and well-formed.
+- **What it cancels:** a findings marker naming the current head, **or** any
+  findings marker posted after the latest clean marker whatever commit it
+  names, cancels every earlier clean marker. A clean marker counts only if it
+  names the head and comes strictly later than all of those; a tie in time
+  fails closed (same as Codex today).
+
+### Instructions For The Designated Reviewer
+
+Written into each module plan that names a designated reviewer:
+
+1. Review the exact head commit; put its full SHA in the marker.
+2. Post findings with a `findings` marker. **Ordinary comments don't count as
+   findings**: the gate can't read prose, so an unmarked finding doesn't
+   block the merge.
+3. After the builder fixes them, review the new head and post a fresh marker
+   (`clean` or `findings`). Never edit an old marker; post a new one.
+4. Post markers from the owner account only, and never on a pull request
+   that account opened.
 
 **Risks.** The owner account is admin, so anything signed in as the owner
 (the owner himself, any Claude session) can post the marker; the marker shows
@@ -94,7 +133,7 @@ A new file, `.github/designated-reviewers.json`, maps paths to reviewers.
 `.github/` is code-owner protected, so only the owner can change it; labels
 won't do, because Write users can add them. Example entry:
 `{ "plan": "docs/plans/household-lists-engine.md", "reviewer": "claude",
-"paths": ["modules/household-lists/**"] }`.
+"paths": ["packages/household-lists/**"] }`.
 
 - **Read from `main` only**, so a pull request editing the map can't affect
   its own result.
@@ -107,6 +146,30 @@ won't do, because Write users can add them. Example entry:
 - **Never the rules.** The loader rejects entries that reach `.github/`,
   `AGENTS.md`, `CLAUDE.md`, `PLAN.md`, `docs/plans/` or `docs/decisions.md`.
 - If GitHub can't list every file (its limit is 3,000), Codex only.
+
+### STATUS.md In Builder Pull Requests
+
+Builder pull requests usually change their package and one line of
+`STATUS.md`. Under full coverage, that line alone would send them back to
+Codex. Two ways to handle it:
+
+- **(A) Recommended: builders leave `STATUS.md` alone** on 2a pull requests;
+  the planning session updates it in its own pull request after its check.
+  A 2a pull request that touches `STATUS.md` simply falls back to Codex
+  (fail closed, nothing breaks). Why: the gate stays a plain path match. No
+  diff-reading code in a security check, and no way for a builder to word
+  its own status. The planning session already checks each outside build
+  and switches on auto-merge, so the status update fits there. Cost: one
+  small extra docs pull request per milestone. This narrows AGENTS.md's
+  "update STATUS.md in any pull request that changes a part's state" for 2a
+  pull requests; that wording change waits until #83 merges.
+- **(B) A shared-path exception:** each map entry names its module's
+  `STATUS.md` paragraph (for example, the line starting
+  `**Household lists engine**`), and the gate allows a `STATUS.md` change
+  only when every changed line falls inside that paragraph. This saves the
+  extra pull request but adds diff parsing to the gate. It breaks if the
+  paragraph's heading is reworded, and it lets the builder state its own
+  progress.
 
 ## Gate Logic
 
@@ -144,6 +207,18 @@ Pure-function tests beside the existing gate tests:
 9. A later `findings` marker, or Codex findings on the head: pending.
 10. A map entry reaching `.github/` or `docs/plans/`: rejected.
 11. Every existing Codex test still passes unchanged.
+12. A findings marker on the head after a clean one: pending; a new clean
+    marker after it: success.
+13. A findings marker naming an older commit, posted after the clean marker:
+    pending. A findings marker at the same second as a clean one: pending.
+14. An edited or malformed owner-account findings marker: still blocks.
+15. A findings marker from `cloudwork-bot`: ignored (neither blocks nor
+    clears).
+16. A mapped pull request that also touches `STATUS.md`: Codex only (under
+    recommendation A).
+17. Staging: `candidate_ref` from a non-owner actor, on a non-`main` run, or
+    against a pull request not based on `gate-test` is refused, and it never
+    posts `codex-approved`.
 
 ## Rollout
 
@@ -154,9 +229,26 @@ Pure-function tests beside the existing gate tests:
    the scripts, tests and map but not `.github/workflows/codex-approved.yml`.
    That one commit is pushed by the owner's login (the owner, or Claude
    acting as him with his go-ahead) to the same branch.
-3. **Dry run before merge** on the scratch branch `gate-test`, the way the
-   gate was tested: run the build branch's workflow by manual dispatch against
-   scratch pull requests covering cases 1, 2, 3, 4 and 6.
+3. **Dry run of the candidate code before merge.** `codex-approved.yml`
+   always checks out `main`'s scripts, so dispatching it on the build branch
+   would test the old gate. Instead, a small owner-approved staging change
+   goes into `main` first (its own pull request, before the build):
+   - a `candidate_ref` input on the existing manual dispatch, honoured only
+     when the event is `workflow_dispatch`, the run is on `main`
+     (`github.ref` is the default branch), and `github.actor` is
+     `CloudworkSystems`. Any other run ignores it. Ordinary pull request
+     events never read it, so **no pull request can pick its own gate code**;
+   - it runs only against a named scratch pull request whose base is
+     `gate-test`, and refuses any other;
+   - the candidate scripts run in a job with a **read-only** token and only
+     print a verdict. A second job, using `main`'s code, posts that verdict
+     as a status named `codex-approved-candidate`, which branch protection
+     doesn't require. Candidate code never holds a token that can set a
+     status, so it can't post `codex-approved` on anything.
+
+   The owner (or Claude acting as him with his go-ahead) then dispatches it
+   against scratch pull requests covering tests 1 to 4, 6, 8 and 12 to 14, and
+   compares results with the expected ones.
 4. **Merge with an empty map**, so 2a is inert; the owner approves.
 5. **First real entry** (household lists) in its own small pull request the
    owner approves. Until then, 2b stays in force.
@@ -176,8 +268,24 @@ Pure-function tests beside the existing gate tests:
 6. **Edited Codex comments:** the same editing gap applies to Codex's clean
    comment today. Close it with the same "never edited" rule? *Recommend yes,
    in its own small pull request.*
-7. **Habit grid plan wording:** it says the gate is Codex's 👍 though Codex
+7. **STATUS.md in builder pull requests:** builders leave it alone and the
+   planning session updates it (A), or a per-module paragraph exception (B)?
+   *Recommend A: simpler and safer gate code, at the cost of one small docs
+   pull request per milestone.*
+8. **Staging input after the build:** keep `candidate_ref` for future gate
+   changes, or remove it? *Recommend keep: it's owner-only, posts a status
+   nothing requires, and the next gate change needs it too.*
+9. **Habit grid plan wording:** it says the gate is Codex's 👍 though Codex
    builds it. *Recommend aligning it with the household lists plan after #83.*
+
+## Codex Round 1 (P1s Written In As Requirements)
+
+1. **STATUS.md:** builders leave it alone on 2a pull requests, and the
+   planning session updates it (STATUS.md In Builder Pull Requests).
+2. **Dry run must test the candidate code:** an owner-only staging input on
+   `main` posts `codex-approved-candidate` (Rollout, step 3).
+3. **Findings marker:** schema, author and cancellation rules, plus
+   reviewer instructions and tests (Findings Markers; tests 12 to 15).
 
 ## What Stays The Same
 
