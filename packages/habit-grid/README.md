@@ -52,8 +52,11 @@ repeat a day.
 - `createPerson(name, { id, weekStartsOn = 'sunday' }?)` returns a permanent ID.
 - `personIds({ trash = false }?)` lists active or recoverable deleted people.
 - `renamePerson(id, name)` and `setWeekStartsOn(id, 'sunday' | 'monday')` change
-  person fields. A later rename can bring back a person whose Trash was emptied;
-  erased fields stay erased. `restorePerson` refuses an emptied person.
+  person fields. Either one can bring back a person whose Trash was emptied,
+  because it writes a person field newer than the cutoff. Erased fields stay
+  erased. `addTracker`, `addStack`, and `markRest` do not write a person field;
+  on an emptied person they are refused and the stored file stays as it was.
+  `restorePerson` refuses an emptied person.
 - `addTracker(personId, fields, { trackerId }?)` returns a permanent tracker ID.
   `name` and `kind` (`done`, `count`, or `amount`) are required. `color` is
   `coral`, `magenta`, `amber`, or `#rrggbb` (default `coral`). `schedule`

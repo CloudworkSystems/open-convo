@@ -1084,3 +1084,27 @@ test('a true life register at or before its purge cutoff is refused', () => {
   assert.deepEqual(mergePeople(loaded, loaded), loaded);
   assert.equal(viewPerson(loaded).trackers[0].name, 'Water');
 });
+
+test('a child write on an emptied person is refused and leaves the file unchanged', () => {
+  const engine = fixed('phone-a', 100);
+  const id = engine.createPerson('River', { id: 'river', weekStartsOn: 'monday' });
+  engine.deletePerson(id);
+  engine.emptyTrash(id);
+  const before = engine.getPerson(id);
+  assert.throws(() => engine.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' }), /Incomplete record in person file/);
+  assert.deepEqual(engine.getPerson(id), before);
+  assert.throws(() => engine.addStack(id, { name: 'Morning' }, { stackId: 'morning' }), /Incomplete record in person file/);
+  assert.deepEqual(engine.getPerson(id), before);
+  assert.throws(() => engine.markRest(id, '2026-03-04', { restId: 'rest' }), /Incomplete record in person file/);
+  assert.deepEqual(engine.getPerson(id), before);
+  assert.equal(engine.view(id).deleted, true);
+  assert.equal(engine.view(id).trackers.length, 0);
+  assert.equal(engine.save(id).includes('Water'), false);
+
+  engine.renamePerson(id, 'River');
+  engine.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  assert.equal(engine.view(id).deleted, false);
+  assert.equal(engine.view(id).name, 'River');
+  assert.equal(engine.view(id).trackers[0].name, 'Water');
+  assert.doesNotThrow(() => engine.save(id));
+});

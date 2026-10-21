@@ -898,7 +898,7 @@ export class HabitGrid {
     let next;
     try {
       operation(draft, stamp);
-      next = canonical(draft);
+      next = validate(canonical(draft));
     } catch (error) {
       this.#counter -= 1;
       throw error;
