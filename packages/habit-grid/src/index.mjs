@@ -863,6 +863,15 @@ function markOn(fill) {
   if (dark >= GRAPHIC_CONTRAST && dark >= light) return EMBER.background;
   return '#ffffff';
 }
+function svgIdPart(value) {
+  let body = '';
+  for (const char of String(value ?? '')) {
+    const code = char.codePointAt(0);
+    if (code < 128 && /[A-Za-z0-9-]/.test(char)) body += char;
+    else body += `_${code.toString(16).padStart(6, '0')}`;
+  }
+  return `${body.length}_${body}`;
+}
 function escapeXml(value) {
   return String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[character]);
 }
@@ -913,7 +922,7 @@ export function renderSvg(grid) {
   const height = top + grid.rows.length * (cell + gap) + 8;
   const initials = { sunday: 'S', monday: 'M', tuesday: 'T', wednesday: 'W', thursday: 'T', friday: 'F', saturday: 'S' };
   const chunks = [];
-  const label = `habit-${String(`${grid.personId ?? ''}-${grid.id ?? 'grid'}-${grid.start ?? ''}`).replace(/[^A-Za-z0-9_-]/g, '') || 'grid'}`;
+  const label = `habit-${svgIdPart(grid.personId)}-${svgIdPart(grid.id ?? 'grid')}-${svgIdPart(grid.start)}`;
   chunks.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="${label}-title ${label}-desc">`);
   chunks.push(`<title id="${label}-title">${escapeXml(grid.name || 'Habit grid')}</title>`);
   chunks.push(`<desc id="${label}-desc">${escapeXml(`Days from ${grid.start} to ${grid.end}. Week starts on ${grid.weekStartsOn}. Full days show a check mark. Rest days show a circle and a bar. Done days show a diamond that grows with the shade. Partial days show bars. Open days are dashed. Empty days are an outline.`)}</desc>`);

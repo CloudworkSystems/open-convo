@@ -1203,9 +1203,9 @@ test('svg title ids differ by grid', () => {
   const span = { start: '2026-03-18', end: '2026-03-18' };
   const water = engine.svg(id, 'water', span);
   const walk = engine.svg(id, 'walk', span);
-  assert.match(water, /id="habit-river-water-2026-03-18-title"/);
-  assert.match(water, /aria-labelledby="habit-river-water-2026-03-18-title habit-river-water-2026-03-18-desc"/);
-  assert.match(walk, /id="habit-river-walk-2026-03-18-title"/);
+  assert.match(water, /id="habit-5_river-5_water-10_2026-03-18-title"/);
+  assert.match(water, /aria-labelledby="habit-5_river-5_water-10_2026-03-18-title habit-5_river-5_water-10_2026-03-18-desc"/);
+  assert.match(walk, /id="habit-5_river-4_walk-10_2026-03-18-title"/);
   assert.equal(water.includes('id="habit-title"'), false);
   const other = fixed('phone-b');
   const glen = other.createPerson('Glen', { id: 'glen' });
@@ -1213,13 +1213,23 @@ test('svg title ids differ by grid', () => {
   other.addStack(glen, { name: 'Morning', members: ['water'] }, { stackId: 'morning' });
   engine.addStack(id, { name: 'Morning', members: ['water'] }, { stackId: 'morning' });
   const glenWater = other.svg(glen, 'water', span);
-  assert.match(glenWater, /id="habit-glen-water-2026-03-18-title"/);
-  assert.equal(water.includes('habit-glen-water-2026-03-18-title'), false);
-  assert.match(engine.stackSvg(id, 'morning', span), /id="habit-river-morning-2026-03-18-title"/);
-  assert.match(other.stackSvg(glen, 'morning', span), /id="habit-glen-morning-2026-03-18-title"/);
-  const hostile = renderSvg({ ...engine.grid(id, 'water', span), id: 'x" onload="alert(1)', personId: 'y" onload="alert(2)' });
+  assert.match(glenWater, /id="habit-4_glen-5_water-10_2026-03-18-title"/);
+  assert.equal(water.includes('habit-4_glen-5_water-10_2026-03-18-title'), false);
+  assert.match(engine.stackSvg(id, 'morning', span), /id="habit-5_river-7_morning-10_2026-03-18-title"/);
+  assert.match(other.stackSvg(glen, 'morning', span), /id="habit-4_glen-7_morning-10_2026-03-18-title"/);
+  const base = engine.grid(id, 'water', span);
+  const titleId = (personId, gridId) => {
+    const svg = renderSvg({ ...base, personId, id: gridId });
+    const found = svg.match(/id="(habit-[A-Za-z0-9_-]+)-title"/);
+    assert.ok(found, personId);
+    assert.equal(svg.includes('onload="'), false);
+    return found[1];
+  };
+  assert.notEqual(titleId('ab', 'water'), titleId('a.b', 'water'));
+  assert.notEqual(titleId('a-b', 'c'), titleId('a', 'b-c'));
+  const hostile = renderSvg({ ...base, id: 'x" onload="alert(1)', personId: 'y" onload="alert(2)' });
   assert.equal(hostile.includes('onload="'), false);
-  assert.match(hostile, /id="habit-yonloadalert2-xonloadalert1-2026-03-18-title"/);
+  assert.match(hostile, /id="habit-[A-Za-z0-9_-]+-title"/);
 });
 
 test('tracker fencing keeps a post-cutoff check-in fragment until another replica completes it', () => {
