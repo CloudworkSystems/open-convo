@@ -119,8 +119,12 @@ A finding that records more than one problem (for example a listing whose
 phone and name both differ) is ranked once, at the lowest rank number among
 its problems, and the report names every problem in it.
 
-- The **fix list** shows the first five problems. The rest appear under
-  "Also found", in the same order.
+- The **fix list** shows the first five ranked findings, not the first five
+  individual problems: a finding with several problems takes one slot and
+  lists all its problems in it. The rest appear under "Also found", in the
+  same order. Every count in the report (the summary's "We found 4 things
+  to fix", and how many are in the fix list and under "Also found") counts
+  ranked findings the same way.
 - A finding checked more than 30 days before `reportDate` keeps its place
   but is marked "Check again before acting: found *date*", because facts go
   stale.
@@ -167,8 +171,11 @@ addresses and 555 phone numbers). At least:
    in rank order; two problems of the same rank come out by `id`; a finding
    with two problems takes the lower rank number and names both. Shuffling
    the input order never changes the output.
-4. Only five problems are in the fix list; the sixth and later go under
-   "Also found".
+4. Only five ranked findings are in the fix list; the sixth and later go
+   under "Also found". With six findings, one of which records two problems
+   and ranks first (seven problems in all), the fix list holds five findings (that one
+   listing both its problems), "Also found" holds one, and the summary says
+   six things to fix.
 5. A finding checked 31 days before `reportDate` is marked "Check again
    before acting"; one checked 30 days before is not.
 6. `unknown` findings appear only under "Couldn't check"; `ok` findings only

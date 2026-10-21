@@ -91,10 +91,13 @@ Fields the facts schema allows today (`schema/facts.schema.json`):
   list changed.
 - **Repeated keys.** The schema doesn't require list keys to be unique (two
   services can share a name, two hours entries the same `days`, two social
-  links the same address, two photos the same picture). Entries that share
-  a key are paired by position among the entries with that key: the first
-  old "Rye loaf" with the first new "Rye loaf", the second with the second,
-  and any left over are added or removed.
+  links the same address, two photos the same picture). Among entries that
+  share a key, entries whose whole content is identical in both files are
+  paired first (in order of appearance), so a pure swap of two different
+  "Rye loaf" entries reports only "The order of services changes", not two
+  price changes. Only the entries left after that are paired by position
+  among themselves: the first remaining old "Rye loaf" with the first
+  remaining new "Rye loaf", and so on; any left over are added or removed.
 - **Colors:** "Accent color: #f37a4a becomes #2f6f4f", using the colors
   after defaults are applied, so filling in a default value is no change.
 - **Site address** (`siteUrl`): "Site address: *old* becomes *new*. The
@@ -130,7 +133,10 @@ invented variants beside them). At least:
    both.
 4. Repeated keys: two services named "Rye loaf" with different prices, two
    hours entries for the same days, and a repeated social address each pair
-   by position; adding a third "Rye loaf" shows one new service.
+   by position when their content changes; adding a third "Rye loaf" shows
+   one new service. Swapping the two different "Rye loaf" entries, and
+   nothing else, reports only the order sentence for services and no price
+   change (and the same for swapped hours entries with the same days).
 5. One-line output: a description change whose old and new text contain a
    line break, a carriage return, a tab and a backslash prints as one line
    with `\n`, `\r`, `\t` and `\\`; the JSON holds the exact text.
