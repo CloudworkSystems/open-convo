@@ -93,6 +93,10 @@ October 20 fix (OC-261020-gate-package-tests): `tests` now also runs
 (Site Engine, household lists, and new ones such as the habit grid), found
 by folder so new packages are covered automatically.
 
+**Building faster** (more outside modules, parallel lanes, a dogfooding
+cadence): proposal awaiting the owner. Plan:
+[docs/plans/scale-up.md](docs/plans/scale-up.md).
+
 ## Owner Decisions
 
 Moved to [docs/decisions.md](docs/decisions.md), which only the owner
