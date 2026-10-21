@@ -423,3 +423,32 @@ test('the gate re-runs on comments by the owner, including deletions', () => {
   assert.match(wf, /types: \[created, edited, deleted\]/);
   assert.match(wf, /github\.event\.comment\.user\.login == 'CloudworkSystems'/);
 });
+
+test('an owner note on a head Codex has not reviewed stays pending', () => {
+  const ok = note(`owner-accepts-findings ${HEAD}`);
+  // No Codex review or summary of the head at all.
+  assert.equal(evaluateCodexSignal({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [ok] }).approved, false);
+  // Codex reviewed only an older commit.
+  assert.equal(evaluateCodexSignal({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [ok], reviews: [findings(OLD, '2026-10-15T01:00:00Z')] }).approved, false);
+  // Codex's summary of the head (state or completed row) counts as reviewed.
+  const state = stateComment(HEAD, { findings: true });
+  assert.equal(evaluateCodexSignal({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [ok, state] }).approved, true);
+  const row = { ...summary(HEAD), edit_history: neverEdited };
+  assert.equal(evaluateCodexSignal({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [ok, row] }).approved, true);
+});
+
+test('an owner note inside a code block or inline code never counts', () => {
+  for (const body of [
+    `Example:\n\`\`\`\nowner-accepts-findings ${HEAD}\n\`\`\``,
+    `~~~text\n<!-- owner-accepts-findings sha=${HEAD} -->\n~~~`,
+    `\`\`\`\`\n\`\`\`\nowner-accepts-findings ${HEAD}\n\`\`\`\n\`\`\`\``,
+    `\`\`\`\nunclosed fence\nowner-accepts-findings ${HEAD}`,
+    `    owner-accepts-findings ${HEAD}`,
+    `Use \`owner-accepts-findings ${HEAD}\` like this.`,
+  ]) {
+    assert.equal(ownerAcceptance({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [note(body)] }), false, body);
+  }
+  // A real note after a closed fence still counts.
+  const after = `\`\`\`\nowner-accepts-findings ${OLD}\n\`\`\`\nowner-accepts-findings ${HEAD}`;
+  assert.equal(ownerAcceptance({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [note(after)] }), true);
+});

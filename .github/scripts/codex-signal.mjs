@@ -67,8 +67,30 @@ function editedOnlyBy(comment, isEditor) {
 // The owner's note, in either of two exact forms, each on a line of its own:
 //   owner-accepts-findings <full 40-character head sha>
 //   <!-- owner-accepts-findings sha=<full 40-character head sha> -->
-// Lowercase hex only; anything else on the line makes it malformed.
-const ACCEPT_LINE = /^[ \t]*(?:owner-accepts-findings ([0-9a-f]{40})|<!-- owner-accepts-findings sha=([0-9a-f]{40}) -->)[ \t]*$/gm;
+// Lowercase hex only; anything else on the line makes it malformed. At most
+// three leading spaces (four make a Markdown code block), and lines inside
+// fenced code blocks never count, so a quoted example can't accept anything.
+// (Inline code can't match: a backtick on the line makes it malformed.)
+const ACCEPT_LINE = /^ {0,3}(?:owner-accepts-findings ([0-9a-f]{40})|<!-- owner-accepts-findings sha=([0-9a-f]{40}) -->)[ \t]*$/;
+const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+
+/** The note's sha on each line outside fenced code blocks. */
+function acceptedShas(body) {
+  const shas = [];
+  let fence = null;
+  for (const line of (body ?? '').split(/\r?\n/)) {
+    const f = line.match(FENCE);
+    if (fence) {
+      // A fence closes with the same character, at least as long.
+      if (f && f[1][0] === fence[0] && f[1].length >= fence.length) fence = null;
+      continue;
+    }
+    if (f) { fence = f[1]; continue; }
+    const m = line.match(ACCEPT_LINE);
+    if (m) shas.push(m[1] ?? m[2]);
+  }
+  return shas;
+}
 
 /**
  * True if the owner accepted the remaining Codex findings on this exact head.
@@ -84,11 +106,21 @@ export function ownerAcceptance({ headSha, prAuthor, comments = [] }) {
     if (c?.user?.login !== OWNER_LOGIN || c.user.type !== 'User') return false;
     // The edit record must have been read (fail closed if it wasn't).
     if (c.edit_history === undefined || !editedOnlyBy(c, isOwnerEditor)) return false;
-    return [...(c.body ?? '').matchAll(ACCEPT_LINE)].some((m) => (m[1] ?? m[2]) === headSha);
+    return acceptedShas(c.body).includes(headSha);
   });
 }
 
 const fromCodex = (comment) => isCodex(comment.user) && editedOnlyByCodex(comment);
+
+// The commit a completed code review in Codex's review state names, if any.
+function reviewStateSha(body) {
+  const m = (body ?? '').match(REVIEW_STATE);
+  if (!m) return null;
+  try {
+    const code = JSON.parse(m[1])?.code_review;
+    return code?.status === 'completed' ? code.commit_sha : null;
+  } catch { return null; }
+}
 
 /**
  * True only if the timeline shows the owner's account dismissed this review.
@@ -180,8 +212,13 @@ export function evaluateCodexSignal({ headSha, comments: allComments = [], revie
     return { approved: true, reason: `Codex reacted thumbs-up after reviewing ${short}.` };
   }
 
-  // The owner's explicit acceptance of whatever Codex left on this head.
-  if (ownerAcceptance({ headSha, prAuthor, comments: allComments })) {
+  // The owner's explicit acceptance of whatever Codex left on this head. Only
+  // once Codex has reviewed this exact head: a review of it, or its trusted
+  // summary naming it. A note alone on an unreviewed head stays pending.
+  const codexReviewedHead = reviews.some((r) => isCodex(r.user) && r.commit_id === headSha)
+    || headCompletions.length > 0
+    || comments.some((c) => (c.body ?? '').includes(SUMMARY_MARKER) && reviewStateSha(c.body) === headSha);
+  if (codexReviewedHead && ownerAcceptance({ headSha, prAuthor, comments: allComments })) {
     return { approved: true, reason: `Owner accepted remaining findings on ${headSha}.` };
   }
 
