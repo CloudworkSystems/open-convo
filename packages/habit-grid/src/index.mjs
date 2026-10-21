@@ -638,6 +638,7 @@ function classifyDay({ date, today, tracker, value, highest, ownerRest }) {
     }
     return { state: 'open', shade: 0, due: false, value };
   }
+  if (date > today) return { state: 'open', shade: 0, due: true, value };
   if (value > 0) {
     const shaded = shadeOf(value, target, highest);
     return { ...shaded, due: true, value };

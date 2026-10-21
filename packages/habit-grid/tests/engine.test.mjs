@@ -340,13 +340,14 @@ test('8. SVG contrast and shapes distinguish rest and full days', () => {
   const engine = fixed('phone-a');
   const id = engine.createPerson('River', { id: 'river' });
   engine.addTracker(id, { name: 'Water <glasses> & more', kind: 'count', color: 'coral', target: 4, unit: 'glasses', startedOn: '2026-03-16' }, { trackerId: 'water' });
-  engine.addTracker(id, { name: 'Pages', kind: 'count', color: 'magenta', startedOn: '2026-03-16' }, { trackerId: 'pages' });
+  engine.addTracker(id, { name: 'Pages', kind: 'count', color: 'magenta', startedOn: '2026-03-15' }, { trackerId: 'pages' });
   engine.logCheckIn(id, 'water', { date: '2026-03-17', value: 2, checkInId: 'partial' });
   engine.logCheckIn(id, 'water', { date: '2026-03-18', value: 4, checkInId: 'full' });
+  engine.logCheckIn(id, 'pages', { date: '2026-03-15', value: 4, checkInId: 'top' });
   engine.logCheckIn(id, 'pages', { date: '2026-03-16', value: 1, checkInId: 'low' });
   engine.logCheckIn(id, 'pages', { date: '2026-03-17', value: 2, checkInId: 'mid' });
   engine.logCheckIn(id, 'pages', { date: '2026-03-18', value: 3, checkInId: 'high' });
-  engine.logCheckIn(id, 'pages', { date: '2026-03-20', value: 4, checkInId: 'top' });
+  engine.logCheckIn(id, 'pages', { date: '2026-03-20', value: 4, checkInId: 'ahead' });
   engine.markRest(id, '2026-03-19', { restId: 'rest' });
   const span = { start: '2026-03-16', end: '2026-03-20' };
   const water = renderSvg(engine.grid(id, 'water', span));
@@ -366,6 +367,8 @@ test('8. SVG contrast and shapes distinguish rest and full days', () => {
   const diamonds = [...pages.matchAll(/<g\b[^>]*data-shade="([1-4])"[^>]*data-shape="diamond"[\s\S]*?<\/g>/g)];
   const points = Object.fromEntries(diamonds.map(match => [match[1], /points="([^"]+)" fill="#/.exec(match[0])[1]]));
   assert.deepEqual(Object.keys(points).sort(), ['1', '2', '3', '4']);
+  assert.match(pages, /data-date="2026-03-15" data-state="done" data-shade="4"/);
+  assert.match(pages, /data-date="2026-03-20" data-state="open" data-shade="0"/);
   assert.equal(points['1'], '7,4 10,7 7,10 4,7');
   assert.equal(points['4'], '7,1 13,7 7,13 1,7');
   assert.notEqual(points['2'], points['3']);
@@ -1661,4 +1664,63 @@ test('an unknown edit field does not revive a deleted tracker or check-in', () =
   assert.equal(engine.view(id).checkIns.find(item => item.id === 'glass').value, 9);
   engine.editTracker(id, 'water', { name: 'Fresh water' });
   assert.equal(engine.view(id).trackers[0].name, 'Fresh water');
+});
+
+test('a due day after today stays open when a check-in is already stored', () => {
+  const engine = fixed('phone-a');
+  const id = engine.createPerson('River', { id: 'river' });
+  const span = { start: '2026-03-16', end: '2026-03-20', today: '2026-03-18' };
+  const shown = (grid, date) => {
+    const item = square(grid, date);
+    return { state: item.state, shade: item.shade, due: item.due, value: item.value };
+  };
+  engine.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses', startedOn: '2026-03-16' }, { trackerId: 'water' });
+  engine.logCheckIn(id, 'water', { date: '2026-03-17', value: 8, checkInId: 'water-past' });
+  engine.logCheckIn(id, 'water', { date: '2026-03-18', value: 3, checkInId: 'water-today' });
+  engine.logCheckIn(id, 'water', { date: '2026-03-19', value: 2, checkInId: 'water-partial' });
+  engine.logCheckIn(id, 'water', { date: '2026-03-20', value: 8, checkInId: 'water-ahead' });
+  const water = engine.grid(id, 'water', span);
+  assert.deepEqual(shown(water, '2026-03-16'), { state: 'empty', shade: 0, due: true, value: 0 });
+  assert.deepEqual(shown(water, '2026-03-17'), { state: 'full', shade: 4, due: true, value: 8 });
+  assert.deepEqual(shown(water, '2026-03-18'), { state: 'partial', shade: 2, due: true, value: 3 });
+  assert.deepEqual(shown(water, '2026-03-19'), { state: 'open', shade: 0, due: true, value: 2 });
+  assert.deepEqual(shown(water, '2026-03-20'), { state: 'open', shade: 0, due: true, value: 8 });
+  assert.deepEqual(water.streaks, { current: 1, longest: 1, unit: 'day' });
+  assert.equal(engine.view(id).checkIns.find(item => item.id === 'water-ahead').value, 8);
+
+  engine.addTracker(id, {
+    name: 'Stretch', kind: 'done', schedule: { type: 'days', days: ['monday', 'wednesday', 'friday'] }, startedOn: '2026-03-16',
+  }, { trackerId: 'stretch' });
+  engine.logCheckIn(id, 'stretch', { date: '2026-03-16', checkInId: 'stretch-past' });
+  engine.logCheckIn(id, 'stretch', { date: '2026-03-18', checkInId: 'stretch-today' });
+  engine.logCheckIn(id, 'stretch', { date: '2026-03-19', checkInId: 'stretch-off' });
+  engine.logCheckIn(id, 'stretch', { date: '2026-03-20', checkInId: 'stretch-ahead' });
+  const stretch = engine.grid(id, 'stretch', span);
+  assert.deepEqual(shown(stretch, '2026-03-16'), { state: 'full', shade: 4, due: true, value: 1 });
+  assert.deepEqual(shown(stretch, '2026-03-17'), { state: 'rest', shade: 0, due: false, value: 0 });
+  assert.deepEqual(shown(stretch, '2026-03-18'), { state: 'full', shade: 4, due: true, value: 1 });
+  assert.deepEqual(shown(stretch, '2026-03-19'), { state: 'rest', shade: 0, due: false, value: 1 });
+  assert.deepEqual(shown(stretch, '2026-03-20'), { state: 'open', shade: 0, due: true, value: 1 });
+
+  engine.addTracker(id, { name: 'Pages', kind: 'count', target: null, startedOn: '2026-03-16' }, { trackerId: 'pages' });
+  engine.logCheckIn(id, 'pages', { date: '2026-03-17', value: 2, checkInId: 'pages-past' });
+  engine.logCheckIn(id, 'pages', { date: '2026-03-20', value: 4, checkInId: 'pages-ahead' });
+  const pages = engine.grid(id, 'pages', span);
+  assert.equal(pages.fullLevel, false);
+  assert.deepEqual(shown(pages, '2026-03-17'), { state: 'done', shade: 2, due: true, value: 2 });
+  assert.deepEqual(shown(pages, '2026-03-20'), { state: 'open', shade: 0, due: true, value: 4 });
+
+  engine.addTracker(id, {
+    name: 'Calls', kind: 'done', schedule: { type: 'timesPerWeek', times: 3 }, startedOn: '2026-03-01',
+  }, { trackerId: 'calls' });
+  engine.logCheckIn(id, 'calls', { date: '2026-03-20', checkInId: 'calls-ahead' });
+  const calls = engine.grid(id, 'calls', span);
+  assert.deepEqual(shown(calls, '2026-03-18'), { state: 'open', shade: 0, due: false, value: 0 });
+  assert.deepEqual(shown(calls, '2026-03-20'), { state: 'done', shade: 4, due: false, value: 1 });
+
+  engine.addStack(id, { name: 'Morning', members: ['water'] }, { stackId: 'morning' });
+  const morning = engine.stackGrid(id, 'morning', span);
+  assert.deepEqual(shown(morning, '2026-03-17'), { state: 'full', shade: 4, due: true, value: 1 });
+  assert.deepEqual(shown(morning, '2026-03-18'), { state: 'partial', shade: 1, due: true, value: 0 });
+  assert.deepEqual(shown(morning, '2026-03-20'), { state: 'open', shade: 0, due: false, value: 0 });
 });

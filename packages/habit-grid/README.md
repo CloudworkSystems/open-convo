@@ -158,8 +158,9 @@ requested span.
 - Chosen weekdays that are not selected are `rest`, including when a check-in
   exists. The value remains on the square. They are not due.
 - Days before `startedOn` are `open`.
-- A due day after today, and today before it is met, are `open`. A past due
-  day with no value is `empty`.
+- A due day after today, and today before it is met, are `open`. A check-in
+  stored on a future due day stays on the square and does not change that
+  `open` state. A past due day with no value is `empty`.
 - Owner rest is `rest` for that tracker, or for every tracker when the mark
   has an empty tracker ID. Rest is never an empty due day.
 - Times per week: no day is due. A day with a value above zero is `done`
