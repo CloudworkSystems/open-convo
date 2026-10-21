@@ -1539,3 +1539,40 @@ test('emptying Trash fences a check-in that already moved off the deleted tracke
   assert.equal(square(engine.grid(id, 'water', span), '2026-03-04').value, 0);
   assert.equal(square(engine.grid(id, 'steps', span), '2026-03-04').value, 0);
 });
+
+test('a purged tracker in one history does not resurrect a newer deletion from another replica', () => {
+  const origin = fixed('phone-o', 100);
+  const id = origin.createPerson('River', { id: 'river' });
+  origin.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  origin.addTracker(id, { name: 'Steps', kind: 'count', target: 8, unit: 'steps' }, { trackerId: 'steps' });
+  const mover = fixed('phone-m', 100);
+  const editor = fixed('phone-e', 100);
+  const deleter = fixed('phone-d', 100);
+  const purger = fixed('phone-p', 100);
+  mover.importPerson(origin.getPerson(id));
+  purger.importPerson(origin.getPerson(id));
+  mover.logCheckIn(id, 'water', { date: '2026-03-04', value: 5, checkInId: 'glass' });
+  const logged = mover.getPerson(id);
+  editor.importPerson(logged);
+  deleter.importPerson(logged);
+  mover.editCheckIn(id, 'glass', { trackerId: 'steps' });
+  mover.editCheckIn(id, 'glass', { trackerId: 'water' });
+  purger.deleteTracker(id, 'steps');
+  purger.emptyTrash(id);
+  mover.importPerson(purger.getPerson(id));
+  editor.renamePerson(id, 'River two');
+  editor.editCheckIn(id, 'glass', { value: 9 });
+  deleter.renamePerson(id, 'River two');
+  deleter.renamePerson(id, 'River three');
+  deleter.renamePerson(id, 'River four');
+  deleter.deleteCheckIn(id, 'glass');
+  const copies = [mover, editor, deleter].map(device => device.getPerson(id));
+  const joined = mergePeople(mergePeople(copies[1], copies[0]), copies[2]);
+  for (const [i, j, k] of [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]) {
+    const merged = mergePeople(mergePeople(copies[i], copies[j]), copies[k]);
+    assert.equal(merged.checkIns.find(item => item.id === 'glass').life.value, false);
+    assert.equal(viewPerson(merged).checkIns.length, 0);
+    assert.deepEqual(merged, joined);
+  }
+  assert.deepEqual(mergePeople(joined, joined), joined);
+});

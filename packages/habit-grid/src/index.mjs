@@ -255,8 +255,13 @@ function mergeFencedChildren(left, right, parentPurge, cutoffs, recordKind) {
   return ids.map(id => {
     const leftRecord = a.get(id);
     const rightRecord = b.get(id);
-    const cutoffList = [...cutoffsForRecord(leftRecord, cutoffs), ...cutoffsForRecord(rightRecord, cutoffs)];
-    const merged = mergeRecord(fenceAgainst(leftRecord, cutoffList), fenceAgainst(rightRecord, cutoffList), parentPurge, false, recordKind);
+    const merged = mergeRecord(
+      fenceAgainst(leftRecord, cutoffsForRecord(leftRecord, cutoffs)),
+      fenceAgainst(rightRecord, cutoffsForRecord(rightRecord, cutoffs)),
+      parentPurge,
+      false,
+      recordKind,
+    );
     if (recordKind === 'checkIn') rememberCheckInTrackers(merged, leftRecord, rightRecord);
     return fencedByTracker(merged, cutoffs);
   });
