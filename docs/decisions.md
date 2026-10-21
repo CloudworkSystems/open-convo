@@ -16,15 +16,15 @@ full plan and history are in [PLAN.md](../PLAN.md).
   dogfooding), with an infra lane added after the auto-update job merges.
   Standing approval to rebuild True Convo Test on the owner's Mac when it is
   idle and the Test app isn't running: Test app only, built from `main`, old
-  build kept if a build fails; the time window is still to be set by the
-  owner. The Mac app's protected paths will be narrowed by one refactor pull
+  build kept if a build fails, in a window from 2 to 6 AM Eastern. The Mac app's protected paths will be narrowed by one refactor pull
   request after the Claude Code adapter's first code pull request, and only
   when it passes the plan's checks (files only moved, identical linking,
   every safety test passing, and a new protected test finding no paid-API
   or API-key code in unprotected files; it still
   needs the owner's approval). Agents add approvals to one daily "Needs the
-  owner" list instead of pinging; urgent items still come in chat; the time
-  of day is still to be set by the owner.
+  owner" list instead of pinging, which the owner reads at 8:00 AM Eastern;
+  urgent items still come in chat. The rebuild and the daily list each run
+  as a scheduled task on the owner's Mac.
 - **Oct 21:** The PR steward counts as part of the planning side: after its
   own passing planning check on an outside builder's pull request, it may
   switch on auto-merge, and it may post the `@codex review` fallback when a
