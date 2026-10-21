@@ -1,6 +1,13 @@
 // Posts the `codex-approved` commit status on pull request head commits.
 // Runs only from the default branch's copy of the workflow (pull_request_target,
-// issue_comment, pull_request_review, schedule), never from pull request code.
+// issue_comment, schedule, workflow_dispatch), never from pull request code.
+//
+// No event fires when a review is dismissed (pull_request_review would run the
+// pull request's own copy of the workflow, so the gate doesn't use it). After
+// the owner dismisses a Codex review, run the codex-approved workflow by hand
+// (workflow_dispatch, optionally with the pull request number); otherwise the
+// hourly run picks it up within an hour. The delay can only hold a pull request
+// back, never let one through.
 
 import { readFileSync } from 'node:fs';
 import { client, repoFromEnv } from './github.mjs';

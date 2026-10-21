@@ -306,8 +306,9 @@ test('the tests check waits for every other job in tests.yml', () => {
 
 // Any account with write access can dismiss a Codex review. Only the owner's
 // dismissal clears the finding.
+// As GitHub documents them: a review's id is a number, the event's review_id a string.
 const dismissedReview = (id, sha, at) => ({ ...findings(sha, at), id, state: 'DISMISSED' });
-const dismissal = (id, login) => ({ event: 'review_dismissed', actor: login ? { login } : null, dismissed_review: { review_id: id, state: 'dismissed' } });
+const dismissal = (id, login) => ({ event: 'review_dismissed', actor: login ? { login } : null, dismissed_review: { review_id: String(id), state: 'dismissed' } });
 
 test('a Codex review dismissed by the bot still blocks', () => {
   const r = evaluateCodexSignal({ headSha: HEAD, comments: [clean(HEAD, '2026-10-15T01:00:00Z')], reviews: [dismissedReview(7, HEAD, '2026-10-15T02:00:00Z')], dismissals: [dismissal(7, 'cloudwork-bot')] });
@@ -337,4 +338,14 @@ test('with no dismissals, results are unchanged', () => {
   assert.equal(evaluateCodexSignal({ headSha: HEAD, comments: [clean(HEAD, '2026-10-15T02:00:00Z')], reviews: [findings(HEAD, '2026-10-15T01:00:00Z')], dismissals: [] }).approved, true);
   assert.equal(evaluateCodexSignal({ headSha: HEAD, comments: [clean(HEAD, '2026-10-15T01:00:00Z')], reviews: [findings(HEAD, '2026-10-15T02:00:00Z')], dismissals: [] }).approved, false);
   assert.equal(dismissedByOwner({ id: 7 }, [dismissal(7, OWNER_LOGIN)]), true);
+});
+
+test('review ids match whether the event gives them as text or as a number', () => {
+  const review = dismissedReview(5594675189, HEAD, '2026-10-15T02:00:00Z');
+  assert.equal(typeof review.id, 'number');
+  assert.equal(dismissedByOwner(review, [dismissal(5594675189, OWNER_LOGIN)]), true);
+  // This repo's own review_dismissed events return a number.
+  const numeric = { ...dismissal(5594675189, OWNER_LOGIN), dismissed_review: { review_id: 5594675189, state: 'dismissed' } };
+  assert.equal(dismissedByOwner(review, [numeric]), true);
+  assert.equal(dismissedByOwner({ id: undefined }, [{ ...numeric, dismissed_review: {} }]), false);
 });

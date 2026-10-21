@@ -175,6 +175,11 @@ on October 20; builders now open PRs as the bot. See "Status".)
 2. **`codex-approved` check**: as described above. Re-runs when Codex
    comments or reviews, on new commits, and hourly as a backstop
    for 👍 reactions (GitHub sends no event for those).
+   A dismissed Codex review keeps blocking unless the owner's account
+   dismissed it. Dismissing a review sends no event the gate listens to, so
+   after the owner dismisses one, he or a session runs the `codex-approved`
+   workflow by hand (Actions, "Run workflow", optionally with the pull
+   request number); otherwise the hourly run picks it up within an hour.
 3. **Repo settings**, after owner approval: turn on "Allow auto-merge" and
    "Automatically delete head branches"; update `main`'s protection to require
    `tests` and `codex-approved` (from GitHub Actions), require code-owner

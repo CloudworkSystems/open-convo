@@ -62,10 +62,14 @@ const fromCodex = (comment) => isCodex(comment.user) && editedOnlyByCodex(commen
  * `dismissals` are the pull request's `review_dismissed` issue events (REST),
  * each { actor: { login }, dismissed_review: { review_id } }. No matching
  * event, an unknown actor, or any matching event by someone else: false.
+ * GitHub documents `review_id` as a string while reviews carry a numeric
+ * `id` (this repo's own events return a number), so both are compared as text.
  */
+const sameId = (a, b) => a != null && b != null && String(a) === String(b);
+
 export function dismissedByOwner(review, dismissals) {
   if (!Array.isArray(dismissals)) return false;
-  const events = dismissals.filter((e) => e?.event === 'review_dismissed' && e.dismissed_review?.review_id === review.id);
+  const events = dismissals.filter((e) => e?.event === 'review_dismissed' && sameId(e.dismissed_review?.review_id, review.id));
   return events.length > 0 && events.every((e) => e.actor?.login === OWNER_LOGIN);
 }
 
