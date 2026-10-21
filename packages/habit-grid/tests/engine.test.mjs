@@ -7,10 +7,10 @@ import {
 
 const TODAY = '2026-03-18';
 const CLOCK = Date.UTC(2026, 2, 18);
-const BANNED = /failed|broke|score/i;
+const BANNED = /failed|broke|score|\bmiss(?:ed)?\b|streak lost|\bbadge\b/i;
 
 function fixed(deviceId, time = CLOCK) {
-  return new HabitGrid({ deviceId, now: () => time });
+  return new HabitGrid({ deviceId, now: () => time, timeZone: 'UTC' });
 }
 function at(iso) {
   const [year, month, day] = iso.split('-').map(Number);
@@ -1107,4 +1107,106 @@ test('a child write on an emptied person is refused and leaves the file unchange
   assert.equal(engine.view(id).name, 'River');
   assert.equal(engine.view(id).trackers[0].name, 'Water');
   assert.doesNotThrow(() => engine.save(id));
+});
+
+test('emptying a deleted tracker purges its check-ins, rest days, and stack membership', () => {
+  const home = fixed('phone-a', 100);
+  const away = fixed('phone-b', 100);
+  const id = home.createPerson('River', { id: 'river' });
+  home.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  home.addTracker(id, { name: 'Vitamins', kind: 'done' }, { trackerId: 'vitamins' });
+  home.logCheckIn(id, 'water', { date: '2026-03-04', value: 5, checkInId: 'glass' });
+  home.markRest(id, '2026-03-05', { trackerId: 'water', restId: 'water-rest' });
+  home.markRest(id, '2026-03-06', { restId: 'all-rest' });
+  home.addStack(id, { name: 'Morning', members: ['water', 'vitamins'] }, { stackId: 'morning' });
+  away.importPerson(home.getPerson(id));
+  away.logCheckIn(id, 'water', { date: '2026-03-03', value: 1, checkInId: 'extra' });
+  home.deleteTracker(id, 'water');
+  home.emptyTrash(id);
+  assert.equal(home.view(id).checkIns.length, 0);
+  assert.equal(home.view(id, { trash: true }).checkIns.length, 0);
+  assert.deepEqual(home.getPerson(id).checkIns.find(item => item.id === 'glass').fields, {});
+  assert.equal(home.view(id).restDays.some(item => item.id === 'water-rest'), false);
+  assert.equal(home.view(id).restDays.some(item => item.id === 'all-rest'), true);
+  assert.deepEqual(home.view(id).stacks[0].members, ['vitamins']);
+  home.addTracker(id, { name: 'Steps', kind: 'count', target: 8, unit: 'steps' }, { trackerId: 'water' });
+  const span = { start: '2026-03-01', end: '2026-03-08' };
+  assert.equal(square(home.grid(id, 'water', span), '2026-03-04').value, 0);
+  const reader = fixed('phone-c', 100);
+  reader.importPerson(converges(home.getPerson(id), away.getPerson(id)));
+  assert.deepEqual(reader.getPerson(id).checkIns.find(item => item.id === 'glass').fields, {});
+  assert.deepEqual(reader.getPerson(id).checkIns.find(item => item.id === 'extra').fields, {});
+  assert.equal(reader.view(id).checkIns.length, 0);
+  assert.equal(square(reader.grid(id, 'water', span), '2026-03-03').value, 0);
+  assert.equal(square(reader.grid(id, 'water', span), '2026-03-04').value, 0);
+});
+
+test('a week that is entirely rest does not break a times-per-week streak', () => {
+  const engine = fixed('phone-a');
+  const id = engine.createPerson('River', { id: 'river' });
+  engine.addTracker(id, { name: 'Calls', kind: 'done', schedule: { type: 'timesPerWeek', times: 3 }, startedOn: '2026-03-01' }, { trackerId: 'calls' });
+  for (const date of ['2026-03-01', '2026-03-02', '2026-03-03', '2026-03-15', '2026-03-16', '2026-03-17']) {
+    engine.logCheckIn(id, 'calls', { date, checkInId: `calls-${date}` });
+  }
+  for (let day = 8; day <= 14; day += 1) engine.markRest(id, `2026-03-${String(day).padStart(2, '0')}`, { trackerId: 'calls', restId: `rest-${day}` });
+  const span = { today: '2026-03-22', start: '2026-03-01', end: '2026-03-21' };
+  const grid = engine.grid(id, 'calls', span);
+  const week = start => grid.columns.find(column => column.weekStart === start);
+  assert.equal(week('2026-03-01').status, 'met');
+  assert.equal(week('2026-03-08').status, 'rest');
+  assert.equal(week('2026-03-15').status, 'met');
+  assert.deepEqual(grid.streaks, { current: 2, longest: 2, unit: 'week' });
+  engine.addStack(id, { name: 'Morning', members: ['calls'] }, { stackId: 'morning' });
+  const stack = engine.stackGrid(id, 'morning', span);
+  assert.equal(stack.columns.find(column => column.weekStart === '2026-03-08').status, 'rest');
+  assert.deepEqual(stack.streaks, { current: 2, longest: 2, unit: 'week' });
+});
+
+test('an evening check-in uses the local date, not the next UTC date', () => {
+  const instant = Date.parse('2026-03-19T01:00:00.000Z');
+  const local = new HabitGrid({ deviceId: 'phone-a', timeZone: 'America/Chicago', now: () => instant });
+  const utc = new HabitGrid({ deviceId: 'phone-b', timeZone: 'UTC', now: () => instant });
+  const localId = local.createPerson('River', { id: 'river' });
+  const utcId = utc.createPerson('River', { id: 'river' });
+  local.addTracker(localId, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  utc.addTracker(utcId, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  local.logCheckIn(localId, 'water', { value: 1, checkInId: 'evening' });
+  utc.logCheckIn(utcId, 'water', { value: 1, checkInId: 'evening' });
+  assert.equal(local.view(localId).checkIns[0].date, '2026-03-18');
+  assert.equal(local.view(localId).trackers[0].startedOn, '2026-03-18');
+  assert.equal(utc.view(utcId).checkIns[0].date, '2026-03-19');
+  assert.throws(() => new HabitGrid({ deviceId: 'phone-c', timeZone: 'Not/AZone' }), /Unknown time zone/);
+});
+
+test('checking a stack twice does not write a second check-in', () => {
+  const engine = fixed('phone-a');
+  const id = engine.createPerson('River', { id: 'river' });
+  engine.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses', usualAmount: 4, startedOn: '2026-03-01' }, { trackerId: 'water' });
+  engine.addTracker(id, { name: 'Vitamins', kind: 'done', startedOn: '2026-03-01' }, { trackerId: 'vitamins' });
+  const stack = engine.addStack(id, { name: 'Morning', members: ['water', 'vitamins'] }, { stackId: 'morning' });
+  const first = engine.checkStack(id, stack, { date: '2026-03-10' });
+  assert.deepEqual(first.written.map(item => item.trackerId), ['vitamins', 'water']);
+  assert.deepEqual(first.alreadyLogged, []);
+  const second = engine.checkStack(id, stack, { date: '2026-03-10' });
+  assert.deepEqual(second.written, []);
+  assert.deepEqual(second.alreadyLogged.map(item => item.trackerId), ['vitamins', 'water']);
+  assert.equal(engine.view(id).checkIns.filter(item => item.date === '2026-03-10').length, 2);
+  assert.equal(square(engine.grid(id, 'water', { start: '2026-03-10', end: '2026-03-10' }), '2026-03-10').value, 4);
+  assert.equal(square(engine.grid(id, 'vitamins', { start: '2026-03-10', end: '2026-03-10' }), '2026-03-10').state, 'full');
+});
+
+test('svg title ids differ by grid', () => {
+  const engine = fixed('phone-a');
+  const id = engine.createPerson('River', { id: 'river' });
+  engine.addTracker(id, { name: 'Water', kind: 'done', startedOn: '2026-03-18' }, { trackerId: 'water' });
+  engine.addTracker(id, { name: 'Walk', kind: 'done', startedOn: '2026-03-18' }, { trackerId: 'walk' });
+  const span = { start: '2026-03-18', end: '2026-03-18' };
+  const water = engine.svg(id, 'water', span);
+  const walk = engine.svg(id, 'walk', span);
+  assert.match(water, /id="habit-water-2026-03-18-title"/);
+  assert.match(walk, /id="habit-walk-2026-03-18-title"/);
+  assert.equal(water.includes('id="habit-title"'), false);
+  const hostile = renderSvg({ ...engine.grid(id, 'water', span), id: 'x" onload="alert(1)' });
+  assert.equal(hostile.includes('onload="'), false);
+  assert.match(hostile, /id="habit-xonloadalert1-2026-03-18-title"/);
 });

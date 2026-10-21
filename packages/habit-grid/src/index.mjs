@@ -15,7 +15,7 @@ export const WEEK_STARTS = Object.freeze(['sunday', 'monday']);
 export const SOURCES = Object.freeze(['manual', 'voice', 'automatic']);
 export const SURFACES = Object.freeze(['mac', 'wall', 'phone']);
 export const DAY_STATES = Object.freeze(['empty', 'partial', 'full', 'rest', 'open', 'done']);
-export const WEEK_STATUSES = Object.freeze(['met', 'inProgress', 'unmet']);
+export const WEEK_STATUSES = Object.freeze(['met', 'inProgress', 'unmet', 'rest']);
 export const RANGE_DAYS = Object.freeze({ mac: 183, wall: 183, phone: 92 });
 export const EMBER = Object.freeze({
   background: '#15110f',
@@ -212,6 +212,11 @@ export function mergePeople(left, right) {
     checkIns: mergeCollection(left.checkIns, right.checkIns, purge, false, 'checkIn'),
     restDays: mergeCollection(left.restDays, right.restDays, purge, false, 'rest'),
   };
+  const cutoffs = new Map();
+  for (const tracker of result.trackers) if (validStamp(tracker.purge)) cutoffs.set(tracker.id, tracker.purge);
+  result.checkIns = result.checkIns.map(record => fencedByTracker(record, cutoffs));
+  result.restDays = result.restDays.map(record => fencedByTracker(record, cutoffs));
+  result.stacks = result.stacks.map(stack => fencedStack(stack, cutoffs));
   if (!result.life.value && result.purge && compareStamps(result.life.stamp, result.purge) === 0) {
     result.trackers = [];
     result.stacks = [];
@@ -219,6 +224,23 @@ export function mergePeople(left, right) {
     result.restDays = [];
   }
   return validate(canonical(result));
+}
+function fencedByTracker(record, cutoffs) {
+  const trackerId = record.fields?.trackerId?.value;
+  const cutoff = typeof trackerId === 'string' ? cutoffs.get(trackerId) : null;
+  if (!cutoff) return record;
+  const stamps = [record.life?.stamp, ...Object.values(record.fields).map(entry => entry.stamp)];
+  if (stamps.every(stamp => compareStamps(stamp, cutoff) > 0)) return record;
+  return tombstoneRecord(record.id, latest(record.purge, cutoff), false);
+}
+function fencedStack(stack, cutoffs) {
+  const members = {};
+  for (const [id, entry] of Object.entries(stack.members ?? {})) {
+    const cutoff = cutoffs.get(id);
+    if (cutoff && compareStamps(entry.stamp, cutoff) <= 0) continue;
+    setOwn(members, id, clone(entry));
+  }
+  return { ...stack, members };
 }
 
 function validSchedule(value) {
@@ -516,17 +538,33 @@ function weekDone(tracker, values, rests, week) {
   }
   return done;
 }
+function weekResting(tracker, rests, week) {
+  let counted = 0;
+  for (let offset = 0; offset < 7; offset += 1) {
+    const date = addDays(week, offset);
+    if (date < tracker.startedOn) continue;
+    counted += 1;
+    if (!rests.has(date)) return false;
+  }
+  return counted > 0;
+}
+function weekLabel(tracker, values, rests, week, today) {
+  const finished = addDays(week, 6) < today;
+  if (weekResting(tracker, rests, week)) return { kind: 'rest', finished };
+  const met = weekDone(tracker, values, rests, week) >= tracker.schedule.times;
+  return { kind: met ? 'met' : 'unmet', finished };
+}
 function weekStreak(tracker, values, rests, today, weekStartsOn) {
   let current = 0;
   let longest = 0;
   const last = weekStartOf(today, weekStartsOn);
   for (let week = weekStartOf(tracker.startedOn, weekStartsOn); week <= last; week = addDays(week, 7)) {
-    const met = weekDone(tracker, values, rests, week) >= tracker.schedule.times;
-    const finished = addDays(week, 6) < today;
-    if (met) {
+    const label = weekLabel(tracker, values, rests, week, today);
+    if (label.kind === 'rest') continue;
+    if (label.kind === 'met') {
       current += 1;
       if (current > longest) longest = current;
-    } else if (finished) current = 0;
+    } else if (label.finished) current = 0;
   }
   return { current, longest, unit: 'week' };
 }
@@ -575,8 +613,12 @@ function layout(tracker, person, options) {
     let met = null;
     let status = null;
     if (weekly && week <= today) {
-      met = doneDays >= times;
-      status = weekEnd < today ? (met ? 'met' : 'unmet') : 'inProgress';
+      const label = weekLabel(tracker, values, rests, week, today);
+      if (label.kind === 'rest') status = label.finished ? 'rest' : 'inProgress';
+      else {
+        met = label.kind === 'met';
+        status = label.finished ? label.kind : 'inProgress';
+      }
     }
     columns.push({ weekStart: week, weekEnd, doneDays, times, met, status, squares: columnSquares });
   }
@@ -604,9 +646,24 @@ function layout(tracker, person, options) {
   };
 }
 
+function civilDate(time, timeZone) {
+  let parts;
+  try {
+    parts = new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(time));
+  } catch {
+    fail('Unknown time zone.');
+  }
+  const bag = Object.fromEntries(parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
+  const iso = `${bag.year}-${bag.month}-${bag.day}`;
+  if (!validDate(iso)) fail('Invalid clock.');
+  return iso;
+}
+function todayIn(timeZone) {
+  return civilDate(Date.now(), timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
+}
 export function buildGrid(person, trackerId, options = {}) {
   validate(person);
-  const today = options.today ?? new Date().toISOString().slice(0, 10);
+  const today = options.today ?? todayIn(options.timeZone);
   return layout(readTracker(person, trackerId), person, { ...options, today });
 }
 function liveStack(person, stackId) {
@@ -645,7 +702,7 @@ export function buildStackGrid(person, stackId, options = {}) {
   validate(person);
   const stack = liveStack(person, stackId);
   const members = stackMembers(person, stack);
-  const today = options.today ?? new Date().toISOString().slice(0, 10);
+  const today = options.today ?? todayIn(options.timeZone);
   const weekStartsOn = person.fields.weekStartsOn?.value === 'monday' ? 'monday' : 'sunday';
   const { start, end } = resolveRange(options, today);
   const prepared = members.map(tracker => ({
@@ -674,11 +731,16 @@ export function buildStackGrid(person, stackId, options = {}) {
     let doneDays = null; let times = null; let met = null; let status = null;
     if (weekly) {
       const active = prepared.filter(entry => entry.tracker.startedOn <= addDays(week, 6));
-      doneDays = active.filter(entry => weekDone(entry.tracker, entry.values, entry.rests, week) >= entry.tracker.schedule.times).length;
-      times = active.length;
-      if (times > 0 && week <= today) {
-        met = doneDays >= times;
-        status = addDays(week, 6) < today ? (met ? 'met' : 'unmet') : 'inProgress';
+      const labels = active.map(entry => weekLabel(entry.tracker, entry.values, entry.rests, week, today));
+      const judging = labels.filter(label => label.kind !== 'rest');
+      doneDays = judging.filter(label => label.kind === 'met').length;
+      times = judging.length;
+      if (active.length > 0 && week <= today) {
+        if (judging.length === 0) status = addDays(week, 6) < today ? 'rest' : 'inProgress';
+        else {
+          met = doneDays >= times;
+          status = addDays(week, 6) < today ? (met ? 'met' : 'unmet') : 'inProgress';
+        }
       }
     }
     columns.push({ weekStart: week, weekEnd: addDays(week, 6), doneDays, times, met, status, squares: columnSquares });
@@ -692,7 +754,10 @@ export function buildStackGrid(person, stackId, options = {}) {
       for (let week = weekStartOf(earliest, weekStartsOn); week <= last; week = addDays(week, 7)) {
         const active = prepared.filter(entry => entry.tracker.startedOn <= addDays(week, 6));
         if (active.length === 0) continue;
-        const met = active.every(entry => weekDone(entry.tracker, entry.values, entry.rests, week) >= entry.tracker.schedule.times);
+        const labels = active.map(entry => weekLabel(entry.tracker, entry.values, entry.rests, week, today));
+        const judging = labels.filter(label => label.kind !== 'rest');
+        if (judging.length === 0) continue;
+        const met = judging.every(label => label.kind === 'met');
         const finished = addDays(week, 6) < today;
         if (met) {
           streaks.current += 1;
@@ -817,9 +882,10 @@ export function renderSvg(grid) {
   const height = top + grid.rows.length * (cell + gap) + 8;
   const initials = { sunday: 'S', monday: 'M', tuesday: 'T', wednesday: 'W', thursday: 'T', friday: 'F', saturday: 'S' };
   const chunks = [];
-  chunks.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="habit-title habit-desc">`);
-  chunks.push(`<title id="habit-title">${escapeXml(grid.name || 'Habit grid')}</title>`);
-  chunks.push(`<desc id="habit-desc">${escapeXml(`Days from ${grid.start} to ${grid.end}. Week starts on ${grid.weekStartsOn}. Full days show a check mark. Rest days show a circle and a bar. Done days show a diamond that grows with the shade. Partial days show bars. Open days are dashed. Empty days are an outline.`)}</desc>`);
+  const label = `habit-${String(`${grid.id ?? 'grid'}-${grid.start ?? ''}`).replace(/[^A-Za-z0-9_-]/g, '') || 'grid'}`;
+  chunks.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="${label}-title ${label}-desc">`);
+  chunks.push(`<title id="${label}-title">${escapeXml(grid.name || 'Habit grid')}</title>`);
+  chunks.push(`<desc id="${label}-desc">${escapeXml(`Days from ${grid.start} to ${grid.end}. Week starts on ${grid.weekStartsOn}. Full days show a check mark. Rest days show a circle and a bar. Done days show a diamond that grows with the shade. Partial days show bars. Open days are dashed. Empty days are an outline.`)}</desc>`);
   chunks.push(`<rect width="${width}" height="${height}" fill="${background}" data-role="background"/>`);
   grid.rows.forEach((weekday, index) => {
     const y = top + index * (cell + gap) + 11;
@@ -873,15 +939,17 @@ function collectStamps(person) {
 export class HabitGrid {
   #people = new Map();
   #counter = 0;
-  constructor({ deviceId, now = Date.now } = {}) {
+  constructor({ deviceId, now = Date.now, timeZone } = {}) {
     this.deviceId = identity(deviceId, 'Device ID');
     if (typeof now !== 'function') fail('Invalid clock.');
     this.now = now;
+    this.timeZone = timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+    civilDate(0, this.timeZone);
   }
   #today() {
     const time = this.now();
     if (!Number.isSafeInteger(time)) fail('Invalid clock.');
-    return new Date(time).toISOString().slice(0, 10);
+    return civilDate(time, this.timeZone);
   }
   #observe(person) {
     for (const stamp of collectStamps(person)) this.#counter = Math.max(this.#counter, stamp.counter);
@@ -1159,13 +1227,20 @@ export class HabitGrid {
     const memberIds = Object.entries(stack.members ?? {}).filter(([, entry]) => entry.value).map(([id]) => id).sort();
     const plan = [];
     const needsValue = [];
+    const alreadyLogged = [];
+    const logged = trackerId => person.checkIns.some(record => record.life.value && fieldsPresent(record.fields, RECORD_KEYS.checkIn) && record.fields.trackerId.value === trackerId && record.fields.date.value === day);
     for (const trackerId of memberIds) {
       const tracker = person.trackers.find(record => record.id === trackerId);
       if (!tracker || !tracker.life.value || !fieldsPresent(tracker.fields, RECORD_KEYS.tracker)) continue;
       const kind = tracker.fields.kind.value;
-      if (kind === 'done') plan.push({ trackerId, kind, value: 1, name: tracker.fields.name.value });
-      else if (positive(tracker.fields.usualAmount?.value)) plan.push({ trackerId, kind, value: tracker.fields.usualAmount.value, name: tracker.fields.name.value });
-      else needsValue.push({ trackerId, name: tracker.fields.name.value, kind });
+      const name = tracker.fields.name.value;
+      if (logged(trackerId)) {
+        alreadyLogged.push({ trackerId, name, kind });
+        continue;
+      }
+      if (kind === 'done') plan.push({ trackerId, kind, value: 1, name });
+      else if (positive(tracker.fields.usualAmount?.value)) plan.push({ trackerId, kind, value: tracker.fields.usualAmount.value, name });
+      else needsValue.push({ trackerId, name, kind });
     }
     const written = [];
     if (plan.length) {
@@ -1183,7 +1258,7 @@ export class HabitGrid {
         draft.life = { value: true, stamp };
       });
     }
-    return { date: day, written, needsValue };
+    return { date: day, written, needsValue, alreadyLogged };
   }
   emptyTrash(id) {
     return this.#change(id, (person, stamp) => {
@@ -1196,6 +1271,8 @@ export class HabitGrid {
         person.purge = stamp;
         person.life = { value: false, stamp };
       } else {
+        const purged = new Set(person.trackers.filter(record => !record.life.value).map(record => record.id));
+        const pointsAt = record => purged.has(record.fields?.trackerId?.value);
         for (const collection of [person.trackers, person.stacks, person.checkIns, person.restDays]) {
           for (const record of collection) if (!record.life.value) {
             record.fields = {};
@@ -1203,6 +1280,17 @@ export class HabitGrid {
             record.purge = stamp;
             record.life = { value: false, stamp };
           }
+        }
+        for (const record of [...person.checkIns, ...person.restDays]) if (pointsAt(record)) {
+          record.fields = {};
+          record.purge = stamp;
+          record.life = { value: false, stamp };
+        }
+        for (const stack of person.stacks) {
+          if (!stack.members) continue;
+          const members = {};
+          for (const [id, entry] of Object.entries(stack.members)) if (!purged.has(id)) setOwn(members, id, entry);
+          stack.members = members;
         }
       }
     });

@@ -44,10 +44,12 @@ Reload saved files before editing after restart. A future sync adapter must
 persist every person file, including deleted ones; dropping tombstones would
 break the offline-deletion guarantee.
 
-Civil dates are `YYYY-MM-DD` on the UTC calendar. `today` derived from `now`
-is that UTC date. Callers that want a local civil date pass `today`. Calendar
-arithmetic never adds 24 hours, so a daylight-saving change cannot skip or
-repeat a day.
+Civil dates are `YYYY-MM-DD`. The constructor takes `timeZone`, an IANA name.
+When it is omitted, `today` is the civil date of `now` in the runtime's time
+zone, so an evening check-in stays on that local day. Pass `timeZone: 'UTC'`
+for the UTC date. Callers can still pass `today` or `date`. Calendar
+arithmetic uses the UTC calendar and never adds 24 hours, so a
+daylight-saving change cannot skip or repeat a day.
 
 - `createPerson(name, { id, weekStartsOn = 'sunday' }?)` returns a permanent ID.
 - `personIds({ trash = false }?)` lists active or recoverable deleted people.
@@ -84,10 +86,12 @@ repeat a day.
   An empty `trackerId` applies to every tracker. The same date and tracker
   mark returns the existing record. `deleteRest` and `restoreRest` use Trash.
 - `checkStack(personId, stackId, { date }?)` returns
-  `{ date, written, needsValue }`. Done members are written as 1. Count and
-  amount members are written only when `usualAmount` is a number above zero.
-  Other count and amount members are listed in `needsValue` and nothing is
-  written for them. Members can still be logged alone with `logCheckIn`.
+  `{ date, written, needsValue, alreadyLogged }`. Done members are written as
+  1. Count and amount members are written only when `usualAmount` is a number
+  above zero. Other count and amount members are listed in `needsValue` and
+  nothing is written for them. A member that already has a check-in on that
+  date is listed in `alreadyLogged` and is not written again. Members can
+  still be logged alone with `logCheckIn`.
 - `grid(personId, trackerId, options)` and `stackGrid(personId, stackId, options)`
   return plain grid data. `svg` and `stackSvg` render that grid.
   Options are `start`, `end`, `surface` (`mac`, `wall`, or `phone`), and
@@ -103,7 +107,12 @@ repeat a day.
 - `mergePeople(a, b)` returns a new merged snapshot of the same person ID.
   Neither input changes. Different person IDs and malformed files are refused.
 - `emptyTrash(id)` permanently removes recoverable deleted records. If the
-  person is deleted, it removes the person's content instead.
+  person is deleted, it removes the person's content instead. Emptying a
+  deleted tracker also purges that tracker's check-ins and tracker-specific
+  rest days, and drops the tracker from stack membership. A rest day with an
+  empty tracker ID stays. An older check-in for that tracker, merged from
+  another device, stays purged. Reusing the tracker ID starts from an empty
+  grid.
 
 Comparisons use JavaScript UTF-16 code unit order, so devices agree.
 
@@ -137,16 +146,19 @@ requested span.
   (shade still follows the rules above). Other days are `open`. A week is met
   when the number of those done days reaches `times`. The current week stays
   `inProgress` until its last day has passed, even when the total is already
-  met. A finished week is `met` or `unmet`. `unmet` is a plain fact about the
-  total. The grid does not add praise, blame, or badges.
+  met. A finished week is `met`, `unmet`, or `rest`. A week whose days on or
+  after the start date are all rest is `rest`, and that week does not change
+  the streak. `unmet` is a plain fact about the total. The grid does not add
+  praise, blame, or badges.
 
 Streaks are `{ current, longest, unit }`. Daily and chosen-day streaks count
 due days whose state is `full` or `done`. Rest, off-days, and days before the
 tracker started do not change the streak. Today does not end it before it is
 met. A past due day that is `empty` or `partial` ends it. Times-per-week
 streaks count weeks. A met week counts, including the current week once its
-total is met. The current week does not end the streak while it is still in
-progress. Streaks use the whole history from `startedOn` through today, not
+total is met. A finished week that is entirely rest is skipped. The current
+week does not end the streak while it is still in progress. Streaks use the
+whole history from `startedOn` through today, not
 only the requested span.
 
 A stack square ignores members in `rest` or `open`. It is `full` when every
@@ -158,7 +170,8 @@ who has started.
 ## SVG
 
 `renderSvg(grid)` returns one self-contained SVG. It does not load a font,
-image, or stylesheet. Square `date`, `state`, and `shade` are escaped before
+image, or stylesheet. The title and description ids include the grid id, so
+two tiles on one page do not share an id. Square `date`, `state`, and `shade` are escaped before
 they are written into attributes, so a hand-built grid cannot add an event
 handler. Ember values come from `brand/tokens.css`: page
 `#15110f`, text `#f7f2ee`, body `#cec3bc`, magenta `#c8298b`, coral `#f37a4a`,
