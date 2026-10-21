@@ -1,6 +1,13 @@
 // Posts the `codex-approved` commit status on pull request head commits.
 // Runs only from the default branch's copy of the workflow (pull_request_target,
-// issue_comment, pull_request_review, schedule), never from pull request code.
+// issue_comment, schedule, workflow_dispatch), never from pull request code.
+//
+// No event fires when a review is dismissed (pull_request_review would run the
+// pull request's own copy of the workflow, so the gate doesn't use it). After
+// the owner dismisses a Codex review, run the codex-approved workflow by hand
+// (workflow_dispatch, optionally with the pull request number); otherwise the
+// hourly run picks it up within an hour. The delay can only hold a pull request
+// back, never let one through.
 
 import { readFileSync } from 'node:fs';
 import { client, repoFromEnv } from './github.mjs';
@@ -56,7 +63,13 @@ async function check(number) {
     gh.all(`${base}/pulls/${number}/reviews`),
     gh.all(`${base}/issues/${number}/reactions`),
   ]);
-  const { approved, reason } = evaluateCodexSignal({ headSha: pr.head.sha, comments, reviews, reactions });
+  // Who dismissed a Codex review. Fetched only when one is dismissed; if the
+  // timeline can't be read, the dismissed review keeps blocking.
+  const dismissed = reviews.some((r) => r.user?.login === CODEX_LOGIN && r.state === 'DISMISSED');
+  const dismissals = dismissed
+    ? (await gh.all(`${base}/issues/${number}/events`)).filter((e) => e.event === 'review_dismissed')
+    : [];
+  const { approved, reason } = evaluateCodexSignal({ headSha: pr.head.sha, comments, reviews, reactions, dismissals });
   const state = approved ? 'success' : 'pending';
 
   const current = await gh.get(`${base}/commits/${pr.head.sha}/status`);
