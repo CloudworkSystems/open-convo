@@ -138,6 +138,7 @@ function canonicalRecord(record, withMembers, withHistory = false) {
     const history = records(record.formerTrackers ?? {}, {});
     if (Object.keys(history).length > 0) result.formerTrackers = history;
     if (own(record, 'emptied')) result.emptied = clone(record.emptied);
+    if (own(record, 'fenced')) result.fenced = clone(record.fenced);
   }
   return result;
 }
@@ -196,7 +197,7 @@ function mergeRecord(a, b, parentPurge, withMembers, recordKind) {
   const ownPurge = latest(a.purge, b.purge);
   const purge = latest(ownPurge, parentPurge);
   const life = register(a.life, b.life);
-  const finish = record => recordKind === 'checkIn' ? attachEmptied(record, a, b) : record;
+  const finish = record => recordKind === 'checkIn' ? attachFenced(attachEmptied(record, a, b), a, b) : record;
   if (compareStamps(life.stamp, purge) <= 0) return finish(tombstoneRecord(a.id, purge, withMembers));
   const result = { id: a.id, fields: records(a.fields, b.fields, purge), life, purge: clone(purge) };
   if (withMembers) result.members = records(a.members ?? {}, b.members ?? {}, purge);
@@ -207,6 +208,11 @@ function mergeRecord(a, b, parentPurge, withMembers, recordKind) {
 function attachEmptied(record, left, right) {
   const emptied = latest(validStamp(left?.emptied) ? left.emptied : null, validStamp(right?.emptied) ? right.emptied : null);
   if (validStamp(emptied)) record.emptied = clone(emptied);
+  return record;
+}
+function attachFenced(record, left, right) {
+  const fenced = latest(validStamp(left?.fenced) ? left.fenced : null, validStamp(right?.fenced) ? right.fenced : null);
+  if (validStamp(fenced)) record.fenced = clone(fenced);
   return record;
 }
 function mergeCollection(left, right, parentPurge, withMembers, recordKind) {
@@ -280,7 +286,7 @@ function mergeFencedChildren(left, right, parentPurge, cutoffs, recordKind) {
       recordKind,
     );
     if (recordKind === 'checkIn') rememberCheckInTrackers(merged, leftRecord, rightRecord, cutoffs, parentPurge);
-    return fencedByTracker(merged, cutoffs);
+    return fencedByTracker(merged, cutoffs, recordKind === 'checkIn');
   });
 }
 function rememberTracker(history, id, stamp) {
@@ -298,7 +304,7 @@ function rememberLeftBehind(history, source, keptFields) {
 function ownEmptyStamp(record, trackerCutoffs, parentPurge) {
   if (!record) return null;
   if (validStamp(record.emptied)) return record.emptied;
-  if (!validStamp(record.purge)) return null;
+  if (!validStamp(record.purge) || validStamp(record.fenced)) return null;
   if (validStamp(parentPurge) && compareStamps(record.purge, parentPurge) === 0) return null;
   if (object(record.formerTrackers) && Object.keys(record.formerTrackers).length > 0) return null;
   for (const cutoff of trackerCutoffs.values()) {
@@ -342,8 +348,8 @@ function losingTracker(left, right) {
   if (!leftId || !rightId || leftId.value === rightId.value) return null;
   return compareStamps(leftId.stamp, rightId.stamp) >= 0 ? rightId : leftId;
 }
-function fencedByTracker(record, cutoffs) {
-  return fenceAgainst(record, cutoffsForRecord(record, cutoffs));
+function fencedByTracker(record, cutoffs, markFence = false) {
+  return fenceAgainst(record, cutoffsForRecord(record, cutoffs), markFence);
 }
 function installFence(record, fenced) {
   if (!fenced || fenced === record) return;
@@ -354,31 +360,42 @@ function installFence(record, fenced) {
   else delete record.formerTrackers;
   if (validStamp(fenced.emptied)) record.emptied = fenced.emptied;
   else delete record.emptied;
+  if (validStamp(fenced.fenced)) record.fenced = fenced.fenced;
+  else delete record.fenced;
 }
 function carryHistory(record, source) {
   const history = source?.formerTrackers;
   if (history && Object.keys(history).length > 0) record.formerTrackers = clone(history);
   if (validStamp(source?.emptied)) record.emptied = clone(source.emptied);
+  if (validStamp(source?.fenced)) record.fenced = clone(source.fenced);
   return record;
 }
-function fenceAgainst(record, cutoffList) {
+function noteFence(record, purge, cutoffList) {
+  if (cutoffList.some(cutoff => compareStamps(purge, cutoff) === 0)) record.fenced = clone(purge);
+  return record;
+}
+function fenceAgainst(record, cutoffList, markFence = false) {
   if (!record || cutoffList.length === 0) return record;
   let purge = record.purge;
   for (const cutoff of cutoffList) purge = latest(purge, cutoff);
   const stamps = [record.life?.stamp, ...Object.values(record.fields).map(entry => entry.stamp)];
+  const marked = (next) => markFence ? noteFence(next, purge, cutoffList) : next;
   const purgeAlreadyRecorded = validStamp(record.purge) && compareStamps(record.purge, purge) === 0;
-  if (purgeAlreadyRecorded && stamps.every(stamp => compareStamps(stamp, purge) > 0)) return record;
+  if (purgeAlreadyRecorded && stamps.every(stamp => compareStamps(stamp, purge) > 0)) {
+    if (!markFence || !cutoffList.some(cutoff => compareStamps(purge, cutoff) === 0) || validStamp(record.fenced)) return record;
+    return marked(carryHistory({ id: record.id, life: clone(record.life), purge: clone(record.purge), fields: clone(record.fields) }, record));
+  }
   if (stamps.every(stamp => compareStamps(stamp, purge) > 0)) {
-    return carryHistory({ id: record.id, life: clone(record.life), purge: clone(purge), fields: clone(record.fields) }, record);
+    return marked(carryHistory({ id: record.id, life: clone(record.life), purge: clone(purge), fields: clone(record.fields) }, record));
   }
   const fields = {};
   for (const [key, entry] of Object.entries(record.fields)) {
     if (compareStamps(entry.stamp, purge) > 0) setOwn(fields, key, clone(entry));
   }
   if (compareStamps(record.life.stamp, purge) <= 0 || Object.keys(fields).length === 0) {
-    return carryHistory(tombstoneRecord(record.id, purge, false), record);
+    return marked(carryHistory(tombstoneRecord(record.id, purge, false), record));
   }
-  return carryHistory({ id: record.id, life: clone(record.life), purge: clone(purge), fields }, record);
+  return marked(carryHistory({ id: record.id, life: clone(record.life), purge: clone(purge), fields }, record));
 }
 function fencedStack(stack, cutoffs) {
   const members = {};
@@ -515,6 +532,7 @@ function validate(person) {
       validateRecord(record, types, withMembers, checkShape, person.purge);
       validateCheckInHistory(record, key === 'checkIns');
       validateEmptied(record, key === 'checkIns');
+      validateFenced(record, key === 'checkIns');
     }
     uniqueIds(person[key], label);
   }
@@ -530,6 +548,11 @@ function validateEmptied(record, allowed) {
   for (const entry of Object.values(history)) {
     if (object(entry) && validStamp(entry.stamp) && compareStamps(entry.stamp, record.emptied) <= 0) fail('Check-in history is older than its empty stamp.');
   }
+}
+function validateFenced(record, allowed) {
+  if (!own(record, 'fenced')) return;
+  if (!allowed || !validStamp(record.fenced)) fail('Invalid check-in fence stamp in person file.');
+  if (!validStamp(record.purge) || compareStamps(record.fenced, record.purge) > 0) fail('Invalid check-in fence stamp in person file.');
 }
 function validateCheckInHistory(record, allowed) {
   if (!own(record, 'formerTrackers')) return;
@@ -555,6 +578,12 @@ function assertTrackerChildCutoffs(person) {
     for (const [id, entry] of Object.entries(stack.members ?? {})) {
       const cutoff = cutoffs.get(id);
       if (cutoff && compareStamps(entry.stamp, cutoff) <= 0) fail('Field is older than its purge cutoff.');
+    }
+  }
+  for (const record of person.checkIns) {
+    if (validStamp(record.emptied) || validStamp(record.fenced) || !validStamp(record.purge)) continue;
+    for (const cutoff of cutoffs.values()) {
+      if (compareStamps(record.purge, cutoff) === 0) fail('Invalid check-in purge provenance in person file.');
     }
   }
 }
@@ -1137,7 +1166,7 @@ function collectStamps(person) {
   for (const entry of Object.values(person.fields ?? {})) stamps.push(entry.stamp);
   for (const collection of [person.trackers, person.stacks, person.checkIns, person.restDays]) {
     for (const record of collection ?? []) {
-      stamps.push(record.life?.stamp, record.purge, record.emptied);
+      stamps.push(record.life?.stamp, record.purge, record.emptied, record.fenced);
       for (const entry of Object.values(record.fields ?? {})) stamps.push(entry.stamp);
       for (const entry of Object.values(record.members ?? {})) stamps.push(entry.stamp);
       for (const entry of Object.values(record.formerTrackers ?? {})) stamps.push(entry?.stamp);
@@ -1355,6 +1384,7 @@ export class HabitGrid {
       const previous = index >= 0 ? person.checkIns[index] : null;
       const purge = previous ? previous.purge : null;
       const emptied = previous && validStamp(previous.emptied) ? previous.emptied : null;
+      const fenced = previous && validStamp(previous.fenced) ? previous.fenced : null;
       if (index >= 0) person.checkIns.splice(index, 1);
       const created = {
         id: checkInId,
@@ -1363,6 +1393,7 @@ export class HabitGrid {
         fields: stampedFields([['trackerId', trackerId], ['date', day], ['value', amount], ['source', 'manual']], stamp),
       };
       if (emptied) created.emptied = emptied;
+      if (fenced) created.fenced = fenced;
       person.checkIns.push(created);
       person.life = { value: true, stamp };
     });
@@ -1509,7 +1540,10 @@ export class HabitGrid {
             delete record.formerTrackers;
             record.purge = stamp;
             record.life = { value: false, stamp };
-            if (collection === person.checkIns) record.emptied = stamp;
+            if (collection === person.checkIns) {
+              record.emptied = stamp;
+              delete record.fenced;
+            }
           }
         }
         const cutoffs = new Map();
@@ -1517,9 +1551,8 @@ export class HabitGrid {
           if (tracker.life.value) continue;
           cutoffs.set(tracker.id, alreadyEmptied.has(tracker.id) ? tracker.purge : stamp);
         }
-        for (const record of [...person.checkIns, ...person.restDays]) {
-          installFence(record, fenceAgainst(record, cutoffsForRecord(record, cutoffs)));
-        }
+        for (const record of person.checkIns) installFence(record, fenceAgainst(record, cutoffsForRecord(record, cutoffs), true));
+        for (const record of person.restDays) installFence(record, fenceAgainst(record, cutoffsForRecord(record, cutoffs)));
         for (const stack of person.stacks) {
           if (!stack.members) continue;
           const members = {};

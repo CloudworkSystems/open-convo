@@ -243,7 +243,8 @@ A **register** is `{value, stamp}`. Person fields are `name` and
 `formerTrackers`, a map of every tracker it left, each `{value: true, stamp}`
 from that move. A check-in may also keep `emptied`, a stamp written only when
 that check-in is emptied from Trash. Copying a tracker fence onto `purge`
-does not set it. Rest fields are `date` and
+does not set `emptied`. It records `fenced`, the tracker cutoff copied onto
+the check-in. Rest fields are `date` and
 `trackerId` (empty means every tracker).
 
 Each record is `{id, life, purge, fields}` and a stack also has `members`.
@@ -273,7 +274,10 @@ cutoff, and it is not the cutoff of any tracker in the file. A purge copied
 from a tracker stays that tracker's fence after the check-in id is reused on
 another tracker, so a move saved on an older copy is kept. An
 `emptied` stamp with no purge, or newer than the check-in's purge, is refused.
-History stamped at or before that empty is refused too.
+History stamped at or before that empty is refused too. A purge that matches
+a tracker cutoff and has neither `emptied` nor `fenced` is refused, including
+an older file from one Trash call that emptied the check-in and a tracker
+together.
 
 Check-ins merge as records by ID. The same ID arriving twice counts once.
 Two devices' different IDs on the same tracker and date both survive, and the

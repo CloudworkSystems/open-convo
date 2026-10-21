@@ -1390,6 +1390,7 @@ test('a child stamped before its tracker purge is refused at load', () => {
     id: 'glass',
     life: { value: true, stamp: { ...fresh } },
     purge: { ...cutoff },
+    fenced: { ...cutoff },
     fields: {
       trackerId: { value: 'water', stamp: { ...fresh } },
       date: { value: '2026-03-09', stamp: { ...fresh } },
@@ -2015,6 +2016,7 @@ test('reusing a check-in fenced by one tracker keeps a move to another', () => {
   assert.equal(glass.fields.value.value, 9);
   assert.equal(glass.formerTrackers.steps.value, true);
   assert.equal(glass.emptied, undefined);
+  assert.equal(compareStamps(glass.fenced, reused.trackers.find(item => item.id === 'water').purge), 0);
   const later = fixed('phone-c', 100);
   later.importPerson(joined);
   later.deleteTracker(id, 'steps');
@@ -2027,4 +2029,28 @@ test('reusing a check-in fenced by one tracker keeps a move to another', () => {
   const purged = converges(reused, away.getPerson(id));
   assert.equal(purged.checkIns.find(item => item.id === 'glass').life.value, false);
   assert.equal(viewPerson(purged).checkIns.length, 0);
+});
+
+test('a legacy check-in empty that shares a tracker cutoff is refused', () => {
+  const home = fixed('phone-a', 100);
+  const away = fixed('phone-b', 100);
+  const id = home.createPerson('River', { id: 'river' });
+  home.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  home.addTracker(id, { name: 'Steps', kind: 'count', target: 8, unit: 'steps' }, { trackerId: 'steps' });
+  away.importPerson(home.getPerson(id));
+  home.logCheckIn(id, 'water', { date: '2026-03-04', value: 5, checkInId: 'glass' });
+  home.editCheckIn(id, 'glass', { trackerId: 'steps' });
+  away.importPerson(home.getPerson(id));
+  home.deleteCheckIn(id, 'glass');
+  home.deleteTracker(id, 'water');
+  home.emptyTrash(id);
+  home.logCheckIn(id, 'steps', { date: '2026-03-05', value: 9, checkInId: 'glass' });
+  const legacy = home.getPerson(id);
+  const glass = legacy.checkIns.find(item => item.id === 'glass');
+  delete glass.emptied;
+  delete glass.fenced;
+  assert.equal(compareStamps(glass.purge, legacy.trackers.find(item => item.id === 'water').purge), 0);
+  assert.throws(() => deserializePerson(JSON.stringify(legacy)), /Invalid check-in purge provenance/);
+  assert.throws(() => mergePeople(legacy, legacy), /Invalid check-in purge provenance/);
+  assert.throws(() => mergePeople(legacy, away.getPerson(id)), /Invalid check-in purge provenance/);
 });
