@@ -36,6 +36,28 @@ node packages/site-engine/src/diff.mjs --old <old.facts.json> --new <new.facts.j
 and the same as a function, `diffFacts(oldPath, newPath)`, exported from
 `src/diff.mjs`.
 
+**`diffFacts` returns data and prints nothing.** It returns a promise of
+`{ schemaVersion: 1, changes }`, where `changes` is a list (empty when
+nothing changes) of objects with exactly these fields:
+- `area`: one of `name`, `tagline`, `description`, `photos`, `services`,
+  `hours`, `location`, `contact`, `social`, `colors`, `siteUrl`;
+- `kind`: `added`, `removed`, `changed`, `reordered`, `section-added` or
+  `section-removed`;
+- `path`: the field path in the facts (for example `services[1].price`, or
+  `brand.background`);
+- `before` and `after`: the old and new values exactly as the facts hold
+  them (for colors, the resolved hex value), or `null` when there is none;
+- `sentence`: the plain sentence, already escaped to one line as described
+  below.
+
+On a refusal it throws a `SiteEngineError` whose message is the build's
+message plus which file was refused. It never writes to stdout or stderr
+and never calls `process.exit`. The command line is a thin wrapper: it
+calls `diffFacts`, then prints each `sentence` on its own line (or
+"Nothing on the site changes." when `changes` is empty), or with `--json`
+prints the returned object as JSON. On a refusal the wrapper prints the
+message to stderr and exits with 1.
+
 1. **Both files go through the build's own checks**, using the existing code
    rather than a copy of it: the same size limit and JSON reading as
    `buildSite` in `src/build.mjs`, `validateFacts` from `src/schema.mjs`,
@@ -150,15 +172,36 @@ Fields the facts schema allows today (`schema/facts.schema.json`):
   price changes. Only the entries left after that are paired by position
   among themselves: the first remaining old "Rye loaf" with the first
   remaining new "Rye loaf", and so on; any left over are added or removed.
-- **Colors:** "Accent color: #f37a4a becomes #2f6f4f", using the colors
-  after defaults are applied, so filling in a default value is no change.
+- **Colors.** The three brand colors are compared after `resolveBrand`
+  applies the defaults and normalizes them (lowercase, six digits), so
+  filling in a default value, or writing `#FFF` for `#ffffff`, is no
+  change. `renderCss` uses them like this, and the sentences follow:
+  - `brand.accent` colors links and the skip link: "Accent color: #f37a4a
+    becomes #2f6f4f".
+  - `brand.text` colors all body text: "Text color: #f7f2ee becomes
+    #ffffff".
+  - `brand.background` is the page background, and it also sets the
+    page's `theme-color` and, through `colorScheme`, whether the page
+    declares itself light or dark: "Background color: #15110f becomes
+    #fbf8f4". When the light/dark choice flips, a second sentence follows:
+    "The page now asks browsers for a light color scheme (was dark)", or
+    the reverse; it is its own change object, with `path` `colorScheme`
+    and `before` and `after` set to `"dark"` or `"light"`.
+  Order inside colors: background, then text, then accent.
+
+  **Colors the build refuses are never shown as a change.** `assertContrast`
+  refuses the facts when the text or accent color on the background is
+  below 4.5:1. Since both files go through the build's checks first, a new
+  background, text or accent color that fails contrast makes the whole diff
+  a refusal, with the build's message ("Brand colors fail WCAG AA
+  contrast ...") naming the new file, and no changes are listed. A change
+  that keeps every pair at 4.5:1 or above is listed normally.
 - **Site address** (`siteUrl`): "Site address: *old* becomes *new*. The
   page's canonical link and sitemap change too."
 - **No changes:** "Nothing on the site changes."
 
-The JSON form (`schemaVersion: 1`) lists the same changes, each with the
-area, the kind (`added`, `removed` or `changed`), the field path, the old and
-new values, and the plain sentence. Same input gives byte-identical output.
+The JSON form is the object `diffFacts` returns (see "What It Does"), one
+change object per sentence. Same input gives byte-identical output.
 
 **Each change stays on one line.** The schema's `CONTROL_CHARS` check
 (`src/schema.mjs`) still allows tab, line feed and carriage return, and it
@@ -215,7 +258,19 @@ invented variants beside them). At least:
 7. Photos: a new photo, a removed photo, an alt-text change, a replaced
    picture under the same file name, and a metadata-only change (no change
    reported).
-8. Filling in a brand color with its default value reports no change.
+8. Filling in a brand color with its default value, or writing the same
+   color in another form (`#FFF` vs `#ffffff`), reports no change. A
+   background change, a text change and an accent change each give exactly
+   their sentence; a background change that flips light and dark adds the
+   color-scheme sentence; all three at once come out in the order
+   background, text, accent. A new background that drops the text color
+   below 4.5:1, a new text color below 4.5:1 and a new accent below 4.5:1
+   are each a refusal naming the new file, with no changes listed.
+8a. `diffFacts` returns `{ schemaVersion: 1, changes }` with the fields
+   above and an empty `changes` for identical files; it writes nothing to
+   stdout or stderr (a test captures both); a refusal throws. The command
+   prints the same sentences, or exactly the returned object with
+   `--json`.
 9. Every refusal the build makes is also a diff refusal with the build's
    message, for either file, and lists no changes: an unknown field (with a
    marker string that then appears in no output), a missing required field,
