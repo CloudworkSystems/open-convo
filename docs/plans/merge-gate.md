@@ -3,19 +3,23 @@
 Written October 15, 2026 by the planning session at the owner's request.
 Revised the same day after Codex's first review (five P1s, answered under
 "Codex Round 1" below) and three owner decisions. Session name:
-`OC-261015-merge-gate`. Until this is finished and tried, the owner keeps
-merging every pull request by hand.
+`OC-261015-merge-gate`. The gate has been on for `main` since October 20,
+2026; see "Status" below.
 
 ## Why
 
 As more modules are built at once, the owner can't spend the day merging pull
 requests. Merging should happen by itself, but only when GitHub itself can
 prove the review and tests are done. A written rule isn't enough, because
-today every agent signs in to GitHub as the owner (`CloudworkSystems`, the repo
-owner and its only admin), so GitHub can't tell agents apart and any agent
-could change the rules.
+before the gate every agent signed in to GitHub as the owner (`CloudworkSystems`,
+the repo owner and its only admin), so GitHub couldn't tell agents apart and
+any agent could change the rules.
 
 ## The Design In One Picture
+
+This is the setup as it is now (October 20, 2026): `cloudwork-bot` exists
+with Write access and builders sign in as it; cloud Claude is still on the
+owner's connection until it is switched.
 
 | Who | Signs in as | Access |
 | --- | --- | --- |
@@ -42,7 +46,8 @@ A pull request merges itself when all of these are true:
 3. **The owner approved the latest version**, but only if it touches a
    protected path (below). Any new commit after his approval cancels it.
 4. Auto-merge is switched on for the pull request (the author does this when
-   opening it).
+   opening it; for outside builders, the planning session does it after its
+   plan check passes).
 
 No bot holds admin, so no bot can turn these rules off.
 
@@ -82,6 +87,36 @@ pushed**, so the owner always approves the final version.
 
 Everything else (module code, tests, design notes, annotations) merges
 automatically once checks 1, 2 and 4 pass.
+
+## Status (October 20, 2026)
+
+**On.** The owner approved switching the gate on for `main` on October 20.
+
+- **Scratch tests passed** on `gate-scratch`: tests 1 to 6 below, plus a
+  forged-status test (a `codex-approved` status set with a token, not by
+  GitHub Actions, did not satisfy the gate). Test 6 (a new commit dismisses
+  the owner's approval) passed on #79.
+- **Codex ignores the bot's pull requests.** Codex skips both automatic
+  review and `@codex review` comments on pull requests opened by
+  `cloudwork-bot`, because the bot has no Codex account. Owner decision for
+  now: the session that opened the pull request posts `@codex review` from the
+  owner's account after each push. Giving the bot its own Codex account is to
+  be tried later and may involve spending.
+- **Designated reviewer (planned).** For Codex-built modules, Claude is the
+  plan's designated reviewer. Letting `codex-approved` accept that reviewer
+  in place of Codex is planned and needs the owner's approval before it's
+  built. Until then,
+  Codex's review still gates those pull requests and Claude also reviews them.
+- **"Up to date" side effect.** `main` requires a branch to be up to date
+  before it merges, so every merge puts the other open pull requests out of
+  date. Each update is a new commit, which needs a new Codex review before
+  `codex-approved` passes again.
+- **Blank review decision.** On #79, a protected-path pull request,
+  GitHub's `reviewDecision` field showed blank, not `REVIEW_REQUIRED`, even
+  though GitHub still enforced the code-owner approval. So anything that reads
+  that field can't rely on it to spot pull requests waiting on the owner.
+  Follow-up (not changed now): check the "needs the owner" list's script
+  against this.
 
 ## What The Owner Does (Only He Can)
 
@@ -127,7 +162,8 @@ and `codex-approved` passed. So while cloud Claude opens PRs as the owner,
 protected paths bind only the bot, not Claude. The gate is not switched on
 for `main` until test 3 passes with a bot-opened PR. If Claude can't be moved
 to the bot, the owner merges Claude's protected-path PRs himself with
-auto-merge off.
+auto-merge off. (Later: test 3 passed with a bot-opened PR and the gate went
+on October 20; builders now open PRs as the bot. See "Status".)
 
 ## What The Building Session Builds
 
@@ -159,7 +195,8 @@ Results so far (October 19, on `gate-test`, protected like `main` will be):
 1 pass (#66), 2 pass (#67), 5 pass (#69), 3 fails for owner-opened PRs (#68,
 see Cloud Claude), 4 and 6 wait for the bot. Also found and fixed on the way:
 an emoji in a status description that GitHub rejected (#63) and the computing
-job sharing the check's name (#70).
+job sharing the check's name (#70). Final results (October 20, on
+`gate-scratch`, with bot-opened PRs): all six pass; see "Status".
 
 Run on a scratch branch protected exactly like `main`, with invented changes:
 

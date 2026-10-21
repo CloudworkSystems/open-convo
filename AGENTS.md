@@ -36,23 +36,39 @@ reads from and writes to `CloudworkSystems/open-convo`.
   the owner's words, and the requested change. Each marked screenshot is saved
   next to it as `<session-name>-01.png`, `-02.png` and so on. Codex changes no
   code, then commits only those files on a branch named
-  `<session-name>-annotations` and opens a pull request; the owner merges it.
+  `<session-name>-annotations` and opens a pull request with auto-merge on.
   (`main` is protected: every change reaches it through a pull request.)
 - Claude pulls from GitHub, builds the changes on a branch named after the
-  session and opens a pull request. Codex may review that pull request on
-  GitHub. The owner merges it with GitHub's button.
+  session and opens a pull request. Codex reviews that pull request on GitHub.
+- **Merge gate (on since October 20, 2026; plan:
+  [docs/plans/merge-gate.md](docs/plans/merge-gate.md)).** GitHub merges a
+  pull request when the gate passes: `tests` and `codex-approved` pass on the
+  latest commit, and the owner approves any protected path in
+  `.github/CODEOWNERS`. Authors in the main build switch on auto-merge when
+  they open a pull request; for outside builders, the planning session
+  switches it on after its plan check passes. Agents never merge by hand. Builders sign in to GitHub as
+  `cloudwork-bot`, so the owner can approve their protected-path pull
+  requests. Until the bot has Codex access, the session that opened a pull
+  request asks for each Codex review (`@codex review`) from the owner's
+  account after every push.
 - **How far review goes depends on what the pull request contains.**
   - *Any pull request that changes code* follows the code path below, even
     when it also changes docs.
-  - *Plans and other docs* get one Codex review round. Claude writes its P1
-    findings into the plan as requirements for the code that follows, and the
-    owner merges. Later rounds on a plan are optional, not a merge condition;
-    build-level detail belongs in the code pull requests.
+  - *Plans and other docs* get a Codex review. Claude writes its P1 findings
+    into the plan as requirements for the code that follows; once the
+    findings are folded in, the latest commit needs a clean follow-up review
+    before the gate merges it. Build-level detail belongs in the code pull
+    requests.
   - *Code* is reviewed until Codex finishes with a 👍 on the pull request.
     Claude fixes every P1 and P2, or explains in the pull request why one does
     not apply. Only the owner decides to merge with findings still open.
+  - *Codex-built work* is reviewed by the plan's designated reviewer (Claude
+    for Codex-built modules). Letting the `codex-approved` check accept that
+    reviewer in place of Codex is planned and needs the owner's approval
+    before it's built. Until then, Codex's review still gates the merge and
+    Claude also posts a review, so no agent's review is the only one on its own work.
   - A green "Ready to merge" button means no conflicts, not approval. Claude
-    tells the owner in chat when a pull request is ready to merge.
+    tells the owner in chat when a pull request waits on his approval.
 - *Proposed October 15, pending the owner's approval at merge:* every review,
   by any agent or the owner, asks two questions of each change. Does it break
   a rule of this system? Does it fix a problem the owner actually has?
@@ -70,7 +86,8 @@ The builder works on a branch named after the session and opens a pull
 request; it never pushes to `main` (GitHub also blocks direct pushes, force
 pushes and deletion of `main`, for every account, since October 15, 2026). A different agent reviews it under the
 code path below (no agent reviews its own work), the planning session checks
-it against the plan, and the owner merges. The Limits below apply to outside
+it against the plan and then switches on auto-merge (outside builders don't
+switch it on themselves), and the gate merges it. The Limits below apply to outside
 builders in full; where a builder can reach the owner's Mac, the plan says
 which commands, if any, it may run there.
 
