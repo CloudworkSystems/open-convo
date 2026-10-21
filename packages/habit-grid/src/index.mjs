@@ -262,7 +262,7 @@ function mergeFencedChildren(left, right, parentPurge, cutoffs, recordKind) {
       false,
       recordKind,
     );
-    if (recordKind === 'checkIn') rememberCheckInTrackers(merged, leftRecord, rightRecord);
+    if (recordKind === 'checkIn') rememberCheckInTrackers(merged, leftRecord, rightRecord, cutoffs);
     return fencedByTracker(merged, cutoffs);
   });
 }
@@ -278,13 +278,16 @@ function rememberLeftBehind(history, source, keptFields) {
   if (keptFields && own(keptFields, 'trackerId') && keptFields.trackerId.value === tracker.value) return;
   rememberTracker(history, tracker.value, tracker.stamp);
 }
-function purgeErasedHistory(record, id, stamp) {
+function purgeErasedHistory(record, id, stamp, trackerCutoffs) {
   if (!record || !validStamp(record.purge) || compareStamps(stamp, record.purge) > 0) return null;
   const history = record.formerTrackers;
   if (object(history) && own(history, id) && compareStamps(history[id].stamp, record.purge) <= 0) return null;
+  for (const cutoff of trackerCutoffs.values()) {
+    if (compareStamps(record.purge, cutoff) === 0) return null;
+  }
   return record.purge;
 }
-function rememberCheckInTrackers(merged, leftRecord, rightRecord) {
+function rememberCheckInTrackers(merged, leftRecord, rightRecord, trackerCutoffs) {
   const history = records(leftRecord?.formerTrackers ?? {}, rightRecord?.formerTrackers ?? {}, null);
   rememberLeftBehind(history, leftRecord, merged.fields);
   rememberLeftBehind(history, rightRecord, merged.fields);
@@ -292,7 +295,10 @@ function rememberCheckInTrackers(merged, leftRecord, rightRecord) {
   if (losing) rememberTracker(history, losing.value, losing.stamp);
   const kept = Object.values(merged.fields ?? {});
   for (const id of Object.keys(history)) {
-    const cutoff = latest(purgeErasedHistory(leftRecord, id, history[id].stamp), purgeErasedHistory(rightRecord, id, history[id].stamp));
+    const cutoff = latest(
+      purgeErasedHistory(leftRecord, id, history[id].stamp, trackerCutoffs),
+      purgeErasedHistory(rightRecord, id, history[id].stamp, trackerCutoffs),
+    );
     const newerEpoch = kept.length > 0 && kept.every(entry => compareStamps(entry.stamp, cutoff) > 0);
     if (cutoff && newerEpoch) delete history[id];
   }

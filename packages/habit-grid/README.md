@@ -260,7 +260,9 @@ cutoff stays, and only the new fields survive. Former-tracker history stamped
 at or before that check-in cutoff stays erased too, so an older copy cannot
 attach the reused check-in to a tracker it left before the empty. A cutoff
 copied from another tracker's fence does not erase history of a different
-tracker the check-in left.
+tracker the check-in left. A replica that merely lacks one of those trackers,
+and whose purge was copied from a different tracker's fence, does not erase
+it either.
 
 Check-ins merge as records by ID. The same ID arriving twice counts once.
 Two devices' different IDs on the same tracker and date both survive, and the

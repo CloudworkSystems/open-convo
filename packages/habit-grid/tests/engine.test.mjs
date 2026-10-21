@@ -1759,6 +1759,48 @@ test('a tracker fence does not erase another tracker from check-in history', () 
   assert.deepEqual(mergePeople(joined, joined), joined);
 });
 
+test('a tracker fence purge does not erase history another replica kept', () => {
+  const kept = fixed('phone-m', 100);
+  const plain = fixed('phone-p', 100);
+  const fence = fixed('phone-c', 100);
+  const later = fixed('phone-a', 100);
+  const id = kept.createPerson('River', { id: 'river' });
+  kept.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  kept.addTracker(id, { name: 'Steps', kind: 'count', target: 8, unit: 'steps' }, { trackerId: 'steps' });
+  kept.addTracker(id, { name: 'Pages', kind: 'count', target: 8, unit: 'pages' }, { trackerId: 'pages' });
+  plain.importPerson(kept.getPerson(id));
+  fence.importPerson(kept.getPerson(id));
+  later.importPerson(kept.getPerson(id));
+  plain.logCheckIn(id, 'pages', { date: '2026-03-04', value: 1, checkInId: 'glass' });
+  kept.logCheckIn(id, 'water', { date: '2026-03-04', value: 5, checkInId: 'glass' });
+  kept.editCheckIn(id, 'glass', { trackerId: 'steps' });
+  kept.editCheckIn(id, 'glass', { trackerId: 'pages' });
+  for (const name of ['River two', 'River three', 'River four', 'River five']) fence.renamePerson(id, name);
+  fence.deleteTracker(id, 'pages');
+  fence.emptyTrash(id);
+  for (const name of ['River two', 'River three', 'River four', 'River five', 'River six', 'River seven']) {
+    plain.renamePerson(id, name);
+    kept.renamePerson(id, name);
+  }
+  plain.editCheckIn(id, 'glass', { trackerId: 'pages', date: '2026-03-05', value: 4, source: 'manual' });
+  kept.editCheckIn(id, 'glass', { trackerId: 'pages', date: '2026-03-05', value: 9, source: 'manual' });
+  const fenced = mergePeople(plain.getPerson(id), fence.getPerson(id));
+  for (const name of ['Glen two', 'Glen three', 'Glen four', 'Glen five', 'Glen six', 'Glen seven', 'Glen eight', 'Glen nine', 'Glen ten', 'Glen eleven', 'Glen twelve']) later.renamePerson(id, name);
+  later.deleteTracker(id, 'water');
+  later.emptyTrash(id);
+  const copies = [kept.getPerson(id), fenced, later.getPerson(id)];
+  const joined = mergePeople(mergePeople(copies[0], copies[1]), copies[2]);
+  for (const [i, j, k] of [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]) {
+    const merged = mergePeople(mergePeople(copies[i], copies[j]), copies[k]);
+    const glass = merged.checkIns.find(item => item.id === 'glass');
+    assert.equal(glass.life.value, false);
+    assert.equal(glass.formerTrackers.water.value, true);
+    assert.equal(viewPerson(merged).checkIns.length, 0);
+    assert.deepEqual(merged, joined);
+  }
+  assert.deepEqual(mergePeople(joined, joined), joined);
+});
+
 test('emptying Trash again does not renew an already emptied person cutoff', () => {
   const home = fixed('phone-a', 100);
   const away = fixed('phone-b', 100);
