@@ -114,7 +114,10 @@ daylight-saving change cannot skip or repeat a day.
   another device, stays purged. A tracker cutoff drops only the check-in or
   rest fields stamped at or before it. A newer partial check-in stays in the
   file and stays hidden until another replica fills the missing fields, and
-  every merge order keeps that completed check-in. Reusing the tracker ID
+  every merge order keeps that completed check-in. Moving a check-in to
+  another tracker keeps the earlier tracker id. Merge applies that cutoff
+  before it keeps the new tracker id, in either merge order, so the fields
+  that were not written again do not show up on the new tracker. Reusing the tracker ID
   starts from an empty grid when nothing newer than the cutoff remains.
 
 Comparisons use JavaScript UTF-16 code unit order, so devices agree.
@@ -219,7 +222,8 @@ A **register** is `{value, stamp}`. Person fields are `name` and
 `weekStartsOn`. Tracker fields are `name`, `color`, `kind`, `target`, `unit`,
 `usualAmount`, `schedule`, and `startedOn`. Stack fields are `name`, plus a
 `members` map of tracker ID to a boolean register. Check-in fields are
-`trackerId`, `date`, `value`, and `source`. Rest fields are `date` and
+`trackerId`, `date`, `value`, and `source`. A check-in may also keep
+`formerTrackerId`, the tracker it pointed at before a move. Rest fields are `date` and
 `trackerId` (empty means every tracker).
 
 Each record is `{id, life, purge, fields}` and a stack also has `members`.

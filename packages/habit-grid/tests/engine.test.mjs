@@ -1427,3 +1427,52 @@ test('a child stamped before its tracker purge is refused at load', () => {
   assert.equal(absorbed.checkIns.find(item => item.id === 'later').purge.counter, cutoff.counter);
   assert.equal(viewPerson(absorbed).checkIns[0].value, 2);
 });
+
+test('moving a check-in to a live tracker does not restore fields purged with the old tracker', () => {
+  const home = fixed('phone-a', 100);
+  const away = fixed('phone-b', 100);
+  const id = home.createPerson('River', { id: 'river' });
+  home.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+  home.addTracker(id, { name: 'Steps', kind: 'count', target: 8, unit: 'steps' }, { trackerId: 'steps' });
+  away.importPerson(home.getPerson(id));
+  away.logCheckIn(id, 'water', { date: '2026-03-04', value: 5, checkInId: 'glass' });
+  const original = away.getPerson(id);
+  home.deleteTracker(id, 'water');
+  home.emptyTrash(id);
+  away.renamePerson(id, 'River two');
+  away.renamePerson(id, 'River');
+  away.editCheckIn(id, 'glass', { trackerId: 'steps' });
+  const moved = away.getPerson(id);
+  assert.equal(moved.checkIns.find(item => item.id === 'glass').fields.formerTrackerId.value, 'water');
+  assert.equal(moved.checkIns.find(item => item.id === 'glass').fields.trackerId.value, 'steps');
+  const purger = home.getPerson(id);
+  const span = { start: '2026-03-01', end: '2026-03-08' };
+  const hidden = snapshot => {
+    const reader = fixed('phone-c', 100);
+    reader.importPerson(snapshot);
+    assert.equal(reader.view(id).checkIns.length, 0);
+    assert.equal(square(reader.grid(id, 'steps', span), '2026-03-04').value, 0);
+    const glass = reader.getPerson(id).checkIns.find(item => item.id === 'glass');
+    assert.equal(glass.fields.date, undefined);
+    assert.equal(glass.fields.value, undefined);
+    assert.equal(glass.fields.source, undefined);
+    return reader;
+  };
+  hidden(converges(purger, moved));
+
+  const hand = structuredClone(original);
+  const handGlass = hand.checkIns.find(item => item.id === 'glass');
+  handGlass.fields.trackerId = { value: 'steps', stamp: { ...moved.checkIns.find(item => item.id === 'glass').fields.trackerId.stamp } };
+  handGlass.life = structuredClone(moved.checkIns.find(item => item.id === 'glass').life);
+  const copies = [purger, original, hand];
+  const joined = mergePeople(mergePeople(copies[0], copies[1]), copies[2]);
+  for (const [i, j, k] of [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]) {
+    assert.deepEqual(mergePeople(mergePeople(copies[i], copies[j]), copies[k]), joined);
+  }
+  hidden(joined);
+  readerAddsWater(hidden(joined));
+  function readerAddsWater(reader) {
+    reader.addTracker(id, { name: 'Water', kind: 'count', target: 8, unit: 'glasses' }, { trackerId: 'water' });
+    assert.equal(square(reader.grid(id, 'water', span), '2026-03-04').value, 0);
+  }
+});
