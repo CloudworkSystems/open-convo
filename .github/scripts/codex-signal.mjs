@@ -13,6 +13,9 @@ export const CODEX_LOGIN = 'chatgpt-codex-connector[bot]';
 // The same app as GitHub's GraphQL API reports it: type Bot, no "[bot]" suffix.
 // Only GitHub Apps are of type Bot, so a person can't pose as this editor.
 export const CODEX_BOT_LOGIN = 'chatgpt-codex-connector';
+// The owner's account. Only its dismissal of a Codex review clears the finding:
+// any account with write access (the builder bot included) can dismiss reviews.
+export const OWNER_LOGIN = 'CloudworkSystems';
 
 const CLEAN_PHRASE = /didn['’]t find any major issues/i;
 const REVIEWED_COMMIT = /\*\*Reviewed commit:\*\*\s*`([0-9a-f]{7,40})`/i;
@@ -55,23 +58,38 @@ export function editedOnlyByCodex(comment) {
 const fromCodex = (comment) => isCodex(comment.user) && editedOnlyByCodex(comment);
 
 /**
+ * True only if the timeline shows the owner's account dismissed this review.
+ * `dismissals` are the pull request's `review_dismissed` issue events (REST),
+ * each { actor: { login }, dismissed_review: { review_id } }. No matching
+ * event, an unknown actor, or any matching event by someone else: false.
+ */
+export function dismissedByOwner(review, dismissals) {
+  if (!Array.isArray(dismissals)) return false;
+  const events = dismissals.filter((e) => e?.event === 'review_dismissed' && e.dismissed_review?.review_id === review.id);
+  return events.length > 0 && events.every((e) => e.actor?.login === OWNER_LOGIN);
+}
+
+/**
  * @param {object} input
  * @param {string} input.headSha full 40-character head commit
  * @param {Array} input.comments issue comments on the pull request, each
  *   with `edit_history` (see editedOnlyByCodex)
  * @param {Array} input.reviews pull request reviews
  * @param {Array} input.reactions reactions on the pull request (issue)
+ * @param {Array} input.dismissals `review_dismissed` issue events (see dismissedByOwner)
  * @returns {{approved: boolean, reason: string}}
  */
-export function evaluateCodexSignal({ headSha, comments: allComments = [], reviews = [], reactions = [] }) {
+export function evaluateCodexSignal({ headSha, comments: allComments = [], reviews = [], reactions = [], dismissals = [] }) {
   if (!/^[0-9a-f]{40}$/i.test(headSha ?? '')) return { approved: false, reason: 'No head commit to check.' };
   const short = headSha.slice(0, 7);
   // Every signal below reads only Codex comments that Codex alone has edited.
   const comments = allComments.filter(fromCodex);
 
-  // Codex posts findings as a pull request review tied to a commit.
+  // Codex posts findings as a pull request review tied to a commit. A
+  // dismissed review still counts unless the owner's account dismissed it.
   const findings = reviews
-    .filter((r) => isCodex(r.user) && r.commit_id === headSha && r.state !== 'APPROVED' && r.state !== 'DISMISSED')
+    .filter((r) => isCodex(r.user) && r.commit_id === headSha && r.state !== 'APPROVED')
+    .filter((r) => r.state !== 'DISMISSED' || !dismissedByOwner(r, dismissals))
     .map((r) => time(r.submitted_at));
   const lastFinding = findings.length ? Math.max(...findings) : 0;
 

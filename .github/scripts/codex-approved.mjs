@@ -56,7 +56,13 @@ async function check(number) {
     gh.all(`${base}/pulls/${number}/reviews`),
     gh.all(`${base}/issues/${number}/reactions`),
   ]);
-  const { approved, reason } = evaluateCodexSignal({ headSha: pr.head.sha, comments, reviews, reactions });
+  // Who dismissed a Codex review. Fetched only when one is dismissed; if the
+  // timeline can't be read, the dismissed review keeps blocking.
+  const dismissed = reviews.some((r) => r.user?.login === CODEX_LOGIN && r.state === 'DISMISSED');
+  const dismissals = dismissed
+    ? (await gh.all(`${base}/issues/${number}/events`)).filter((e) => e.event === 'review_dismissed')
+    : [];
+  const { approved, reason } = evaluateCodexSignal({ headSha: pr.head.sha, comments, reviews, reactions, dismissals });
   const state = approved ? 'success' : 'pending';
 
   const current = await gh.get(`${base}/commits/${pr.head.sha}/status`);
