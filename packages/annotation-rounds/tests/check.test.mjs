@@ -9,7 +9,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { checkRound, reportJson, RoundError } from '../src/index.mjs';
-import { dedupeProtectedPaths, pathsMatch, volumeFoldsCase, volumeRules } from '../src/round.mjs';
+import { dedupeProtectedPaths, pathsMatch, resetPathCache, volumeFoldsCase, volumeRules } from '../src/round.mjs';
 
 const CLI = fileURLToPath(new URL('../src/check.mjs', import.meta.url));
 const FIXTURE = fileURLToPath(new URL('./fixtures/OC-990101-sample-round.md', import.meta.url));
@@ -1223,6 +1223,43 @@ test('casing variants of one screenshot follow the volume case rules', { timeout
     assert.equal(here.identity, realpathSync(dir));
     assert.equal(there.identity, realpathSync(sub));
     assert.notEqual(here.identity, there.identity);
+  });
+});
+
+test('many missing screenshot folders reuse one volume lookup', { timeout: 3000 }, () => {
+  withDir(dir => {
+    const header = item(1, 'Screenshot: ');
+    const names = [];
+    let size = header.length + 1;
+    for (let index = 0; size < 900000; index += 1) {
+      const name = `d${index}/x`;
+      const extra = names.length === 0 ? name.length : name.length + 1;
+      if (size + extra > 900000) break;
+      names.push(name);
+      size += extra;
+    }
+    assert.ok(names.length > 50000);
+    const round = writeRound(dir, item(1, `Screenshot: ${names.join(',')}`));
+    const out = path.join(dir, 'out.json');
+    const written = run([round, '--json', out], dir);
+    assert.equal(written.status, 1);
+    assert.equal(written.stderr, '');
+    const report = JSON.parse(readFileSync(out, 'utf8'));
+    assert.equal(report.items[0].screenshots.length, names.length);
+    assert.equal(report.items[0].screenshots[0].name, names[0]);
+    assert.equal(report.items[0].screenshots[names.length - 1].name, names[names.length - 1]);
+
+    const kept = path.join(dir, 'kept');
+    mkdirSync(kept);
+    resetPathCache();
+    const first = volumeRules(path.join(dir, names[0]));
+    const second = volumeRules(path.join(dir, names[1]));
+    assert.deepEqual(first, second);
+    assert.equal(first.identity, realpathSync(dir));
+
+    const inside = volumeRules(path.join(kept, 'shot.png'));
+    assert.equal(inside.identity, realpathSync(kept));
+    assert.notEqual(inside.identity, first.identity);
   });
 });
 

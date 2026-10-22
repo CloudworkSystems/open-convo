@@ -72,6 +72,7 @@ export function hasErrors(report) {
 }
 
 export function outputRefusal(roundPath, mentionedNames, jsonPath, mdPath) {
+  resetPathCache();
   if (jsonPath && mdPath && sameFile(jsonPath, mdPath)) {
     return 'Refusing to write: --json and --md are the same file.';
   }
@@ -534,12 +535,102 @@ function collectProtected(roundPath, mentionedNames) {
   return dedupeProtectedPaths(resolved);
 }
 
+const listedDirs = new Map();
+const described = new Map();
+
+export function resetPathCache() {
+  listedDirs.clear();
+  described.clear();
+}
+
+function loadListedDir(dir) {
+  const cached = listedDirs.get(dir);
+  if (cached) return cached;
+  let entries;
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    const missing = { missing: true, names: new Set(), folds: false, identity: dir };
+    listedDirs.set(dir, missing);
+    return missing;
+  }
+  let identity = dir;
+  try {
+    identity = realpathSync(dir);
+  } catch {
+    identity = dir;
+  }
+  const folds = volumeFoldsCase(dir);
+  const names = new Set();
+  for (const entry of entries) names.add(folds ? entry.normalize('NFC').toLowerCase() : entry);
+  const info = { missing: false, names, folds, identity };
+  listedDirs.set(dir, info);
+  return info;
+}
+
+function describePath(target) {
+  const absolute = path.resolve(target);
+  const hit = described.get(absolute);
+  if (hit) return hit;
+  const root = path.parse(absolute).root;
+  const parts = absolute.slice(root.length).split(path.sep).filter(Boolean);
+  let info = loadListedDir(root);
+  let identity = info.missing ? root : info.identity;
+  let folds = info.missing ? false : info.folds;
+  let result = null;
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index];
+    const key = info.folds ? part.normalize('NFC').toLowerCase() : part;
+    if (info.missing || !info.names.has(key)) {
+      result = {
+        resolved: path.join(identity, ...parts.slice(index)),
+        exists: false,
+        folds,
+        identity,
+      };
+      break;
+    }
+    const nextLexical = path.join(root, ...parts.slice(0, index + 1));
+    const next = loadListedDir(nextLexical);
+    if (next.missing) {
+      if (index < parts.length - 1) {
+        result = {
+          resolved: path.join(identity, ...parts.slice(index)),
+          exists: false,
+          folds,
+          identity,
+        };
+        break;
+      }
+      try {
+        const real = realpathSync(nextLexical);
+        result = { resolved: real, exists: true, folds, identity: real };
+      } catch (err) {
+        if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
+          result = { resolved: null, exists: false, folds, identity };
+        } else {
+          result = {
+            resolved: path.join(identity, part),
+            exists: false,
+            folds,
+            identity,
+          };
+        }
+      }
+      break;
+    }
+    info = next;
+    identity = info.identity;
+    folds = info.folds;
+  }
+  if (!result) result = { resolved: identity, exists: true, folds, identity };
+  described.set(absolute, result);
+  return result;
+}
+
 export function volumeRules(resolved) {
-  const dir = path.dirname(resolved);
-  return {
-    folds: volumeFoldsCase(dir),
-    identity: existingAncestor(dir) ?? dir,
-  };
+  const found = describePath(path.dirname(path.resolve(resolved)));
+  return { folds: found.folds, identity: found.identity };
 }
 
 export function dedupeProtectedPaths(resolvedPaths, rulesForPath = volumeRules) {
@@ -610,11 +701,12 @@ function folderSymlinkOnTheWay(absolute) {
 }
 
 function sameFile(a, b) {
-  const resolvedA = fullyResolved(a);
-  const resolvedB = fullyResolved(b);
-  if (resolvedA && resolvedB && pathsMatch(resolvedA, resolvedB, volumeFoldsCase(resolvedA) || volumeFoldsCase(resolvedB))) {
+  const resolvedA = describePath(a);
+  const resolvedB = describePath(b);
+  if (resolvedA.resolved && resolvedB.resolved && pathsMatch(resolvedA.resolved, resolvedB.resolved, resolvedA.folds || resolvedB.folds)) {
     return true;
   }
+  if (!resolvedA.exists || !resolvedB.exists) return false;
   const statA = statOrNull(a);
   const statB = statOrNull(b);
   return Boolean(statA && statB && statA.dev === statB.dev && statA.ino === statB.ino);
@@ -673,25 +765,7 @@ export function pathsMatch(a, b, foldsCase) {
 }
 
 function fullyResolved(target) {
-  const absolute = path.resolve(target);
-  try {
-    return realpathSync(absolute);
-  } catch (err) {
-    if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') return null;
-  }
-  const missing = [];
-  let current = absolute;
-  while (true) {
-    const parent = path.dirname(current);
-    if (parent === current) return absolute;
-    missing.push(path.basename(current));
-    try {
-      return path.join(realpathSync(parent), ...missing.slice().reverse());
-    } catch (err) {
-      if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') return null;
-      current = parent;
-    }
-  }
+  return describePath(target).resolved;
 }
 
 function statOrNull(target) {
