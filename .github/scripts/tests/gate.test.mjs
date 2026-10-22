@@ -357,8 +357,8 @@ const note = (body, { user = ownerUser, history = neverEdited } = {}) => ({ user
 const withFindings = (extra) => ({ headSha: HEAD, prAuthor: 'cloudwork-bot', reviews: [findings(HEAD, '2026-10-15T01:00:00Z')], ...extra });
 
 test('owner note on the exact head passes despite open findings', () => {
-  // Exactly one of the two forms; surrounding whitespace is trimmed.
-  for (const body of [`owner-accepts-findings ${HEAD}`, `<!-- owner-accepts-findings sha=${HEAD} -->`, `\n  owner-accepts-findings ${HEAD}  \r\n`]) {
+  // Exactly the one visible line; surrounding whitespace is trimmed.
+  for (const body of [`owner-accepts-findings ${HEAD}`, `\n  owner-accepts-findings ${HEAD}  \r\n`]) {
     const r = evaluateCodexSignal(withFindings({ comments: [note(body)] }));
     assert.equal(r.approved, true, body);
     assert.equal(r.reason, `Owner accepted remaining findings on ${HEAD}.`);
@@ -402,6 +402,7 @@ test('malformed owner notes are ignored', () => {
     `please owner-accepts-findings ${HEAD}`,
     `owner-accepts-findings  ${HEAD}`,
     `<!-- owner-accepts-findings ${HEAD} -->`,
+    `<!-- owner-accepts-findings sha=${HEAD} -->`,
     `<!-- owner-accepts-findings sha=${HEAD.slice(0, 39)} -->`,
     `\`owner-accepts-findings ${HEAD}\``,
   ]) {

@@ -65,19 +65,19 @@ function editedOnlyBy(comment, isEditor) {
 }
 
 // The owner's note. The whole comment, trimmed of leading and trailing
-// whitespace, must be exactly one of these two lines and nothing else:
+// whitespace, must be exactly this one visible line and nothing else:
 //   owner-accepts-findings <full 40-character head sha>
-//   <!-- owner-accepts-findings sha=<full 40-character head sha> -->
-// Lowercase hex only. Any other text in the comment (a second line, a quote,
+// Lowercase hex only. There is no hidden form: a note the page doesn't
+// show doesn't count. Any other text in the comment (a second line, a quote,
 // a code fence, HTML, a word before or after) means it doesn't count. No
 // Markdown is parsed, so there is no way to quote, hide or wrap a note and
 // still have it count: the rule fails closed.
-const ACCEPT_NOTE = /^(?:owner-accepts-findings ([0-9a-f]{40})|<!-- owner-accepts-findings sha=([0-9a-f]{40}) -->)$/;
+const ACCEPT_NOTE = /^owner-accepts-findings ([0-9a-f]{40})$/;
 
 /** The note's sha if the whole comment is exactly the note, otherwise null. */
 function acceptedSha(body) {
   const m = (typeof body === 'string' ? body.trim() : '').match(ACCEPT_NOTE);
-  return m ? (m[1] ?? m[2]) : null;
+  return m ? m[1] : null;
 }
 
 /**
