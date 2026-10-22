@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
   closeSync, existsSync, ftruncateSync, linkSync, lstatSync, mkdirSync, mkdtempSync,
-  openSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync,
+  openSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync, writeSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -993,6 +993,34 @@ test('a warning-only overflow stays a warning', () => {
     const result = run([round], dir);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /0 errors, 201 warnings/);
+  });
+});
+
+test('a long run of unreadable lines stays a bounded report', () => {
+  withDir(dir => {
+    const round = path.join(dir, `${SESSION}.md`);
+    const fd = openSync(round, 'w');
+    try {
+      const chunk = Buffer.alloc(64 * 1024, 'x\n');
+      let written = 0;
+      writeSync(fd, '1.\n');
+      written += 3;
+      while (written + chunk.length <= MB - 1) {
+        written += writeSync(fd, chunk);
+      }
+      if (written < MB - 1) writeSync(fd, Buffer.alloc(MB - 1 - written, 'x'));
+    } finally {
+      closeSync(fd);
+    }
+    const checked = checkRound(round);
+    assert.equal(checked.report.items.length, 1);
+    assert.equal(checked.report.problems.length, 201);
+    assert.equal(checked.report.problems[0].message, 'Could not read line 2.');
+    assert.match(checked.report.problems.at(-1).message, /^[1-9]\d{3,} more problems were left out\.$/);
+    const result = run([round], dir);
+    assert.equal(result.status, 1);
+    assert.equal(result.stderr.includes('Could not check the round file'), false);
+    assert.match(result.stdout, /Could not read line 2\./);
   });
 });
 

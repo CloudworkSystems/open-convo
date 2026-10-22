@@ -136,11 +136,12 @@ function buildReport(roundPath, text) {
       null,
     ));
   }
-  problems.push(...parsed.problems, ...numberProblems(parsed.items));
+  appendProblems(problems, parsed.problems);
+  appendProblems(problems, numberProblems(parsed.items));
   const items = parsed.items.map(item => finishItem(item, session, roundDir));
-  problems.push(...sharedWarnings(parsed.items));
-  problems.push(...unnamedWarnings(roundDir, session, parsed.items, orphanNames));
-  const listedProblems = capProblems(problems);
+  appendProblems(problems, sharedWarnings(parsed.items));
+  appendProblems(problems, unnamedWarnings(roundDir, session, parsed.items, orphanNames));
+  const listedProblems = capProblems(problems, parsed.unreadLeftOut);
 
   return {
     report: {
@@ -150,19 +151,22 @@ function buildReport(roundPath, text) {
       items,
       problems: listedProblems,
     },
-    mentionedNames: [...orphanNames, ...parsed.items.flatMap(item => item.mentioned)],
+    mentionedNames: orphanNames.concat(parsed.items.flatMap(item => item.mentioned)),
   };
 }
 
-function capProblems(problems) {
-  if (problems.length <= PROBLEM_LIMIT) return problems;
+function capProblems(problems, extraOmitted = 0) {
+  const overflow = problems.length + extraOmitted - PROBLEM_LIMIT;
+  if (overflow <= 0) return problems;
   const kept = problems.slice(0, PROBLEM_LIMIT);
   const omitted = problems.slice(PROBLEM_LIMIT);
-  const level = omitted.every(entry => entry.level === 'warning') ? 'warning' : 'error';
-  return [
-    ...kept,
-    problem(level, `${omitted.length} more problems were left out.`, null),
-  ];
+  const onlyWarnings = extraOmitted === 0 && omitted.every(entry => entry.level === 'warning');
+  kept.push(problem(onlyWarnings ? 'warning' : 'error', `${overflow} more problems were left out.`, null));
+  return kept;
+}
+
+function appendProblems(target, source) {
+  for (const entry of source) target.push(entry);
 }
 
 function parseRound(text) {
@@ -173,10 +177,15 @@ function parseRound(text) {
   let orphan = null;
   let itemCount = 0;
   let accepting = true;
+  let unreadLeftOut = 0;
 
   function couldNotRead(lineNo) {
     if (!accepting) return;
-    problems.push(problem('error', `Could not read line ${lineNo}.`, lineNo));
+    if (problems.length < PROBLEM_LIMIT) {
+      problems.push(problem('error', `Could not read line ${lineNo}.`, lineNo));
+      return;
+    }
+    unreadLeftOut += 1;
   }
 
   function keepShot(value) {
@@ -238,7 +247,7 @@ function parseRound(text) {
     couldNotRead(lineNo);
   }
 
-  return { items, problems, orphanShots, itemCount };
+  return { items, problems, orphanShots, itemCount, unreadLeftOut };
 }
 
 function startItem(digits, lineNo) {
