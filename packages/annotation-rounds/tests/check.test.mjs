@@ -9,7 +9,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { checkRound, reportJson, RoundError } from '../src/index.mjs';
-import { dedupeProtectedPaths, pathsMatch, volumeFoldsCase } from '../src/round.mjs';
+import { dedupeProtectedPaths, pathsMatch, volumeFoldsCase, volumeRules } from '../src/round.mjs';
 
 const CLI = fileURLToPath(new URL('../src/check.mjs', import.meta.url));
 const FIXTURE = fileURLToPath(new URL('./fixtures/OC-990101-sample-round.md', import.meta.url));
@@ -1150,13 +1150,48 @@ function casingVariant(index) {
 test('casing variants of one screenshot follow the volume case rules', { timeout: 3000 }, () => {
   const variants = [];
   for (let index = 0; index < 50000; index += 1) variants.push(`/rounds/sample/${casingVariant(index)}`);
-  assert.equal(dedupeProtectedPaths(variants, true).length, 1);
-  assert.equal(dedupeProtectedPaths(variants, true)[0], variants[0]);
-  assert.equal(dedupeProtectedPaths(variants, false).length, 50000);
+  let calls = 0;
+  const folded = dedupeProtectedPaths(variants, () => {
+    calls += 1;
+    return { folds: true, identity: '/rounds/sample' };
+  });
+  assert.equal(calls, 1);
+  assert.equal(folded.length, 1);
+  assert.equal(folded[0], variants[0]);
+  calls = 0;
+  const exact = dedupeProtectedPaths(variants, () => {
+    calls += 1;
+    return { folds: false, identity: '/rounds/sample' };
+  });
+  assert.equal(calls, 1);
+  assert.equal(exact.length, 50000);
+  const folding = { folds: true, identity: '/rounds' };
+  const sensitive = { folds: false, identity: '/rounds' };
   const nfc = '/rounds/\u00e9.png';
   const nfd = '/rounds/e\u0301.png';
-  assert.equal(dedupeProtectedPaths([nfc, nfd], true).length, 1);
-  assert.equal(dedupeProtectedPaths([nfc, nfd], false).length, 2);
+  assert.equal(dedupeProtectedPaths([nfc, nfd], () => folding).length, 1);
+  assert.equal(dedupeProtectedPaths([nfc, nfd], () => sensitive).length, 2);
+
+  const mixed = [
+    '/Users/round/shot.png',
+    '/Users/round/SHOT.png',
+    '/Volumes/CaseSensitive/shot.png',
+    '/Volumes/CaseSensitive/SHOT.png',
+  ];
+  calls = 0;
+  const kept = dedupeProtectedPaths(mixed, (resolved) => {
+    calls += 1;
+    if (resolved.startsWith('/Volumes/CaseSensitive/')) {
+      return { folds: false, identity: '/Volumes/CaseSensitive' };
+    }
+    return { folds: true, identity: '/Users/round' };
+  });
+  assert.equal(calls, 2);
+  assert.deepEqual(kept, [
+    '/Users/round/shot.png',
+    '/Volumes/CaseSensitive/shot.png',
+    '/Volumes/CaseSensitive/SHOT.png',
+  ]);
 
   withDir(dir => {
     const folds = volumeFoldsCase(dir);
@@ -1178,6 +1213,16 @@ test('casing variants of one screenshot follow the volume case rules', { timeout
     assert.equal(refused.status, 1);
     assert.match(refused.stderr, /same file as an input/);
     assert.equal(existsSync(other), false);
+
+    const sub = path.join(dir, 'elsewhere');
+    mkdirSync(sub);
+    const here = volumeRules(path.join(dir, 'shot.png'));
+    const there = volumeRules(path.join(sub, 'SHOT.png'));
+    assert.equal(here.folds, folds);
+    assert.equal(there.folds, volumeFoldsCase(sub));
+    assert.equal(here.identity, realpathSync(dir));
+    assert.equal(there.identity, realpathSync(sub));
+    assert.notEqual(here.identity, there.identity);
   });
 });
 

@@ -151,9 +151,9 @@ name the round mentions (a bad name, a subfolder, `..`, and an absolute path
 included). A screenshot name still counts when it sits before the first
 numbered item, and when the round has no numbered items at all. A name
 that appears many times is still listed each time, and the path is compared
-once. On a volume
-that treats names differing only by case as one file, those names are compared
-once too, and a missing screenshot is reserved under that rule as well. Two paths are the same file when their fully
+once. Each path uses the case rules of its own volume. Names that differ only
+by case are compared once when that volume treats them as one file, and a
+missing screenshot there is reserved under the same rule. Two paths are the same file when their fully
 resolved paths match, or, when both exist, when they have the same device and
 inode. An output that
 already exists is also refused when it has another hard link, when it is

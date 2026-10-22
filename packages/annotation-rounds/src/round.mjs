@@ -531,13 +531,29 @@ function collectProtected(roundPath, mentionedNames) {
     if (sessionShotName(session, entry.name)) resolved.push(path.join(roundDir, entry.name));
   }
   for (const name of mentionedNames) resolved.push(path.resolve(roundDir, name));
-  return dedupeProtectedPaths(resolved, volumeFoldsCase(roundDir));
+  return dedupeProtectedPaths(resolved);
 }
 
-export function dedupeProtectedPaths(resolvedPaths, foldsCase) {
+export function volumeRules(resolved) {
+  const dir = path.dirname(resolved);
+  return {
+    folds: volumeFoldsCase(dir),
+    identity: existingAncestor(dir) ?? dir,
+  };
+}
+
+export function dedupeProtectedPaths(resolvedPaths, rulesForPath = volumeRules) {
   const unique = new Map();
+  const rulesByDir = new Map();
   for (const resolved of resolvedPaths) {
-    const key = foldsCase ? resolved.normalize('NFC').toLowerCase() : resolved;
+    const dir = path.dirname(resolved);
+    let rules = rulesByDir.get(dir);
+    if (!rules) {
+      rules = rulesForPath(resolved);
+      rulesByDir.set(dir, rules);
+    }
+    const distinguished = rules.folds ? resolved.normalize('NFC').toLowerCase() : resolved;
+    const key = `${rules.identity}\0${distinguished}`;
     if (!unique.has(key)) unique.set(key, resolved);
   }
   return [...unique.values()];
