@@ -985,12 +985,9 @@ struct DeskHostProtocolTests {
 
     @Test("A start that claims a commit's id after the commit's start-id check, while the commit waits inside its delivery check, wins: the commit loses the barrier claim and is payload-mismatch, holding, dispatching and saving nothing, and the start's claim is unchanged (Codex Q22)")
     func commitLosesTheBarrierClaim() async throws {
-        let probe = FlushRetryProbe()
-        let draftsLock = DraftLockHolder()
         let configuration = ParticipantHostConfiguration(pin: IdentityInvented.pin)
         let identities = configuration.identities
-        let harness = try HostHarness(faults: probe, participants: configuration,
-                                      drafts: DraftBindingRegistry(makeDeliveryId: { draftsLock.makeDeliveryId() }))
+        let harness = try HostHarness(participants: configuration)
         defer { harness.clean() }
         _ = try await harness.bind(expectedRevision: 0)
         guard case .delivered(let deliveryId, _, _, _) = await harness.deliver("invented words") else {
@@ -998,48 +995,31 @@ struct DeskHostProtocolTests {
             return
         }
 
-        // An unrelated result whose folder flush fails leaves the store
-        // unsynced, so the commit's first durable read, its exact-replay
-        // lookup before the start-id check, retries the flush and says so.
-        let unrelated = UUID()
-        probe.failFlushes(of: [1])
-        #expect(throws: ProofStoreError.undetermined(requestId: unrelated)) {
-            try IdentityInvented.commit(unrelated, on: harness.store, revision: 1)
-        }
-        probe.armRetrySignal()
-        // Another thread holds the draft registry's lock, which the
-        // delivery check needs after the start-id check and the store's
-        // delivery evidence.
-        draftsLock.arm()
-        let drafts = harness.drafts
-        Thread { _ = drafts.makeDeliveryId() }.start()
-        try #require(await waitOffPool(draftsLock.entered, seconds: 30), "the draft registry's lock is held")
-        defer { draftsLock.release.signal() }
+        // The commit stops inside its delivery check, past the start-id
+        // check and the store's delivery evidence, before it reads the
+        // draft registry, and stays there until released.
+        let held = HeldCheck()
+        let host = harness.host
+        await host.setDeliveryCheckWillReadDrafts { held.hold() }
+        defer { held.release.signal() }
 
         let commitId = UUID()
         let request = harness.commitRequest(expectedRevision: 0, record: inventedRecord("lost the claim", revision: 1),
                                             deliveryId: deliveryId, requestId: commitId)
-        let host = harness.host
         let answered = Box<Bool>()
         let commit = Task {
             let reply = await host.handle(request)
             answered.value = true
             return reply
         }
-        try #require(await waitOffPool(probe.retried, seconds: 30), "the commit's replay lookup ran on the actor")
-        // From here the actor runs the start-id check and the delivery
-        // check without suspending, and stops at the draft registry's lock.
-        try await Task.sleep(nanoseconds: 200_000_000)
+        try #require(await waitOffPool(held.reached, seconds: 60), "the commit is held inside its delivery check")
         #expect(identities.claimStarting(commitId, payloadHash: "start-hash") == .claimed, "the start claims the id the commit already checked")
-        // Had the commit not passed its start-id check yet, that check
-        // would now refuse it without the draft lock, and it would answer.
-        try await Task.sleep(nanoseconds: 300_000_000)
         let waitedPastTheCheck = answered.value != true
-        draftsLock.release.signal()
+        held.release.signal()
         let reply = await commit.value
 
         #expect(waitedPastTheCheck, "the commit was inside its delivery check, past the start-id check, when the start claimed")
-        #expect(!draftsLock.releasedByTimeout)
+        #expect(!held.releasedByTimeout)
         #expect(reply == .refused(.payloadMismatch, echo: request.echo), "the barrier claim refuses it")
         #expect(await host.outstandingMutation == nil, "nothing is held")
         #expect(try harness.store.dispatchReceipt(for: commitId) == nil, "nothing was dispatched")
