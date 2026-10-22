@@ -728,6 +728,94 @@ test('a round over 1 MB is refused and nothing is written', () => {
   });
 });
 
+test('a screenshot named with no numbered item is not overwritten', () => {
+  withDir(dir => {
+    const notes = path.join(dir, 'notes.png');
+    writeFileSync(notes, 'notes-keep');
+    const round = writeRound(dir, 'Screenshot: notes.png\n', 'loose.md');
+    const report = checkRound(round).report;
+    assert.equal(report.items.length, 0);
+    assert.equal(report.problems.length, 1);
+    assert.match(report.problems[0].message, /no numbered items/);
+    assert.equal(JSON.stringify(report).includes('Could not read'), false);
+
+    const result = run([round, '--json', notes], dir);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Refusing to write/);
+    assert.equal(result.stdout, '');
+    assert.equal(readFileSync(notes, 'utf8'), 'notes-keep');
+
+    const continued = writeRound(dir, 'Screenshot: continued-a.png,\n  continued-b.png\n', 'continued.md');
+    const continuedOut = path.join(dir, 'continued-b.png');
+    writeFileSync(continuedOut, 'continued-keep');
+    const continuedRun = run([continued, '--md', continuedOut], dir);
+    assert.equal(continuedRun.status, 1);
+    assert.match(continuedRun.stderr, /Refusing to write/);
+    assert.equal(continuedRun.stdout, '');
+    assert.equal(readFileSync(continuedOut, 'utf8'), 'continued-keep');
+    assert.equal(existsSync(path.join(dir, 'continued-a.png')), false);
+
+    const early = writeRound(dir, `Screenshot: early.png\n\n${item(1)}\n`, 'early.md');
+    const earlyFile = path.join(dir, 'early.png');
+    writeFileSync(earlyFile, 'early-keep');
+    const earlyRun = run([early, '--json', earlyFile], dir);
+    assert.equal(earlyRun.status, 1);
+    assert.match(earlyRun.stderr, /Refusing to write/);
+    assert.equal(readFileSync(earlyFile, 'utf8'), 'early-keep');
+    const earlyReport = checkRound(early).report;
+    assert.equal(earlyReport.items.length, 1);
+    assert.ok(earlyReport.problems.some(problem => problem.message === 'Could not read line 1.'));
+
+    const buried = writeRound(dir, [
+      '1. Screen: Desk',
+      'Element: Button',
+      "Owner's words: Please.",
+      '  Screenshot: buried.png',
+      'Change: Make the change.',
+    ].join('\n'), 'buried.md');
+    const buriedOut = path.join(dir, 'buried.json');
+    const buriedRun = run([buried, '--json', buriedOut], dir);
+    assert.equal(buriedRun.status, 0, buriedRun.stderr);
+    assert.equal(existsSync(buriedOut), true);
+    const buriedReport = checkRound(buried).report;
+    assert.equal(buriedReport.items[0].ownersWords, 'Please.\nScreenshot: buried.png');
+    assert.equal(buriedReport.items[0].screenshots.length, 0);
+  });
+});
+
+test('huge item numbers are reported without listing every missing number', { timeout: 1000 }, () => {
+  withDir(dir => {
+    const huge = checkRound(writeRound(dir, item(1000000000), 'huge.md')).report;
+    assert.equal(huge.items[0].number, 1000000000);
+    assert.equal(huge.problems.length, 1);
+    assert.equal(huge.problems[0].message, 'Item numbers 1 through 999999999 are skipped.');
+    assert.equal(huge.items[0].problems.length, 0);
+
+    const listed = checkRound(writeRound(dir, `${item(1)}\n\n${item(22)}`, 'listed.md')).report;
+    const listedSkips = listed.problems.filter(problem => problem.message.endsWith('is skipped.'));
+    assert.equal(listedSkips.length, 20);
+    assert.equal(listedSkips[0].message, 'Item number 2 is skipped.');
+    assert.equal(listedSkips[19].message, 'Item number 21 is skipped.');
+    assert.equal(listed.problems.some(problem => problem.message.includes('through')), false);
+
+    const ranged = checkRound(writeRound(dir, `${item(1)}\n\n${item(23)}`, 'ranged.md')).report;
+    assert.equal(ranged.problems.filter(problem => problem.message.includes('skipped')).length, 1);
+    assert.equal(ranged.problems.find(problem => problem.message.includes('skipped')).message, 'Item numbers 2 through 22 are skipped.');
+
+    const digits = '9'.repeat(40);
+    const tooBigRound = writeRound(dir, item(digits), 'too-big.md');
+    const tooBigChecked = checkRound(tooBigRound);
+    const tooBig = tooBigChecked.report;
+    assert.equal(tooBig.items.length, 1);
+    assert.equal(tooBig.items[0].number, null);
+    assert.match(tooBigChecked.markdown, /- \[ \] too large\. Desk/);
+    assert.equal(tooBig.problems.length, 1);
+    assert.equal(tooBig.problems[0].message, `Item number ${'9'.repeat(20)}... is too large.`);
+    assert.equal(JSON.stringify(tooBig).includes(digits), false);
+    assert.equal(tooBig.items[0].problems.length, 0);
+  });
+});
+
 test('the command rejects a missing round and a bad argument', () => {
   const missing = run(['/tmp/does-not-exist-annotation-round.md']);
   assert.equal(missing.status, 1);

@@ -75,7 +75,7 @@ Errors:
 
 - a missing or empty screen, element, owner's words, or change
 - the same label twice in one item (neither value is kept)
-- an item number that repeats, skips, or is out of order
+- an item number that repeats, skips, or is out of order. A skip of 20 numbers or fewer names each missing number. A longer skip is one range. A number with more than 15 digits is one "too large" error and is left out of that check
 - a screenshot name that is not `<session>-NN.png`, including a folder, `..`, or an absolute path
 - a screenshot that is named but not present
 - a line that could not be read
@@ -136,7 +136,8 @@ const { report, markdown } = checkRound('OC-990101-sample-round.md');
 `--json` and `--md` are refused, and nothing is written, when either path is
 the round file, a `<session>-NN.png` file beside the round, or any screenshot
 name the round mentions (a bad name, a subfolder, `..`, and an absolute path
-included). Two paths are the same file when their fully resolved paths match,
+included). A screenshot name still counts when it sits before the first
+numbered item, and when the round has no numbered items at all. Two paths are the same file when their fully resolved paths match,
 or, when both exist, when they have the same device and inode. An output that
 already exists is also refused when it has another hard link, when it is
 itself a symbolic link, or when a folder on the way is a symbolic link.

@@ -104,6 +104,8 @@ function buildReport(roundPath, text) {
   const roundDir = path.dirname(path.resolve(roundPath));
   const parsed = parseRound(text);
 
+  const orphanNames = parsed.orphanShots.flatMap(chunk => splitNames(chunk.text));
+
   if (parsed.items.length === 0) {
     const message = text.trim() === ''
       ? 'This round file is empty.'
@@ -116,7 +118,7 @@ function buildReport(roundPath, text) {
         items: [],
         problems: [problem('error', message, null)],
       },
-      mentionedNames: [],
+      mentionedNames: orphanNames,
     };
   }
 
@@ -137,14 +139,16 @@ function buildReport(roundPath, text) {
       items,
       problems,
     },
-    mentionedNames: parsed.items.flatMap(item => item.mentioned),
+    mentionedNames: [...orphanNames, ...parsed.items.flatMap(item => item.mentioned)],
   };
 }
 
 function parseRound(text) {
   const problems = [];
   const items = [];
+  const orphanShots = [];
   let item = null;
+  let orphan = null;
 
   function couldNotRead(lineNo) {
     problems.push(problem('error', `Could not read line ${lineNo}.`, lineNo));
@@ -153,20 +157,25 @@ function parseRound(text) {
   for (const [index, line] of splitLines(text).entries()) {
     const lineNo = index + 1;
     if (line.startsWith('  ')) {
-      if (!item?.current) {
-        couldNotRead(lineNo);
+      if (item?.current) {
+        continueField(item, line.slice(2));
         continue;
       }
-      continueField(item, line.slice(2));
+      if (orphan) {
+        orphan.text = `${orphan.text}\n${line.slice(2)}`;
+        continue;
+      }
+      couldNotRead(lineNo);
       continue;
     }
+    orphan = null;
     if (line === '') {
       if (item) item.current = null;
       continue;
     }
     const itemMatch = /^(\d+)\.(.*)$/.exec(line);
     if (itemMatch) {
-      item = startItem(parseInt(itemMatch[1], 10), lineNo);
+      item = startItem(itemMatch[1], lineNo);
       items.push(item);
       const rest = itemMatch[2].replace(/^[ \t]+/, '');
       if (rest !== '') {
@@ -180,6 +189,10 @@ function parseRound(text) {
     if (label) {
       if (!item) {
         couldNotRead(lineNo);
+        if (label.key === 'screenshots') {
+          orphan = { text: label.value };
+          orphanShots.push(orphan);
+        }
         continue;
       }
       applyField(item, label.key, label.value, lineNo);
@@ -188,12 +201,15 @@ function parseRound(text) {
     couldNotRead(lineNo);
   }
 
-  return { items, problems };
+  return { items, problems, orphanShots };
 }
 
-function startItem(number, lineNo) {
+function startItem(digits, lineNo) {
+  const parsed = parseItemNumber(digits);
   return {
-    number,
+    number: parsed.number,
+    numberLabel: parsed.label,
+    bounded: parsed.bounded,
     line: lineNo,
     fields: {},
     current: null,
@@ -202,6 +218,18 @@ function startItem(number, lineNo) {
     screenshotLine: null,
     problems: [],
   };
+}
+
+function parseItemNumber(digits) {
+  const label = digits.length > 20 ? `${digits.slice(0, 20)}...` : digits;
+  if (digits.length > 15) return { bounded: false, number: null, label };
+  const number = Number(digits);
+  if (!Number.isSafeInteger(number)) return { bounded: false, number: null, label };
+  return { bounded: true, number, label: String(number) };
+}
+
+function itemName(item) {
+  return item.bounded ? item.number : item.numberLabel;
 }
 
 function applyField(item, key, value, lineNo) {
@@ -216,7 +244,7 @@ function applyField(item, key, value, lineNo) {
     if (!existing.reported) {
       item.problems.push(problem(
         'error',
-        `Item ${item.number} uses the label ${LABEL_NAME[key]} more than once.`,
+        `Item ${itemName(item)} uses the label ${LABEL_NAME[key]} more than once.`,
         lineNo,
       ));
       existing.reported = true;
@@ -244,11 +272,11 @@ function finishItem(item, session, roundDir) {
   for (const [key, missingPhrase, emptyPhrase] of REQUIRED) {
     const field = item.fields[key];
     if (!field) {
-      item.problems.push(problem('error', `Item ${item.number} is missing ${missingPhrase}.`, item.line));
+      item.problems.push(problem('error', `Item ${itemName(item)} is missing ${missingPhrase}.`, item.line));
     } else if (field.discarded) {
       values[key] = null;
     } else if (String(field.value).trim() === '') {
-      item.problems.push(problem('error', `Item ${item.number} has ${emptyPhrase}.`, field.line));
+      item.problems.push(problem('error', `Item ${itemName(item)} has ${emptyPhrase}.`, field.line));
       values[key] = field.value;
     } else {
       values[key] = field.value;
@@ -278,7 +306,7 @@ function finishItem(item, session, roundDir) {
   }
 
   return {
-    number: item.number,
+    number: item.bounded ? item.number : null,
     screen: values.screen,
     element: values.element,
     ownersWords: values.ownersWords,
@@ -289,11 +317,17 @@ function finishItem(item, session, roundDir) {
   };
 }
 
+const SKIP_LIST_LIMIT = 20;
+
 function numberProblems(items) {
   const problems = [];
   const seen = new Set();
   let previous = null;
   for (const item of items) {
+    if (!item.bounded) {
+      problems.push(problem('error', `Item number ${item.numberLabel} is too large.`, item.line));
+      continue;
+    }
     if (seen.has(item.number)) {
       problems.push(problem('error', `Item number ${item.number} is repeated.`, item.line));
     } else {
@@ -304,13 +338,26 @@ function numberProblems(items) {
     }
     previous = item.number;
   }
-  const max = items.reduce((highest, item) => Math.max(highest, item.number), 0);
-  for (let number = 1; number < max; number += 1) {
-    if (seen.has(number)) continue;
-    const later = items.find(item => item.number > number);
-    problems.push(problem('error', `Item number ${number} is skipped.`, later ? later.line : null));
+  const present = [...seen].filter(number => number >= 1).sort((a, b) => a - b);
+  let next = 1;
+  for (const number of present) {
+    if (number > next) addSkip(problems, items, next, number - 1);
+    if (number >= next) next = number + 1;
   }
   return problems;
+}
+
+function addSkip(problems, items, start, end) {
+  const later = items.find(item => item.bounded && item.number > end);
+  const line = later ? later.line : null;
+  const count = end - start + 1;
+  if (count <= SKIP_LIST_LIMIT) {
+    for (let number = start; number <= end; number += 1) {
+      problems.push(problem('error', `Item number ${number} is skipped.`, line));
+    }
+    return;
+  }
+  problems.push(problem('error', `Item numbers ${start} through ${end} are skipped.`, line));
 }
 
 function sharedWarnings(items) {
@@ -585,7 +632,7 @@ export function renderMarkdown(report) {
 function renderItem(item) {
   const pad = '      ';
   const parts = [
-    place(`- [ ] ${item.number}. `, displayField(item.screen), pad),
+    place(`- [ ] ${item.number == null ? 'too large' : item.number}. `, displayField(item.screen), pad),
     place(`${pad}Element: `, displayField(item.element), pad),
     place(`${pad}Change: `, displayField(item.change), pad),
     place(`${pad}Owner's words: `, displayWords(item.ownersWords), pad),
