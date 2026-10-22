@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -140,11 +141,16 @@ function diffText(area, label, before, after) {
   ];
 }
 
+function photoDigest(bytes) {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
 function photoRecords(facts, prepared) {
   return (facts.images ?? []).map((item, index) => ({
     item,
     index,
     bytes: prepared[index].bytes,
+    digest: photoDigest(prepared[index].bytes),
     alt: item.alt,
     file: item.file,
   }));
@@ -186,17 +192,27 @@ function diffPhotos(current, next) {
   const content = pairByKey(
     oldList,
     newList,
-    (record) => record.bytes.toString("base64"),
+    (record) => record.digest,
     (left, right) => left.bytes.equals(right.bytes) && left.alt === right.alt,
   );
+  const confirmed = [];
+  const unmatchedOld = [...content.removed];
+  const unmatchedNew = [...content.added];
+  for (const pair of content.pairs) {
+    if (pair.old.bytes.equals(pair.new.bytes)) confirmed.push(pair);
+    else {
+      unmatchedOld.push(pair.old);
+      unmatchedNew.push(pair.new);
+    }
+  }
   const replaced = pairByKey(
-    content.removed,
-    content.added,
+    unmatchedOld,
+    unmatchedNew,
     (record) => record.file,
     () => false,
   );
   const pairs = [
-    ...content.pairs.map((pair) => ({ ...pair, mode: pair.identical ? "same" : "alt" })),
+    ...confirmed.map((pair) => ({ ...pair, mode: pair.identical ? "same" : "alt" })),
     ...replaced.pairs.map((pair) => ({ ...pair, mode: "replaced" })),
   ];
   const added = replaced.added;
