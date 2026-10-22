@@ -100,8 +100,12 @@ install('node:dgram', dgram, {
   createSocket: block('dgram.createSocket'),
 });
 
-const dnsNames = Object.keys(dns).filter((name) => name === 'lookup' || name.startsWith('resolve'));
-const dnsPromiseNames = Object.keys(dnsPromises).filter((name) => name === 'lookup' || name.startsWith('resolve'));
+function isDnsQuery(name) {
+  return name === 'lookup' || name === 'lookupService' || name === 'reverse' || name.startsWith('resolve');
+}
+
+const dnsNames = Object.keys(dns).filter(isDnsQuery);
+const dnsPromiseNames = Object.keys(dnsPromises).filter(isDnsQuery);
 
 function stubResolverPrototype(Resolver, prefix, names) {
   const prototype = Resolver?.prototype;

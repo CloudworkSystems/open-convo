@@ -798,6 +798,15 @@ test('stubbed entry points throw before they can connect', async () => {
   assert.throws(() => new dnsPromises.Resolver().resolve('example.com'), /Network blocked: dns\/promises\.Resolver\.prototype\.resolve/);
   assert.throws(() => new dns.promises.Resolver().resolve4('example.com'), /Network blocked: dns\/promises\.Resolver\.prototype\.resolve4/);
   assert.throws(() => new dns.Resolver().resolve4('example.com', () => {}), /Network blocked: dns\.Resolver\.prototype\.resolve4/);
+  assert.throws(() => dns.reverse('127.0.0.1', () => {}), /Network blocked: dns\.reverse/);
+  assert.throws(() => dns.lookupService('127.0.0.1', 443, () => {}), /Network blocked: dns\.lookupService/);
+  assert.throws(() => dns.promises.reverse('127.0.0.1'), /Network blocked: dns\/promises\.reverse/);
+  assert.throws(() => dns.promises.lookupService('127.0.0.1', 443), /Network blocked: dns\/promises\.lookupService/);
+  assert.throws(() => dnsPromises.reverse('127.0.0.1'), /Network blocked: dns\/promises\.reverse/);
+  assert.throws(() => dnsPromises.lookupService('127.0.0.1', 443), /Network blocked: dns\/promises\.lookupService/);
+  assert.throws(() => new dns.Resolver().reverse('127.0.0.1', () => {}), /Network blocked: dns\.Resolver\.prototype\.reverse/);
+  assert.throws(() => new dnsPromises.Resolver().reverse('127.0.0.1'), /Network blocked: dns\/promises\.Resolver\.prototype\.reverse/);
+  assert.throws(() => new dns.promises.Resolver().reverse('127.0.0.1'), /Network blocked: dns\/promises\.Resolver\.prototype\.reverse/);
   assert.throws(() => inspector.open(), /Network blocked/);
   assert.throws(() => inspectorPromises.open(), /Network blocked/);
   assert.throws(() => childProcess.spawn('true'), /Network blocked/);
