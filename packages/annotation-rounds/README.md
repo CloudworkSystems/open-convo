@@ -121,7 +121,9 @@ The Markdown checklist starts with the session name, a one-line summary
 one unticked box per item, with the screen, element, change, the owner's
 words in quotes, and the screenshots. Problems are listed again under the
 item they belong to. Text from the round is escaped so it cannot add a
-heading, list item, link, image, or HTML tag.
+heading, list item, link, image, or HTML tag. A bare web address
+(`https://...` or `www.`) or an email address is escaped too, so it stays
+plain text.
 
 From code:
 
@@ -137,8 +139,11 @@ const { report, markdown } = checkRound('OC-990101-sample-round.md');
 the round file, a `<session>-NN.png` file beside the round, or any screenshot
 name the round mentions (a bad name, a subfolder, `..`, and an absolute path
 included). A screenshot name still counts when it sits before the first
-numbered item, and when the round has no numbered items at all. Two paths are the same file when their fully resolved paths match,
-or, when both exist, when they have the same device and inode. An output that
+numbered item, and when the round has no numbered items at all. On a volume
+that treats names differing only by case as one file, a missing screenshot is
+reserved under that rule as well. Two paths are the same file when their fully
+resolved paths match, or, when both exist, when they have the same device and
+inode. An output that
 already exists is also refused when it has another hard link, when it is
 itself a symbolic link, or when a folder on the way is a symbolic link.
 `--json` and `--md` cannot name the same file.

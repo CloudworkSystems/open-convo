@@ -501,10 +501,64 @@ function pathProblem(target, protectedPaths) {
 function sameFile(a, b) {
   const resolvedA = fullyResolved(a);
   const resolvedB = fullyResolved(b);
-  if (resolvedA && resolvedB && resolvedA === resolvedB) return true;
+  if (resolvedA && resolvedB && pathsMatch(resolvedA, resolvedB, volumeFoldsCase(resolvedA) || volumeFoldsCase(resolvedB))) {
+    return true;
+  }
   const statA = statOrNull(a);
   const statB = statOrNull(b);
   return Boolean(statA && statB && statA.dev === statB.dev && statA.ino === statB.ino);
+}
+
+const caseFoldCache = new Map();
+
+export function volumeFoldsCase(target) {
+  const ancestor = existingAncestor(target);
+  if (!ancestor) return false;
+  if (caseFoldCache.has(ancestor)) return caseFoldCache.get(ancestor);
+  const flipped = flipOneLetter(ancestor);
+  let folds = false;
+  if (flipped) {
+    try {
+      folds = realpathSync(flipped) === ancestor;
+    } catch {
+      folds = false;
+    }
+  }
+  caseFoldCache.set(ancestor, folds);
+  return folds;
+}
+
+function existingAncestor(target) {
+  let current = path.resolve(target);
+  while (true) {
+    try {
+      return realpathSync(current);
+    } catch (err) {
+      if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') return null;
+      const parent = path.dirname(current);
+      if (parent === current) return null;
+      current = parent;
+    }
+  }
+}
+
+function flipOneLetter(value) {
+  const chars = Array.from(value);
+  for (let index = chars.length - 1; index >= 0; index -= 1) {
+    const ch = chars[index];
+    const lower = ch.toLowerCase();
+    const upper = ch.toUpperCase();
+    if (lower === upper) continue;
+    chars[index] = ch === lower ? upper : lower;
+    return chars.join('');
+  }
+  return null;
+}
+
+export function pathsMatch(a, b, foldsCase) {
+  if (a === b) return true;
+  if (!foldsCase) return false;
+  return a.normalize('NFC').toLowerCase() === b.normalize('NFC').toLowerCase();
 }
 
 function fullyResolved(target) {
@@ -680,6 +734,9 @@ function escapeMarkdownLine(line) {
   escaped = escaped.replace(/^(\s*)(#{1,6})/, (_, spaces, marks) => `${spaces}\\${marks}`);
   escaped = escaped.replace(/^(\s*)([-*+])(?=\s)/, (_, spaces, mark) => `${spaces}\\${mark}`);
   escaped = escaped.replace(/^(\s*)(\d+)\./, (_, spaces, number) => `${spaces}${number}\\.`);
+  escaped = escaped.replaceAll('://', ':\\/\\/');
+  escaped = escaped.replace(/(^|[^A-Za-z0-9])(www)\./gi, (_, prefix, www) => `${prefix}${www}\\.`);
+  escaped = escaped.replaceAll('@', '\\@');
   return escaped;
 }
 

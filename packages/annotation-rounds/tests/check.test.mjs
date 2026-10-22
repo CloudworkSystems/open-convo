@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
   closeSync, existsSync, ftruncateSync, linkSync, lstatSync, mkdirSync, mkdtempSync,
-  openSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync,
+  openSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { checkRound, reportJson, RoundError } from '../src/index.mjs';
+import { pathsMatch, volumeFoldsCase } from '../src/round.mjs';
 
 const CLI = fileURLToPath(new URL('../src/check.mjs', import.meta.url));
 const FIXTURE = fileURLToPath(new URL('./fixtures/OC-990101-sample-round.md', import.meta.url));
@@ -392,9 +393,31 @@ test('9. hostile field text is escaped in Markdown and exact in JSON', () => {
     assert.equal(markdown.includes('[link](https://example.test)'), false);
     assert.equal(markdown.includes('![logo]'), false);
     assert.equal(markdown.includes('&lt;script&gt;'), true);
-    assert.equal(markdown.includes('\\[link\\](https://example.test)'), true);
+    assert.equal(markdown.includes('\\[link\\](https:\\/\\/example.test)'), true);
     assert.equal(markdown.includes('\\!\\[logo\\]'), false);
     assert.equal(markdown.includes('!\\[logo\\]'), true);
+    assert.equal(markdown.includes('://'), false);
+
+    const bare = [
+      '1. Screen: https://example.test/desk',
+      'Element: owner@example.test',
+      "Owner's words: See www.example.test",
+      'Change: Mail me at owner@example.test',
+      'Screenshot: https://cdn.example.test/shot.png',
+    ].join('\n');
+    const linked = checkRound(writeRound(dir, bare, 'bare.md'));
+    assert.equal(linked.report.items[0].screen, 'https://example.test/desk');
+    assert.equal(linked.report.items[0].element, 'owner@example.test');
+    assert.equal(linked.report.items[0].ownersWords, 'See www.example.test');
+    assert.equal(linked.report.items[0].change, 'Mail me at owner@example.test');
+    assert.equal(linked.report.items[0].screenshots[0].name, 'https://cdn.example.test/shot.png');
+    assert.equal(linked.markdown.includes('://'), false);
+    assert.equal(linked.markdown.includes('owner@example.test'), false);
+    assert.equal(linked.markdown.includes('www.example.test'), false);
+    assert.equal(linked.markdown.includes('https:\\/\\/example.test/desk'), true);
+    assert.equal(linked.markdown.includes('owner\\@example.test'), true);
+    assert.equal(linked.markdown.includes('www\\.example.test'), true);
+    assert.equal(linked.markdown.includes('https:\\/\\/cdn.example.test/shot.png'), true);
   });
 });
 
@@ -813,6 +836,44 @@ test('huge item numbers are reported without listing every missing number', { ti
     assert.equal(tooBig.problems[0].message, `Item number ${'9'.repeat(20)}... is too large.`);
     assert.equal(JSON.stringify(tooBig).includes(digits), false);
     assert.equal(tooBig.items[0].problems.length, 0);
+  });
+});
+
+test('a missing screenshot follows the volume case rules', () => {
+  assert.equal(pathsMatch('/rounds/notes.png', '/rounds/NOTES.PNG', true), true);
+  assert.equal(pathsMatch('/rounds/notes.png', '/rounds/NOTES.PNG', false), false);
+  assert.equal(pathsMatch('/rounds/notes.png', '/rounds/notes.png', false), true);
+  assert.equal(pathsMatch('/rounds/notes.png', '/rounds/other.png', true), false);
+
+  withDir(dir => {
+    const round = writeRound(dir, item(1, 'Screenshot: notes.png'), 'case.md');
+    const out = path.join(dir, 'NOTES.PNG');
+    const result = run([round, '--json', out], dir);
+    const folds = volumeFoldsCase(dir);
+    let probed = false;
+    const chars = Array.from(dir);
+    for (let index = chars.length - 1; index >= 0; index -= 1) {
+      const lower = chars[index].toLowerCase();
+      const upper = chars[index].toUpperCase();
+      if (lower === upper) continue;
+      chars[index] = chars[index] === lower ? upper : lower;
+      try {
+        probed = realpathSync(chars.join('')) === realpathSync(dir);
+      } catch {
+        probed = false;
+      }
+      break;
+    }
+    assert.equal(folds, probed);
+    if (folds) {
+      assert.match(result.stderr, /Refusing to write/);
+      assert.equal(result.stdout, '');
+      assert.equal(existsSync(out), false);
+    } else {
+      assert.equal(result.stderr.includes('Refusing to write'), false);
+      assert.equal(existsSync(out), true);
+      assert.equal(existsSync(path.join(dir, 'notes.png')), false);
+    }
   });
 });
 
