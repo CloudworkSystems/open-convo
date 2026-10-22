@@ -11,7 +11,7 @@
 
 import { readFileSync } from 'node:fs';
 import { client, repoFromEnv } from './github.mjs';
-import { evaluateCodexSignal, CODEX_LOGIN } from './codex-signal.mjs';
+import { evaluateCodexSignal, CODEX_LOGIN, OWNER_LOGIN } from './codex-signal.mjs';
 
 const CONTEXT = 'codex-approved';
 const gh = client();
@@ -41,10 +41,10 @@ const EDIT_HISTORY = `query($ids: [ID!]!) {
   }
 }`;
 
-// Attaches `edit_history` to Codex's comments. A comment whose record can't be
+// Attaches `edit_history` to Codex's and the owner's comments. A comment whose record can't be
 // read gets null, which makes the signal check ignore it (fails closed).
 async function withEditHistory(comments) {
-  const ids = comments.filter((c) => c.user?.login === CODEX_LOGIN && c.node_id).map((c) => c.node_id);
+  const ids = comments.filter((c) => [CODEX_LOGIN, OWNER_LOGIN].includes(c.user?.login) && c.node_id).map((c) => c.node_id);
   const history = new Map();
   for (let i = 0; i < ids.length; i += 50) {
     const data = await gh.graphql(EDIT_HISTORY, { ids: ids.slice(i, i + 50) });
@@ -69,7 +69,7 @@ async function check(number) {
   const dismissals = dismissed
     ? (await gh.all(`${base}/issues/${number}/events`)).filter((e) => e.event === 'review_dismissed')
     : [];
-  const { approved, reason } = evaluateCodexSignal({ headSha: pr.head.sha, comments, reviews, reactions, dismissals });
+  const { approved, reason } = evaluateCodexSignal({ headSha: pr.head.sha, prAuthor: pr.user?.login, comments, reviews, reactions, dismissals });
   const state = approved ? 'success' : 'pending';
 
   const current = await gh.get(`${base}/commits/${pr.head.sha}/status`);
