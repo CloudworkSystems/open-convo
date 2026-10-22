@@ -322,6 +322,7 @@ const SKIP_LIST_LIMIT = 20;
 function numberProblems(items) {
   const problems = [];
   const seen = new Set();
+  const firstLine = new Map();
   let previous = null;
   for (const item of items) {
     if (!item.bounded) {
@@ -332,24 +333,36 @@ function numberProblems(items) {
       problems.push(problem('error', `Item number ${item.number} is repeated.`, item.line));
     } else {
       seen.add(item.number);
+      if (item.number >= 1) firstLine.set(item.number, item.line);
     }
     if (item.number < 1 || (previous !== null && item.number < previous)) {
       problems.push(problem('error', `Item number ${item.number} is out of order.`, item.line));
     }
     previous = item.number;
   }
-  const present = [...seen].filter(number => number >= 1).sort((a, b) => a - b);
+  const present = [...firstLine.keys()].sort((a, b) => a - b);
+  const lineAtOrAfter = lineOfFirstLaterItem(present, firstLine);
   let next = 1;
-  for (const number of present) {
-    if (number > next) addSkip(problems, items, next, number - 1);
+  for (let index = 0; index < present.length; index += 1) {
+    const number = present[index];
+    if (number > next) addSkip(problems, next, number - 1, lineAtOrAfter[index]);
     if (number >= next) next = number + 1;
   }
   return problems;
 }
 
-function addSkip(problems, items, start, end) {
-  const later = items.find(item => item.bounded && item.number > end);
-  const line = later ? later.line : null;
+function lineOfFirstLaterItem(present, firstLine) {
+  const lines = new Array(present.length);
+  let best = null;
+  for (let index = present.length - 1; index >= 0; index -= 1) {
+    const line = firstLine.get(present[index]);
+    if (best === null || line < best) best = line;
+    lines[index] = best;
+  }
+  return lines;
+}
+
+function addSkip(problems, start, end, line) {
   const count = end - start + 1;
   if (count <= SKIP_LIST_LIMIT) {
     for (let number = start; number <= end; number += 1) {

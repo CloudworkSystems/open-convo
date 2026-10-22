@@ -330,6 +330,12 @@ test('7. repeated, skipped, and out-of-order item numbers', () => {
 
     const startsLate = checkRound(writeRound(dir, `${item(2)}\n\n${item(3)}`)).report;
     assert.ok(startsLate.problems.some(problem => problem.message === 'Item number 1 is skipped.'));
+
+    const earlyLater = checkRound(writeRound(dir, [item(1), item(10), item(3)].join('\n\n'))).report;
+    const skipTwo = earlyLater.problems.find(problem => problem.message === 'Item number 2 is skipped.');
+    assert.equal(skipTwo.line, 6);
+    const skipRange = earlyLater.problems.find(problem => problem.message === 'Item number 4 is skipped.');
+    assert.equal(skipRange.line, 6);
   });
 });
 
@@ -838,6 +844,19 @@ test('huge item numbers are reported without listing every missing number', { ti
     assert.equal(tooBig.problems[0].message, `Item number ${'9'.repeat(20)}... is too large.`);
     assert.equal(JSON.stringify(tooBig).includes(digits), false);
     assert.equal(tooBig.items[0].problems.length, 0);
+  });
+});
+
+test('sparse item numbers keep the later line without a slow rescan', { timeout: 2500 }, () => {
+  withDir(dir => {
+    const lines = [];
+    for (let number = 2; number <= 80000; number += 2) lines.push(`${number}.`);
+    const report = checkRound(writeRound(dir, lines.join('\n'), 'sparse.md')).report;
+    assert.equal(report.items.length, 40000);
+    const firstSkip = report.problems.find(problem => problem.message === 'Item number 1 is skipped.');
+    assert.equal(firstSkip.line, 1);
+    const laterSkip = report.problems.find(problem => problem.message === 'Item number 3 is skipped.');
+    assert.equal(laterSkip.line, 2);
   });
 });
 
