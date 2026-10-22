@@ -98,8 +98,9 @@ October 20 fix (OC-261020-gate-package-tests): `tests` now also runs
 (Site Engine, household lists, and new ones such as the habit grid), found
 by folder so new packages are covered automatically.
 October 21 (OC-261021-owner-accepts-findings): the owner can accept the
-remaining Codex findings on one exact head commit by posting
-`owner-accepts-findings <full head sha>`; it satisfies only `codex-approved`.
+remaining Codex findings on one exact head commit: post a comment containing
+only this line, `owner-accepts-findings <full head sha>`. Any other text in
+the comment makes it not count. It satisfies only `codex-approved`.
 
 **Building faster** (more outside modules, parallel lanes, a dogfooding
 cadence): approved by the owner October 21. The limit of three outside
