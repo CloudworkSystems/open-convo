@@ -86,6 +86,10 @@ Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
 **Visibility report** (Business), GrokBot (team C) builds, Codex reviews; plan approved (`docs/plans/visibility-report.md`); team C can start.
 
+**Sync core** (Personal; first slice of the iPhone and sync line, owner
+decision October 22): the next free GrokBot team builds, Codex reviews. Plan
+in review: [docs/plans/sync-core.md](docs/plans/sync-core.md).
+
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:
 [docs/plans/merge-gate.md](docs/plans/merge-gate.md). Switched on for `main`

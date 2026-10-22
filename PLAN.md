@@ -9,8 +9,7 @@ product repo. True Convo stays private as the reference and parts library.
 
 **Names.** The product is **True Convo**. **Open Convo** is its open-source core
 ("True Convo core"): the part given away that people can use and label as their
-own. Non-core offerings are a True Convo subscription. Whether relabeling at all
-requires a subscription is still open. The Mac app keeps the name True Convo and
+own. Non-core offerings are a True Convo subscription. The Mac app keeps the name True Convo and
 its existing identity (`com.trueconvo.voice-cursor`), so an installed build
 replaces today's True Convo app and keeps its permissions and settings.
 
@@ -24,6 +23,23 @@ Longer term, the owner has discussed making it the shell for a whole operating
 system people can install and customize, in the spirit of Omarchy (a configured
 Linux setup). This is why it is sometimes called an OS. It is a direction, not
 yet a plan.
+
+**Open core, protected name (owner decision, October 22).** Open Convo stays
+truly open source. The name **True Convo** is protected by trademark, not by
+the code license: anyone may copy and change the core, but a copy that isn't a
+subscriber's may not be called True Convo, so it ships under another name or
+none. A subscription lets a business put its own brand on the maintained
+True Convo, choose which modules its members see, and use the modules that
+haven't joined the core yet. Someone who cancels keeps everything they built
+and can keep pulling core updates from the public repo; they lose the paid
+modules and their own brand on True Convo. Requiring "Powered by True Convo"
+in forks is deferred. Pricing and the business plan stay out of this repo.
+
+**What joins the core (owner decision, October 22).** A module joins the core
+once it runs well entirely on the user's own keys, sign-ins or local models,
+at almost no ongoing cost to the project. Modules that are still in beta,
+still expensive or still taking real work stay in the subscription until
+they meet that bar. No module is fixed in either place ahead of time.
 
 **Look.** True Convo's brand is **Ember** (warm near-black shell, cream text,
 magenta-to-coral-to-amber accent), with Atkinson Hyperlegible Next and JetBrains
@@ -106,9 +122,35 @@ has tried it. Each step ends with something the owner can try.
    reading the durable session records. Moved up from step 11. Navigator
    search and sorting stays at step 7.
 
+### Day One And Public Launch (Owner Decision, October 22)
+
+**Day-one proof.** A new user should see in the first session that an agent
+helps them. Two things together: a chat that works like the ChatGPT app,
+even on a local model such as Qwen (with fewer tools), and **tasks and
+productivity** as the first real job it does. Tasks build on step 3's
+conversation, step 5's chosen memory and the household lists engine. Home
+devices and finances come later as modules.
+
+**Public launch needs the Mac and iPhone with private sync.** The same
+conversations, tasks and memory on both, with no visible sync errors and
+data the project can't read. **Apple-only at launch:** sync runs on CloudKit,
+each user's private iCloud database, so the project runs no sync server.
+What is synced is the already-encrypted data, unlocked on each device with
+the user's recovery key; turning sync on is a one-time host approval
+(foundations principle 6). Windows and Android come later with their own sync.
+
+**A parallel line, starting now.** The iPhone app and sync no longer wait for
+step 5. Their standalone first slice, the sync core, is built beside the main
+build by an outside builder:
+[docs/plans/sync-core.md](docs/plans/sync-core.md). Wiring it into the Mac
+app's storage and building the iPhone app itself stay with the building
+lanes, because they touch app and storage code.
+
 ### After the Top Five
 
-- **iPhone capture app** (owner decision, October 15), right after step 5: a
+- **iPhone capture app** (owner decision, October 15; on October 22 the
+  iPhone app and sync moved to a parallel line, see Day One And Public Launch
+  above): a
   "Share to True Convo" button for links and the owner's own video clips,
   landing as sources in the inbox. Until then an Apple Shortcut saves shared
   items into an iCloud Drive folder the Mac app watches. That sends the items
@@ -116,7 +158,7 @@ has tried it. Each step ends with something the owner can try.
   iCloud Drive once as a host, seeing what goes there (links and video clips)
   and that it is end-to-end encrypted only with Advanced Data Protection on.
   AirDrop to the Mac is the local-only alternative. Automatic secure sync
-  comes with step 9's encrypted transfer. The full iOS app stays at step 12.
+  now comes from the sync core and CloudKit (October 22). The full iOS app stays at step 12.
 - **First-run guide** (ordinary code, no AI): checks the computer, sets up a
   local model or a cloud model. Needed before anyone else installs.
 
@@ -127,7 +169,8 @@ has tried it. Each step ends with something the owner can try.
    [agent-profiles-and-adapters.md](docs/design-notes/agent-profiles-and-adapters.md).
 7. Navigator search and sorting; Related and Revisit-when reminders.
 8. Reading the owner's real old sessions on the Mac, read-only.
-9. First creator beta: worksheet, Site Engine's first site, encrypted transfer between devices.
+9. First creator beta: worksheet, Site Engine's first site. (Encrypted
+   transfer between devices moved to the sync line, October 22.)
 10. Business features: one-change card, business messaging, phone handoff.
 11. Browser annotations, family and shared spaces (Canvas/Atlas moved up to
     right after step 3).
@@ -198,11 +241,13 @@ Strategy and interview files, `docs/reviews`, `docs/sessions`, session audits,
 
 ## Open Questions
 
-- Which parts are open core and which are subscription-only. Everything lives
-  in this private repo for now. Before the repo goes public, the subscription
-  parts move to a separate private repo that builds on Open Convo.
-- The license and trademark approach, which decides whether others may relabel
-  the core freely or only with a subscription.
+- Where the subscription modules live. The rule for what joins the core is
+  set (October 22, above). Everything lives in this private repo for now;
+  before the repo goes public, the subscription parts move to a separate
+  private repo that builds on Open Convo.
+- Registering the True Convo trademark and writing the repo's trademark
+  policy, with a lawyer's review, before the repo goes public. Whether forks
+  must say "Powered by True Convo" is deferred.
 - License, and when (or whether) the repo goes public.
 - Whether the in-progress True Convo branches (native host proof, build 8
   trial, participant wiring) get finished here or restarted fresh.

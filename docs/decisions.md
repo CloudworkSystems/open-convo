@@ -6,6 +6,19 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 22:** Day one and public launch (owner interview, planning session
+  `OC-261022-plan-day-one-and-sync`). The day-one proof is a ChatGPT-style
+  chat that works on a local model plus tasks and productivity as its first
+  real job. Public launch needs the Mac and iPhone with private sync;
+  Apple-only (CloudKit) at launch, Windows and Android later. The iPhone app
+  and sync move from after step 5 to a parallel line starting now; its first
+  slice is the standalone sync core ([docs/plans/sync-core.md](plans/sync-core.md)),
+  built by the next free GrokBot team. Open Convo stays truly open source;
+  the True Convo name is protected by trademark, so copies that aren't a
+  subscriber's can't use it; "Powered by True Convo" in forks is deferred.
+  A module joins the core once it runs on the user's own keys or local
+  models at almost no ongoing cost to the project. Pricing and the business
+  plan stay out of this repo.
 - **Oct 21:** Scale-up plan approved ([docs/plans/scale-up.md](plans/scale-up.md)).
   Up to three outside modules at a time, each with its own builder or builder
   team; modules waiting only on review fixes don't count. None is waiting
