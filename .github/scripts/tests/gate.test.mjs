@@ -484,3 +484,19 @@ test('an owner note inside a multi-line HTML block never counts', () => {
   assert.equal(ownerAcceptance({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [note(`<!-- aside -->\n\nowner-accepts-findings ${HEAD}`)] }), true);
   assert.equal(ownerAcceptance({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [note(`Accepted.\n\n<!-- owner-accepts-findings sha=${HEAD} -->`)] }), true);
 });
+
+test('fences follow GFM: a backtick in a backtick opener, or text after a closer, changes nothing', () => {
+  const t = '```';
+  for (const body of [
+    // Not a fence (backtick in its info string), so the plain ``` opens one.
+    `${t} example\`\n\n${t}\n\nowner-accepts-findings ${HEAD}\n\n${t}`,
+    // "``` more" can't close a fence, so the note is still inside it.
+    `${t}\n${t} more\n\nowner-accepts-findings ${HEAD}\n\n${t}`,
+    // Tilde fences may have backticks in their info string.
+    `~~~ a\`b\n\nowner-accepts-findings ${HEAD}\n\n~~~`,
+  ]) {
+    assert.equal(ownerAcceptance({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [note(body)] }), false, body);
+  }
+  // A properly closed fence before the note still leaves it counting.
+  assert.equal(ownerAcceptance({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [note(`${t} text\nx\n${t}  \n\nowner-accepts-findings ${HEAD}`)] }), true);
+});

@@ -75,7 +75,15 @@ function editedOnlyBy(comment, isEditor) {
 // <pre>, <script>, <style>, <textarea>, <?...?>, <!...>, CDATA) never count,
 // so an example or commented-out note can't accept anything.
 const ACCEPT_LINE = /^(?:owner-accepts-findings ([0-9a-f]{40})|<!-- owner-accepts-findings sha=([0-9a-f]{40}) -->)[ \t]*$/;
-const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+// GFM fences: a backtick opener's info string can't contain a backtick (then
+// it isn't a fence at all); a closer is the same character, at least as long,
+// followed only by spaces.
+const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/;
+const fenceOpener = (line) => {
+  const m = line.match(FENCE_OPEN);
+  return m && (m[1][0] === '~' || !m[2].includes('`')) ? m[1] : null;
+};
 // Multi-line HTML blocks as GitHub Flavored Markdown defines them: how one
 // starts, and the text that ends it.
 const HTML_BLOCKS = [
@@ -96,7 +104,7 @@ function acceptedShas(body) {
   lines.forEach((line, i) => {
     if (fence) {
       // A fence closes with the same character, at least as long.
-      const f = line.match(FENCE);
+      const f = line.match(FENCE_CLOSE);
       if (f && f[1][0] === fence[0] && f[1].length >= fence.length) fence = null;
       return;
     }
@@ -109,8 +117,8 @@ function acceptedShas(body) {
       if (blank(lines[i - 1]) && blank(lines[i + 1])) shas.push(m[1] ?? m[2]);
       return;
     }
-    const f = line.match(FENCE);
-    if (f) { fence = f[1]; return; }
+    const f = fenceOpener(line);
+    if (f) { fence = f; return; }
     for (const [open, close] of HTML_BLOCKS) {
       const o = line.match(open);
       // A block that also closes on its own first line hides nothing more.
