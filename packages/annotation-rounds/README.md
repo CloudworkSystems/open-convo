@@ -131,7 +131,8 @@ left out. That note stays a warning when every entry it covers is a warning.
 The note that later items were not listed is kept even when the list is cut.
 Warnings count in that same top-level list. A screenshot that is present is
 listed with the item and is not turned into a problem. A line of backticks
-or tildes is escaped so it cannot open a code block.
+or tildes is escaped so it cannot open a code block. A line of only `=`,
+`-`, `*`, or `_` is escaped so it cannot become a heading or a rule.
 
 From code:
 

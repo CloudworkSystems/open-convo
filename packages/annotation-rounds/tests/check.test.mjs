@@ -452,6 +452,27 @@ test('9. hostile field text is escaped in Markdown and exact in JSON', () => {
     assert.equal(/^\s*~{3,}/m.test(fenced.markdown), false);
     assert.equal(fenced.markdown.includes('\\```js'), true);
     assert.equal(fenced.markdown.includes('\\~~~'), true);
+
+    const ruled = checkRound(writeRound(dir, [
+      '1. Screen: Desk title',
+      '  ===',
+      'Element: Button',
+      '  ---',
+      "Owner's words: Please.",
+      'Change: Make the change.',
+      '  ***',
+      '  ___',
+      '  - - -',
+    ].join('\n'), 'rules.md'));
+    assert.equal(ruled.report.items[0].screen, 'Desk title\n===');
+    assert.equal(ruled.report.items[0].element, 'Button\n---');
+    assert.equal(ruled.report.items[0].change, 'Make the change.\n***\n___\n- - -');
+    assert.equal(/^\s*(=+|-+)\s*$/m.test(ruled.markdown), false);
+    assert.equal(/^\s*([-*_])(?:\s*\1){2,}\s*$/m.test(ruled.markdown), false);
+    assert.equal(ruled.markdown.includes('\\==='), true);
+    assert.equal(ruled.markdown.includes('\\---'), true);
+    assert.equal(ruled.markdown.includes('\\***'), true);
+    assert.equal(ruled.markdown.includes('\\___'), true);
   });
 });
 

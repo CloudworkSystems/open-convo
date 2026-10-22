@@ -813,10 +813,18 @@ function escapeMarkdownLine(line) {
   escaped = escaped.replace(/^(\s*)([-*+])(?=\s)/, (_, spaces, mark) => `${spaces}\\${mark}`);
   escaped = escaped.replace(/^(\s*)(\d+)\./, (_, spaces, number) => `${spaces}${number}\\.`);
   escaped = escaped.replace(/^(\s*)(`{3,}|~{3,})/, (_, spaces, fence) => `${spaces}\\${fence}`);
+  escaped = escapeBreakLine(escaped);
   escaped = escaped.replaceAll('://', ':\\/\\/');
   escaped = escaped.replace(/(^|[^A-Za-z0-9])(www)\./gi, (_, prefix, www) => `${prefix}${www}\\.`);
   escaped = escaped.replaceAll('@', '\\@');
   return escaped;
+}
+
+function escapeBreakLine(line) {
+  if (/^(\s*)(=+|-+)\s*$/.test(line) || /^(\s*)([-*_])(?:\s*\2){2,}\s*$/.test(line)) {
+    return line.replace(/^(\s*)([=\-*_])/, (_, spaces, mark) => `${spaces}\\${mark}`);
+  }
+  return line;
 }
 
 function countLevel(report, level) {
