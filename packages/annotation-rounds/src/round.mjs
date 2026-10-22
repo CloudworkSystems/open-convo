@@ -1053,7 +1053,16 @@ function escapeMarkdownLine(line) {
   escaped = escaped.replaceAll('://', ':\\/\\/');
   escaped = escaped.replace(/(^|[^A-Za-z0-9])(www)\./gi, (_, prefix, www) => `${prefix}${www}\\.`);
   escaped = escaped.replaceAll('@', '\\@');
+  escaped = escaped.replace(/(^|[^0-9A-Fa-f])([0-9A-Fa-f]{7,40})(?![0-9A-Fa-f])/g, (_, prefix, token) => {
+    return prefix + splitCommitToken(token);
+  });
   return escaped;
+}
+
+function splitCommitToken(token) {
+  const parts = [];
+  for (let index = 0; index < token.length; index += 6) parts.push(token.slice(index, index + 6));
+  return parts.join('\u200b');
 }
 
 function escapeBreakLine(line) {

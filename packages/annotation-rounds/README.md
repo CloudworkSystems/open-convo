@@ -126,7 +126,8 @@ number and `.` or `)` is escaped, so it cannot start a list. A backslash already
 text is escaped first, so it cannot bring a link back. A bare web address
 (`https://...` or `www.`) or an email address is escaped too, so it stays
 plain text. A `#` or `GH-` followed by a number is escaped, so it cannot
-become an issue or pull request link. A checklist lists at most 500 numbered items. Further items are
+become an issue or pull request link. A hexadecimal token of 7 to 40
+characters is split with an invisible break, so it cannot become a commit link. A checklist lists at most 500 numbered items. Further items are
 counted in one error, and a screenshot name among them is still protected.
 Each problem list keeps the first 200 entries and then says how many were
 left out. That note stays a warning when every entry it covers is a warning.

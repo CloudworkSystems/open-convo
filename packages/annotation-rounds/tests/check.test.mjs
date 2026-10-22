@@ -445,6 +445,26 @@ test('9. hostile field text is escaped in Markdown and exact in JSON', () => {
     assert.equal(issues.markdown.includes('GH\\-98'), true);
     assert.equal(issues.markdown.includes('gh\\-7'), true);
 
+    const sha = '0123456789abcdef0123456789abcdef01234567';
+    const shortSha = 'abcdef0';
+    const longer = 'b'.repeat(41);
+    const commits = checkRound(writeRound(dir, [
+      '1. Screen: Desk',
+      `Element: ${sha}`,
+      `Owner's words: owner@${sha}`,
+      `Change: ${shortSha} and ${longer} and abc123`,
+    ].join('\n'), 'commits.md'));
+    assert.equal(commits.report.items[0].element, sha);
+    assert.equal(commits.report.items[0].ownersWords, `owner@${sha}`);
+    assert.equal(commits.report.items[0].change, `${shortSha} and ${longer} and abc123`);
+    assert.equal(commits.markdown.includes(sha), false);
+    assert.equal(commits.markdown.includes(shortSha), false);
+    assert.equal(commits.markdown.includes(`012345\u200b6789ab`), true);
+    assert.equal(commits.markdown.includes(`abcdef\u200b0`), true);
+    assert.equal(commits.markdown.includes(`owner\\@012345\u200b6789ab`), true);
+    assert.equal(commits.markdown.includes(longer), true);
+    assert.equal(commits.markdown.includes('abc123'), true);
+
     const preescaped = checkRound(writeRound(dir, [
       '1. Screen: Desk',
       'Element: Button',
