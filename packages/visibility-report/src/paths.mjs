@@ -12,31 +12,35 @@ function existsOrLink(cursor) {
 }
 
 /**
- * Resolve one existing path. A symlink is followed even when its target
- * does not exist yet, so two names for one output still compare equal.
+ * Resolve one path, following symlinks. When a link points at a missing
+ * child, resolution continues from the nearest existing ancestor so a
+ * symlink in that ancestor is still followed.
  */
 function resolveNode(cursor) {
-  const seen = new Set();
-  let current = cursor;
-  while (true) {
-    if (seen.has(current)) return current;
-    let stat;
+  return resolveFrom(cursor, new Set());
+}
+
+function resolveFrom(current, seen) {
+  if (seen.has(current)) return current;
+  let stat;
+  try {
+    stat = fs.lstatSync(current);
+  } catch (error) {
+    if (error?.code !== 'ENOENT' && error?.code !== 'ENOTDIR' && error?.code !== 'ELOOP') return current;
+    const parent = path.dirname(current);
+    if (parent === current) return current;
+    return path.join(resolveFrom(parent, seen), path.basename(current));
+  }
+  if (!stat.isSymbolicLink()) {
     try {
-      stat = fs.lstatSync(current);
+      return fs.realpathSync(current);
     } catch {
       return current;
     }
-    if (!stat.isSymbolicLink()) {
-      try {
-        return fs.realpathSync(current);
-      } catch {
-        return current;
-      }
-    }
-    seen.add(current);
-    const target = fs.readlinkSync(current);
-    current = path.resolve(path.dirname(current), target);
   }
+  seen.add(current);
+  const target = fs.readlinkSync(current);
+  return resolveFrom(path.resolve(path.dirname(current), target), seen);
 }
 
 function fullyResolve(input) {
