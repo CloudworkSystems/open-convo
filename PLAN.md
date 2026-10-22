@@ -204,8 +204,9 @@ lanes, because they touch app and storage code.
 10. Business features: one-change card, business messaging, phone handoff.
 11. Browser annotations, family and shared spaces (Canvas/Atlas moved up to
     right after step 3).
-12. iOS app showing the same modules as the Mac, in a phone layout; later the
-    OS shell.
+12. The OS shell. (The iPhone app itself moved to the parallel sync line on
+    October 22: its launch version carries the launch set; later modules
+    reach the phone as each one is built.)
 
 ### Beside The Main Build
 

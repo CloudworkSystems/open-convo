@@ -55,16 +55,43 @@ so it builds and tests on Linux too.
   batches; a device fetches everything changed since its last change token.
   An upload that fails or is cut off is retried without duplicating anything.
   A device offline for a long time catches up from its last token, or from
-  scratch if the token has expired, with the same end result.
+  scratch if the token has expired, with the same end result. A change token
+  is saved only after every record it covers has been applied, so a download
+  cut off partway resumes from the last safely applied token.
+- **Survives quitting.** The outbox, the last applied change token, the
+  logical clock and retry records are saved through a checkpoint: the package
+  exports its sync state as bytes and restores it from bytes. The app stores
+  those bytes in its protected store later; in this slice tests keep them in
+  memory or a temporary file. A device that quits mid-sync and reopens from
+  its checkpoint loses no unsent change and duplicates nothing.
+- **The clock moves forward.** Every fetched stamp pushes the device's
+  logical counter past it, so the next local change always gets a higher
+  stamp than anything the device has seen.
 - **Conflicts.** When the cloud already holds a newer version of a record,
   the sync core does not pick a winner blindly. It hands both copies to a
-  **merge function registered for that record type** (the household lists
-  engine already has one) and uploads the result. A record type with no merge
+  **merge function registered for that record type** and uploads the result.
+  **Where decryption happens:** the merge function is supplied by the app,
+  which holds the keys. It decrypts both copies, merges the contents with the
+  module's own merge rules (for task lists, the household lists engine's
+  rules), encrypts the result and hands back ciphertext. The sync core still
+  never sees keys or plaintext. In this slice the tests register a stand-in
+  merge function over invented, unencrypted test bytes; wiring the real
+  decrypt-merge-encrypt function, including calling the JavaScript list
+  engine from the app, is the next slice's job. A record type with no merge
   function falls back to "higher stamp wins" and keeps the losing copy as a
   conflict copy the app can show, so nothing is silently lost.
-- **Deletions stay deleted.** Deleting leaves a permanent marker (ID, stamp,
-  "deleted"), so an offline device's older copy can never bring a record
+- **Two kinds of deletion.** A *logical deletion* (removing an item or list,
+  reversible until Trash is emptied) is an ordinary stamped change: it wins
+  over earlier edits and loses to a later edit or re-add, matching the
+  household lists engine's rules, and it goes through the registered merge
+  function. A *purge* (emptying Trash) leaves a permanent marker (ID, stamp,
+  "purged") so no older copy, from any device, can ever bring the record
   back. Markers are kept; compacting them is out of scope.
+- **Size limits.** CloudKit refuses ordinary record fields over 1 MB. The
+  sync core sets a payload limit below that, leaving room for encryption
+  overhead and metadata, and stores larger payloads as asset-style
+  attachments in the fake cloud (as the real adapter will with CloudKit
+  assets). Oversized payloads never fail silently.
 - **Status the app can show.** Synced, waiting, offline, or needs attention
   (with a plain reason), for each record type and overall. No silent failures.
 
@@ -73,7 +100,9 @@ so it builds and tests on Linux too.
 An in-memory stand-in that behaves like CloudKit's private database in the
 ways that matter here: record zones, change tokens, saves that fail when the
 cloud copy changed since it was read, batch limits, expired change tokens,
-and dropped connections partway through a batch. The real CloudKit adapter
+dropped connections partway through a batch (uploads and downloads), the
+1 MB limit on ordinary record fields, and asset-style attachments for larger
+payloads. The real CloudKit adapter
 later must pass the same tests the fake passes.
 
 ## Tests (Must Pass, Run By One Command)
@@ -87,8 +116,11 @@ Every case uses two or three simulated devices and invented records.
    syncs first.
 4. Same as 3 with no merge function: higher stamp wins, the other copy is kept
    as a conflict copy, and status says "needs attention".
-5. A deletes a record; B, offline, edits its older copy; after sync the
-   record stays deleted.
+5. A logically deletes a record; B, offline, edits its older copy; after
+   sync the deletion wins (older edit). Then A restores the record with a
+   later stamp; after sync it is back on both devices.
+5b. A purges a record; B, offline, edits its older copy; after sync the
+   record stays purged and cannot come back.
 6. The connection drops halfway through an upload; after retry, nothing is
    missing and nothing is duplicated.
 7. B is offline for many changes, then catches up, including after its change
@@ -98,6 +130,16 @@ Every case uses two or three simulated devices and invented records.
 9. The payload bytes that come out on device B are exactly the bytes that went
    in on device A (the core never changes or reads them).
 10. Status reports offline, waiting and synced correctly through a sync cycle.
+11. The connection drops partway through B's paginated download; after retry
+    from the last safely applied token, nothing is missing or duplicated.
+12. B fetches a record whose stamp counter is far above its own, then makes a
+    local change; the new change's counter is higher than the fetched one and
+    wins over it.
+13. A device is destroyed and recreated from its checkpoint in the middle of
+    an upload and again in the middle of a download; after it syncs, nothing
+    is lost or duplicated.
+14. A payload over the field limit goes as an attachment and arrives on B
+    byte for byte; a payload under the limit stays an ordinary field.
 
 ## Out Of Scope For This Slice
 
@@ -140,6 +182,14 @@ breaking one is a stop-and-report event.
 If GrokBot's subscription ends before this is finished, the work stays on its
 branch. Any agent may finish it from this plan, on the same branch or a new
 one named after a new session, under the same rules and review.
+
+## Review History
+
+Codex reviewed this plan on pull request #116 (October 22). Its P1 findings
+are written in above as requirements: durable checkpoints, safe change
+tokens on interrupted downloads, the clock moving past fetched stamps, where
+decryption and content merging happen, and logical deletion versus purge.
+Its P2 on CloudKit's 1 MB field limit is also written in.
 
 ## Review And Finish Line
 
