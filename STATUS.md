@@ -82,7 +82,7 @@ Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
 **Annotation rounds checker** (Code): plan approved; GrokBot team A starts once #94 merges.
 
-**Site Engine: what will change** (Business), GrokBot (team B) builds, Codex reviews; plan in review in its own pull request (`OC-261021-plan-site-engine-diff`).
+**Site Engine: what will change** (Business), GrokBot (team B) builds, Codex reviews; plan approved (`docs/plans/site-engine-diff.md`); team B can start.
 
 **Visibility report** (Business), GrokBot (team C) builds, Codex reviews; plan approved (`docs/plans/visibility-report.md`); team C can start.
 
