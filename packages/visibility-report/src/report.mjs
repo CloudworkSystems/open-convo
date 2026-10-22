@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { sameFile } from './paths.mjs';
 import { renderReport } from './render.mjs';
 import { ReportError, validateFindings } from './validate.mjs';
@@ -97,8 +97,22 @@ export function run(argv, io = {}) {
   }
 }
 
-const entry = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : '';
-if (import.meta.url === entry) {
+function realPath(filePath) {
+  const absolute = path.resolve(filePath);
+  try {
+    return fs.realpathSync(absolute);
+  } catch {
+    return absolute;
+  }
+}
+
+/** True when this file is the program Node was asked to run, links included. */
+export function isMainModule(argvPath, moduleUrl = import.meta.url) {
+  if (!argvPath) return false;
+  return realPath(argvPath) === realPath(fileURLToPath(moduleUrl));
+}
+
+if (isMainModule(process.argv[1])) {
   // Let stdout finish. process.exit() would drop Markdown still queued on a pipe.
   process.exitCode = run(process.argv.slice(2));
 }

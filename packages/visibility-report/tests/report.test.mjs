@@ -4,7 +4,7 @@ import { builtinModules } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { mock, test } from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import MarkdownIt from 'markdown-it';
 import { clearNetworkCalls, networkCalls, STUBBED_MODULES } from './network-guard.mjs';
 import snapshot from './builtin-modules.json' with { type: 'json' };
@@ -59,7 +59,7 @@ mock.module('node:fs', {
   },
 });
 
-const { run } = await import('../src/report.mjs');
+const { run, isMainModule } = await import('../src/report.mjs');
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
@@ -833,6 +833,26 @@ test('the command reads no file other than the findings file', () => {
     recordReads = false;
   }
   assert.deepEqual(readLog, [{ kind: 'readFileSync', file: findings }]);
+});
+
+test('a symlinked command path still counts as this program', () => {
+  const dir = tempDir();
+  try {
+    const real = path.join(dir, 'report.mjs');
+    fs.writeFileSync(real, '');
+    const link = path.join(dir, 'report-link.mjs');
+    const linkedDir = path.join(dir, 'linked-dir');
+    fs.symlinkSync(real, link);
+    fs.symlinkSync(dir, linkedDir);
+    const moduleUrl = pathToFileURL(real).href;
+    assert.equal(isMainModule(real, moduleUrl), true);
+    assert.equal(isMainModule(link, moduleUrl), true);
+    assert.equal(isMainModule(path.join(linkedDir, 'report.mjs'), moduleUrl), true);
+    assert.equal(isMainModule(path.join(dir, 'other.mjs'), moduleUrl), false);
+    assert.equal(isMainModule('', moduleUrl), false);
+  } finally {
+    cleanup(dir);
+  }
 });
 
 test('output paths that name one file are refused and the findings file is unchanged', () => {
