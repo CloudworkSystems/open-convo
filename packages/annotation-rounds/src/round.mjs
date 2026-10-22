@@ -129,8 +129,8 @@ function buildReport(roundPath, text) {
   }
 
   const problems = [
-    ...capProblems(parsed.problems),
-    ...capProblems(numberProblems(parsed.items)),
+    ...parsed.problems,
+    ...numberProblems(parsed.items),
   ];
   if (parsed.itemCount > ITEM_LIMIT) {
     problems.push(problem(
@@ -142,6 +142,7 @@ function buildReport(roundPath, text) {
   const items = parsed.items.map(item => finishItem(item, session, roundDir));
   problems.push(...sharedWarnings(parsed.items));
   problems.push(...unnamedWarnings(roundDir, session, parsed.items, orphanNames));
+  const listedProblems = capProblems(problems);
 
   return {
     report: {
@@ -149,7 +150,7 @@ function buildReport(roundPath, text) {
       session,
       roundFile,
       items,
-      problems,
+      problems: listedProblems,
     },
     mentionedNames: [...orphanNames, ...parsed.items.flatMap(item => item.mentioned)],
   };
@@ -322,32 +323,22 @@ function finishItem(item, session, roundDir) {
   const screenshots = [];
   const shot = item.fields.screenshots;
   if (shot && !shot.discarded) {
-    const names = splitNames(shot.value);
-    const room = Math.max(0, PROBLEM_LIMIT - item.problems.length);
-    const shown = names.length > room ? names.slice(0, room) : names;
-    for (const name of shown) {
+    let omitted = 0;
+    for (const name of splitNames(shot.value)) {
       const nameError = screenshotNameError(session, name);
-      if (nameError) {
-        item.problems.push(problem('error', nameError, shot.line));
-        screenshots.push({ name, present: false });
-      } else {
-        const present = isPresentPng(roundDir, name);
-        if (!present) {
-          item.problems.push(problem(
-            'error',
-            `Screenshot "${name}" is named but not present.`,
-            shot.line,
-          ));
+      const present = nameError ? false : isPresentPng(roundDir, name);
+      const diagnostic = nameError ?? (present ? null : `Screenshot "${name}" is named but not present.`);
+      if (diagnostic) {
+        if (item.problems.length < PROBLEM_LIMIT) {
+          item.problems.push(problem('error', diagnostic, shot.line));
+        } else {
+          omitted += 1;
         }
-        screenshots.push({ name, present });
       }
+      screenshots.push({ name, present });
     }
-    if (names.length > shown.length) {
-      item.problems.push(problem(
-        'error',
-        `${names.length - shown.length} more problems were left out.`,
-        shot.line,
-      ));
+    if (omitted > 0) {
+      item.problems.push(problem('error', `${omitted} more problems were left out.`, shot.line));
     }
   }
 

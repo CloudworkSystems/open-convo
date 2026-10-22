@@ -863,7 +863,8 @@ test('sparse item numbers keep the later line without a slow rescan', { timeout:
     for (let number = 2; number <= 80000; number += 2) lines.push(`${number}.`);
     const report = checkRound(writeRound(dir, lines.join('\n'), 'sparse.md')).report;
     assert.equal(report.items.length, 500);
-    assert.ok(report.problems.some(problem => problem.message === 'This round has 40000 numbered items. Only the first 500 are listed.'));
+    assert.equal(report.problems.length, 201);
+    assert.equal(report.problems.at(-1).message, '301 more problems were left out.');
     const firstSkip = report.problems.find(problem => problem.message === 'Item number 1 is skipped.');
     assert.equal(firstSkip.line, 1);
     const laterSkip = report.problems.find(problem => problem.message === 'Item number 3 is skipped.');
@@ -908,8 +909,36 @@ test('a long round stays bounded and still protects a later screenshot', () => {
 
     const names = Array.from({ length: 250 }, (_, index) => `shot-${index}.png`).join(', ');
     const many = checkRound(writeRound(dir, item(1, `Screenshot: ${names}`), 'many.md')).report;
-    assert.equal(many.items[0].screenshots.length, 200);
+    assert.equal(many.items[0].screenshots.length, 250);
+    assert.equal(many.items[0].problems.length, 201);
     assert.equal(many.items[0].problems.at(-1).message, '50 more problems were left out.');
+
+    const presentNames = [];
+    for (let number = 1; number <= 201; number += 1) {
+      const name = `${SESSION}-${String(number).padStart(3, '0')}.png`;
+      presentNames.push(name);
+      writePng(path.join(dir, name));
+    }
+    const presentRound = writeRound(dir, item(1, `Screenshot: ${presentNames.join(', ')}`));
+    const present = checkRound(presentRound);
+    assert.equal(present.report.items[0].screenshots.length, 201);
+    assert.equal(present.report.items[0].screenshots.every(shot => shot.present), true);
+    assert.equal(present.report.items[0].problems.length, 0);
+    assert.equal(present.report.problems.length, 0);
+    const presentRun = run([presentRound], dir);
+    assert.equal(presentRun.status, 0, presentRun.stderr);
+
+    const shared = Array.from({ length: 30 }, (_, index) => `dup-${index}.png`).join(', ');
+    const mixed = [
+      ...Array.from({ length: 180 }, () => 'hello'),
+      item(1, `Screenshot: ${shared}`),
+      '',
+      item(2, `Screenshot: ${shared}`),
+    ].join('\n');
+    const mixedReport = checkRound(writeRound(dir, mixed, 'mixed.md')).report;
+    assert.equal(mixedReport.problems.length, 201);
+    assert.equal(mixedReport.problems.at(-1).message, '10 more problems were left out.');
+    assert.equal(mixedReport.problems.filter(problem => problem.message.includes('named by more than one item')).length, 20);
   });
 });
 
