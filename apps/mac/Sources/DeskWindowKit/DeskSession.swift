@@ -192,6 +192,10 @@ public final class DeskSession {
     public var confirmLeavingUnsavedWork: (@MainActor (URL?, DeskUnsavedWork) async -> Bool)?
     /// Test seam: stands in for the page's unsaved-work answer (nil: clean).
     var unsavedWorkCheck: (@MainActor () async -> DeskUnsavedWork?)?
+    /// Test seam: awaited while the Desk is still opening, after the store
+    /// work and before the close check that would abandon the open, so a
+    /// test can close the window at a known point (nil: no wait).
+    var openWillFinish: (@MainActor () async -> Void)?
 
     private var unlocking = false
     /// Counts lock requests: an unlock or open that saw a lock arrive
@@ -507,6 +511,7 @@ public final class DeskSession {
                 }
                 log("desk.store.recovery", "kind=\(kind)")
             }
+            if let openWillFinish { await openWillFinish() }
             if closeRequests != closeRequestsAtStart {
                 // The window closed while the Desk was opening: nothing is
                 // shown, and the store's writer lock is released at once. An

@@ -271,7 +271,9 @@ final class DeskWindowControllerTests: XCTestCase {
 
     /// Review finding LC-3, the reopen within a run: closing the window
     /// while the Desk is still opening leaves it closed, with the store's
-    /// writer lock released.
+    /// writer lock released. The open is held at a known point so the
+    /// close lands inside it every time (a bare `Task.yield()` let the
+    /// reopen finish first on a busy machine).
     func testCloseWhileReopeningLeavesTheDeskClosed() async throws {
         let logs = DeskLogCollector()
         let session = makeSession(folder, bundle: try anyDeskBundle(folder), logs: logs)
@@ -279,9 +281,12 @@ final class DeskWindowControllerTests: XCTestCase {
         let run = try XCTUnwrap(session.runFolder)
         await session.close()
         XCTAssertEqual(session.state, .closed)
+        let held = HeldStep()
+        session.openWillFinish = { await held.wait() }
         let reopening = Task { await session.unlock(verifier: StubUnlockVerifier()) }
-        await Task.yield()
+        try await waitUntil("the reopen to be opening") { held.isWaiting }
         await session.close()
+        held.release()
         await reopening.value
         XCTAssertEqual(session.state, .closed)
         XCTAssertNil(session.host)
