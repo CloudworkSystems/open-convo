@@ -805,12 +805,6 @@ export function volumeFoldsCase(target) {
 function probeCaseFold(directory) {
   const child = foldableChild(directory);
   if (child) return sameLookup(path.join(directory, child), path.join(directory, flipOneLetter(child)));
-  const parent = path.dirname(directory);
-  if (parent !== directory && sameDevice(directory, parent)) {
-    const flipped = flipOneLetter(directory);
-    return flipped ? sameLookup(directory, flipped) : false;
-  }
-  if (parent === directory) return false;
   return probeWithTemporaryChild(directory);
 }
 
@@ -833,14 +827,6 @@ function foldableChild(directory) {
 function sameLookup(original, flipped) {
   try {
     return realpathSync(original) === realpathSync(flipped);
-  } catch {
-    return false;
-  }
-}
-
-function sameDevice(left, right) {
-  try {
-    return statSync(left).dev === statSync(right).dev;
   } catch {
     return false;
   }

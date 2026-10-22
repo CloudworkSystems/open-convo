@@ -157,7 +157,8 @@ other missing folders beside it. A folder that can be entered but not listed
 is still resolved, so a link to it and the real path stay the same file. Names that differ only by case are compared
 once when that volume treats them as one file, including when only the folder
 name's case changes. That check uses a file inside the folder, so a mounted
-volume is not judged by the folder above it. A missing screenshot there is
+volume is not judged by the folder above it. An empty folder is checked with
+a temporary file that is removed before the check returns. A missing screenshot there is
 reserved under the same rule. Two paths are the same file when their fully
 resolved paths match, or, when both exist, when they have the same device and
 inode. An output that

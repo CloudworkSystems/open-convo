@@ -1312,6 +1312,24 @@ test('a folder that cannot be listed still protects its file', (t) => {
   });
 });
 
+test('an empty directory is probed from the inside', () => {
+  withDir(dir => {
+    const empty = path.join(dir, 'empty');
+    mkdirSync(empty);
+    const folds = volumeFoldsCase(empty);
+    assert.equal(readdirSync(empty).some(name => name.startsWith('oc-case-probe-')), false);
+    const sample = path.join(empty, 'inside-probe');
+    writeFileSync(sample, 'x');
+    let inside = false;
+    try {
+      inside = realpathSync(sample) === realpathSync(path.join(empty, 'inside-probE'));
+    } catch {
+      inside = false;
+    }
+    assert.equal(folds, inside);
+  });
+});
+
 test('the command rejects a missing round and a bad argument', () => {
   const missing = run(['/tmp/does-not-exist-annotation-round.md']);
   assert.equal(missing.status, 1);
