@@ -31,44 +31,25 @@ import Testing
 // its run's start record already durable (section 20.4: receipt before
 // request), or the case fails.
 
-/// Counts every read, so the harness can tell that a run took in bytes:
-/// with virtual time standing still, a local run reads its clock only when
-/// something arrives (or, once it holds text, on its 250 ms timer).
-final class CountingClock: ParticipantClock, @unchecked Sendable {
-    private let inner: any ParticipantClock
-    private let lock = NSLock()
-    private var count = 0
-
-    init(_ inner: any ParticipantClock) { self.inner = inner }
-
-    var reads: Int { lock.lock(); defer { lock.unlock() }; return count }
-
-    func monotonicMillis() -> UInt64 {
-        lock.lock(); count += 1; lock.unlock()
-        return inner.monotonicMillis()
-    }
-
-    func wallMillis() -> Int64 {
-        lock.lock(); count += 1; lock.unlock()
-        return inner.wallMillis()
-    }
-}
-
 /// The real `LocalChatRun`, its updates relayed and counted, so the harness
-/// knows when the coordinator has consumed them all.
+/// knows when the coordinator has consumed them all. Its stops are counted
+/// too: the real run carries a stop out later, on its own queue, so a stop
+/// asked for (by a lock, say) has not ended the run when `stop()` returns.
+/// And the reply body bytes it has taken in (`LocalChatRun`'s test seam), so
+/// the harness knows when it has read everything the fake sent.
 final class VectorLocalRun: ParticipantRunning, @unchecked Sendable {
     let runId: String
-    let clock: CountingClock
     let updates: AsyncStream<ParticipantRunUpdate>
     private let inner: any ParticipantRunning
     private let lock = NSLock()
     private var count = 0
     private var ended = false
+    private var stops = 0
+    private var body = 0
 
-    init(_ inner: any ParticipantRunning, runId: String, clock: CountingClock) {
+    init(_ inner: any ParticipantRunning, runId: String) {
         self.inner = inner
         self.runId = runId
-        self.clock = clock
         var continuation: AsyncStream<ParticipantRunUpdate>.Continuation!
         updates = AsyncStream(bufferingPolicy: .unbounded) { continuation = $0 }
         let relay = continuation!
@@ -84,12 +65,20 @@ final class VectorLocalRun: ParticipantRunning, @unchecked Sendable {
 
     var yielded: Int { lock.lock(); defer { lock.unlock() }; return count }
     var finished: Bool { lock.lock(); defer { lock.unlock() }; return ended }
+    /// Whether anything asked this run to stop.
+    var stopAsked: Bool { lock.lock(); defer { lock.unlock() }; return stops > 0 }
+    /// Reply body bytes the run has taken in so far.
+    var bodyBytes: Int { lock.lock(); defer { lock.unlock() }; return body }
     var snapshot: ParticipantRunSnapshot { inner.snapshot }
 
     @discardableResult
-    func stop() -> Bool { inner.stop() }
+    func stop() -> Bool {
+        lock.lock(); stops += 1; lock.unlock()
+        return inner.stop()
+    }
 
     private func note() { lock.lock(); count += 1; lock.unlock() }
+    func noteBody(_ total: Int) { lock.lock(); body = total; lock.unlock() }
     private func end() { lock.lock(); ended = true; lock.unlock() }
 }
 
@@ -111,8 +100,10 @@ final class VectorLocalRoute: LocalRouteLaunching, @unchecked Sendable {
     func sweepAliases(keepingRunIds: Set<String>) async { await client.sweepAliases(keepingRunIds: keepingRunIds) }
 
     func launchLocal(_ request: LocalRunLaunch, clock: any ParticipantClock) -> any ParticipantRunning {
-        let counting = CountingClock(clock)
-        let run = VectorLocalRun(client.launchLocal(request, clock: counting), runId: request.identity.runId, clock: counting)
+        let inner = client.launchLocal(request, clock: clock)
+        let run = VectorLocalRun(inner, runId: request.identity.runId)
+        // Before any reply: the fake answers only when the harness plays it.
+        (inner as? LocalChatRun)?.setBodyTakenIn { [weak run] total in run?.noteBody(total) }
         lock.lock(); launched.append(run); lock.unlock()
         return run
     }
@@ -333,6 +324,9 @@ enum LocalHostReplay {
             throw VectorHarnessError.mismatch("\(label) the chat request never reached the fake Ollama")
         }
         let chat = ollama.chats[index]
+        // Reply body bytes sent so far: a chunk is taken in once the run has
+        // read them all, or has ended (a run past a bound stops reading).
+        var sent = 0
         for step in steps {
             guard let fields = step.objectValue, let kind = fields["kind"]?.stringValue else { throw VectorHarnessError.fixture("\(label) step") }
             let ended: Bool
@@ -347,12 +341,11 @@ enum LocalHostReplay {
                     throw VectorHarnessError.fixture("\(label) chunk is {kind, text, repeat?}")
                 }
                 let count = fields["repeat"]?.safeIntegerValue ?? 1
-                let before = run.clock.reads
-                chat.line(["message": ["role": "assistant", "content": String(repeating: text, count: count)], "done": false])
-                ended = await waitUntil { run.clock.reads > before || run.finished }
-                await quiet { run.clock.reads }
+                sent += chat.line(["message": ["role": "assistant", "content": String(repeating: text, count: count)], "done": false])
+                let target = sent
+                ended = await waitUntil { run.bodyBytes >= target || run.finished }
             case "done":
-                chat.line(["message": ["role": "assistant", "content": ""], "done": true, "done_reason": "stop"])
+                sent += chat.line(["message": ["role": "assistant", "content": ""], "done": true, "done_reason": "stop"])
                 chat.end()
                 chat.close()
                 ended = await waitUntil { run.finished }
@@ -375,11 +368,18 @@ enum LocalHostReplay {
     }
 
     /// Every local run's updates applied (and their end seen once it ended).
+    /// A run that has its terminal, or was asked to stop, counts only once
+    /// its updates have ended: a stop is carried out on the run's own queue
+    /// after `stop()` returns, so without this a lock's stop could still be
+    /// on its way when the harness unlocks, and its text and `stopped` would
+    /// then go to the connection issued after the unlock (the contract's
+    /// S10 reading allows that; the vectors state the stop finished while
+    /// locked).
     static func drained(_ route: VectorLocalRoute, world: VectorWorld) async -> Bool {
         for run in route.runs {
             guard let consumed = await world.coordinator.consumption(of: run.runId) else { continue }
             if consumed.applied < run.yielded || (run.finished && !consumed.finished) { return false }
-            if run.snapshot.terminal != nil, !run.finished { return false }
+            if run.snapshot.terminal != nil || run.stopAsked, !run.finished { return false }
         }
         return true
     }
