@@ -1,4 +1,4 @@
-import { closeSync, constants, lstatSync, openSync, readFileSync, readdirSync, readSync, realpathSync, statSync } from 'node:fs';
+import { closeSync, constants, lstatSync, openSync, readFileSync, readdirSync, readSync, realpathSync, statSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 
 /**
@@ -797,17 +797,76 @@ export function volumeFoldsCase(target) {
   const ancestor = existingAncestor(target);
   if (!ancestor) return false;
   if (caseFoldCache.has(ancestor)) return caseFoldCache.get(ancestor);
-  const flipped = flipOneLetter(ancestor);
-  let folds = false;
-  if (flipped) {
-    try {
-      folds = realpathSync(flipped) === ancestor;
-    } catch {
-      folds = false;
-    }
-  }
+  const folds = probeCaseFold(ancestor);
   caseFoldCache.set(ancestor, folds);
   return folds;
+}
+
+function probeCaseFold(directory) {
+  const child = foldableChild(directory);
+  if (child) return sameLookup(path.join(directory, child), path.join(directory, flipOneLetter(child)));
+  const parent = path.dirname(directory);
+  if (parent !== directory && sameDevice(directory, parent)) {
+    const flipped = flipOneLetter(directory);
+    return flipped ? sameLookup(directory, flipped) : false;
+  }
+  if (parent === directory) return false;
+  return probeWithTemporaryChild(directory);
+}
+
+function foldableChild(directory) {
+  let entries;
+  try {
+    entries = readdirSync(directory, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  let fallback = null;
+  for (const entry of entries) {
+    if (!flipOneLetter(entry.name)) continue;
+    if (!entry.isSymbolicLink()) return entry.name;
+    if (!fallback) fallback = entry.name;
+  }
+  return fallback;
+}
+
+function sameLookup(original, flipped) {
+  try {
+    return realpathSync(original) === realpathSync(flipped);
+  } catch {
+    return false;
+  }
+}
+
+function sameDevice(left, right) {
+  try {
+    return statSync(left).dev === statSync(right).dev;
+  } catch {
+    return false;
+  }
+}
+
+function probeWithTemporaryChild(directory) {
+  const name = `oc-case-probe-${process.pid}`;
+  const file = path.join(directory, name);
+  const flipped = flipOneLetter(name);
+  if (!flipped) return false;
+  let fd;
+  try {
+    fd = openSync(file, constants.O_CREAT | constants.O_EXCL | constants.O_RDWR, 0o600);
+  } catch {
+    return false;
+  }
+  try {
+    closeSync(fd);
+    fd = undefined;
+    return sameLookup(file, path.join(directory, flipped));
+  } finally {
+    if (fd !== undefined) {
+      try { closeSync(fd); } catch { /* closed before the probe finished */ }
+    }
+    try { unlinkSync(file); } catch { /* the probe file is already gone */ }
+  }
 }
 
 function existingAncestor(target) {

@@ -1072,19 +1072,12 @@ test('a missing screenshot follows the volume case rules', () => {
     const out = path.join(dir, 'NOTES.PNG');
     const result = run([round, '--json', out], dir);
     const folds = volumeFoldsCase(dir);
+    const inside = path.join(dir, 'case.md');
     let probed = false;
-    const chars = Array.from(dir);
-    for (let index = chars.length - 1; index >= 0; index -= 1) {
-      const lower = chars[index].toLowerCase();
-      const upper = chars[index].toUpperCase();
-      if (lower === upper) continue;
-      chars[index] = chars[index] === lower ? upper : lower;
-      try {
-        probed = realpathSync(chars.join('')) === realpathSync(dir);
-      } catch {
-        probed = false;
-      }
-      break;
+    try {
+      probed = realpathSync(inside) === realpathSync(path.join(dir, 'case.mD'));
+    } catch {
+      probed = false;
     }
     assert.equal(folds, probed);
     if (folds) {
