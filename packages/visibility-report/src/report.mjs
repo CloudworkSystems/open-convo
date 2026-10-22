@@ -99,5 +99,6 @@ export function run(argv, io = {}) {
 
 const entry = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : '';
 if (import.meta.url === entry) {
-  process.exit(run(process.argv.slice(2)));
+  // Let stdout finish. process.exit() would drop Markdown still queued on a pipe.
+  process.exitCode = run(process.argv.slice(2));
 }
