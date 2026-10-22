@@ -18,7 +18,12 @@ full plan and history are in [PLAN.md](../PLAN.md).
   subscriber's can't use it; "Powered by True Convo" in forks is deferred.
   A module joins the core once it runs on the user's own keys or local
   models at almost no ongoing cost to the project. Pricing and the business
-  plan stay out of this repo.
+  plan stay out of this repo. The owner's starting tasks list, in order:
+  checklists (household lists engine), habit grid, email triage across
+  several inboxes, one combined calendar (later on a family wall display),
+  and start-on-iPhone, continue-on-Mac. Every user gets the whole harness,
+  which also teaches building their own local apps. The multi-level
+  white-label tiers from October 15 stay on top of the flat subscription.
 - **Oct 21:** Scale-up plan approved ([docs/plans/scale-up.md](plans/scale-up.md)).
   Up to three outside modules at a time, each with its own builder or builder
   team; modules waiting only on review fixes don't count. None is waiting

@@ -127,9 +127,28 @@ has tried it. Each step ends with something the owner can try.
 **Day-one proof.** A new user should see in the first session that an agent
 helps them. Two things together: a chat that works like the ChatGPT app,
 even on a local model such as Qwen (with fewer tools), and **tasks and
-productivity** as the first real job it does. Tasks build on step 3's
-conversation, step 5's chosen memory and the household lists engine. Home
-devices and finances come later as modules.
+productivity** as the first real job it does. Home devices and finances come
+later as modules. The owner's starting list, in his order:
+
+1. **Checklists** (groceries and others, as kept in Apple Notes today, but
+   better): the household lists engine, already built, wired into the app.
+2. **Habit tracking** in a GitHub-style grid: the habit grid engine, already
+   built, wired into the app.
+3. **Email triage** across several inboxes: group, classify, organize,
+   unsubscribe and report spam, with approval before anything is deleted,
+   sent or reported. New module.
+4. **One calendar** combining iCloud, Google Calendar, his work scheduling
+   calendar and more; later shown on a homemade family wall display (an
+   alternative to commercial family-hub screens) that syncs locally. New
+   module; the wall display stays with the Family umbrella.
+5. **Start on the iPhone, continue on the Mac**: sessions and tasks begun on
+   one device carry on on the other. This is the sync line below.
+
+**Building your own software.** Every user gets the whole harness. Beyond
+simple uses like the list above, it shows them how to build an app they need
+for their own business or home, or one they want to sell, starting with
+local apps on a home or office network. That growing confidence is the path
+to the software factory.
 
 **Public launch needs the Mac and iPhone with private sync.** The same
 conversations, tasks and memory on both, with no visible sync errors and
