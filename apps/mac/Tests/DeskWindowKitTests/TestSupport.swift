@@ -178,6 +178,22 @@ final class HeldVerifier: DeskUnlockVerifier {
     }
 }
 
+/// Holds a step until released, so a test can act while it waits.
+@MainActor
+final class HeldStep {
+    private var pending: CheckedContinuation<Void, Never>?
+    var isWaiting: Bool { pending != nil }
+
+    func wait() async {
+        await withCheckedContinuation { pending = $0 }
+    }
+
+    func release() {
+        pending?.resume()
+        pending = nil
+    }
+}
+
 /// Runs a nested run loop in the modal-panel mode until `done` or the time
 /// is up. An alert's `runModal`, and `NSApp.terminate` waiting for a
 /// `.terminateLater` reply, wait like this, nested inside their caller.
