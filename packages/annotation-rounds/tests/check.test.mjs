@@ -436,6 +436,22 @@ test('9. hostile field text is escaped in Markdown and exact in JSON', () => {
     assert.equal(preescaped.report.items[0].ownersWords, String.raw`\[click\](/target)`);
     assert.equal(preescaped.markdown.includes(String.raw`\\\[click\\\](/target)`), true);
     assert.equal(preescaped.markdown.includes('[click](/target)'), false);
+
+    const fenced = checkRound(writeRound(dir, [
+      '1. Screen: Desk',
+      'Element: Button',
+      "Owner's words: See this",
+      '  ```js',
+      '  ~~~',
+      '  still words',
+      'Change: Make the change.',
+    ].join('\n'), 'fence.md'));
+    assert.equal(fenced.report.items[0].ownersWords, 'See this\n```js\n~~~\nstill words');
+    assert.equal(fenced.report.items[0].change, 'Make the change.');
+    assert.equal(/^\s*`{3,}/m.test(fenced.markdown), false);
+    assert.equal(/^\s*~{3,}/m.test(fenced.markdown), false);
+    assert.equal(fenced.markdown.includes('\\```js'), true);
+    assert.equal(fenced.markdown.includes('\\~~~'), true);
   });
 });
 
@@ -864,6 +880,7 @@ test('sparse item numbers keep the later line without a slow rescan', { timeout:
     const report = checkRound(writeRound(dir, lines.join('\n'), 'sparse.md')).report;
     assert.equal(report.items.length, 500);
     assert.equal(report.problems.length, 201);
+    assert.equal(report.problems[0].message, 'This round has 40000 numbered items. Only the first 500 are listed.');
     assert.equal(report.problems.at(-1).message, '301 more problems were left out.');
     const firstSkip = report.problems.find(problem => problem.message === 'Item number 1 is skipped.');
     assert.equal(firstSkip.line, 1);
@@ -939,6 +956,22 @@ test('a long round stays bounded and still protects a later screenshot', () => {
     assert.equal(mixedReport.problems.length, 201);
     assert.equal(mixedReport.problems.at(-1).message, '10 more problems were left out.');
     assert.equal(mixedReport.problems.filter(problem => problem.message.includes('named by more than one item')).length, 20);
+  });
+});
+
+test('a warning-only overflow stays a warning', () => {
+  withDir(dir => {
+    for (let number = 1; number <= 201; number += 1) {
+      writePng(path.join(dir, `${SESSION}-${String(number).padStart(3, '0')}.png`));
+    }
+    const round = writeRound(dir, item(1));
+    const checked = checkRound(round);
+    assert.equal(checked.report.problems.length, 201);
+    assert.equal(checked.report.problems.every(entry => entry.level === 'warning'), true);
+    assert.equal(checked.report.problems.at(-1).message, '1 more problems were left out.');
+    const result = run([round], dir);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /0 errors, 201 warnings/);
   });
 });
 

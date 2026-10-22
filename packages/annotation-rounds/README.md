@@ -127,8 +127,11 @@ text is escaped first, so it cannot bring a link back. A bare web address
 plain text. A checklist lists at most 500 numbered items. Further items are
 counted in one error, and a screenshot name among them is still protected.
 Each problem list keeps the first 200 entries and then says how many were
-left out. Warnings count in that same top-level list. A screenshot that is
-present is listed with the item and is not turned into a problem.
+left out. That note stays a warning when every entry it covers is a warning.
+The note that later items were not listed is kept even when the list is cut.
+Warnings count in that same top-level list. A screenshot that is present is
+listed with the item and is not turned into a problem. A line of backticks
+or tildes is escaped so it cannot open a code block.
 
 From code:
 

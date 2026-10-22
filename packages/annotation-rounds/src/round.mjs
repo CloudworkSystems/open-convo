@@ -128,10 +128,7 @@ function buildReport(roundPath, text) {
     item.mentioned = item.shotChunks.flatMap(chunk => splitNames(chunk.text));
   }
 
-  const problems = [
-    ...parsed.problems,
-    ...numberProblems(parsed.items),
-  ];
+  const problems = [];
   if (parsed.itemCount > ITEM_LIMIT) {
     problems.push(problem(
       'error',
@@ -139,6 +136,7 @@ function buildReport(roundPath, text) {
       null,
     ));
   }
+  problems.push(...parsed.problems, ...numberProblems(parsed.items));
   const items = parsed.items.map(item => finishItem(item, session, roundDir));
   problems.push(...sharedWarnings(parsed.items));
   problems.push(...unnamedWarnings(roundDir, session, parsed.items, orphanNames));
@@ -158,10 +156,12 @@ function buildReport(roundPath, text) {
 
 function capProblems(problems) {
   if (problems.length <= PROBLEM_LIMIT) return problems;
-  const left = problems.length - PROBLEM_LIMIT;
+  const kept = problems.slice(0, PROBLEM_LIMIT);
+  const omitted = problems.slice(PROBLEM_LIMIT);
+  const level = omitted.every(entry => entry.level === 'warning') ? 'warning' : 'error';
   return [
-    ...problems.slice(0, PROBLEM_LIMIT),
-    problem('error', `${left} more problems were left out.`, null),
+    ...kept,
+    problem(level, `${omitted.length} more problems were left out.`, null),
   ];
 }
 
@@ -812,6 +812,7 @@ function escapeMarkdownLine(line) {
   escaped = escaped.replace(/^(\s*)(#{1,6})/, (_, spaces, marks) => `${spaces}\\${marks}`);
   escaped = escaped.replace(/^(\s*)([-*+])(?=\s)/, (_, spaces, mark) => `${spaces}\\${mark}`);
   escaped = escaped.replace(/^(\s*)(\d+)\./, (_, spaces, number) => `${spaces}${number}\\.`);
+  escaped = escaped.replace(/^(\s*)(`{3,}|~{3,})/, (_, spaces, fence) => `${spaces}\\${fence}`);
   escaped = escaped.replaceAll('://', ':\\/\\/');
   escaped = escaped.replace(/(^|[^A-Za-z0-9])(www)\./gi, (_, prefix, www) => `${prefix}${www}\\.`);
   escaped = escaped.replaceAll('@', '\\@');
