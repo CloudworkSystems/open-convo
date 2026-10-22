@@ -1,60 +1,88 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-/** A path Node can stat, including a symlink whose target is not there yet. */
-function existsOrLink(cursor) {
+function partsOf(value) {
+  return value.split(path.sep).filter((part) => part !== '' && part !== '.');
+}
+
+function rootOf(value) {
+  return path.parse(value).root;
+}
+
+function isRoot(value) {
+  return value === rootOf(value);
+}
+
+function joinPart(dir, part) {
+  if (isRoot(dir)) return dir.endsWith(path.sep) ? dir + part : `${dir}${path.sep}${part}`;
+  return `${dir}${path.sep}${part}`;
+}
+
+function lstatOrNull(value) {
   try {
-    fs.lstatSync(cursor);
-    return true;
+    return fs.lstatSync(value);
   } catch {
-    return false;
+    return null;
   }
+}
+
+/** Real path of an existing directory, plus any missing suffix left as written. */
+function withMissingSuffix(dir, parts) {
+  let base = dir;
+  const stat = lstatOrNull(dir);
+  if (stat && !stat.isSymbolicLink()) {
+    try {
+      base = fs.realpathSync(dir);
+    } catch {
+      base = dir;
+    }
+  }
+  let result = base;
+  for (const part of parts) result = joinPart(result, part);
+  return result;
 }
 
 /**
- * Resolve one path, following symlinks. When a link points at a missing
- * child, resolution continues from the nearest existing ancestor so a
- * symlink in that ancestor is still followed.
+ * Walk one component at a time. `..` is applied after any symlink in front
+ * of it, which is how the file system writes through the path.
  */
-function resolveNode(cursor) {
-  return resolveFrom(cursor, new Set());
-}
-
-function resolveFrom(current, seen) {
-  if (seen.has(current)) return current;
-  let stat;
-  try {
-    stat = fs.lstatSync(current);
-  } catch (error) {
-    if (error?.code !== 'ENOENT' && error?.code !== 'ENOTDIR' && error?.code !== 'ELOOP') return current;
-    const parent = path.dirname(current);
-    if (parent === current) return current;
-    return path.join(resolveFrom(parent, seen), path.basename(current));
+function walk(dir, parts, seen) {
+  let cursor = dir;
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index];
+    if (part === '..') {
+      cursor = isRoot(cursor) ? cursor : path.dirname(cursor);
+      continue;
+    }
+    const next = joinPart(cursor, part);
+    const stat = lstatOrNull(next);
+    if (!stat) return withMissingSuffix(cursor, parts.slice(index));
+    if (!stat.isSymbolicLink()) {
+      cursor = next;
+      continue;
+    }
+    if (seen.has(next)) return withMissingSuffix(next, parts.slice(index + 1));
+    seen.add(next);
+    const target = fs.readlinkSync(next);
+    cursor = path.isAbsolute(target)
+      ? walk(rootOf(target), partsOf(target), seen)
+      : walk(path.dirname(next), partsOf(target), seen);
   }
-  if (!stat.isSymbolicLink()) {
+  const stat = lstatOrNull(cursor);
+  if (stat && !stat.isSymbolicLink()) {
     try {
-      return fs.realpathSync(current);
+      return fs.realpathSync(cursor);
     } catch {
-      return current;
+      return cursor;
     }
   }
-  seen.add(current);
-  const target = fs.readlinkSync(current);
-  return resolveFrom(path.resolve(path.dirname(current), target), seen);
+  return cursor;
 }
 
 function fullyResolve(input) {
-  const absolute = path.resolve(input);
-  let cursor = absolute;
-  const suffix = [];
-  while (!existsOrLink(cursor)) {
-    const parent = path.dirname(cursor);
-    if (parent === cursor) break;
-    suffix.push(path.basename(cursor));
-    cursor = parent;
-  }
-  const base = resolveNode(cursor);
-  return suffix.length === 0 ? base : path.join(base, ...suffix.reverse());
+  const seen = new Set();
+  if (path.isAbsolute(input)) return walk(rootOf(input), partsOf(input), seen);
+  return walk(process.cwd(), partsOf(input), seen);
 }
 
 function sameInode(left, right) {
