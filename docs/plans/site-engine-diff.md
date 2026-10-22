@@ -276,8 +276,7 @@ invented variants beside them). At least:
    message, for either file, and lists no changes: an unknown field (with a
    marker string that then appears in no output), a missing required field,
    failing contrast, an unsafe link, an unsafe image path, a symbolic-link
-   image, an image whose contents don't match its name, invalid JSON and an
-   oversized file.
+   image, invalid JSON and an oversized file.
 10. The diff writes nothing: a test runs it inside a temporary folder and
     finds the folder exactly as before, and `diff.mjs` never imports
     `publish.mjs`.
