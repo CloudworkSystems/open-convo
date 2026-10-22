@@ -64,8 +64,9 @@ function editedOnlyBy(comment, isEditor) {
   return edits.nodes.every((edit) => edit && !edit.deletedAt && isEditor(edit.editor));
 }
 
-// The owner's note. The whole comment, trimmed of leading and trailing
-// whitespace, must be exactly this one visible line and nothing else:
+// The owner's note. The whole comment, ignoring blank lines around it and
+// trailing whitespace, must be exactly this one visible line and nothing else,
+// starting at the left edge:
 //   owner-accepts-findings <full 40-character head sha>
 // Lowercase hex only. There is no hidden form: a note the page doesn't
 // show doesn't count. Any other text in the comment (a second line, a quote,
@@ -76,7 +77,11 @@ const ACCEPT_NOTE = /^owner-accepts-findings ([0-9a-f]{40})$/;
 
 /** The note's sha if the whole comment is exactly the note, otherwise null. */
 function acceptedSha(body) {
-  const m = (typeof body === 'string' ? body.trim() : '').match(ACCEPT_NOTE);
+  // Blank lines before and trailing whitespace after are ignored, but the line itself
+  // must start at the left edge: GitHub shows a line indented by four spaces or a tab
+  // as a code block, so an indented note is an example, not the owner's acceptance.
+  const text = typeof body === 'string' ? body.replace(/^(?:[ \t]*\r?\n)+/, '').replace(/\s+$/, '') : '';
+  const m = text.match(ACCEPT_NOTE);
   return m ? m[1] : null;
 }
 
