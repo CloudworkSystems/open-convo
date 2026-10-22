@@ -1072,14 +1072,7 @@ test('a missing screenshot follows the volume case rules', () => {
     const out = path.join(dir, 'NOTES.PNG');
     const result = run([round, '--json', out], dir);
     const folds = volumeFoldsCase(dir);
-    const inside = path.join(dir, 'case.md');
-    let probed = false;
-    try {
-      probed = realpathSync(inside) === realpathSync(path.join(dir, 'case.mD'));
-    } catch {
-      probed = false;
-    }
-    assert.equal(folds, probed);
+    assert.equal(folds, sameEntry(path.join(dir, 'case.md'), path.join(dir, 'case.mD')));
     if (folds) {
       assert.match(result.stderr, /Refusing to write/);
       assert.equal(result.stdout, '');
@@ -1312,21 +1305,34 @@ test('a folder that cannot be listed still protects its file', (t) => {
   });
 });
 
-test('an empty directory is probed from the inside', () => {
+function sameEntry(left, right) {
+  try {
+    const a = lstatSync(left);
+    const b = lstatSync(right);
+    return a.dev === b.dev && a.ino === b.ino;
+  } catch {
+    return false;
+  }
+}
+
+test('an empty directory stays empty and only the named output is written', () => {
   withDir(dir => {
     const empty = path.join(dir, 'empty');
+    const outside = path.join(dir, 'outside');
     mkdirSync(empty);
-    const folds = volumeFoldsCase(empty);
-    assert.equal(readdirSync(empty).some(name => name.startsWith('oc-case-probe-')), false);
-    const sample = path.join(empty, 'inside-probe');
-    writeFileSync(sample, 'x');
-    let inside = false;
-    try {
-      inside = realpathSync(sample) === realpathSync(path.join(empty, 'inside-probE'));
-    } catch {
-      inside = false;
-    }
-    assert.equal(folds, inside);
+    mkdirSync(outside);
+    const round = writeRound(dir, item(1, `Screenshot: ${path.join(empty, 'notes.png')}, ${path.join(outside, 'other.png')}`));
+    const out = path.join(dir, 'out.json');
+    const written = run([round, '--json', out], dir);
+    assert.equal(written.stderr, '');
+    assert.deepEqual(readdirSync(empty), []);
+    assert.deepEqual(readdirSync(outside), []);
+    assert.equal(existsSync(path.join(empty, 'notes.png')), false);
+    assert.equal(existsSync(path.join(outside, 'other.png')), false);
+    assert.equal(existsSync(out), true);
+    assert.equal(readdirSync(dir).some(name => name.startsWith('oc-case-probe-')), false);
+    assert.equal(volumeFoldsCase(empty), sameEntry(empty, path.join(dir, 'emptY')));
+    assert.deepEqual(readdirSync(empty), []);
   });
 });
 

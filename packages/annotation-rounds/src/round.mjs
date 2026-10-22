@@ -1,4 +1,4 @@
-import { closeSync, constants, lstatSync, openSync, readFileSync, readdirSync, readSync, realpathSync, statSync, unlinkSync } from 'node:fs';
+import { closeSync, constants, lstatSync, openSync, readFileSync, readdirSync, readSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 /**
@@ -537,10 +537,12 @@ function collectProtected(roundPath, mentionedNames) {
 
 const listedDirs = new Map();
 const described = new Map();
+const caseFoldCache = new Map();
 
 export function resetPathCache() {
   listedDirs.clear();
   described.clear();
+  caseFoldCache.clear();
 }
 
 function loadListedDir(dir, parentFolds = false) {
@@ -791,11 +793,9 @@ function sameFile(a, b) {
   return Boolean(statA && statB && statA.dev === statB.dev && statA.ino === statB.ino);
 }
 
-const caseFoldCache = new Map();
-
 export function volumeFoldsCase(target) {
   const ancestor = existingAncestor(target);
-  if (!ancestor) return false;
+  if (!ancestor) return true;
   if (caseFoldCache.has(ancestor)) return caseFoldCache.get(ancestor);
   const folds = probeCaseFold(ancestor);
   caseFoldCache.set(ancestor, folds);
@@ -804,8 +804,41 @@ export function volumeFoldsCase(target) {
 
 function probeCaseFold(directory) {
   const child = foldableChild(directory);
-  if (child) return sameLookup(path.join(directory, child), path.join(directory, flipOneLetter(child)));
-  return probeWithTemporaryChild(directory);
+  if (child) {
+    const answer = caseFoldAnswer(path.join(directory, child), path.join(directory, flipOneLetter(child)));
+    if (answer !== null) return answer;
+  }
+  return probeFromAncestors(directory);
+}
+
+function probeFromAncestors(directory) {
+  let current = directory;
+  while (true) {
+    const parent = path.dirname(current);
+    if (parent === current) return true;
+    const flipped = flipOneLetter(path.basename(current));
+    if (flipped) {
+      const answer = caseFoldAnswer(path.join(parent, path.basename(current)), path.join(parent, flipped));
+      if (answer !== null) return answer;
+    }
+    current = parent;
+  }
+}
+
+function caseFoldAnswer(original, flipped) {
+  let left;
+  try {
+    left = lstatSync(original);
+  } catch {
+    return null;
+  }
+  try {
+    const right = lstatSync(flipped);
+    return left.dev === right.dev && left.ino === right.ino;
+  } catch (err) {
+    if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return false;
+    return null;
+  }
 }
 
 function foldableChild(directory) {
@@ -822,37 +855,6 @@ function foldableChild(directory) {
     if (!fallback) fallback = entry.name;
   }
   return fallback;
-}
-
-function sameLookup(original, flipped) {
-  try {
-    return realpathSync(original) === realpathSync(flipped);
-  } catch {
-    return false;
-  }
-}
-
-function probeWithTemporaryChild(directory) {
-  const name = `oc-case-probe-${process.pid}`;
-  const file = path.join(directory, name);
-  const flipped = flipOneLetter(name);
-  if (!flipped) return false;
-  let fd;
-  try {
-    fd = openSync(file, constants.O_CREAT | constants.O_EXCL | constants.O_RDWR, 0o600);
-  } catch {
-    return false;
-  }
-  try {
-    closeSync(fd);
-    fd = undefined;
-    return sameLookup(file, path.join(directory, flipped));
-  } finally {
-    if (fd !== undefined) {
-      try { closeSync(fd); } catch { /* closed before the probe finished */ }
-    }
-    try { unlinkSync(file); } catch { /* the probe file is already gone */ }
-  }
 }
 
 function existingAncestor(target) {
