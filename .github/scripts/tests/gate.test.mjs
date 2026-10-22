@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { evaluateCodexSignal, editedOnlyByCodex, dismissedByOwner, CODEX_LOGIN, CODEX_BOT_LOGIN, OWNER_LOGIN } from '../codex-signal.mjs';
+import { evaluateCodexSignal, editedOnlyByCodex, dismissedByOwner, ownerAcceptance, CODEX_LOGIN, CODEX_BOT_LOGIN, OWNER_LOGIN } from '../codex-signal.mjs';
 import { parseCodeowners, protectedFiles } from '../codeowners.mjs';
 import { packagesToTest, listPackages, OWN_JOB } from '../package-changes.mjs';
 
@@ -348,4 +348,130 @@ test('review ids match whether the event gives them as text or as a number', () 
   const numeric = { ...dismissal(5594675189, OWNER_LOGIN), dismissed_review: { review_id: 5594675189, state: 'dismissed' } };
   assert.equal(dismissedByOwner(review, [numeric]), true);
   assert.equal(dismissedByOwner({ id: undefined }, [{ ...numeric, dismissed_review: {} }]), false);
+});
+
+// The owner's "owner-accepts-findings" note.
+const ownerUser = { login: OWNER_LOGIN, type: 'User' };
+const ownerEditor = { __typename: 'User', login: OWNER_LOGIN };
+const note = (body, { user = ownerUser, history = neverEdited } = {}) => ({ user, created_at: '2026-10-15T03:00:00Z', body, edit_history: history });
+const withFindings = (extra) => ({ headSha: HEAD, prAuthor: 'cloudwork-bot', reviews: [findings(HEAD, '2026-10-15T01:00:00Z')], ...extra });
+
+test('owner note on the exact head passes despite open findings', () => {
+  // Exactly the one visible line at the left edge; blank lines around it and trailing whitespace are ignored.
+  for (const body of [`owner-accepts-findings ${HEAD}`, `\n\r\nowner-accepts-findings ${HEAD}  \r\n`, `  \nowner-accepts-findings ${HEAD}\t\n`]) {
+    const r = evaluateCodexSignal(withFindings({ comments: [note(body)] }));
+    assert.equal(r.approved, true, body);
+    assert.equal(r.reason, `Owner accepted remaining findings on ${HEAD}.`);
+  }
+  // Edited only by the owner still counts.
+  const edited = { ...editedBy(ownerEditor), userContentEdits: { totalCount: 2, nodes: [{ editor: ownerEditor, deletedAt: null }, { editor: ownerEditor, deletedAt: null }] } };
+  assert.equal(evaluateCodexSignal(withFindings({ comments: [note(`owner-accepts-findings ${HEAD}`, { history: edited })] })).approved, true);
+});
+
+test('owner note naming another commit stays pending', () => {
+  assert.equal(evaluateCodexSignal(withFindings({ comments: [note(`owner-accepts-findings ${OLD}`)] })).approved, false);
+});
+
+test('a note from the bot or from Codex is ignored', () => {
+  for (const user of [impostor, codex, { login: OWNER_LOGIN, type: 'Bot' }]) {
+    assert.equal(evaluateCodexSignal(withFindings({ comments: [note(`owner-accepts-findings ${HEAD}`, { user })] })).approved, false, user.login);
+  }
+});
+
+test('an owner note edited by the bot, or with an unreadable edit record, is ignored', () => {
+  const byBot = { ...editedBy(botEditor), userContentEdits: { totalCount: 2, nodes: [{ editor: botEditor, deletedAt: null }, { editor: ownerEditor, deletedAt: null }] }, editor: botEditor };
+  for (const history of [byBot, null]) {
+    assert.equal(evaluateCodexSignal(withFindings({ comments: [note(`owner-accepts-findings ${HEAD}`, { history })] })).approved, false, String(history));
+  }
+  // No edit record attached at all.
+  const { edit_history, ...unread } = note(`owner-accepts-findings ${HEAD}`);
+  assert.equal(evaluateCodexSignal(withFindings({ comments: [unread] })).approved, false);
+});
+
+test('an owner note never counts on a pull request opened by the owner (or of unknown author)', () => {
+  for (const prAuthor of [OWNER_LOGIN, undefined, '']) {
+    assert.equal(evaluateCodexSignal(withFindings({ prAuthor, comments: [note(`owner-accepts-findings ${HEAD}`)] })).approved, false, String(prAuthor));
+  }
+});
+
+test('malformed owner notes are ignored', () => {
+  for (const body of [
+    `owner-accepts-findings ${HEAD.slice(0, 7)}`,
+    `owner-accepts-findings ${HEAD.toUpperCase()}`,
+    `owner-accepts-findings ${HEAD} and more`,
+    `please owner-accepts-findings ${HEAD}`,
+    `owner-accepts-findings  ${HEAD}`,
+    `<!-- owner-accepts-findings ${HEAD} -->`,
+    `<!-- owner-accepts-findings sha=${HEAD} -->`,
+    `    owner-accepts-findings ${HEAD}`,
+    `\towner-accepts-findings ${HEAD}`,
+    `\n  owner-accepts-findings ${HEAD}`,
+    ` owner-accepts-findings ${HEAD}`,
+    `<!-- owner-accepts-findings sha=${HEAD.slice(0, 39)} -->`,
+    `\`owner-accepts-findings ${HEAD}\``,
+  ]) {
+    assert.equal(ownerAcceptance({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [note(body)] }), false, body);
+  }
+});
+
+test('an owner note only satisfies codex-approved, never tests', async () => {
+  const dir = new URL('../../workflows/', import.meta.url);
+  const tests = readFileSync(new URL('tests.yml', dir), 'utf8');
+  assert.doesNotMatch(tests, /owner-accepts-findings|codex-signal|issue_comment/);
+  const scripts = new URL('../', import.meta.url);
+  const { readdirSync } = await import('node:fs');
+  const readers = readdirSync(scripts).filter((f) => f.endsWith('.mjs') && readFileSync(new URL(f, scripts), 'utf8').includes('owner-accepts-findings'));
+  assert.deepEqual(readers, ['codex-signal.mjs']);
+});
+
+test('the gate re-runs on comments by the owner, including deletions', () => {
+  const wf = readFileSync(new URL('../../workflows/codex-approved.yml', import.meta.url), 'utf8');
+  assert.match(wf, /types: \[created, edited, deleted\]/);
+  assert.match(wf, /github\.event\.comment\.user\.login == 'CloudworkSystems'/);
+});
+
+test('an owner note on a head Codex has not reviewed stays pending', () => {
+  const ok = note(`owner-accepts-findings ${HEAD}`);
+  // No Codex review or summary of the head at all.
+  assert.equal(evaluateCodexSignal({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [ok] }).approved, false);
+  // Codex reviewed only an older commit.
+  assert.equal(evaluateCodexSignal({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [ok], reviews: [findings(OLD, '2026-10-15T01:00:00Z')] }).approved, false);
+  // Codex's summary of the head (state or completed row) counts as reviewed.
+  const state = stateComment(HEAD, { findings: true });
+  assert.equal(evaluateCodexSignal({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [ok, state] }).approved, true);
+  const row = { ...summary(HEAD), edit_history: neverEdited };
+  assert.equal(evaluateCodexSignal({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [ok, row] }).approved, true);
+});
+
+test('a comment with anything besides the note never counts', () => {
+  const t = '```';
+  for (const body of [
+    // Extra text before, after or around it.
+    `Read what's left; fine.\n\nowner-accepts-findings ${HEAD}`,
+    `owner-accepts-findings ${HEAD}\n\nThanks.`,
+    `Accepted.\n\n<!-- owner-accepts-findings sha=${HEAD} -->`,
+    `owner-accepts-findings ${HEAD}\nowner-accepts-findings ${HEAD}`,
+    `owner-accepts-findings ${HEAD}\n<!-- owner-accepts-findings sha=${HEAD} -->`,
+    // Quotes and lists.
+    `> owner-accepts-findings ${HEAD}`,
+    `- owner-accepts-findings ${HEAD}`,
+    // Code fences and inline code.
+    `${t}\nowner-accepts-findings ${HEAD}\n${t}`,
+    `~~~\n<!-- owner-accepts-findings sha=${HEAD} -->\n~~~`,
+    `\`owner-accepts-findings ${HEAD}\``,
+    // HTML around it, including Codex's latest case: paired container tags
+    // separated by blank lines.
+    `<blockquote>\n\nowner-accepts-findings ${HEAD}\n\n</blockquote>`,
+    `<details>\n\nowner-accepts-findings ${HEAD}\n\n</details>`,
+    `<div>owner-accepts-findings ${HEAD}</div>`,
+    `<!--\nowner-accepts-findings ${HEAD}\n-->`,
+    `<pre>\n\nowner-accepts-findings ${HEAD}\n\n</pre>`,
+    `<!-- aside -->\n\nowner-accepts-findings ${HEAD}`,
+  ]) {
+    assert.equal(ownerAcceptance({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [note(body)] }), false, body);
+  }
+  // Missing or non-text bodies never count.
+  for (const body of [undefined, null, '', '   ']) {
+    assert.equal(ownerAcceptance({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [note(body)] }), false, String(body));
+  }
 });

@@ -69,6 +69,12 @@ reads from and writes to `CloudworkSystems/open-convo`.
   - *Code* is reviewed until Codex finishes with a 👍 on the pull request.
     Claude fixes every P1 and P2, or explains in the pull request why one does
     not apply. Only the owner decides to merge with findings still open.
+  - The owner does that by posting a comment containing only this line,
+    `owner-accepts-findings <full head sha>`, on the pull request himself,
+    after reading what's left. Any other text in the comment makes it not
+    count. It satisfies only `codex-approved` for that exact commit, and
+    never counts on a pull request opened under the owner's account. Agents
+    never post it, draft it for posting, or ask another agent to post it.
   - *Codex-built work* is reviewed by the plan's designated reviewer (Claude
     for Codex-built modules). Letting the `codex-approved` check accept that
     reviewer in place of Codex is planned and needs the owner's approval

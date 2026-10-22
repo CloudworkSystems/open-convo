@@ -82,7 +82,7 @@ Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
 **Annotation rounds checker** (Code): plan approved; GrokBot team A starts once #94 merges.
 
-**Site Engine: what will change** (Business), GrokBot (team B) builds, Codex reviews; plan in review in its own pull request (`OC-261021-plan-site-engine-diff`).
+**Site Engine: what will change** (Business), GrokBot (team B) builds, Codex reviews; plan approved (`docs/plans/site-engine-diff.md`); team B can start.
 
 **Visibility report** (Business), GrokBot (team C) builds, Codex reviews; plan approved (`docs/plans/visibility-report.md`); team C can start.
 
@@ -97,6 +97,10 @@ October 20 fix (OC-261020-gate-package-tests): `tests` now also runs
 `npm test` for every other folder in `packages/` that a pull request changes
 (Site Engine, household lists, and new ones such as the habit grid), found
 by folder so new packages are covered automatically.
+October 21 (OC-261021-owner-accepts-findings): the owner can accept the
+remaining Codex findings on one exact head commit: post a comment containing
+only this line, `owner-accepts-findings <full head sha>`. Any other text in
+the comment makes it not count. It satisfies only `codex-approved`.
 
 **Building faster** (more outside modules, parallel lanes, a dogfooding
 cadence): approved by the owner October 21. The limit of three outside
