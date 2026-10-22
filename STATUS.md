@@ -84,7 +84,7 @@ Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
 **Site Engine: what will change** (Business), GrokBot (team B) builds, Codex reviews; plan in review in its own pull request (`OC-261021-plan-site-engine-diff`).
 
-**Visibility report** (Business), GrokBot (team C) builds, Codex reviews; plan in review in its own pull request (`OC-261021-plan-visibility-report`).
+**Visibility report** (Business), GrokBot (team C) builds, Codex reviews; plan approved (`docs/plans/visibility-report.md`); team C can start.
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:
