@@ -427,6 +427,24 @@ test('9. hostile field text is escaped in Markdown and exact in JSON', () => {
     assert.equal(linked.markdown.includes('www\\.example.test'), true);
     assert.equal(linked.markdown.includes('https:\\/\\/cdn.example.test/shot.png'), true);
 
+    const issues = checkRound(writeRound(dir, [
+      '1. Screen: Desk',
+      'Element: see #98',
+      "Owner's words: CloudworkSystems/open-convo#98",
+      '  #98',
+      'Change: Also GH-98 and gh-7.',
+    ].join('\n'), 'issues.md'));
+    assert.equal(issues.report.items[0].element, 'see #98');
+    assert.equal(issues.report.items[0].ownersWords, 'CloudworkSystems/open-convo#98\n#98');
+    assert.equal(issues.report.items[0].change, 'Also GH-98 and gh-7.');
+    assert.equal(/(^|[^\\])#\d/.test(issues.markdown), false);
+    assert.equal(/(^|[^\\])GH-\d/i.test(issues.markdown), false);
+    assert.equal(issues.markdown.includes('see \\#98'), true);
+    assert.equal(issues.markdown.includes('open-convo\\#98'), true);
+    assert.equal(issues.markdown.includes('\\#98'), true);
+    assert.equal(issues.markdown.includes('GH\\-98'), true);
+    assert.equal(issues.markdown.includes('gh\\-7'), true);
+
     const preescaped = checkRound(writeRound(dir, [
       '1. Screen: Desk',
       'Element: Button',

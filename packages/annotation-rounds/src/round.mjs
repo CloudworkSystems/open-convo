@@ -1043,6 +1043,8 @@ function escapeMarkdownLine(line) {
   let escaped = line.replaceAll('\\', '\\\\');
   escaped = escaped.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
   escaped = escaped.replaceAll('[', '\\[').replaceAll(']', '\\]');
+  escaped = escaped.replace(/#(?=\d)/g, '\\#');
+  escaped = escaped.replace(/(GH)-(?=\d)/gi, (_, gh) => `${gh}\\-`);
   escaped = escaped.replace(/^(\s*)(#{1,6})/, (_, spaces, marks) => `${spaces}\\${marks}`);
   escaped = escaped.replace(/^(\s*)([-*+])(?=\s)/, (_, spaces, mark) => `${spaces}\\${mark}`);
   escaped = escaped.replace(/^(\s*)(\d+)([.)])/, (_, spaces, number, mark) => `${spaces}${number}\\${mark}`);
