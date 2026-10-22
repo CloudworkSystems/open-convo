@@ -24,7 +24,9 @@ function run(args, cwd) {
 }
 
 function withDir(fn) {
-  const dir = mkdtempSync(path.join(tmpdir(), 'annotation-rounds-'));
+  // macOS reports tmpdir under /tmp or /var, which are symbolic links. A
+  // checklist path with that ancestor is refused, so start from the real path.
+  const dir = mkdtempSync(path.join(realpathSync(tmpdir()), 'annotation-rounds-'));
   try {
     return fn(dir);
   } finally {
