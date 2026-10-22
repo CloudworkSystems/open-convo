@@ -44,7 +44,8 @@ nothing changes) of objects with exactly these fields:
 - `kind`: `added`, `removed`, `changed`, `reordered`, `section-added` or
   `section-removed`;
 - `path`: the field path in the facts (for example `services[1].price`, or
-  `brand.background`);
+  `brand.background`), with one exception: the derived light/dark choice
+  uses `colorScheme`, which is not a facts field (see Colors below);
 - `before` and `after`: the old and new values exactly as the facts hold
   them (for colors, the resolved hex value), or `null` when there is none;
 - `sentence`: the plain sentence, already escaped to one line as described
