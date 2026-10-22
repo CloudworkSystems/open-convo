@@ -145,7 +145,8 @@ reserved under that rule as well. Two paths are the same file when their fully
 resolved paths match, or, when both exist, when they have the same device and
 inode. An output that
 already exists is also refused when it has another hard link, when it is
-itself a symbolic link, or when a folder on the way is a symbolic link.
+itself a symbolic link, or when a folder on the way is a symbolic link. Letter
+case alone does not count as that kind of folder on a volume that ignores case.
 `--json` and `--md` cannot name the same file.
 
 ## Library

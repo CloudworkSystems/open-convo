@@ -485,7 +485,11 @@ function pathProblem(target, protectedPaths) {
   const given = path.resolve(target);
   const full = fullyResolved(target);
   if (!full) return 'the path could not be resolved.';
-  if (full !== given) return 'a folder on the way is a symbolic link.';
+  const onTheWay = folderSymlinkOnTheWay(given);
+  if (onTheWay) return onTheWay;
+  if (!pathsMatch(full, given, volumeFoldsCase(full) || volumeFoldsCase(given))) {
+    return 'a folder on the way is a symbolic link.';
+  }
   const parent = path.dirname(given);
   try {
     if (!statSync(parent).isDirectory()) return 'its folder does not exist.';
@@ -494,6 +498,25 @@ function pathProblem(target, protectedPaths) {
   }
   for (const protectedPath of protectedPaths) {
     if (sameFile(target, protectedPath)) return 'it is the same file as an input.';
+  }
+  return null;
+}
+
+function folderSymlinkOnTheWay(absolute) {
+  const root = path.parse(absolute).root;
+  const parts = absolute.slice(root.length).split(path.sep).filter(part => part.length > 0);
+  parts.pop();
+  let current = root;
+  for (const part of parts) {
+    current = path.join(current, part);
+    let listed;
+    try {
+      listed = lstatSync(current);
+    } catch (err) {
+      if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return null;
+      return 'the path could not be checked.';
+    }
+    if (listed.isSymbolicLink()) return 'a folder on the way is a symbolic link.';
   }
   return null;
 }

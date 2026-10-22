@@ -844,6 +844,9 @@ test('a missing screenshot follows the volume case rules', () => {
   assert.equal(pathsMatch('/rounds/notes.png', '/rounds/NOTES.PNG', false), false);
   assert.equal(pathsMatch('/rounds/notes.png', '/rounds/notes.png', false), true);
   assert.equal(pathsMatch('/rounds/notes.png', '/rounds/other.png', true), false);
+  assert.equal(pathsMatch('/rounds/Desk/out.json', '/rounds/desk/out.json', true), true);
+  assert.equal(pathsMatch('/rounds/out.json', '/rounds/OUT.JSON', true), true);
+  assert.equal(pathsMatch('/tmp/out.json', '/private/tmp/out.json', true), false);
 
   withDir(dir => {
     const round = writeRound(dir, item(1, 'Screenshot: notes.png'), 'case.md');
@@ -874,6 +877,29 @@ test('a missing screenshot follows the volume case rules', () => {
       assert.equal(existsSync(out), true);
       assert.equal(existsSync(path.join(dir, 'notes.png')), false);
     }
+
+    const writable = writeRound(dir, item(1), 'writable.md');
+    const stored = path.join(dir, 'OUT.JSON');
+    writeFileSync(stored, 'old-checklist');
+    const requested = path.join(dir, 'out.json');
+    const cased = run([writable, '--json', requested], dir);
+    assert.equal(cased.stderr.includes('symbolic link'), false, cased.stderr);
+    if (folds) {
+      assert.equal(cased.status, 0, cased.stderr);
+      assert.match(readFileSync(stored, 'utf8'), /schemaVersion/);
+    } else {
+      assert.equal(cased.status, 0, cased.stderr);
+      assert.equal(readFileSync(stored, 'utf8'), 'old-checklist');
+      assert.match(readFileSync(requested, 'utf8'), /schemaVersion/);
+    }
+
+    const realDir = path.join(dir, 'real-case');
+    mkdirSync(realDir);
+    const via = path.join(dir, 'via-case');
+    symlinkSync(realDir, via);
+    const linked = run([writable, '--json', path.join(via, 'out.json')], dir);
+    assert.match(linked.stderr, /symbolic link/);
+    assert.equal(existsSync(path.join(realDir, 'out.json')), false);
   });
 });
 
