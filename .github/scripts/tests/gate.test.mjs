@@ -357,7 +357,7 @@ const note = (body, { user = ownerUser, history = neverEdited } = {}) => ({ user
 const withFindings = (extra) => ({ headSha: HEAD, prAuthor: 'cloudwork-bot', reviews: [findings(HEAD, '2026-10-15T01:00:00Z')], ...extra });
 
 test('owner note on the exact head passes despite open findings', () => {
-  for (const body of [`Read what's left; fine.\nowner-accepts-findings ${HEAD}`, `<!-- owner-accepts-findings sha=${HEAD} -->`]) {
+  for (const body of [`Read what's left; fine.\n\nowner-accepts-findings ${HEAD}`, `<!-- owner-accepts-findings sha=${HEAD} -->`]) {
     const r = evaluateCodexSignal(withFindings({ comments: [note(body)] }));
     assert.equal(r.approved, true, body);
     assert.equal(r.reason, `Owner accepted remaining findings on ${HEAD}.`);
@@ -449,6 +449,38 @@ test('an owner note inside a code block or inline code never counts', () => {
     assert.equal(ownerAcceptance({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [note(body)] }), false, body);
   }
   // A real note after a closed fence still counts.
-  const after = `\`\`\`\nowner-accepts-findings ${OLD}\n\`\`\`\nowner-accepts-findings ${HEAD}`;
+  const after = `\`\`\`\nowner-accepts-findings ${OLD}\n\`\`\`\n\nowner-accepts-findings ${HEAD}`;
   assert.equal(ownerAcceptance({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [note(after)] }), true);
+});
+
+test('an owner note in a blockquote, list or paragraph never counts', () => {
+  for (const body of [
+    `> Example only:\nowner-accepts-findings ${HEAD}`,
+    `> owner-accepts-findings ${HEAD}`,
+    `- step one\n  owner-accepts-findings ${HEAD}`,
+    `Like this:\nowner-accepts-findings ${HEAD}`,
+    `owner-accepts-findings ${HEAD}\nis how you'd do it`,
+    ` owner-accepts-findings ${HEAD}`,
+  ]) {
+    assert.equal(ownerAcceptance({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [note(body)] }), false, body);
+  }
+  // Its own paragraph still counts.
+  assert.equal(ownerAcceptance({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [note(`> what's left is fine\n\nowner-accepts-findings ${HEAD}\n`)] }), true);
+});
+
+test('an owner note inside a multi-line HTML block never counts', () => {
+  for (const body of [
+    `<!--\nowner-accepts-findings ${HEAD}\n-->`,
+    `<!-- draft:\n\nowner-accepts-findings ${HEAD}\n\n-->`,
+    `<pre>\n\nowner-accepts-findings ${HEAD}\n\n</pre>`,
+    `<textarea>\n\nowner-accepts-findings ${HEAD}\n\n</textarea>`,
+    `<?php\n\nowner-accepts-findings ${HEAD}\n\n?>`,
+    `<![CDATA[\n\nowner-accepts-findings ${HEAD}\n\n]]>`,
+    `Some text <!-- hidden\n\nowner-accepts-findings ${HEAD}\n\n-->`,
+  ]) {
+    assert.equal(ownerAcceptance({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [note(body)] }), false, body);
+  }
+  // A closed comment before the note doesn't hide it, and the hidden form counts.
+  assert.equal(ownerAcceptance({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [note(`<!-- aside -->\n\nowner-accepts-findings ${HEAD}`)] }), true);
+  assert.equal(ownerAcceptance({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [note(`Accepted.\n\n<!-- owner-accepts-findings sha=${HEAD} -->`)] }), true);
 });

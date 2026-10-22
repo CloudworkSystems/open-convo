@@ -64,31 +64,65 @@ function editedOnlyBy(comment, isEditor) {
   return edits.nodes.every((edit) => edit && !edit.deletedAt && isEditor(edit.editor));
 }
 
-// The owner's note, in either of two exact forms, each on a line of its own:
+// The owner's note, in either of two exact forms, each alone on its line:
 //   owner-accepts-findings <full 40-character head sha>
 //   <!-- owner-accepts-findings sha=<full 40-character head sha> -->
-// Lowercase hex only; anything else on the line makes it malformed. At most
-// three leading spaces (four make a Markdown code block), and lines inside
-// fenced code blocks never count, so a quoted example can't accept anything.
-// (Inline code can't match: a backtick on the line makes it malformed.)
-const ACCEPT_LINE = /^ {0,3}(?:owner-accepts-findings ([0-9a-f]{40})|<!-- owner-accepts-findings sha=([0-9a-f]{40}) -->)[ \t]*$/;
+// Lowercase hex only; anything else on the line makes it malformed. The line
+// must start at the margin and be its own paragraph: a blank line (or the
+// start or end of the comment) before and after it. That rejects quotes and
+// their lazy continuation lines, list items, indented code and inline code.
+// Lines inside fenced code blocks and multi-line HTML blocks (comments,
+// <pre>, <script>, <style>, <textarea>, <?...?>, <!...>, CDATA) never count,
+// so an example or commented-out note can't accept anything.
+const ACCEPT_LINE = /^(?:owner-accepts-findings ([0-9a-f]{40})|<!-- owner-accepts-findings sha=([0-9a-f]{40}) -->)[ \t]*$/;
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+// Multi-line HTML blocks as GitHub Flavored Markdown defines them: how one
+// starts, and the text that ends it.
+const HTML_BLOCKS = [
+  [/^ {0,3}<(?:pre|script|style|textarea)(?:\s|>|$)/i, /<\/(?:pre|script|style|textarea)>/i],
+  [/^ {0,3}<!--/, /-->/],
+  [/^ {0,3}<\?/, /\?>/],
+  [/^ {0,3}<![A-Za-z]/, />/],
+  [/^ {0,3}<!\[CDATA\[/, /\]\]>/],
+];
+const blank = (line) => line === undefined || /^[ \t]*$/.test(line);
 
-/** The note's sha on each line outside fenced code blocks. */
+/** The note's sha on each qualifying line (see above). */
 function acceptedShas(body) {
+  const lines = (body ?? '').split(/\r?\n/);
   const shas = [];
   let fence = null;
-  for (const line of (body ?? '').split(/\r?\n/)) {
-    const f = line.match(FENCE);
+  let htmlEnd = null;
+  lines.forEach((line, i) => {
     if (fence) {
       // A fence closes with the same character, at least as long.
+      const f = line.match(FENCE);
       if (f && f[1][0] === fence[0] && f[1].length >= fence.length) fence = null;
-      continue;
+      return;
     }
-    if (f) { fence = f[1]; continue; }
+    if (htmlEnd) {
+      if (htmlEnd.test(line)) htmlEnd = null;
+      return;
+    }
     const m = line.match(ACCEPT_LINE);
-    if (m) shas.push(m[1] ?? m[2]);
-  }
+    if (m) {
+      if (blank(lines[i - 1]) && blank(lines[i + 1])) shas.push(m[1] ?? m[2]);
+      return;
+    }
+    const f = line.match(FENCE);
+    if (f) { fence = f[1]; return; }
+    for (const [open, close] of HTML_BLOCKS) {
+      const o = line.match(open);
+      // A block that also closes on its own first line hides nothing more.
+      if (o) { if (!close.test(line.slice(o[0].length))) htmlEnd = close; break; }
+    }
+    // An HTML comment opened mid-line and not closed on it: fail closed and
+    // treat everything up to its end as hidden.
+    if (!htmlEnd) {
+      const at = line.lastIndexOf('<!--');
+      if (at >= 0 && !line.slice(at + 4).includes('-->')) htmlEnd = /-->/;
+    }
+  });
   return shas;
 }
 
