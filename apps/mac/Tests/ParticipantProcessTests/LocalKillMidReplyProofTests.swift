@@ -50,6 +50,7 @@ final class ProofApp: @unchecked Sendable {
     private let lock = NSLock()
     private var buffer = Data()
     private var errorText = Data()
+    private var outputEnded = false
     private var taken: Set<Int> = []
 
     init(_ world: ProofWorld) throws {
@@ -65,7 +66,12 @@ final class ProofApp: @unchecked Sendable {
         // it lets go of itself then.
         output.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
-            if data.isEmpty { handle.readabilityHandler = nil } else { self?.append(data, error: false) }
+            if data.isEmpty {
+                handle.readabilityHandler = nil
+                self?.endOutput()
+            } else {
+                self?.append(data, error: false)
+            }
         }
         errors.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
@@ -83,6 +89,22 @@ final class ProofApp: @unchecked Sendable {
     private func append(_ data: Data, error: Bool) {
         lock.lock(); defer { lock.unlock() }
         if error { errorText.append(data) } else { buffer.append(data) }
+    }
+
+    private func endOutput() {
+        lock.lock(); defer { lock.unlock() }
+        outputEnded = true
+    }
+
+    /// True while a line may still arrive: the app is running, or it has
+    /// exited and its last output is still on the way. An exited app's
+    /// final lines (`quit reachedBound=false`) reach the read handler only
+    /// after the exit can already be seen, so "not running" alone does not
+    /// mean "nothing more to read"; only the end of its output does.
+    private var mayPrintMore: Bool {
+        if process.isRunning { return true }
+        lock.lock(); defer { lock.unlock() }
+        return !outputEnded
     }
 
     /// Every whole line printed so far.
@@ -107,7 +129,11 @@ final class ProofApp: @unchecked Sendable {
         let deadline = Date().addingTimeInterval(seconds)
         while true {
             if let found = take(prefix) { return found }
-            guard process.isRunning, Date() < deadline else { throw ProofAppError.noLine(prefix, detail) }
+            guard mayPrintMore, Date() < deadline else {
+                // One last look: the end of output may have come in with the line.
+                if let found = take(prefix) { return found }
+                throw ProofAppError.noLine(prefix, detail)
+            }
             try await Task.sleep(nanoseconds: 5_000_000)
         }
     }
@@ -130,7 +156,7 @@ final class ProofApp: @unchecked Sendable {
                 return words.count == 5 && words[0] == "saved" && words[1] == runId && words[3] == type && words[4] == "\(chars)"
             }
             if found { return }
-            guard process.isRunning, Date() < deadline else { throw ProofAppError.noLine("saved \(runId) \(type) \(chars)", detail) }
+            guard mayPrintMore, Date() < deadline else { throw ProofAppError.noLine("saved \(runId) \(type) \(chars)", detail) }
             try await Task.sleep(nanoseconds: 5_000_000)
         }
     }
