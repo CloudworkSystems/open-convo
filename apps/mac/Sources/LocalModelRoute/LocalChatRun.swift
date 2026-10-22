@@ -20,6 +20,12 @@ public final class LocalChatRun: NSObject, ParticipantRunning, URLSessionDataDel
     private var finishedUpdates = false
     private let snapshotLock = NSLock()
     private var lastSnapshot: ParticipantRunSnapshot
+    /// Test seam: called on `queue` after each piece of the reply body is
+    /// taken in, with the body bytes taken in so far, so a test can wait
+    /// until the run has read everything it was sent (nil in the app:
+    /// nothing is counted or called). Set through `setBodyTakenIn`.
+    private var bodyTakenIn: (@Sendable (Int) -> Void)?
+    private var bodyBytes = 0
 
     /// Starts the request at once. A body that can't be built ends the run
     /// `failed` `process-error` with nothing sent.
@@ -59,6 +65,11 @@ public final class LocalChatRun: NSObject, ParticipantRunning, URLSessionDataDel
             apply(core.stopRequested(monotonic: clock.monotonicMillis(), wall: clock.wallMillis()))
         }
         return true
+    }
+
+    /// Test seam: see `bodyTakenIn`. Set it before the reply starts.
+    func setBodyTakenIn(_ hook: (@Sendable (Int) -> Void)?) {
+        queue.sync { bodyTakenIn = hook }
     }
 
     // MARK: Driving
@@ -155,6 +166,10 @@ public final class LocalChatRun: NSObject, ParticipantRunning, URLSessionDataDel
 
     public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         apply(core.bytes([UInt8](data), monotonic: clock.monotonicMillis(), wall: clock.wallMillis()))
+        if let bodyTakenIn {
+            bodyBytes += data.count
+            bodyTakenIn(bodyBytes)
+        }
     }
 
     public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
