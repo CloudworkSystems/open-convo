@@ -549,10 +549,27 @@ function loadListedDir(dir) {
   let entries;
   try {
     entries = readdirSync(dir);
-  } catch {
-    const missing = { missing: true, names: new Set(), folds: false, identity: dir };
-    listedDirs.set(dir, missing);
-    return missing;
+  } catch (err) {
+    if (err.code === 'ENOENT' || err.code === 'ENOTDIR') {
+      const missing = { missing: true, unlistable: false, names: new Set(), folds: false, identity: dir };
+      listedDirs.set(dir, missing);
+      return missing;
+    }
+    let identity = dir;
+    try {
+      identity = realpathSync(dir);
+    } catch {
+      identity = dir;
+    }
+    const blocked = {
+      missing: false,
+      unlistable: true,
+      names: new Set(),
+      folds: volumeFoldsCase(dir),
+      identity,
+    };
+    listedDirs.set(dir, blocked);
+    return blocked;
   }
   let identity = dir;
   try {
@@ -563,9 +580,50 @@ function loadListedDir(dir) {
   const folds = volumeFoldsCase(dir);
   const names = new Set();
   for (const entry of entries) names.add(folds ? entry.normalize('NFC').toLowerCase() : entry);
-  const info = { missing: false, names, folds, identity };
+  const info = { missing: false, unlistable: false, names, folds, identity };
   listedDirs.set(dir, info);
   return info;
+}
+
+function resolveThrough(absolute, info) {
+  try {
+    const real = realpathSync(absolute);
+    return { resolved: real, exists: true, folds: info.folds, identity: real };
+  } catch (err) {
+    if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
+      let exists = false;
+      try {
+        const listed = statSync(absolute);
+        exists = listed.isFile() || listed.isDirectory();
+      } catch {
+        exists = false;
+      }
+      return { resolved: null, exists, folds: info.folds, identity: info.identity };
+    }
+  }
+  const missing = [];
+  let current = absolute;
+  while (true) {
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return { resolved: absolute, exists: false, folds: info.folds, identity: info.identity };
+    }
+    missing.push(path.basename(current));
+    try {
+      const real = realpathSync(parent);
+      return {
+        resolved: path.join(real, ...missing.slice().reverse()),
+        exists: false,
+        folds: info.folds,
+        identity: real,
+      };
+    } catch (err) {
+      if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
+        return { resolved: null, exists: false, folds: info.folds, identity: info.identity };
+      }
+      current = parent;
+    }
+  }
 }
 
 function describePath(target) {
@@ -579,6 +637,10 @@ function describePath(target) {
   let folds = info.missing ? false : info.folds;
   let result = null;
   for (let index = 0; index < parts.length; index += 1) {
+    if (info.unlistable) {
+      result = resolveThrough(absolute, info);
+      break;
+    }
     const part = parts[index];
     const key = info.folds ? part.normalize('NFC').toLowerCase() : part;
     if (info.missing || !info.names.has(key)) {
@@ -592,6 +654,10 @@ function describePath(target) {
     }
     const nextLexical = path.join(root, ...parts.slice(0, index + 1));
     const next = loadListedDir(nextLexical);
+    if (next.unlistable) {
+      result = resolveThrough(absolute, next);
+      break;
+    }
     if (next.missing) {
       if (index < parts.length - 1) {
         result = {

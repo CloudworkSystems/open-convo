@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
-  closeSync, existsSync, ftruncateSync, linkSync, lstatSync, mkdirSync, mkdtempSync,
-  openSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync, writeSync,
+  chmodSync, closeSync, existsSync, ftruncateSync, linkSync, lstatSync, mkdirSync, mkdtempSync,
+  openSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync, writeSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -1260,6 +1260,34 @@ test('many missing screenshot folders reuse one volume lookup', { timeout: 3000 
     const inside = volumeRules(path.join(kept, 'shot.png'));
     assert.equal(inside.identity, realpathSync(kept));
     assert.notEqual(inside.identity, first.identity);
+  });
+});
+
+test('a folder that cannot be listed still protects its file', () => {
+  withDir(dir => {
+    const hidden = path.join(dir, 'hidden');
+    const via = path.join(dir, 'via');
+    mkdirSync(hidden);
+    const shot = path.join(hidden, 'shot.png');
+    writeFileSync(shot, PNG);
+    symlinkSync(hidden, via);
+    chmodSync(hidden, 0o111);
+    try {
+      let denied = false;
+      try {
+        readdirSync(hidden);
+      } catch (err) {
+        denied = err.code === 'EACCES';
+      }
+      assert.equal(denied, true);
+      const round = writeRound(dir, item(1, `Screenshot: ${path.join(via, 'shot.png')}`));
+      const refused = run([round, '--json', shot], dir);
+      assert.equal(refused.status, 1);
+      assert.match(refused.stderr, /same file as an input/);
+      assert.equal(readFileSync(shot).equals(PNG), true);
+    } finally {
+      chmodSync(hidden, 0o755);
+    }
   });
 });
 
