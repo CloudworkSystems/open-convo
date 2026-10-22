@@ -144,11 +144,22 @@ later as modules. The owner's starting list, in his order:
 5. **Start on the iPhone, continue on the Mac**: sessions and tasks begun on
    one device carry on on the other. This is the sync line below.
 
+**What ships at public launch (owner decision, October 22):** chat, the
+checklists, the habit grid, start-on-iPhone-continue-on-Mac, a **Personal
+calendar that only reads** (iCloud, Google, his work schedule, more) in one
+view, and **email sorting and grouping only**, on a local model so mail
+stays on the Mac. Right after launch: unsubscribe, report spam and delete,
+each approved once as a standing rule the owner can see and switch off
+(foundations principle 1). The shared family calendar, voice to calendar and
+the wall display stay at step 11.
+
 **Building your own software.** Every user gets the whole harness. Beyond
 simple uses like the list above, it shows them how to build an app they need
 for their own business or home, or one they want to sell, starting with
 local apps on a home or office network. That growing confidence is the path
-to the software factory.
+to the software factory. Building apps for users waits for step 6 (agents
+working together) and comes after launch; until then public copy says it is
+coming, never that it works (claim discipline).
 
 **Public launch needs the Mac and iPhone with private sync.** The same
 conversations, tasks and memory on both, with no visible sync errors and

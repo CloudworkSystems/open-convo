@@ -24,6 +24,11 @@ full plan and history are in [PLAN.md](../PLAN.md).
   and start-on-iPhone, continue-on-Mac. Every user gets the whole harness,
   which also teaches building their own local apps. The multi-level
   white-label tiers from October 15 stay on top of the flat subscription.
+  Launch scope: chat, checklists, habit grid, iPhone-to-Mac continuity, a
+  read-only Personal calendar, and email sorting only (local model); email
+  actions follow right after launch as standing rules; the family calendar,
+  voice to calendar and wall display stay at step 11. Building apps for users
+  comes after launch with step 6, and public copy says it is coming.
 - **Oct 21:** Scale-up plan approved ([docs/plans/scale-up.md](plans/scale-up.md)).
   Up to three outside modules at a time, each with its own builder or builder
   team; modules waiting only on review fixes don't count. None is waiting
