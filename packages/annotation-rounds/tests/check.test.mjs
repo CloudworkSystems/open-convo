@@ -426,6 +426,16 @@ test('9. hostile field text is escaped in Markdown and exact in JSON', () => {
     assert.equal(linked.markdown.includes('owner\\@example.test'), true);
     assert.equal(linked.markdown.includes('www\\.example.test'), true);
     assert.equal(linked.markdown.includes('https:\\/\\/cdn.example.test/shot.png'), true);
+
+    const preescaped = checkRound(writeRound(dir, [
+      '1. Screen: Desk',
+      'Element: Button',
+      String.raw`Owner's words: \[click\](/target)`,
+      'Change: Make the change.',
+    ].join('\n'), 'slashes.md'));
+    assert.equal(preescaped.report.items[0].ownersWords, String.raw`\[click\](/target)`);
+    assert.equal(preescaped.markdown.includes(String.raw`\\\[click\\\](/target)`), true);
+    assert.equal(preescaped.markdown.includes('[click](/target)'), false);
   });
 });
 
@@ -852,11 +862,72 @@ test('sparse item numbers keep the later line without a slow rescan', { timeout:
     const lines = [];
     for (let number = 2; number <= 80000; number += 2) lines.push(`${number}.`);
     const report = checkRound(writeRound(dir, lines.join('\n'), 'sparse.md')).report;
-    assert.equal(report.items.length, 40000);
+    assert.equal(report.items.length, 500);
+    assert.ok(report.problems.some(problem => problem.message === 'This round has 40000 numbered items. Only the first 500 are listed.'));
     const firstSkip = report.problems.find(problem => problem.message === 'Item number 1 is skipped.');
     assert.equal(firstSkip.line, 1);
     const laterSkip = report.problems.find(problem => problem.message === 'Item number 3 is skipped.');
     assert.equal(laterSkip.line, 2);
+  });
+});
+
+test('a long round stays bounded and still protects a later screenshot', () => {
+  withDir(dir => {
+    const lines = [];
+    for (let number = 1; number <= 500; number += 1) lines.push(`${number}.`);
+    const atLimit = checkRound(writeRound(dir, lines.join('\n'), 'limit.md')).report;
+    assert.equal(atLimit.items.length, 500);
+    assert.equal(atLimit.problems.some(problem => problem.message.includes('Only the first')), false);
+
+    lines.push('501. Screenshot: late.png');
+    lines.push('Screenshot: after.png,');
+    lines.push('  continued-late.png');
+    const round = writeRound(dir, lines.join('\n'), 'over.md');
+    const over = checkRound(round).report;
+    assert.equal(over.items.length, 500);
+    assert.ok(over.problems.some(problem => problem.message === 'This round has 501 numbered items. Only the first 500 are listed.'));
+
+    const late = path.join(dir, 'late.png');
+    writeFileSync(late, 'late-keep');
+    const lateRun = run([round, '--json', late], dir);
+    assert.match(lateRun.stderr, /Refusing to write/);
+    assert.equal(lateRun.stdout, '');
+    assert.equal(readFileSync(late, 'utf8'), 'late-keep');
+    const continued = path.join(dir, 'continued-late.png');
+    writeFileSync(continued, 'continued-keep');
+    const continuedRun = run([round, '--md', continued], dir);
+    assert.match(continuedRun.stderr, /Refusing to write/);
+    assert.equal(readFileSync(continued, 'utf8'), 'continued-keep');
+
+    const noise = Array.from({ length: 250 }, () => 'hello');
+    noise.push(item(1));
+    const noisy = checkRound(writeRound(dir, noise.join('\n'), 'noise.md')).report;
+    assert.equal(noisy.items.length, 1);
+    assert.equal(noisy.problems.length, 201);
+    assert.equal(noisy.problems.at(-1).message, '50 more problems were left out.');
+
+    const names = Array.from({ length: 250 }, (_, index) => `shot-${index}.png`).join(', ');
+    const many = checkRound(writeRound(dir, item(1, `Screenshot: ${names}`), 'many.md')).report;
+    assert.equal(many.items[0].screenshots.length, 200);
+    assert.equal(many.items[0].problems.at(-1).message, '50 more problems were left out.');
+  });
+});
+
+test('an output that is not a regular file is refused', () => {
+  const device = run([FIXTURE, '--json', '/dev/null']);
+  assert.equal(device.status, 1);
+  assert.match(device.stderr, /not a regular file/);
+  assert.equal(device.stdout, '');
+
+  withDir(dir => {
+    const fifo = path.join(dir, 'out.fifo');
+    const made = spawnSync('mkfifo', [fifo]);
+    assert.equal(made.status, 0, made.stderr);
+    const round = writeRound(dir, item(1), 'fifo.md');
+    const refused = run([round, '--md', fifo], dir);
+    assert.equal(refused.status, 1);
+    assert.match(refused.stderr, /not a regular file/);
+    assert.equal(refused.stdout, '');
   });
 });
 

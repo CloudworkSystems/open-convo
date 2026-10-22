@@ -10,6 +10,8 @@ import path from 'node:path';
 export const SCHEMA_VERSION = 1;
 
 const MAX_BYTES = 1024 * 1024;
+const ITEM_LIMIT = 500;
+const PROBLEM_LIMIT = 200;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const READ_FLAGS = constants.O_RDONLY | (constants.O_NOFOLLOW || 0);
 
@@ -126,10 +128,20 @@ function buildReport(roundPath, text) {
     item.mentioned = item.shotChunks.flatMap(chunk => splitNames(chunk.text));
   }
 
-  const problems = [...parsed.problems, ...numberProblems(parsed.items)];
+  const problems = [
+    ...capProblems(parsed.problems),
+    ...capProblems(numberProblems(parsed.items)),
+  ];
+  if (parsed.itemCount > ITEM_LIMIT) {
+    problems.push(problem(
+      'error',
+      `This round has ${parsed.itemCount} numbered items. Only the first ${ITEM_LIMIT} are listed.`,
+      null,
+    ));
+  }
   const items = parsed.items.map(item => finishItem(item, session, roundDir));
   problems.push(...sharedWarnings(parsed.items));
-  problems.push(...unnamedWarnings(roundDir, session, parsed.items));
+  problems.push(...unnamedWarnings(roundDir, session, parsed.items, orphanNames));
 
   return {
     report: {
@@ -143,21 +155,38 @@ function buildReport(roundPath, text) {
   };
 }
 
+function capProblems(problems) {
+  if (problems.length <= PROBLEM_LIMIT) return problems;
+  const left = problems.length - PROBLEM_LIMIT;
+  return [
+    ...problems.slice(0, PROBLEM_LIMIT),
+    problem('error', `${left} more problems were left out.`, null),
+  ];
+}
+
 function parseRound(text) {
   const problems = [];
   const items = [];
   const orphanShots = [];
   let item = null;
   let orphan = null;
+  let itemCount = 0;
+  let accepting = true;
 
   function couldNotRead(lineNo) {
+    if (!accepting) return;
     problems.push(problem('error', `Could not read line ${lineNo}.`, lineNo));
+  }
+
+  function keepShot(value) {
+    orphan = { text: value };
+    orphanShots.push(orphan);
   }
 
   for (const [index, line] of splitLines(text).entries()) {
     const lineNo = index + 1;
     if (line.startsWith('  ')) {
-      if (item?.current) {
+      if (accepting && item?.current) {
         continueField(item, line.slice(2));
         continue;
       }
@@ -175,9 +204,19 @@ function parseRound(text) {
     }
     const itemMatch = /^(\d+)\.(.*)$/.exec(line);
     if (itemMatch) {
+      itemCount += 1;
+      const rest = itemMatch[2].replace(/^[ \t]+/, '');
+      if (itemCount > ITEM_LIMIT) {
+        accepting = false;
+        item = null;
+        if (rest !== '') {
+          const label = matchLabel(rest);
+          if (label?.key === 'screenshots') keepShot(label.value);
+        }
+        continue;
+      }
       item = startItem(itemMatch[1], lineNo);
       items.push(item);
-      const rest = itemMatch[2].replace(/^[ \t]+/, '');
       if (rest !== '') {
         const label = matchLabel(rest);
         if (label) applyField(item, label.key, label.value, lineNo);
@@ -187,12 +226,9 @@ function parseRound(text) {
     }
     const label = matchLabel(line);
     if (label) {
-      if (!item) {
-        couldNotRead(lineNo);
-        if (label.key === 'screenshots') {
-          orphan = { text: label.value };
-          orphanShots.push(orphan);
-        }
+      if (!accepting || !item) {
+        if (accepting) couldNotRead(lineNo);
+        if (label.key === 'screenshots') keepShot(label.value);
         continue;
       }
       applyField(item, label.key, label.value, lineNo);
@@ -201,7 +237,7 @@ function parseRound(text) {
     couldNotRead(lineNo);
   }
 
-  return { items, problems, orphanShots };
+  return { items, problems, orphanShots, itemCount };
 }
 
 function startItem(digits, lineNo) {
@@ -286,7 +322,10 @@ function finishItem(item, session, roundDir) {
   const screenshots = [];
   const shot = item.fields.screenshots;
   if (shot && !shot.discarded) {
-    for (const name of splitNames(shot.value)) {
+    const names = splitNames(shot.value);
+    const room = Math.max(0, PROBLEM_LIMIT - item.problems.length);
+    const shown = names.length > room ? names.slice(0, room) : names;
+    for (const name of shown) {
       const nameError = screenshotNameError(session, name);
       if (nameError) {
         item.problems.push(problem('error', nameError, shot.line));
@@ -302,6 +341,13 @@ function finishItem(item, session, roundDir) {
         }
         screenshots.push({ name, present });
       }
+    }
+    if (names.length > shown.length) {
+      item.problems.push(problem(
+        'error',
+        `${names.length - shown.length} more problems were left out.`,
+        shot.line,
+      ));
     }
   }
 
@@ -395,8 +441,11 @@ function sharedWarnings(items) {
   return warnings;
 }
 
-function unnamedWarnings(roundDir, session, items) {
+function unnamedWarnings(roundDir, session, items, extraNames = []) {
   const named = new Set();
+  for (const name of extraNames) {
+    if (sessionShotName(session, name)) named.add(name);
+  }
   for (const item of items) {
     for (const name of item.mentioned) {
       if (sessionShotName(session, name)) named.add(name);
@@ -494,6 +543,7 @@ function pathProblem(target, protectedPaths) {
   }
   if (listed?.isSymbolicLink()) return 'it is a symbolic link.';
   if (listed?.isDirectory()) return 'it is a folder.';
+  if (listed && !listed.isFile()) return 'it is not a regular file.';
   if (listed && listed.nlink > 1) return 'it has another hard link.';
   const given = path.resolve(target);
   const full = fullyResolved(target);
@@ -765,7 +815,8 @@ function escapeMarkdown(text) {
 }
 
 function escapeMarkdownLine(line) {
-  let escaped = line.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  let escaped = line.replaceAll('\\', '\\\\');
+  escaped = escaped.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
   escaped = escaped.replaceAll('[', '\\[').replaceAll(']', '\\]');
   escaped = escaped.replace(/^(\s*)(#{1,6})/, (_, spaces, marks) => `${spaces}\\${marks}`);
   escaped = escaped.replace(/^(\s*)([-*+])(?=\s)/, (_, spaces, mark) => `${spaces}\\${mark}`);

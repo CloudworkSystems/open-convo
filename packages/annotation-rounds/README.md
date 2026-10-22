@@ -121,9 +121,13 @@ The Markdown checklist starts with the session name, a one-line summary
 one unticked box per item, with the screen, element, change, the owner's
 words in quotes, and the screenshots. Problems are listed again under the
 item they belong to. Text from the round is escaped so it cannot add a
-heading, list item, link, image, or HTML tag. A bare web address
+heading, list item, link, image, or HTML tag. A backslash already in the
+text is escaped first, so it cannot bring a link back. A bare web address
 (`https://...` or `www.`) or an email address is escaped too, so it stays
-plain text.
+plain text. A checklist lists at most 500 numbered items. Further items are
+counted in one error, and a screenshot name among them is still protected.
+Each problem list keeps the first 200 entries and then says how many were
+left out.
 
 From code:
 
@@ -145,7 +149,8 @@ reserved under that rule as well. Two paths are the same file when their fully
 resolved paths match, or, when both exist, when they have the same device and
 inode. An output that
 already exists is also refused when it has another hard link, when it is
-itself a symbolic link, or when a folder on the way is a symbolic link. Letter
+itself a symbolic link, when it is not a regular file (a device or a pipe),
+or when a folder on the way is a symbolic link. Letter
 case alone does not count as that kind of folder on a volume that ignores case.
 `--json` and `--md` cannot name the same file.
 
