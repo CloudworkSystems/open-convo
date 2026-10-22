@@ -177,6 +177,12 @@ public actor DeskHostProtocol {
     /// Bounded like the ledger: the oldest entry is forgotten past capacity.
     private var ephemeralReplays: [UUID: ReplayEntry] = [:]
     private var ephemeralOrder: [UUID] = []
+    /// Test seam: called on this actor inside a commit's delivery check,
+    /// after the start-id check and the store's delivery evidence and
+    /// before the draft registry is read, so a test can hold the commit at
+    /// that point (nil: nothing runs). Set through
+    /// `setDeliveryCheckWillReadDrafts`.
+    private var deliveryCheckWillReadDrafts: (@Sendable () -> Void)?
 
     /// `events` may be nil only for a read-only host: without a sink nothing
     /// can be pushed, so `deliverFinal` holds the text instead of consuming
@@ -449,6 +455,11 @@ public actor DeskHostProtocol {
         let held = HeldDelivery(deliveryId: drafts.makeDeliveryId(), generation: token.generation, reason: reason, text: text, heldAt: now)
         drafts.hold(held)
         return .held(held)
+    }
+
+    /// Test seam: see `deliveryCheckWillReadDrafts`.
+    func setDeliveryCheckWillReadDrafts(_ hook: (@Sendable () -> Void)?) {
+        deliveryCheckWillReadDrafts = hook
     }
 
     // MARK: Requests
@@ -801,6 +812,7 @@ public actor DeskHostProtocol {
         }
         guard let evidence else { return .unknownDelivery }
         guard case .pending = evidence else { return .duplicateDelivery }
+        deliveryCheckWillReadDrafts?()
         guard let pending = drafts.pendingDelivery(deliveryId), pending.connectionId == request.connectionId,
               pending.generation == request.generation, let binding = drafts.binding(pending.bindingId),
               binding.deliveryId == deliveryId, binding.target.expectedRevision == expectedRevision,

@@ -139,84 +139,29 @@ final class StoreWriteBlocker: AtomicWriteFaults, @unchecked Sendable {
     }
 }
 
-/// Fails the folder flush of chosen writes, leaving the store unsynced, and
-/// once armed signals the next flush retry: the store's next durable read,
-/// which runs on its caller's thread inside the store lock.
-final class FlushRetryProbe: AtomicWriteFaults, @unchecked Sendable {
+/// Holds a host's commit at a test seam: `hold()` runs on the host's
+/// actor, signals `reached`, then blocks until released (at most 60 s, so a
+/// broken test cannot hang).
+final class HeldCheck: @unchecked Sendable {
     private let lock = NSLock()
-    private var writeIndex = -1
-    private var failingFlushes: Set<Int> = []
-    private var signalsRetry = false
-    let retried = DispatchSemaphore(value: 0)
-
-    /// Counts writes from here: write 0 is the next one.
-    func failFlushes(of writes: Set<Int>) {
-        lock.lock()
-        defer { lock.unlock() }
-        writeIndex = -1
-        failingFlushes = writes
-    }
-
-    func armRetrySignal() {
-        lock.lock()
-        defer { lock.unlock() }
-        signalsRetry = true
-    }
-
-    func fault(before stage: AtomicWriteStage, target: URL) -> Int32? {
-        lock.lock()
-        defer { lock.unlock() }
-        if stage == .target { writeIndex += 1 }
-        return stage == .directoryFlush && failingFlushes.contains(writeIndex) ? EIO : nil
-    }
-
-    func flushRetryFault(target: URL) -> Int32? {
-        lock.lock()
-        let signals = signalsRetry
-        signalsRetry = false
-        lock.unlock()
-        if signals { retried.signal() }
-        return nil
-    }
-}
-
-/// Makes a draft registry's delivery ids. Once armed, the next one blocks
-/// inside the registry's lock until released (at most 10 s, so a broken
-/// test cannot hang), holding that lock for the test.
-final class DraftLockHolder: @unchecked Sendable {
-    private let lock = NSLock()
-    private var armed = false
     private var timedOut = false
-    let entered = DispatchSemaphore(value: 0)
+    let reached = DispatchSemaphore(value: 0)
     let release = DispatchSemaphore(value: 0)
 
-    func arm() {
-        lock.lock()
-        defer { lock.unlock() }
-        armed = true
-    }
-
-    /// True once the 10 s cap freed a lock nobody released.
+    /// True once the 60 s cap freed a hold nobody released.
     var releasedByTimeout: Bool {
         lock.lock()
         defer { lock.unlock() }
         return timedOut
     }
 
-    func makeDeliveryId() -> UUID {
-        lock.lock()
-        let blocks = armed
-        armed = false
-        lock.unlock()
-        if blocks {
-            entered.signal()
-            if release.wait(timeout: .now() + 10) == .timedOut {
-                lock.lock()
-                timedOut = true
-                lock.unlock()
-            }
+    func hold() {
+        reached.signal()
+        if release.wait(timeout: .now() + 60) == .timedOut {
+            lock.lock()
+            timedOut = true
+            lock.unlock()
         }
-        return UUID()
     }
 }
 
