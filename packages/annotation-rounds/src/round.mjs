@@ -543,9 +543,13 @@ export function resetPathCache() {
   described.clear();
 }
 
-function loadListedDir(dir) {
+function loadListedDir(dir, parentFolds = false) {
   const cached = listedDirs.get(dir);
   if (cached) return cached;
+  if (parentFolds) {
+    const folded = listedDirs.get(dir.normalize('NFC').toLowerCase());
+    if (folded) return folded;
+  }
   let entries;
   try {
     entries = readdirSync(dir);
@@ -582,6 +586,10 @@ function loadListedDir(dir) {
   for (const entry of entries) names.add(folds ? entry.normalize('NFC').toLowerCase() : entry);
   const info = { missing: false, unlistable: false, names, folds, identity };
   listedDirs.set(dir, info);
+  if (folds) {
+    listedDirs.set(dir.normalize('NFC').toLowerCase(), info);
+    listedDirs.set(identity.normalize('NFC').toLowerCase(), info);
+  }
   return info;
 }
 
@@ -653,7 +661,7 @@ function describePath(target) {
       break;
     }
     const nextLexical = path.join(root, ...parts.slice(0, index + 1));
-    const next = loadListedDir(nextLexical);
+    const next = loadListedDir(nextLexical, info.folds);
     if (next.unlistable) {
       result = resolveThrough(absolute, next);
       break;
@@ -704,10 +712,15 @@ export function dedupeProtectedPaths(resolvedPaths, rulesForPath = volumeRules) 
   const rulesByDir = new Map();
   for (const resolved of resolvedPaths) {
     const dir = path.dirname(resolved);
-    let rules = rulesByDir.get(dir);
+    const foldedDir = dir.normalize('NFC').toLowerCase();
+    let rules = rulesByDir.get(dir) ?? rulesByDir.get(`fold\0${foldedDir}`);
     if (!rules) {
       rules = rulesForPath(resolved);
       rulesByDir.set(dir, rules);
+      if (rules.folds) {
+        rulesByDir.set(`fold\0${foldedDir}`, rules);
+        if (rules.identity) rulesByDir.set(`fold\0${rules.identity.normalize('NFC').toLowerCase()}`, rules);
+      }
     }
     const distinguished = rules.folds ? resolved.normalize('NFC').toLowerCase() : resolved;
     const key = `${rules.identity}\0${distinguished}`;

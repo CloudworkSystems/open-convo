@@ -1263,7 +1263,32 @@ test('many missing screenshot folders reuse one volume lookup', { timeout: 3000 
   });
 });
 
-test('a folder that cannot be listed still protects its file', () => {
+test('case variants of one directory are resolved once when case does not matter', () => {
+  const paths = [];
+  for (let index = 0; index < 32768; index += 1) {
+    let folder = '';
+    for (let bit = 0; bit < 15; bit += 1) folder += (index & (1 << bit)) === 0 ? 'a' : 'A';
+    paths.push(`/Volumes/Pics/${folder}/shot.png`);
+  }
+  let calls = 0;
+  const folded = dedupeProtectedPaths(paths, () => {
+    calls += 1;
+    return { folds: true, identity: '/Volumes/Pics/aaaaaaaaaaaaaaa' };
+  });
+  assert.equal(calls, 1);
+  assert.equal(folded.length, 1);
+  assert.equal(folded[0], paths[0]);
+
+  calls = 0;
+  const exact = dedupeProtectedPaths(paths, (resolved) => {
+    calls += 1;
+    return { folds: false, identity: path.dirname(resolved) };
+  });
+  assert.equal(calls, 32768);
+  assert.equal(exact.length, 32768);
+});
+
+test('a folder that cannot be listed still protects its file', (t) => {
   withDir(dir => {
     const hidden = path.join(dir, 'hidden');
     const via = path.join(dir, 'via');
@@ -1279,7 +1304,10 @@ test('a folder that cannot be listed still protects its file', () => {
       } catch (err) {
         denied = err.code === 'EACCES';
       }
-      assert.equal(denied, true);
+      if (!denied) {
+        t.skip('this runner can still list a search-only folder');
+        return;
+      }
       const round = writeRound(dir, item(1, `Screenshot: ${path.join(via, 'shot.png')}`));
       const refused = run([round, '--json', shot], dir);
       assert.equal(refused.status, 1);
