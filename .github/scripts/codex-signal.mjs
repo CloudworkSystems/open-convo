@@ -8,6 +8,10 @@
 // shows Codex as the author). So a Codex comment counts only if Codex itself
 // made every edit to it. Comments edited by anyone else, or whose editors
 // can't be fully checked, are ignored: the gate fails closed.
+//
+// The owner can also accept the remaining findings on one exact head commit
+// with an "owner-accepts-findings" note (see ownerAcceptance). That satisfies
+// only this check; `tests` and code-owner approval still apply.
 
 export const CODEX_LOGIN = 'chatgpt-codex-connector[bot]';
 // The same app as GitHub's GraphQL API reports it: type Bot, no "[bot]" suffix.
@@ -32,6 +36,7 @@ const isCodex = (user) => Boolean(user) && user.login === CODEX_LOGIN;
 const matchesHead = (short, head) => Boolean(short) && short.length >= 7 && head.toLowerCase().startsWith(short.toLowerCase());
 const time = (value) => Date.parse(value ?? '') || 0;
 const isCodexEditor = (actor) => Boolean(actor) && actor.__typename === 'Bot' && actor.login === CODEX_BOT_LOGIN;
+const isOwnerEditor = (actor) => Boolean(actor) && actor.__typename === 'User' && actor.login === OWNER_LOGIN;
 
 /**
  * True only if nobody but Codex ever edited this comment.
@@ -42,6 +47,10 @@ const isCodexEditor = (actor) => Boolean(actor) && actor.__typename === 'Bot' &&
  * so without that record a comment counts only if it was never edited at all.
  */
 export function editedOnlyByCodex(comment) {
+  return editedOnlyBy(comment, isCodexEditor);
+}
+
+function editedOnlyBy(comment, isEditor) {
   const history = comment.edit_history;
   if (history === undefined) return !comment.updated_at || comment.updated_at === comment.created_at;
   if (!history) return false;
@@ -51,11 +60,60 @@ export function editedOnlyByCodex(comment) {
   // Edited: every revision must be present and made by Codex. A missing,
   // partial or deleted revision means the editors can't all be checked.
   if (!count || !Array.isArray(edits.nodes) || edits.nodes.length !== count) return false;
-  if (!isCodexEditor(history.editor)) return false;
-  return edits.nodes.every((edit) => edit && !edit.deletedAt && isCodexEditor(edit.editor));
+  if (!isEditor(history.editor)) return false;
+  return edits.nodes.every((edit) => edit && !edit.deletedAt && isEditor(edit.editor));
+}
+
+// The owner's note. The whole comment, ignoring blank lines around it and
+// trailing whitespace, must be exactly this one visible line and nothing else,
+// starting at the left edge:
+//   owner-accepts-findings <full 40-character head sha>
+// Lowercase hex only. There is no hidden form: a note the page doesn't
+// show doesn't count. Any other text in the comment (a second line, a quote,
+// a code fence, HTML, a word before or after) means it doesn't count. No
+// Markdown is parsed, so there is no way to quote, hide or wrap a note and
+// still have it count: the rule fails closed.
+const ACCEPT_NOTE = /^owner-accepts-findings ([0-9a-f]{40})$/;
+
+/** The note's sha if the whole comment is exactly the note, otherwise null. */
+function acceptedSha(body) {
+  // Blank lines before and trailing whitespace after are ignored, but the line itself
+  // must start at the left edge: GitHub shows a line indented by four spaces or a tab
+  // as a code block, so an indented note is an example, not the owner's acceptance.
+  const text = typeof body === 'string' ? body.replace(/^(?:[ \t]*\r?\n)+/, '').replace(/\s+$/, '') : '';
+  const m = text.match(ACCEPT_NOTE);
+  return m ? m[1] : null;
+}
+
+/**
+ * True if the owner accepted the remaining Codex findings on this exact head.
+ * Counts only an issue comment authored by the owner's account, whose edit
+ * record was read and shows no editor but the owner, and whose whole body
+ * is the note naming the full head sha. Never for a pull request opened by
+ * the owner's account: Claude sessions can open pull requests under it, and
+ * the owner shouldn't wave those through.
+ */
+export function ownerAcceptance({ headSha, prAuthor, comments = [] }) {
+  if (!prAuthor || prAuthor === OWNER_LOGIN) return false;
+  return comments.some((c) => {
+    if (c?.user?.login !== OWNER_LOGIN || c.user.type !== 'User') return false;
+    // The edit record must have been read (fail closed if it wasn't).
+    if (c.edit_history === undefined || !editedOnlyBy(c, isOwnerEditor)) return false;
+    return acceptedSha(c.body) === headSha;
+  });
 }
 
 const fromCodex = (comment) => isCodex(comment.user) && editedOnlyByCodex(comment);
+
+// The commit a completed code review in Codex's review state names, if any.
+function reviewStateSha(body) {
+  const m = (body ?? '').match(REVIEW_STATE);
+  if (!m) return null;
+  try {
+    const code = JSON.parse(m[1])?.code_review;
+    return code?.status === 'completed' ? code.commit_sha : null;
+  } catch { return null; }
+}
 
 /**
  * True only if the timeline shows the owner's account dismissed this review.
@@ -81,9 +139,10 @@ export function dismissedByOwner(review, dismissals) {
  * @param {Array} input.reviews pull request reviews
  * @param {Array} input.reactions reactions on the pull request (issue)
  * @param {Array} input.dismissals `review_dismissed` issue events (see dismissedByOwner)
+ * @param {string} input.prAuthor login of the account that opened the pull request
  * @returns {{approved: boolean, reason: string}}
  */
-export function evaluateCodexSignal({ headSha, comments: allComments = [], reviews = [], reactions = [], dismissals = [] }) {
+export function evaluateCodexSignal({ headSha, comments: allComments = [], reviews = [], reactions = [], dismissals = [], prAuthor } = {}) {
   if (!/^[0-9a-f]{40}$/i.test(headSha ?? '')) return { approved: false, reason: 'No head commit to check.' };
   const short = headSha.slice(0, 7);
   // Every signal below reads only Codex comments that Codex alone has edited.
@@ -144,6 +203,16 @@ export function evaluateCodexSignal({ headSha, comments: allComments = [], revie
   const lastThumb = thumbs.length ? Math.max(...thumbs) : 0;
   if (completedAt && lastThumb > completedAt && lastThumb > lastFinding) {
     return { approved: true, reason: `Codex reacted thumbs-up after reviewing ${short}.` };
+  }
+
+  // The owner's explicit acceptance of whatever Codex left on this head. Only
+  // once Codex has reviewed this exact head: a review of it, or its trusted
+  // summary naming it. A note alone on an unreviewed head stays pending.
+  const codexReviewedHead = reviews.some((r) => isCodex(r.user) && r.commit_id === headSha)
+    || headCompletions.length > 0
+    || comments.some((c) => (c.body ?? '').includes(SUMMARY_MARKER) && reviewStateSha(c.body) === headSha);
+  if (codexReviewedHead && ownerAcceptance({ headSha, prAuthor, comments: allComments })) {
+    return { approved: true, reason: `Owner accepted remaining findings on ${headSha}.` };
   }
 
   if (lastFinding) return { approved: false, reason: `Codex left findings on ${short}; waiting for a clean round.` };
