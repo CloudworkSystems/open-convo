@@ -121,7 +121,8 @@ The Markdown checklist starts with the session name, a one-line summary
 one unticked box per item, with the screen, element, change, the owner's
 words in quotes, and the screenshots. Problems are listed again under the
 item they belong to. Text from the round is escaped so it cannot add a
-heading, list item, link, image, or HTML tag. A backslash already in the
+heading, list item, link, image, or HTML tag. A line that starts with a
+number and `.` or `)` is escaped, so it cannot start a list. A backslash already in the
 text is escaped first, so it cannot bring a link back. A bare web address
 (`https://...` or `www.`) or an email address is escaped too, so it stays
 plain text. A checklist lists at most 500 numbered items. Further items are
@@ -148,7 +149,9 @@ const { report, markdown } = checkRound('OC-990101-sample-round.md');
 the round file, a `<session>-NN.png` file beside the round, or any screenshot
 name the round mentions (a bad name, a subfolder, `..`, and an absolute path
 included). A screenshot name still counts when it sits before the first
-numbered item, and when the round has no numbered items at all. On a volume
+numbered item, and when the round has no numbered items at all. A name
+that appears many times is still listed each time, and the path is compared
+once. On a volume
 that treats names differing only by case as one file, a missing screenshot is
 reserved under that rule as well. Two paths are the same file when their fully
 resolved paths match, or, when both exist, when they have the same device and

@@ -526,12 +526,12 @@ function listRoundDir(roundDir) {
 function collectProtected(roundPath, mentionedNames) {
   const roundDir = path.dirname(path.resolve(roundPath));
   const session = sessionOf(roundPath);
-  const paths = [path.resolve(roundPath)];
+  const paths = new Set([path.resolve(roundPath)]);
   for (const entry of listRoundDir(roundDir)) {
-    if (sessionShotName(session, entry.name)) paths.push(path.join(roundDir, entry.name));
+    if (sessionShotName(session, entry.name)) paths.add(path.join(roundDir, entry.name));
   }
-  for (const name of mentionedNames) paths.push(path.resolve(roundDir, name));
-  return paths;
+  for (const name of mentionedNames) paths.add(path.resolve(roundDir, name));
+  return [...paths];
 }
 
 function pathProblem(target, protectedPaths) {
@@ -820,7 +820,7 @@ function escapeMarkdownLine(line) {
   escaped = escaped.replaceAll('[', '\\[').replaceAll(']', '\\]');
   escaped = escaped.replace(/^(\s*)(#{1,6})/, (_, spaces, marks) => `${spaces}\\${marks}`);
   escaped = escaped.replace(/^(\s*)([-*+])(?=\s)/, (_, spaces, mark) => `${spaces}\\${mark}`);
-  escaped = escaped.replace(/^(\s*)(\d+)\./, (_, spaces, number) => `${spaces}${number}\\.`);
+  escaped = escaped.replace(/^(\s*)(\d+)([.)])/, (_, spaces, number, mark) => `${spaces}${number}\\${mark}`);
   escaped = escaped.replace(/^(\s*)(`{3,}|~{3,})/, (_, spaces, fence) => `${spaces}\\${fence}`);
   escaped = escapeBreakLine(escaped);
   escaped = escaped.replaceAll('://', ':\\/\\/');

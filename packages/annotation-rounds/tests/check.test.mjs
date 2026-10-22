@@ -473,6 +473,22 @@ test('9. hostile field text is escaped in Markdown and exact in JSON', () => {
     assert.equal(ruled.markdown.includes('\\---'), true);
     assert.equal(ruled.markdown.includes('\\***'), true);
     assert.equal(ruled.markdown.includes('\\___'), true);
+
+    const ordered = checkRound(writeRound(dir, [
+      '1. Screen: Desk',
+      'Element: Button',
+      "Owner's words: Please.",
+      '  1) nested item',
+      '  12) more',
+      '  1. dotted',
+      'Change: Make the change.',
+    ].join('\n'), 'ordered.md'));
+    assert.equal(ordered.report.items[0].ownersWords, 'Please.\n1) nested item\n12) more\n1. dotted');
+    assert.equal(/^\s*\d+\)/m.test(ordered.markdown), false);
+    assert.equal(/^\s*\d+\./m.test(ordered.markdown), false);
+    assert.equal(ordered.markdown.includes('1\\) nested item'), true);
+    assert.equal(ordered.markdown.includes('12\\) more'), true);
+    assert.equal(ordered.markdown.includes('1\\. dotted'), true);
   });
 });
 
@@ -1103,6 +1119,25 @@ test('a missing screenshot follows the volume case rules', () => {
     const linked = run([writable, '--json', path.join(via, 'out.json')], dir);
     assert.match(linked.stderr, /symbolic link/);
     assert.equal(existsSync(path.join(realDir, 'out.json')), false);
+  });
+});
+
+test('repeated screenshot names stay listed and are compared once', { timeout: 3000 }, () => {
+  withDir(dir => {
+    const repeats = 'x,'.repeat(50000);
+    const round = writeRound(dir, item(1, `Screenshot: ${repeats}`));
+    const out = path.join(dir, 'out.json');
+    const written = run([round, '--json', out], dir);
+    assert.equal(written.status, 1);
+    assert.equal(written.stderr, '');
+    const report = JSON.parse(readFileSync(out, 'utf8'));
+    assert.equal(report.items[0].screenshots.length, 50000);
+    assert.equal(report.items[0].screenshots.every(shot => shot.name === 'x' && shot.present === false), true);
+
+    const refused = run([round, '--json', path.join(dir, 'x')], dir);
+    assert.equal(refused.status, 1);
+    assert.match(refused.stderr, /same file as an input/);
+    assert.equal(existsSync(path.join(dir, 'x')), false);
   });
 });
 
