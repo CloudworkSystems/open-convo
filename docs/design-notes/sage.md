@@ -172,9 +172,11 @@ so every entry is ready for tests now and for preference-style training later.
   the owner can see it, and can be rolled back.
 - Sage runs on a local model by default; the judge's paid providers stay capped
   and owner-approved, never a silent fallback.
-- **Jeff stays private.** Until its legal review, Jeff lives on the subscription
-  side. Open Convo's core loop must work without it, using local rules or a
-  local model as the judge, with Jeff added on top for subscribers.
+- **Jeff's adapter is public; its trained rules are private.** The judge is
+  always reached through Jeff, the classifier adapter in Open Convo (see
+  `capabilities-and-primitives.md`). Jeff's trained rules stay on the
+  subscription side until their legal review, so Open Convo's core loop runs
+  on Jeff with a local provider alone.
 - No model trained on Sage data ships to other people before a terms check.
 
 ## Open Questions (Later)
