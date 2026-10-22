@@ -139,6 +139,34 @@ final class FakeOllama: @unchecked Sendable {
     }
 }
 
+/// A loopback port with nothing on it. The system picks a free port for a
+/// fresh socket, which is closed again before this returns, so a connect is
+/// refused at once. (A FakeOllama dropped out of scope is not a closed port:
+/// its accept thread can keep it alive and still answering. A socket kept
+/// bound but not listening is no good either: macOS drops the connect
+/// silently and the request times out instead of being refused.)
+enum ClosedPort {
+    static func make() throws -> UInt16 {
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        guard fd >= 0 else { throw POSIXError(.EIO) }
+        defer { close(fd) }
+        var address = sockaddr_in()
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_addr.s_addr = inet_addr("127.0.0.1")
+        address.sin_port = 0
+        let bound = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
+        }
+        var actual = sockaddr_in()
+        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        let named = withUnsafeMutablePointer(to: &actual) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(fd, $0, &length) }
+        }
+        guard bound == 0, named == 0 else { throw POSIXError(.EADDRINUSE) }
+        return UInt16(bigEndian: actual.sin_port)
+    }
+}
+
 /// Invented catalog rows in Ollama 0.34.0's `/api/tags` shape.
 enum Invented {
     static let digestA = String(repeating: "a1", count: 32)
