@@ -9,7 +9,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { checkRound, reportJson, RoundError } from '../src/index.mjs';
-import { pathsMatch, volumeFoldsCase } from '../src/round.mjs';
+import { dedupeProtectedPaths, pathsMatch, volumeFoldsCase } from '../src/round.mjs';
 
 const CLI = fileURLToPath(new URL('../src/check.mjs', import.meta.url));
 const FIXTURE = fileURLToPath(new URL('./fixtures/OC-990101-sample-round.md', import.meta.url));
@@ -1138,6 +1138,46 @@ test('repeated screenshot names stay listed and are compared once', { timeout: 3
     assert.equal(refused.status, 1);
     assert.match(refused.stderr, /same file as an input/);
     assert.equal(existsSync(path.join(dir, 'x')), false);
+  });
+});
+
+function casingVariant(index) {
+  let name = '';
+  for (let bit = 0; bit < 16; bit += 1) name += (index & (1 << bit)) === 0 ? 'a' : 'A';
+  return name;
+}
+
+test('casing variants of one screenshot follow the volume case rules', { timeout: 3000 }, () => {
+  const variants = [];
+  for (let index = 0; index < 50000; index += 1) variants.push(`/rounds/sample/${casingVariant(index)}`);
+  assert.equal(dedupeProtectedPaths(variants, true).length, 1);
+  assert.equal(dedupeProtectedPaths(variants, true)[0], variants[0]);
+  assert.equal(dedupeProtectedPaths(variants, false).length, 50000);
+  const nfc = '/rounds/\u00e9.png';
+  const nfd = '/rounds/e\u0301.png';
+  assert.equal(dedupeProtectedPaths([nfc, nfd], true).length, 1);
+  assert.equal(dedupeProtectedPaths([nfc, nfd], false).length, 2);
+
+  withDir(dir => {
+    const folds = volumeFoldsCase(dir);
+    const count = folds ? 50000 : 2;
+    const names = [];
+    for (let index = 0; index < count; index += 1) names.push(casingVariant(index));
+    const round = writeRound(dir, item(1, `Screenshot: ${names.join(',')}`));
+    const out = path.join(dir, 'out.json');
+    const written = run([round, '--json', out], dir);
+    assert.equal(written.status, 1);
+    assert.equal(written.stderr, '');
+    const report = JSON.parse(readFileSync(out, 'utf8'));
+    assert.equal(report.items[0].screenshots.length, count);
+    assert.equal(report.items[0].screenshots[0].name, names[0]);
+    assert.equal(report.items[0].screenshots[count - 1].name, names[count - 1]);
+
+    const other = path.join(dir, casingVariant(1));
+    const refused = run([round, '--json', other], dir);
+    assert.equal(refused.status, 1);
+    assert.match(refused.stderr, /same file as an input/);
+    assert.equal(existsSync(other), false);
   });
 });
 

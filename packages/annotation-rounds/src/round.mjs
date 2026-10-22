@@ -526,12 +526,21 @@ function listRoundDir(roundDir) {
 function collectProtected(roundPath, mentionedNames) {
   const roundDir = path.dirname(path.resolve(roundPath));
   const session = sessionOf(roundPath);
-  const paths = new Set([path.resolve(roundPath)]);
+  const resolved = [path.resolve(roundPath)];
   for (const entry of listRoundDir(roundDir)) {
-    if (sessionShotName(session, entry.name)) paths.add(path.join(roundDir, entry.name));
+    if (sessionShotName(session, entry.name)) resolved.push(path.join(roundDir, entry.name));
   }
-  for (const name of mentionedNames) paths.add(path.resolve(roundDir, name));
-  return [...paths];
+  for (const name of mentionedNames) resolved.push(path.resolve(roundDir, name));
+  return dedupeProtectedPaths(resolved, volumeFoldsCase(roundDir));
+}
+
+export function dedupeProtectedPaths(resolvedPaths, foldsCase) {
+  const unique = new Map();
+  for (const resolved of resolvedPaths) {
+    const key = foldsCase ? resolved.normalize('NFC').toLowerCase() : resolved;
+    if (!unique.has(key)) unique.set(key, resolved);
+  }
+  return [...unique.values()];
 }
 
 function pathProblem(target, protectedPaths) {
