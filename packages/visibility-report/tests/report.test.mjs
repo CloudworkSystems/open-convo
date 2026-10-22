@@ -564,6 +564,8 @@ test('the schema refuses malformed findings without copying them into the report
   expectRefuse(missingDate, /missing reportDate/);
   expectRefuse(doc([{ ...problemByRank(5, 'late'), checkedOn: '2026-10-22' }]), /checkedOn "2026-10-22" is after reportDate/);
   expectRefuse(doc([{ ...problemByRank(5, 'http'), source: urlSource('Maps', 'http://maps.example/shop') }]), /is not an https:\/\/ address/);
+  expectRefuse(doc([{ ...problemByRank(5, 'bad-host'), source: urlSource('Maps', 'https://[not-a-host') }]), /Finding "bad-host" field findings\[0\]\.source\.url is not an https:\/\/ address/);
+  expectRefuse(doc([{ ...problemByRank(5, 'bad-port'), source: urlSource('Maps', 'https://example.com:bad') }]), /Finding "bad-port" field findings\[0\]\.source\.url is not an https:\/\/ address/);
   for (const status of ['ok', 'problem', 'unknown']) {
     const details = status === 'unknown'
       ? { service: 'Hearthwick Maps' }
@@ -792,6 +794,10 @@ test('stubbed entry points throw before they can connect', async () => {
   assert.throws(() => dns.lookup('example.com', () => {}), /Network blocked/);
   assert.throws(() => dns.resolve('example.com', () => {}), /Network blocked/);
   assert.throws(() => dnsPromises.lookup('example.com'), /Network blocked/);
+  assert.throws(() => new dnsPromises.Resolver().resolve4('example.com'), /Network blocked: dns\/promises\.Resolver\.prototype\.resolve4/);
+  assert.throws(() => new dnsPromises.Resolver().resolve('example.com'), /Network blocked: dns\/promises\.Resolver\.prototype\.resolve/);
+  assert.throws(() => new dns.promises.Resolver().resolve4('example.com'), /Network blocked: dns\/promises\.Resolver\.prototype\.resolve4/);
+  assert.throws(() => new dns.Resolver().resolve4('example.com', () => {}), /Network blocked: dns\.Resolver\.prototype\.resolve4/);
   assert.throws(() => inspector.open(), /Network blocked/);
   assert.throws(() => inspectorPromises.open(), /Network blocked/);
   assert.throws(() => childProcess.spawn('true'), /Network blocked/);
@@ -860,6 +866,22 @@ test('output paths that name one file are refused and the findings file is uncha
     const identical = invoke(['--findings', findings, '--json', upper, '--md', upper]);
     assert.equal(identical.code, 1);
     assert.match(identical.stderr, /--json and --md to the same file/);
+    const out = path.join(dir, 'out');
+    const outLink = path.join(dir, 'out-link');
+    fs.symlinkSync('out', outLink);
+    const dangling = invoke(['--findings', findings, '--json', outLink, '--md', out]);
+    assert.equal(dangling.code, 1, dangling.stderr);
+    assert.match(dangling.stderr, /--json and --md to the same file/);
+    assert.equal(fs.existsSync(out), false);
+    assert.equal(fs.lstatSync(outLink).isSymbolicLink(), true);
+    const chain = path.join(dir, 'chain');
+    const mid = path.join(dir, 'mid');
+    fs.symlinkSync('mid', chain);
+    fs.symlinkSync('out', mid);
+    const chained = invoke(['--findings', findings, '--md', chain, '--json', out]);
+    assert.equal(chained.code, 1, chained.stderr);
+    assert.match(chained.stderr, /--json and --md to the same file/);
+    assert.equal(fs.existsSync(out), false);
     const nfc = path.join(dir, 'caf\u00e9.json');
     const nfd = path.join(dir, 'cafe\u0301.json');
     const folded = invoke(['--findings', findings, '--json', nfc, '--md', nfd]);

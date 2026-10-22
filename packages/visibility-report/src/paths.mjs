@@ -1,22 +1,55 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+/** A path Node can stat, including a symlink whose target is not there yet. */
+function existsOrLink(cursor) {
+  try {
+    fs.lstatSync(cursor);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve one existing path. A symlink is followed even when its target
+ * does not exist yet, so two names for one output still compare equal.
+ */
+function resolveNode(cursor) {
+  const seen = new Set();
+  let current = cursor;
+  while (true) {
+    if (seen.has(current)) return current;
+    let stat;
+    try {
+      stat = fs.lstatSync(current);
+    } catch {
+      return current;
+    }
+    if (!stat.isSymbolicLink()) {
+      try {
+        return fs.realpathSync(current);
+      } catch {
+        return current;
+      }
+    }
+    seen.add(current);
+    const target = fs.readlinkSync(current);
+    current = path.resolve(path.dirname(current), target);
+  }
+}
+
 function fullyResolve(input) {
   const absolute = path.resolve(input);
   let cursor = absolute;
   const suffix = [];
-  while (!fs.existsSync(cursor)) {
+  while (!existsOrLink(cursor)) {
     const parent = path.dirname(cursor);
     if (parent === cursor) break;
     suffix.push(path.basename(cursor));
     cursor = parent;
   }
-  let base = cursor;
-  try {
-    base = fs.realpathSync(cursor);
-  } catch {
-    base = cursor;
-  }
+  const base = resolveNode(cursor);
   return suffix.length === 0 ? base : path.join(base, ...suffix.reverse());
 }
 

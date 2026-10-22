@@ -40,10 +40,15 @@ export function hiddenCharacter(text, { multiline = false } = {}) {
   return false;
 }
 
+/** A complete https address: the URL parser accepts it and it has a host. */
 export function isHttpsUrl(value) {
   if (typeof value !== 'string' || !value.startsWith('https://')) return false;
-  const host = value.slice('https://'.length).split(/[/?#]/, 1)[0];
-  return host.length > 0 && !/\s/u.test(host);
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && url.hostname.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 export function fill(template, vars) {

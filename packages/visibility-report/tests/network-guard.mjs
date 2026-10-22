@@ -102,13 +102,17 @@ install('node:dgram', dgram, {
 
 const dnsNames = Object.keys(dns).filter((name) => name === 'lookup' || name.startsWith('resolve'));
 const dnsPromiseNames = Object.keys(dnsPromises).filter((name) => name === 'lookup' || name.startsWith('resolve'));
-if (dns.Resolver?.prototype) {
-  for (const name of dnsNames) {
-    if (typeof dns.Resolver.prototype[name] === 'function') {
-      dns.Resolver.prototype[name] = block(`dns.Resolver.prototype.${name}`);
-    }
+
+function stubResolverPrototype(Resolver, prefix, names) {
+  const prototype = Resolver?.prototype;
+  if (!prototype) return;
+  for (const name of names) {
+    if (typeof prototype[name] === 'function') prototype[name] = block(`${prefix}.${name}`);
   }
 }
+
+stubResolverPrototype(dns.Resolver, 'dns.Resolver.prototype', dnsNames);
+stubResolverPrototype(dnsPromises.Resolver, 'dns/promises.Resolver.prototype', dnsPromiseNames);
 install('node:dns/promises', dnsPromises, stubFunctions(dnsPromises, 'dns/promises', dnsPromiseNames));
 install('node:dns', dns, {
   ...stubFunctions(dns, 'dns', dnsNames),
