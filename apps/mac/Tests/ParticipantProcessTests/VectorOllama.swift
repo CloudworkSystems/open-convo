@@ -25,10 +25,13 @@ final class VectorOllama: @unchecked Sendable {
                                     extra: "Transfer-Encoding: chunked\r\nX-Content-Type-Options: nosniff\r\n"))
         }
 
-        /// One newline-ended JSON line, as one HTTP chunk.
-        func line(_ object: [String: Any]) {
+        /// One newline-ended JSON line, as one HTTP chunk. Returns the
+        /// body bytes it adds (the line, without the chunk framing).
+        @discardableResult
+        func line(_ object: [String: Any]) -> Int {
             let line = ((try? JSONSerialization.data(withJSONObject: object)) ?? Data()) + Data("\n".utf8)
             write(Data(String(line.count, radix: 16).utf8) + Data("\r\n".utf8) + line + Data("\r\n".utf8))
+            return line.count
         }
 
         /// The chunked body's end.
