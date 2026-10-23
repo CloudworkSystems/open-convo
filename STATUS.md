@@ -37,7 +37,7 @@ invented chats only, while the step 2 trial is pending. Scope:
 | PR 4c: Fake-Ollama host cases in the shared local vectors (26 cases, both sides) | Merged (#62) |
 | PR 5: Scripted kill-mid-reply proof | Merged (#65) |
 | PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-3-owner-trial.md)) | Waiting on the owner |
-| Trial fixes (Stop, Ollama notice) | In review |
+| Trial fixes (Stop, Ollama notice) | Merged (#76) |
 
 **Next build: the Claude Code adapter** (right after step 3; invented
 chats only). Scope:
@@ -45,7 +45,7 @@ chats only). Scope:
 
 | Part | State |
 | --- | --- |
-| PR 1: Scope | In review |
+| PR 1: Scope | Merged (#75) |
 
 ## Done
 
@@ -70,7 +70,7 @@ chats only). Scope:
 **Site Engine, standalone first slice**, built by an outside builder (GrokBot
 builds, Codex reviews). Plan:
 [docs/plans/site-engine-standalone.md](docs/plans/site-engine-standalone.md).
-In review.
+Merged (#55, fixes #60 and #64).
 
 **Household lists engine** (Family and Home), built by Codex alongside Site
 Engine; P2 follow-up implements the October 17 plan and purge guard; the fixes merged as #71 on October 21. Plan:

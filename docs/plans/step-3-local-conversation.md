@@ -1,6 +1,6 @@
 # Step 3 Scope: One Real Conversation, Local First
 
-Status: In progress (Oct 21): all parts merged; owner's trial and trial fixes pending.
+Status: In progress (Oct 23): all parts merged, including the trial fixes (#76); waiting on the owner's trial.
 
 Written October 15, 2026 by the building session, at the owner's request to
 start step 3 while his step 2 trial is pending. A proposal: the owner and the

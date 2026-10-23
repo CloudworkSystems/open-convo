@@ -1,6 +1,6 @@
 # Habit Grid Engine (PRD)
 
-Status: In progress (Oct 21): build in review (#74).
+Status: Built (Oct 21): merged as #74.
 
 Written October 16, 2026 by the planning session from the owner's decisions
 (all recommendations accepted). Session name: `OC-261016-habit-grid-engine`.
