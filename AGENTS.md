@@ -96,6 +96,27 @@ reads from and writes to `CloudworkSystems/open-convo`.
     (issue #52, which the `owner-queue` workflow rewrites every hour), and the
     8 AM message sends him that list. Claude messages him in chat only for
     urgent or blocked items (owner decision, October 21).
+- **Gemini reviews (owner decision, October 23, 2026).** Gemini Code Assist
+  (a GitHub app, installed October 23) is the impartial reviewer: no agent
+  is the independent review of its own work.
+  - GrokBot (Cursor) builds: Codex reviews, then the coordinator's plan check.
+  - Codex builds: Gemini reviews, then the coordinator's plan check. Codex
+    never counts as the independent review of its own work.
+  - Claude builds: Gemini reviews. Codex also reviews every pull request by
+    itself, as above.
+  - Gemini is advisory for now. Its critical and high findings count as P1,
+    its medium findings as P2. They are fixed or answered in the pull
+    request before auto-merge goes on, but no required check reads Gemini
+    yet. Making it a required check is a later code change and the owner's
+    call.
+  - Until Gemini actually posts reviews on the repo, a fresh Claude review
+    (by an agent that didn't build the pull request) stands in as the
+    independent review.
+  - Agents ask Gemini for a re-review (`/gemini review`) only from
+    `cloudwork-bot`.
+  - Still open for the owner: whether Argon (his Gemini preview model) is
+    reached later through the Gemini CLI or an API key, kept as a repository
+    secret and never in files.
 - *Proposed October 15, pending the owner's approval at merge:* every review,
   by any agent or the owner, asks two questions of each change. Does it break
   a rule of this system? Does it fix a problem the owner actually has?
@@ -119,6 +140,9 @@ switch it on themselves, and the owner doesn't click Merge; owner decision,
 October 23), and the gate merges it. The Limits below apply to outside
 builders in full; where a builder can reach the owner's Mac, the plan says
 which commands, if any, it may run there.
+
+Who reviews an outside builder's pull request: Codex reviews GrokBot's
+work, and Gemini reviews Codex's work (Review Loop, "Gemini reviews").
 
 ## Coordinating On GitHub (Owner Decision, October 19, 2026)
 
@@ -188,6 +212,7 @@ request itself, so the owner doesn't have to carry messages:
 | Claude building sessions | `cloudwork-bot` | Build on a named branch; open the pull request with auto-merge on |
 | GrokBot teams (Cursor) | `cloudwork-bot` | Each builds one module from its plan and fixes findings on its own pull request |
 | Codex | its own app | Reviews every pull request; builds Codex modules |
+| Gemini Code Assist | its own app | Impartial reviewer of Codex-built and Claude-built pull requests (advisory for now) |
 | PR steward (scheduled, 8:41 AM and 5:41 PM) | `cloudwork-bot` | Reviews Codex-built pull requests; flags stuck ones on issue #52 |
 | PR keeper (scheduled, hourly) | `cloudwork-bot` | Keeps pull requests moving: updates auto-merge pull requests that fall behind `main`, and restarts a hung Codex review once per commit |
 | Daily list (scheduled, 7:52 AM) | `cloudwork-bot`, reading only | Sends the owner issue #52's list, plus pull requests Codex has gone silent on |
@@ -210,3 +235,7 @@ or task gets a row here first.
 - Preserve other agents' edits and unsaved work. No force-push, history
   rewriting or deletion of the owner's work.
 - License choice is the owner's decision and is still open. Do not add one.
+- Mac app builds and full Mac test runs on the owner's Mac go one at a time.
+  No stress or load testing on the owner's Mac without his OK. Agents
+  (GrokBot, Codex, cloud Claude) run on their own servers, so there is no
+  cap on how many agents or sessions work at once.

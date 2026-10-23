@@ -6,6 +6,20 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 23:** Gemini Code Assist is the impartial reviewer (installed on
+  open-convo Oct 23). Codex reviews GrokBot's work; Gemini reviews Codex's
+  and Claude's, and Codex never counts as the independent review of its own
+  work. Gemini is advisory to start: critical and high findings count as P1,
+  medium as P2, fixed or answered before auto-merge goes on; no required
+  check reads it yet. Until it posts reviews, a fresh Claude review stands
+  in. Agents ask for `/gemini review` only from `cloudwork-bot` (AGENTS.md
+  "Review Loop"). Open: Argon through the Gemini CLI or an API key kept as a
+  repository secret, and whether Gemini becomes a required check.
+- **Oct 23:** Mac app builds and full Mac test runs on the owner's Mac go one
+  at a time, and no stress or load testing there without his OK. Agents run
+  on their own servers, so there is no cap on how many work at once; True
+  Convo's old two-heavy-sessions limit doesn't apply here (AGENTS.md
+  "Limits").
 - **Oct 23:** Hung Codex reviews restart by themselves. Codex's review of
   #120 hung twice ("running" with no result) and an empty commit restarted it
   both times, so the PR keeper now does that once per commit when a review
