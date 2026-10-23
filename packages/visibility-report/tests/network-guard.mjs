@@ -76,6 +76,7 @@ globalThis.fetch = block('fetch');
 globalThis.WebSocket = blockedClass('WebSocket');
 
 net.Socket.prototype.connect = block('net.Socket.prototype.connect');
+net.Server.prototype.listen = block('net.Server.prototype.listen');
 tls.TLSSocket.prototype.connect = block('tls.TLSSocket.prototype.connect');
 
 install('node:net', net, {
