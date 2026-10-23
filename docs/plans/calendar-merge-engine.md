@@ -51,7 +51,9 @@ and the same as a function, `mergeCalendars(sources, query)`, exported from
   file's text (at most 5 MB each). `id` is 1 to 40 characters and unique.
   The command uses each file's name, without `.ics`, as `id` and `name`.
 - `query`: `{ from, to, timeZone, includeCancelled? }`. `from` and `to` are
-  dates (`YYYY-MM-DD`), `to` not before `from`, at most 400 days apart; the
+  dates (`YYYY-MM-DD`), `to` not before `from`, covering at most 400
+  calendar dates counting both ends (so `to` is at most 399 days after
+  `from`); the
   range is the whole of each day from the start of `from` to the end of `to`
   in `timeZone`. `timeZone` is an IANA name (`America/New_York`), checked
   with Node's built-in `Intl`. `includeCancelled` defaults to false.
@@ -150,6 +152,9 @@ in the wrapper prints the message to stderr and exits with 1.
   before it.
 
 ## Cancelled Events
+
+- An event with no `STATUS` is `confirmed`, exactly as if it said
+  `STATUS:CONFIRMED`; the two match each other everywhere status matters.
 
 - An event, or one occurrence, with `STATUS:CANCELLED` (or from a
   `METHOD:CANCEL` file) is left out of the view, or shown with
@@ -274,7 +279,10 @@ write them). At least:
    `INTERVAL=3` lands on the right weeks; a test checks the no-`COUNT` case
    takes no more steps than the range needs. An `RDATE` list of 10,001 dates
    inside the range shows 10,000 and adds a problem.
-8. Cancelled: a cancelled single event, a cancelled series (its changed
+8. Status: an event with no `STATUS` comes out as `confirmed`, and it
+   merges as `title-and-time` with an otherwise identical event in another
+   source that says `STATUS:CONFIRMED` (and with the same `UID`, shows once).
+   Cancelled: a cancelled single event, a cancelled series (its changed
    occurrences hidden too), and a `METHOD:CANCEL` file. Cancellation records
    with no `DTSTART`, in a second source: one with `UID` and `RECURRENCE-ID`
    cancels just that occurrence (written in another time zone than the
@@ -303,7 +311,9 @@ write them). At least:
    source.
 10. Range: an event that starts before `from` and ends inside the range
     shows; one that ends exactly at the range's start doesn't; a range of one
-    day; a range of 400 days works and 401 is refused; `to` before `from`
+    day (`from` equal to `to`); a range of 400 included dates (`to` 399
+    days after `from`) works and one of 401 included dates (`to` 400 days
+    after `from`) is refused; `to` before `from`
     and a bad `timeZone` are refused with a plain message.
 11. Reading: folded lines (space and tab), LF-only files, escaped text, quoted
     parameters, `DURATION` instead of `DTEND`, lower-case property names,

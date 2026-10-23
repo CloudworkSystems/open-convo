@@ -121,7 +121,11 @@ the model can't invent one.
    `Message-ID` are never merged.
 3. **Conversations stay together.** Messages linked by `Message-ID`,
    `In-Reply-To` or `References` (within the input only) form one
-   conversation. Each conversation is sorted once, using its newest message
+   conversation. Both of those headers can hold several IDs: each `<...>`
+   token in them is one ID (text outside angle brackets is ignored, and a
+   header listed more than once contributes all its tokens). Every ID, from
+   any of the three headers, is normalized the same way as `Message-ID`
+   (spaces and angle brackets trimmed, lower case) before comparing. Each conversation is sorted once, using its newest message
    (by `date`, then by `inbox` and `id` in character-code order for a tie),
    and every message in it lands in that pile. A message the owner sent
    himself (from one of `myAddresses`) never decides the pile on its own; the
@@ -252,7 +256,10 @@ and no model: every test uses the scripted or keyword classifier. At least:
 10. Conversations: a reply chain linked by `In-Reply-To` and one linked only
     by `References` each land in one pile, decided by the newest message from
     someone other than the owner; a conversation of only the owner's own
-    messages goes to `other`.
+    messages goes to `other`. A `References` header holding three IDs
+    (`<A1@mail.example> <b2@MAIL.example>\n <c3@mail.example>`, folded, mixed
+    case) links the message to each of the three earlier messages, and an
+    `In-Reply-To` holding two IDs links to both.
 11. Grouping: newsletters group by `List-Id`; other piles by sender address;
     group labels, counts and ordering follow the rules above, including ties
     broken by key, inbox and `id`.
