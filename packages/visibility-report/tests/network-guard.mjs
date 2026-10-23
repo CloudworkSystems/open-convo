@@ -56,7 +56,34 @@ function blockedClass(name) {
   };
 }
 
+function assignExport(target, name, value) {
+  if (!target || (typeof target !== 'object' && typeof target !== 'function')) return;
+  try {
+    target[name] = value;
+    if (target[name] === value) return;
+  } catch {
+    // A getter such as dns.promises has no setter. Replace it below.
+  }
+  try {
+    Object.defineProperty(target, name, {
+      value,
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
+  } catch {
+    // Leave a sealed export unchanged.
+  }
+}
+
 function install(specifier, real, overrides) {
+  // process.getBuiltinModule returns this same object, not the ESM mock.
+  for (const [name, value] of Object.entries(overrides)) {
+    assignExport(real, name, value);
+    if (real.default && typeof real.default === 'object' && real.default !== real) {
+      assignExport(real.default, name, value);
+    }
+  }
   const named = { ...real, ...overrides };
   if (real.default && typeof real.default === 'object') {
     named.default = { ...real.default, ...overrides };
@@ -146,6 +173,9 @@ install('node:inspector', inspector, { open: block('inspector.open') });
 install('node:inspector/promises', inspectorPromises, { open: block('inspector/promises.open') });
 
 const childNames = ['spawn', 'exec', 'execFile', 'fork', 'spawnSync', 'execSync', 'execFileSync', 'forkSync'];
+if (typeof childProcess.ChildProcess?.prototype?.spawn === 'function') {
+  childProcess.ChildProcess.prototype.spawn = block('child_process.ChildProcess.prototype.spawn');
+}
 install('node:child_process', childProcess, stubFunctions(childProcess, 'child_process', childNames));
 install('node:cluster', cluster, { fork: block('cluster.fork') });
 install('node:worker_threads', workerThreads, { Worker: blockedClass('worker_threads.Worker') });

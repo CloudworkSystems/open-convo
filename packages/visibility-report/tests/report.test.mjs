@@ -822,6 +822,17 @@ test('stubbed entry points throw before they can connect', async () => {
   assert.throws(() => inspector.open(), /Network blocked/);
   assert.throws(() => inspectorPromises.open(), /Network blocked/);
   assert.throws(() => childProcess.spawn('true'), /Network blocked/);
+  assert.throws(() => new childProcess.ChildProcess().spawn({ file: 'true', args: ['true'] }), /Network blocked: child_process\.ChildProcess\.prototype\.spawn/);
+  const builtinChild = process.getBuiltinModule('child_process');
+  const builtinChildNode = process.getBuiltinModule('node:child_process');
+  assert.throws(() => builtinChild.spawn('true'), /Network blocked: child_process\.spawn/);
+  assert.throws(() => new builtinChildNode.ChildProcess().spawn({ file: 'true', args: ['true'] }), /Network blocked: child_process\.ChildProcess\.prototype\.spawn/);
+  assert.throws(() => process.getBuiltinModule('dns').lookup('example.com', () => {}), /Network blocked: dns\.lookup/);
+  assert.throws(() => process.getBuiltinModule('node:dns/promises').resolve('example.com'), /Network blocked: dns\/promises\.resolve/);
+  assert.throws(() => process.getBuiltinModule('dns').promises.lookup('example.com'), /Network blocked: dns\/promises\.lookup/);
+  assert.throws(() => process.getBuiltinModule('dgram').createSocket('udp4'), /Network blocked: dgram\.createSocket/);
+  assert.throws(() => new (process.getBuiltinModule('node:dgram').Socket)('udp4'), /Network blocked: dgram\.Socket/);
+  assert.throws(() => process.getBuiltinModule('inspector').open(), /Network blocked: inspector\.open/);
   assert.throws(() => childProcess.exec('true'), /Network blocked/);
   assert.throws(() => childProcess.execFile('true'), /Network blocked/);
   assert.throws(() => childProcess.fork('true'), /Network blocked/);
@@ -851,6 +862,24 @@ test('an absolute Windows path does not repeat its root', () => {
   assert.deepEqual(partsOf('C:\\cwd\\out', pathWin), ['cwd', 'out']);
   assert.deepEqual(partsOf('\\\\server\\share\\dir\\out', pathWin), ['dir', 'out']);
   assert.deepEqual(partsOf('\\\\?\\C:\\dir\\out', pathWin), ['dir', 'out']);
+  assert.deepEqual(partsOf('\\\\?\\UNC\\server\\share\\dir\\out', pathWin), ['dir', 'out']);
+  assert.deepEqual(partsOf('//?/UNC/server/share/alias/../out', pathWin), ['alias', '..', 'out']);
+  assert.deepEqual(
+    walkStart('\\\\?\\UNC\\server\\share\\dir\\out', pathWin),
+    walkStart('\\\\server\\share\\dir\\out', pathWin),
+  );
+  assert.deepEqual(
+    walkStart('\\\\?\\UNC\\server\\share\\dir\\out', pathWin),
+    { dir: '\\\\server\\share\\', parts: ['dir', 'out'] },
+  );
+  assert.deepEqual(
+    walkStart('//?/UNC/server/share/alias/../out', pathWin),
+    { dir: '\\\\server\\share\\', parts: ['alias', '..', 'out'] },
+  );
+  assert.deepEqual(
+    walkStart('\\\\?\\unc\\Server\\Share\\dir\\out', pathWin),
+    walkStart('\\\\Server\\Share\\dir\\out', pathWin),
+  );
   assert.deepEqual(partsOf('//server/share/alias/../out', pathWin), ['alias', '..', 'out']);
   assert.deepEqual(partsOf('alias\\..\\alias\\out', pathWin), ['alias', '..', 'alias', 'out']);
   assert.deepEqual(partsOf('/dir/out'), ['dir', 'out']);

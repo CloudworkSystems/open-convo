@@ -2,6 +2,30 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 /**
+ * `\\?\UNC\server\share\...` is the extended spelling of `\\server\share\...`.
+ * Node's parser stops at `\\?\UNC\`, so the server and share would be
+ * ordinary components and the two spellings would not meet. The share is
+ * the root, written in the plain form.
+ */
+function matchExtendedUnc(value) {
+  if (typeof value !== 'string') return null;
+  const match = /^(?:\\\\|\/\/)\?[\\/]unc[\\/]([^\\/]+)[\\/]([^\\/]+)/i.exec(value);
+  if (!match) return null;
+  let consumed = match[0].length;
+  const next = value.charCodeAt(consumed);
+  if (next === 92 || next === 47) consumed += 1;
+  return { root: `\\\\${match[1]}\\${match[2]}\\`, consumed };
+}
+
+function absoluteRoot(value, pathApi) {
+  if (pathApi.sep === '\\') {
+    const extended = matchExtendedUnc(value);
+    if (extended) return extended.root;
+  }
+  return pathApi.parse(value).root;
+}
+
+/**
  * Path components after an absolute root. On Windows the root (`C:\`, a
  * UNC share, or a device path) is not a component, because the walk
  * already starts there.
@@ -9,8 +33,12 @@ import path from 'node:path';
 export function partsOf(value, pathApi = path) {
   let rest = value;
   if (pathApi.isAbsolute(value)) {
-    const root = pathApi.parse(value).root;
-    if (root && rest.startsWith(root)) rest = rest.slice(root.length);
+    const extended = pathApi.sep === '\\' ? matchExtendedUnc(value) : null;
+    if (extended) rest = value.slice(extended.consumed);
+    else {
+      const root = pathApi.parse(value).root;
+      if (root && rest.startsWith(root)) rest = rest.slice(root.length);
+    }
   }
   const pieces = pathApi.sep === '\\' ? rest.split(/[\\/]/) : rest.split(pathApi.sep);
   return pieces.filter((part) => part !== '' && part !== '.');
@@ -45,13 +73,13 @@ export function expandDriveRelative(value, pathApi = path, cwd = () => process.c
 export function walkStart(input, pathApi = path, cwd = () => process.cwd(), env = process.env) {
   const expanded = expandDriveRelative(input, pathApi, cwd, env);
   if (pathApi.isAbsolute(expanded)) {
-    return { dir: pathApi.parse(expanded).root, parts: partsOf(expanded, pathApi) };
+    return { dir: absoluteRoot(expanded, pathApi), parts: partsOf(expanded, pathApi) };
   }
   return { dir: cwd(), parts: partsOf(expanded, pathApi) };
 }
 
 function rootOf(value) {
-  return path.parse(value).root;
+  return absoluteRoot(value, path);
 }
 
 function isRoot(value) {
