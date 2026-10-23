@@ -146,8 +146,10 @@ request itself, so the owner doesn't have to carry messages:
   started an hour after the push), the PR keeper restarts it once by pushing
   an empty commit, "Restart Codex review (no changes)", as the bot. An empty
   commit leaves the pull request's changes the same, so it needs no new
-  Claude review. If Codex is still silent an hour after a restart, the 8 AM
-  list shows it as "Codex silent"; nobody asks from the owner's account.
+  Claude review. A restart commit is never restarted itself: when the latest
+  commit is already a restart, the keeper leaves it, and if Codex is still
+  silent an hour later, the 8 AM list shows it as "Codex silent". Nobody
+  asks from the owner's account.
 
 ## Accounts And Provenance (Owner Decision, October 23, 2026)
 
