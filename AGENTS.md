@@ -106,8 +106,8 @@ reads from and writes to `CloudworkSystems/open-convo`.
 
 Codex or GrokBot may build a module only when the module stands on its own
 (touches no app, storage or memory code) and has a merged plan in
-`docs/plans/` that lists the builder's rules. Up to three outside modules at
-a time (owner decision, October 21, 2026), each with its own builder or
+`docs/plans/` that lists the builder's rules. Up to five outside modules at
+a time (owner decision, October 23, 2026; three before that), each with its own builder or
 builder team; a module waiting only on review fixes doesn't count.
 The builder works on a branch named after the session and opens a pull
 request; it never pushes to `main` (GitHub also blocks direct pushes, force

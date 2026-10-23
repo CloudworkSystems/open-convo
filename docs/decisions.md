@@ -19,7 +19,8 @@ full plan and history are in [PLAN.md](../PLAN.md).
   Agents may show the owner the exact `owner-accepts-findings` line but never
   post it. The coordinator is the Claude thread "261012 OC Coordinator" (the
   planning session in earlier decisions); AGENTS.md "Who Does What" gives
-  every agent its one job.
+  every agent its one job. Up to five outside modules at a time (was three):
+  GrokBot's teams plus Codex as a builder, each from its own plan.
 - **Oct 21:** Scale-up plan approved ([docs/plans/scale-up.md](plans/scale-up.md)).
   Up to three outside modules at a time, each with its own builder or builder
   team; modules waiting only on review fixes don't count. None is waiting

@@ -105,7 +105,8 @@ the comment makes it not count. It satisfies only `codex-approved`.
 
 **Building faster** (more outside modules, parallel lanes, a dogfooding
 cadence): approved by the owner October 21. The limit of three outside
-modules merges with the plan; each module plan above and the other
+modules merged with the plan and was raised to five on October 23 (GrokBot's
+teams plus Codex as a builder); each module plan above and the other
 changes follow in their own pull requests. Plan:
 [docs/plans/scale-up.md](docs/plans/scale-up.md).
 

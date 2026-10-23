@@ -97,12 +97,14 @@ automatically once checks 1, 2 and 4 pass.
   forged-status test (a `codex-approved` status set with a token, not by
   GitHub Actions, did not satisfy the gate). Test 6 (a new commit dismisses
   the owner's approval) passed on #79.
-- **Codex ignores the bot's pull requests.** Codex skips both automatic
-  review and `@codex review` comments on pull requests opened by
-  `cloudwork-bot`, because the bot has no Codex account. Owner decision for
-  now: the session that opened the pull request posts `@codex review` from the
-  owner's account after each push. Giving the bot its own Codex account is to
-  be tried later and may involve spending.
+- **Codex reviews the bot's pull requests by itself (since October 23).**
+  Codex's open-convo setting reviews all pull requests on every push,
+  including those opened by `cloudwork-bot` (first seen on #120), so nobody
+  asks for reviews, and nobody posts from the owner's account (AGENTS.md
+  "Accounts And Provenance"). Codex still ignores `@codex` requests from the
+  bot, because the bot has no Codex account; giving it one may involve
+  spending. Until October 23, the session that opened a pull request posted
+  `@codex review` from the owner's account after each push.
 - **Designated reviewer (planned).** For Codex-built modules, Claude is the
   plan's designated reviewer. Letting `codex-approved` accept that reviewer
   in place of Codex is planned and needs the owner's approval before it's
@@ -242,7 +244,7 @@ Run on a scratch branch protected exactly like `main`, with invented changes:
 4. **Owner override.** With "applies to admins" on, the owner can't merge past
    an open Codex finding with one click. For now he can switch the rule off
    briefly in settings. A safer override waits until cloud Claude no longer
-   signs in as the owner.
+   signs in as the owner. (Since October 23 it signs in as `cloudwork-bot`.)
 
 ## Finish Line
 
