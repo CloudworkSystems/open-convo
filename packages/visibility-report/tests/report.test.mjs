@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import MarkdownIt from 'markdown-it';
 import { clearNetworkCalls, networkCalls, STUBBED_MODULES } from './network-guard.mjs';
 import snapshot from './builtin-modules.json' with { type: 'json' };
-import { partsOf } from '../src/paths.mjs';
+import { expandDriveRelative, partsOf, walkStart } from '../src/paths.mjs';
 import { fixedWording } from '../src/wording.mjs';
 
 const readLog = [];
@@ -798,6 +798,11 @@ test('stubbed entry points throw before they can connect', async () => {
   assert.throws(() => https.request('https://127.0.0.1'), /Network blocked/);
   assert.throws(() => http2.connect('https://127.0.0.1'), /Network blocked/);
   assert.throws(() => dgram.createSocket('udp4'), /Network blocked/);
+  assert.throws(() => dgram._createSocketHandle('udp4'), /Network blocked: dgram\._createSocketHandle/);
+  assert.throws(() => new dgram.Socket('udp4'), /Network blocked: dgram\.Socket/);
+  assert.throws(() => dgram.Socket.prototype.bind.call({}, 0), /Network blocked: dgram\.Socket\.prototype\.bind/);
+  assert.throws(() => dgram.Socket.prototype.send.call({}, 'x'), /Network blocked: dgram\.Socket\.prototype\.send/);
+  assert.throws(() => dgram.Socket.prototype.connect.call({}, 9, '127.0.0.1'), /Network blocked: dgram\.Socket\.prototype\.connect/);
   assert.throws(() => dns.lookup('example.com', () => {}), /Network blocked/);
   assert.throws(() => dns.resolve('example.com', () => {}), /Network blocked/);
   assert.throws(() => dnsPromises.lookup('example.com'), /Network blocked/);
@@ -850,6 +855,16 @@ test('an absolute Windows path does not repeat its root', () => {
   assert.deepEqual(partsOf('alias\\..\\alias\\out', pathWin), ['alias', '..', 'alias', 'out']);
   assert.deepEqual(partsOf('/dir/out'), ['dir', 'out']);
   assert.deepEqual(partsOf('alias/../out'), ['alias', '..', 'out']);
+  const cwd = () => 'C:\\cwd';
+  assert.deepEqual(walkStart('C:out', pathWin, cwd, {}), { dir: 'C:\\', parts: ['cwd', 'out'] });
+  assert.deepEqual(walkStart('C:out', pathWin, cwd, {}), walkStart('C:\\cwd\\out', pathWin, cwd, {}));
+  assert.deepEqual(walkStart('C:alias\\..\\out', pathWin, cwd, {}), { dir: 'C:\\', parts: ['cwd', 'alias', '..', 'out'] });
+  assert.deepEqual(walkStart('D:out', pathWin, cwd, {}), { dir: 'D:\\', parts: ['out'] });
+  assert.deepEqual(walkStart('D:out', pathWin, cwd, { '=D:': 'D:\\data' }), { dir: 'D:\\', parts: ['data', 'out'] });
+  assert.deepEqual(walkStart('c:out', pathWin, cwd, { '=C:': 'C:\\data' }), { dir: 'C:\\', parts: ['data', 'out'] });
+  assert.deepEqual(walkStart('C:out', pathWin, cwd, { '=C:': 'D:\\data' }), { dir: 'C:\\', parts: ['out'] });
+  assert.deepEqual(walkStart('alias/../out', path, () => '/workspace', {}), { dir: '/workspace', parts: ['alias', '..', 'out'] });
+  assert.equal(expandDriveRelative('C:out'), 'C:out');
 });
 
 test('a symlinked command path still counts as this program', () => {

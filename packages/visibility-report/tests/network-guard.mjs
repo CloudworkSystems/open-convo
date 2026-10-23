@@ -97,8 +97,26 @@ install('node:https', https, {
 install('node:http2', http2, {
   connect: block('http2.connect'),
 });
+const BlockedSocket = blockedClass('dgram.Socket');
+for (const name of [
+  'bind',
+  'connect',
+  'disconnect',
+  'send',
+  'sendto',
+  'addMembership',
+  'dropMembership',
+  'addSourceSpecificMembership',
+  'dropSourceSpecificMembership',
+]) {
+  if (typeof dgram.Socket?.prototype?.[name] === 'function') {
+    BlockedSocket.prototype[name] = block(`dgram.Socket.prototype.${name}`);
+  }
+}
 install('node:dgram', dgram, {
   createSocket: block('dgram.createSocket'),
+  _createSocketHandle: block('dgram._createSocketHandle'),
+  Socket: BlockedSocket,
 });
 
 function isDnsQuery(name) {

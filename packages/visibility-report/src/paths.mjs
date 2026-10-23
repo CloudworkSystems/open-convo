@@ -16,6 +16,40 @@ export function partsOf(value, pathApi = path) {
   return pieces.filter((part) => part !== '' && part !== '.');
 }
 
+/**
+ * `C:out` is relative to that drive's current directory, not to one
+ * component named `C:out`. Windows keeps a current directory per drive in
+ * `=C:`; otherwise it uses the process directory, or that drive's root
+ * when the process directory is on another drive. `..` stays in the text
+ * so the walk can apply it after a symlink.
+ */
+export function expandDriveRelative(value, pathApi = path, cwd = () => process.cwd(), env = process.env) {
+  if (pathApi.sep !== '\\' || typeof value !== 'string' || value.length < 2) return value;
+  if (pathApi.isAbsolute(value)) return value;
+  const device = value.slice(0, 2);
+  if (!/^[A-Za-z]:$/.test(device)) return value;
+  const third = value.charCodeAt(2);
+  if (value.length > 2 && (third === 92 || third === 47)) return value;
+  const perDrive = env[`=${device}`] || env[`=${device[0].toUpperCase()}:`] || env[`=${device[0].toLowerCase()}:`];
+  let base = perDrive || cwd();
+  const sameDrive = base.slice(0, 2).toLowerCase() === device.toLowerCase();
+  if (!sameDrive && base.charCodeAt(2) === 92) base = `${device}\\`;
+  const rest = value.slice(2);
+  if (!rest) return base;
+  if (base.endsWith('\\') || base.endsWith('/')) return base + rest;
+  const sep = base.includes('\\') ? '\\' : (base.includes('/') ? '/' : '\\');
+  return base + sep + rest;
+}
+
+/** Directory and components a path walks from, after drive-relative expansion. */
+export function walkStart(input, pathApi = path, cwd = () => process.cwd(), env = process.env) {
+  const expanded = expandDriveRelative(input, pathApi, cwd, env);
+  if (pathApi.isAbsolute(expanded)) {
+    return { dir: pathApi.parse(expanded).root, parts: partsOf(expanded, pathApi) };
+  }
+  return { dir: cwd(), parts: partsOf(expanded, pathApi) };
+}
+
 function rootOf(value) {
   return path.parse(value).root;
 }
@@ -77,7 +111,7 @@ function walk(dir, parts, chain) {
     if (chain.has(next)) return withMissingSuffix(next, parts.slice(index + 1));
     chain.add(next);
     try {
-      const target = fs.readlinkSync(next);
+      const target = expandDriveRelative(fs.readlinkSync(next));
       cursor = path.isAbsolute(target)
         ? walk(rootOf(target), partsOf(target), chain)
         : walk(path.dirname(next), partsOf(target), chain);
@@ -97,9 +131,8 @@ function walk(dir, parts, chain) {
 }
 
 function fullyResolve(input) {
-  const chain = new Set();
-  if (path.isAbsolute(input)) return walk(rootOf(input), partsOf(input), chain);
-  return walk(process.cwd(), partsOf(input), chain);
+  const start = walkStart(input);
+  return walk(start.dir, start.parts, new Set());
 }
 
 function sameInode(left, right) {
