@@ -77,7 +77,9 @@ in the wrapper prints the message to stderr and exits with 1.
 - An event that can't be read (no `DTSTART`, no `UID`, a date that doesn't
   parse, an end before its start) is skipped and listed in `problems`, naming
   the source and the line number. The rest of the file is still read. A file
-  with no `BEGIN:VCALENDAR` is refused as a whole, naming the source.
+  with no `BEGIN:VCALENDAR` is refused as a whole, naming the source. The one
+  exception to "no `DTSTART`" is a cancellation record (see Cancelled
+  Events).
 - A file with `METHOD:CANCEL` marks the events in it as cancelled.
 
 ## Time Zones And Daylight Saving
@@ -153,6 +155,20 @@ in the wrapper prints the message to stderr and exits with 1.
   `METHOD:CANCEL` file) is left out of the view, or shown with
   `status: "cancelled"` when `includeCancelled` is true.
 - A cancelled series hides every occurrence, including its changed ones.
+- **Cancellation records need no `DTSTART`.** A `VEVENT` in a
+  `METHOD:CANCEL` file, or one with `STATUS:CANCELLED`, that has a `UID` but
+  no `DTSTART` is a cancellation record, not a broken event. It is matched
+  by its identifiers alone: with a `RECURRENCE-ID`, it cancels that one
+  occurrence (matched by the same instant, or the same date for all-day
+  events, as for `EXDATE`); without one, it cancels the whole series or
+  single event with that `UID`. It applies across every source, through the
+  same-`UID` rules below: it wins over a copy with a lower `SEQUENCE` (then
+  an earlier `LAST-MODIFIED`, then an earlier `DTSTAMP`) and loses to a newer
+  one. A missing `SEQUENCE` counts as 0. With `includeCancelled`, the
+  cancelled occurrence is shown with the time and title of the copy it
+  cancelled. A cancellation record that matches nothing in any source is
+  listed in `problems` and shows nothing. A record with no `UID` is skipped
+  like any unreadable event.
 
 ## The Same Event In Two Calendars
 
@@ -166,10 +182,19 @@ in the wrapper prints the message to stderr and exits with 1.
   sources whose titles match (ignoring case, accents and spaces at the ends)
   and whose start and end are the same instant (or the same dates, for
   all-day events) are shown once, with both sources, and
-  `matchedBy: "title-and-time"`. Two such occurrences in the same source are
+  `matchedBy: "title-and-time"`. Two occurrences from the same source are
   never merged. Matching runs after each event's own changes and
   cancellations are applied, and only between occurrences with the same
   status, so a cancelled copy never hides or merges into a live one.
+- **Who is matched with whom.** Occurrences with the same match key
+  (normalized title, start, end and status) are grouped one to one, in a
+  fixed order: sort them by `uid` in character-code order, then by source
+  order, then by `key`. Take each in turn and add it to the first group so
+  far that has no occurrence from its source; if there is none, it starts a
+  new group. So each group holds at most one occurrence per source, and the
+  same input always gives the same groups. For example, with "Dentist" at
+  10:00 twice in calendar A (uids `a1`, `a2`) and once in calendar B (uid
+  `b1`), the groups are `a1` with `b1`, and `a2` alone.
 - **Which copy is shown for a title-and-time match.** Every single-value
   field (`title`, `location`, `status`, `eventTimeZone`, `floating`,
   `isRepeat`, `isChanged`, `repeatNotSupported` and `uid`) comes from one
@@ -250,7 +275,13 @@ write them). At least:
    takes no more steps than the range needs. An `RDATE` list of 10,001 dates
    inside the range shows 10,000 and adds a problem.
 8. Cancelled: a cancelled single event, a cancelled series (its changed
-   occurrences hidden too), and a `METHOD:CANCEL` file.
+   occurrences hidden too), and a `METHOD:CANCEL` file. Cancellation records
+   with no `DTSTART`, in a second source: one with `UID` and `RECURRENCE-ID`
+   cancels just that occurrence (written in another time zone than the
+   series, to check instant matching); one with only `UID` cancels the whole
+   series; one with a lower `SEQUENCE` than the live copy cancels nothing;
+   one matching no event adds a problem and shows nothing; none of them is
+   reported as a broken event.
 9. Duplicates: the same `UID` in two calendars shows once with both
    sources; when they differ, the higher `SEQUENCE` wins, and a cancelled
    copy with the higher `SEQUENCE` cancels it while one with a lower
@@ -264,6 +295,12 @@ write them). At least:
    source order and `uid`, never a mix, and shuffling the events inside each
    file gives the same result; a cancelled copy and a live copy at the same
    time are not merged.
+   Collisions: "Dentist" at 10:00 twice in calendar A (uids `a1`, `a2`) and
+   once in B (`b1`) gives `a1` with `b1`, and `a2` alone; adding a third
+   copy in C (`c1`) gives `a1` with `b1` and `c1`, and `a2` alone; shuffling
+   events inside each file, or reordering the uids' events in the files,
+   never changes the groups; no group ever holds two occurrences from one
+   source.
 10. Range: an event that starts before `from` and ends inside the range
     shows; one that ends exactly at the range's start doesn't; a range of one
     day; a range of 400 days works and 401 is refused; `to` before `from`
