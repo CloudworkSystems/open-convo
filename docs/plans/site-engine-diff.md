@@ -334,7 +334,7 @@ new one named after a new session, under the same rules and review.
    example, finishing it after GrokBot stops), Claude also reviews it under
    AGENTS.md's rules for Codex-built work, so no agent's review is the only
    one on its own work.
-3. The planning session or the PR steward checks the result against this
+3. The coordinator (AGENTS.md "Who Does What") checks the result against this
    document, gives the owner a short try-it note (change the bakery's
    Saturday hours and a price in a copy of its facts file, then read the
    list), and then switches on auto-merge. The merge gate merges it.
