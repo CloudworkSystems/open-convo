@@ -141,9 +141,13 @@ request itself, so the owner doesn't have to carry messages:
   code or asks for Codex reviews, and it no longer runs planning checks:
   where an older plan gives a planning check or auto-merge to "the planning
   session or the PR steward", the coordinator does it.
-- Codex reviews each new commit by itself. If it hasn't answered a pull
-  request's latest commit within an hour, the 8 AM list shows it as "Codex
-  silent"; nobody asks from the owner's account.
+- Codex reviews each new commit by itself. When its review of a pull
+  request's latest commit hangs (still "running" after 30 minutes, or not
+  started an hour after the push), the PR keeper restarts it once by pushing
+  an empty commit, "Restart Codex review (no changes)", as the bot. An empty
+  commit leaves the pull request's changes the same, so it needs no new
+  Claude review. If Codex is still silent an hour after a restart, the 8 AM
+  list shows it as "Codex silent"; nobody asks from the owner's account.
 
 ## Accounts And Provenance (Owner Decision, October 23, 2026)
 
@@ -183,7 +187,7 @@ request itself, so the owner doesn't have to carry messages:
 | GrokBot teams (Cursor) | `cloudwork-bot` | Each builds one module from its plan and fixes findings on its own pull request |
 | Codex | its own app | Reviews every pull request; builds Codex modules |
 | PR steward (scheduled, 8:41 AM and 5:41 PM) | `cloudwork-bot` | Reviews Codex-built pull requests; flags stuck ones on issue #52 |
-| PR keeper (scheduled, hourly) | `cloudwork-bot` | Updates auto-merge pull requests that fall behind `main` |
+| PR keeper (scheduled, hourly) | `cloudwork-bot` | Keeps pull requests moving: updates auto-merge pull requests that fall behind `main`, and restarts a hung Codex review once per commit |
 | Daily list (scheduled, 7:52 AM) | `cloudwork-bot`, reading only | Sends the owner issue #52's list, plus pull requests Codex has gone silent on |
 | Nightly Test build (scheduled, 2–6 AM) | none | Rebuilds True Convo Test from `main` on the owner's Mac |
 | Recycling pass (scheduled, Sundays) | `cloudwork-bot` | One pull request proposing fixes for stale docs |
