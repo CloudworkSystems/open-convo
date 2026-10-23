@@ -6,6 +6,15 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 23:** Codex builds two standalone engines from the public launch
+  set as an outside builder: email sorting
+  ([docs/plans/email-sorting-engine.md](plans/email-sorting-engine.md)) and
+  calendar merge
+  ([docs/plans/calendar-merge-engine.md](plans/calendar-merge-engine.md)).
+  Gemini Code Assist reviews them (Codex never reviews its own work), and
+  the coordinator checks each pull request against its plan. The plans'
+  owner questions are still open; builders use the recommended answers
+  unless the owner changes them before the code pull request merges.
 - **Oct 21:** Scale-up plan approved ([docs/plans/scale-up.md](plans/scale-up.md)).
   Up to three outside modules at a time, each with its own builder or builder
   team; modules waiting only on review fixes don't count. None is waiting

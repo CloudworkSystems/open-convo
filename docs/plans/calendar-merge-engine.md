@@ -76,6 +76,12 @@ in the wrapper prints the message to stderr and exits with 1.
   `DURATION`, `RRULE`, `RDATE`, `EXDATE`, `RECURRENCE-ID`, `STATUS`,
   `SEQUENCE`, `DTSTAMP` and `LAST-MODIFIED`. Everything else (descriptions,
   attendees, attachments, alarms) is ignored and never copied to the output.
+- **Missing optional fields.** An event with no `SUMMARY` has an empty
+  title: `title` is `""` in the JSON, it sorts and matches as an empty
+  title, and the agenda shows it as "(No title)". A timed event with
+  neither `DTEND` nor `DURATION` lasts no time at all: it ends at its start
+  (RFC 5545). It shows when its start falls inside the range (from the
+  range's start up to, but not including, its end).
 - An event that can't be read (no `DTSTART`, no `UID`, a date that doesn't
   parse, an end before its start) is skipped and listed in `problems`, naming
   the source and the line number. The rest of the file is still read. A file
@@ -317,6 +323,11 @@ write them). At least:
     and a bad `timeZone` are refused with a plain message.
 11. Reading: folded lines (space and tab), LF-only files, escaped text, quoted
     parameters, `DURATION` instead of `DTEND`, lower-case property names,
+    an event with no `SUMMARY` (`title` `""`, agenda "(No title)", and it
+    matches another untitled event at the same time in a second source), a
+    timed event with no `DTEND` or `DURATION` (end equals start; shown when
+    it starts at the range's start, not when it starts exactly at the
+    range's end),
     and a broken event (no `DTSTART`, end before start, bad date) skipped and
     listed with its line number while the rest of the file still shows. A
     file without `BEGIN:VCALENDAR`, a source over 5 MB, more than 20 sources
@@ -376,6 +387,10 @@ breaking one is a stop-and-report event.
   done, and anything unsure.
 - Don't review your own pull request, and don't review the email sorting
   engine's either if Codex builds both.
+- Edge cases this plan doesn't name: follow the governing standard's
+  default (RFC 5545 for calendars). Write each choice in the package README's "Edge cases"
+  section with a test. The code pull request's reviewers check these
+  choices; they are not plan gaps.
 
 ## Review And Finish Line
 
@@ -404,6 +419,9 @@ latest commit has no open P1 or P2, and the coordinator's plan check finds
 nothing missing from this document.
 
 ## Owner Questions
+
+The owner hasn't answered these yet. Builders use the recommended answer
+unless the owner changes it before the code pull request merges.
 
 1. **Gemini Code Assist on the repo.** The same question as in
    [email-sorting-engine.md](email-sorting-engine.md): its GitHub app needs

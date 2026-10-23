@@ -90,7 +90,12 @@ model), and prints a plain summary, or with `--json` the result object.
 - `workDomains`: domains that mean work (`northglass-tutoring.example`).
 - `senderRules`: a list of `{ match, category }`, where `match` is an exact
   address (`orders@marrowlane.example`) or a domain starting with `@`
-  (`@marrowlane.example`). These are the owner's own choices and always win.
+  (`@marrowlane.example`), and `category` must be one of the six fixed piles
+  below. A rule naming any other pile (`vip`, `Receipts` in the wrong case,
+  an empty string) makes the whole settings file refused when it is loaded,
+  with a plain message naming the rule's position and the pile it named;
+  nothing is sorted. Valid rules are the owner's own choices and always
+  win.
 - `confidenceFloor`: a number from 0.5 to 0.95, default 0.6 (see Sorting).
 - `timeoutMs`: how long to wait for the model on one question, 1,000 to
   120,000, default 30,000.
@@ -125,7 +130,18 @@ the model can't invent one.
    token in them is one ID (text outside angle brackets is ignored, and a
    header listed more than once contributes all its tokens). Every ID, from
    any of the three headers, is normalized the same way as `Message-ID`
-   (spaces and angle brackets trimmed, lower case) before comparing. Each conversation is sorted once, using its newest message
+   (spaces and angle brackets trimmed, lower case) before comparing.
+   **Which messages share a conversation:** each message's ID set is its
+   `Message-ID` plus every ID in its `In-Reply-To` and `References`. Two
+   messages are in the same conversation when their ID sets share an ID,
+   directly or through other messages in the input (so two replies to the
+   same earlier message are together even if that message isn't in the
+   input). **The conversation key** is `id:` followed by the smallest
+   normalized ID, in character-code order, in the union of all its
+   messages' ID sets. A message with no IDs at all is a conversation on its
+   own, with the key `msg:` followed by `JSON.stringify([inbox, id])`. The
+   key depends only on the set of messages, never on file order.
+   Each conversation is sorted once, using its newest message
    (by `date`, then by `inbox` and `id` in character-code order for a tie),
    and every message in it lands in that pile. A message the owner sent
    himself (from one of `myAddresses`) never decides the pile on its own; the
@@ -230,7 +246,9 @@ and no model: every test uses the scripted or keyword classifier. At least:
    land there, with the model's reason.
 3. Owner's rules: an exact address rule beats a domain rule; the first of two
    equal rules wins; a rule beats a confident model answer; the reason names
-   the rule.
+   the rule. A settings file with a rule naming `vip`, `Receipts` or `""` is
+   refused at load with a message naming the rule's position and the pile,
+   and nothing is sorted.
 4. Confidence: an answer at the floor is accepted; one just below goes to
    `other` with "Not sure" naming the best guess; a custom floor works; a
    floor outside 0.5 to 0.95 is refused.
@@ -259,7 +277,11 @@ and no model: every test uses the scripted or keyword classifier. At least:
     messages goes to `other`. A `References` header holding three IDs
     (`<A1@mail.example> <b2@MAIL.example>\n <c3@mail.example>`, folded, mixed
     case) links the message to each of the three earlier messages, and an
-    `In-Reply-To` holding two IDs links to both.
+    `In-Reply-To` holding two IDs links to both. Conversation keys: a
+    three-message thread gets `id:` plus its smallest normalized ID however
+    the file is shuffled; two replies to a message missing from the input
+    share one conversation; a message with no ID headers gets its own
+    `msg:` key.
 11. Grouping: newsletters group by `List-Id`; other piles by sender address;
     group labels, counts and ordering follow the rules above, including ties
     broken by key, inbox and `id`.
@@ -321,6 +343,10 @@ breaking one is a stop-and-report event.
   done, and anything unsure.
 - Don't review your own pull request, and don't review the calendar merge
   engine's either if Codex builds both.
+- Edge cases this plan doesn't name: follow the governing standard's
+  default (RFC 5322 for email headers). Write each choice in the package README's "Edge cases"
+  section with a test. The code pull request's reviewers check these
+  choices; they are not plan gaps.
 
 ## Review And Finish Line
 
@@ -348,6 +374,9 @@ latest commit has no open P1 or P2, and the coordinator's plan check finds
 nothing missing from this document.
 
 ## Owner Questions
+
+The owner hasn't answered these yet. Builders use the recommended answer
+unless the owner changes it before the code pull request merges.
 
 1. **Gemini Code Assist on the repo.** No Gemini review has appeared on
    open-convo yet, so its GitHub app may not be installed. Installing an app
