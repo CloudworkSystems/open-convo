@@ -131,8 +131,21 @@ in the wrapper prints the message to stderr and exits with 1.
   supported in this slice. Such a series shows only its first occurrence
   (if in range), marked `repeatNotSupported: true`, and is listed in
   `problems`, so nothing silently goes missing.
-- A series stops after 10,000 occurrences; one that would go further is
-  listed in `problems`.
+- **Old series reach the range.** A series is expanded only as far as the
+  range needs: one without `COUNT` jumps straight to the first period
+  (day, week, month or year, in steps of `INTERVAL`) that can touch the
+  range, instead of stepping from `DTSTART`, so a daily meeting that began in
+  1990 shows correctly in 2026. One with `COUNT` is counted from `DTSTART`,
+  as the standard requires, and stops at the end of the range or at its
+  count; a `COUNT` above 1,000,000 is not supported (first occurrence only,
+  as above). Changed occurrences are found by their `UID` and
+  `RECURRENCE-ID`, not by expanding to them, so one moved into the range from
+  far away still shows.
+- **Safety limit.** At most 10,000 occurrences of one series are listed in one
+  query (only `RDATE` lists can come close inside 400 days); a series that
+  would list more shows the first 10,000 in the range and is listed in
+  `problems`. The limit counts occurrences in the range, never occurrences
+  before it.
 
 ## Cancelled Events
 
@@ -154,7 +167,20 @@ in the wrapper prints the message to stderr and exits with 1.
   and whose start and end are the same instant (or the same dates, for
   all-day events) are shown once, with both sources, and
   `matchedBy: "title-and-time"`. Two such occurrences in the same source are
-  never merged.
+  never merged. Matching runs after each event's own changes and
+  cancellations are applied, and only between occurrences with the same
+  status, so a cancelled copy never hides or merges into a live one.
+- **Which copy is shown for a title-and-time match.** Every single-value
+  field (`title`, `location`, `status`, `eventTimeZone`, `floating`,
+  `isRepeat`, `isChanged`, `repeatNotSupported` and `uid`) comes from one
+  winning copy, chosen by the same order as for the same `UID`: the higher
+  `SEQUENCE`, then the later `LAST-MODIFIED`, then the later `DTSTAMP`, then
+  the earlier source in the list, then the smaller `uid` in character-code
+  order. Fields are never mixed from different copies. `sources` lists every
+  source of every copy (in the order the sources were given), and `key` is
+  built from all the merged keys, sorted. Since the winner depends only on
+  the copies' contents and the source list, the order of events inside a file
+  never changes it.
 - Occurrences are merged; series are not. A daily stand-up in one calendar
   and a single copy of one day of it in another merge on that day only.
 
@@ -216,8 +242,13 @@ write them). At least:
    one moved out doesn't; a cancelled occurrence is gone, and shown as
    cancelled with `includeCancelled`.
 7. Unsupported rules (`FREQ=HOURLY`, `BYWEEKNO`, `RANGE=THISANDFUTURE`) show
-   the first occurrence marked `repeatNotSupported` and add a problem; a
-   rule with no end stops at 10,000 occurrences with a problem.
+   the first occurrence marked `repeatNotSupported` and add a problem; so
+   does `COUNT=2000000`. Old series: a daily series with no end that began
+   in 1990, and a daily series from 2000 with `COUNT=20000`, both show every
+   occurrence in a November 2026 range; a weekly series from 1990 with
+   `INTERVAL=3` lands on the right weeks; a test checks the no-`COUNT` case
+   takes no more steps than the range needs. An `RDATE` list of 10,001 dates
+   inside the range shows 10,000 and adds a problem.
 8. Cancelled: a cancelled single event, a cancelled series (its changed
    occurrences hidden too), and a `METHOD:CANCEL` file.
 9. Duplicates: the same `UID` in two calendars shows once with both
@@ -227,7 +258,12 @@ write them). At least:
    source order. Different `UID`s with the same title (different case, an
    accent, trailing spaces) and the same time show once as
    `title-and-time`; the same title at different times, and two matching
-   events in one source, are not merged.
+   events in one source, are not merged. Two title-and-time copies that
+   differ in title spelling, location, time zone and floating show every
+   field from the winner by `SEQUENCE`, then `LAST-MODIFIED`, `DTSTAMP`,
+   source order and `uid`, never a mix, and shuffling the events inside each
+   file gives the same result; a cancelled copy and a live copy at the same
+   time are not merged.
 10. Range: an event that starts before `from` and ends inside the range
     shows; one that ends exactly at the range's start doesn't; a range of one
     day; a range of 400 days works and 401 is refused; `to` before `from`
@@ -297,22 +333,28 @@ breaking one is a stop-and-report event.
 ## Review And Finish Line
 
 1. Codex opens the pull request.
-2. **Gemini Code Assist** reviews it as code, round after round. Codex fixes
-   every finding Gemini marks critical or high (treated as P1) or medium
-   (treated as P2), or explains in the pull request why one does not apply;
-   low findings are optional. Codex's own automatic review may also appear
-   and the merge gate's `codex-approved` check still applies as AGENTS.md
-   says, but it never counts as the independent review of Codex's own work.
+2. **The independent review.** Gemini Code Assist reviews it as code, round
+   after round, once Gemini reviews on this repo. Until then (see Owner
+   Questions), the PR steward's Claude review stands in, under AGENTS.md's
+   existing rule for Codex-built work. Whichever of the two is reviewing is
+   "the independent review" below. Codex fixes every P1 and P2 it raises
+   (for Gemini, findings marked critical or high count as P1 and medium as
+   P2), or explains in the pull request why one does not apply; P3s (Gemini's
+   low findings) are optional. If Gemini starts reviewing partway through,
+   both reviews of the latest commit must be clear. Codex's own automatic
+   review may also appear and the merge gate's `codex-approved` check still
+   applies as AGENTS.md says, but it never counts as the independent review
+   of Codex's own work.
 3. The coordinator checks the result against this document, posts the check
    as a comment, gives the owner a short try-it note (merge the sample
    calendars for the week the clocks change, then view the same week in
-   another time zone), and switches on auto-merge once Gemini's review of the
-   latest commit has no open critical, high or medium finding. The merge gate
-   merges it.
+   another time zone), and switches on auto-merge once the independent
+   review of the latest commit has no open P1 or P2. The merge gate merges
+   it.
 
-Done when the tests pass with one command, Gemini's review of the latest
-commit has no open critical, high or medium finding, and the coordinator's
-plan check finds nothing missing from this document.
+Done when the tests pass with one command, the independent review of the
+latest commit has no open P1 or P2, and the coordinator's plan check finds
+nothing missing from this document.
 
 ## Owner Questions
 

@@ -163,7 +163,10 @@ The engine never talks to a model directly. It is given a classifier: an
 object with one method, `classify(question)`, that returns a promise of
 `{ category, confidence, reason }`.
 
-- `question` holds only: the deciding message's `from`, `to`, `subject`,
+- `question` holds only: `ref`, the deciding message's `{ inbox, id }`
+  (so an answer can be matched to its message; a real model adapter uses it
+  only to match answers and never sends it to the model), then that
+  message's `from`, `to`, `subject`,
   `date`, the first 1,000 characters of `snippet`, a fixed set of header
   facts (`hasListId`, `hasListUnsubscribe`, `autoSubmitted`, `precedence`,
   `isReply`, `senderIsWorkDomain`), how many messages the conversation has,
@@ -182,9 +185,10 @@ object with one method, `classify(question)`, that returns a promise of
 
 The package ships two classifiers, both deterministic, no network:
 
-- `createScriptedClassifier(answers)`: answers from a table keyed by message
-  `id` (and can be told to throw, hang or answer badly for one id). Tests use
-  it for exact cases.
+- `createScriptedClassifier(answers)`: answers from a table keyed by the
+  question's `ref` (inbox and `id`), and can be told to throw, hang or answer
+  badly for one `ref`. A question whose `ref` isn't in the table throws, so a
+  test can't pass by accident. Tests use it for exact cases.
 - `createKeywordClassifier()`: a small fixed keyword table (for example
   "receipt", "order", "invoice" for receipts; "verification code", "sign-in"
   for alerts) with a fixed confidence per rule. It exists so the command and
@@ -232,8 +236,10 @@ and no model: every test uses the scripted or keyword classifier. At least:
    fallback, in the fallback order above, with a problem recorded. The run
    still finishes and sorts everything else.
 6. The question sent to the classifier holds exactly the fields listed under
-   The Model Interface and nothing else (the test captures it); the snippet
-   is cut to 1,000 characters.
+   The Model Interface and nothing else (the test captures it); its `ref` is
+   the deciding message's inbox and `id`; the snippet is cut to 1,000
+   characters. The scripted classifier finds its answer by `ref`, and a
+   `ref` missing from its table throws.
 7. Mail is data: a message whose subject and snippet tell the model to file
    it elsewhere, and a scripted answer with an invented category such as
    `vip`, never produce a pile outside the fixed list.
@@ -312,21 +318,27 @@ breaking one is a stop-and-report event.
 ## Review And Finish Line
 
 1. Codex opens the pull request.
-2. **Gemini Code Assist** reviews it as code, round after round. Codex fixes
-   every finding Gemini marks critical or high (treated as P1) or medium
-   (treated as P2), or explains in the pull request why one does not apply;
-   low findings are optional. Codex's own automatic review may also appear
-   and the merge gate's `codex-approved` check still applies as AGENTS.md
-   says, but it never counts as the independent review of Codex's own work.
+2. **The independent review.** Gemini Code Assist reviews it as code, round
+   after round, once Gemini reviews on this repo. Until then (see Owner
+   Questions), the PR steward's Claude review stands in, under AGENTS.md's
+   existing rule for Codex-built work. Whichever of the two is reviewing is
+   "the independent review" below. Codex fixes every P1 and P2 it raises
+   (for Gemini, findings marked critical or high count as P1 and medium as
+   P2), or explains in the pull request why one does not apply; P3s (Gemini's
+   low findings) are optional. If Gemini starts reviewing partway through,
+   both reviews of the latest commit must be clear. Codex's own automatic
+   review may also appear and the merge gate's `codex-approved` check still
+   applies as AGENTS.md says, but it never counts as the independent review
+   of Codex's own work.
 3. The coordinator checks the result against this document, posts the check
    as a comment, gives the owner a short try-it note (run the command on the
    sample mailbox, then add a sender rule and run it again), and switches on
-   auto-merge once Gemini's review of the latest commit has no open critical,
-   high or medium finding. The merge gate merges it.
+   auto-merge once the independent review of the latest commit has no open P1
+   or P2. The merge gate merges it.
 
-Done when the tests pass with one command, Gemini's review of the latest
-commit has no open critical, high or medium finding, and the coordinator's
-plan check finds nothing missing from this document.
+Done when the tests pass with one command, the independent review of the
+latest commit has no open P1 or P2, and the coordinator's plan check finds
+nothing missing from this document.
 
 ## Owner Questions
 
