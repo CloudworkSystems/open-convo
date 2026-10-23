@@ -3,11 +3,13 @@ import fs from 'node:fs';
 import { builtinModules } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
+import pathWin from 'node:path/win32';
 import { mock, test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import MarkdownIt from 'markdown-it';
 import { clearNetworkCalls, networkCalls, STUBBED_MODULES } from './network-guard.mjs';
 import snapshot from './builtin-modules.json' with { type: 'json' };
+import { partsOf } from '../src/paths.mjs';
 import { fixedWording } from '../src/wording.mjs';
 
 const readLog = [];
@@ -838,6 +840,16 @@ test('the command reads no file other than the findings file', () => {
     recordReads = false;
   }
   assert.deepEqual(readLog, [{ kind: 'readFileSync', file: findings }]);
+});
+
+test('an absolute Windows path does not repeat its root', () => {
+  assert.deepEqual(partsOf('C:\\cwd\\out', pathWin), ['cwd', 'out']);
+  assert.deepEqual(partsOf('\\\\server\\share\\dir\\out', pathWin), ['dir', 'out']);
+  assert.deepEqual(partsOf('\\\\?\\C:\\dir\\out', pathWin), ['dir', 'out']);
+  assert.deepEqual(partsOf('//server/share/alias/../out', pathWin), ['alias', '..', 'out']);
+  assert.deepEqual(partsOf('alias\\..\\alias\\out', pathWin), ['alias', '..', 'alias', 'out']);
+  assert.deepEqual(partsOf('/dir/out'), ['dir', 'out']);
+  assert.deepEqual(partsOf('alias/../out'), ['alias', '..', 'out']);
 });
 
 test('a symlinked command path still counts as this program', () => {

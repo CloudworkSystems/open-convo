@@ -1,8 +1,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-function partsOf(value) {
-  return value.split(path.sep).filter((part) => part !== '' && part !== '.');
+/**
+ * Path components after an absolute root. On Windows the root (`C:\`, a
+ * UNC share, or a device path) is not a component, because the walk
+ * already starts there.
+ */
+export function partsOf(value, pathApi = path) {
+  let rest = value;
+  if (pathApi.isAbsolute(value)) {
+    const root = pathApi.parse(value).root;
+    if (root && rest.startsWith(root)) rest = rest.slice(root.length);
+  }
+  const pieces = pathApi.sep === '\\' ? rest.split(/[\\/]/) : rest.split(pathApi.sep);
+  return pieces.filter((part) => part !== '' && part !== '.');
 }
 
 function rootOf(value) {
