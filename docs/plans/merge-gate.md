@@ -17,16 +17,17 @@ any agent could change the rules.
 
 ## The Design In One Picture
 
-This is the setup as it is now (October 20, 2026): `cloudwork-bot` exists
-with Write access and builders sign in as it; cloud Claude is still on the
-owner's connection until it is switched.
+This is the setup as it is now (October 23, 2026): `cloudwork-bot` exists
+with Write access, and every agent signs in as it, cloud Claude included
+since October 23. The owner's account is the owner's alone (AGENTS.md
+"Accounts And Provenance").
 
 | Who | Signs in as | Access |
 | --- | --- | --- |
 | Owner | `CloudworkSystems` | Admin. Used by the owner only. |
-| GrokBot, local Codex, Claude on the Mac | one shared bot account, `cloudwork-bot` | Write: branches, pull requests |
-| Claude in the cloud | the owner's connected account today (see "Cloud Claude" below) | Admin today; Write once switched |
-| Codex reviews | `chatgpt-codex-connector[bot]` (already separate) | Reviews only |
+| GrokBot, local Codex, Claude on the Mac and in the cloud, Claude scheduled tasks | one shared bot account, `cloudwork-bot` | Write: branches, pull requests |
+| Codex's GitHub app (reviews, cloud builds) | `chatgpt-codex-connector[bot]` (already separate) | Reviews and its own branches |
+| GitHub Actions workflows (`owner-queue`, the checks) | `github-actions[bot]` | Read-only token, except the job that posts `codex-approved` |
 
 **One bot account, not one per agent (owner decision, October 15).** GitHub's
 terms allow one free personal account plus one free machine account per person.
@@ -34,7 +35,9 @@ Three free bot accounts would break that and could be suspended, taking the
 gate down with them. One shared account is enough for the gate: what GitHub
 must tell apart is the owner (who can change rules) from the builders (who
 can't), and the reviewer is already a separate app. Which agent built a pull
-request is recorded in its branch name and a `Built-by:` line in each commit
+request is recorded by its `agent:` label and the sign-off line on every
+comment (AGENTS.md "Accounts And Provenance", October 23); earlier pull
+requests used the branch name and a `Built-by:` line in each commit
 message. If per-agent identities are needed later, use one GitHub App per
 agent (free, within the terms), not more accounts.
 
@@ -46,9 +49,8 @@ A pull request merges itself when all of these are true:
 3. **The owner approved the latest version**, but only if it touches a
    protected path (below). Any new commit after his approval cancels it.
 4. Auto-merge is switched on for the pull request (the author does this when
-   opening it; for outside builders, the planning session or the PR steward
-   does it after its
-   plan check passes).
+   opening it; for outside builders, the coordinator does it after its plan
+   check passes).
 
 No bot holds admin, so no bot can turn these rules off.
 
@@ -148,10 +150,13 @@ chat, files or logs.
 ## Cloud Claude
 
 Cloud Claude sessions reach GitHub through the account connected to the
-owner's Claude account, which is today the owner's. Until that changes, cloud
-Claude acts with admin rights, and the gate binds it by rule only (AGENTS.md),
-not by GitHub. It also means the owner can't approve Claude's protected-path
-pull requests, because GitHub doesn't let an author approve their own.
+owner's Claude account. **Since October 23 that is `cloudwork-bot`**, so cloud
+Claude has Write only, like the other builders, and the owner can approve its
+protected-path pull requests (#120 was the first). Before October 23 it was
+the owner's account: cloud Claude acted with admin rights, the gate bound it
+by rule only (AGENTS.md), not by GitHub, and the owner couldn't approve
+Claude's protected-path pull requests, because GitHub doesn't let an author
+approve their own.
 
 Fix, tried during the scratch tests: reconnect the Claude GitHub connection
 as `cloudwork-bot`. Cloud Claude then has Write only, like the other builders.
@@ -233,9 +238,10 @@ Run on a scratch branch protected exactly like `main`, with invented changes:
 
 ## Open Questions
 
-1. **Cloud Claude's login.** Whether reconnecting Claude's GitHub link as the
-   bot works is checked during the scratch tests (above).
-2. **Planning check for outside builders.** AGENTS.md has the planning session
+1. **Cloud Claude's login.** Answered October 23: reconnecting Claude's
+   GitHub link as the bot works, and cloud Claude now signs in as
+   `cloudwork-bot` (see "Cloud Claude").
+2. **Planning check for outside builders.** AGENTS.md has the coordinator (the planning session)
    check an outside builder's work against its plan. Proposed: it stays as a
    comment, not a gate, since tests and Codex already gate the merge.
 3. **Actions minutes.** Private repos get a monthly allowance of free Actions

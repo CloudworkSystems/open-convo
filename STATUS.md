@@ -90,8 +90,9 @@ Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 review is clean; protected paths still need the owner. Plan:
 [docs/plans/merge-gate.md](docs/plans/merge-gate.md). Switched on for `main`
 October 20 after the scratch-branch tests passed. The bot account
-(`cloudwork-bot`) exists, and since October 23 every agent except Codex works
-as it (AGENTS.md "Accounts And Provenance"). Codex reviews pull requests by
+(`cloudwork-bot`) exists, and since October 23 every agent works as it, apart
+from Codex's GitHub app and the Actions workflows (AGENTS.md "Accounts And
+Provenance"). Codex reviews pull requests by
 itself, the bot's included (first seen on #120); nobody asks for reviews from
 the owner's account.
 October 20 fix (OC-261020-gate-package-tests): `tests` now also runs

@@ -51,9 +51,9 @@ reads from and writes to `CloudworkSystems/open-convo`.
   `.github/CODEOWNERS`. Authors in the main build switch on auto-merge when
   they open a pull request; for outside builders, the coordinator switches it
   on after its plan check passes. Agents never merge by hand. Every agent
-  except Codex, which works through its own app, signs in to GitHub as
-  `cloudwork-bot` (see Accounts And Provenance), so the owner can approve
-  their protected-path pull requests. Codex reviews every pull request on
+  signs in to GitHub as `cloudwork-bot` (two app exceptions are listed in
+  Accounts And Provenance), so the owner can approve their protected-path
+  pull requests. Codex reviews every pull request on
   each push by itself (its open-convo setting covers all pull requests), so
   no agent asks for Codex reviews.
 - **How far review goes depends on what the pull request contains.**
@@ -148,14 +148,17 @@ request itself, so the owner doesn't have to carry messages:
 ## Accounts And Provenance (Owner Decision, October 23, 2026)
 
 - `CloudworkSystems` is the owner's account, and only the owner uses it, in
-  his browser. No agent, scheduled task, app connection or Mac login acts as
-  it. An approval, an `owner-accepts-findings` note or a dismissed Codex
-  review from that account therefore always means the owner did it.
-- Every agent that writes to GitHub, except Codex, signs in as
-  `cloudwork-bot`: Claude in the cloud and on the Mac, GrokBot's builders and
-  the Claude scheduled tasks. Codex works through its own app,
-  `chatgpt-codex-connector[bot]`, and the repo's GitHub Actions workflows
-  (such as `owner-queue`) post as `github-actions[bot]`. Codex doesn't
+  his browser. No agent, scheduled task or app connection may act as it. On
+  the Mac, agents run every GitHub command with the bot's key, and git pushes
+  from the OPEN-CONVO folder go out as the bot. An approval, an
+  `owner-accepts-findings` note or a dismissed Codex review from that account
+  therefore means the owner did it.
+- Every agent that writes to GitHub signs in as `cloudwork-bot`: Claude in
+  the cloud and on the Mac, local Codex on the Mac, GrokBot's builders and the
+  Claude scheduled tasks. Two apps keep their own identities: Codex's GitHub
+  app (`chatgpt-codex-connector[bot]`), which posts its reviews and its cloud
+  builds, and the repo's GitHub Actions workflows (such as `owner-queue`),
+  which post as `github-actions[bot]`. Codex doesn't
   answer `cloudwork-bot`'s requests yet, so asking Codex to fix its own pull
   request waits for the owner until the bot has its own Codex access.
 - An agent that finds itself signed in as `CloudworkSystems` stops and tells
