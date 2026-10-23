@@ -79,10 +79,12 @@ reads from and writes to `CloudworkSystems/open-convo`.
     reviewer in place of Codex is planned and needs the owner's approval
     before it's built. Until then, Codex's review still gates the merge and
     Claude also posts a review, so no agent's review is the only one on its own work.
-    Because Claude's review doesn't gate the merge yet, the PR steward or the
-    coordinator switches on auto-merge only when Claude's review of the
-    latest commit has no open P1 or P2 (each fixed, or explained in the pull
-    request as not applying; P3s don't block); until then it stays off.
+    Because neither Claude's review nor the plan check gates the merge yet,
+    only the coordinator switches on auto-merge for a Codex-built pull
+    request, and only when Claude's review of the latest commit has no open
+    P1 or P2 (each fixed, or explained in the pull request as not applying;
+    P3s don't block) and, for an outside module, the coordinator's plan check
+    has passed; until then it stays off.
     Claude's review counts only for the commit it reviewed: whoever pushes a
     commit that changes the pull request's content switches auto-merge off
     until Claude reviews the new head. An update from `main` that leaves the
@@ -135,11 +137,10 @@ request itself, so the owner doesn't have to carry messages:
   Every other pull request follows the Review Loop above as before.
 - The PR steward, a Claude scheduled task (8:41 AM and 5:41 PM Eastern),
   reviews Codex-built pull requests and flags stuck ones in its own comment
-  on issue #52. When its review of a Codex-built pull request's latest commit
-  has no open P1 or P2, it may switch on auto-merge. It never merges,
-  approves, changes code or asks for Codex reviews, and it no longer runs
-  planning checks: where an older plan gives a planning check to "the
-  planning session or the PR steward", the coordinator does it.
+  on issue #52. It never merges, approves, switches on auto-merge, changes
+  code or asks for Codex reviews, and it no longer runs planning checks:
+  where an older plan gives a planning check or auto-merge to "the planning
+  session or the PR steward", the coordinator does it.
 - Codex reviews each new commit by itself. If it hasn't answered a pull
   request's latest commit within an hour, the 8 AM list shows it as "Codex
   silent"; nobody asks from the owner's account.
@@ -177,7 +178,7 @@ request itself, so the owner doesn't have to carry messages:
 | Who | Account | Its one job |
 |---|---|---|
 | The owner | `CloudworkSystems` | Decisions, approvals on protected paths, the 8 AM list |
-| Claude coordinator (thread "261012 OC Coordinator") | `cloudwork-bot` | The planning session in plans and earlier decisions: checks outside builders' pull requests against their plans, switches on auto-merge when a check passes, answers builders' plan questions, keeps this table current |
+| Claude coordinator (thread "261012 OC Coordinator") | `cloudwork-bot` | The planning session in plans and earlier decisions: checks outside builders' pull requests against their plans, switches on auto-merge when a check passes (for Codex-built work, also only after Claude's review is clean), answers builders' plan questions, keeps this table current |
 | Claude building sessions | `cloudwork-bot` | Build on a named branch; open the pull request with auto-merge on |
 | GrokBot teams (Cursor) | `cloudwork-bot` | Each builds one module from its plan and fixes findings on its own pull request |
 | Codex | its own app | Reviews every pull request; builds Codex modules |

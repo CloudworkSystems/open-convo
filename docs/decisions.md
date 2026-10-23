@@ -11,8 +11,10 @@ full plan and history are in [PLAN.md](../PLAN.md).
   uses `cloudwork-bot` (one bot for all agents; Codex keeps its own app and
   the repo's GitHub Actions workflows post as `github-actions[bot]`), and
   each marks its work with an `agent:` label and a sign-off line (AGENTS.md
-  "Accounts And Provenance"). The PR steward no longer runs planning checks;
-  the coordinator does, including where older plans name the steward.
+  "Accounts And Provenance"). The PR steward no longer runs planning checks
+  or switches on auto-merge; the coordinator does both, including where older
+  plans name the steward, and for Codex-built work only after Claude's review
+  of the latest commit is clean.
   Codex reviews every pull request on each push by itself, so no agent asks
   for reviews from the owner's account. Outside-builder pull requests merge
   by auto-merge after the coordinator's plan check, with no owner click.
