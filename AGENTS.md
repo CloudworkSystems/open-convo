@@ -2,8 +2,7 @@
 
 ## Project Facts
 
-- Repository: `CloudworkSystems/open-convo` (public; the license is still the
-  owner's open decision).
+- Repository: `CloudworkSystems/open-convo`.
 - Mac checkout: `/Users/patrick/OPEN-CONVO`.
 - This is the active product repo. True Convo (`/Users/patrick/True-Convo-AI`)
   was frozen on October 12, 2026 and is a read-only reference and parts library.

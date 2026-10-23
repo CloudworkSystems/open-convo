@@ -27,7 +27,7 @@ since October 23. The owner's account is the owner's alone (AGENTS.md
 | Owner | `CloudworkSystems` | Admin. Used by the owner only. |
 | GrokBot, local Codex, Claude on the Mac and in the cloud, Claude scheduled tasks | one shared bot account, `cloudwork-bot` | Write: branches, pull requests |
 | Codex's GitHub app (reviews, cloud builds) | `chatgpt-codex-connector[bot]` (already separate) | Reviews and its own branches |
-| GitHub Actions workflows (`owner-queue`, the checks) | `github-actions[bot]` | Read-only token, except the job that posts `codex-approved` |
+| GitHub Actions workflows (`owner-queue`, the checks) | `github-actions[bot]` | Read-only tokens, with two write exceptions: `codex-approved` (statuses, to post the check) and `owner-queue` (issues, to rewrite #52) |
 
 **One bot account, not one per agent (owner decision, October 15).** GitHub's
 terms allow one free personal account plus one free machine account per person.
@@ -142,8 +142,9 @@ chat, files or logs.
    which is also owner-protected. `repo` does let the token set commit
    statuses, so branch protection accepts `codex-approved` and `tests` only
    from GitHub Actions, and every workflow's own token is read-only except
-   the one that posts `codex-approved`, which runs from `main` and never
-   runs pull request code. Expires in 90 days. Put it in Keychain, then point
+   two, both of which run from `main` and never run pull request code: the
+   one that posts `codex-approved` (statuses) and `owner-queue` (issues, to
+   rewrite #52). Expires in 90 days. Put it in Keychain, then point
    each builder (GrokBot, local Codex) at it instead of the owner's login.
 4. Approve the repo setting changes before the session makes them.
 
