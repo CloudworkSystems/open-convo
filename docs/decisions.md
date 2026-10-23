@@ -6,6 +6,11 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 23:** Hung Codex reviews restart by themselves. Codex's review of
+  #120 hung twice ("running" with no result) and an empty commit restarted it
+  both times, so the PR keeper now does that once per commit when a review
+  hangs (AGENTS.md "Coordinating On GitHub"). Codex may also use the owner's
+  credits for reviews after a rate limit (owner's Codex setting).
 - **Oct 23:** One account per role. `CloudworkSystems` is the owner's alone;
   every agent, Claude scheduled task and app connection that writes to GitHub
   uses `cloudwork-bot` (one bot for all agents; Codex keeps its own app and
