@@ -138,7 +138,9 @@ request itself, so the owner doesn't have to carry messages:
   reviews Codex-built pull requests and flags stuck ones in its own comment
   on issue #52. When its review of a Codex-built pull request's latest commit
   has no open P1 or P2, it may switch on auto-merge. It never merges,
-  approves, changes code or asks for Codex reviews.
+  approves, changes code or asks for Codex reviews, and it no longer runs
+  planning checks: where an older plan gives a planning check to "the
+  planning session or the PR steward", the coordinator does it.
 - Codex reviews each new commit by itself. If it hasn't answered a pull
   request's latest commit within an hour, the 8 AM list shows it as "Codex
   silent"; nobody asks from the owner's account.
@@ -151,8 +153,9 @@ request itself, so the owner doesn't have to carry messages:
   review from that account therefore always means the owner did it.
 - Every agent that writes to GitHub, except Codex, signs in as
   `cloudwork-bot`: Claude in the cloud and on the Mac, GrokBot's builders and
-  the scheduled tasks. Codex works through its own app,
-  `chatgpt-codex-connector[bot]`. Codex doesn't
+  the Claude scheduled tasks. Codex works through its own app,
+  `chatgpt-codex-connector[bot]`, and the repo's GitHub Actions workflows
+  (such as `owner-queue`) post as `github-actions[bot]`. Codex doesn't
   answer `cloudwork-bot`'s requests yet, so asking Codex to fix its own pull
   request waits for the owner until the bot has its own Codex access.
 - An agent that finds itself signed in as `CloudworkSystems` stops and tells

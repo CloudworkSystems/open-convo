@@ -7,10 +7,12 @@ for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
 - **Oct 23:** One account per role. `CloudworkSystems` is the owner's alone;
-  every agent, scheduled task and app connection that writes to GitHub uses
-  `cloudwork-bot` (one bot for all agents; Codex keeps working through its
-  own app), and each marks its work with an `agent:` label and a sign-off
-  line (AGENTS.md "Accounts And Provenance").
+  every agent, Claude scheduled task and app connection that writes to GitHub
+  uses `cloudwork-bot` (one bot for all agents; Codex keeps its own app and
+  the repo's GitHub Actions workflows post as `github-actions[bot]`), and
+  each marks its work with an `agent:` label and a sign-off line (AGENTS.md
+  "Accounts And Provenance"). The PR steward no longer runs planning checks;
+  the coordinator does, including where older plans name the steward.
   Codex reviews every pull request on each push by itself, so no agent asks
   for reviews from the owner's account. Outside-builder pull requests merge
   by auto-merge after the coordinator's plan check, with no owner click.
