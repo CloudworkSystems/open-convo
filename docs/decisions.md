@@ -6,6 +6,11 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 23:** Hung Codex reviews restart by themselves. Codex's review of
+  #120 hung twice ("running" with no result) and an empty commit restarted it
+  both times, so the PR keeper now does that once per commit when a review
+  hangs (AGENTS.md "Coordinating On GitHub"). Codex may also use the owner's
+  credits for reviews after a rate limit (owner's Codex setting).
 - **Oct 23:** Codex builds two standalone engines from the public launch
   set as an outside builder: email sorting
   ([docs/plans/email-sorting-engine.md](plans/email-sorting-engine.md)) and
