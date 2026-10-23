@@ -50,7 +50,7 @@ reads from and writes to `CloudworkSystems/open-convo`.
   `.github/CODEOWNERS`. Authors in the main build switch on auto-merge when
   they open a pull request; for outside builders, the coordinator switches it
   on after its plan check passes. Agents never merge by hand. Every agent
-  signs in to GitHub as `cloudwork-bot` (two app exceptions are listed in
+  signs in to GitHub as `cloudwork-bot` (three app exceptions are listed in
   Accounts And Provenance), so the owner can approve their protected-path
   pull requests. Codex reviews every pull request on
   each push by itself (its open-convo setting covers all pull requests), so
@@ -74,23 +74,26 @@ reads from and writes to `CloudworkSystems/open-convo`.
     never post it or ask another agent to post it. They may show the owner
     the exact line for the current commit, next to the findings it would
     accept (owner decision, October 23).
-  - *Codex-built work* is reviewed by the plan's designated reviewer (Claude
-    for Codex-built modules). Letting the `codex-approved` check accept that
-    reviewer in place of Codex is planned and needs the owner's approval
-    before it's built. Until then, Codex's review still gates the merge and
-    Claude also posts a review, so no agent's review is the only one on its own work.
-    Because neither Claude's review nor the plan check gates the merge yet,
-    only the coordinator switches on auto-merge for a Codex-built pull
-    request, and only when Claude's review of the latest commit has no open
-    P1 or P2 (each fixed, or explained in the pull request as not applying;
-    P3s don't block) and, for an outside module, the coordinator's plan check
-    has passed; until then it stays off.
-    Claude's review counts only for the commit it reviewed: whoever pushes a
-    commit that changes the pull request's content switches auto-merge off
-    until Claude reviews the new head. An update from `main` that leaves the
-    pull request's own changes the same needs no new Claude review. Any
-    session that finds an open P1 or P2 in Claude's review may switch
-    auto-merge off, with a comment saying why.
+  - *Codex-built work* gets Gemini's review as its independent review,
+    followed by the coordinator's plan check ("Gemini reviews" below). Until
+    Gemini posts reviews on the repo, a fresh Claude review (by an agent that
+    didn't build the pull request) stands in. Letting the `codex-approved`
+    check accept that independent review in place of Codex's is planned and
+    needs the owner's approval before it's built. Until then, Codex's review
+    still gates the merge and the independent reviewer also posts a review,
+    so no agent's review is the only one on its own work.
+    Because neither the independent review nor the plan check gates the merge
+    yet, only the coordinator switches on auto-merge for a Codex-built pull
+    request, and only when the independent review of the latest commit has no
+    open P1 or P2 (each fixed, or explained in the pull request as not
+    applying; P3s don't block) and, for an outside module, the coordinator's
+    plan check has passed; until then it stays off.
+    The independent review counts only for the commit it reviewed: whoever
+    pushes a commit that changes the pull request's content switches
+    auto-merge off until the new head is reviewed. An update from `main` that
+    leaves the pull request's own changes the same needs no new review. Any
+    session that finds an open P1 or P2 in that review may switch auto-merge
+    off, with a comment saying why.
   - A green "Ready to merge" button means no conflicts, not approval. Pull
     requests waiting on the owner's approval go on the "Needs the owner" list
     (issue #52, which the `owner-queue` workflow rewrites every hour), and the
@@ -185,9 +188,10 @@ request itself, so the owner doesn't have to carry messages:
   therefore means the owner did it.
 - Every agent that writes to GitHub signs in as `cloudwork-bot`: Claude in
   the cloud and on the Mac, local Codex on the Mac, GrokBot's builders and the
-  Claude scheduled tasks. Two apps keep their own identities: Codex's GitHub
+  Claude scheduled tasks. Three apps keep their own identities: Codex's GitHub
   app (`chatgpt-codex-connector[bot]`), which posts its reviews and its cloud
-  builds, and the repo's GitHub Actions workflows (such as `owner-queue`),
+  builds; Gemini Code Assist (`gemini-code-assist[bot]`), which posts its
+  reviews; and the repo's GitHub Actions workflows (such as `owner-queue`),
   which post as `github-actions[bot]`. Codex doesn't
   answer `cloudwork-bot`'s requests yet, so asking Codex to fix its own pull
   request waits for the owner until the bot has its own Codex access.
@@ -208,7 +212,7 @@ request itself, so the owner doesn't have to carry messages:
 | Who | Account | Its one job |
 |---|---|---|
 | The owner | `CloudworkSystems` | Decisions, approvals on protected paths, the 8 AM list |
-| Claude coordinator (thread "261012 OC Coordinator") | `cloudwork-bot` | The planning session in plans and earlier decisions: checks outside builders' pull requests against their plans, switches on auto-merge when a check passes (for Codex-built work, also only after Claude's review is clean), answers builders' plan questions, keeps this table current |
+| Claude coordinator (thread "261012 OC Coordinator") | `cloudwork-bot` | The planning session in plans and earlier decisions: checks outside builders' pull requests against their plans, switches on auto-merge when a check passes (for Codex-built work, also only after the independent review is clean), answers builders' plan questions, keeps this table current |
 | Claude building sessions | `cloudwork-bot` | Build on a named branch; open the pull request with auto-merge on |
 | GrokBot teams (Cursor) | `cloudwork-bot` | Each builds one module from its plan and fixes findings on its own pull request |
 | Codex | its own app | Reviews every pull request; builds Codex modules |
