@@ -94,9 +94,11 @@ Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 review is clean; protected paths still need the owner. Plan:
 [docs/plans/merge-gate.md](docs/plans/merge-gate.md). Switched on for `main`
 October 20 after the scratch-branch tests passed. The bot account
-(`cloudwork-bot`) exists and builders open pull requests with it. Codex doesn't
-review the bot's pull requests yet; until it does, the session that opened the
-pull request asks for each Codex review from the owner's account.
+(`cloudwork-bot`) exists, and since October 23 every agent works as it, apart
+from Codex's GitHub app and the Actions workflows (AGENTS.md "Accounts And
+Provenance"). Codex reviews pull requests by
+itself, the bot's included (first seen on #120); nobody asks for reviews from
+the owner's account.
 October 20 fix (OC-261020-gate-package-tests): `tests` now also runs
 `npm test` for every other folder in `packages/` that a pull request changes
 (Site Engine, household lists, and new ones such as the habit grid), found
@@ -108,7 +110,8 @@ the comment makes it not count. It satisfies only `codex-approved`.
 
 **Building faster** (more outside modules, parallel lanes, a dogfooding
 cadence): approved by the owner October 21. The limit of three outside
-modules merges with the plan; each module plan above and the other
+modules merged with the plan and was raised to five on October 23 (GrokBot's
+teams plus Codex as a builder); each module plan above and the other
 changes follow in their own pull requests. Plan:
 [docs/plans/scale-up.md](docs/plans/scale-up.md).
 

@@ -2,7 +2,7 @@
 
 ## Project Facts
 
-- Repository: `CloudworkSystems/open-convo` (private until the owner decides otherwise).
+- Repository: `CloudworkSystems/open-convo`.
 - Mac checkout: `/Users/patrick/OPEN-CONVO`.
 - This is the active product repo. True Convo (`/Users/patrick/True-Convo-AI`)
   was frozen on October 12, 2026 and is a read-only reference and parts library.
@@ -48,13 +48,13 @@ reads from and writes to `CloudworkSystems/open-convo`.
   pull request when the gate passes: `tests` and `codex-approved` pass on the
   latest commit, and the owner approves any protected path in
   `.github/CODEOWNERS`. Authors in the main build switch on auto-merge when
-  they open a pull request; for outside builders, the planning session (or
-  the PR steward) switches it on after its plan check passes. Agents never merge by hand. Builders sign in to GitHub as
-  `cloudwork-bot`, so the owner can approve their protected-path pull
-  requests. Until the bot has Codex access, the session that opened a pull
-  request asks for each Codex review (`@codex review`) from the owner's
-  account after every push; if it can't (for example, an outside builder),
-  the planning session or the PR steward asks instead.
+  they open a pull request; for outside builders, the coordinator switches it
+  on after its plan check passes. Agents never merge by hand. Every agent
+  signs in to GitHub as `cloudwork-bot` (two app exceptions are listed in
+  Accounts And Provenance), so the owner can approve their protected-path
+  pull requests. Codex reviews every pull request on
+  each push by itself (its open-convo setting covers all pull requests), so
+  no agent asks for Codex reviews.
 - **How far review goes depends on what the pull request contains.**
   - *Any pull request that changes code* follows the code path below, even
     when it also changes docs.
@@ -71,16 +71,20 @@ reads from and writes to `CloudworkSystems/open-convo`.
     after reading what's left. Any other text in the comment makes it not
     count. It satisfies only `codex-approved` for that exact commit, and
     never counts on a pull request opened under the owner's account. Agents
-    never post it, draft it for posting, or ask another agent to post it.
+    never post it or ask another agent to post it. They may show the owner
+    the exact line for the current commit, next to the findings it would
+    accept (owner decision, October 23).
   - *Codex-built work* is reviewed by the plan's designated reviewer (Claude
     for Codex-built modules). Letting the `codex-approved` check accept that
     reviewer in place of Codex is planned and needs the owner's approval
     before it's built. Until then, Codex's review still gates the merge and
     Claude also posts a review, so no agent's review is the only one on its own work.
-    Because Claude's review doesn't gate the merge yet, the planning session
-    or the PR steward switches on auto-merge only when Claude's review of the
-    latest commit has no open P1 or P2 (each fixed, or explained in the pull
-    request as not applying; P3s don't block); until then it stays off.
+    Because neither Claude's review nor the plan check gates the merge yet,
+    only the coordinator switches on auto-merge for a Codex-built pull
+    request, and only when Claude's review of the latest commit has no open
+    P1 or P2 (each fixed, or explained in the pull request as not applying;
+    P3s don't block) and, for an outside module, the coordinator's plan check
+    has passed; until then it stays off.
     Claude's review counts only for the commit it reviewed: whoever pushes a
     commit that changes the pull request's content switches auto-merge off
     until Claude reviews the new head. An update from `main` that leaves the
@@ -88,9 +92,10 @@ reads from and writes to `CloudworkSystems/open-convo`.
     session that finds an open P1 or P2 in Claude's review may switch
     auto-merge off, with a comment saying why.
   - A green "Ready to merge" button means no conflicts, not approval. Pull
-    requests waiting on the owner's approval go on the daily 8 AM "Needs the
-    owner" list; Claude messages him in chat only for urgent or blocked items
-    (owner decision, October 21).
+    requests waiting on the owner's approval go on the "Needs the owner" list
+    (issue #52, which the `owner-queue` workflow rewrites every hour), and the
+    8 AM message sends him that list. Claude messages him in chat only for
+    urgent or blocked items (owner decision, October 21).
 - *Proposed October 15, pending the owner's approval at merge:* every review,
   by any agent or the owner, asks two questions of each change. Does it break
   a rule of this system? Does it fix a problem the owner actually has?
@@ -102,15 +107,16 @@ reads from and writes to `CloudworkSystems/open-convo`.
 
 Codex or GrokBot may build a module only when the module stands on its own
 (touches no app, storage or memory code) and has a merged plan in
-`docs/plans/` that lists the builder's rules. Up to three outside modules at
-a time (owner decision, October 21, 2026), each with its own builder or
+`docs/plans/` that lists the builder's rules. Up to five outside modules at
+a time (owner decision, October 23, 2026; three before that), each with its own builder or
 builder team; a module waiting only on review fixes doesn't count.
 The builder works on a branch named after the session and opens a pull
 request; it never pushes to `main` (GitHub also blocks direct pushes, force
 pushes and deletion of `main`, for every account, since October 15, 2026). A different agent reviews it under the
-code path below (no agent reviews its own work), the planning session or the
-PR steward checks it against the plan and then switches on auto-merge (outside builders don't
-switch it on themselves), and the gate merges it. The Limits below apply to outside
+code path below (no agent reviews its own work), the coordinator checks it
+against the plan and then switches on auto-merge (outside builders don't
+switch it on themselves, and the owner doesn't click Merge; owner decision,
+October 23), and the gate merges it. The Limits below apply to outside
 builders in full; where a builder can reach the owner's Mac, the plan says
 which commands, if any, it may run there.
 
@@ -127,16 +133,66 @@ request itself, so the owner doesn't have to carry messages:
   and never reviews its own work.
 - No agent merges or approves a pull request; the merge gate merges.
   Outside-builder pull requests wait for a "Ready to merge" planning check
-  (from the planning session or the PR steward); whoever posts it switches on
-  auto-merge once the check passes. Every other pull request follows the
-  Review Loop above as before.
-- The PR steward, an hourly Claude scheduled task on the owner's account,
-  requests Codex reviews, reviews Codex-built pull requests, sends fix
-  requests to Codex, posts planning checks, and keeps one "Needs the owner"
-  issue current. It only comments and switches on auto-merge after a passing planning
-  check; it never merges, approves or changes code.
-- When a new commit lands on a pull request whose builder can't start a Codex
-  review, the planning session or the PR steward posts `@codex review` for it.
+  from the coordinator, which switches on auto-merge once the check passes.
+  Every other pull request follows the Review Loop above as before.
+- The PR steward, a Claude scheduled task (8:41 AM and 5:41 PM Eastern),
+  reviews Codex-built pull requests and flags stuck ones in its own comment
+  on issue #52. It never merges, approves, switches on auto-merge, changes
+  code or asks for Codex reviews, and it no longer runs planning checks:
+  where an older plan gives a planning check or auto-merge to "the planning
+  session or the PR steward", the coordinator does it.
+- Codex reviews each new commit by itself. If it hasn't answered a pull
+  request's latest commit within an hour, the 8 AM list shows it as "Codex
+  silent"; nobody asks from the owner's account.
+
+## Accounts And Provenance (Owner Decision, October 23, 2026)
+
+- `CloudworkSystems` is the owner's account, and only the owner uses it, in
+  his browser. No agent, scheduled task or app connection may act as it. On
+  the Mac, agents run every GitHub command with the bot's key, and git pushes
+  from the OPEN-CONVO folder go out as the bot. An approval, an
+  `owner-accepts-findings` note or a dismissed Codex review from that account
+  therefore means the owner did it.
+- Every agent that writes to GitHub signs in as `cloudwork-bot`: Claude in
+  the cloud and on the Mac, local Codex on the Mac, GrokBot's builders and the
+  Claude scheduled tasks. Two apps keep their own identities: Codex's GitHub
+  app (`chatgpt-codex-connector[bot]`), which posts its reviews and its cloud
+  builds, and the repo's GitHub Actions workflows (such as `owner-queue`),
+  which post as `github-actions[bot]`. Codex doesn't
+  answer `cloudwork-bot`'s requests yet, so asking Codex to fix its own pull
+  request waits for the owner until the bot has its own Codex access.
+- An agent that finds itself signed in as `CloudworkSystems` stops and tells
+  the owner instead of acting.
+- Agents share one account, so each marks its own work:
+  - Each pull request carries a label naming its builder: `agent: claude`,
+    `agent: grokbot` or `agent: codex`. The coordinator adds it when a
+    builder can't.
+  - The last line of every comment, review and pull request description names
+    the agent and its thread or task, for example
+    `— Claude, 261012 OC Coordinator` or `— GrokBot team A`.
+  - Commits keep their tools' own marks: Claude's `Claude-Session` link,
+    `Cursor Agent` as GrokBot's author and Codex's `codex/` branches.
+
+## Who Does What
+
+| Who | Account | Its one job |
+|---|---|---|
+| The owner | `CloudworkSystems` | Decisions, approvals on protected paths, the 8 AM list |
+| Claude coordinator (thread "261012 OC Coordinator") | `cloudwork-bot` | The planning session in plans and earlier decisions: checks outside builders' pull requests against their plans, switches on auto-merge when a check passes (for Codex-built work, also only after Claude's review is clean), answers builders' plan questions, keeps this table current |
+| Claude building sessions | `cloudwork-bot` | Build on a named branch; open the pull request with auto-merge on |
+| GrokBot teams (Cursor) | `cloudwork-bot` | Each builds one module from its plan and fixes findings on its own pull request |
+| Codex | its own app | Reviews every pull request; builds Codex modules |
+| PR steward (scheduled, 8:41 AM and 5:41 PM) | `cloudwork-bot` | Reviews Codex-built pull requests; flags stuck ones on issue #52 |
+| PR keeper (scheduled, hourly) | `cloudwork-bot` | Updates auto-merge pull requests that fall behind `main` |
+| Daily list (scheduled, 7:52 AM) | `cloudwork-bot`, reading only | Sends the owner issue #52's list, plus pull requests Codex has gone silent on |
+| Nightly Test build (scheduled, 2–6 AM) | none | Rebuilds True Convo Test from `main` on the owner's Mac |
+| Recycling pass (scheduled, Sundays) | `cloudwork-bot` | One pull request proposing fixes for stale docs |
+| `owner-queue` workflow | GitHub Actions | Rewrites issue #52, "Needs the owner", every hour |
+
+Work that belongs to another row is forwarded there once, and the owner is
+told where it went. A Claude thread opened for a single pull request closes
+when that pull request is done and doesn't need a row. A new standing thread
+or task gets a row here first.
 
 ## Limits
 
