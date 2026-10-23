@@ -947,6 +947,16 @@ test('output paths that name one file are refused and the findings file is uncha
     assert.equal(direct.code, 1, direct.stderr);
     assert.match(direct.stderr, /--json and --md to the same file/);
     assert.equal(fs.existsSync(dotOut), false);
+    const repeat = path.join(dir, 'repeat');
+    const repeatReal = path.join(repeat, 'real');
+    fs.mkdirSync(repeatReal, { recursive: true });
+    fs.symlinkSync('real', path.join(repeat, 'alias'));
+    const repeatOut = path.join(repeatReal, 'out');
+    const repeated = `${path.join(repeat, 'alias')}/../alias/out`;
+    const again = invoke(['--findings', findings, '--json', repeated, '--md', repeatOut]);
+    assert.equal(again.code, 1, again.stderr);
+    assert.match(again.stderr, /--json and --md to the same file/);
+    assert.equal(fs.existsSync(repeatOut), false);
     const nfc = path.join(dir, 'caf\u00e9.json');
     const nfd = path.join(dir, 'cafe\u0301.json');
     const folded = invoke(['--findings', findings, '--json', nfc, '--md', nfd]);

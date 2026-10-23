@@ -44,9 +44,11 @@ function withMissingSuffix(dir, parts) {
 
 /**
  * Walk one component at a time. `..` is applied after any symlink in front
- * of it, which is how the file system writes through the path.
+ * of it, which is how the file system writes through the path. A symlink
+ * is remembered only while its target is being expanded, so the same link
+ * may be followed again later in the path.
  */
-function walk(dir, parts, seen) {
+function walk(dir, parts, chain) {
   let cursor = dir;
   for (let index = 0; index < parts.length; index += 1) {
     const part = parts[index];
@@ -61,12 +63,16 @@ function walk(dir, parts, seen) {
       cursor = next;
       continue;
     }
-    if (seen.has(next)) return withMissingSuffix(next, parts.slice(index + 1));
-    seen.add(next);
-    const target = fs.readlinkSync(next);
-    cursor = path.isAbsolute(target)
-      ? walk(rootOf(target), partsOf(target), seen)
-      : walk(path.dirname(next), partsOf(target), seen);
+    if (chain.has(next)) return withMissingSuffix(next, parts.slice(index + 1));
+    chain.add(next);
+    try {
+      const target = fs.readlinkSync(next);
+      cursor = path.isAbsolute(target)
+        ? walk(rootOf(target), partsOf(target), chain)
+        : walk(path.dirname(next), partsOf(target), chain);
+    } finally {
+      chain.delete(next);
+    }
   }
   const stat = lstatOrNull(cursor);
   if (stat && !stat.isSymbolicLink()) {
@@ -80,9 +86,9 @@ function walk(dir, parts, seen) {
 }
 
 function fullyResolve(input) {
-  const seen = new Set();
-  if (path.isAbsolute(input)) return walk(rootOf(input), partsOf(input), seen);
-  return walk(process.cwd(), partsOf(input), seen);
+  const chain = new Set();
+  if (path.isAbsolute(input)) return walk(rootOf(input), partsOf(input), chain);
+  return walk(process.cwd(), partsOf(input), chain);
 }
 
 function sameInode(left, right) {
