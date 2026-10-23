@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { lstat, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -7,25 +6,15 @@ import { assertContrast, resolveBrand } from "./contrast.mjs";
 import { SiteEngineError } from "./errors.mjs";
 import { prepareImages } from "./images.mjs";
 import { publishSite } from "./publish.mjs";
+import { readFactsFile } from "./read-facts.mjs";
 import { renderPage } from "./render.mjs";
 import { validateFacts } from "./schema.mjs";
 
-const MAX_FACTS_BYTES = 1_000_000;
 const USAGE = "Usage: node packages/site-engine/src/build.mjs --facts <facts.json> --out <folder>";
 
 export async function buildSite(factsPath, outPath) {
-  const factsAbs = path.resolve(factsPath);
   const outAbs = path.resolve(outPath);
-  const raw = await readFacts(factsAbs);
-  let parsed;
-  try {
-    parsed = JSON.parse(raw.replace(/^\uFEFF/, ""));
-  } catch {
-    throw new SiteEngineError("Facts file is not valid JSON.");
-  }
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new SiteEngineError("Facts file must be a JSON object.");
-  }
+  const { factsPath: factsAbs, facts: parsed } = await readFactsFile(factsPath);
   const facts = validateFacts(parsed);
   const colors = resolveBrand(facts.brand);
   assertContrast(colors);
@@ -42,19 +31,6 @@ export async function buildSite(factsPath, outPath) {
     ],
     factsAbs,
   );
-}
-
-async function readFacts(factsAbs) {
-  let real;
-  try {
-    real = await realpath(factsAbs);
-  } catch {
-    throw new SiteEngineError("Facts file was not found.");
-  }
-  const info = await lstat(real);
-  if (!info.isFile()) throw new SiteEngineError("Facts file is not a file.");
-  if (info.size > MAX_FACTS_BYTES) throw new SiteEngineError("Facts file is too large.");
-  return (await readFile(real)).toString("utf8");
 }
 
 function parseArgs(argv) {
