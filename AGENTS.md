@@ -51,10 +51,11 @@ reads from and writes to `CloudworkSystems/open-convo`.
   `.github/CODEOWNERS`. Authors in the main build switch on auto-merge when
   they open a pull request; for outside builders, the coordinator switches it
   on after its plan check passes. Agents never merge by hand. Every agent
-  signs in to GitHub as `cloudwork-bot` (see Accounts And Provenance), so the
-  owner can approve their protected-path pull requests. Codex reviews every
-  pull request on each push by itself (its open-convo setting covers all pull
-  requests), so no agent asks for Codex reviews.
+  except Codex, which works through its own app, signs in to GitHub as
+  `cloudwork-bot` (see Accounts And Provenance), so the owner can approve
+  their protected-path pull requests. Codex reviews every pull request on
+  each push by itself (its open-convo setting covers all pull requests), so
+  no agent asks for Codex reviews.
 - **How far review goes depends on what the pull request contains.**
   - *Any pull request that changes code* follows the code path below, even
     when it also changes docs.
@@ -148,9 +149,10 @@ request itself, so the owner doesn't have to carry messages:
   his browser. No agent, scheduled task, app connection or Mac login acts as
   it. An approval, an `owner-accepts-findings` note or a dismissed Codex
   review from that account therefore always means the owner did it.
-- Every agent that writes to GitHub signs in as `cloudwork-bot`: Claude in
-  the cloud and on the Mac, GrokBot's builders and the scheduled tasks. Codex
-  works through its own app, `chatgpt-codex-connector[bot]`. Codex doesn't
+- Every agent that writes to GitHub, except Codex, signs in as
+  `cloudwork-bot`: Claude in the cloud and on the Mac, GrokBot's builders and
+  the scheduled tasks. Codex works through its own app,
+  `chatgpt-codex-connector[bot]`. Codex doesn't
   answer `cloudwork-bot`'s requests yet, so asking Codex to fix its own pull
   request waits for the owner until the bot has its own Codex access.
 - An agent that finds itself signed in as `CloudworkSystems` stops and tells
