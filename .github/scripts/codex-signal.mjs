@@ -50,7 +50,8 @@ export function editedOnlyByCodex(comment) {
   return editedOnlyBy(comment, isCodexEditor);
 }
 
-function editedOnlyBy(comment, isEditor) {
+/** True only if every edit to this comment was made by an editor isEditor accepts. */
+export function editedOnlyBy(comment, isEditor) {
   const history = comment.edit_history;
   if (history === undefined) return !comment.updated_at || comment.updated_at === comment.created_at;
   if (!history) return false;
