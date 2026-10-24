@@ -95,8 +95,10 @@ so it builds and tests on Linux too.
   the checkpoint that recorded the fetch; when that fetch is replayed from
   the older change token, a fetched copy with the same stamp as the local
   record counts as already applied, with no conflict and no merge. The same
-  holds for uploads: an outbox entry is uploaded only after the checkpoint
-  holding it is saved, and whenever an upload or a fetch meets a cloud copy
+  holds for uploads: an outbox entry, of any kind, is uploaded only after
+  both the checkpoint holding it is saved and the app confirms it saved the
+  matching local record, so the cloud never receives an edit the device
+  could still drop on reconciliation; and whenever an upload or a fetch meets a cloud copy
   with the queued entry's record ID and stamp, that entry counts as
   acknowledged, whatever base it carries, with no conflict, no merge and no
   new revision. It drops any queued entry whose record ID and stamp
@@ -258,8 +260,10 @@ Every case uses two or three simulated devices and invented records.
     checkpoint is saved; recreated from the older checkpoint and reconciled
     against its records, it queues the edit and B has it after sync. In the
     reverse (checkpoint saved with a queued entry, record not saved), the
-    entry is dropped: it is never uploaded, B never sees it, status returns
-    to synced, and nothing that was acknowledged is lost. A third case: A
+    entry is dropped: it is never uploaded (the uploader was holding it for
+    the app's save confirmation, so the cloud received nothing even while A
+    was still online), B never sees it, status returns to synced, and
+    nothing that was acknowledged is lost. A third case: A
     saves a purge marker locally and is destroyed before its checkpoint;
     after reconciling, the purge is queued as a purge, reaches the cloud, and
     a stale edit from B still can't bring the record back. A fourth case: A
@@ -417,7 +421,9 @@ only once it is checkpointed, and a cloud copy with its ID and stamp counts
 as its acknowledgement (test 17, sixth case). Its round on `bd3d676` added
 two P1s: a winning purge discards the losing payload instead of keeping a
 conflict copy (test 5b), and a merged entry uploads only after the app
-confirms the local save (test 19).
+confirms the local save (test 19). Its round on `4db0ee9` added a P1:
+every entry, not only a merge, waits for the app's local-save
+confirmation before it uploads (test 17, reverse case).
 
 ## Review And Finish Line
 
