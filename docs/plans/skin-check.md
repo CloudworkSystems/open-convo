@@ -133,6 +133,14 @@ A small library in `packages/skin-check/`:
     reminder. Never "low risk", "safe", "normal" or "benign".
   The engine returns these as data with the reason text; it never ranks
   spots against each other or produces a number.
+- **A spot's outcome over time.** Each check-in gets its own outcome. The
+  spot's outcome (used for grouping and in the visit summary) is the most
+  cautious outcome of any check-in since the owner last recorded "seen by a
+  clinician" for that spot, with every reason kept and dated. A later
+  all-"no" check-in never hides an earlier urgent or clinician-worthy
+  answer. Recording "seen by a clinician" (a dated entry on the spot, with
+  an optional note) is the only thing that starts the spot's outcome
+  afresh; the earlier check-ins stay in its history.
 - **Change over time.** For each spot, the engine lists its check-ins in
   order and pairs the latest photo with the earliest and the previous one, so
   a surface can show them side by side. It notes when the owner answered
@@ -185,7 +193,9 @@ people and spots only. At least:
 7. The visit summary lists urgent spots first, then clinician-worthy
    ones, shows each spot's outcome and reasons (an urgent spot keeps the
    "book an appointment soon" wording), escapes all owner text, and
-   contains no image data or external links.
+   contains no image data or external links. An urgent check-in followed
+   by an all-"no" one keeps the spot in the urgent group with the earlier
+   reason and its date, until "seen by a clinician" is recorded.
 8. Merge: the same cases as the household lists engine (different spots,
    same field, delete vs edit, equal timestamps, clock skew, offline copy
    after Trash is emptied), A into B equals B into A, and the same check-in
