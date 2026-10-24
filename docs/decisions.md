@@ -11,6 +11,15 @@ full plan and history are in [PLAN.md](../PLAN.md).
   both times, so the PR keeper now does that once per commit when a review
   hangs (AGENTS.md "Coordinating On GitHub"). Codex may also use the owner's
   credits for reviews after a rate limit (owner's Codex setting).
+- **Oct 23:** Codex builds two standalone engines from the public launch
+  set as an outside builder: email sorting
+  ([docs/plans/email-sorting-engine.md](plans/email-sorting-engine.md)) and
+  calendar merge
+  ([docs/plans/calendar-merge-engine.md](plans/calendar-merge-engine.md)).
+  Gemini Code Assist reviews them (Codex never reviews its own work), and
+  the coordinator checks each pull request against its plan. The plans'
+  owner questions are still open; builders use the recommended answers
+  unless the owner changes them before the code pull request merges.
 - **Oct 23:** One account per role. `CloudworkSystems` is the owner's alone;
   every agent, Claude scheduled task and app connection that writes to GitHub
   uses `cloudwork-bot` (one bot for all agents; Codex keeps its own app and
