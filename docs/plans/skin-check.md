@@ -41,7 +41,7 @@ rule, not just a disclaimer:
 
 ## Plan Of Record
 
-1. **Slice 1, now (beside the main build):** the skin check engine on its
+1. **Slice 1, now:** the skin check engine on its
    own in `packages/skin-check/`, tested on invented data. No app code, no
    storage code, no photos, no network, no AI. This is the part that can be
    built and proven today.
@@ -92,16 +92,19 @@ A small library in `packages/skin-check/`:
   5. Has it changed in size, shape, color or feeling since you last looked?
      (Evolving)
   Plus two urgent questions: "Has it bled without being hurt?" and "Is it a
-  sore that hasn't healed in three weeks?" and one comparison question:
-  "Does it look different from your other spots?" (the "ugly duckling" sign).
+  sore that hasn't healed in three weeks?"; one comparison question: "Does
+  it look different from your other spots?" (the "ugly duckling" sign); and
+  one new-spot question: "Is this a spot you hadn't noticed before (new in
+  the last few months)?" The new-spot question is asked on the spot's first
+  check-in and can be answered again later. It records whether the spot is
+  new on the skin, which the spot's created date in the app cannot tell.
 - **What needs a clinician's look.** Plain rules, no scores:
   - Any urgent answer "yes": **book an appointment soon**, with the reason.
-  - "Evolving" answered "yes", or "different from your other spots" answered
+  - "Evolving", "different from your other spots" or "new spot" answered
     "yes": **worth showing a clinician**, with the reason.
-  - Two or more of A to D answered "yes" or "not sure": **worth showing a
-    clinician**, with the reasons.
-  - A new spot first recorded after the owner's chosen age threshold (default
-    off; the owner sets it): **worth showing a clinician**.
+  - Any one of A to D answered "yes" or "not sure": **worth showing a
+    clinician**, with the reasons. Dermatology guidance says to see a
+    dermatologist for any one of these signs, so one is enough.
   - Otherwise: **no warning sign noted by you**, always with the standard
     reminder. Never "low risk", "safe", "normal" or "benign".
   The engine returns these as data with the reason text; it never ranks
@@ -139,9 +142,10 @@ people and spots only. At least:
 1. Spots: create, rename, move region, archive, remove, Trash and restore.
 2. Check-ins record answers and photo references, and refuse a check-in for
    an unknown or removed spot with a plain message.
-3. Each rule above produces the right outcome and reason, including "not
-   sure" counting toward A to D, urgent answers always winning, and the age
-   threshold being off by default.
+3. Each rule above produces the right outcome and reason, including a
+   single A to D "yes" or "not sure" being enough, a "new spot" answer of
+   "yes" with every other answer "no" being worth a clinician's look, and
+   urgent answers always winning.
 4. No output text contains reassuring or grading words: a test scans every
    string the engine produces (outcomes, reasons, summary) for words such as
    "safe", "benign", "normal", "low risk", "healthy", "clear", "fine",
@@ -166,6 +170,13 @@ AI or image model, notifications, network or iCloud, Mac app or Desk code,
 storage or encryption code, real personal data or real skin photos.
 
 ## Rules For The Builder
+
+This is not an outside-builder module: AGENTS.md "Outside Builders" covers
+modules built by Codex or GrokBot. Skin check is built by a Claude building
+session under the normal Review Loop (as AGENTS.md's "Who Does What" table
+gives Claude building sessions), so it takes none of the outside-builder
+places. If the owner would rather hand it to Codex or GrokBot, this section
+is rewritten with that builder's rules before the code starts.
 
 - Builder: a Claude building session (this thread), working as
   `cloudwork-bot` on the branch `OC-261024-skin-check`, pull request into
