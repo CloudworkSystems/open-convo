@@ -565,3 +565,26 @@ test('a clinician visit dated in the future is refused, so an urgent spot stays 
   mac.recordClinicianVisit('spot-back', { date: '2026-11-25' }, { id: 'today' });
   assert.equal(mac.spotOutcome('spot-wrist').outcome, 'notCheckedSinceVisit');
 });
+
+test('two offline removals never bring back an emptied spot, whatever their counters', () => {
+  const { mac, phone } = pair();
+  mac.removeSpot('spot-back');
+  mac.emptyTrash();
+  for (let i = 0; i < 10; i += 1) phone.renameSpot('spot-wrist', `Busy ${i}`);
+  phone.removeSpot('spot-back');
+  const merged = converges(mac, phone);
+  const view = new SkinCheck({ deviceId: 'v', person: merged });
+  assert.deepEqual(view.spots({ trash: true }), []);
+  assert.deepEqual(view.spots().map(spot => spot.id), ['spot-wrist']);
+  const third = engine('tablet-c', { person: mac.getPerson() });
+  assert.deepEqual(mergePeople(mergePeople(phone.getPerson(), third.getPerson()), mac.getPerson()), merged);
+});
+
+test('a missing evolving answer counts as not sure in the timeline', () => {
+  const { mac } = pair();
+  mac.addCheckIn({ spotId: 'spot-wrist', capturedAt: '2026-10-02T08:00:00Z', answers: answers({ evolving: 'notSure' }) }, { id: 'e-1' });
+  const { evolving: _, ...rest } = ALL_NO;
+  mac.addCheckIn({ spotId: 'spot-wrist', capturedAt: '2026-10-03T08:00:00Z', answers: rest }, { id: 'e-2' });
+  mac.addCheckIn({ spotId: 'spot-wrist', capturedAt: '2026-10-04T08:00:00Z', answers: ALL_NO }, { id: 'e-3' });
+  assert.deepEqual(mac.timeline('spot-wrist').evolving.map(entry => [entry.answer, entry.changed]), [['notSure', false], [null, false], ['no', true]]);
+});

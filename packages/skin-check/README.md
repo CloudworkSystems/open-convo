@@ -219,7 +219,8 @@ Cases the plan doesn't name, each read the cautious way and covered by a test:
   back (`returned: true`, region `other` until the owner moves it) instead
   of that observation vanishing. A copy of the old records alone never
   brings the spot back. A restore stamped after the emptying also brings it
-  back, without its old details.
+  back, without its old details. A removal from a copy that never saw the
+  emptying never does, whatever its counter.
 - **Delete versus offline edit.** A concurrent rename keeps its new label,
   but the spot stays in Trash until someone restores it.
 - **Archived spots** keep their outcome, accept check-ins, and are left out

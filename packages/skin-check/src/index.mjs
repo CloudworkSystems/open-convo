@@ -292,8 +292,11 @@ function canonical(person) {
 function mergeSpot(a, b) {
   if (!a || !b) return clone(a ?? b);
   const purge = latest(a.purge, b.purge);
-  let life = register(a.life, b.life);
-  if (purge && compareStamps(life.stamp, purge) <= 0) life = { value: false, stamp: clone(purge) };
+  // A removal from a copy that never saw the emptying stays below it, however high its counter;
+  // only a restore can bring an emptied spot back.
+  const lifeOf = side => !side.life.value && compareStamps(side.purge, purge) < 0 ? null : side.life;
+  let life = register(lifeOf(a), lifeOf(b));
+  if (!life || (purge && compareStamps(life.stamp, purge) <= 0)) life = { value: false, stamp: clone(purge) };
   return { id: a.id, life, purge: clone(purge), fields: records(a.fields, b.fields, purge), purged: unionPurged(a.purged, b.purged) };
 }
 // Check-ins and visits never change after they are made: merged as a set by ID.
@@ -687,8 +690,10 @@ export class SkinCheck {
     let previousAnswer;
     const evolving = checkIns.map((record, index) => {
       const answer = record.answers.evolving ?? null;
-      const entry = { checkInId: record.id, capturedAt: record.capturedAt, answer, changed: index > 0 && answer !== previousAnswer };
-      previousAnswer = answer;
+      // A missing answer counts as not sure, here as in the rules.
+      const counted = answer ?? 'notSure';
+      const entry = { checkInId: record.id, capturedAt: record.capturedAt, answer, changed: index > 0 && counted !== previousAnswer };
+      previousAnswer = counted;
       return entry;
     });
     return {
