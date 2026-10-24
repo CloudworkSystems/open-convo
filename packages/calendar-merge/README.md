@@ -74,6 +74,10 @@ console.log(formatAgenda(result));
   (negative too), `BYMONTH`, `BYSETPOS`, `WKST`; `RDATE` (dates, date-times
   and periods) and `EXDATE` (several lines, comma lists, matched by instant,
   or by date for all-day events); changed occurrences (`RECURRENCE-ID`).
+  A period's days and weeks (`20260307T170000Z/P1D`) are counted on the clock
+  of the period's own start, not the event's. Two values for the same start
+  count once, the same whatever order they are written in: the `DTSTART` and
+  `RRULE` start first, then the smaller label, then the earlier end.
   A series without `COUNT` jumps straight to the range; one with `COUNT` is
   counted from `DTSTART`. At most 10,000 occurrences of one series in a range,
   its changed occurrences included.
@@ -89,7 +93,8 @@ console.log(formatAgenda(result));
   (`matchedBy: "title-and-time"`), grouped one to one: occurrences are sorted
   by the smallest source index in their source set, then `uid`, then `key`,
   and each joins the first group whose sources don't overlap its own. All
-  fields come from one winning copy.
+  fields come from one winning copy, including the `RECURRENCE-ID` label in
+  the `key`, so the order copies come in never changes the output.
 
 ## Not supported in this slice
 

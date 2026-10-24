@@ -98,3 +98,43 @@ test('the series limit is applied after cancellations that won\'t be shown are r
   assert.deepEqual(result.occurrences.map((o) => o.title), ['Live']);
   assert.deepEqual(result.problems, []);
 });
+
+test('a PERIOD RDATE counts its days in the zone of its own start, not the event\'s (review r7)', async () => {
+  const MAR = { from: '2026-03-01', to: '2026-03-31', timeZone: 'UTC' };
+  for (const rdate of ['RDATE;VALUE=PERIOD:20260307T170000Z/P1D', 'RDATE;VALUE=PERIOD;TZID=Europe/London:20260307T170000/P1D']) {
+    // New York moves its clocks on 2026-03-08; London and UTC don't.
+    const event = ev('UID:p@test.example', 'SUMMARY:Stay', 'DTSTART;TZID=America/New_York:20260301T090000', 'DURATION:PT1H', rdate);
+    const result = await merge({ a: cal(event) }, MAR);
+    const stay = result.occurrences.find((o) => o.start.utc === '2026-03-07T17:00:00Z');
+    assert.ok(stay, rdate);
+    assert.equal(stay.end.utc, '2026-03-08T17:00:00Z', rdate);
+  }
+});
+
+test('equal RECURRENCE-IDs written differently give byte-identical output in either order (review r7)', async () => {
+  const UTC = { ...NOV, timeZone: 'UTC' };
+  const weekly = ev('UID:r@test.example', 'SUMMARY:Weekly', 'DTSTART:20261102T090000Z', 'DURATION:PT1H', 'RRULE:FREQ=WEEKLY;COUNT=3');
+  const floating = ev('UID:r@test.example', 'SUMMARY:Moved', 'RECURRENCE-ID:20261102T090000', 'DTSTART:20261102T100000Z', 'DURATION:PT1H', 'SEQUENCE:1');
+  const utc = ev('UID:r@test.example', 'SUMMARY:Moved again', 'RECURRENCE-ID:20261102T090000Z', 'DTSTART:20261102T110000Z', 'DURATION:PT1H', 'SEQUENCE:2');
+  const one = await merge({ a: cal(weekly, floating, utc) }, UTC);
+  const two = await merge({ a: cal(weekly, utc, floating) }, UTC);
+  const three = await merge({ a: cal(utc), b: cal(weekly, floating) }, UTC);
+  const four = await merge({ a: cal(floating), b: cal(weekly, utc) }, UTC);
+  assert.equal(JSON.stringify(one.occurrences), JSON.stringify(two.occurrences));
+  assert.equal(JSON.stringify(three.occurrences.map((o) => [o.key, o.title])), JSON.stringify(four.occurrences.map((o) => [o.key, o.title])));
+  assert.deepEqual(one.occurrences.map((o) => [o.key, o.title]), [
+    ['r@test.example/2026-11-02T09:00:00Z', 'Moved again'],
+    ['r@test.example/2026-11-09T09:00:00Z', 'Weekly'],
+    ['r@test.example/2026-11-16T09:00:00Z', 'Weekly'],
+  ]);
+});
+
+test('RDATEs for the same start written differently give byte-identical output in either order (review r7)', async () => {
+  const UTC = { ...NOV, timeZone: 'UTC' };
+  const make = (...rdates) => cal(ev('UID:d@test.example', 'SUMMARY:Extra', 'DTSTART:20261102T090000', 'DURATION:PT1H', ...rdates));
+  const rdates = ['RDATE:20261105T090000', 'RDATE:20261105T090000Z', 'RDATE;VALUE=PERIOD:20261105T090000Z/PT3H'];
+  const first = await merge({ a: make(...rdates) }, UTC);
+  const second = await merge({ a: make(...[...rdates].reverse()) }, UTC);
+  assert.equal(JSON.stringify(first), JSON.stringify(second));
+  assert.equal(first.occurrences.length, 2);
+});

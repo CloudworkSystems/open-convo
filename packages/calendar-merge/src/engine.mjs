@@ -374,9 +374,15 @@ function expandFully(copy, q, single, stats, budget) {
   // any time zone work. The others count against the source's value budget.
   const outside = (day) => day < window.fromDay - 1 || day > window.toDay + 1;
   const resolve = (value) => budgetedResolve(value, copy.zone, budget);
-  const add = (resolvedStart, instance) => {
+  // Two values for the same start count once. Which one is kept never
+  // depends on the order they are written in: DTSTART and RRULE starts come
+  // before RDATEs, then the smaller label, then the earlier end.
+  const endKey = (i) => (i.allDay ? i.endDay * DAY_MS : i.endMs);
+  const add = (resolvedStart, instance, fromRdate = false) => {
     const key = keyOf(resolvedStart);
-    if (!all.has(key)) all.set(key, { ...instance, origKey: key, origLabel: labelOf(resolvedStart) });
+    const next = { ...instance, origKey: key, origLabel: labelOf(resolvedStart), fromRdate };
+    const kept = all.get(key);
+    if (!kept || (Number(next.fromRdate) - Number(kept.fromRdate) || byCodeUnits(next.origLabel, kept.origLabel) || endKey(next) - endKey(kept)) < 0) all.set(key, next);
   };
   if (!single && copy.rdates.length + copy.exdates.length > limits.seriesValues) {
     throw new WorkLimit(`more than ${limits.seriesValues} RDATE and EXDATE values`);
@@ -431,22 +437,23 @@ function expandFully(copy, q, single, stats, budget) {
           const e = resolve(endValue);
           endMs = e.error ? null : e.ms;
         } else if (d && d.sign > 0) {
-          const wall = wallAt(copy.zone, s.ms);
-          endMs = wallToInstant(copy.zone, wall.day + d.weeks * 7 + d.days, wall.sec) + (d.hours * 3600 + d.minutes * 60 + d.seconds) * 1000;
+          // Days and weeks are counted on the clock of the period's own start
+          // (its TZID, UTC, or the event's zone when floating), not the event's.
+          endMs = wallToInstant(s.zone, s.day + d.weeks * 7 + d.days, s.sec) + (d.hours * 3600 + d.minutes * 60 + d.seconds) * 1000;
         }
         if (endMs === undefined || endMs === null || endMs < s.ms) { at(`RDATE period "${rdate.text}" skipped: its end is not readable`); continue; }
-        add(s, { allDay: false, startMs: s.ms, endMs, wallDay: wallAt(copy.zone, s.ms).day });
+        add(s, { allDay: false, startMs: s.ms, endMs, wallDay: wallAt(copy.zone, s.ms).day }, true);
         continue;
       }
       const value = parseDateValue(rdate.text, rdate.params);
       if (!value) { at(`RDATE "${rdate.text}" skipped: not a readable date`); continue; }
       if ((value.kind === 'date') !== allDay) { at(`RDATE "${rdate.text}" skipped: it is ${allDay ? 'a date-time on an all-day event' : 'a date on a timed event'}`); continue; }
       if (outside(value.day)) continue;
-      if (allDay) { add({ date: true, day: value.day }, { allDay: true, startDay: value.day, endDay: value.day + copy.duration.days }); continue; }
+      if (allDay) { add({ date: true, day: value.day }, { allDay: true, startDay: value.day, endDay: value.day + copy.duration.days }, true); continue; }
       const s = resolve(value);
       if (s.error) { at(`RDATE "${rdate.text}" skipped: ${s.error}`); continue; }
       const wall = wallAt(copy.zone, s.ms);
-      add(s, timedInstance(copy, s.ms, wall.day, wall.sec));
+      add(s, timedInstance(copy, s.ms, wall.day, wall.sec), true);
     }
 
     const exMs = new Set();
@@ -544,12 +551,14 @@ function mergeUid(group, q, problems) {
     const sources = new Set([...masterSources, ...copies.map((c) => c.sourceIndex), ...entry.records.map((r) => r.sourceIndex)]);
     // Only the winning copy's RANGE counts: a stale RANGE override that loses
     // to a newer cancellation changes nothing beyond its own occurrence.
-    changed.set(ridKey, { override: copies[0] ?? null, cancelled: winner.kind === 'record' || winner.status === 'cancelled', sources, rid: entry.rid, range: Boolean(winner.ridRange) });
+    // The label comes from the winning copy, so equal RECURRENCE-IDs written
+    // differently give the same key whatever order the copies come in.
+    changed.set(ridKey, { override: copies[0] ?? null, cancelled: winner.kind === 'record' || winner.status === 'cancelled', sources, rid: winner.rid, range: Boolean(winner.ridRange) });
   }
 
   const items = [];
   let degraded = false;
-  let lineFor = display ?? [...group.overrides.values()].flatMap((o) => o.copies)[0];
+  const lineFor = display ?? [...group.overrides.values()].flatMap((o) => o.copies).sort(compareCopies)[0];
   if (display && !display.outOfRange) {
     const thisAndFuture = [...changed.values()].some((c) => c.range);
     // The series is paid for by the shown copy's own source only: a source
@@ -723,7 +732,7 @@ export async function mergeCalendars(sources, query) {
       if (copy.ridKey === null) {
         (copy.kind === 'record' ? group.records : group.masters).push(copy);
       } else {
-        if (!group.overrides.has(copy.ridKey)) group.overrides.set(copy.ridKey, { copies: [], records: [], rid: copy.rid });
+        if (!group.overrides.has(copy.ridKey)) group.overrides.set(copy.ridKey, { copies: [], records: [] });
         const entry = group.overrides.get(copy.ridKey);
         (copy.kind === 'record' ? entry.records : entry.copies).push(copy);
       }
