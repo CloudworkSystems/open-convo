@@ -97,7 +97,11 @@ with a plain message naming the request's position.
 1. **Check the input** as above. A refusal produces no plan.
 2. **The same message in two inboxes is one message**, as in the sorting
    engine: same `Message-ID` (trimmed, angle brackets removed, lower case),
-   shown once with every inbox it arrived in. Acting on it acts on every
+   shown once with every inbox it arrived in. Its other fields (`pile`,
+   sender, date, headers, unsubscribe headers) and its `id` come from the
+   copy whose inbox, then `id`, comes first in character-code order, the
+   sorting engine's rule, so the file's order never changes a guard, a
+   group, an unsubscribe method or the seal. Acting on it acts on every
    copy, and the plan lists each copy, because each inbox needs its own
    action later.
 3. **Match each request** to its messages, in request order.
@@ -225,7 +229,9 @@ mail only (`.example` addresses, invented people and businesses). At least:
    `mailto:` with `subject` and `body` lists both, and changing either
    changes the seal; one with `cc` or `bcc` is `none`.
 8. Duplicates: the same `Message-ID` in two inboxes is one message with two
-   copies, and the seal covers both copies.
+   copies, and the seal covers both copies; two copies that disagree on
+   `pile`, sender and `List-Unsubscribe` give the same plan and seal in
+   either file order, taken from the representative copy.
 9. The seal: the same files give the same seal; adding, removing or
    changing any message copy, action or unsubscribe URL changes it;
    shuffling the messages file doesn't; swapping two requests that don't
