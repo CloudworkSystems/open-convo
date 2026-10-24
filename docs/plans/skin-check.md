@@ -141,9 +141,12 @@ A small library in `packages/skin-check/`:
   cautious outcome of any check-in since the owner last recorded "seen by a
   clinician" for that spot, with every reason kept and dated. A later
   all-"no" check-in never hides an earlier urgent or clinician-worthy
-  answer. Recording "seen by a clinician" (a dated entry on the spot, with
-  an optional note) is the only thing that starts the spot's outcome
-  afresh; the earlier check-ins stay in its history. Until the next
+  answer. Recording "seen by a clinician" (an entry on the spot with the
+  visit's time and UTC offset, a permanent ID and an optional note; when
+  only the date is known, the end of that day in the owner's time zone) is
+  the only thing that starts the spot's outcome afresh. A check-in counts
+  as after the visit when its capture instant is the same as or later than
+  the visit's, so a tie keeps the observation visible; the earlier check-ins stay in its history. Until the next
   check-in after that entry, the spot's outcome is **not checked since your
   clinician visit**, with the visit date and a prompt to check it again;
   never "no warning sign noted by you".
@@ -210,7 +213,9 @@ people and spots only. At least:
    by an all-"no" one keeps the spot in the urgent group with the earlier
    reason and its date, until "seen by a clinician" is recorded; right
    after that entry the spot shows "not checked since your clinician
-   visit", never "no warning sign".
+   visit", never "no warning sign". Check-ins just before, at the same
+   instant as, and just after a same-day visit land on the right side of
+   it, before and after a merge.
 8. Merge: the same cases as the household lists engine (different spots,
    same field, delete vs edit, equal timestamps, clock skew, offline copy
    after Trash is emptied), A into B equals B into A, and the same check-in
