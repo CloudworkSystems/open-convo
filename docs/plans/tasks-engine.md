@@ -170,11 +170,13 @@ A. Two rules specific to tasks:
   else: it never moves a series on and never applies as a snooze.
 - **Reopening works on the occurrence, not on one record.** Reopening a
   repeating occurrence adds a reopen record naming that occurrence, with its
-  own ID and version stamp. Every completion and skip record for that
-  occurrence with a lower version stamp than the occurrence's highest reopen
-  record is set aside, including ones the reopening device had not seen
-  yet; one with a higher stamp (a re-complete made after the reopen, on any
-  device) counts again. Set-aside records stay in history as undone and
+  own ID, and listing the IDs of every completion and skip record for that
+  occurrence that the reopening device has at that moment (its causal
+  context; version stamps are not compared). Those listed records are set
+  aside. Any record for that occurrence that the reopen doesn't list counts:
+  a re-complete made afterwards, or a completion made concurrently on a
+  device the reopen hadn't heard from (the add wins, as in an
+  observed-remove set). Set-aside records stay in history as undone and
   never move the series on. Reopen records are merged as a set like the
   others. Reopening a one-off task is an ordinary stamped change to its
   `state`.
@@ -258,9 +260,11 @@ and tasks only. At least:
    already has the completion, merges later (the occurrence stays reopened,
    and the series is back on it on both devices); two devices complete the
    same occurrence, then one reopens it after seeing only its own record
-   (both records are set aside and the occurrence is open on both devices,
-   whichever order they merge in); a re-complete after a reopen counts again,
-   and a later re-complete beats an earlier withdrawal; and the rule edit case (weekly on Monday changed
+   (its own record is set aside, the other device's unseen completion still
+   counts, so the occurrence is done on both devices, whichever order they
+   merge in, even when the unseen completion has the lower version stamp);
+   reopening after seeing both records reopens it; a re-complete after a
+   reopen counts again, and a later re-complete beats an earlier withdrawal; and the rule edit case (weekly on Monday changed
    to weekly on Thursday: the Monday
    completion stays in history and the next due date is the first Thursday
    after it, on both devices, whichever order they merge in). Merging is commutative, associative and idempotent on random
