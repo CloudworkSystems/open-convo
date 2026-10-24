@@ -536,11 +536,17 @@ function mergeUid(group, q, problems) {
   }
 
   // Winners of each changed occurrence (RECURRENCE-ID).
+  // A cancellation record with a RECURRENCE-ID matches a series (E17), or a
+  // one-off at exactly that start; anything else is listed and changes nothing.
   const changed = new Map();
   for (const [ridKey, entry] of group.overrides) {
     const copies = [...entry.copies].sort(compareCopies);
     if (!copies.length && !display) {
       for (const record of entry.records) problems.push({ sourceIndex: record.sourceIndex, line: record.line, text: `cancellation for "${record.uid}" at ${labelOf(record.rid)} matches no event in any source` });
+      continue;
+    }
+    if (!copies.length && !display.isRepeat && keyOf(display.start) !== ridKey) {
+      for (const record of entry.records) problems.push({ sourceIndex: record.sourceIndex, line: record.line, text: `cancellation for "${record.uid}" at ${labelOf(record.rid)} matches no occurrence: "${record.uid}" does not repeat` });
       continue;
     }
     const contenders = [...copies, ...entry.records];
@@ -553,7 +559,7 @@ function mergeUid(group, q, problems) {
     // to a newer cancellation changes nothing beyond its own occurrence.
     // The label comes from the winning copy, so equal RECURRENCE-IDs written
     // differently give the same key whatever order the copies come in.
-    changed.set(ridKey, { override: copies[0] ?? null, cancelled: winner.kind === 'record' || winner.status === 'cancelled', sources, rid: winner.rid, range: Boolean(winner.ridRange) });
+    changed.set(ridKey, { override: copies[0] ?? null, cancelled: winner.kind === 'record' || winner.status === 'cancelled', sources, rid: winner.rid, range: Boolean(winner.ridRange), winner });
   }
 
   const items = [];
@@ -567,9 +573,13 @@ function mergeUid(group, q, problems) {
     problems.push(...found);
     if (workLimit) {
       problems.push({ sourceIndex: display.sourceIndex, line: display.line, text: `"${display.uid}" needs too much work to expand (${workLimit}); only its first occurrence is shown` });
+    } else if (display.ruleProblem !== null) {
+      problems.push({ sourceIndex: display.sourceIndex, line: display.line, text: `repeat rule of "${display.uid}" not supported (${display.ruleProblem}); only its first occurrence is shown` });
     } else if (notSupported) {
-      const why = display.ruleProblem ?? 'RANGE=THISANDFUTURE';
-      problems.push({ sourceIndex: display.sourceIndex, line: display.line, text: `repeat rule of "${display.uid}" not supported (${why}); only its first occurrence is shown` });
+      // RANGE=THISANDFUTURE is written on a changed copy or cancellation
+      // record, so the problem names the top-ranked one that won with it.
+      const ranged = [...changed.values()].filter((c) => c.range).map((c) => c.winner).sort(compareCopies)[0];
+      problems.push({ sourceIndex: ranged.sourceIndex, line: ranged.line, text: `repeat rule of "${display.uid}" not supported (RANGE=THISANDFUTURE); only its first occurrence is shown` });
     }
     degraded = notSupported;
     for (const instance of instances.values()) {

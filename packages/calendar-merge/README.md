@@ -188,7 +188,8 @@ Each has a test under the same number, in `tests/15-edge-cases.test.mjs`
 (E1 to E27) or `tests/17-review-fixes.test.mjs` (E28 to E31).
 
 - **E1.** `DTSTART` always counts as the first occurrence, even when it
-  doesn't match the rule (RFC 5545 3.3.10).
+  doesn't match the rule (RFC 5545 3.3.10) and even when `UNTIL` is before
+  it: `UNTIL` limits only the dates the rule adds.
 - **E2.** A rule the standard doesn't allow (`COUNT` with `UNTIL`,
   `BYMONTHDAY` with `WEEKLY`, a numbered `BYDAY` with `DAILY` or `WEEKLY`,
   `BYSETPOS` alone, an unknown rule part, `INTERVAL=0`) is handled like an
@@ -226,7 +227,9 @@ Each has a test under the same number, in `tests/15-edge-cases.test.mjs`
   their place in the file.
 - **E17.** A cancellation record with a `RECURRENCE-ID` matches when the
   series exists in any source, even if the series has no occurrence at that
-  time; it is not listed as a problem.
+  time; it is not listed as a problem. When the `UID` belongs only to an event
+  that doesn't repeat, it matches only that event's own start; otherwise it
+  is listed and changes nothing.
 - **E18.** An occurrence that began before the range is sorted and listed
   under the range's first day.
 - **E19.** The query's time zone must be a name; offset forms are refused.
@@ -257,7 +260,7 @@ Each has a test under the same number, in `tests/15-edge-cases.test.mjs`
 - **E29.** `RANGE=THISANDFUTURE` counts only when it is on the winning copy
   of a changed occurrence, an override or a cancellation record; a stale
   `RANGE` override that loses to a newer cancellation changes only its own
-  occurrence.
+  occurrence. The problem names the source and line of that winning copy.
 - **E30.** A series shown as its first occurrence only (an unsupported rule,
   `RANGE=THISANDFUTURE` or a work limit) leaves out its changed copies; a
   cancellation of that first occurrence still applies, whether it comes from

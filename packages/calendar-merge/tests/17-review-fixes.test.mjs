@@ -16,7 +16,7 @@ test('E29: a winning cancellation record with RANGE=THISANDFUTURE shows the firs
   const record = withMethod('CANCEL', ev('UID:s@test.example', 'RECURRENCE-ID;RANGE=THISANDFUTURE;TZID=America/New_York:20261116T090000', 'SEQUENCE:1'));
   const result = await merge({ a: cal(series), b: record }, NOV);
   assert.deepEqual(days(result), ['2026-11-02*']);
-  assert.deepEqual(result.problems, ['Source "a", line 4: repeat rule of "s@test.example" not supported (RANGE=THISANDFUTURE); only its first occurrence is shown.']);
+  assert.deepEqual(result.problems, ['Source "b", line 4: repeat rule of "s@test.example" not supported (RANGE=THISANDFUTURE); only its first occurrence is shown.']);
 });
 
 test('E29: a stale RANGE override that loses to a newer cancellation changes only its own occurrence', async () => {
@@ -137,4 +137,44 @@ test('RDATEs for the same start written differently give byte-identical output i
   const second = await merge({ a: make(...[...rdates].reverse()) }, UTC);
   assert.equal(JSON.stringify(first), JSON.stringify(second));
   assert.equal(first.occurrences.length, 2);
+});
+
+test('DTSTART is always the first occurrence, even when UNTIL is before it (review r8)', async () => {
+  const timed = ev('UID:u@test.example', 'SUMMARY:Late', 'DTSTART:20261105T090000Z', 'DURATION:PT1H', 'RRULE:FREQ=DAILY;UNTIL=20261101T090000Z');
+  const allDay = ev('UID:v@test.example', 'SUMMARY:Late day', 'DTSTART;VALUE=DATE:20261105', 'RRULE:FREQ=DAILY;UNTIL=20261101');
+  const result = await merge({ a: cal(timed, allDay) }, { ...NOV, timeZone: 'UTC' });
+  assert.deepEqual(result.occurrences.map((o) => [o.title, o.allDay ? o.start : o.start.utc]), [['Late day', '2026-11-05'], ['Late', '2026-11-05T09:00:00Z']]);
+  assert.deepEqual(result.problems, []);
+});
+
+test('DTSTART counts as the first occurrence when BYDAY excludes it, and with a bad COUNT (review r8)', async () => {
+  const UTC = { ...NOV, timeZone: 'UTC' };
+  // 2026-11-05 is a Thursday: COUNT=2 is DTSTART plus the next Monday.
+  const byday = ev('UID:w@test.example', 'SUMMARY:Mondays', 'DTSTART:20261105T090000Z', 'DURATION:PT1H', 'RRULE:FREQ=WEEKLY;BYDAY=MO;COUNT=2');
+  const shown = await merge({ a: cal(byday) }, UTC);
+  assert.deepEqual(shown.occurrences.map((o) => o.start.utc), ['2026-11-05T09:00:00Z', '2026-11-09T09:00:00Z']);
+  const zero = ev('UID:z@test.example', 'SUMMARY:Zero', 'DTSTART:20261105T090000Z', 'DURATION:PT1H', 'RRULE:FREQ=DAILY;COUNT=0');
+  const degraded = await merge({ a: cal(zero) }, UTC);
+  assert.deepEqual(degraded.occurrences.map((o) => [o.start.utc, o.repeatNotSupported]), [['2026-11-05T09:00:00Z', true]]);
+  assert.equal(degraded.problems.length, 1);
+});
+
+test('a cancellation with a RECURRENCE-ID for a UID that only has a one-off is listed unless it names that one-off\'s start (review r8)', async () => {
+  const UTC = { ...NOV, timeZone: 'UTC', includeCancelled: true };
+  const oneOff = cal(ev('UID:o@test.example', 'SUMMARY:Once', 'DTSTART:20261101T090000Z', 'DURATION:PT1H'));
+  const other = cal(ev('UID:o@test.example', 'STATUS:CANCELLED', 'RECURRENCE-ID:20261102T090000Z', 'SEQUENCE:1'));
+  const missed = await merge({ a: oneOff, b: other }, UTC);
+  assert.deepEqual(missed.occurrences.map((o) => [o.title, o.status]), [['Once', 'confirmed']]);
+  assert.deepEqual(missed.problems, ['Source "b", line 4: cancellation for "o@test.example" at 2026-11-02T09:00:00Z matches no occurrence: "o@test.example" does not repeat.']);
+  const same = cal(ev('UID:o@test.example', 'STATUS:CANCELLED', 'RECURRENCE-ID:20261101T090000Z', 'SEQUENCE:1'));
+  const hit = await merge({ a: oneOff, b: same }, UTC);
+  assert.deepEqual(hit.occurrences.map((o) => [o.title, o.status]), [['Once', 'cancelled']]);
+  assert.deepEqual(hit.problems, []);
+});
+
+test('a RANGE=THISANDFUTURE change from another source is named in its problem, not the series (review r8)', async () => {
+  const moved = ev('UID:s@test.example', 'SUMMARY:Moved', 'RECURRENCE-ID;RANGE=THISANDFUTURE;TZID=America/New_York:20261116T090000', 'DTSTART;TZID=America/New_York:20261116T100000', 'DURATION:PT1H', 'SEQUENCE:1');
+  const result = await merge({ a: cal(series), b: cal(ev('UID:other@test.example', 'SUMMARY:Other', 'DTSTART:20261103T150000Z'), moved) }, NOV);
+  assert.deepEqual(days(result), ['2026-11-02*', '2026-11-03']);
+  assert.deepEqual(result.problems, [`Source "b", line ${4 + ev('UID:other@test.example', 'SUMMARY:Other', 'DTSTART:20261103T150000Z').length}: repeat rule of "s@test.example" not supported (RANGE=THISANDFUTURE); only its first occurrence is shown.`]);
 });

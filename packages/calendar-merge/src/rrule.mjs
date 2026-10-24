@@ -247,9 +247,11 @@ export function expandRuleDays(rule, startDay, window, pastUntil = () => false, 
   let k = rule.count === null ? firstUsefulPeriod(rule, ctx, window.fromDay) : 0;
   let produced = 0;
   if (k === 0) {
-    // DTSTART is always the first instance, matching the rule or not.
-    if (pastUntil(startDay)) return out;
+    // DTSTART is always the first instance, matching the rule or not, and
+    // even when UNTIL is before it: UNTIL bounds only the dates the rule
+    // makes (RFC 5545 3.8.5.3).
     if (startDay >= window.fromDay) out.push(startDay);
+    if (pastUntil(startDay)) return out;
     produced = 1;
   }
   for (;; k += 1) {
