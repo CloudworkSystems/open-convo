@@ -130,7 +130,9 @@ so it builds and tests on Linux too.
   but before that save, reconciliation drops the merged entry, re-queues
   the old local edit with its old base, and the next upload finds the
   conflict and merges again, so the other device's edit is never written
-  over. The sync core does not
+  over. A merged entry also becomes uploadable only once the app confirms
+  that local save, so the cloud can't commit a merge result the device
+  might still drop. The sync core does not
   pick a winner blindly. It hands both copies to a **merge function
   registered for that record type** and uploads the result, so the edit that
   reaches the cloud second never simply overwrites the first. Stamps decide
@@ -173,8 +175,11 @@ so it builds and tests on Linux too.
   back. "Purged" is sync metadata the core reads, not part of the opaque
   payload, and it wins over every edit whatever its stamp, with or without
   a merge function: a device whose counter ran ahead through other work
-  still can't revive a purged record. Markers are kept; compacting them is
-  out of scope.
+  still can't revive a purged record. When a purge wins, the losing payload
+  is discarded, not kept as a conflict copy (the conflict-copy fallback
+  never applies to a purge), and any queued edit to that record leaves the
+  outbox, so no purged content stays on any device. Markers are kept;
+  compacting them is out of scope.
 - **Size limits.** CloudKit refuses ordinary record fields over 1 MB. The
   sync core sets a payload limit below that, leaving room for encryption
   overhead and metadata, and stores larger payloads as asset-style
@@ -218,7 +223,9 @@ Every case uses two or three simulated devices and invented records.
 5b. A purges a record; B, offline, edits its older copy; after sync the
    record stays purged and cannot come back. This holds when B's edit has a
    higher stamp than the purge (B's counter ran ahead through other work)
-   and the record type has no merge function.
+   and the record type has no merge function. Afterwards neither device
+   holds B's edited payload anywhere: not as the record, a conflict copy or
+   an outbox entry.
 6. The connection drops halfway through an upload; after retry, nothing is
    missing and nothing is duplicated.
 7. B is offline for many changes, then catches up, including after its change
@@ -283,7 +290,9 @@ Every case uses two or three simulated devices and invented records.
     And when A is destroyed after the merged entry reaches its checkpoint
     but before the merged record is saved locally, A reconciles from the old
     local edit, the upload is still treated as a conflict, and both devices
-    end with both edits.
+    end with both edits. The merged entry isn't uploaded in that window:
+    with the app's save held back, the cloud receives nothing for that
+    record until the save is confirmed.
 
 ## Out Of Scope For This Slice
 
@@ -405,7 +414,10 @@ the result doesn't depend on fetch-or-upload order (test 4). Its round on
 device's ID, and a replayed fetch with an equal stamp is already applied
 (test 17, fifth case). Its round on `7b3c28a` added a P1: an entry uploads
 only once it is checkpointed, and a cloud copy with its ID and stamp counts
-as its acknowledgement (test 17, sixth case).
+as its acknowledgement (test 17, sixth case). Its round on `bd3d676` added
+two P1s: a winning purge discards the losing payload instead of keeping a
+conflict copy (test 5b), and a merged entry uploads only after the app
+confirms the local save (test 19).
 
 ## Review And Finish Line
 
