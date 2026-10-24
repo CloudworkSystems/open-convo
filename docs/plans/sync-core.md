@@ -94,7 +94,12 @@ so it builds and tests on Linux too.
   edited here, so reconciliation never queues it, even when a crash lost
   the checkpoint that recorded the fetch; when that fetch is replayed from
   the older change token, a fetched copy with the same stamp as the local
-  record counts as already applied, with no conflict and no merge. It drops any queued entry whose record ID and stamp
+  record counts as already applied, with no conflict and no merge. The same
+  holds for uploads: an outbox entry is uploaded only after the checkpoint
+  holding it is saved, and whenever an upload or a fetch meets a cloud copy
+  with the queued entry's record ID and stamp, that entry counts as
+  acknowledged, whatever base it carries, with no conflict, no merge and no
+  new revision. It drops any queued entry whose record ID and stamp
   aren't in the local store, so an edit that was never saved locally is
   never uploaded and doesn't leave the status stuck on "waiting". An edit
   saved just before a crash is therefore never stranded, and one that wasn't
@@ -259,7 +264,12 @@ Every case uses two or three simulated devices and invented records.
     reconciled one and reaches B. A fifth case: A fetches B's edit and
     saves it locally, then is destroyed before its checkpoint; after
     reconciling and fetching again, A uploads nothing for that record, the
-    merge function isn't called, and both devices hold B's version.
+    merge function isn't called, and both devices hold B's version. A sixth
+    case: the cloud saves A's upload, then A is destroyed before the
+    checkpoint that records the acknowledgement; after reconciling, A's
+    rebuilt entry is recognized as already in the cloud, the cloud holds
+    exactly one revision of that edit, the merge function isn't called, and
+    status returns to synced.
 18. A merged result is saved by the cloud but the connection drops before
     A hears back. After A retries, the cloud holds exactly one new revision,
     the merge function was called once for that conflict, and B ends with
@@ -393,7 +403,9 @@ a P1: with no merge function, a fetch applies "higher stamp wins" too, so
 the result doesn't depend on fetch-or-upload order (test 4). Its round on
 `da67bdb` added a P1: reconciliation queues only stamps carrying this
 device's ID, and a replayed fetch with an equal stamp is already applied
-(test 17, fifth case).
+(test 17, fifth case). Its round on `7b3c28a` added a P1: an entry uploads
+only once it is checkpointed, and a cloud copy with its ID and stamp counts
+as its acknowledgement (test 17, sixth case).
 
 ## Review And Finish Line
 
