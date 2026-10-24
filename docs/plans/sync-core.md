@@ -87,7 +87,10 @@ so it builds and tests on Linux too.
   local edit or a local merge result, not a copy fetched from another
   device; the device ID is part of the checkpoint, so a device recreated
   from its checkpoint keeps the same ID, and the core refuses to start
-  from a checkpoint with a different ID passed in) and isn't already queued, using the payload
+  from a checkpoint with a different ID passed in; on a brand-new install,
+  the core saves its first checkpoint, holding the device ID, before it
+  accepts any local edit, so a crash on first run can't leave an edit
+  stamped with an ID the device no longer has) and isn't already queued, using the payload
   it was handed and that record's saved change tag as the entry's base, so
   an edit another device made in the meantime is still found as a conflict
   and merged. (If the saved tag is older than the true base, the only cost
@@ -157,7 +160,11 @@ so it builds and tests on Linux too.
   function falls back to "higher stamp wins" and keeps the losing copy as a
   conflict copy the app can show, so nothing is silently lost. Conflict
   copies are part of the checkpoint until the app confirms it has saved
-  them in its own store, so a quit before then doesn't lose them.
+  them in its own store, so a quit before then doesn't lose them. The
+  checkpoint holding a new conflict copy is saved before the app is asked
+  to replace the local record with the winning copy, so a crash between
+  the two can't lose the losing edit: it is either still the local record
+  or already a saved conflict copy.
 - **Retries reuse the merge result.** The merge result is stamped and saved
   in the outbox (and so in the checkpoint) before it is uploaded, and a
   retry sends those same bytes; the merge function is not called again for
@@ -225,7 +232,11 @@ Every case uses two or three simulated devices and invented records.
    attention". Also run with A fetching B's version before A uploads, once
    with A's stamp lower and once higher: both devices end with the
    higher-stamped version and the other kept as a conflict copy, the same
-   as when A uploads first.
+   as when A uploads first. In the case where B's fetched copy wins, the
+   app isn't asked to replace A's local record until the checkpoint holding
+   the conflict copy is saved; when A is destroyed right after the app
+   replaces the record, the recreated A still holds A's edit, once, as a
+   conflict copy, and status says "needs attention".
 5. A logically deletes a record; B, offline, edits its older copy; after
    sync the deletion wins (older edit). Then A restores the record with a
    later stamp; after sync it is back on both devices.
@@ -291,7 +302,11 @@ Every case uses two or three simulated devices and invented records.
     save is held back, and A is destroyed; recreated from its checkpoint,
     A fetches the edit again and saves it. Every case recreates A from the
     checkpoint alone, without passing in its device ID again, and A keeps
-    its ID.
+    its ID. An eighth case, on first run: a brand-new A with no checkpoint
+    accepts no edit until its first checkpoint, holding its device ID, is
+    saved; A then saves its first edit locally and is destroyed before the
+    next checkpoint; recreated, A keeps its ID, queues the edit, and B has
+    it after sync.
 18. A merged result is saved by the cloud but the connection drops before
     A hears back. After A retries, the cloud holds exactly one new revision,
     the merge function was called once for that conflict, and B ends with
@@ -437,7 +452,11 @@ two P1s: a winning purge discards the losing payload instead of keeping a
 conflict copy (test 5b), and a merged entry uploads only after the app
 confirms the local save (test 19). Its round on `4db0ee9` added a P1:
 every entry, not only a merge, waits for the app's local-save
-confirmation before it uploads (test 17, reverse case).
+confirmation before it uploads (test 17, reverse case). Its round on
+`e52c1a1` added two P1s: a new install saves its device ID in a first
+checkpoint before accepting any edit (test 17, eighth case), and the
+checkpoint holding a conflict copy is saved before the app replaces the
+local record (test 4).
 
 ## Review And Finish Line
 
