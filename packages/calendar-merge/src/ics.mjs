@@ -26,6 +26,10 @@ function contentLines(text) {
   return lines;
 }
 
+// RFC 6868: ^n is a new line, ^' a double quote and ^^ a caret in a
+// parameter value.
+const decodeParam = (value) => value.replace(/\^([n^'])/g, (_, ch) => (ch === 'n' ? '\n' : ch === "'" ? '"' : '^'));
+
 // NAME;PARAM=a,"b";P2=c:value  ->  { name, params, value }, or null.
 export function parseContentLine(text) {
   let i = 0;
@@ -44,12 +48,12 @@ export function parseContentLine(text) {
       if (text[i] === '"') {
         const close = text.indexOf('"', i + 1);
         if (close < 0) return null;
-        values.push(text.slice(i + 1, close));
+        values.push(decodeParam(text.slice(i + 1, close)));
         i = close + 1;
       } else {
         let j = i;
         while (j < text.length && text[j] !== ',' && text[j] !== ';' && text[j] !== ':') j += 1;
-        values.push(text.slice(i, j));
+        values.push(decodeParam(text.slice(i, j)));
         i = j;
       }
       if (text[i] === ',') { i += 1; continue; }
@@ -94,12 +98,14 @@ export function parseDuration(value) {
   return { sign: match[1] === '-' ? -1 : 1, weeks, days, hours, minutes, seconds };
 }
 
-// Splits a source's text into raw VEVENTs. Throws a Refusal for a file with no
+// Splits a source's text into raw VEVENTs, and lists events that can't be
+// read whole (an END:VEVENT missing). Throws a Refusal for a file with no
 // BEGIN:VCALENDAR.
 export function readIcs(text) {
   const lines = contentLines(text);
   const events = [];
   const tzids = [];
+  const problems = [];
   const stack = [];
   let sawCalendar = false;
   let calendar = null;
@@ -110,6 +116,12 @@ export function readIcs(text) {
     if (prop.name === 'BEGIN') {
       const kind = prop.value.trim().toUpperCase();
       if (kind === 'VCALENDAR' && stack.length === 0) { sawCalendar = true; calendar = { method: null }; }
+      if (kind === 'VEVENT' && current && stack[0] === 'VCALENDAR') {
+        // A new event while one is still open: the open one has no END:VEVENT.
+        problems.push({ line: current.line, text: 'event skipped: no END:VEVENT before the next BEGIN:VEVENT' });
+        stack.length = 1;
+        current = null;
+      }
       if (kind === 'VEVENT' && stack.length === 1 && stack[0] === 'VCALENDAR') {
         current = { line, calendar, props: new Map() };
       }
@@ -119,6 +131,10 @@ export function readIcs(text) {
     if (prop.name === 'END') {
       const kind = prop.value.trim().toUpperCase();
       const at = stack.lastIndexOf(kind);
+      if (kind === 'VCALENDAR' && at === 0 && current) {
+        problems.push({ line: current.line, text: 'event skipped: no END:VEVENT before END:VCALENDAR' });
+        current = null;
+      }
       if (at >= 0) stack.length = at; // tolerate a missing END inside
       if (kind === 'VEVENT' && current && stack.length === 1) {
         events.push(current);
@@ -138,5 +154,6 @@ export function readIcs(text) {
   }
   if (!sawCalendar) throw new Refusal('has no BEGIN:VCALENDAR');
   // METHOD belongs to the whole calendar, wherever it is written.
-  return { events: events.map(({ calendar: cal, ...event }) => ({ ...event, method: cal.method })), tzids };
+  if (current) problems.push({ line: current.line, text: 'event skipped: no END:VEVENT before the end of the file' });
+  return { events: events.map(({ calendar: cal, ...event }) => ({ ...event, method: cal.method })), tzids, problems };
 }

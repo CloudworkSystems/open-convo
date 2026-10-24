@@ -119,6 +119,24 @@ only its first occurrence, marked `repeatNotSupported: true`, and is listed in
 - `problems`: plain messages naming the source, the line and what was skipped.
 - The same input gives byte-identical output; the order of events inside a
   file never changes it.
+- Because look-alike copies are grouped by the smallest source index first
+  (#121 requirement 1), the order of the sources can change which copies pair
+  up when three or more look-alike copies collide at the same time: with "c"
+  in A and B, "b" in B and "a" in C, the order A, B, C gives {a, c} and {b},
+  while C, B, A gives {a, b} and {c}.
+
+## Work limits
+
+Calendars come from outside, so one call's work is bounded, not only its
+input size. A series may visit at most 100,000 repeat periods and hold at most
+50,000 `RDATE` and `EXDATE` values; one call may visit at most 2,000,000
+periods and read at most 200,000 dates through a time zone. A series that
+would go past a limit shows only its first occurrence, marked
+`repeatNotSupported: true`, and is listed in `problems` ("needs too much work
+to expand"). `RDATE` and `EXDATE` values whose written date is outside the
+range (with a day to spare) are skipped before any time zone work, and time
+zone offsets are cached per zone and hour. `tests/16-work-budget.test.mjs`
+covers a hostile 164-byte `COUNT` rule and large out-of-range `RDATE` lists.
 
 ## Edge cases
 
@@ -177,6 +195,14 @@ Each has a test in `tests/15-edge-cases.test.mjs` under the same number.
 - **E23.** A changed occurrence lists the sources of its series and of its
   changed copies.
 - **E24.** A calendar given without a `name` is named by its `id`.
+- **E25.** An event missing its `END:VEVENT` (another `BEGIN:VEVENT`,
+  `END:VCALENDAR` or the end of the file comes first) is skipped and listed.
+- **E26.** Parameter values are decoded as RFC 6868 says (`^n`, `^'`, `^^`).
+- **E27.** RFC 5545 folds by octets, so a fold can split a multi-byte UTF-8
+  character. The command moves the split character's bytes in front of the
+  fold before decoding, so it reads whole and line numbers stay the same. The
+  library takes text, so anything else that hands it text (a later fetch
+  layer, for example) needs the same care.
 
 ## Windows time zone names
 
@@ -190,7 +216,8 @@ copied as data. Unicode CLDR data is used under the Unicode License v3
 ## Tests
 
 `tests/01-…` to `tests/14-…` follow the plan's numbered tests, and
-`tests/15-edge-cases.test.mjs` the edge cases above. Every test file loads
+`tests/15-edge-cases.test.mjs` the edge cases above, and
+`tests/16-work-budget.test.mjs` the work limits. Every test file loads
 `tests/setup/guard.mjs` first, which blocks every network and process entry
 point of Node 22's built-in modules and every file write, and fails a test
 that calls one; `tests/setup/builtin-modules.json` lists Node's built-in

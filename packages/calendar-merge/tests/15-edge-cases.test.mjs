@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { cal, ev, merge, sourceIds, titles } from './helpers.mjs';
 import { formatAgenda } from '../src/index.mjs';
+import { parseContentLine } from '../src/ics.mjs';
+import { decodeIcs, run } from '../src/merge.mjs';
 
 const NOV = { from: '2026-11-01', to: '2026-11-30' };
 const NY = (time) => `DTSTART;TZID=America/New_York:${time}`;
@@ -200,4 +202,43 @@ test('E23: a changed occurrence lists the sources of its series and of its chang
 test('E24: a calendar without a name is named by its id', async () => {
   const result = await merge([{ id: 'nameless', ics: cal(ev('UID:e24@test.example', 'SUMMARY:E24', NY('20261103T090000'))) }], NOV);
   assert.deepEqual(result.occurrences[0].sources, [{ id: 'nameless', name: 'nameless' }]);
+});
+
+test('E25: a missing END:VEVENT is listed as a problem, and the rest of the file still shows', async () => {
+  const text = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0',
+    'BEGIN:VEVENT', 'UID:e25a@test.example', 'SUMMARY:Unclosed', NY('20261103T090000'),
+    'BEGIN:VEVENT', 'UID:e25b@test.example', 'SUMMARY:Closed', NY('20261103T100000'), 'END:VEVENT',
+    'BEGIN:VEVENT', 'UID:e25c@test.example', 'SUMMARY:Unclosed at the end', NY('20261103T110000'),
+    'END:VCALENDAR', '',
+  ].join('\r\n');
+  const result = await merge({ a: text }, NOV);
+  assert.deepEqual(titles(result), ['Closed']);
+  assert.deepEqual(result.problems, [
+    'Source "a", line 3: event skipped: no END:VEVENT before the next BEGIN:VEVENT.',
+    'Source "a", line 12: event skipped: no END:VEVENT before END:VCALENDAR.',
+  ]);
+});
+
+test('E26: caret-encoded parameter values are decoded (RFC 6868)', async () => {
+  assert.deepEqual(parseContentLine("ATTENDEE;CN=Juniper ^'June^' Ash^ngrove ^^1:mailto:j@test.example").params.CN, ['Juniper "June" Ash\ngrove ^1']);
+  const result = await merge({ a: cal(ev('UID:e26@test.example', 'SUMMARY:E26', 'DTSTART;TZID="America/New^^York":20261103T090000')) }, NOV);
+  assert.deepEqual(result.problems, ['Source "a", line 4: event "e26@test.example" skipped: unknown time zone "America/New^York".']);
+});
+
+test('E27: the command restores a multi-byte character that a fold split', async () => {
+  const bytes = new TextEncoder().encode(cal(ev('UID:e27@test.example', 'SUMMARY:Café été', NY('20261103T090000'))));
+  // Fold inside the first "é" (0xC3 0xA9), as RFC 5545 allows.
+  const at = bytes.indexOf(0xa9);
+  const folded = Uint8Array.from([...bytes.subarray(0, at), 0x0d, 0x0a, 0x20, ...bytes.subarray(at)]);
+  let printed = '';
+  const code = await run(['--from', '2026-11-03', '--to', '2026-11-03', '--tz', 'America/New_York', '--json', 'folded.ics'], {
+    stdout: { write(chunk) { printed += chunk; return true; } },
+    stderr: { write() { return true; } },
+    readFile: () => folded,
+    fileSize: () => folded.length,
+  });
+  assert.equal(code, 0);
+  assert.equal(JSON.parse(printed).occurrences[0].title, 'Café été');
+  assert.equal(decodeIcs(folded).split('\r\n').length, new TextDecoder().decode(folded).split('\r\n').length);
 });

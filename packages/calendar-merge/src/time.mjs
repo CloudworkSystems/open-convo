@@ -119,24 +119,56 @@ export function zoneFromTzid(tzid) {
   return canonicalZone(tzid);
 }
 
-// Wall clock of an instant in a zone, and the zone's offset there.
-export function wallAt(zone, ms) {
-  if (zone === 'UTC') {
-    const day = Math.floor(ms / DAY_MS);
-    return { day, sec: Math.floor(mod(ms, DAY_MS) / 1000), offsetMs: 0 };
-  }
+// The zone's offset at an instant, read through Intl.
+function readOffset(zone, ms) {
   const fields = {};
   for (const part of formatterFor(zone).formatToParts(ms)) fields[part.type] = part.value;
   let year = Number(fields.year);
   if (fields.era && fields.era.startsWith('B')) year = 1 - year;
   const day = daysFromCivil(year, Number(fields.month), Number(fields.day));
   const sec = Number(fields.hour) * 3600 + Number(fields.minute) * 60 + Number(fields.second);
-  const wallMs = day * DAY_MS + sec * 1000;
-  const whole = Math.floor(ms / 1000) * 1000;
-  return { day, sec, offsetMs: wallMs - whole };
+  return day * DAY_MS + sec * 1000 - Math.floor(ms / 1000) * 1000;
 }
 
-export const offsetAt = (zone, ms) => wallAt(zone, ms).offsetMs;
+// Offsets are cached per zone and hour. An hour whose first and last second
+// have the same offset holds no clock change (zones change at most once an
+// hour), so its offset is stored; an hour with a change is always read
+// exactly. The cache is cleared when it grows large.
+const HOUR_MS = 3_600_000;
+const MIXED = Symbol('mixed');
+const offsetCache = new Map();
+let cachedHours = 0;
+
+export function offsetAt(zone, ms) {
+  if (zone === 'UTC') return 0;
+  let hours = offsetCache.get(zone);
+  if (!hours) {
+    hours = new Map();
+    offsetCache.set(zone, hours);
+  }
+  const hour = Math.floor(ms / HOUR_MS);
+  let offset = hours.get(hour);
+  if (offset === undefined) {
+    const first = readOffset(zone, hour * HOUR_MS);
+    offset = first === readOffset(zone, hour * HOUR_MS + HOUR_MS - 1000) ? first : MIXED;
+    if (cachedHours > 200_000) {
+      offsetCache.clear();
+      cachedHours = 0;
+      offsetCache.set(zone, hours = new Map());
+    }
+    hours.set(hour, offset);
+    cachedHours += 1;
+  }
+  return offset === MIXED ? readOffset(zone, ms) : offset;
+}
+
+// Wall clock of an instant in a zone, and the zone's offset there.
+export function wallAt(zone, ms) {
+  const offsetMs = offsetAt(zone, ms);
+  const wallMs = Math.floor(ms / 1000) * 1000 + offsetMs;
+  const day = Math.floor(wallMs / DAY_MS);
+  return { day, sec: Math.floor(mod(wallMs, DAY_MS) / 1000), offsetMs };
+}
 
 // Local wall time to an instant, following RFC 5545: a time the clocks skip
 // is read with the offset before the gap; a time that happens twice is the

@@ -7,6 +7,9 @@ import { civilFromDays, daysFromCivil, daysInMonth, isLeapYear, weekdayOf } from
 export const WEEKDAYS = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
 export const MAX_COUNT = 1_000_000;
 
+// Thrown when expanding one series would take more work than it is allowed.
+export class WorkLimit extends Error {}
+
 const SUPPORTED_FREQ = new Set(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']);
 const UNSUPPORTED_FREQ = new Set(['HOURLY', 'MINUTELY', 'SECONDLY']);
 const UNSUPPORTED_PARTS = new Set(['BYHOUR', 'BYMINUTE', 'BYSECOND', 'BYWEEKNO', 'BYYEARDAY']);
@@ -235,8 +238,9 @@ function firstUsefulPeriod(rule, ctx, fromDay) {
 // expansion starts at the first period that can reach fromDay; with COUNT it
 // counts from DTSTART. It stops after toDay,
 // at the count, or at the first date `pastUntil(day)` says is after UNTIL.
-// `stats.steps` counts the periods visited.
-export function expandRuleDays(rule, startDay, window, pastUntil = () => false, stats = { steps: 0 }) {
+// `stats.steps` counts the periods visited; past `maxSteps` it throws a
+// WorkLimit.
+export function expandRuleDays(rule, startDay, window, pastUntil = () => false, stats = { steps: 0 }, maxSteps = Infinity) {
   const start = civilFromDays(startDay);
   const ctx = { start, startDay, weekStart: startDay - ((weekdayOf(startDay) - rule.wkst + 7) % 7) };
   const out = [];
@@ -252,6 +256,7 @@ export function expandRuleDays(rule, startDay, window, pastUntil = () => false, 
     if (rule.count !== null && produced >= rule.count) break;
     if (periodFirstDay(rule, ctx, k) > window.toDay) break;
     stats.steps += 1;
+    if (stats.steps > maxSteps) throw new WorkLimit(`more than ${maxSteps} repeat periods to reach the range`);
     for (const day of periodCandidates(rule, ctx, k)) {
       if (day <= startDay) continue;
       if (day > window.toDay) return out;

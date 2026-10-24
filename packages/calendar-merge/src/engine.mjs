@@ -2,7 +2,7 @@
 // for a date range out. Reads no clock, no files and no network.
 
 import { Refusal, parseDateValue, parseDuration, readIcs, unescapeText } from './ics.mjs';
-import { expandRuleDays, parseRRule } from './rrule.mjs';
+import { WorkLimit, expandRuleDays, parseRRule } from './rrule.mjs';
 import {
   DAY_MS, canonicalZone, formatDate, formatLocal, formatUtc, formatWall, parseIsoDate,
   wallAt, wallToInstant, zoneFromTzid,
@@ -15,6 +15,11 @@ export const LIMITS = Object.freeze({
   idLength: 40,
   rangeDates: 400,
   seriesOccurrences: 10_000,
+  // Work budgets, so a hostile or huge calendar can't stall a call.
+  seriesSteps: 100_000, // repeat periods visited for one series
+  callSteps: 2_000_000, // repeat periods visited in one call
+  seriesValues: 50_000, // RDATE and EXDATE values in one series
+  callValues: 200_000, // dates read through a time zone in one call
 });
 
 function refuse(message) {
@@ -259,39 +264,76 @@ function inRange(instance, q) {
   return instance.startMs < q.rangeEnd && instance.endMs > q.rangeStart;
 }
 
+// The expansion window in the series' own dates: wide enough for every
+// occurrence that can touch the range, with a day to spare on each side.
+function seriesWindow(copy, q) {
+  if (copy.start.date) return { fromDay: q.fromDay - copy.duration.days, toDay: q.toDay };
+  const spanDays = copy.duration.nominalDays + Math.ceil(copy.duration.exactMs / DAY_MS);
+  return {
+    fromDay: wallAt(copy.zone, q.rangeStart).day - spanDays - 1,
+    toDay: wallAt(copy.zone, q.rangeEnd).day + 1,
+  };
+}
+
 // Instances of a series (or a single event) that touch the range, keyed by
-// their original start. Returns { instances: Map, notSupported, problems }.
+// their original start. Returns { instances: Map, notSupported, workLimit,
+// problems }. A series that would take more work than its share of the
+// budget (q.budget, shared by the whole call) shows only its first
+// occurrence, with `workLimit` saying why.
 export function expandSeries(copy, q, { forceSingle = false, stats = { steps: 0 } } = {}) {
+  const budget = q.budget ?? { steps: LIMITS.callSteps, values: LIMITS.callValues };
+  const notSupported = forceSingle || copy.ruleProblem !== null;
+  try {
+    const result = expandFully(copy, q, notSupported, stats, budget);
+    return { ...result, notSupported, workLimit: null };
+  } catch (error) {
+    if (!(error instanceof WorkLimit)) throw error;
+    const { instances } = expandFully(copy, q, true, { steps: 0 }, budget);
+    return { instances, problems: [], notSupported: true, workLimit: error.message };
+  } finally {
+    budget.steps = Math.max(0, budget.steps - stats.steps);
+  }
+}
+
+function expandFully(copy, q, single, stats, budget) {
   const problems = [];
   const at = (text) => problems.push({ sourceIndex: copy.sourceIndex, line: copy.line, text });
   const all = new Map();
   const allDay = copy.start.date;
-  const notSupported = forceSingle || copy.ruleProblem !== null;
+  const window = seriesWindow(copy, q);
+  const maxSteps = Math.min(LIMITS.seriesSteps, budget.steps);
+  // Values outside the window can't touch the range: they are skipped before
+  // any time zone work. The others count against the call's value budget.
+  const outside = (day) => day < window.fromDay - 1 || day > window.toDay + 1;
+  const resolve = (value) => {
+    if (!value.utc) {
+      if (budget.values <= 0) throw new WorkLimit(`more than ${LIMITS.callValues} dates to read in one call`);
+      budget.values -= 1;
+    }
+    return resolveValue(value, copy.zone);
+  };
   const add = (resolvedStart, instance) => {
     const key = keyOf(resolvedStart);
     if (!all.has(key)) all.set(key, { ...instance, origKey: key, origLabel: labelOf(resolvedStart) });
   };
+  if (!single && copy.rdates.length + copy.exdates.length > LIMITS.seriesValues) {
+    throw new WorkLimit(`more than ${LIMITS.seriesValues} RDATE and EXDATE values`);
+  }
 
   if (allDay) {
     const days = copy.duration.days;
-    const window = { fromDay: q.fromDay - days, toDay: q.toDay };
     let dates = [copy.start.day];
-    if (copy.rule && !notSupported) {
+    if (copy.rule && !single) {
       const until = copy.rule.untilValue;
-      dates = expandRuleDays(copy.rule, copy.start.day, window, until ? (day) => day > until.day : undefined, stats);
+      dates = expandRuleDays(copy.rule, copy.start.day, window, until ? (day) => day > until.day : undefined, stats, maxSteps);
     }
     for (const day of dates) add({ date: true, day }, { allDay: true, startDay: day, endDay: day + days });
   } else {
     const { zone } = copy;
     const { sec } = copy.start;
-    const spanDays = copy.duration.nominalDays + Math.ceil(copy.duration.exactMs / DAY_MS);
-    const window = {
-      fromDay: wallAt(zone, q.rangeStart).day - spanDays - 1,
-      toDay: wallAt(zone, q.rangeEnd).day + 1,
-    };
     const instantOf = (day) => wallToInstant(zone, day, sec);
     let dates = [copy.start.day];
-    if (copy.rule && !notSupported) {
+    if (copy.rule && !single) {
       const until = copy.rule.untilValue;
       let pastUntil;
       if (until && until.kind === 'date') pastUntil = (day) => day > until.day;
@@ -300,7 +342,7 @@ export function expandSeries(copy, q, { forceSingle = false, stats = { steps: 0 
         const untilMs = untilResolved.error ? Infinity : untilResolved.ms;
         pastUntil = (day) => instantOf(day) > untilMs;
       }
-      dates = expandRuleDays(copy.rule, copy.start.day, window, pastUntil, stats);
+      dates = expandRuleDays(copy.rule, copy.start.day, window, pastUntil, stats, maxSteps);
     }
     for (const day of dates) {
       const startMs = instantOf(day);
@@ -308,26 +350,26 @@ export function expandSeries(copy, q, { forceSingle = false, stats = { steps: 0 
     }
   }
 
-  if (!notSupported) {
+  if (!single) {
     for (const rdate of copy.rdates) {
       const type = (rdate.params.VALUE?.[0] || '').toUpperCase();
       if (type === 'PERIOD') {
         const [startText, endText = ''] = rdate.text.split('/');
         const startValue = parseDateValue(startText, { TZID: rdate.params.TZID });
         if (!startValue || startValue.kind !== 'time' || allDay) { at(`RDATE period "${rdate.text}" skipped: not readable for this event`); continue; }
-        const s = resolveValue(startValue, copy.zone);
+        const endValue = parseDateValue(endText, { TZID: rdate.params.TZID });
+        const d = endValue ? null : parseDuration(endText);
+        const lastDay = endValue ? endValue.day : startValue.day + (d ? d.weeks * 7 + d.days + 1 : 0);
+        if (startValue.day > window.toDay + 1 || lastDay < window.fromDay - 1) continue;
+        const s = resolve(startValue);
         if (s.error) { at(`RDATE "${rdate.text}" skipped: ${s.error}`); continue; }
         let endMs;
-        const endValue = parseDateValue(endText, { TZID: rdate.params.TZID });
         if (endValue && endValue.kind === 'time') {
-          const e = resolveValue(endValue, copy.zone);
+          const e = resolve(endValue);
           endMs = e.error ? null : e.ms;
-        } else {
-          const d = parseDuration(endText);
-          if (d && d.sign > 0) {
-            const wall = wallAt(copy.zone, s.ms);
-            endMs = wallToInstant(copy.zone, wall.day + d.weeks * 7 + d.days, wall.sec) + (d.hours * 3600 + d.minutes * 60 + d.seconds) * 1000;
-          }
+        } else if (d && d.sign > 0) {
+          const wall = wallAt(copy.zone, s.ms);
+          endMs = wallToInstant(copy.zone, wall.day + d.weeks * 7 + d.days, wall.sec) + (d.hours * 3600 + d.minutes * 60 + d.seconds) * 1000;
         }
         if (endMs === undefined || endMs === null || endMs < s.ms) { at(`RDATE period "${rdate.text}" skipped: its end is not readable`); continue; }
         add(s, { allDay: false, startMs: s.ms, endMs, wallDay: wallAt(copy.zone, s.ms).day });
@@ -336,8 +378,9 @@ export function expandSeries(copy, q, { forceSingle = false, stats = { steps: 0 
       const value = parseDateValue(rdate.text, rdate.params);
       if (!value) { at(`RDATE "${rdate.text}" skipped: not a readable date`); continue; }
       if ((value.kind === 'date') !== allDay) { at(`RDATE "${rdate.text}" skipped: it is ${allDay ? 'a date-time on an all-day event' : 'a date on a timed event'}`); continue; }
+      if (outside(value.day)) continue;
       if (allDay) { add({ date: true, day: value.day }, { allDay: true, startDay: value.day, endDay: value.day + copy.duration.days }); continue; }
-      const s = resolveValue(value, copy.zone);
+      const s = resolve(value);
       if (s.error) { at(`RDATE "${rdate.text}" skipped: ${s.error}`); continue; }
       const wall = wallAt(copy.zone, s.ms);
       add(s, timedInstance(copy, s.ms, wall.day, wall.sec));
@@ -348,8 +391,9 @@ export function expandSeries(copy, q, { forceSingle = false, stats = { steps: 0 
     for (const exdate of copy.exdates) {
       const value = parseDateValue(exdate.text, exdate.params);
       if (!value) { at(`EXDATE "${exdate.text}" ignored: not a readable date`); continue; }
+      if (outside(value.day)) continue;
       if (value.kind === 'date' || allDay) { exDays.add(value.day); continue; }
-      const resolved = resolveValue(value, copy.zone);
+      const resolved = resolve(value);
       if (resolved.error) { at(`EXDATE "${exdate.text}" ignored: ${resolved.error}`); continue; }
       exMs.add(resolved.ms);
     }
@@ -359,7 +403,7 @@ export function expandSeries(copy, q, { forceSingle = false, stats = { steps: 0 
   }
 
   const instances = new Map([...all].filter(([, instance]) => inRange(instance, q)));
-  return { instances, notSupported, problems };
+  return { instances, problems };
 }
 
 // ---- Merging -------------------------------------------------------------
@@ -442,9 +486,11 @@ function mergeUid(group, q, problems) {
   const thisAndFuture = [...changed.values()].filter((c) => c.override?.ridRange);
   if (display) {
     const forceSingle = thisAndFuture.length > 0;
-    const { instances, notSupported, problems: found } = expandSeries(display, q, { forceSingle });
+    const { instances, notSupported, workLimit, problems: found } = expandSeries(display, q, { forceSingle });
     problems.push(...found);
-    if (notSupported) {
+    if (workLimit) {
+      problems.push({ sourceIndex: display.sourceIndex, line: display.line, text: `"${display.uid}" needs too much work to expand (${workLimit}); only its first occurrence is shown` });
+    } else if (notSupported) {
       const why = display.ruleProblem ?? 'RANGE=THISANDFUTURE';
       problems.push({ sourceIndex: display.sourceIndex, line: display.line, text: `repeat rule of "${display.uid}" not supported (${why}); only its first occurrence is shown` });
     }
@@ -560,6 +606,7 @@ export async function mergeCalendars(sources, query) {
     ...checked,
     rangeStart: wallToInstant(checked.zone, checked.fromDay, 0),
     rangeEnd: wallToInstant(checked.zone, checked.toDay + 1, 0),
+    budget: { steps: LIMITS.callSteps, values: LIMITS.callValues },
   };
 
   const problems = [];
@@ -576,6 +623,7 @@ export async function mergeCalendars(sources, query) {
       if (error instanceof Refusal) refuse(`Calendar "${source.id}" ${error.message}.`);
       throw error;
     }
+    for (const problem of read.problems) problems.push({ sourceIndex: source.index, ...problem });
     for (const raw of read.events) {
       const result = interpret(raw, source, q);
       if (result.problem) { problems.push(result.problem); continue; }
