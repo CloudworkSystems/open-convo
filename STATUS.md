@@ -87,8 +87,8 @@ Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 **Visibility report** (Business), GrokBot (team C) builds, Codex reviews; plan approved (`docs/plans/visibility-report.md`); team C can start.
 
 **Sync core** (Personal; first slice of the iPhone and sync line, owner
-decision October 22): the next free GrokBot team builds, Codex reviews. Plan
-in review: [docs/plans/sync-core.md](docs/plans/sync-core.md).
+decision October 22): GrokBot team B builds it as its next module, Codex
+reviews. Plan in review: [docs/plans/sync-core.md](docs/plans/sync-core.md).
 
 **Email sorting engine** (Personal, launch set), Codex builds, Gemini Code Assist reviews; plan approved (`docs/plans/email-sorting-engine.md`); Codex can start when a builder place is free.
 

@@ -149,8 +149,11 @@ checklists, the habit grid, start-on-iPhone-continue-on-Mac, a **Personal
 calendar that only reads** (iCloud, Google, his work schedule, more) in one
 view, and **email sorting and grouping only**, on a local model so mail
 stays on the Mac. Right after launch: unsubscribe, report spam and delete,
-each approved once as a standing rule the owner can see and switch off
-(foundations principle 1). The shared family calendar, voice to calendar and
+each approved once as a standing rule the owner can see and switch off.
+Foundations principle 1 says deletion and anything irreversible always stop
+for the owner, so until he changes that principle in its own decision, each
+delete, unsubscribe and spam report still asks him first, with a preview;
+standing rules cover only the routine sorting. The shared family calendar, voice to calendar and
 the wall display stay at step 11.
 
 **Building your own software.** Every user gets the whole harness. Beyond

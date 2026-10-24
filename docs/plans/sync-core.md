@@ -4,9 +4,10 @@ Written October 22, 2026 by the planning session from the owner's decisions
 that day (recorded in [docs/decisions.md](../decisions.md)). Session name:
 `OC-261022-plan-day-one-and-sync`. Umbrella: Personal. First slice of the
 iPhone and sync line (PLAN.md, "Day One And Public Launch"). Built by an
-outside builder under AGENTS.md "Outside Builders": **the next free GrokBot
-team** builds, Codex reviews. It takes the first of the three outside-builder
-places that frees up; it does not make a fourth.
+outside builder under AGENTS.md "Outside Builders": **GrokBot team B**
+builds it as its next module, working through Cursor and signed in as
+`cloudwork-bot`; Codex reviews. It takes one of the five outside-builder
+places (owner decision, October 23).
 
 ## Why
 
@@ -57,7 +58,10 @@ so it builds and tests on Linux too.
   A device offline for a long time catches up from its last token, or from
   scratch if the token has expired, with the same end result. A change token
   is saved only after every record it covers has been applied, so a download
-  cut off partway resumes from the last safely applied token.
+  cut off partway resumes from the last safely applied token. An upload is
+  acknowledged by record ID *and* stamp: if the record changes locally while
+  an upload is in flight, the acknowledgement clears only the version that
+  was sent, and the newer version stays queued until it reaches the cloud.
 - **Survives quitting.** The outbox, the last applied change token, the
   logical clock and retry records are saved through a checkpoint: the package
   exports its sync state as bytes and restores it from bytes. The app stores
@@ -140,6 +144,10 @@ Every case uses two or three simulated devices and invented records.
     is lost or duplicated.
 14. A payload over the field limit goes as an attachment and arrives on B
     byte for byte; a payload under the limit stays an ordinary field.
+15. A's upload of a record is held before the cloud answers; A edits the same
+    record; then the upload completes. Only the uploaded version is
+    acknowledged, the newer edit stays queued, and after the next sync B has
+    the newer edit.
 
 ## Out Of Scope For This Slice
 
@@ -151,22 +159,26 @@ spaces), Windows and Android, compacting deletion markers, and any real data.
 
 The merge gate runs `npm test` for packages today. A small, owner-approved
 change to `.github/` makes it also run `swift test` for `packages/sync-core/`.
-The planning side opens that pull request; the builder does not touch
+The coordinator opens that pull request; the builder does not touch
 `.github/`.
 
-## Rules For The Builder (Next Free GrokBot Team)
+## Rules For The Builder (GrokBot Team B)
 
 These are rules the builder must follow; the setup does not enforce them, so
 breaking one is a stop-and-report event.
 
-- Work only in a checkout of this repo, on the branch `OC-261022-sync-core`,
-  signed in as `cloudwork-bot`. Open a pull request into `main`. Never push to
-  `main` directly.
+- Work only in a checkout of this repo, through Cursor, on the branch
+  `OC-261022-sync-core`, signed in as `cloudwork-bot`. Open a pull request
+  into `main` with auto-merge off and the label `agent: grokbot`. Never push
+  to `main` directly, and never switch on auto-merge.
+- Mark the work as AGENTS.md "Accounts And Provenance" says: `Cursor Agent`
+  as commit author, and `— GrokBot team B` as the last line of the pull
+  request description and every comment.
 - Run **no commands on the owner's Mac** for this job. Nothing here needs it.
 - Touch no keys, tokens, passwords, accounts, Keychain, iCloud or private
   files. Invented records only.
 - Change files only under `packages/sync-core/`. Nothing else, not even
-  `STATUS.md`: the planning side updates STATUS.md.
+  `STATUS.md`: the coordinator updates STATUS.md.
 - No network calls, no AI, no paid services, in the code or the tests. No
   real CloudKit; the fake cloud only.
 - No new dependencies unless unavoidable; list any in the pull request with
@@ -189,21 +201,28 @@ Codex reviewed this plan on pull request #116 (October 22). Its P1 findings
 are written in above as requirements: durable checkpoints, safe change
 tokens on interrupted downloads, the clock moving past fetched stamps, where
 decryption and content merging happen, and logical deletion versus purge.
-Its P2 on CloudKit's 1 MB field limit is also written in.
+Its P2 on CloudKit's 1 MB field limit is also written in. Its last round on
+`faa5594` (reviewed again as #127) added one P1, written in above: an edit
+made while an upload is in flight stays queued (test 15). The P2s Codex
+raised are listed on #127 under "Requirements carried to the code pull
+request" for the builder to meet.
 
 ## Review And Finish Line
 
 1. The GrokBot team opens the pull request.
 2. Codex reviews it as code, round after round, until it finishes with a 👍.
    The builder fixes every P1 and P2, or explains in the pull request why one
-   does not apply; P3s are optional. If Codex builds any part of it, Claude
-   also reviews it under AGENTS.md's rules for Codex-built work.
-3. The planning session or the PR steward checks the result against this
-   document, gives the owner a short try-it note (run the tests and read the
-   two-device conflict case in plain words), and then switches on auto-merge.
-   The merge gate merges it.
+   does not apply; P3s are optional. If Codex builds any part of it, Gemini
+   reviews that work as AGENTS.md "Gemini reviews" says.
+3. The coordinator (the Claude thread "261012 OC Coordinator") checks the
+   result against this document and the requirements carried on #127, posts
+   the check on the pull request, gives the owner a short try-it note (run
+   the tests and read the two-device conflict case in plain words), and then
+   switches on auto-merge. The merge gate merges it; the owner doesn't click
+   Merge.
 
 Done when the tests pass with one command, Codex has given a 👍 with no open
-P1 or P2, and the planning check finds nothing missing from this document.
+P1 or P2, and the coordinator's plan check finds nothing missing from this
+document.
 The owner sees sync working for real only after the next slice wires it to
 CloudKit and the apps.
