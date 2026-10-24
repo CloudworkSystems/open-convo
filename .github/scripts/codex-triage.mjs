@@ -189,22 +189,29 @@ export async function judgeFindings({ findings, prTitle, apiKey, fetchImpl = fet
     required: ['verdicts'],
     additionalProperties: false,
   };
-  const response = await fetchImpl('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2026-10-21' },
-    body: JSON.stringify({
-      model: JUDGE_MODEL,
-      max_tokens: 16000,
-      system: SYSTEM,
-      output_config: { effort: 'medium', format: { type: 'json_schema', schema } },
-      messages: [{ role: 'user', content: user }],
-    }),
-  });
+  // Errors that carry `billed` make the caller keep its claim, so no later run
+  // pays for the same call. Only an error reply from the API (nothing billed)
+  // releases it; a lost connection may have been answered and billed, so it
+  // keeps the claim too, and the check stays pending until the next commit.
+  const billed = (text) => Object.assign(new Error(text), { billed: true });
+  let response;
+  try {
+    response = await fetchImpl('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2026-10-21' },
+      body: JSON.stringify({
+        model: JUDGE_MODEL,
+        max_tokens: 16000,
+        system: SYSTEM,
+        output_config: { effort: 'medium', format: { type: 'json_schema', schema } },
+        messages: [{ role: 'user', content: user }],
+      }),
+    });
+  } catch (error) {
+    throw billed(`judge connection failed: ${error.message}`);
+  }
   // Never log the response body: it can echo the request.
   if (!response.ok) throw new Error(`judge request failed: ${response.status}`);
-  // From here on the call was answered (and billed): errors carry `billed`,
-  // so the caller keeps its claim and no later run pays for the same call.
-  const billed = (text) => Object.assign(new Error(text), { billed: true });
   let message;
   try { message = await response.json(); } catch { throw billed('judge sent an unreadable answer'); }
   if (message.stop_reason !== 'end_turn') throw billed(`judge stopped early: ${message.stop_reason}`);

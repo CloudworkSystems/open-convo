@@ -92,8 +92,9 @@ ask the judge; they share that pull request's concurrency group, so two runs
 never ask at once (the hourly run over every pull request only reads posted
 verdicts). Before the paid call it posts a claim comment, which it then edits
 into the verdict, so a run that fails after the call never pays for it again
-(only a call the judge never answered releases the claim; an answered but
-unusable one keeps it, and the check stays pending). Editing or deleting a verdict re-runs the
+(only an error reply from the API, which bills nothing, releases the claim;
+an answered but unusable call or a lost connection keeps it, and the check
+stays pending until the next commit or the owner's note). Editing or deleting a verdict re-runs the
 gate. It asks the judge at most once per head commit and set of findings, and records the verdict as a comment on the
 pull request so everyone can read why it passed. To post that comment, the
 workflow's token gains `issues: write` (it had `statuses: write` only).
