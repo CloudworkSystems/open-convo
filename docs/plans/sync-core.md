@@ -67,25 +67,34 @@ so it builds and tests on Linux too.
   an upload is in flight, the acknowledgement clears only the version that
   was sent, and the newer version stays queued until it reaches the cloud.
 - **Survives quitting.** The outbox, the last applied change token, the
-  logical clock and retry records are saved through a checkpoint: the package
+  logical clock, retry records and each record's last acknowledged stamp
+  and last-seen change tag are saved through a checkpoint: the package
   exports its sync state as bytes and restores it from bytes. The app stores
   those bytes in its protected store later; in this slice tests keep them in
   memory or a temporary file. A device that quits mid-sync and reopens from
   its checkpoint loses no unsent change and duplicates nothing.
 - **Reconciling after a crash.** In the app, a record and its outbox entry
   live in different places, so a crash can save one without the other. The
-  checkpoint keeps, for each record, the last stamp the cloud acknowledged.
-  On start, the app hands the sync core every local record in full (the
+  checkpoint keeps, for each record, the last stamp the cloud acknowledged
+  and the last cloud version (change tag) the device saw, updated on every
+  acknowledged upload and every applied fetch, so it doesn't depend on the
+  outbox entry surviving. On start, the app hands the sync core every local record in full (the
   whole record shape above, including the purged flag), and the core makes the outbox
   match the local store both ways. It queues any record whose stamp is newer
   than its last acknowledged one and isn't already queued, using the payload
-  it was handed. It drops any queued entry whose record ID and stamp
+  it was handed and that record's saved change tag as the entry's base, so
+  an edit another device made in the meantime is still found as a conflict
+  and merged. (If the saved tag is older than the true base, the only cost
+  is a merge that changes nothing, since merges are idempotent.) It also
+  pushes the logical counter past every local stamp it was handed, so the
+  next local edit can't reuse or sort below a stamp saved just before the
+  crash. It drops any queued entry whose record ID and stamp
   aren't in the local store, so an edit that was never saved locally is
   never uploaded and doesn't leave the status stuck on "waiting". An edit
   saved just before a crash is therefore never stranded, and one that wasn't
   saved never leaks out, whichever side was saved first.
-- **The clock moves forward.** Every fetched stamp pushes the device's
-  logical counter past it, so the next local change always gets a higher
+- **The clock moves forward.** Every fetched stamp, and every local stamp
+  handed over in reconciliation, pushes the device's logical counter past it, so the next local change always gets a higher
   stamp than anything the device has seen.
 - **Conflicts.** Every outbox entry saves the cloud version (change tag) its
   edit was based on, and keeps it through checkpoints and through later
@@ -215,7 +224,13 @@ Every case uses two or three simulated devices and invented records.
     to synced, and nothing that was acknowledged is lost. A third case: A
     saves a purge marker locally and is destroyed before its checkpoint;
     after reconciling, the purge is queued as a purge, reaches the cloud, and
-    a stale edit from B still can't bring the record back.
+    a stale edit from B still can't bring the record back. A fourth case: A
+    saves an edit locally and is destroyed before its checkpoint, and B
+    changes the same record and syncs before A restarts; after reconciling,
+    A's upload is treated as a conflict against B's version and merged, so
+    B's edit isn't overwritten. In the first case, A then makes another local
+    edit (with its wall clock set back), which gets a higher stamp than the
+    reconciled one and reaches B.
 18. A merged result is saved by the cloud but the connection drops before
     A hears back. After A retries, the cloud holds exactly one new revision,
     the merge function was called once for that conflict, and B ends with
@@ -334,7 +349,10 @@ before upload can't hide a conflict ("Conflicts", test 19). Its round on
 record is replaced, so reconciliation can't drop it (test 19), and "purged"
 is sync metadata that beats any stamp (test 5b). Its round on `ba4386e`
 added a P1: the purged flag is part of the record shape reconciliation
-receives (test 17).
+receives (test 17). Its round on `0c40e11` added two P1s: the checkpoint
+keeps each record's last-seen change tag so reconciliation can rebuild the
+base, and reconciliation pushes the logical clock past every local stamp
+(test 17, fourth case and the follow-up edit).
 
 ## Review And Finish Line
 
