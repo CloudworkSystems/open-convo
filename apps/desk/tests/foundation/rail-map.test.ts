@@ -56,6 +56,12 @@ test('lanes keep main in lane 0 and give each branch its own track', () => {
   const intoMain = rows.slice(openRow, rows.findIndex((row) => row.commit.hash === 'm2'))
     .flatMap((row) => row.segments).some((segment) => segment.to === 0 && segment.from === lane.o1);
   assert.ok(intoMain, 'The open branch never joins its parent on main.');
+  // It does not join lane 0 until the row just above m2, so it never looks connected to m3.
+  const aboveM2 = rows.findIndex((row) => row.commit.hash === 'm2') - 1;
+  rows.slice(openRow, aboveM2).forEach((row) => assert.ok(
+    !row.segments.some((segment) => segment.from === lane.o1 && segment.to === 0),
+    `The open branch joins main early, at ${row.commit.hash}.`,
+  ));
   // A parent outside the snapshot ends the track instead of opening a lane.
   assert.deepEqual(rows.at(-1)!.segments, []);
 });

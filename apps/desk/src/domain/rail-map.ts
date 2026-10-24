@@ -105,7 +105,11 @@ export function mainLine(snapshot: RailMapSnapshot): Set<string> {
 export function layoutRails(snapshot: RailMapSnapshot): RailRow[] {
   const main = mainLine(snapshot);
   const known = new Set(snapshot.commits.map((commit) => commit.hash));
-  const lanes: (string | null)[] = [null];
+  // Lane 0 waits for the main tip from the start, so a newer branch whose
+  // parent is an older main commit keeps its own lane down to that parent
+  // instead of appearing to join the main commits above it.
+  const mainTip = snapshot.commits.find((commit) => main.has(commit.hash))?.hash ?? null;
+  const lanes: (string | null)[] = [mainTip];
   const free = () => {
     const index = lanes.findIndex((value, lane) => lane > 0 && value === null);
     if (index >= 0) return index;
@@ -119,10 +123,12 @@ export function layoutRails(snapshot: RailMapSnapshot): RailRow[] {
     const lane = main.has(commit.hash) ? 0 : waiting[0] ?? free();
     for (const index of waiting) lanes[index] = null;
     commit.parents.forEach((parent, index) => {
-      if (!known.has(parent) || lanes.includes(parent)) return;
-      const onMain = main.has(parent);
-      if (index === 0 && lanes[lane] === null && onMain === (lane === 0)) lanes[lane] = parent;
-      else if (onMain && lanes[0] === null) lanes[0] = parent;
+      if (!known.has(parent)) return;
+      // The main line always continues in lane 0, even when a branch lane
+      // already waits for the same parent; both lanes meet at its row.
+      if (lane === 0 && index === 0 && main.has(parent)) { lanes[0] = parent; return; }
+      if (lanes.includes(parent)) return;
+      if (index === 0 && lane > 0 && lanes[lane] === null) lanes[lane] = parent;
       else lanes[free()] = parent;
     });
     while (lanes.length > 1 && lanes[lanes.length - 1] === null) lanes.pop();
