@@ -528,3 +528,14 @@ test('a file missing its time zone or a spot field is refused', () => {
   delete spotless.spots[0].fields.createdAt;
   assert.throws(() => deserializePerson(JSON.stringify(spotless)), /missing a field/);
 });
+
+test('a spot brought back only by a visit anchors its reminder to that visit, even after a skewed purge', () => {
+  const { mac, phone } = pair();
+  mac.clock.time = Date.UTC(2030, 0, 1);
+  mac.removeSpot('spot-back');
+  mac.emptyTrash();
+  phone.recordClinicianVisit('spot-back', { at: '2026-10-05T10:00:00-04:00' }, { id: 'unseen-visit' });
+  const view = new SkinCheck({ deviceId: 'v', person: converges(mac, phone) });
+  assert.equal(view.spotOutcome('spot-back').outcome, 'notCheckedSinceVisit');
+  assert.deepEqual(view.nextCheck('spot-back'), { setting: 'monthly', anchor: '2026-10-05', due: '2026-11-05' });
+});

@@ -694,8 +694,10 @@ export class SkinCheck {
     const spot = this.#find(spotId);
     const view = spotView(this.#person, spot);
     const last = this.#person.checkIns.filter(record => record.spotId === spotId).sort(compareCheckIns).at(-1);
-    // A spot that came back after Trash was emptied has lost its created time; its stored life stamp stands in.
-    const from = last ? instant(last.capturedAt, 'Capture time') : view.createdAt ? instant(view.createdAt, 'Created time') : spot.life.stamp.time;
+    // A spot that came back after Trash was emptied has lost its created time. The earliest stored time
+    // stands in (a visit that brought it back, or its life stamp), so a skewed clock can only make it due sooner.
+    const visits = this.#person.visits.filter(record => record.spotId === spotId).map(record => instant(record.at, 'Visit time'));
+    const from = last ? instant(last.capturedAt, 'Capture time') : view.createdAt ? instant(view.createdAt, 'Created time') : Math.min(spot.life.stamp.time, ...visits);
     const anchor = civilDate(from, this.timeZone);
     if (view.reminder === 'off') return { setting: 'off', anchor, due: null };
     const due = view.reminder === 'monthly' ? addMonths(anchor, 1) : addDays(anchor, view.reminder * 7);
