@@ -1,6 +1,6 @@
 # Status
 
-Updated October 21, 2026. The short version of where the build is. The full
+Updated October 24, 2026. The short version of where the build is. The full
 plan is in [PLAN.md](PLAN.md).
 
 ## Now
@@ -89,6 +89,8 @@ Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 **Email sorting engine** (Personal, launch set), Codex builds, Gemini Code Assist reviews; plan approved (`docs/plans/email-sorting-engine.md`); Codex can start when a builder place is free.
 
 **Calendar merge engine** (Personal, launch set), Codex builds, Gemini Code Assist reviews; plan approved (`docs/plans/calendar-merge-engine.md`); Codex can start when a builder place is free.
+
+**Cloudwork Rail Map** (Desk, Cloudwork Nexus), Claude builds; a fifth Nexus view showing this repository's branches, commits and pull requests from a saved snapshot (`apps/desk/scripts/rail-map-snapshot.mjs`); merged October 24 (#132).
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:
