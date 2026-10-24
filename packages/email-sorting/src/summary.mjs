@@ -1,7 +1,8 @@
 // The command's plain summary. Text from mail is printed on one line:
 // a backslash becomes \\, line feed \n, tab \t, and the Unicode line and
-// paragraph separators \u2028 and \u2029, and bidirectional format characters
-// as \u-style escapes, so one printed line is always one line of mail text.
+// paragraph separators \u2028 and \u2029, and every Unicode Bidi_Control
+// character as a four-digit \u-style escape, so one printed line is always
+// one line of mail text.
 
 import { PILE_NAMES } from './rules.mjs';
 
@@ -13,7 +14,8 @@ export function oneLine(text) {
     .replace(/\r/g, '\\r')
     .replace(/\u2028/g, '\\u2028')
     .replace(/\u2029/g, '\\u2029')
-    .replace(/[\u202A-\u202E\u2066-\u2069]/g, ch => `\\u${ch.codePointAt(0).toString(16)}`);
+    .replace(/[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/g,
+      ch => `\\u${ch.codePointAt(0).toString(16).padStart(4, '0')}`);
 }
 
 function plural(count, one, many) {

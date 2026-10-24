@@ -251,10 +251,10 @@ function ruleReason(rule) {
 }
 
 // The model's reason, cleaned like every other reason text (one line, cut
-// to 160 characters with "…"); an empty or ellipsis-only one is replaced.
+// to 160 characters with "…"); an empty cleaned result is replaced.
 export function cleanReason(reason, category) {
   const text = oneLine(reason, LIMITS.reasonChars);
-  return text === '' || text === '…' ? `The model chose ${PILE_NAMES[category]}` : text;
+  return text === '' ? `The model chose ${PILE_NAMES[category]}` : text;
 }
 
 function checkedAnswer(answer) {

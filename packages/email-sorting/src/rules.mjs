@@ -98,14 +98,15 @@ export function own(object, key) {
 // The result is trimmed and cut to `max` characters, the last being "…"
 // when bounded suffix inspection finds real text that was cut or leaves any
 // input uninspected. Every scan is bounded by a multiple of `max`, regardless
-// of input length. Only a flattened empty value returns ""; callers decide
-// whether a literal ellipsis has special meaning in their context.
+// of input length. An empty flattened value returns "", as does exhausting
+// the leading allowance before finding real text.
 export function oneLine(text, max) {
   const source = String(text);
   const whiteOrControl = /[\s\u0000-\u001F\u007F-\u009F]/u;
 
   // A separate leading allowance keeps padding from consuming the body bound.
-  // If it is exhausted, treating the value as empty keeps work bounded.
+  // If it is exhausted before real text is found and input remains, return
+  // empty without inspecting the rest.
   const leadingLimit = Math.min(source.length, max * 8);
   let start = 0;
   while (start < leadingLimit && whiteOrControl.test(source[start])) start += 1;
@@ -131,13 +132,7 @@ export function oneLine(text, max) {
     }
     return inspectionEnd < source.length;
   };
-  let truncatedPastBound = suffixWasTruncated(end);
-
-  // Preserve the established boundary result when useful text straddled the
-  // former five-length input window; the inspection remains fixed-size.
-  if (!truncatedPastBound && start > 0 && start < max * 5 && source.length > max * 5) {
-    truncatedPastBound = suffixWasTruncated(max * 5);
-  }
+  const truncatedPastBound = suffixWasTruncated(end);
 
   const flat = bounded.replace(/[\s\u0000-\u001F\u007F-\u009F]+/g, ' ').trim();
   if (flat === '') return '';

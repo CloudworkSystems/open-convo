@@ -332,9 +332,9 @@ test('E24. classifier fields are read once and the copied answer stays in one fi
 });
 
 test('E25. every bidi formatting control is escaped before a summary group count', () => {
-  const controls = ['\u202a', '\u202b', '\u202c', '\u202d', '\u202e', '\u2066', '\u2067', '\u2068', '\u2069'];
+  const controls = ['\u061c', '\u200e', '\u200f', '\u202a', '\u202b', '\u202c', '\u202d', '\u202e', '\u2066', '\u2067', '\u2068', '\u2069'];
   const label = controls.join('');
-  const escaped = controls.map(ch => `\\u${ch.codePointAt(0).toString(16)}`).join('');
+  const escaped = controls.map(ch => `\\u${ch.codePointAt(0).toString(16).padStart(4, '0')}`).join('');
   const summary = formatSummary({
     schemaVersion: 1,
     piles: [{ category: 'alerts', count: 7, groups: [{ key: 'k', label, count: 7, messages: [] }] }],
@@ -349,13 +349,14 @@ test('E26. reason cleanup bounds huge input and marks cut or uninspected suffixe
   assert.equal(huge, `${'x'.repeat(159)}…`);
   assert.equal([...huge].length, 160);
 
-  // Preserve the former absolute five-output-length boundary on padded input.
+  // Leading padding does not create an absolute five-output-length boundary.
   const justUnder = `${' '.repeat(640)}${'a'.repeat(159)}`;
   const justOver = `${' '.repeat(641)}${'b'.repeat(160)}`;
   const padded = `Short reason${' '.repeat(1000)}`;
   assert.equal(cleanReason(justUnder, 'people'), 'a'.repeat(159));
-  assert.equal(cleanReason(justOver, 'people'), `${'b'.repeat(159)}…`);
+  assert.equal(cleanReason(justOver, 'people'), 'b'.repeat(160));
   assert.equal(cleanReason(padded, 'people'), 'Short reason');
+  assert.equal(cleanReason(` a${' '.repeat(798)}b`, 'people'), 'a b');
 });
 
 test('E27. bounded suffix inspection marks uninspected input and hidden real text as truncated', () => {
@@ -369,9 +370,12 @@ test('E28. bounded leading white space does not consume the reason body bound', 
   assert.equal(cleanReason(`${' '.repeat(900)}hello`, 'people'), 'hello');
 });
 
-test('E29. empty and bare-ellipsis cleaned reasons use the model-choice fallback', () => {
+test('E29. only empty cleaned reasons use the model-choice fallback; literal ellipses are kept', () => {
   const separators = ' \t\u0000\u007f'.repeat(1024 * 1024);
   assert.equal(cleanReason(separators, 'people'), 'The model chose People');
+  assert.equal(cleanReason('', 'people'), 'The model chose People');
+  assert.equal(cleanReason(' \t ', 'people'), 'The model chose People');
   assert.equal(reasonOneLine(' … ', 160), '…');
-  assert.equal(cleanReason(' \t… ', 'people'), 'The model chose People');
+  assert.equal(cleanReason('…', 'people'), '…');
+  assert.equal(cleanReason(' \t… ', 'people'), '…');
 });
