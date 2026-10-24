@@ -12,6 +12,7 @@
 import { readFileSync } from 'node:fs';
 import { client, repoFromEnv } from './github.mjs';
 import { evaluateCodexSignal, CODEX_LOGIN, OWNER_LOGIN } from './codex-signal.mjs';
+import { parseCodeowners, ownerOpenedBlock } from './codeowners.mjs';
 
 const CONTEXT = 'codex-approved';
 const gh = client();
@@ -55,6 +56,17 @@ async function withEditHistory(comments) {
   return comments.map((c) => ({ ...c, edit_history: history.get(c.node_id) ?? null }));
 }
 
+// CODEOWNERS from the default branch, never the pull request's copy.
+let ownerRules;
+async function codeownersRules() {
+  if (!ownerRules) {
+    const { default_branch: ref } = await gh.get(base);
+    const file = await gh.get(`${base}/contents/.github/CODEOWNERS?ref=${encodeURIComponent(ref)}`);
+    ownerRules = parseCodeowners(Buffer.from(file.content, 'base64').toString('utf8'));
+  }
+  return ownerRules;
+}
+
 async function check(number) {
   const pr = await gh.get(`${base}/pulls/${number}`);
   if (pr.state !== 'open') return;
@@ -69,7 +81,15 @@ async function check(number) {
   const dismissals = dismissed
     ? (await gh.all(`${base}/issues/${number}/events`)).filter((e) => e.event === 'review_dismissed')
     : [];
-  const { approved, reason } = evaluateCodexSignal({ headSha: pr.head.sha, prAuthor: pr.user?.login, comments, reviews, reactions, dismissals });
+  const signal = evaluateCodexSignal({ headSha: pr.head.sha, prAuthor: pr.user?.login, comments, reviews, reactions, dismissals });
+  // A pull request the owner opened skips GitHub's code-owner review, so it
+  // waits here instead whenever it changes a protected file.
+  const changed = await gh.all(`${base}/pulls/${number}/files`);
+  const files = changed.flatMap((f) => [f.filename, f.previous_filename].filter(Boolean));
+  const complete = changed.length >= pr.changed_files;
+  const blocked = ownerOpenedBlock({ prAuthor: pr.user?.login, files, rules: await codeownersRules(), complete });
+  const approved = signal.approved && !blocked;
+  const reason = blocked ?? signal.reason;
   const state = approved ? 'success' : 'pending';
 
   const current = await gh.get(`${base}/commits/${pr.head.sha}/status`);

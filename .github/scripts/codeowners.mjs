@@ -21,7 +21,10 @@ function toRegExp(pattern) {
   body = body
     .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
     .replace(/\*\*/g, '\u0000')
+    // "/**/" also matches zero folders, as in GitHub and gitignore.
+    .replace(/\/\u0000\//g, '/\u0001')
     .replace(/\*/g, '[^/]*')
+    .replace(/\u0001/g, '(?:.*/)?')
     .replace(/\u0000/g, '.*');
   const prefix = anchored ? '^' : '(^|.*/)';
   return new RegExp(`${prefix}${body}${directory ? '.*' : '(/.*)?$'}`);
@@ -35,4 +38,21 @@ export function protectedFiles(rules, files) {
     for (const rule of compiled) if (rule.regex.test(file)) owners = rule.owners;
     return owners !== null && owners.length > 0;
   });
+}
+
+// GitHub skips the code-owner review when the code owner opened the pull
+// request (docs/plans/merge-gate.md, scratch test 3), so a protected file
+// changed in a pull request opened from the owner's account would need no
+// approval at all. Returns why such a pull request must wait, or null.
+// `files` lists each changed path, and a renamed file's old path too.
+// `complete` is false when GitHub cut the list short (it returns at most
+// 3,000 files), and then the pull request waits, since a protected file
+// could be among those left out.
+export function ownerOpenedBlock({ prAuthor, files = [], rules = [], complete = true }) {
+  const owned = rules.some((rule) => rule.owners.some((o) => o.replace(/^@/, '') === prAuthor));
+  if (!prAuthor || !owned) return null;
+  if (!complete) return "Opened from the code owner's account and too large to check every file; reopen it from cloudwork-bot";
+  const hit = protectedFiles(rules, files);
+  if (hit.length === 0) return null;
+  return `Opened from the code owner's account and changes ${hit[0]}; reopen it from cloudwork-bot`;
 }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { evaluateCodexSignal, editedOnlyByCodex, dismissedByOwner, ownerAcceptance, CODEX_LOGIN, CODEX_BOT_LOGIN, OWNER_LOGIN } from '../codex-signal.mjs';
-import { parseCodeowners, protectedFiles } from '../codeowners.mjs';
+import { parseCodeowners, protectedFiles, ownerOpenedBlock } from '../codeowners.mjs';
 import { packagesToTest, listPackages, OWN_JOB } from '../package-changes.mjs';
 
 const HEAD = '7af6dd5bd9'.padEnd(40, 'a');
@@ -122,6 +122,8 @@ test('CODEOWNERS covers the rules, decisions and key files, and not ordinary cod
     'apps/mac/Tests/ProtectionProofTests/Anything.swift',
     'apps/mac/Sources/VoiceCursorMac/OpenAIRealtimeTranscriber.swift',
     'apps/mac/Sources/VoiceCursorMac/OpenAIRealtimeSmoke.swift',
+    // "/**/" matches zero folders too.
+    'apps/mac/FooKeychain.swift', 'apps/mac/ParticipantX.swift',
   ];
   assert.deepEqual(protectedFiles(rules, files), files);
   const open = ['STATUS.md', 'README.md', 'apps/desk/src/app/App.tsx', 'packages/clarity/src/index.mjs',
@@ -474,4 +476,25 @@ test('a comment with anything besides the note never counts', () => {
   for (const body of [undefined, null, '', '   ']) {
     assert.equal(ownerAcceptance({ headSha: HEAD, prAuthor: 'cloudwork-bot', comments: [note(body)] }), false, String(body));
   }
+});
+
+test('a pull request the owner opened waits when it changes a protected file', () => {
+  const rules = parseCodeowners(readFileSync(new URL('../../CODEOWNERS', import.meta.url), 'utf8'));
+  const reason = ownerOpenedBlock({ prAuthor: OWNER_LOGIN, files: ['packages/x/a.mjs', 'AGENTS.md'], rules });
+  assert.match(reason, /AGENTS\.md/);
+  // A renamed file's old path counts: moving a protected file away changes it.
+  assert.ok(ownerOpenedBlock({ prAuthor: OWNER_LOGIN, files: ['docs/old-plan.md', 'docs/plans/x.md'], rules }));
+});
+
+test('the owner-opened rule leaves ordinary changes and bot pull requests alone', () => {
+  const rules = parseCodeowners(readFileSync(new URL('../../CODEOWNERS', import.meta.url), 'utf8'));
+  assert.equal(ownerOpenedBlock({ prAuthor: OWNER_LOGIN, files: ['packages/visibility-report/src/a.mjs', 'STATUS.md'], rules }), null);
+  assert.equal(ownerOpenedBlock({ prAuthor: 'cloudwork-bot', files: ['AGENTS.md', '.github/CODEOWNERS'], rules }), null);
+  assert.equal(ownerOpenedBlock({ prAuthor: undefined, files: ['AGENTS.md'], rules }), null);
+});
+
+test('an owner-opened pull request whose file list was cut short waits', () => {
+  const rules = parseCodeowners(readFileSync(new URL('../../CODEOWNERS', import.meta.url), 'utf8'));
+  assert.ok(ownerOpenedBlock({ prAuthor: OWNER_LOGIN, files: ['packages/x/a.mjs'], rules, complete: false }));
+  assert.equal(ownerOpenedBlock({ prAuthor: 'cloudwork-bot', files: ['packages/x/a.mjs'], rules, complete: false }), null);
 });

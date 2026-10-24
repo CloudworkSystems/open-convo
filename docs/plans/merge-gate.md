@@ -112,6 +112,12 @@ automatically once checks 1, 2 and 4 pass.
   in place of Codex is planned and needs the owner's approval before it's
   built. Until then,
   Codex's review still gates those pull requests and Claude also reviews them.
+- **Owner-opened pull requests (October 24).** GitHub skips the code-owner
+  review when the owner opened the pull request (scratch test 3), so
+  `codex-approved` now stays pending on any pull request opened from
+  `CloudworkSystems` that changes a protected file, and says to reopen it
+  from `cloudwork-bot`. It reads CODEOWNERS from `main`, so the pull request
+  can't loosen the rule for itself.
 - **"Up to date" side effect.** `main` requires a branch to be up to date
   before it merges, so every merge puts the other open pull requests out of
   date. Each update is a new commit, which needs a new Codex review before
