@@ -57,7 +57,11 @@ and loaded from one JSON file per person):
   For the patterned kinds (`weekdays`, `monthDay`, `monthWeekday`) the start
   must itself be a date of the pattern (a Tuesday start with `weekdays` set
   to Monday is refused with a plain message), so the first occurrence is
-  always the start.
+  always the start. The repeat stores its `start`. Editing the rule sets
+  `start` again, in the same stamped change: to the new rule's first date
+  on or after the current due date (weekly on Monday, due Monday the 6th,
+  changed to Thursdays: start Thursday the 9th). Earlier records keep their
+  occurrence names, as "Built For Sync Later" says.
   A repeat is `{ kind, every, mode, ... }`, with `every` (N) from 1 to 365
   for days and 1 to 99 otherwise, `mode` `onSchedule` or `afterDone`, and
   one of these kinds:
@@ -119,8 +123,12 @@ clock and never uses the machine's time zone.
   `repeatsAfterDone` so a view can say "then every 3 days after you do it".
 - `overdue(now)`: open tasks whose due moment has passed. A date-only task is
   overdue from the start of the next day in the owner's zone.
-- `remindersDue(from, to)`: every reminder whose moment falls in the half-open
-  range `[from, to)`, at most 31 days, each with its task and occurrence. A
+- `remindersDue(from, to)`: every reminder of an open occurrence whose
+  moment falls in the half-open range `[from, to)`, at most 31 days, each
+  with its task and occurrence. An open occurrence is an open one-off task,
+  or an occurrence of a repeating task that no counting completion or skip
+  has closed; reminders of done, dropped, deleted or skipped work are never
+  returned. A
   caller that checks every minute passes the last check and now, so no
   reminder is shown twice or missed.
 - `history(taskId)`: completions, skips, snoozes and drops, newest first.
@@ -249,7 +257,9 @@ and tasks only. At least:
    invented set, match a saved expected file exactly.
 7. Reminders: fixed and offset reminders, a date-only task's 09:00 base, and
    `remindersDue` over back-to-back ranges returns each reminder exactly once,
-   including across a daylight-saving change and a month end.
+   including across a daylight-saving change and a month end; a task
+   completed, or an occurrence skipped, before its reminder's moment returns
+   no reminder, while the next open occurrence's reminders still come.
 8. Snooze: each preset; snoozing one occurrence of a repeating task leaves
    the next occurrence alone; a snooze never moves an on-schedule or
    after-done series on; two devices snoozing the same occurrence end with
