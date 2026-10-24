@@ -55,7 +55,8 @@ async function openRailMap(t, viewport) {
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(origin);
-  await expect(page.getByText('Sample preview · sample data only', { exact: true })).toBeVisible();
+  // The first load after a cold dev server start waits on Vite's dependency scan.
+  await expect(page.getByText('Sample preview · sample data only', { exact: true })).toBeVisible({ timeout: 30_000 });
   // A phone keeps the navigation rail in a drawer.
   if (viewport.width < 700) await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
   await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).first().click();

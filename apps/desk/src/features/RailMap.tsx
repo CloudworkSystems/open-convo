@@ -142,7 +142,7 @@ function CommitRow({ row, pulls, snapshot }: { row: RailRow; pulls: RailPullInde
   return <div className={`rail-row${row.onMain ? ' on-main' : ''}`} title={commit.subject}>
     <span className="rail-row-gutter" />
     <div className="rail-row-message">
-      <code className="rail-hash">{commit.hash}</code>
+      <code className="rail-hash">{commit.hash.slice(0, 7)}</code>
       {commit.refs.map((ref) => <span key={ref} className={`rail-pill ${ref === snapshot.mainBranch ? 'rail-main-ref' : 'rail-branch'}`} title={ref}>{ref}</span>)}
       <PullBadges pulls={linked} repository={snapshot.repository} />
       <span className="rail-subject">{merged ? `Merged: ${merged.title}` : commit.subject}</span>
