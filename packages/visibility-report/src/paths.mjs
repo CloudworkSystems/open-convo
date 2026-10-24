@@ -25,6 +25,26 @@ function absoluteRoot(value, pathApi) {
   return pathApi.parse(value).root;
 }
 
+/** `\\?\` keeps the name as written. Ordinary Win32 paths do not. */
+function keepsLiteralNames(value) {
+  return typeof value === 'string' && /^(?:\\\\|\/\/)\?/i.test(value);
+}
+
+/**
+ * Win32 drops trailing dots and spaces from each name. `out.` and `out `
+ * are `out`. `.` and `..` stay, so a parent step is not eaten.
+ */
+function win32Name(part) {
+  if (part === '.' || part === '..') return part;
+  let end = part.length;
+  while (end > 0) {
+    const code = part.charCodeAt(end - 1);
+    if (code !== 46 && code !== 32) break;
+    end -= 1;
+  }
+  return part.slice(0, end);
+}
+
 /**
  * Path components after an absolute root. On Windows the root (`C:\`, a
  * UNC share, or a device path) is not a component, because the walk
@@ -32,16 +52,19 @@ function absoluteRoot(value, pathApi) {
  */
 export function partsOf(value, pathApi = path) {
   let rest = value;
+  let literal = false;
   if (pathApi.isAbsolute(value)) {
     const extended = pathApi.sep === '\\' ? matchExtendedUnc(value) : null;
     if (extended) rest = value.slice(extended.consumed);
     else {
       const root = pathApi.parse(value).root;
       if (root && rest.startsWith(root)) rest = rest.slice(root.length);
+      literal = pathApi.sep === '\\' && keepsLiteralNames(value);
     }
   }
   const pieces = pathApi.sep === '\\' ? rest.split(/[\\/]/) : rest.split(pathApi.sep);
-  return pieces.filter((part) => part !== '' && part !== '.');
+  const names = pathApi.sep === '\\' && !literal ? pieces.map(win32Name) : pieces;
+  return names.filter((part) => part !== '' && part !== '.');
 }
 
 /**

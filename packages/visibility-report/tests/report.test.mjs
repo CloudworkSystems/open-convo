@@ -894,6 +894,17 @@ test('an absolute Windows path does not repeat its root', () => {
   assert.deepEqual(walkStart('C:out', pathWin, cwd, { '=C:': 'D:\\data' }), { dir: 'C:\\', parts: ['out'] });
   assert.deepEqual(walkStart('alias/../out', path, () => '/workspace', {}), { dir: '/workspace', parts: ['alias', '..', 'out'] });
   assert.equal(expandDriveRelative('C:out'), 'C:out');
+  assert.deepEqual(partsOf('out.', pathWin), ['out']);
+  assert.deepEqual(partsOf('out...', pathWin), ['out']);
+  assert.deepEqual(partsOf('dir.\\out.', pathWin), ['dir', 'out']);
+  assert.deepEqual(partsOf('alias\\..\\out.', pathWin), ['alias', '..', 'out']);
+  assert.deepEqual(partsOf('out ', pathWin), ['out']);
+  assert.deepEqual(partsOf('out. ', pathWin), ['out']);
+  assert.deepEqual(partsOf('\\\\?\\C:\\out.', pathWin), ['out.']);
+  assert.deepEqual(walkStart('out.', pathWin, cwd, {}), walkStart('out', pathWin, cwd, {}));
+  assert.deepEqual(walkStart('C:\\cwd\\out.', pathWin), walkStart('C:\\cwd\\out', pathWin));
+  assert.deepEqual(partsOf('out.'), ['out.']);
+  assert.deepEqual(partsOf('alias/../out.'), ['alias', '..', 'out.']);
 });
 
 test('a symlinked command path still counts as this program', () => {
