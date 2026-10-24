@@ -39,7 +39,10 @@ reads from and writes to `CloudworkSystems/open-convo`.
   format in docs/plans/annotation-rounds.md). Each marked screenshot is saved
   next to it as `<session-name>-01.png`, `-02.png` and so on. Codex changes no
   code, then commits only those files on a branch named
-  `<session-name>-annotations` and opens a pull request with auto-merge on.
+  `<session-name>-annotations` and opens a pull request with auto-merge off,
+  like other Codex-built pull requests. The coordinator switches it on once
+  the round's files match the round (docs only, so that is its whole check);
+  an owner-only path still needs the owner's approval.
   (`main` is protected: every change reaches it through a pull request.)
 - Claude pulls from GitHub, builds the changes on a branch named after the
   session and opens a pull request. Codex reviews that pull request on GitHub.
