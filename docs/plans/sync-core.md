@@ -31,10 +31,13 @@ building lanes.
 1. **Now (this slice):** a Swift package with the sync logic and an in-memory
    fake of CloudKit's private database, tested with invented records. No real
    CloudKit, no Apple account, no keys, no app or storage code.
-2. **Next (building lanes):** a thin adapter from this package to real
-   CloudKit; the Mac app hands its already-encrypted records to the sync core;
-   the iPhone app is built on the same package. Turning sync on is a one-time
-   host approval in the app (foundations principle 6).
+2. **Next (building lanes):** an adapter from this package to real
+   CloudKit; the Mac app's storage split into separately encrypted, stamped
+   records it can hand to the sync core; a way for a new device to get the
+   keys; and the iPhone app on the same package. This is more than a thin
+   adapter: see "Requirements For The Next Slice" below, which its own plan
+   must meet. Turning sync on is a one-time host approval in the app
+   (foundations principle 6).
 3. **Later:** Windows and Android sync behind the same interface.
 
 ## What It Does
@@ -84,6 +87,15 @@ so it builds and tests on Linux too.
   engine from the app, is the next slice's job. A record type with no merge
   function falls back to "higher stamp wins" and keeps the losing copy as a
   conflict copy the app can show, so nothing is silently lost.
+- **Merge laws.** With three or more devices, copies can reach the cloud in
+  any order and any grouping, so a registered merge function must be
+  commutative (`merge(a, b)` equals `merge(b, a)`), associative
+  (`merge(merge(a, b), c)` equals `merge(a, merge(b, c))`) and idempotent
+  (`merge(a, a)` equals `a`, and merging a copy already folded in changes
+  nothing), judged on the decrypted contents. The README states these laws
+  as part of the merge-function interface, and the test helper that checks
+  them (test 16) is exported so each module's real merge function can be
+  checked against them in the next slice.
 - **Two kinds of deletion.** A *logical deletion* (removing an item or list,
   reversible until Trash is emptied) is an ordinary stamped change: it wins
   over earlier edits and loses to a later edit or re-add, matching the
@@ -148,12 +160,42 @@ Every case uses two or three simulated devices and invented records.
     record; then the upload completes. Only the uploaded version is
     acknowledged, the newer edit stays queued, and after the next sync B has
     the newer edit.
+16. A, B and C each change the same record while offline. For every order
+    in which the three reach the cloud (all six), and again when one
+    device's sync is replayed, all three devices end with the same contents.
+    The stand-in merge function passes a check of the merge laws above; a
+    deliberately non-associative stand-in fails that check.
 
 ## Out Of Scope For This Slice
 
 Real CloudKit, any Apple account or entitlement, keys and encryption, the Mac
 app's storage, the Desk, the iPhone app, sharing between people (Family
 spaces), Windows and Android, compacting deletion markers, and any real data.
+
+## Requirements For The Next Slice
+
+Not built in this slice. Written here because Codex's review of #127 found
+that the next slice can't be a thin adapter; its own plan must cover each of
+these before it is approved. It touches the Mac app's storage and keys, which
+are protected paths, so it goes to the owner.
+
+1. **Per-record storage.** The Mac app's protected store seals one whole
+   workspace file today; it has no separately encrypted `conversation-page`,
+   `task-list` or `memory-item` records with version stamps. The next plan
+   defines the record boundaries, gives each record its own encryption and
+   version stamp, and migrates an existing store to that shape without loss
+   (including a store that is interrupted partway through migrating).
+2. **Keys on a new device.** A new iPhone can't decrypt anything with
+   today's recovery flow: the recovery secret isn't stored, and only the
+   local sealed file can unwrap the store key. The next plan designs an
+   authenticated, wrapped store-key envelope that syncs alongside the
+   records, how a new device joins (for example, the user enters the
+   recovery key once), what happens when the key is replaced (rewrapping,
+   and devices that were offline during the change), and how a device is
+   removed.
+3. **Real merge functions meet the merge laws.** Each module's
+   decrypt-merge-encrypt function passes the test-16 law check before it is
+   registered.
 
 ## Before The Builder's Pull Request Can Merge
 
@@ -205,7 +247,10 @@ Its P2 on CloudKit's 1 MB field limit is also written in. Its last round on
 `faa5594` (reviewed again as #127) added one P1, written in above: an edit
 made while an upload is in flight stays queued (test 15). The P2s Codex
 raised are listed on #127 under "Requirements carried to the code pull
-request" for the builder to meet.
+request" for the builder to meet. Its round on `7e98760` added three P1s: the
+merge laws and the three-device test are written in above (test 16), and
+per-record storage and key provisioning are written in as "Requirements For
+The Next Slice".
 
 ## Review And Finish Line
 

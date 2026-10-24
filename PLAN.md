@@ -191,7 +191,8 @@ lanes, because they touch app and storage code.
   iCloud Drive once as a host, seeing what goes there (links and video clips)
   and that it is end-to-end encrypted only with Advanced Data Protection on.
   AirDrop to the Mac is the local-only alternative. Automatic secure sync
-  now comes from the sync core and CloudKit (October 22). The full iOS app stays at step 12.
+  now comes from the sync core and CloudKit (October 22). The full iOS app is
+  built on the parallel sync line (see step 12 below).
 - **First-run guide** (ordinary code, no AI): checks the computer, sets up a
   local model or a cloud model. Needed before anyone else installs.
 
