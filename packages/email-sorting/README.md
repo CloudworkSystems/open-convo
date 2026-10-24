@@ -279,15 +279,13 @@ a test in `tests/edge-cases.test.mjs` under the same number.
   truncated because it was not inspected, even when it is white space. Thus a
   multi-megabyte white-space suffix after a short reason ends in `…`, as does
   real text hidden in the middle of a long padded suffix.
-- **E28.** Leading white space and control characters have a separate bounded
-  allowance of eight times the output limit, so they do not consume the
-  five-times body bound. If that allowance is exhausted before text is found,
-  `oneLine` returns `""` and does not inspect the rest of the input.
-- **E29.** The reason-cleanup `oneLine` helper returns `""` when the flattened
-  value is empty, or when the leading allowance described in E28 runs out
-  before any real text is found. A literal `…` is preserved. For model reasons,
-  `cleanReason` returns `The model chose <Pile>` only when the cleaned result is
-  empty.
+- **E28.** Leading white space and control characters are skipped up to the
+  first real character, do not consume the five-times body bound, and are not
+  capped.
+- **E29.** The reason-cleanup `oneLine` helper returns `""` only when the
+  flattened value is empty (all separators). A literal `…` is preserved. For
+  model reasons, `cleanReason` returns `The model chose <Pile>` only when the
+  cleaned result is empty.
 
 ## What this slice does not do
 

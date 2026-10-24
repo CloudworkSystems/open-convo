@@ -366,8 +366,12 @@ test('E27. bounded suffix inspection marks uninspected input and hidden real tex
   assert.equal(cleanReason(`Brief reason${' '.repeat(2000)}SECRET${' '.repeat(2000)}`, 'people'), 'Brief reason…');
 });
 
-test('E28. bounded leading white space does not consume the reason body bound', () => {
+test('E28. uncapped leading white space does not consume the reason body bound', () => {
+  const atOldLimit = `${' '.repeat(1280)}hello`;
   assert.equal(cleanReason(`${' '.repeat(900)}hello`, 'people'), 'hello');
+  assert.equal(cleanReason(atOldLimit, 'people'), 'hello');
+  assert.equal(cleanReason(`${' '.repeat(100_000)}hello`, 'people'), 'hello');
+  assert.equal(reasonOneLine(atOldLimit, 160), 'hello');
 });
 
 test('E29. only empty cleaned reasons use the model-choice fallback; literal ellipses are kept', () => {

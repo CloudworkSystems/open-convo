@@ -93,24 +93,20 @@ export function own(object, key) {
 
 // The one way any text enters a reason (rule matches, header facts,
 // domains, the model's reason): leading white space and control characters
-// are skipped within a fixed bound, then every remaining run of them (CR,
-// LF, tab, U+2028, U+2029 and the rest of Unicode Cc) becomes one space.
-// The result is trimmed and cut to `max` characters, the last being "…"
-// when bounded suffix inspection finds real text that was cut or leaves any
-// input uninspected. Every scan is bounded by a multiple of `max`, regardless
-// of input length. An empty flattened value returns "", as does exhausting
-// the leading allowance before finding real text.
+// are skipped in one linear pass to the first real character, then every
+// remaining run of them (CR, LF, tab, U+2028, U+2029 and the rest of Unicode
+// Cc) becomes one space. The result is trimmed and cut to `max` characters,
+// the last being "…" when bounded suffix inspection finds real text that was
+// cut or leaves any input uninspected. The body and suffix scans are bounded
+// by multiples of `max`. An empty flattened value returns "".
 export function oneLine(text, max) {
   const source = String(text);
   const whiteOrControl = /[\s\u0000-\u001F\u007F-\u009F]/u;
 
-  // A separate leading allowance keeps padding from consuming the body bound.
-  // If it is exhausted before real text is found and input remains, return
-  // empty without inspecting the rest.
-  const leadingLimit = Math.min(source.length, max * 8);
+  // Skip all leading separators in one linear pass so padding does not consume
+  // the bounded body scan.
   let start = 0;
-  while (start < leadingLimit && whiteOrControl.test(source[start])) start += 1;
-  if (start === leadingLimit && start < source.length) return '';
+  while (start < source.length && whiteOrControl.test(source[start])) start += 1;
 
   // Take at most five output lengths without slicing or walking the rest.
   let bounded = '';
