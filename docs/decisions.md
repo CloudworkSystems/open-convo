@@ -74,7 +74,9 @@ full plan and history are in [PLAN.md](../PLAN.md).
   white-label tiers from October 15 stay on top of the flat subscription.
   Launch scope: chat, checklists, habit grid, iPhone-to-Mac continuity, a
   read-only Personal calendar, and email sorting only (local model); email
-  actions follow right after launch as standing rules; the family calendar,
+  actions follow right after launch, each asking first with a preview
+  (foundations principle 1; the owner asked for standing rules, which stay
+  limited to sorting unless he changes that principle); the family calendar,
   voice to calendar and wall display stay at step 11. Building apps for users
   comes after launch with step 6, and public copy says it is coming.
 - **Oct 21:** Scale-up plan approved ([docs/plans/scale-up.md](plans/scale-up.md)).

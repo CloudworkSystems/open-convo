@@ -148,13 +148,13 @@ later as modules. The owner's starting list, in his order:
 checklists, the habit grid, start-on-iPhone-continue-on-Mac, a **Personal
 calendar that only reads** (iCloud, Google, his work schedule, more) in one
 view, and **email sorting and grouping only**, on a local model so mail
-stays on the Mac. Right after launch: unsubscribe, report spam and delete,
-each approved once as a standing rule the owner can see and switch off.
-Foundations principle 1 says deletion and anything irreversible always stop
-for the owner, so until he changes that principle in its own decision, each
-delete, unsubscribe and spam report still asks him first, with a preview;
-standing rules cover only the routine sorting. The shared family calendar, voice to calendar and
-the wall display stay at step 11.
+stays on the Mac. Right after launch: unsubscribe, report spam and delete.
+The owner asked for these as standing rules, but foundations principle 1
+says deletion and anything irreversible always stop for the owner. So each
+delete, unsubscribe and spam report asks him first, with a preview, and
+standing rules cover only the routine sorting. That changes only if he
+changes principle 1 in its own decision. The shared family calendar, voice
+to calendar and the wall display stay at step 11.
 
 **Building your own software.** Every user gets the whole harness. Beyond
 simple uses like the list above, it shows them how to build an app they need

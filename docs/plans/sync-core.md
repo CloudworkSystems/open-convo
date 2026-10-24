@@ -71,6 +71,13 @@ so it builds and tests on Linux too.
   those bytes in its protected store later; in this slice tests keep them in
   memory or a temporary file. A device that quits mid-sync and reopens from
   its checkpoint loses no unsent change and duplicates nothing.
+- **Reconciling after a crash.** In the app, a record and its outbox entry
+  live in different places, so a crash can save one without the other. The
+  checkpoint keeps, for each record, the last stamp the cloud acknowledged.
+  On start, the app hands the sync core the ID and stamp of every local
+  record, and the core queues any record whose stamp is newer than its last
+  acknowledged one and isn't already queued. An edit saved just before a
+  crash is therefore never stranded, whichever side was saved first.
 - **The clock moves forward.** Every fetched stamp pushes the device's
   logical counter past it, so the next local change always gets a higher
   stamp than anything the device has seen.
@@ -165,6 +172,11 @@ Every case uses two or three simulated devices and invented records.
     device's sync is replayed, all three devices end with the same contents.
     The stand-in merge function passes a check of the merge laws above; a
     deliberately non-associative stand-in fails that check.
+17. A device saves an edit to its local records and is destroyed before its
+    checkpoint is saved; recreated from the older checkpoint and reconciled
+    against its records, it queues the edit and B has it after sync. The
+    reverse (checkpoint saved, record not) queues nothing new and loses
+    nothing that was acknowledged.
 
 ## Out Of Scope For This Slice
 
@@ -193,7 +205,11 @@ are protected paths, so it goes to the owner.
    recovery key once), what happens when the key is replaced (rewrapping,
    and devices that were offline during the change), and how a device is
    removed.
-3. **Real merge functions meet the merge laws.** Each module's
+3. **Record and outbox stay in step.** The app either saves a record and
+   its outbox entry in one atomic write to its store, or runs the
+   reconciliation above on every start; either way it tests a crash on both
+   sides of that save.
+4. **Real merge functions meet the merge laws.** Each module's
    decrypt-merge-encrypt function passes the test-16 law check before it is
    registered.
 
@@ -250,7 +266,9 @@ raised are listed on #127 under "Requirements carried to the code pull
 request" for the builder to meet. Its round on `7e98760` added three P1s: the
 merge laws and the three-device test are written in above (test 16), and
 per-record storage and key provisioning are written in as "Requirements For
-The Next Slice".
+The Next Slice". Its round on `406d89c` added a P1 on crashes between
+saving a record and saving the outbox, written in as "Reconciling after a
+crash" (test 17) and next-slice requirement 3.
 
 ## Review And Finish Line
 
