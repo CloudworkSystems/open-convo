@@ -82,7 +82,12 @@ and loaded from one JSON file per person):
 - **Snooze** moves a task's next reminder (and, if asked, its due date) to a
   chosen moment, or by a preset: later today (+3 hours), tomorrow at the
   reminder time, next Monday. Snoozing a repeating task changes only the
-  current occurrence.
+  current occurrence. A snooze is its own record naming the occurrence it
+  snoozes and the new reminder moment (and new due moment, if moved). It
+  never moves a series on: only completion and skip records do. For the
+  current occurrence, the snooze with the highest version stamp applies;
+  snoozes naming any other occurrence stay in history and change nothing.
+  If a snooze moves the due date, the occurrence keeps its original name.
 - **Drop** (the task won't be done) and **delete** are different: a dropped
   task stays in history; a delete goes to Trash, reversible until Trash is
   emptied.
@@ -99,7 +104,10 @@ clock and never uses the machine's time zone.
   (oldest first), then by due time (date-only tasks after timed ones), then
   high priority first, then title, then ID.
 - `upcoming(now, days)`: open tasks due in the next 1 to 60 days, grouped by
-  date, repeating tasks shown once per occurrence in the window.
+  date. An on-schedule repeating task is shown once per occurrence in the
+  window. An after-done task is shown only at its current due date, because
+  its later dates depend on when it is next done; the entry is marked
+  `repeatsAfterDone` so a view can say "then every 3 days after you do it".
 - `overdue(now)`: open tasks whose due moment has passed. A date-only task is
   overdue from the start of the next day in the owner's zone.
 - `remindersDue(from, to)`: every reminder whose moment falls in the half-open
@@ -157,7 +165,8 @@ A. Two rules specific to tasks:
   is made, so travel or a later change to the owner's zone never moves it.
   Records never change when the rule changes.
 - **The next due date always comes from the winning rule and the merged
-  records**, whichever device's edit won. The latest record is the one with
+  completion and skip records** (snoozes never count here), whichever
+  device's edit won. The latest record is the one with
   the latest occurrence name, then the latest action date, then the latest
   instant, then the highest record ID. On schedule, the next due date is
   the winning rule's first date after the latest record's occurrence date.
@@ -213,7 +222,12 @@ and tasks only. At least:
    `remindersDue` over back-to-back ranges returns each reminder exactly once,
    including across a daylight-saving change and a month end.
 8. Snooze: each preset; snoozing one occurrence of a repeating task leaves
-   the next occurrence alone.
+   the next occurrence alone; a snooze never moves an on-schedule or
+   after-done series on; two devices snoozing the same occurrence end with
+   the higher-stamped snooze; a snooze naming an old occurrence changes
+   nothing. `upcoming` over 30 days shows every occurrence of an on-schedule
+   task and only the current one, marked `repeatsAfterDone`, for an
+   after-done task.
 9. Merge: the household lists engine's cases (different tasks, same field,
    delete versus edit, equal timestamps, clock skew, an offline copy after
    Trash is emptied), plus two devices completing different occurrences, the
