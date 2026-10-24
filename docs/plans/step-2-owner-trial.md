@@ -1,5 +1,7 @@
 # Step 2: The Owner's Trial
 
+Status: In progress (Oct 21): waiting on the owner's trial.
+
 The last part of step 2 (PR 5). The scripted proof checks the stores in a
 test folder; this trial checks the real True Convo Test app on your Mac.
 Use **invented words only** until every box below is ticked.

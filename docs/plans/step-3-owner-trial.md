@@ -1,5 +1,7 @@
 # Step 3: The Owner's Trial
 
+Status: In progress (Oct 21): waiting on the owner's trial.
+
 The last part of step 3 (PR 5). The scripted proof checks the local route
 with a fake Ollama and a test store. This trial checks the real True Convo
 Test app talking to the real Ollama on your Mac.
