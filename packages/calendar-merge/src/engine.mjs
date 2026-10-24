@@ -171,7 +171,8 @@ function interpret(raw, source, ctx, budget, full = false) {
   const where = { sourceIndex: source.index, line: raw.line };
   // UID is TEXT: unescaped like SUMMARY, so \, and , name the same event.
   const uidProp = first('UID');
-  const uid = uidProp ? unescapeText(uidProp.value.trim()) : '';
+  // Not trimmed: spaces are part of a TEXT value, so "a" and " a " differ.
+  const uid = uidProp ? unescapeText(uidProp.value) : '';
   if (!uid) return { problem: { ...where, text: 'event skipped: no UID' } };
   const statusText = (first('STATUS')?.value || '').trim().toUpperCase();
   const cancelled = raw.method === 'CANCEL' || statusText === 'CANCELLED';
@@ -438,7 +439,8 @@ function expandFully(copy, q, single, stats, budget) {
         if (s.error) { at(`RDATE "${rdate.text}" skipped: ${s.error}`); continue; }
         let endMs;
         if (endValue && endValue.kind === 'time') {
-          const e = resolve(endValue);
+          // A floating end is read on the clock of the period's own start.
+          const e = budgetedResolve(endValue, s.zone, budget);
           endMs = e.error ? null : e.ms;
         } else if (d && d.sign > 0) {
           // Days and weeks are counted on the clock of the period's own start

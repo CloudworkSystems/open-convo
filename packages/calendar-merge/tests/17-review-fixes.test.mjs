@@ -4,7 +4,7 @@
 import './setup/guard.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { cal, ev, merge } from './helpers.mjs';
+import { cal, ev, merge, utcs } from './helpers.mjs';
 import { LIMITS } from '../src/index.mjs';
 
 const NOV = { from: '2026-11-01', to: '2026-11-30' };
@@ -216,4 +216,30 @@ test('a UID is unescaped like other text before copies are matched (review r9)',
   const plain = cal(ev('UID:team,one@test.example', 'SUMMARY:New', 'DTSTART:20261103T150000Z', 'SEQUENCE:1'));
   const result = await merge({ a: escaped, b: plain }, NOV);
   assert.deepEqual(result.occurrences.map((o) => [o.uid, o.title, o.matchedBy]), [['team,one@test.example', 'New', 'uid']]);
+});
+
+test('a UID is not trimmed: "a" and " a " are different events (review r10)', async () => {
+  const UTC = { ...NOV, timeZone: 'UTC' };
+  const result = await merge({ a: cal(ev('UID:a', 'SUMMARY:One', 'DTSTART:20261103T150000Z')), b: cal(ev('UID: a ', 'SUMMARY:Two', 'DTSTART:20261103T150000Z')) }, UTC);
+  assert.deepEqual(result.occurrences.map((o) => [o.uid, o.title]), [['a', 'One'], [' a ', 'Two']]);
+});
+
+test('a floating PERIOD end is read on the clock of the period\'s start (review r10)', async () => {
+  const event = ev('UID:p@test.example', 'SUMMARY:Extra', 'DTSTART;TZID=America/New_York:20261102T090000', 'DURATION:PT1H', 'RDATE;VALUE=PERIOD:20261101T090000Z/20261101T100000');
+  const result = await merge({ a: cal(event) }, NOV);
+  assert.deepEqual(result.occurrences.map((o) => [o.start.utc, o.end.utc]), [['2026-11-01T09:00:00Z', '2026-11-01T10:00:00Z'], ['2026-11-02T14:00:00Z', '2026-11-02T15:00:00Z']]);
+  assert.deepEqual(result.problems, []);
+});
+
+test('any positive INTERVAL is read; a huge one gives DTSTART and nothing after it (review r10)', async () => {
+  const UTC = { ...NOV, timeZone: 'UTC' };
+  const seven = await merge({ a: cal(ev('UID:i@test.example', 'SUMMARY:I', 'DTSTART:20261102T090000Z', 'RRULE:FREQ=DAILY;INTERVAL=0000007')) }, UTC);
+  assert.deepEqual(utcs(seven), ['2026-11-02T09:00:00Z', '2026-11-09T09:00:00Z', '2026-11-16T09:00:00Z', '2026-11-23T09:00:00Z', '2026-11-30T09:00:00Z']);
+  for (const freq of ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']) {
+    for (const interval of ['1000000', '99999999999999', '9'.repeat(400)]) {
+      const result = await merge({ a: cal(ev('UID:i@test.example', 'SUMMARY:I', 'DTSTART:20261102T090000Z', `RRULE:FREQ=${freq};INTERVAL=${interval}`)) }, UTC);
+      assert.deepEqual(utcs(result), ['2026-11-02T09:00:00Z'], `${freq} ${interval.length}`);
+      assert.deepEqual(result.problems, [], `${freq} ${interval.length}`);
+    }
+  }
 });

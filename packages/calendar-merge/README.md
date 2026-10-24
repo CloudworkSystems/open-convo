@@ -55,7 +55,7 @@ console.log(formatAgenda(result));
 
 - Lines are unfolded (space or tab), CRLF or LF endings, text unescaped
   (`\n`, `\,`, `\;`, `\\`), parameters may be quoted, names in any case.
-  `UID` is text too: it is unescaped before copies are matched, so
+  `UID` is text too: it is unescaped (never trimmed) before copies are matched, so
   `team\,one` and `team,one` are the same event.
 - Only `VEVENT`s: `UID`, `SUMMARY`, `LOCATION`, `DTSTART`, `DTEND` or
   `DURATION`, `RRULE`, `RDATE`, `EXDATE`, `RECURRENCE-ID`, `STATUS`,
@@ -71,7 +71,8 @@ console.log(formatAgenda(result));
   twice is the first one.
 - All-day events are dates: the same dates in every zone, `DTEND` exclusive,
   one day when there is no end.
-- Repeats: `FREQ` `DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY` with `INTERVAL`,
+- Repeats: `FREQ` `DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY` with `INTERVAL`
+  (any positive number; one too large to reach another date gives `DTSTART` only),
   `COUNT`, `UNTIL`, `BYDAY` (numbered for monthly and yearly), `BYMONTHDAY`
   (negative too), `BYMONTH`, `BYSETPOS`, `WKST`; `RDATE` (dates, date-times
   and periods) and `EXDATE` (several lines, comma lists, matched by instant,

@@ -6,6 +6,7 @@ import { civilFromDays, daysFromCivil, daysInMonth, isLeapYear, weekdayOf } from
 
 export const WEEKDAYS = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
 export const MAX_COUNT = 1_000_000;
+export const MAX_INTERVAL = 10_000_000;
 
 // Thrown when expanding one series would take more work than it is allowed.
 export class WorkLimit extends Error {}
@@ -48,8 +49,11 @@ export function parseRRule(text) {
   }
   const rule = { freq, interval: 1, count: null, until: null, byday: null, bymonthday: null, bymonth: null, bysetpos: null, wkst: 1 };
   if (parts.has('INTERVAL')) {
-    if (!/^\d{1,6}$/.test(parts.get('INTERVAL')) || Number(parts.get('INTERVAL')) < 1) return { unsupported: 'bad INTERVAL' };
-    rule.interval = Number(parts.get('INTERVAL'));
+    if (!/^\d+$/.test(parts.get('INTERVAL')) || Number(parts.get('INTERVAL')) < 1) return { unsupported: 'bad INTERVAL' };
+    // Any positive INTERVAL is read. Past MAX_INTERVAL one step already
+    // passes year 9999 at every FREQ, so larger values behave the same:
+    // DTSTART and nothing after it.
+    rule.interval = Math.min(Number(parts.get('INTERVAL')), MAX_INTERVAL);
   }
   if (parts.has('COUNT') && parts.has('UNTIL')) return { unsupported: 'both COUNT and UNTIL' };
   if (parts.has('COUNT')) {
