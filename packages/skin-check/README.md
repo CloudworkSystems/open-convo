@@ -138,8 +138,12 @@ reminder dates and the summary date.
 `mergePeople(a, b)` is a pure, commutative merge of two copies of the same
 person's file. Spot fields are version-stamped registers (higher counter,
 then time, then device ID wins). Check-ins and clinician visits never change
-once made, so they merge as sets of records by ID; the same record arriving
-twice counts once, and two different records sharing an ID are refused.
+once made, so they merge as sets of records keyed by spot and ID; the same
+record arriving twice counts once. Two different records under the same key
+(only possible with caller-chosen IDs) never block a sync: the more cautious
+one is kept, then the newer stamp, then a fixed text order, so every merge
+order gives the same file. Records deleted with an emptied spot are removed
+before this step.
 
 ## JSON schema version 1
 
@@ -194,7 +198,9 @@ under its own type. A merge drops a record only when its own spot lists its
 ID under that record's type. A future sync
 adapter must keep these markers; dropping them would let an offline copy
 bring deleted records back. Unknown keys, an unknown `schemaVersion`, or a
-check-in or visit for a spot that is not in the file are refused.
+check-in or visit for a spot that is not in the file are refused, and so is
+a file missing its time zone or a spot (other than an emptied one) missing
+one of its fields.
 
 ## Edge cases
 

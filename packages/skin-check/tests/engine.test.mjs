@@ -347,7 +347,7 @@ test('merge: a check-in the emptying device never saw brings the spot back inste
   assert.equal(view.spot('spot-back').region, 'upperBack');
 });
 
-test('merge: A into B equals B into A, the same check-in twice counts once, conflicts are refused', () => {
+test('merge: A into B equals B into A, the same check-in twice counts once, conflicts settle the same way', () => {
   const { mac, phone } = pair();
   mac.addCheckIn({ spotId: 'spot-wrist', capturedAt: '2026-10-02T08:00:00-04:00', answers: answers({ bleeding: 'yes' }) }, { id: 'shared' });
   phone.importPerson(mac.getPerson());
@@ -355,9 +355,13 @@ test('merge: A into B equals B into A, the same check-in twice counts once, conf
   const merged = converges(mac, phone);
   assert.equal(merged.checkIns.length, 1);
   assert.equal(new SkinCheck({ deviceId: 'v', person: merged }).spotOutcome('spot-wrist').reasons.length, 1);
+  // Two different records under one key never block a sync: the more cautious one is kept, in either order.
   const forged = mac.getPerson();
   forged.checkIns[0].answers = ALL_NO;
-  assert.throws(() => mergePeople(phone.getPerson(), forged), /share the ID/);
+  for (const result of [mergePeople(phone.getPerson(), forged), mergePeople(forged, phone.getPerson())]) {
+    assert.equal(result.checkIns.length, 1);
+    assert.equal(result.checkIns[0].answers.bleeding, 'yes');
+  }
   const stranger = engine('mac-a', { person: undefined });
   assert.throws(() => mergePeople(mac.getPerson(), { ...stranger.getPerson(), id: 'someone-else' }), /different people/);
   // Three copies merge to the same file in any order.
@@ -488,4 +492,34 @@ test('deleted record IDs stay reserved across spots, and an old copy never block
   const merged = mergePeople(mergePeople(mac.getPerson(), phone.getPerson()), offline);
   assert.deepEqual(merged, mergePeople(offline, mergePeople(phone.getPerson(), mac.getPerson())));
   assert.deepEqual(merged.checkIns.map(record => [record.spotId, record.id]), [['spot-wrist', 'reused']]);
+});
+
+test('three copies with a reused ID on two spots and an emptied Trash merge the same in any order', () => {
+  const { mac } = pair();
+  const fork = engine('tablet-c', { person: mac.getPerson() });
+  mac.addCheckIn({ spotId: 'spot-back', capturedAt: '2026-10-02T08:00:00Z', answers: answers({ bleeding: 'yes' }) }, { id: 'X' });
+  const withRecord = mac.getPerson();
+  mac.removeSpot('spot-back');
+  mac.emptyTrash();
+  const purged = mac.getPerson();
+  fork.addCheckIn({ spotId: 'spot-wrist', capturedAt: '2026-10-03T08:00:00Z', answers: ALL_NO }, { id: 'X' });
+  const older = fork.getPerson();
+  const orders = [[withRecord, purged, older], [withRecord, older, purged], [older, withRecord, purged], [purged, older, withRecord]];
+  const results = orders.map(([a, b, c]) => mergePeople(mergePeople(a, b), c));
+  for (const result of results) assert.deepEqual(result, results[0]);
+  assert.deepEqual(results[0].checkIns.map(record => [record.spotId, record.id]), [['spot-wrist', 'X']]);
+  // Before the emptying arrives, both records live side by side on their own spots.
+  const both = mergePeople(withRecord, older);
+  assert.deepEqual(both.checkIns.map(record => record.spotId).sort(), ['spot-back', 'spot-wrist']);
+  assert.equal(new SkinCheck({ deviceId: 'v', person: both }).checkInOutcome('X').outcome, 'bookSoon');
+});
+
+test('a file missing its time zone or a spot field is refused', () => {
+  const { mac } = pair();
+  const file = JSON.parse(mac.save());
+  delete file.fields.timeZone;
+  assert.throws(() => deserializePerson(JSON.stringify(file)), /missing its time zone/);
+  const spotless = JSON.parse(mac.save());
+  delete spotless.spots[0].fields.createdAt;
+  assert.throws(() => deserializePerson(JSON.stringify(spotless)), /missing a field/);
 });

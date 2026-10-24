@@ -55,6 +55,7 @@ const identity = (value, label) => string(value, label).length ? value : fail(`$
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const setOwn = (target, key, value) => Object.defineProperty(target, key, { value, enumerable: true, writable: true, configurable: true });
 const byId = (a, b) => lex(a.id, b.id);
+const byRecord = (a, b) => lex(a.id, b.id) || lex(a.spotId, b.spotId);
 const onlyKeys = (value, keys) => Object.keys(value).every(key => keys.includes(key));
 
 // ---- Dates, instants and time zones ----
@@ -235,12 +236,15 @@ function validateSpot(spot) {
   }
   if (spot.purge === null && PURGED_KINDS.some(kind => spot.purged[kind].length)) fail('Invalid spot in skin check file.');
   validateFields(spot.fields, SPOT_FIELDS, 'spot');
+  // Only a spot whose Trash was emptied may lack fields (it keeps those written after).
+  if (spot.purge === null && Object.keys(SPOT_FIELDS).some(key => !own(spot.fields, key))) fail('A spot in the skin check file is missing a field.');
 }
 function validate(person) {
   if (!object(person) || person.schemaVersion !== SCHEMA_VERSION) fail(`Unsupported schemaVersion; expected ${SCHEMA_VERSION}.`);
   if (!onlyKeys(person, ['schemaVersion', 'id', 'fields', 'spots', 'checkIns', 'visits'])) fail('Unknown data in skin check file.');
   identity(person.id, 'Person ID');
   validateFields(person.fields, PERSON_FIELDS, 'person');
+  if (!own(person.fields, 'timeZone')) fail('The skin check file is missing its time zone.');
   if (!Array.isArray(person.spots) || !Array.isArray(person.checkIns) || !Array.isArray(person.visits)) fail('Invalid skin check file.');
   const spots = new Set();
   for (const spot of person.spots) {
@@ -252,9 +256,10 @@ function validate(person) {
     const ids = new Set();
     for (const record of list) {
       check(record);
-      if (ids.has(record.id)) fail(`Duplicate ${what} ID in skin check file.`);
+      const key = JSON.stringify([record.spotId, record.id]);
+      if (ids.has(key)) fail(`Duplicate ${what} ID in skin check file.`);
       if (!spots.has(record.spotId)) fail(`A ${what} refers to a spot that is not in the file.`);
-      ids.add(record.id);
+      ids.add(key);
     }
   }
   return person;
@@ -271,8 +276,8 @@ function canonical(person) {
       id: spot.id, life: clone(spot.life), purge: clone(spot.purge),
       fields: records(spot.fields, {}), purged: unionPurged(spot.purged),
     })).sort(byId),
-    checkIns: person.checkIns.map(record => clone(record)).sort(byId),
-    visits: person.visits.map(record => clone(record)).sort(byId),
+    checkIns: person.checkIns.map(record => clone(record)).sort(byRecord),
+    visits: person.visits.map(record => clone(record)).sort(byRecord),
   };
 }
 function mergeSpot(a, b) {
@@ -283,12 +288,18 @@ function mergeSpot(a, b) {
   return { id: a.id, life, purge: clone(purge), fields: records(a.fields, b.fields, purge), purged: unionPurged(a.purged, b.purged) };
 }
 // Check-ins and visits never change after they are made: merged as a set by ID.
-function mergeSet(left, right, what) {
-  const result = new Map(left.map(record => [record.id, record]));
+// A record is known by its spot and its ID. Two different records with the same
+// key (only possible with caller-chosen IDs) never block a sync: the more
+// cautious one is kept, then the newer stamp, then a fixed text order, so the
+// result is the same in any merge order.
+const recordKey = record => JSON.stringify([record.spotId, record.id]);
+const caution = record => record.answers ? CAUTION.indexOf(evaluateAnswers(record.answers).outcome) : 0;
+const preferred = (a, b) => caution(a) - caution(b) || compareStamps(a.stamp, b.stamp) || lex(stable(a), stable(b));
+function mergeSet(left, right) {
+  const result = new Map(left.map(record => [recordKey(record), record]));
   for (const record of right) {
-    const other = result.get(record.id);
-    if (other && stable(other) !== stable(record)) fail(`Two different ${what} share the ID "${record.id}".`);
-    result.set(record.id, record);
+    const other = result.get(recordKey(record));
+    if (!other || preferred(record, other) > 0) result.set(recordKey(record), record);
   }
   return [...result.values()].map(record => clone(record));
 }
@@ -300,7 +311,7 @@ export function mergePeople(left, right) {
   const b = new Map(right.spots.map(spot => [spot.id, spot]));
   const spots = [...new Set([...a.keys(), ...b.keys()])].sort().map(id => mergeSpot(a.get(id), b.get(id)));
   // A record is dropped only when its own spot lists its ID under its own type.
-  const purged = kind => new Set(spots.flatMap(spot => spot.purged[kind].map(id => JSON.stringify([spot.id, id]))));
+  const purged = kind => new Set(spots.flatMap(spot => spot.purged[kind].map(id => recordKey({ spotId: spot.id, id }))));
   const [goneCheckIns, goneVisits] = [purged('checkIns'), purged('visits')];
   return canonical(validate({
     schemaVersion: SCHEMA_VERSION,
@@ -308,8 +319,8 @@ export function mergePeople(left, right) {
     fields: records(left.fields, right.fields),
     spots,
     // Deleted records leave before the set merge, so an old copy can't clash with a new record that reuses its ID.
-    checkIns: mergeSet(...[left.checkIns, right.checkIns].map(list => list.filter(record => !goneCheckIns.has(JSON.stringify([record.spotId, record.id])))), 'check-ins'),
-    visits: mergeSet(...[left.visits, right.visits].map(list => list.filter(record => !goneVisits.has(JSON.stringify([record.spotId, record.id])))), 'clinician visits'),
+    checkIns: mergeSet(...[left.checkIns, right.checkIns].map(list => list.filter(record => !goneCheckIns.has(recordKey(record))))),
+    visits: mergeSet(...[left.visits, right.visits].map(list => list.filter(record => !goneVisits.has(recordKey(record))))),
   }));
 }
 export function serializePerson(person) { return JSON.stringify(canonical(validate(person))); }
@@ -616,7 +627,7 @@ export class SkinCheck {
       photo: clone(checkPhoto(photo)), source, stamp: this.#stamp(),
     };
     this.#person.checkIns.push(record);
-    this.#person.checkIns.sort(byId);
+    this.#person.checkIns.sort(byRecord);
     return id;
   }
   /**
@@ -636,7 +647,7 @@ export class SkinCheck {
     }
     instant(when, 'Visit time');
     this.#person.visits.push({ id, spotId, at: when, dateOnly: date !== undefined, note: string(note, 'Visit note'), stamp: this.#stamp() });
-    this.#person.visits.sort(byId);
+    this.#person.visits.sort(byRecord);
     return id;
   }
 
@@ -647,8 +658,10 @@ export class SkinCheck {
   }
   spot(spotId) { return spotView(this.#person, this.#find(spotId)); }
   checkInOutcome(checkInId) {
-    const record = this.#person.checkIns.find(entry => entry.id === checkInId) ?? fail('No check-in with that ID.');
-    return evaluateAnswers(record.answers);
+    const found = this.#person.checkIns.filter(entry => entry.id === checkInId);
+    if (!found.length) fail('No check-in with that ID.');
+    // Merged files can hold the same caller-chosen ID on two spots; the most cautious wins here too.
+    return evaluateAnswers(found.reduce((a, b) => preferred(a, b) >= 0 ? a : b).answers);
   }
   spotOutcome(spotId) { this.#find(spotId); return spotOutcomeOf(this.#person, spotId); }
 
