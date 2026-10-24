@@ -107,6 +107,10 @@ test('a branch whose tip a merged pull request squashed into main counts as merg
   assert.deepEqual(work, { open: 'unmerged', main: 'trunk', feature: 'merged', squashed: 'merged' });
   // A commit pushed after the squash merge is new work again.
   assert.equal(branchWork({ ...snapshot.branches[3], tip: 's2', ahead: 3 }, index, 'main'), 'unmerged');
+  // With no recorded head, the merge time decides.
+  const headless = indexPulls(snapshot.pulls.map((pull) => pull.number === 4 ? { ...pull, headHash: undefined } : pull));
+  assert.equal(branchWork(snapshot.branches[3], headless, 'main'), 'merged');
+  assert.equal(branchWork({ ...snapshot.branches[3], tip: 's2', date: '2026-10-01T09:00:00Z' }, headless, 'main'), 'unmerged');
 });
 
 test('summary counts and timeline spans', () => {
