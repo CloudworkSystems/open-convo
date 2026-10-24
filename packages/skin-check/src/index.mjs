@@ -236,6 +236,11 @@ function validateSpot(spot) {
   }
   if (spot.purge === null && PURGED_KINDS.some(kind => spot.purged[kind].length)) fail('Invalid spot in skin check file.');
   validateFields(spot.fields, SPOT_FIELDS, 'spot');
+  // Nothing on a spot may predate its emptied-Trash cutoff; a merge would already have dropped it.
+  if (spot.purge !== null && (compareStamps(spot.life.stamp, spot.purge) < 0 ||
+    Object.values(spot.fields).some(entry => compareStamps(entry.stamp, spot.purge) <= 0))) {
+    fail('A spot in the skin check file has data older than its emptied Trash.');
+  }
   // Only a spot whose Trash was emptied may lack fields (it keeps those written after).
   if (spot.purge === null && Object.keys(SPOT_FIELDS).some(key => !own(spot.fields, key))) fail('A spot in the skin check file is missing a field.');
 }

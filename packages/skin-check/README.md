@@ -201,8 +201,8 @@ adapter must keep these markers; dropping them would let an offline copy
 bring deleted records back. Unknown keys, an unknown `schemaVersion`, or a
 check-in or visit for a spot that is not in the file are refused, and so is
 a file missing its time zone or a spot (other than an emptied one) missing
-one of its fields, or still holding a record that its spot's deletion marker
-names.
+one of its fields, still holding a record that its spot's deletion marker
+names, or holding spot data older than that spot's emptied Trash.
 
 ## Edge cases
 

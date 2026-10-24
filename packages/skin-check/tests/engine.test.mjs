@@ -453,6 +453,10 @@ test('emptying Trash drops only the deleted records of that type and spot, even 
   contradictory.checkIns.push({ ...offlineRecord(mac), spotId: 'spot-back', id: 'same-id' });
   assert.throws(() => deserializePerson(JSON.stringify(contradictory)), /permanently deleted with its spot/);
   assert.throws(() => new SkinCheck({ deviceId: 'v', person: contradictory }), /permanently deleted with its spot/);
+  const revived = JSON.parse(mac.save());
+  const marker = revived.spots.find(spot => spot.id === 'spot-back');
+  marker.life = { value: true, stamp: { ...marker.purge, counter: marker.purge.counter - 1 } };
+  assert.throws(() => deserializePerson(JSON.stringify(revived)), /older than its emptied Trash/);
   const reloaded = deserializePerson(mac.save());
   const merged = mergePeople(reloaded, mac.getPerson());
   assert.deepEqual(merged.visits.map(visit => visit.id), ['same-id']);
