@@ -90,6 +90,8 @@ Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
 **Calendar merge engine** (Personal, launch set), Codex builds, Gemini Code Assist reviews; plan approved (`docs/plans/calendar-merge-engine.md`); Codex can start when a builder place is free.
 
+**Skin check** (Personal, new Health module), Claude builds, Gemini Code Assist reviews; plan in review (`docs/plans/skin-check.md`). Slice 1 is a standalone engine; the iPhone source and Desk view wait for the iPhone capture app.
+
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:
 [docs/plans/merge-gate.md](docs/plans/merge-gate.md). Switched on for `main`
