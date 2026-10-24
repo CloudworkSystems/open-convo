@@ -103,6 +103,14 @@ so it builds and tests on Linux too.
   engine from the app, is the next slice's job. A record type with no merge
   function falls back to "higher stamp wins" and keeps the losing copy as a
   conflict copy the app can show, so nothing is silently lost.
+- **Retries reuse the merge result.** The merge result is stamped and saved
+  in the outbox (and so in the checkpoint) before it is uploaded, and a
+  retry sends those same bytes; the merge function is not called again for
+  that conflict. If the cloud saved the result but the answer was lost, the
+  next fetch finds the cloud copy carrying that stamp and treats it as
+  acknowledged, so no second revision is written. (Encryption with a fresh
+  nonce would make a re-run merge produce different bytes, so re-running it
+  can't be how a retry works.)
 - **Merge laws.** With three or more devices, copies can reach the cloud in
   any order and any grouping, so a registered merge function must be
   commutative (`merge(a, b)` equals `merge(b, a)`), associative
@@ -189,6 +197,11 @@ Every case uses two or three simulated devices and invented records.
     reverse (checkpoint saved with a queued entry, record not saved), the
     entry is dropped: it is never uploaded, B never sees it, status returns
     to synced, and nothing that was acknowledged is lost.
+18. A merged result is saved by the cloud but the connection drops before
+    A hears back. After A retries, the cloud holds exactly one new revision,
+    the merge function was called once for that conflict, and B ends with
+    the same bytes A saved. The stand-in merge function for this test adds
+    random bytes to its output, as real encryption would.
 
 ## Out Of Scope For This Slice
 
@@ -288,7 +301,9 @@ reconciliation, test 17) and a P2 to keep the builder's requirements in
 this plan rather than on the pull request (done). Its round on `0cf717e` added two
 P1s: every divergent cloud copy goes through the merge function, not only
 an older-stamped one ("Conflicts"), and reconciliation receives full
-records, so it can rebuild an outbox entry with its payload.
+records, so it can rebuild an outbox entry with its payload. Its round on
+`20b4dc9` added a P1 on retrying an encrypted merge, written in as "Retries
+reuse the merge result" (test 18).
 
 ## Review And Finish Line
 
