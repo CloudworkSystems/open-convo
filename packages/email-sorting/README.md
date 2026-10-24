@@ -191,8 +191,10 @@ a test in `tests/edge-cases.test.mjs` under the same number.
   value when there is none, in lower case.
 - **E6.** Dates follow RFC 3339 exactly: lower-case `t` and `z`, fractional
   seconds and a leap second (`:60`) are accepted; `-00:00` equals `Z`.
-  Ordering uses the instant, fractions included. The output keeps the date
-  as written.
+  Ordering uses the instant, fractions included; a leap second sorts after
+  every `:59` instant of its minute and before the next minute's `:00`
+  (`23:59:60.5Z` is older than the next day's `00:00:00Z`). The output keeps
+  the date as written.
 - **E7.** An address needs text on both sides of its one `@` (RFC 5322
   addr-spec). Addresses compare trimmed and in lower case.
 - **E8.** Domain rules (`@shop.example`) and `workDomains` match the exact
@@ -213,6 +215,9 @@ a test in `tests/edge-cases.test.mjs` under the same number.
 - **E14.** A blank sender name counts as no name for group labels.
 - **E15.** A classifier answer (or failure) that arrives after the timeout is
   ignored and never surfaces as an error.
+- **E16.** Settings that are supplied must be an object: a settings file
+  holding `null` (or a list, text or number) is refused. Only leaving the
+  settings out gives the defaults.
 
 ## What this slice does not do
 

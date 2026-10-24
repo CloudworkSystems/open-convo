@@ -60,8 +60,10 @@ function daysFromCivil(year, month, day) {
   return era * 146097 + doe - 719468;
 }
 
-// Returns { seconds, fraction } for ordering, or null when the text isn't a
-// valid RFC 3339 date-time with an offset.
+// Returns { seconds, leap, fraction } for ordering, or null when the text
+// isn't a valid RFC 3339 date-time with an offset. A leap second (:60) keeps
+// its own place: it counts as second 59 with `leap` 1, so it sorts after
+// every :59 instant and before the next minute's :00.
 export function parseDate(text) {
   if (typeof text !== 'string') return null;
   const m = DATE_TIME.exec(text);
@@ -76,13 +78,15 @@ export function parseDate(text) {
     if (oh > 23 || om > 59) return null;
     offset = (m[9] === '-' ? -1 : 1) * (oh * 3600 + om * 60);
   }
-  const seconds = daysFromCivil(year, month, day) * 86400 + hour * 3600 + minute * 60 + second - offset;
+  const leap = second === 60 ? 1 : 0;
+  const seconds = daysFromCivil(year, month, day) * 86400 + hour * 3600 + minute * 60 + (second - leap) - offset;
   const fraction = (m[7] || '').replace(/0+$/, '');
-  return { seconds, fraction };
+  return { seconds, leap, fraction };
 }
 
 export function compareDates(a, b) {
   if (a.seconds !== b.seconds) return a.seconds < b.seconds ? -1 : 1;
+  if (a.leap !== b.leap) return a.leap < b.leap ? -1 : 1;
   const len = Math.max(a.fraction.length, b.fraction.length);
   const fa = a.fraction.padEnd(len, '0');
   const fb = b.fraction.padEnd(len, '0');
@@ -226,7 +230,9 @@ export function ruleMatchProblem(match) {
 
 // Returns a complete, frozen settings object with defaults filled in.
 export function validateSettings(settings) {
-  if (settings === undefined || settings === null) settings = { schemaVersion: SCHEMA_VERSION };
+  // Only an omitted settings file (undefined) means defaults; a supplied
+  // file that is null, a list or anything but an object is refused.
+  if (settings === undefined) settings = { schemaVersion: SCHEMA_VERSION };
   if (!isPlainObject(settings)) settingsRefuse('the settings file must be a JSON object.');
   for (const key of Object.keys(settings)) {
     if (!SETTINGS_FIELDS.includes(key)) settingsRefuse(`a field this version doesn't accept: ${quote(key)}.`);

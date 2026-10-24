@@ -22,17 +22,40 @@ test('15. the guard throws when net.connect is called on purpose', () => {
   assert.deepEqual(takeCalls(), ['net.connect', 'net.Socket.prototype.connect']);
 });
 
+// Names are compared without the "node:" prefix: newer Node releases list
+// prefix-only modules (node:sea, node:sqlite, node:test, ...) that way.
+// The snapshot is the union of every release the package supports (Node 22
+// and later; checked against 22 and 26). A module a release drops is fine;
+// one the snapshot doesn't know fails the test.
+function unlisted(names) {
+  return names.map(name => name.replace(/^node:/, '')).filter(name => !Object.hasOwn(SNAPSHOT, name));
+}
+
+// Node 26's builtinModules, as printed by that release.
+const NODE_26 = ['_http_agent', '_http_client', '_http_common', '_http_incoming', '_http_outgoing', '_http_server',
+  '_tls_common', '_tls_wrap', 'assert', 'assert/strict', 'async_hooks', 'buffer', 'child_process', 'cluster', 'console',
+  'constants', 'crypto', 'dgram', 'diagnostics_channel', 'dns', 'dns/promises', 'domain', 'events', 'fs', 'fs/promises',
+  'http', 'http2', 'https', 'inspector', 'inspector/promises', 'module', 'net', 'os', 'path', 'path/posix', 'path/win32',
+  'perf_hooks', 'process', 'punycode', 'querystring', 'readline', 'readline/promises', 'repl', 'stream',
+  'stream/consumers', 'stream/promises', 'stream/web', 'string_decoder', 'sys', 'timers', 'timers/promises', 'tls',
+  'trace_events', 'tty', 'url', 'util', 'util/types', 'v8', 'vm', 'wasi', 'worker_threads', 'zlib',
+  'node:sea', 'node:sqlite', 'node:test', 'node:test/reporters'];
+
 test('15. every Node built-in module is in the snapshot, marked network or not', () => {
   const marks = new Set(['network or process: stubbed above', 'no network']);
-  for (const name of builtinModules) {
-    assert.ok(Object.hasOwn(SNAPSHOT, name), `built-in "${name}" is not in tests/builtin-modules.json; add its entry points to tests/guard.mjs first`);
-    assert.ok(marks.has(SNAPSHOT[name]), `built-in "${name}" has an unknown mark`);
-  }
+  assert.deepEqual(unlisted(builtinModules), [],
+    'a built-in is not in tests/builtin-modules.json; add its entry points to tests/guard.mjs first');
+  for (const mark of Object.values(SNAPSHOT)) assert.ok(marks.has(mark), `unknown mark ${JSON.stringify(mark)}`);
   for (const [name, mark] of Object.entries(SNAPSHOT)) {
-    if (mark === 'network or process: stubbed above' && builtinModules.includes(name)) {
+    if (mark === 'network or process: stubbed above') {
       assert.ok(STUBBED.includes(name) || name.startsWith('_http_'), `"${name}" is marked stubbed but the guard doesn't list it`);
     }
   }
+});
+
+test('15. the snapshot covers later supported releases, including node:-prefixed modules', () => {
+  assert.deepEqual(unlisted(NODE_26), []);
+  assert.deepEqual(unlisted(['node:sqlite', 'node:brand-new']), ['brand-new'], 'an unknown module still fails');
 });
 
 test('15. the library writes no files and opens no network while sorting', async () => {

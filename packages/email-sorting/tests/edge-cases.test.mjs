@@ -1,4 +1,4 @@
-// One test per choice in the README's "Edge cases" section (E1 to E15):
+// One test per choice in the README's "Edge cases" section (E1 to E16):
 // cases the plan doesn't name, settled by the RFC 5322 (and RFC 3339, RFC
 // 2919, RFC 3834) defaults.
 
@@ -80,6 +80,27 @@ test('E6. dates: lower-case t and z, leap seconds, fractions, and -00:00 are RFC
   assert.deepEqual(classifier.questions.map(q => q.ref.id), ['a', 'c'], '.5 is newer than .25');
 });
 
+test('E6. a leap second sorts after :59 and before the next day\'s midnight, fractions included', async () => {
+  const thread = (id, date, n) => mail({
+    id, date, from: { address: `${id}@leap.example` },
+    headers: { 'Message-ID': `<${id}@m.example>`, ...(n ? { References: '<root@m.example>' } : {}) },
+  });
+  const cases = [
+    // [older, newer]: ids are chosen so the inbox/id tie-break would pick the older one.
+    [['z-leap', '2016-12-31T23:59:60Z'], ['a-midnight', '2017-01-01T00:00:00Z']],
+    [['z-leap', '2016-12-31T23:59:60.5Z'], ['a-midnight', '2017-01-01T00:00:00Z']],
+    [['z-leap', '2016-12-31T23:59:60.999Z'], ['a-midnight', '2017-01-01T01:00:00+01:00']],
+    [['z-59', '2016-12-31T23:59:59.9Z'], ['a-leap', '2016-12-31T23:59:60Z']],
+  ];
+  for (const [[oldId, oldDate], [newId, newDate]] of cases) {
+    const { classifier } = await ask(
+      [thread('root', '2016-12-31T12:00:00Z', false), thread(oldId, oldDate, true), thread(newId, newDate, true)],
+      [{ inbox: 'home', id: newId, answer: answer('people') }],
+    );
+    assert.deepEqual(classifier.questions.map(q => q.ref.id), [newId], `${newDate} is newer than ${oldDate}`);
+  }
+});
+
 test('E7. addresses need text on both sides of "@" and compare trimmed, in lower case', async () => {
   for (const address of ['@x.example', 'name@', ' @ ']) {
     await assert.rejects(ask([mail({ id: 'a', from: { address } })], []), /needs text before and after the "@"/);
@@ -157,4 +178,16 @@ test('E15. an answer that arrives after the timeout is ignored, and a late failu
   release.resolve(answer('work'));
   release.reject(new Error('late'));
   assert.equal(byId(result, 'm-1').decidedBy, 'fallback');
+});
+
+test('E16. a supplied settings value of null, a list, text or a number is refused; only undefined means defaults', async () => {
+  for (const bad of [null, [], 'settings', 0]) {
+    await assert.rejects(sortMessages(input([mail()]), bad, createScriptedClassifier([])),
+      /^EmailSortError: Settings: the settings file must be a JSON object\.$/);
+  }
+  for (const text of ['null', '[]', '"x"', '1']) {
+    assert.throws(() => parseSettingsFile(text), /the settings file must be a JSON object/);
+  }
+  const result = await sortMessages(input([mail()]), undefined, createScriptedClassifier([{ inbox: 'home', id: 'm-1', answer: answer('people') }]));
+  assert.equal(byId(result, 'm-1').pile, 'people');
 });
