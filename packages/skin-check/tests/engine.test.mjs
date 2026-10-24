@@ -455,3 +455,18 @@ test('deletion markers match spot and record IDs exactly, even when IDs contain 
   const merged = mergePeople(skin.getPerson(), offline);
   assert.deepEqual(merged.checkIns.map(record => [record.spotId, record.id]), [['a', 'b\nc']]);
 });
+
+test('a returned spot refuses the IDs of its permanently deleted records', () => {
+  const { mac, phone } = pair();
+  mac.addCheckIn({ spotId: 'spot-back', capturedAt: '2026-10-02T08:00:00Z', answers: ALL_NO }, { id: 'gone-check' });
+  mac.recordClinicianVisit('spot-back', { at: '2026-10-03T08:00:00Z', note: 'Checked' }, { id: 'gone-visit' });
+  phone.importPerson(mac.getPerson());
+  mac.removeSpot('spot-back');
+  mac.emptyTrash();
+  phone.addCheckIn({ spotId: 'spot-back', capturedAt: '2026-10-05T08:00:00Z', answers: ALL_NO }, { id: 'unseen' });
+  mac.importPerson(phone.getPerson());
+  assert.throws(() => mac.addCheckIn({ spotId: 'spot-back', capturedAt: '2026-10-06T08:00:00Z' }, { id: 'gone-check' }), /permanently deleted/);
+  assert.throws(() => mac.recordClinicianVisit('spot-back', { at: '2026-10-06T08:00:00Z' }, { id: 'gone-visit' }), /permanently deleted/);
+  const visit = mac.recordClinicianVisit('spot-back', { at: '2026-10-06T08:00:00Z', note: 'New note' }, { id: 'new-visit' });
+  assert.equal(deserializePerson(mac.save()).visits.find(record => record.id === visit).note, 'New note');
+});

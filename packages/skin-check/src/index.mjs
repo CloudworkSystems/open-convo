@@ -540,6 +540,8 @@ export class SkinCheck {
     if (spotState(this.#person, spot) === 'trash') fail(`That spot is in Trash. Restore it before ${action}.`);
     return spot;
   }
+  // A permanently deleted record's ID can't be reused: the deletion marker would drop the new record on merge.
+  #purged(kind, spotId, id) { return this.#person.spots.some(spot => spot.id === spotId && spot.purged[kind].includes(id)); }
   #set(spot, key, value, stamp = this.#stamp()) { setOwn(spot.fields, key, { value: clone(value), stamp }); }
 
   setTimeZone(timeZone) { this.#person.fields.timeZone = { value: zone(timeZone), stamp: this.#stamp() }; }
@@ -605,7 +607,7 @@ export class SkinCheck {
       fail('Cannot add a check-in: there is no spot with that ID.');
     }
     this.#active(spotId, 'adding a check-in');
-    if (this.#person.checkIns.some(record => record.id === id)) fail('A check-in with that ID already exists.');
+    if (this.#person.checkIns.some(record => record.id === id) || this.#purged('checkIns', spotId, id)) fail('A check-in with that ID already exists or was permanently deleted.');
     instant(capturedAt, 'Capture time');
     if (!SOURCES.includes(source)) fail('Source must be phone, mac or import.');
     const record = {
@@ -624,7 +626,7 @@ export class SkinCheck {
   recordClinicianVisit(spotId, { at, date, note = '' } = {}, { id = randomUUID() } = {}) {
     identity(id, 'Visit ID');
     this.#active(spotId, 'recording a clinician visit');
-    if (this.#person.visits.some(record => record.id === id)) fail('A clinician visit with that ID already exists.');
+    if (this.#person.visits.some(record => record.id === id) || this.#purged('visits', spotId, id)) fail('A clinician visit with that ID already exists or was permanently deleted.');
     if ((at === undefined) === (date === undefined)) fail('Give either the visit time (at) or, when only the day is known, its date.');
     let when = at;
     if (date !== undefined) {
