@@ -25,7 +25,9 @@ on:
 permissions:
   contents: read
   pull-requests: read
-  issues: read
+  # write: the triage judge records its verdict as a pull request comment
+  # (docs/plans/codex-triage.md). This workflow never runs pull request code.
+  issues: write
   statuses: write
 
 concurrency:
@@ -58,3 +60,5 @@ jobs:
       - run: node .github/scripts/codex-approved.mjs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The triage judge's key. Unset: the judge is never asked.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
