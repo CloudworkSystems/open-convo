@@ -41,6 +41,8 @@ export const REGIONS = Object.freeze({
   leftFoot: 'Left foot', rightFoot: 'Right foot', other: 'Other',
 });
 export const DEFAULT_REMINDER = 'monthly';
+// Allowed clock difference when refusing a clinician visit dated in the future.
+const VISIT_CLOCK_SKEW = 5 * 60000;
 // Least to most cautious. Only these three come from answers.
 const CAUTION = Object.freeze(['noWarningSign', 'worthShowing', 'bookSoon']);
 const QUESTION_IDS = new Set(QUESTIONS.map(question => question.id));
@@ -648,11 +650,14 @@ export class SkinCheck {
     if (this.#person.visits.some(record => record.id === id) || this.#purged('visits', id)) fail('A clinician visit with that ID already exists or was permanently deleted.');
     if ((at === undefined) === (date === undefined)) fail('Give either the visit time (at) or, when only the day is known, its date.');
     let when = at;
+    const now = this.#now();
     if (date !== undefined) {
       if (!validDate(date)) fail('Visit date must be YYYY-MM-DD.');
+      // A visit not yet happened must not clear a spot's flags before anyone has looked at it.
+      if (date > civilDate(now, this.timeZone)) fail('A clinician visit can only be recorded once it has happened; that date is in the future.');
       when = formatInstant(startOfDay(date, this.timeZone), this.timeZone);
     }
-    instant(when, 'Visit time');
+    if (instant(when, 'Visit time') > now + VISIT_CLOCK_SKEW) fail('A clinician visit can only be recorded once it has happened; that time is in the future.');
     this.#person.visits.push({ id, spotId, at: when, dateOnly: date !== undefined, note: string(note, 'Visit note'), stamp: this.#stamp() });
     this.#person.visits.sort(byRecord);
     return id;

@@ -103,7 +103,9 @@ reminder dates and the summary date.
 - `recordClinicianVisit(spotId, { at | date, note }, { id }?)`
   records "seen by a clinician". With `date` (YYYY-MM-DD), the visit counts
   from the start of that day in the owner's time zone; the resulting instant
-  is stored, with `dateOnly: true`.
+  is stored, with `dateOnly: true`. A visit dated in the future (a time more
+  than five minutes ahead of `now`, or a date after today in the owner's time
+  zone) is refused, so booking ahead can't clear a spot's flags.
 - `setTimeZone(timeZone)`.
 - `spots({ trash = false }?)`, `spot(id)`: plain views (`region`,
   `regionName`, `note`, `label`, `createdAt`, `archived`, `reminder`,
@@ -225,6 +227,10 @@ Cases the plan doesn't name, each read the cautious way and covered by a test:
 - **Date-only visits** store the start-of-day instant when recorded. A later
   time zone change doesn't move them. On a day whose midnight is skipped by a
   daylight-saving change, the day starts at its first real minute.
+- **Future visits.** Recording a visit ahead of time is refused (see
+  `recordClinicianVisit`). A future-dated visit can still arrive by merge
+  from a device whose clock runs ahead; the engine takes no `now` in its
+  views, so that narrower case relies on device clocks.
 - **Dates shown in the summary** are the date part of each capture time as
   the device recorded it.
 - **Photo references** longer than 200 characters, containing spaces or

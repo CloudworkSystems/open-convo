@@ -9,7 +9,7 @@ import {
 const ZONE = 'America/New_York';
 const ALL_NO = Object.freeze(Object.fromEntries(QUESTIONS.map(question => [question.id, 'no'])));
 const answers = changes => ({ ...ALL_NO, ...changes });
-function engine(deviceId = 'mac-a', { time = Date.UTC(2026, 9, 1), timeZone = ZONE, person } = {}) {
+function engine(deviceId = 'mac-a', { time = Date.UTC(2026, 11, 1), timeZone = ZONE, person } = {}) {
   const clock = { time };
   const skin = new SkinCheck({ deviceId, now: () => clock.time, personId: 'river', timeZone, person });
   skin.clock = clock;
@@ -436,7 +436,7 @@ test('edge cases: archived spots take check-ins, odd photo references are refuse
   const first = view.nextCheck('spot-back');
   const later = new SkinCheck({ deviceId: 'w', now: () => Date.UTC(2027, 5, 1), person: view.getPerson() });
   assert.deepEqual(later.nextCheck('spot-back'), first);
-  assert.equal(first.anchor, '2026-09-30');
+  assert.equal(first.anchor, '2026-11-30');
 });
 
 test('emptying Trash drops only the deleted records of that type and spot, even when IDs repeat elsewhere', () => {
@@ -549,4 +549,19 @@ test('a spot brought back only by a visit anchors its reminder to that visit, ev
   const view = new SkinCheck({ deviceId: 'v', person: converges(mac, phone) });
   assert.equal(view.spotOutcome('spot-back').outcome, 'notCheckedSinceVisit');
   assert.deepEqual(view.nextCheck('spot-back'), { setting: 'monthly', anchor: '2026-10-05', due: '2026-11-05' });
+});
+
+test('a clinician visit dated in the future is refused, so an urgent spot stays urgent', () => {
+  const { mac } = pair();
+  mac.addCheckIn({ spotId: 'spot-wrist', capturedAt: '2026-11-20T08:00:00-05:00', answers: answers({ bleeding: 'yes' }) });
+  mac.clock.time = Date.parse('2026-11-25T12:00:00-05:00');
+  assert.throws(() => mac.recordClinicianVisit('spot-wrist', { date: '2026-11-26' }), /in the future/);
+  assert.throws(() => mac.recordClinicianVisit('spot-wrist', { at: '2026-11-25T12:10:00-05:00' }), /in the future/);
+  assert.throws(() => mac.recordClinicianVisit('spot-wrist', { at: '2027-11-25T09:00:00-05:00' }), /in the future/);
+  assert.equal(mac.spotOutcome('spot-wrist').outcome, 'bookSoon');
+  assert.deepEqual(mac.visitSummary({ date: '2026-11-25' }).groups[0].spotIds, ['spot-wrist']);
+  // Today, earlier today, and a few minutes of clock difference are accepted.
+  mac.recordClinicianVisit('spot-wrist', { at: '2026-11-25T12:04:00-05:00' }, { id: 'skew-ok' });
+  mac.recordClinicianVisit('spot-back', { date: '2026-11-25' }, { id: 'today' });
+  assert.equal(mac.spotOutcome('spot-wrist').outcome, 'notCheckedSinceVisit');
 });
