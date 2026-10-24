@@ -98,8 +98,8 @@ reminder dates and the summary date.
   `null` or `{ ref, distanceGuide, scaleMarker, light }`: `ref` is a short
   opaque ID, never image data. `source` is `phone`, `mac` or `import`
   (reserved). An unknown, permanently deleted or Trashed spot is refused
-  with a plain message, and so is the ID of a record that was permanently
-  deleted with its spot.
+  with a plain message, and so is the ID of any check-in (or, for visits,
+  any visit) that was permanently deleted with a spot.
 - `recordClinicianVisit(spotId, { at | date, note }, { id }?)`
   records "seen by a clinician". With `date` (YYYY-MM-DD), the visit counts
   from the start of that day in the owner's time zone; the resulting instant

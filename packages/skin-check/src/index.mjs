@@ -307,8 +307,9 @@ export function mergePeople(left, right) {
     id: left.id,
     fields: records(left.fields, right.fields),
     spots,
-    checkIns: mergeSet(left.checkIns, right.checkIns, 'check-ins').filter(record => !goneCheckIns.has(JSON.stringify([record.spotId, record.id]))),
-    visits: mergeSet(left.visits, right.visits, 'clinician visits').filter(record => !goneVisits.has(JSON.stringify([record.spotId, record.id]))),
+    // Deleted records leave before the set merge, so an old copy can't clash with a new record that reuses its ID.
+    checkIns: mergeSet(...[left.checkIns, right.checkIns].map(list => list.filter(record => !goneCheckIns.has(JSON.stringify([record.spotId, record.id])))), 'check-ins'),
+    visits: mergeSet(...[left.visits, right.visits].map(list => list.filter(record => !goneVisits.has(JSON.stringify([record.spotId, record.id])))), 'clinician visits'),
   }));
 }
 export function serializePerson(person) { return JSON.stringify(canonical(validate(person))); }
@@ -541,7 +542,7 @@ export class SkinCheck {
     return spot;
   }
   // A permanently deleted record's ID can't be reused: the deletion marker would drop the new record on merge.
-  #purged(kind, spotId, id) { return this.#person.spots.some(spot => spot.id === spotId && spot.purged[kind].includes(id)); }
+  #purged(kind, id) { return this.#person.spots.some(spot => spot.purged[kind].includes(id)); }
   #set(spot, key, value, stamp = this.#stamp()) { setOwn(spot.fields, key, { value: clone(value), stamp }); }
 
   setTimeZone(timeZone) { this.#person.fields.timeZone = { value: zone(timeZone), stamp: this.#stamp() }; }
@@ -607,7 +608,7 @@ export class SkinCheck {
       fail('Cannot add a check-in: there is no spot with that ID.');
     }
     this.#active(spotId, 'adding a check-in');
-    if (this.#person.checkIns.some(record => record.id === id) || this.#purged('checkIns', spotId, id)) fail('A check-in with that ID already exists or was permanently deleted.');
+    if (this.#person.checkIns.some(record => record.id === id) || this.#purged('checkIns', id)) fail('A check-in with that ID already exists or was permanently deleted.');
     instant(capturedAt, 'Capture time');
     if (!SOURCES.includes(source)) fail('Source must be phone, mac or import.');
     const record = {
@@ -626,7 +627,7 @@ export class SkinCheck {
   recordClinicianVisit(spotId, { at, date, note = '' } = {}, { id = randomUUID() } = {}) {
     identity(id, 'Visit ID');
     this.#active(spotId, 'recording a clinician visit');
-    if (this.#person.visits.some(record => record.id === id) || this.#purged('visits', spotId, id)) fail('A clinician visit with that ID already exists or was permanently deleted.');
+    if (this.#person.visits.some(record => record.id === id) || this.#purged('visits', id)) fail('A clinician visit with that ID already exists or was permanently deleted.');
     if ((at === undefined) === (date === undefined)) fail('Give either the visit time (at) or, when only the day is known, its date.');
     let when = at;
     if (date !== undefined) {

@@ -470,3 +470,19 @@ test('a returned spot refuses the IDs of its permanently deleted records', () =>
   const visit = mac.recordClinicianVisit('spot-back', { at: '2026-10-06T08:00:00Z', note: 'New note' }, { id: 'new-visit' });
   assert.equal(deserializePerson(mac.save()).visits.find(record => record.id === visit).note, 'New note');
 });
+
+test('deleted record IDs stay reserved across spots, and an old copy never blocks a merge', () => {
+  const { mac, phone } = pair();
+  mac.addCheckIn({ spotId: 'spot-back', capturedAt: '2026-10-02T08:00:00Z', answers: ALL_NO }, { id: 'reused' });
+  mac.recordClinicianVisit('spot-back', { at: '2026-10-03T08:00:00Z' }, { id: 'reused-visit' });
+  const offline = mac.getPerson();
+  mac.removeSpot('spot-back');
+  mac.emptyTrash();
+  assert.throws(() => mac.addCheckIn({ spotId: 'spot-wrist', capturedAt: '2026-10-06T08:00:00Z' }, { id: 'reused' }), /permanently deleted/);
+  assert.throws(() => mac.recordClinicianVisit('spot-wrist', { at: '2026-10-06T08:00:00Z' }, { id: 'reused-visit' }), /permanently deleted/);
+  // Even a file written elsewhere that reuses the ID on another spot merges without clashing.
+  phone.addCheckIn({ spotId: 'spot-wrist', capturedAt: '2026-10-06T08:00:00Z', answers: ALL_NO }, { id: 'reused' });
+  const merged = mergePeople(mergePeople(mac.getPerson(), phone.getPerson()), offline);
+  assert.deepEqual(merged, mergePeople(offline, mergePeople(phone.getPerson(), mac.getPerson())));
+  assert.deepEqual(merged.checkIns.map(record => [record.spotId, record.id]), [['spot-wrist', 'reused']]);
+});
