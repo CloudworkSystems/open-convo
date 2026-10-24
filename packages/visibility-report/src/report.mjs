@@ -41,7 +41,18 @@ export function parseArgs(argv) {
   return { findings, json, md };
 }
 
+function refuseOutputShape(flag, filePath) {
+  let problem;
+  if (filePath.includes('\\')) problem = 'a backslash';
+  else if (filePath.includes(':')) problem = 'a colon';
+  else if (filePath.replace(/\/+$/, '').endsWith('.')) problem = 'a trailing dot';
+  if (!problem) return;
+  fail(`Refusing ${flag} path "${filePath}" because it contains ${problem}. This report runs on macOS and Linux only.`);
+}
+
 function refuseSharedPaths(findings, json, md) {
+  if (json !== undefined) refuseOutputShape('--json', json);
+  if (md !== undefined) refuseOutputShape('--md', md);
   if (json !== undefined && sameFile(json, findings)) fail('Refusing to write --json to the findings file.');
   if (md !== undefined && sameFile(md, findings)) fail('Refusing to write --md to the findings file.');
   if (json !== undefined && md !== undefined && sameFile(json, md)) {
@@ -57,6 +68,7 @@ export function run(argv, io = {}) {
   const stdout = io.stdout ?? process.stdout;
   const stderr = io.stderr ?? process.stderr;
   try {
+    if (process.platform === 'win32') fail('This report runs on macOS and Linux only.');
     const args = parseArgs(argv);
     refuseSharedPaths(args.findings, args.json, args.md);
     let stat;

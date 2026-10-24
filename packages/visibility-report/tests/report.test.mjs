@@ -3,13 +3,11 @@ import fs from 'node:fs';
 import { builtinModules } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
-import pathWin from 'node:path/win32';
 import { mock, test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import MarkdownIt from 'markdown-it';
 import { clearNetworkCalls, networkCalls, STUBBED_MODULES } from './network-guard.mjs';
 import snapshot from './builtin-modules.json' with { type: 'json' };
-import { expandDriveRelative, partsOf, walkStart } from '../src/paths.mjs';
 import { fixedWording } from '../src/wording.mjs';
 
 const readLog = [];
@@ -858,53 +856,44 @@ test('the command reads no file other than the findings file', () => {
   assert.deepEqual(readLog, [{ kind: 'readFileSync', file: findings }]);
 });
 
-test('an absolute Windows path does not repeat its root', () => {
-  assert.deepEqual(partsOf('C:\\cwd\\out', pathWin), ['cwd', 'out']);
-  assert.deepEqual(partsOf('\\\\server\\share\\dir\\out', pathWin), ['dir', 'out']);
-  assert.deepEqual(partsOf('\\\\?\\C:\\dir\\out', pathWin), ['dir', 'out']);
-  assert.deepEqual(partsOf('\\\\?\\UNC\\server\\share\\dir\\out', pathWin), ['dir', 'out']);
-  assert.deepEqual(partsOf('//?/UNC/server/share/alias/../out', pathWin), ['alias', '..', 'out']);
-  assert.deepEqual(
-    walkStart('\\\\?\\UNC\\server\\share\\dir\\out', pathWin),
-    walkStart('\\\\server\\share\\dir\\out', pathWin),
-  );
-  assert.deepEqual(
-    walkStart('\\\\?\\UNC\\server\\share\\dir\\out', pathWin),
-    { dir: '\\\\server\\share\\', parts: ['dir', 'out'] },
-  );
-  assert.deepEqual(
-    walkStart('//?/UNC/server/share/alias/../out', pathWin),
-    { dir: '\\\\server\\share\\', parts: ['alias', '..', 'out'] },
-  );
-  assert.deepEqual(
-    walkStart('\\\\?\\unc\\Server\\Share\\dir\\out', pathWin),
-    walkStart('\\\\Server\\Share\\dir\\out', pathWin),
-  );
-  assert.deepEqual(partsOf('//server/share/alias/../out', pathWin), ['alias', '..', 'out']);
-  assert.deepEqual(partsOf('alias\\..\\alias\\out', pathWin), ['alias', '..', 'alias', 'out']);
-  assert.deepEqual(partsOf('/dir/out'), ['dir', 'out']);
-  assert.deepEqual(partsOf('alias/../out'), ['alias', '..', 'out']);
-  const cwd = () => 'C:\\cwd';
-  assert.deepEqual(walkStart('C:out', pathWin, cwd, {}), { dir: 'C:\\', parts: ['cwd', 'out'] });
-  assert.deepEqual(walkStart('C:out', pathWin, cwd, {}), walkStart('C:\\cwd\\out', pathWin, cwd, {}));
-  assert.deepEqual(walkStart('C:alias\\..\\out', pathWin, cwd, {}), { dir: 'C:\\', parts: ['cwd', 'alias', '..', 'out'] });
-  assert.deepEqual(walkStart('D:out', pathWin, cwd, {}), { dir: 'D:\\', parts: ['out'] });
-  assert.deepEqual(walkStart('D:out', pathWin, cwd, { '=D:': 'D:\\data' }), { dir: 'D:\\', parts: ['data', 'out'] });
-  assert.deepEqual(walkStart('c:out', pathWin, cwd, { '=C:': 'C:\\data' }), { dir: 'C:\\', parts: ['data', 'out'] });
-  assert.deepEqual(walkStart('C:out', pathWin, cwd, { '=C:': 'D:\\data' }), { dir: 'C:\\', parts: ['out'] });
-  assert.deepEqual(walkStart('alias/../out', path, () => '/workspace', {}), { dir: '/workspace', parts: ['alias', '..', 'out'] });
-  assert.equal(expandDriveRelative('C:out'), 'C:out');
-  assert.deepEqual(partsOf('out.', pathWin), ['out']);
-  assert.deepEqual(partsOf('out...', pathWin), ['out']);
-  assert.deepEqual(partsOf('dir.\\out.', pathWin), ['dir', 'out']);
-  assert.deepEqual(partsOf('alias\\..\\out.', pathWin), ['alias', '..', 'out']);
-  assert.deepEqual(partsOf('out ', pathWin), ['out']);
-  assert.deepEqual(partsOf('out. ', pathWin), ['out']);
-  assert.deepEqual(partsOf('\\\\?\\C:\\out.', pathWin), ['out.']);
-  assert.deepEqual(walkStart('out.', pathWin, cwd, {}), walkStart('out', pathWin, cwd, {}));
-  assert.deepEqual(walkStart('C:\\cwd\\out.', pathWin), walkStart('C:\\cwd\\out', pathWin));
-  assert.deepEqual(partsOf('out.'), ['out.']);
-  assert.deepEqual(partsOf('alias/../out.'), ['alias', '..', 'out.']);
+test('Windows and Windows-shaped output paths are refused', () => {
+  const dir = tempDir();
+  try {
+    const findings = path.join(dir, 'findings.json');
+    const bytes = Buffer.from('do-not-touch-findings');
+    fs.writeFileSync(findings, bytes);
+    const cases = [
+      ['--json', 'C:\\cwd\\out', /backslash/],
+      ['--md', 'C:out', /colon/],
+      ['--json', 'out::$DATA', /colon/],
+      ['--md', path.join(dir, 'out.'), /trailing dot/],
+      ['--json', path.join(dir, 'out.json.'), /trailing dot/],
+    ];
+    for (const [flag, target, pattern] of cases) {
+      const result = invoke(['--findings', findings, flag, target]);
+      assert.equal(result.code, 1, result.stderr);
+      assert.match(result.stderr, pattern);
+      assert.match(result.stderr, /macOS and Linux only/);
+      assert.equal(result.stdout, '');
+      assert.equal(fs.existsSync(path.join(dir, 'out.json')), false);
+      assert.equal(fs.existsSync(path.join(dir, 'out.md')), false);
+      assert.equal(fs.existsSync(path.join(dir, 'out.')), false);
+      assert.deepEqual(fs.readFileSync(findings), bytes);
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    try {
+      const result = invoke(['--findings', findings]);
+      assert.equal(result.code, 1, result.stderr);
+      assert.match(result.stderr, /This report runs on macOS and Linux only/);
+      assert.equal(result.stdout, '');
+      assert.deepEqual(fs.readFileSync(findings), bytes);
+    } finally {
+      Object.defineProperty(process, 'platform', descriptor);
+    }
+  } finally {
+    cleanup(dir);
+  }
 });
 
 test('a symlinked command path still counts as this program', () => {
