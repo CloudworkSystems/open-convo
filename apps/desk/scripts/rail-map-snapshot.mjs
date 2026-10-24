@@ -46,14 +46,22 @@ if (![...refs.values()].flat().includes(mainBranch)) throw new Error(`origin/${m
 const mainFirstParents = new Set(git('rev-list', '--first-parent', `--max-count=${maxCommits}`, `origin/${mainBranch}`).trim().split('\n'));
 const since = new Date(Date.now() - days * 86_400_000).toISOString();
 const log = git('log', '--remotes=origin', '--topo-order', '--date-order', `--since=${since}`, `--max-count=${maxCommits}`, '--format=%H%x00%P%x00%cI%x00%s%x1e');
-const commits = log.split('\x1e').map((entry) => entry.trim()).filter(Boolean).map((entry) => {
+const mainTip = git('rev-parse', `origin/${mainBranch}`).trim();
+const toCommit = (entry) => {
   const [hash, parents, date, subject] = entry.split('\0');
   const merged = /^Merge pull request #(\d+) /.exec(subject) ?? (mainFirstParents.has(hash) ? /\(#(\d+)\)$/.exec(subject) : null);
   return {
     hash, parents: parents ? parents.split(' ') : [], date, subject,
     refs: refs.get(hash) ?? [], ...(merged ? { mergedPull: Number(merged[1]) } : {}),
   };
-});
+};
+// The main tip is always kept, even when main had no commit inside the
+// window, so the view always has a main track to start from. It is older
+// than every commit the window kept, so it goes last.
+const commits = log.split('\x1e').map((entry) => entry.trim()).filter(Boolean).map(toCommit);
+if (!commits.some((commit) => commit.hash === mainTip)) {
+  commits.push(toCommit(git('log', '-1', '--format=%H%x00%P%x00%cI%x00%s', mainTip).trim()));
+}
 
 const branches = [...refs.entries()].flatMap(([hash, names]) => names.map((name) => {
   const [behind, ahead] = git('rev-list', '--left-right', '--count', `origin/${mainBranch}...${hash}`).trim().split(/\s+/).map(Number);
