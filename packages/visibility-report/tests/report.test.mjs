@@ -771,6 +771,14 @@ test('net.connect is blocked', async () => {
   clearNetworkCalls();
 });
 
+test('the original stdout socket constructor cannot connect', () => {
+  assert.throws(
+    () => new process.stdout.constructor().connect(9, '127.0.0.1'),
+    /Network blocked: net\.Socket\.prototype\.connect/,
+  );
+  clearNetworkCalls();
+});
+
 test('stubbed entry points throw before they can connect', async () => {
   const net = await import('node:net');
   const tls = await import('node:tls');

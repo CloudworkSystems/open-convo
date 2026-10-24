@@ -6,6 +6,10 @@
  * A callable export throws, whether it is reached through `node:`, through
  * `process.getBuiltinModule`, or as a global (`fetch`, `WebSocket`,
  * `EventSource`). Non-function exports are left as they are.
+ *
+ * `process.stdout` is a `net.Socket` created before this guard runs, so its
+ * constructor still points at the original class. The socket prototypes are
+ * patched before the exports are replaced.
  */
 import childProcess from 'node:child_process';
 import cluster from 'node:cluster';
@@ -102,9 +106,35 @@ function denyModule(prefix, real) {
   install(`node:${prefix}`, real, denyCallables(real, prefix));
 }
 
+function patchMethod(proto, label) {
+  const name = label.slice(label.lastIndexOf('.') + 1);
+  const blocked = block(label);
+  try {
+    proto[name] = blocked;
+    if (proto[name] === blocked) return;
+  } catch {
+    // A non-writable method is replaced below.
+  }
+  Object.defineProperty(proto, name, {
+    value: blocked,
+    writable: true,
+    configurable: true,
+    enumerable: true,
+  });
+  if (proto[name] !== blocked) throw new Error(`Could not block ${label}.`);
+}
+
 globalThis.fetch = block('fetch');
 globalThis.WebSocket = block('WebSocket');
 globalThis.EventSource = block('EventSource');
+
+// Patch the real prototypes first. Replacing the class export afterwards
+// does not change process.stdout.constructor, which was captured earlier.
+patchMethod(net.Socket.prototype, 'net.Socket.prototype.connect');
+patchMethod(tls.TLSSocket.prototype, 'tls.TLSSocket.prototype.connect');
+patchMethod(dgram.Socket.prototype, 'dgram.Socket.prototype.bind');
+patchMethod(dgram.Socket.prototype, 'dgram.Socket.prototype.send');
+patchMethod(dgram.Socket.prototype, 'dgram.Socket.prototype.connect');
 
 // dns.promises is the dns/promises module object. Deny that object first so
 // the getter on dns already points at blocked functions.
