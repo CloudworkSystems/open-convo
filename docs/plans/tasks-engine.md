@@ -54,6 +54,10 @@ and loaded from one JSON file per person):
   owner's zone (a setting, default 09:00).
 - **Repeats** (optional). A task with a repeat must have a due date: its
   first due date is the repeat's start, and a repeat without one is refused.
+  For the patterned kinds (`weekdays`, `monthDay`, `monthWeekday`) the start
+  must itself be a date of the pattern (a Tuesday start with `weekdays` set
+  to Monday is refused with a plain message), so the first occurrence is
+  always the start.
   A repeat is `{ kind, every, mode, ... }`, with `every` (N) from 1 to 365
   for days and 1 to 99 otherwise, `mode` `onSchedule` or `afterDone`, and
   one of these kinds:
@@ -235,7 +239,8 @@ and tasks only. At least:
    February; missed on-schedule
    occurrences show once as overdue, not piled up.
 4. Repeat ends: after a count and on a date; the last completion leaves the
-   task done. A repeat on a task with no due date is refused.
+   task done. A repeat on a task with no due date is refused, and so is a
+   patterned repeat whose start isn't one of its dates.
 5. Time zones: a 9:00 New York task stays at 9:00 across both clock changes;
    a nonexistent and a repeated wall time resolve as above; viewing from
    London and Tokyo converts timed tasks and leaves date-only tasks on their

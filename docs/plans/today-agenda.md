@@ -113,6 +113,11 @@ agenda.
    the timed event with the earliest `start` after `now`, ties broken by
    timeline order, with minutes until it starts, or none. No-length events
    are never in progress; one starting after `now` can be `next`.
+   If `now` is before `date` (an agenda prepared the night before),
+   `inProgress` is empty and `next` is the day's first timed event that
+   isn't cancelled, with minutes until it starts. If `now` is after `date`,
+   `nextUp` is `{ inProgress: [], next: null }`. The shape is the same in
+   every case.
 7. **Tasks:** a task is **overdue** when its due moment is before `now`:
    `dueTime` before `now`, or, for a date-only task, `due` before the date
    of `now` in `timeZone`. It is **due today** when it isn't overdue and
@@ -169,7 +174,8 @@ data only. At least:
 6. Next up: in progress, between events, after the last event, and `now` on
    the evening before; two overlapping events both in progress, listed in
    timeline order; two events starting at the same next time, the first in
-   timeline order chosen.
+   timeline order chosen; `now` the evening before gives the day's first
+   event as `next`, and `now` the day after gives an empty `nextUp`.
 7. Tasks, habits and lists order and counts as above. A date-only task due
    yesterday is overdue; a task due today at 09:00 is overdue at 10:00 and
    due today at 08:00; with `now` the evening before `date`, a task due on
