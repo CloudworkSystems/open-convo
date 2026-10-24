@@ -84,7 +84,7 @@ async function isolatedPage(options = {}) {
   } };
 }
 
-const views = ['Nexus Navigator', 'Cloudwork Canvas', 'Cloudwork Atlas', 'Roadmap'];
+const views = ['Nexus Navigator', 'Cloudwork Canvas', 'Cloudwork Atlas', 'Cloudwork Rail Map', 'Roadmap'];
 const choices = (page) => page.getByRole('navigation', { name: 'Nexus views', exact: true });
 async function enter(page) {
   await page.goto(origin);
@@ -93,7 +93,7 @@ async function enter(page) {
   await expect(page.getByText('Sample workspace saved in this browser', { exact: true })).toBeVisible();
 }
 
-test('Nexus keeps all four subviews together and preserves session and Roadmap drafts across reload', async () => {
+test('Nexus keeps all five subviews together and preserves session and Roadmap drafts across reload', async () => {
   const { context, page, verify } = await isolatedPage();
   try {
     await enter(page);
