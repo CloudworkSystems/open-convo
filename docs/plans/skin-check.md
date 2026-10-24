@@ -25,9 +25,11 @@ rule, not just a disclaimer:
 
 - No output says or implies a spot is safe, benign, "low risk" or "nothing to
   worry about." False reassurance is the main harm a skin app can do, so the
-  engine has no reassuring state at all. The only outputs are "worth showing
-  a clinician" (with the reason) and "no warning sign noted by you," which
-  always carries the reminder below.
+  engine has no reassuring state at all. A check-in's only outcomes are
+  "book an appointment soon" (with the reason), "worth showing a clinician"
+  (with the reason) and "no warning sign noted by you," which always
+  carries the reminder below. A spot can also be "not checked since your
+  clinician visit" (see "A spot's outcome over time").
 - Every screen and every export carries the same plain line: "Skin check
   keeps a record of your own observations. It is not a diagnosis. See a
   doctor or dermatologist about any spot that is new, changing, or worries
@@ -91,7 +93,8 @@ A small library in `packages/skin-check/`:
   another region, archived (removed by a doctor, for example) and removed
   (reversible until Trash is emptied).
 - **Check-ins.** Each check-in is its own record with a permanent ID, a spot
-  ID, a date, an optional photo reference (an opaque ID and capture details:
+  ID, a capture time (date and time with its UTC offset, from the device
+  that made it), an optional photo reference (an opaque ID and capture details:
   distance guide used, scale marker present, light; never image bytes), the
   answers to the self-check questions, and where it came from (`phone`,
   `mac`; `import` reserved).
@@ -140,7 +143,14 @@ A small library in `packages/skin-check/`:
   all-"no" check-in never hides an earlier urgent or clinician-worthy
   answer. Recording "seen by a clinician" (a dated entry on the spot, with
   an optional note) is the only thing that starts the spot's outcome
-  afresh; the earlier check-ins stay in its history.
+  afresh; the earlier check-ins stay in its history. Until the next
+  check-in after that entry, the spot's outcome is **not checked since your
+  clinician visit**, with the visit date and a prompt to check it again;
+  never "no warning sign noted by you".
+- **Order of check-ins.** Check-ins are ordered by capture time (compared
+  as instants, so offsets don't matter), then by check-in ID as the
+  tie-breaker. "Latest", "previous" and "earliest" always mean this order,
+  on every device and after any merge.
 - **Change over time.** For each spot, the engine lists its check-ins in
   order and pairs the latest photo with the earliest and the previous one, so
   a surface can show them side by side. It notes when the owner answered
@@ -150,7 +160,8 @@ A small library in `packages/skin-check/`:
   computes dates; it sends nothing.
 - **Visit summary.** A self-contained HTML page (and the same content as
   plain text) listing spots marked "book an appointment soon" first, then
-  those worth showing a clinician, then the rest, each with its outcome and
+  those worth showing a clinician, then those not checked since a
+  clinician visit, then the rest, each with its outcome and
   reasons (in the same words as the rules above), region, label, dates
   checked, the owner's answers and photo references, and the standard
   reminder at the top. Photos are
@@ -188,14 +199,18 @@ people and spots only. At least:
    "score" and "diagnosis" used as a result, and checks the standard
    reminder appears on the summary and on every "no warning sign" outcome.
 5. Change over time pairs latest with earliest and previous correctly,
-   including a spot with one check-in and check-ins on the same day.
+   including a spot with one check-in, two check-ins on the same day,
+   two with the same instant in different UTC offsets, and two with the
+   same capture time (ordered by ID), before and after a merge.
 6. Reminder dates across month ends, a leap day and a daylight-saving change.
 7. The visit summary lists urgent spots first, then clinician-worthy
    ones, shows each spot's outcome and reasons (an urgent spot keeps the
    "book an appointment soon" wording), escapes all owner text, and
    contains no image data or external links. An urgent check-in followed
    by an all-"no" one keeps the spot in the urgent group with the earlier
-   reason and its date, until "seen by a clinician" is recorded.
+   reason and its date, until "seen by a clinician" is recorded; right
+   after that entry the spot shows "not checked since your clinician
+   visit", never "no warning sign".
 8. Merge: the same cases as the household lists engine (different spots,
    same field, delete vs edit, equal timestamps, clock skew, offline copy
    after Trash is emptied), A into B equals B into A, and the same check-in
