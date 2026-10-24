@@ -86,9 +86,12 @@ so it builds and tests on Linux too.
 - **The clock moves forward.** Every fetched stamp pushes the device's
   logical counter past it, so the next local change always gets a higher
   stamp than anything the device has seen.
-- **Conflicts.** A conflict is any upload where the cloud's copy of the
-  record differs from the version this device last saw, whichever has the
-  higher stamp: two devices edited it while apart. The sync core does not
+- **Conflicts.** Every outbox entry saves the cloud version (change tag) its
+  edit was based on, and keeps it through checkpoints and through later
+  fetches. A conflict is any upload where the cloud's copy differs from that
+  base version, whichever has the higher stamp: two devices edited it while
+  apart. Fetching another device's edit before uploading doesn't move the
+  base, so the queued edit is still merged with it, never written over it. The sync core does not
   pick a winner blindly. It hands both copies to a **merge function
   registered for that record type** and uploads the result, so the edit that
   reaches the cloud second never simply overwrites the first. Stamps decide
@@ -202,6 +205,10 @@ Every case uses two or three simulated devices and invented records.
     the merge function was called once for that conflict, and B ends with
     the same bytes A saved. The stand-in merge function for this test adds
     random bytes to its output, as real encryption would.
+19. A edits a record offline and queues it; B edits the same record and
+    syncs; A then fetches before it uploads. A's upload still goes through
+    the merge function, and both devices end with both edits. The same holds
+    when A is recreated from its checkpoint between the fetch and the upload.
 
 ## Out Of Scope For This Slice
 
@@ -303,7 +310,9 @@ P1s: every divergent cloud copy goes through the merge function, not only
 an older-stamped one ("Conflicts"), and reconciliation receives full
 records, so it can rebuild an outbox entry with its payload. Its round on
 `20b4dc9` added a P1 on retrying an encrypted merge, written in as "Retries
-reuse the merge result" (test 18).
+reuse the merge result" (test 18). Its round on `fd602d9` added a P1: each
+outbox entry keeps the cloud version its edit was based on, so a fetch
+before upload can't hide a conflict ("Conflicts", test 19).
 
 ## Review And Finish Line
 
