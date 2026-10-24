@@ -584,3 +584,32 @@ test('triage: only single pull request runs ask the judge, in that pull request\
   assert.match(script, /if \(mayJudge && apiKey/);
   assert.match(script, /check\(number, fromEvent !== null\)/);
 });
+
+test('triage: a claim or an earlier verdict for this head and findings stops a second paid call', async () => {
+  const { alreadyClaimed, claimComment, releasedComment } = await import('../codex-triage.mjs');
+  const e = triageEligibility(loop());
+  const claim = { user: actions, created_at: '2026-10-24T11:00:00Z', body: claimComment({ headSha: HEAD, findings: e.findings }) };
+  assert.equal(alreadyClaimed({ headSha: HEAD, findings: e.findings, comments: [claim] }), true);
+  assert.equal(alreadyClaimed({ headSha: OLD, findings: e.findings, comments: [claim] }), false);
+  assert.equal(alreadyClaimed({ headSha: HEAD, findings: e.findings.slice(0, 1), comments: [claim] }), false);
+  assert.equal(alreadyClaimed({ headSha: HEAD, findings: e.findings, comments: [{ ...claim, user: impostor }] }), false);
+  const released = { ...claim, body: releasedComment({ headSha: HEAD, error: 'judge request failed: 500' }) };
+  assert.equal(alreadyClaimed({ headSha: HEAD, findings: e.findings, comments: [released] }), false);
+  const botEdit = { lastEditedAt: '2026-10-24T11:30:00Z', editor: { __typename: 'User', login: 'cloudwork-bot' }, userContentEdits: { totalCount: 1, nodes: [{ editor: { __typename: 'User', login: 'cloudwork-bot' } }] } };
+  const tampered = verdictFor(e, nits(e), undefined, { edit_history: botEdit });
+  assert.equal(alreadyClaimed({ headSha: HEAD, findings: e.findings, comments: [tampered] }), true);
+  assert.equal(triagePasses({ headSha: HEAD, eligibility: e, comments: [tampered] }), false);
+});
+
+test('triage: the claim is posted before the judge is called and then edited into the verdict', () => {
+  const script = readFileSync(new URL('../codex-approved.mjs', import.meta.url), 'utf8');
+  const claimAt = script.indexOf('claimComment({ headSha, findings })');
+  const judgeAt = script.indexOf('await judgeFindings(');
+  assert.ok(claimAt > 0 && judgeAt > claimAt);
+  assert.match(script, /gh\.patch\(`\$\{base\}\/issues\/comments\/\$\{claim\.id\}`, \{ body: verdictComment/);
+});
+
+test('triage: editing or deleting a verdict re-runs the gate', () => {
+  const wf = readFileSync(new URL('../../workflows/codex-approved.yml', import.meta.url), 'utf8');
+  assert.match(wf, /github\.event\.comment\.user\.login == 'github-actions\[bot\]'/);
+});

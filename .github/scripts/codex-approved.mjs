@@ -12,7 +12,7 @@
 import { readFileSync } from 'node:fs';
 import { client, repoFromEnv } from './github.mjs';
 import { evaluateCodexSignal, CODEX_LOGIN, OWNER_LOGIN } from './codex-signal.mjs';
-import { triageEligibility, triagePasses, latestVerdict, judgeFindings, verdictComment, ACTIONS_LOGIN } from './codex-triage.mjs';
+import { triageEligibility, triagePasses, alreadyClaimed, claimComment, releasedComment, judgeFindings, verdictComment, ACTIONS_LOGIN } from './codex-triage.mjs';
 
 const CONTEXT = 'codex-approved';
 const gh = client();
@@ -84,13 +84,25 @@ async function triage({ number, pr, comments, reviews, dismissals, reason, mayJu
   }
   let current = comments;
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (mayJudge && apiKey && !latestVerdict({ headSha, findings: eligibility.findings, comments })) {
+  const { findings } = eligibility;
+  if (mayJudge && apiKey && !alreadyClaimed({ headSha, findings, comments })) {
+    // Claim first: if anything after the paid call fails, no later run pays again.
     try {
-      const verdicts = await judgeFindings({ findings: eligibility.findings, prTitle: pr.title, apiKey });
-      await gh.post(`${base}/issues/${number}/comments`, { body: verdictComment({ headSha, findings: eligibility.findings, verdicts }) });
-      current = await gh.all(`${base}/issues/${number}/comments`).then(withEditHistory);
+      const claim = await gh.post(`${base}/issues/${number}/comments`, { body: claimComment({ headSha, findings }) });
+      let verdicts;
+      try {
+        verdicts = await judgeFindings({ findings, prTitle: pr.title, apiKey });
+      } catch (error) {
+        console.error(`#${number}: triage judge unavailable: ${error.message}`);
+        await gh.patch(`${base}/issues/comments/${claim.id}`, { body: releasedComment({ headSha, error: error.message }) });
+      }
+      if (verdicts) {
+        await gh.patch(`${base}/issues/comments/${claim.id}`, { body: verdictComment({ headSha, findings, verdicts }) });
+        current = await gh.all(`${base}/issues/${number}/comments`).then(withEditHistory);
+      }
     } catch (error) {
-      console.error(`#${number}: triage judge unavailable: ${error.message}`);
+      // A failed claim or verdict write leaves the check pending.
+      console.error(`#${number}: triage could not be recorded: ${error.message}`);
     }
   }
   if (triagePasses({ headSha, eligibility, comments: current })) {

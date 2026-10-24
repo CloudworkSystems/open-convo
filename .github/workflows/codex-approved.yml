@@ -44,12 +44,14 @@ jobs:
   # protection must only ever see the status this job posts.
   evaluate-codex:
     name: evaluate-codex
-    # Only comments by Codex or the owner (his owner-accepts-findings note)
-    # can change the result, so other comments are skipped (skipped jobs
-    # bill no minutes). An edit by anyone to such a comment still runs it.
+    # Only comments by Codex, the owner (his owner-accepts-findings note) or
+    # GitHub Actions (the triage judge's verdict) can change the result, so
+    # other comments are skipped (skipped jobs bill no minutes). An edit or
+    # deletion by anyone of such a comment still runs it. (Comments the gate
+    # itself writes with its own token start no run.)
     if: >-
       github.event_name != 'issue_comment' ||
-      (github.event.issue.pull_request && (github.event.comment.user.login == 'chatgpt-codex-connector[bot]' || github.event.comment.user.login == 'CloudworkSystems'))
+      (github.event.issue.pull_request && (github.event.comment.user.login == 'chatgpt-codex-connector[bot]' || github.event.comment.user.login == 'CloudworkSystems' || github.event.comment.user.login == 'github-actions[bot]'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

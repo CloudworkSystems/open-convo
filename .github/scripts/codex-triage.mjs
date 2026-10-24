@@ -216,3 +216,42 @@ export async function judgeFindings({ findings, prTitle, apiKey, fetchImpl = fet
   if (got.size !== wanted.size) throw new Error('judge skipped a finding');
   return findings.map((f) => got.get(f.id));
 }
+
+// A claim is posted before the paid judge call and then edited into the
+// verdict, so a retry after a failed write never pays for the same call
+// twice. A claim left over from a failed write keeps the check pending (fails
+// closed). A judge error releases the claim, so a later run may ask again.
+const CLAIM = /<!--\s*codex-triage-claim:v1\s+(\{.*?\})\s*-->/s;
+const findingIds = (findings) => findings.map((f) => String(f.id)).sort().join(',');
+
+/** The claim comment's body for this head and these findings. */
+export function claimComment({ headSha, findings }) {
+  return [
+    `**Codex triage** for \`${headSha.slice(0, 7)}\`: asking an independent judge about the remaining Codex findings.`,
+    '',
+    `<!-- codex-triage-claim:v1 ${JSON.stringify({ head: headSha, ids: findingIds(findings) })} -->`,
+  ].join('\n');
+}
+
+/** The comment body that releases a claim after the judge failed. */
+export function releasedComment({ headSha, error }) {
+  return `**Codex triage** for \`${headSha.slice(0, 7)}\`: the judge was unavailable (${String(error).slice(0, 200)}); a later run may ask again.`;
+}
+
+/** True if GitHub Actions already claimed (or judged) this head and these findings. */
+export function alreadyClaimed({ headSha, findings, comments = [] }) {
+  if (latestVerdict({ headSha, findings, comments })) return true;
+  const ids = findingIds(findings);
+  return comments.some((c) => {
+    if (c?.user?.login !== ACTIONS_LOGIN) return false;
+    // A claim, or a verdict even if someone edited it since: either way the
+    // judge was already paid for this head and these findings.
+    const claim = (c.body ?? '').match(CLAIM);
+    const verdict = (c.body ?? '').match(VERDICT);
+    try {
+      if (claim) { const v = JSON.parse(claim[1]); if (v.head === headSha && v.ids === ids) return true; }
+      if (verdict) { const v = JSON.parse(verdict[1]); if (v.head === headSha && findingIds(v.verdicts ?? []) === ids) return true; }
+    } catch { /* unreadable: not a claim */ }
+    return false;
+  });
+}
