@@ -118,7 +118,8 @@ reminder dates and the summary date.
   evolving answer and whether it `changed` from the one before).
 - `nextCheck(spotId)` returns `{ setting, anchor, due }`. The anchor is the
   civil date, in the owner's time zone, of the latest check-in (or of the
-  spot's creation when it has none). Monthly adds one calendar month,
+  spot's creation when it has none; for a spot that came back after Trash
+  was emptied, the time it came back). Monthly adds one calendar month,
   clamped to the month's last day (January 31 gives February 28 or 29);
   weeks add whole civil days, so daylight-saving changes never shift it.
   `off` gives `due: null`. The engine only computes dates and sends nothing.

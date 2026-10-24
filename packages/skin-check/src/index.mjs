@@ -691,9 +691,11 @@ export class SkinCheck {
 
   /** Suggested next check: from the last check-in's date in the owner's time zone, or the spot's created date. */
   nextCheck(spotId) {
-    const view = spotView(this.#person, this.#find(spotId));
+    const spot = this.#find(spotId);
+    const view = spotView(this.#person, spot);
     const last = this.#person.checkIns.filter(record => record.spotId === spotId).sort(compareCheckIns).at(-1);
-    const from = last ? instant(last.capturedAt, 'Capture time') : instant(view.createdAt ?? new Date(this.#now()).toISOString(), 'Created time');
+    // A spot that came back after Trash was emptied has lost its created time; its stored life stamp stands in.
+    const from = last ? instant(last.capturedAt, 'Capture time') : view.createdAt ? instant(view.createdAt, 'Created time') : spot.life.stamp.time;
     const anchor = civilDate(from, this.timeZone);
     if (view.reminder === 'off') return { setting: 'off', anchor, due: null };
     const due = view.reminder === 'monthly' ? addMonths(anchor, 1) : addDays(anchor, view.reminder * 7);

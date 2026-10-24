@@ -430,6 +430,11 @@ test('edge cases: archived spots take check-ins, odd photo references are refuse
   const view = new SkinCheck({ deviceId: 'v', person: converges(mac, phone) });
   const back = view.spot('spot-back');
   assert.deepEqual([back.inTrash, back.returned, back.label, back.region], [false, true, '', 'other']);
+  // Its reminder anchors to the stored restore time, not to whenever it is viewed.
+  const first = view.nextCheck('spot-back');
+  const later = new SkinCheck({ deviceId: 'w', now: () => Date.UTC(2027, 5, 1), person: view.getPerson() });
+  assert.deepEqual(later.nextCheck('spot-back'), first);
+  assert.equal(first.anchor, '2026-09-30');
 });
 
 test('emptying Trash drops only the deleted records of that type and spot, even when IDs repeat elsewhere', () => {
