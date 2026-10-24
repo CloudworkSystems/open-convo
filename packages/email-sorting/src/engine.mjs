@@ -99,7 +99,7 @@ function keywordOf(headers, name) {
   return keyword === '' ? null : keyword;
 }
 
-function headerFacts(message, settings) {
+function headerFacts(message, index) {
   const h = message.headers;
   return {
     hasListId: firstValue(h, 'List-Id') !== null,
@@ -107,7 +107,7 @@ function headerFacts(message, settings) {
     autoSubmitted: keywordOf(h, 'Auto-Submitted'),
     precedence: keywordOf(h, 'Precedence'),
     isReply: referencedIds(h, 'In-Reply-To').length > 0 || referencedIds(h, 'References').length > 0,
-    senderIsWorkDomain: settings.workDomains.includes(domainOf(message.from.address)),
+    senderIsWorkDomain: index.work.has(domainOf(message.from.address)),
   };
 }
 
@@ -205,12 +205,26 @@ function buildConversations(items) {
   return [...conversations.values()].sort((a, b) => compareText(a.key, b.key));
 }
 
-function ruleFor(address, rules) {
-  const exact = addressKey(address);
-  const domain = `@${domainOf(address)}`;
-  const exactRule = rules.find(rule => !rule.match.startsWith('@') && addressKey(rule.match) === exact);
-  if (exactRule) return exactRule;
-  return rules.find(rule => rule.match.startsWith('@') && `@${lower(rule.match.slice(1).trim())}` === domain) || null;
+// Built once per sort, before any conversation: exact-address rules and
+// domain rules in two Maps keyed the way they are compared, keeping only the
+// first rule for each key (the first rule in the file wins), and the
+// owner's addresses and work domains in Sets. Each lookup is then constant time however
+// many rules or addresses the settings hold.
+function indexSettings(settings) {
+  const exact = new Map();
+  const domains = new Map();
+  for (const rule of settings.senderRules) {
+    const domainRule = rule.match.startsWith('@');
+    const map = domainRule ? domains : exact;
+    const key = domainRule ? lower(rule.match.slice(1).trim()) : addressKey(rule.match);
+    if (!map.has(key)) map.set(key, rule);
+  }
+  return { exact, domains, mine: new Set(settings.myAddresses), work: new Set(settings.workDomains) };
+}
+
+// An exact address rule beats a domain rule.
+function ruleFor(address, index) {
+  return index.exact.get(addressKey(address)) || index.domains.get(domainOf(address)) || null;
 }
 
 // A value placed inside a reason (a rule's match, a header keyword, a
@@ -319,18 +333,20 @@ async function ask(classifier, question, timeoutMs) {
   }
 }
 
-async function decide(conversation, settings, classifier, problems) {
+async function decide(conversation, settings, index, classifier, problems) {
   const items = [...conversation.items].sort(newestFirst);
-  const deciding = items.find(item => !settings.myAddresses.includes(addressKey(item.source.from.address)));
+  const deciding = items.find(item => !index.mine.has(addressKey(item.source.from.address)));
   if (!deciding) {
-    return { pile: 'other', decidedBy: 'owner-only', reason: 'Only messages you sent' };
+    // The plan sends these to Other without naming a decidedBy; no rule or
+    // model decided, so it is a fallback (one of the plan's four values).
+    return { pile: 'other', decidedBy: 'fallback', reason: 'Only messages you sent' };
   }
   const message = deciding.source;
-  const rule = ruleFor(message.from.address, settings.senderRules);
+  const rule = ruleFor(message.from.address, index);
   if (rule) {
     return { pile: rule.category, decidedBy: 'rule', reason: ruleReason(rule) };
   }
-  const facts = headerFacts(message, settings);
+  const facts = headerFacts(message, index);
   const question = buildQuestion(deciding, facts, items.length);
   const { answer, problem: askProblem } = await ask(classifier, question, settings.timeoutMs);
   const problem = askProblem || contractProblem(answer);
@@ -396,9 +412,10 @@ export async function sortMessages(input, settings, classifier) {
   const conversations = buildConversations(items);
   const problems = [];
   const entries = [];
+  const index = indexSettings(config);
   // One question at a time, in conversation-key order.
   for (const conversation of conversations) {
-    const decision = await decide(conversation, config, classifier, problems);
+    const decision = await decide(conversation, config, index, classifier, problems);
     for (const item of conversation.items) {
       entries.push({
         item,

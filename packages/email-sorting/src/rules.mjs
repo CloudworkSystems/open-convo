@@ -24,7 +24,8 @@ export const CATEGORY_DESCRIPTIONS = Object.freeze({
   other: "The engine isn't sure, or couldn't ask the model",
 });
 
-export const DECIDED_BY = Object.freeze(['rule', 'model', 'not-sure', 'fallback', 'owner-only']);
+// The only values `decidedBy` takes (the plan's Output section).
+export const DECIDED_BY = Object.freeze(['rule', 'model', 'not-sure', 'fallback']);
 
 export const LIMITS = Object.freeze({
   fileBytes: 5 * 1024 * 1024,

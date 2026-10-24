@@ -105,7 +105,7 @@ this order. No other pile exists.
    conversation. Its key is `id:` plus the smallest normalized ID (E21), or
    `msg:` plus `JSON.stringify([inbox, id])` for a message with no IDs.
 3. The newest message not sent by the owner decides. Only the owner's own
-   messages: `other`, `decidedBy: "owner-only"`, "Only messages you sent".
+   messages: `other`, `decidedBy: "fallback"`, "Only messages you sent".
 4. A matching sender rule (exact address before domain, first rule among
    equals): `decidedBy: "rule"`.
 5. Otherwise the classifier, accepted at or above the floor:
@@ -163,7 +163,7 @@ Two classifiers ship, both deterministic and offline:
 ```
 
 Each message: `id`, `inboxes`, `from`, `subject`, `date` (as written), `pile`,
-`decidedBy` (`rule`, `model`, `not-sure`, `fallback` or `owner-only`),
+`decidedBy` (`rule`, `model`, `not-sure` or `fallback`, nothing else),
 `reason` and `conversation`. Snippets and headers are not copied. Groups:
 newsletters with a `List-Id` by that list (`key` `list:<id>`), everything
 else by sender address (`key` `address:<address>`). The label is the
@@ -248,6 +248,13 @@ a test in `tests/edge-cases.test.mjs` under the same number.
   last day of a month, after applying the offset (`2017-01-01T00:59:60+01:00`
   is fine, `2026-10-14T09:12:60Z` is refused). Every timestamp is checked by
   the same function.
+- **E23.** Sender rules are indexed once per sort, before any
+  conversation is decided: exact-address rules by trimmed lower-case
+  address and domain rules by trimmed lower-case domain, each keeping only
+  the first rule for its key. A rule that repeats an earlier one (in any
+  case or spacing) never applies; an exact rule beats a domain rule wherever
+  it sits in the file. The owner's addresses and work domains are
+  indexed the same way.
 
 ## What this slice does not do
 

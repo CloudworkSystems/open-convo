@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { main } from '../src/cli.mjs';
 import {
-  CATEGORIES, createKeywordClassifier, createScriptedClassifier, parseSettingsFile, sortMessages,
+  CATEGORIES, DECIDED_BY, createKeywordClassifier, createScriptedClassifier, parseSettingsFile, sortMessages,
 } from '../src/index.mjs';
 import {
   EXPECTED_JSON, EXPECTED_SUMMARY, FIXTURE, FIXTURE_SETTINGS, allMessages, answer, byId, flush, input, mail,
@@ -347,7 +347,7 @@ test('10. reply chains by In-Reply-To or References land in one pile, decided by
   for (const id of ['o-1', 'o-2']) {
     const out = byId(result, id);
     assert.equal(out.pile, 'other');
-    assert.equal(out.decidedBy, 'owner-only');
+    assert.equal(out.decidedBy, 'fallback');
     assert.equal(out.reason, 'Only messages you sent');
   }
   assert.deepEqual(classifier.questions.map(q => q.ref.id), ['c1-b', 'c2-c']);
@@ -435,4 +435,91 @@ test('11. grouping: newsletters by List-Id, others by address; labels, counts an
     assert.equal(pile.count, pile.groups.reduce((sum, g) => sum + g.count, 0));
     for (const g of pile.groups) assert.equal(g.count, g.messages.length);
   }
+});
+
+test('output: decidedBy is only rule, model, not-sure or fallback, and every field is one the plan lists', async () => {
+  assert.deepEqual([...DECIDED_BY], ['rule', 'model', 'not-sure', 'fallback']);
+  const me = 'me@quillhome.example';
+  const runs = [
+    await sortMessages(readJson(FIXTURE), readJson(FIXTURE_SETTINGS), createKeywordClassifier()),
+    await sortMessages(input([
+      mail({ id: 'mine', from: { address: me } }),
+      mail({ id: 'rule', from: { address: 'x@rule.example' } }),
+      mail({ id: 'model' }),
+      mail({ id: 'unsure' }),
+      mail({ id: 'broken' }),
+    ]), settings({ myAddresses: [me], senderRules: [{ match: '@rule.example', category: 'receipts' }] }), createScriptedClassifier([
+      { inbox: 'home', id: 'model', answer: answer('work') },
+      { inbox: 'home', id: 'unsure', answer: answer('work', 0.1) },
+      { inbox: 'home', id: 'broken', throws: true },
+    ])),
+  ];
+  const seen = new Set();
+  for (const result of runs) {
+    assert.deepEqual(Object.keys(result).sort(), ['piles', 'problems', 'schemaVersion']);
+    assert.equal(result.schemaVersion, 1);
+    assert.deepEqual(result.piles.map(p => p.category), [...CATEGORIES]);
+    for (const pile of result.piles) {
+      assert.deepEqual(Object.keys(pile).sort(), ['category', 'count', 'groups']);
+      for (const group of pile.groups) {
+        assert.deepEqual(Object.keys(group).sort(), ['count', 'key', 'label', 'messages']);
+        assert.match(group.key, /^(list|address):/);
+        for (const message of group.messages) {
+          assert.deepEqual(Object.keys(message).sort(),
+            ['conversation', 'date', 'decidedBy', 'from', 'id', 'inboxes', 'pile', 'reason', 'subject']);
+          assert.ok(DECIDED_BY.includes(message.decidedBy), message.decidedBy);
+          assert.equal(message.pile, pile.category);
+          assert.match(message.conversation, /^(id|msg):/);
+          seen.add(message.decidedBy);
+        }
+      }
+    }
+    for (const line of result.problems) assert.equal(typeof line, 'string');
+  }
+  assert.deepEqual([...seen].sort(), ['fallback', 'model', 'not-sure', 'rule']);
+  assert.equal(byId(runs[1], 'mine').decidedBy, 'fallback');
+  assert.equal(byId(runs[1], 'mine').reason, 'Only messages you sent');
+});
+
+test('E23. rule precedence: exact beats domain wherever it sits, and the first of repeated rules wins', async () => {
+  const rules = [
+    { match: '@shop.example', category: 'receipts' },
+    { match: ' Pat@Shop.example ', category: 'alerts' },
+    { match: 'pat@shop.example', category: 'work' },
+    { match: '@SHOP.example ', category: 'newsletters' },
+    { match: '@other.example', category: 'people' },
+    { match: '@ Other.example', category: 'work' },
+  ];
+  const result = await sortMessages(input([
+    mail({ id: 'pat', from: { address: 'PAT@shop.example' } }),
+    mail({ id: 'shop', from: { address: 'x@shop.example' } }),
+    mail({ id: 'other', from: { address: 'y@OTHER.example' } }),
+  ]), settings({ senderRules: rules }), createScriptedClassifier([]));
+  assert.equal(byId(result, 'pat').pile, 'alerts');
+  assert.equal(byId(result, 'pat').reason, 'Your rule: mail from Pat@Shop.example goes to Alerts');
+  assert.equal(byId(result, 'shop').pile, 'receipts');
+  assert.equal(byId(result, 'shop').reason, 'Your rule: mail from @shop.example goes to Receipts');
+  assert.equal(byId(result, 'other').pile, 'people');
+});
+
+test('E23. 20,000 sender rules and 2,000 conversations sort correctly', async () => {
+  const piles = ['people', 'work', 'alerts', 'receipts', 'newsletters', 'other'];
+  const rules = [];
+  for (let i = 0; i < 10_000; i += 1) rules.push({ match: `r${i}@many.example`, category: piles[i % 6] });
+  for (let i = 0; i < 10_000; i += 1) rules.push({ match: `@d${i}.example`, category: piles[(i + 1) % 6] });
+  rules.push({ match: 'R0@MANY.example', category: 'other' }, { match: '@D0.example', category: 'alerts' });
+  const messages = [];
+  for (let i = 0; i < 1_000; i += 1) {
+    messages.push(mail({ id: `e${i}`, from: { address: `r${i * 7}@many.example` } }));
+    messages.push(mail({ id: `d${i}`, from: { address: `x@d${i * 7}.example` } }));
+  }
+  const result = await sortMessages(input(messages), settings({ senderRules: rules }), createScriptedClassifier([]));
+  assert.equal(allMessages(result).length, 2_000);
+  for (let i = 0; i < 1_000; i += 1) {
+    assert.equal(byId(result, `e${i}`).pile, piles[(i * 7) % 6], `e${i}`);
+    assert.equal(byId(result, `d${i}`).pile, piles[(i * 7 + 1) % 6], `d${i}`);
+  }
+  assert.ok(allMessages(result).every(m => m.decidedBy === 'rule'));
+  assert.equal(byId(result, 'e0').pile, 'people', 'the first of two equal rules wins');
+  assert.equal(byId(result, 'd0').pile, 'work', 'the first of two equal domain rules wins');
 });

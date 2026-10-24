@@ -237,7 +237,7 @@ test('E19. every reason is one trimmed line of at most 160 characters, whatever 
   ], config);
   const reasons = Object.fromEntries(messages.map(({ id }) => [id, byId(result, id).reason]));
   assert.deepEqual(Object.fromEntries(messages.map(({ id }) => [id, byId(result, id).decidedBy])), {
-    rule: 'rule', auto: 'fallback', prec: 'fallback', work: 'fallback', model: 'model', unsure: 'not-sure', mine: 'owner-only',
+    rule: 'rule', auto: 'fallback', prec: 'fallback', work: 'fallback', model: 'model', unsure: 'not-sure', mine: 'fallback',
   });
   for (const [id, reason] of Object.entries(reasons)) {
     assert.ok([...reason].length <= 160, `${id}: ${reason}`);

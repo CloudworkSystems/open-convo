@@ -407,7 +407,7 @@
               "subject": "Re: Room booking note",
               "date": "2026-10-16T10:20:00-04:00",
               "pile": "other",
-              "decidedBy": "owner-only",
+              "decidedBy": "fallback",
               "reason": "Only messages you sent",
               "conversation": "id:note-1@northglass-tutoring.example"
             },
@@ -423,7 +423,7 @@
               "subject": "Room booking note",
               "date": "2026-10-16T10:00:00-04:00",
               "pile": "other",
-              "decidedBy": "owner-only",
+              "decidedBy": "fallback",
               "reason": "Only messages you sent",
               "conversation": "id:note-1@northglass-tutoring.example"
             }
