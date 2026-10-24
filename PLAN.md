@@ -9,8 +9,7 @@ product repo. True Convo stays private as the reference and parts library.
 
 **Names.** The product is **True Convo**. **Open Convo** is its open-source core
 ("True Convo core"): the part given away that people can use and label as their
-own. Non-core offerings are a True Convo subscription. Whether relabeling at all
-requires a subscription is still open. The Mac app keeps the name True Convo and
+own. Non-core offerings are a True Convo subscription. The Mac app keeps the name True Convo and
 its existing identity (`com.trueconvo.voice-cursor`), so an installed build
 replaces today's True Convo app and keeps its permissions and settings.
 
@@ -24,6 +23,23 @@ Longer term, the owner has discussed making it the shell for a whole operating
 system people can install and customize, in the spirit of Omarchy (a configured
 Linux setup). This is why it is sometimes called an OS. It is a direction, not
 yet a plan.
+
+**Open core, protected name (owner decision, October 22).** Open Convo stays
+truly open source. The name **True Convo** is protected by trademark, not by
+the code license: anyone may copy and change the core, but a copy that isn't a
+subscriber's may not be called True Convo, so it ships under another name or
+none. A subscription lets a business put its own brand on the maintained
+True Convo, choose which modules its members see, and use the modules that
+haven't joined the core yet. Someone who cancels keeps everything they built
+and can keep pulling core updates from the public repo; they lose the paid
+modules and their own brand on True Convo. Requiring "Powered by True Convo"
+in forks is deferred. Pricing and the business plan stay out of this repo.
+
+**What joins the core (owner decision, October 22).** A module joins the core
+once it runs well entirely on the user's own keys, sign-ins or local models,
+at almost no ongoing cost to the project. Modules that are still in beta,
+still expensive or still taking real work stay in the subscription until
+they meet that bar. No module is fixed in either place ahead of time.
 
 **Look.** True Convo's brand is **Ember** (warm near-black shell, cream text,
 magenta-to-coral-to-amber accent), with Atkinson Hyperlegible Next and JetBrains
@@ -106,9 +122,68 @@ has tried it. Each step ends with something the owner can try.
    reading the durable session records. Moved up from step 11. Navigator
    search and sorting stays at step 7.
 
+### Day One And Public Launch (Owner Decision, October 22)
+
+**Day-one proof.** A new user should see in the first session that an agent
+helps them. Two things together: a chat that works like the ChatGPT app,
+even on a local model such as Qwen (with fewer tools), and **tasks and
+productivity** as the first real job it does. Home devices and finances come
+later as modules. The owner's starting list, in his order:
+
+1. **Checklists** (groceries and others, as kept in Apple Notes today, but
+   better): the household lists engine, already built, wired into the app.
+2. **Habit tracking** in a GitHub-style grid: the habit grid engine, already
+   built, wired into the app.
+3. **Email triage** across several inboxes: group, classify, organize,
+   unsubscribe and report spam, with approval before anything is deleted,
+   sent or reported. New module.
+4. **One calendar** combining iCloud, Google Calendar, his work scheduling
+   calendar and more; later shown on a homemade family wall display (an
+   alternative to commercial family-hub screens) that syncs locally. New
+   module; the wall display stays with the Family umbrella.
+5. **Start on the iPhone, continue on the Mac**: sessions and tasks begun on
+   one device carry on on the other. This is the sync line below.
+
+**What ships at public launch (owner decision, October 22):** chat, the
+checklists, the habit grid, start-on-iPhone-continue-on-Mac, a **Personal
+calendar that only reads** (iCloud, Google, his work schedule, more) in one
+view, and **email sorting and grouping only**, on a local model so mail
+stays on the Mac. Right after launch: unsubscribe, report spam and delete.
+The owner asked for these as standing rules, but foundations principle 1
+says deletion and anything irreversible always stop for the owner. So each
+delete, unsubscribe and spam report asks him first, with a preview, and
+standing rules cover only the routine sorting. That changes only if he
+changes principle 1 in its own decision. The shared family calendar, voice
+to calendar and the wall display stay at step 11.
+
+**Building your own software.** Every user gets the whole harness. Beyond
+simple uses like the list above, it shows them how to build an app they need
+for their own business or home, or one they want to sell, starting with
+local apps on a home or office network. That growing confidence is the path
+to the software factory. Building apps for users waits for step 6 (agents
+working together) and comes after launch; until then public copy says it is
+coming, never that it works (claim discipline).
+
+**Public launch needs the Mac and iPhone with private sync.** The same
+conversations, tasks and memory on both, with no visible sync errors and
+data the project can't read. **Apple-only at launch:** sync runs on CloudKit,
+each user's private iCloud database, so the project runs no sync server.
+What is synced is the already-encrypted data, unlocked on each device with
+the user's recovery key; turning sync on is a one-time host approval
+(foundations principle 6). Windows and Android come later with their own sync.
+
+**A parallel line, starting now.** The iPhone app and sync no longer wait for
+step 5. Their standalone first slice, the sync core, is built beside the main
+build by an outside builder:
+[docs/plans/sync-core.md](docs/plans/sync-core.md). Wiring it into the Mac
+app's storage and building the iPhone app itself stay with the building
+lanes, because they touch app and storage code.
+
 ### After the Top Five
 
-- **iPhone capture app** (owner decision, October 15), right after step 5: a
+- **iPhone capture app** (owner decision, October 15; on October 22 the
+  iPhone app and sync moved to a parallel line, see Day One And Public Launch
+  above): a
   "Share to True Convo" button for links and the owner's own video clips,
   landing as sources in the inbox. Until then an Apple Shortcut saves shared
   items into an iCloud Drive folder the Mac app watches. That sends the items
@@ -116,7 +191,8 @@ has tried it. Each step ends with something the owner can try.
   iCloud Drive once as a host, seeing what goes there (links and video clips)
   and that it is end-to-end encrypted only with Advanced Data Protection on.
   AirDrop to the Mac is the local-only alternative. Automatic secure sync
-  comes with step 9's encrypted transfer. The full iOS app stays at step 12.
+  now comes from the sync core and CloudKit (October 22). The full iOS app is
+  built on the parallel sync line (see step 12 below).
 - **First-run guide** (ordinary code, no AI): checks the computer, sets up a
   local model or a cloud model. Needed before anyone else installs.
 
@@ -127,12 +203,14 @@ has tried it. Each step ends with something the owner can try.
    [agent-profiles-and-adapters.md](docs/design-notes/agent-profiles-and-adapters.md).
 7. Navigator search and sorting; Related and Revisit-when reminders.
 8. Reading the owner's real old sessions on the Mac, read-only.
-9. First creator beta: worksheet, Site Engine's first site, encrypted transfer between devices.
+9. First creator beta: worksheet, Site Engine's first site. (Encrypted
+   transfer between devices moved to the sync line, October 22.)
 10. Business features: one-change card, business messaging, phone handoff.
 11. Browser annotations, family and shared spaces (Canvas/Atlas moved up to
     right after step 3).
-12. iOS app showing the same modules as the Mac, in a phone layout; later the
-    OS shell.
+12. The OS shell. (The iPhone app itself moved to the parallel sync line on
+    October 22: its launch version carries the launch set; later modules
+    reach the phone as each one is built.)
 
 ### Beside The Main Build
 
@@ -204,11 +282,13 @@ Strategy and interview files, `docs/reviews`, `docs/sessions`, session audits,
 
 ## Open Questions
 
-- Which parts are open core and which are subscription-only. Everything lives
-  in this private repo for now. Before the repo goes public, the subscription
-  parts move to a separate private repo that builds on Open Convo.
-- The license and trademark approach, which decides whether others may relabel
-  the core freely or only with a subscription.
+- Where the subscription modules live. The rule for what joins the core is
+  set (October 22, above). Everything lives in this private repo for now;
+  before the repo goes public, the subscription parts move to a separate
+  private repo that builds on Open Convo.
+- Registering the True Convo trademark and writing the repo's trademark
+  policy, with a lawyer's review, before the repo goes public. Whether forks
+  must say "Powered by True Convo" is deferred.
 - License, and when (or whether) the repo goes public.
 - Whether the in-progress True Convo branches (native host proof, build 8
   trial, participant wiring) get finished here or restarted fresh.
