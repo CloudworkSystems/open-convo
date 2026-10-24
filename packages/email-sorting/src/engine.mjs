@@ -1,21 +1,29 @@
 // The sorting engine: messages in, piles with reasons out. No network, no
 // files, no clock, no locale, no random values.
 
+import { createHash } from 'node:crypto';
 import {
-  CATEGORIES, CATEGORY_DESCRIPTIONS, EmailSortError, LIMITS, PILE_NAMES, compareText, cutChars,
+  CATEGORIES, CATEGORY_DESCRIPTIONS, EmailSortError, LIMITS, PILE_NAMES, charLength, compareText, cutChars,
   domainOf, lower, oneLine, own,
 } from './rules.mjs';
 import { compareDates, parseDate, validateInput, validateSettings } from './validate.mjs';
 
 // ---------------------------------------------------------------- headers
 
-// Header names are matched without regard to case. When the same name
-// appears under more than one key (for example "List-Id" and "list-id"),
-// their values are joined in character-code order of the keys, so the
-// result never depends on how the file was written.
+// The one place a header is looked up; every header the engine reads goes
+// through headerValues or firstValue. A key matches a header name exactly
+// apart from the case of ASCII letters (RFC 5322 field names are ASCII):
+// no trimming, so " List-Id " is an unknown header, not List-Id. When the
+// same name appears under more than one key (for example "List-Id" and
+// "list-id"), their values are joined in character-code order of the keys,
+// so the result never depends on how the file was written.
+function asciiLower(text) {
+  return text.replace(/[A-Z]/g, ch => ch.toLowerCase());
+}
+
 function headerValues(headers, name) {
-  const wanted = lower(name);
-  const keys = Object.keys(headers).filter(key => lower(key.trim()) === wanted).sort(compareText);
+  const wanted = asciiLower(name);
+  const keys = Object.keys(headers).filter(key => asciiLower(key) === wanted).sort(compareText);
   const values = [];
   for (const key of keys) {
     const value = headers[key];
@@ -34,8 +42,17 @@ function firstValue(headers, name) {
   return null;
 }
 
+// Every ID taken from a header (Message-ID, In-Reply-To, References,
+// List-Id) passes through here before it is compared, stored or copied into
+// the output. Trimmed of spaces and angle brackets, lower case, and bounded:
+// an ID over 200 characters becomes "SHA256:" plus the SHA-256 of its UTF-16
+// code units in hex. The hash keeps two different long IDs apart and the
+// same long ID together; the upper-case prefix can't occur in a lower-cased
+// ID, so a hashed ID never equals a real one.
 function normalizeId(text) {
-  return lower(text.replace(/^[\s<>]+|[\s<>]+$/g, ''));
+  const id = lower(text.replace(/^[\s<>]+|[\s<>]+$/g, ''));
+  if (charLength(id) <= LIMITS.headerIdChars) return id;
+  return `SHA256:${createHash('sha256').update(Buffer.from(id, 'utf16le')).digest('hex')}`;
 }
 
 // Message-ID: the first "<...>" token if there is one (RFC 5322 allows

@@ -60,8 +60,23 @@ function daysFromCivil(year, month, day) {
   return era * 146097 + doe - 719468;
 }
 
-// Returns { seconds, leap, fraction } for ordering, or null when the text
-// isn't a valid RFC 3339 date-time with an offset. A leap second (:60) keeps
+// The day of the month for a count of days since 1970-01-01 (the inverse
+// of daysFromCivil).
+function dayOfMonth(days) {
+  const z = days + 719468;
+  const era = Math.floor(z / 146097);
+  const doe = z - era * 146097;
+  const yoe = Math.floor((doe - Math.floor(doe / 1460) + Math.floor(doe / 36524) - Math.floor(doe / 146096)) / 365);
+  const doy = doe - (365 * yoe + Math.floor(yoe / 4) - Math.floor(yoe / 100));
+  const mp = Math.floor((5 * doy + 2) / 153);
+  return doy - Math.floor((153 * mp + 2) / 5) + 1;
+}
+
+// The only date check: every timestamp (each message's "date") is
+// read here. Returns { seconds, leap, fraction } for ordering, or null when
+// the text isn't a valid RFC 3339 date-time with an offset. A leap second
+// (:60) is valid only where one can be inserted: 23:59:60 UTC on the last
+// day of a month, once the offset is applied. It keeps
 // its own place: it counts as second 59 with `leap` 1, so it sorts after
 // every :59 instant and before the next minute's :00.
 export function parseDate(text) {
@@ -80,6 +95,8 @@ export function parseDate(text) {
   }
   const leap = second === 60 ? 1 : 0;
   const seconds = daysFromCivil(year, month, day) * 86400 + hour * 3600 + minute * 60 + (second - leap) - offset;
+  // `seconds` is then 23:59:59 UTC, and the next UTC day is a 1st.
+  if (leap && (((seconds + 1) % 86400 + 86400) % 86400 !== 0 || dayOfMonth((seconds + 1) / 86400) !== 1)) return null;
   const fraction = (m[7] || '').replace(/0+$/, '');
   return { seconds, leap, fraction };
 }

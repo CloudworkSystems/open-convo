@@ -102,7 +102,7 @@ this order. No other pile exists.
    inbox it arrived in; its fields come from the copy whose inbox, then id,
    comes first.
 2. Messages linked by `Message-ID`, `In-Reply-To` and `References` form a
-   conversation. Its key is `id:` plus the smallest normalized ID, or
+   conversation. Its key is `id:` plus the smallest normalized ID (E21), or
    `msg:` plus `JSON.stringify([inbox, id])` for a message with no IDs.
 3. The newest message not sent by the owner decides. Only the owner's own
    messages: `other`, `decidedBy: "owner-only"`, "Only messages you sent".
@@ -177,7 +177,7 @@ Choices for cases the plan doesn't name, following RFC 5322 (and RFC 3339
 for dates, RFC 2919 for `List-Id`, RFC 3834 for `Auto-Submitted`). Each has
 a test in `tests/edge-cases.test.mjs` under the same number.
 
-- **E1.** Header names match without regard to case. When one message has
+- **E1.** Header names match without regard to case (E20). When one message has
   the same header under several keys (`references` and `REFERENCES`), their
   values join in character-code order of the keys.
 - **E2.** A header counts as present only when one of its values holds more
@@ -191,7 +191,7 @@ a test in `tests/edge-cases.test.mjs` under the same number.
 - **E5.** `List-Id` is the `<...>` part (RFC 2919), or the whole trimmed
   value when there is none, in lower case.
 - **E6.** Dates follow RFC 3339 exactly: lower-case `t` and `z`, fractional
-  seconds and a leap second (`:60`) are accepted; `-00:00` equals `Z`.
+  seconds and a leap second (`:60`, see E22) are accepted; `-00:00` equals `Z`.
   Ordering uses the instant, fractions included; a leap second sorts after
   every `:59` instant of its minute and before the next minute's `:00`
   (`23:59:60.5Z` is older than the next day's `00:00:00Z`). The output keeps
@@ -232,6 +232,22 @@ a test in `tests/edge-cases.test.mjs` under the same number.
   feed, tab, U+2028, U+2029 and the rest of Unicode Cc) becomes one space,
   the text is trimmed and cut, ending in `…` when cut. Values inside a
   reason are cut to 80 characters; the whole reason to 160.
+- **E20.** Headers are looked up in one place, the same way everywhere: a
+  key matches a header name exactly apart from the case of ASCII letters.
+  Keys are never trimmed, so `" List-Id "` or `"Precedence\t"` is an
+  unknown header and is ignored.
+- **E21.** Every ID read from a header (`Message-ID`, `In-Reply-To`,
+  `References`, `List-Id`) is bounded before it is compared, stored or
+  copied: one over 200 characters (after trimming and lower case) becomes
+  `SHA256:` plus the SHA-256 of its UTF-16 code units in hex. The same long
+  ID always gives the same value and two different ones stay apart; the
+  upper-case prefix can't occur in a lower-cased ID, so a hash never equals
+  a real ID. Conversation keys and newsletter group keys built from them
+  are therefore at most about 200 characters.
+- **E22.** A leap second (`:60`) is accepted only at 23:59:60 UTC on the
+  last day of a month, after applying the offset (`2017-01-01T00:59:60+01:00`
+  is fine, `2026-10-14T09:12:60Z` is refused). Every timestamp is checked by
+  the same function.
 
 ## What this slice does not do
 

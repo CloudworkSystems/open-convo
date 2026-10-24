@@ -1,9 +1,10 @@
-// One test per choice in the README's "Edge cases" section (E1 to E19):
+// One test per choice in the README's "Edge cases" section (E1 to E22):
 // cases the plan doesn't name, settled by the RFC 5322 (and RFC 3339, RFC
 // 2919, RFC 3834) defaults.
 
 import './guard.mjs';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import {
   createScriptedClassifier, formatSummary, parseSettingsFile, sortMessages,
@@ -249,4 +250,66 @@ test('E19. every reason is one trimmed line of at most 160 characters, whatever 
   assert.equal(reasons.work, `Sorted without the model: the sender's domain ctl ${'d'.repeat(75)}… is a work domain`);
   assert.equal(reasons.model, `a b ${'c'.repeat(155)}…`);
   for (const line of result.problems) assert.doesNotMatch(line, /[^\S ]/);
+});
+
+test('E20. header names match exactly apart from ASCII case; a padded name is an unknown header', async () => {
+  const padded = {
+    ' List-Id ': '<news.example>', 'List-Unsubscribe ': '<https://u.example/x>', ' Auto-Submitted': 'auto-generated',
+    'Precedence\t': 'bulk', ' Message-ID ': '<same@m.example>', ' In-Reply-To': '<root@m.example>', 'References ': '<root@m.example>',
+  };
+  const { result, classifier } = await ask([
+    mail({ id: 'a', headers: padded }),
+    mail({ id: 'b', headers: padded }),
+    mail({ id: 'c', headers: { 'LIST-id': '<news.example>' } }),
+  ], throwsFor('a', 'b', 'c'));
+  for (const id of ['a', 'b']) {
+    assert.equal(byId(result, id).pile, 'other', id);
+    assert.equal(byId(result, id).reason, 'Sorted without the model: no header fact applied');
+    assert.equal(byId(result, id).conversation, `msg:${JSON.stringify(['home', id])}`, 'no Message-ID, no merge, no thread');
+  }
+  const { facts } = classifier.questions.find(q => q.ref.id === 'a');
+  assert.deepEqual([facts.hasListId, facts.hasListUnsubscribe, facts.autoSubmitted, facts.precedence, facts.isReply],
+    [false, false, null, null, false]);
+  assert.equal(byId(result, 'c').pile, 'newsletters', 'letter case alone still matches');
+});
+
+test('E21. an ID over 200 characters becomes SHA256: plus its hash: short, distinct and never a real ID', async () => {
+  const hash = id => `SHA256:${createHash('sha256').update(Buffer.from(id, 'utf16le')).digest('hex')}`;
+  const giant = `${'0'.repeat(100_000)}@m.example`;
+  const longA = `${'a'.repeat(191)}@m.example`;
+  const longB = `${'a'.repeat(190)}b@m.example`;
+  const edge = `${'e'.repeat(190)}@m.example`;
+  const list = `${'l'.repeat(300)}.example`;
+  const thread = Array.from({ length: 20 }, (_, i) => mail({
+    id: `t${i}`, headers: { 'Message-ID': `<t${i}@m.example>`, References: `<${giant}> <t0@m.example>` },
+  }));
+  const { result } = await ask([
+    ...thread,
+    mail({ id: 'a1', headers: { 'Message-ID': `<${longA}>` } }),
+    mail({ id: 'a2', headers: { 'In-Reply-To': `<${longA.toUpperCase()}>` } }),
+    mail({ id: 'b', headers: { 'Message-ID': `<${longB}>` } }),
+    mail({ id: 'fake', headers: { 'Message-ID': `<${hash(longA)}>` } }),
+    mail({ id: 'edge', headers: { 'Message-ID': `<${edge}>` } }),
+    mail({ id: 'news', headers: { 'Message-ID': '<news@m.example>', 'List-Id': `<${list}>` } }),
+  ], throwsFor('t0', 'a1', 'b', 'fake', 'edge', 'news'));
+  for (const { id } of thread) assert.equal(byId(result, id).conversation, `id:${hash(giant)}`);
+  assert.equal(byId(result, 'a1').conversation, `id:${hash(longA)}`);
+  assert.equal(byId(result, 'a2').conversation, `id:${hash(longA)}`, 'the same long ID still links, case aside');
+  assert.equal(byId(result, 'b').conversation, `id:${hash(longB)}`, 'a different long ID stays apart');
+  assert.equal(byId(result, 'fake').conversation, `id:${hash(longA).toLowerCase()}`, 'a real ID never equals a hash');
+  assert.equal(byId(result, 'edge').conversation, `id:${edge}`, 'exactly 200 characters is kept as written');
+  assert.equal(pileOf(result, 'newsletters').groups[0].key, `list:${hash(list)}`);
+  assert.ok(JSON.stringify(result).length < 20_000, 'the giant token is never repeated');
+});
+
+test('E22. a leap second is accepted only at 23:59:60 UTC on the last day of a month, after the offset', async () => {
+  for (const date of ['2016-06-30T23:59:60Z', '2016-12-31t23:59:60.5z', '2017-01-01T00:59:60+01:00',
+    '2016-12-31T18:59:60-05:00', '2016-02-29T23:59:60Z', '2015-02-28T23:59:60-00:00']) {
+    const { result } = await ask([mail({ date })], [{ inbox: 'home', id: 'm-1', answer: answer('people') }]);
+    assert.equal(byId(result, 'm-1').date, date);
+  }
+  for (const date of ['2026-10-14T09:12:60Z', '2016-12-30T23:59:60Z', '2016-12-31T23:58:60Z', '2016-12-31T23:59:60+01:00',
+    '2016-12-31T22:59:60+01:00', '2017-01-01T00:59:60Z', '2016-02-28T23:59:60Z', '2016-12-31T23:59:61Z']) {
+    await assert.rejects(ask([mail({ date })], []), /"date" must be an RFC 3339 date-time/, date);
+  }
 });

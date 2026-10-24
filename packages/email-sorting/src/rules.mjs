@@ -36,6 +36,7 @@ export const LIMITS = Object.freeze({
   questionSnippetChars: 1_000,
   reasonChars: 160,
   reasonValueChars: 80,
+  headerIdChars: 200,
 });
 
 export const DEFAULTS = Object.freeze({ confidenceFloor: 0.6, timeoutMs: 30_000 });
