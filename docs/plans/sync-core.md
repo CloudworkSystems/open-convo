@@ -85,7 +85,9 @@ so it builds and tests on Linux too.
   match the local store both ways. It queues any record whose stamp is newer
   than its last acknowledged one, carries this device's ID (so it is a
   local edit or a local merge result, not a copy fetched from another
-  device) and isn't already queued, using the payload
+  device; the device ID is part of the checkpoint, so a device recreated
+  from its checkpoint keeps the same ID, and the core refuses to start
+  from a checkpoint with a different ID passed in) and isn't already queued, using the payload
   it was handed and that record's saved change tag as the entry's base, so
   an edit another device made in the meantime is still found as a conflict
   and merged. (If the saved tag is older than the true base, the only cost
@@ -130,7 +132,10 @@ so it builds and tests on Linux too.
   the version that is queued, and reconciliation after a restart finds it.
   The record's last-seen change tag moves to the fetched version only once
   the app confirms it saved the merged record (and the fetch's change token
-  is saved only then too). If the device crashes after queuing the merge
+  is saved only then too). The same holds for every fetched record, merged
+  or not: a fetch's change tags and change token reach the checkpoint only
+  after the app confirms it saved every record that fetch covers, so a
+  crash between the two replays the fetch instead of skipping a record. If the device crashes after queuing the merge
   but before that save, reconciliation drops the merged entry, re-queues
   the old local edit with its old base, and the next upload finds the
   conflict and merges again, so the other device's edit is never written
@@ -282,7 +287,11 @@ Every case uses two or three simulated devices and invented records.
     checkpoint that records the acknowledgement; after reconciling, A's
     rebuilt entry is recognized as already in the cloud, the cloud holds
     exactly one revision of that edit, the merge function isn't called, and
-    status returns to synced.
+    status returns to synced. A seventh case: A fetches B's edit, the app's
+    save is held back, and A is destroyed; recreated from its checkpoint,
+    A fetches the edit again and saves it. Every case recreates A from the
+    checkpoint alone, without passing in its device ID again, and A keeps
+    its ID.
 18. A merged result is saved by the cloud but the connection drops before
     A hears back. After A retries, the cloud holds exactly one new revision,
     the merge function was called once for that conflict, and B ends with
@@ -420,7 +429,10 @@ the result doesn't depend on fetch-or-upload order (test 4). Its round on
 device's ID, and a replayed fetch with an equal stamp is already applied
 (test 17, fifth case). Its round on `7b3c28a` added a P1: an entry uploads
 only once it is checkpointed, and a cloud copy with its ID and stamp counts
-as its acknowledgement (test 17, sixth case). Its round on `bd3d676` added
+as its acknowledgement (test 17, sixth case). Its round on `ab45302` added
+two P1s: the device ID is kept in the checkpoint, and a fetch's change
+token waits for the app's save of every record it covers (test 17, seventh
+case). Its round on `bd3d676` added
 two P1s: a winning purge discards the losing payload instead of keeping a
 conflict copy (test 5b), and a merged entry uploads only after the app
 confirms the local save (test 19). Its round on `4db0ee9` added a P1:
