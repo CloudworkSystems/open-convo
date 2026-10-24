@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 1,
+  "messages": [
+    {
+      "id": "h-01",
+      "inbox": "home",
+      "from": { "name": "Marrow Lane Bakery", "address": "news@marrowlane.example" },
+      "to": [{ "address": "jordan@quillhome.example" }],
+      "subject": "This week's loaves: rye is back",
+      "date": "2026-10-20T07:30:00-04:00",
+      "snippet": "Our dark rye returns on Thursday. Pre-order by Wednesday night.",
+      "headers": {
+        "Message-ID": "<loaves-1020@marrowlane.example>",
+        "List-Id": "Marrow Lane News <news.marrowlane.example>",
+        "List-Unsubscribe": "<mailto:leave@marrowlane.example>"
+      }
+    },
+    {
+      "id": "h-02",
+      "inbox": "home",
+      "from": { "name": "Marrow Lane Bakery", "address": "news@marrowlane.example" },
+      "to": [{ "address": "jordan@quillhome.example" }],
+      "subject": "Pumpkin season starts Saturday",
+      "date": "2026-10-13T07:30:00-04:00",
+      "snippet": "Pumpkin loaves and spiced buns all weekend.",
+      "headers": {
+        "Message-ID": "<loaves-1013@marrowlane.example>",
+        "List-Id": "Marrow Lane News <news.marrowlane.example>"
+      }
+    },
+    {
+      "id": "h-03",
+      "inbox": "home",
+      "from": { "name": "Marrow Lane Orders", "address": "orders@marrowlane.example" },
+      "to": [{ "name": "Jordan Quill", "address": "jordan@quillhome.example" }],
+      "subject": "Thanks for your pre-order",
+      "date": "2026-10-21T18:02:00-04:00",
+      "snippet": "One dark rye, ready for pickup Thursday after 10 am.",
+      "headers": { "Message-ID": "<po-55120@marrowlane.example>" }
+    },
+    {
+      "id": "h-04",
+      "inbox": "home",
+      "from": { "name": "Quarrystone Bank", "address": "no-reply@quarrystone-bank.example" },
+      "to": [{ "address": "jordan@quillhome.example" }],
+      "subject": "Your verification code",
+      "date": "2026-10-22T08:15:09Z",
+      "snippet": "Use code 000000 to finish signing in. It expires in 10 minutes.",
+      "headers": { "Message-ID": "<otp-8812@quarrystone-bank.example>", "Auto-Submitted": "auto-generated" }
+    },
+    {
+      "id": "h-05",
+      "inbox": "home",
+      "from": { "name": "Avery Lin", "address": "avery.lin@sparrowpost.example" },
+      "to": [{ "name": "Jordan Quill", "address": "jordan@quillhome.example" }],
+      "subject": "Dinner Saturday?",
+      "date": "2026-10-18T19:40:00-07:00",
+      "snippet": "We're trying the new noodle place. Want to come?",
+      "headers": { "Message-ID": "<dinner-1@sparrowpost.example>" }
+    },
+    {
+      "id": "h-06",
+      "inbox": "home",
+      "from": { "name": "Jordan Quill", "address": "Jordan@QuillHome.example" },
+      "to": [{ "name": "Avery Lin", "address": "avery.lin@sparrowpost.example" }],
+      "subject": "Re: Dinner Saturday?",
+      "date": "2026-10-19T09:05:00-04:00",
+      "snippet": "Yes please! What time?",
+      "headers": { "Message-ID": "<reply-77@quillhome.example>", "In-Reply-To": "<dinner-1@sparrowpost.example>" }
+    },
+    {
+      "id": "h-07",
+      "inbox": "home",
+      "from": { "name": "Avery Lin", "address": "avery.lin@sparrowpost.example" },
+      "to": [{ "name": "Jordan Quill", "address": "jordan@quillhome.example" }],
+      "subject": "Re: Dinner Saturday?",
+      "date": "2026-10-19T08:30:00-07:00",
+      "snippet": "Seven works. See you there.",
+      "headers": {
+        "Message-ID": "<dinner-3@sparrowpost.example>",
+        "In-Reply-To": "<reply-77@quillhome.example>",
+        "References": "<dinner-1@sparrowpost.example>\n <reply-77@quillhome.example>"
+      }
+    },
+    {
+      "id": "h-08",
+      "inbox": "home",
+      "from": { "name": "Tallow Parcel", "address": "updates@tallowparcel.example" },
+      "to": [{ "address": "jordan@quillhome.example" }],
+      "subject": "Your package has shipped",
+      "date": "2026-10-21T11:00:00+01:00",
+      "snippet": "Expected Friday. Tracking number TP-0000-1111.",
+      "headers": { "Message-ID": "<ship-4410@tallowparcel.example>" }
+    },
+    {
+      "id": "h-09",
+      "inbox": "home",
+      "from": { "name": "Wrenfield PTA", "address": "pta@wrenfield.example" },
+      "to": [{ "address": "families@wrenfield.example" }],
+      "subject": "Fall fair volunteers",
+      "date": "2026-10-23T16:00:00-04:00",
+      "snippet": "We need six volunteers for the bake table.",
+      "headers": { "Message-ID": "<pta-1023@wrenfield.example>", "List-Id": "<pta.wrenfield.example>" }
+    },
+    {
+      "id": "h-10",
+      "inbox": "home",
+      "from": { "name": "Rowan Park", "address": "rowan@sparrowpost.example" },
+      "to": [{ "address": "jordan@quillhome.example" }],
+      "subject": "Photos from the hike",
+      "date": "2026-10-17T21:12:00-04:00",
+      "snippet": "Here are the ones from the ridge.",
+      "headers": {}
+    },
+    {
+      "id": "w-01",
+      "inbox": "work",
+      "from": { "name": "Priya Natal", "address": "priya@northglass-tutoring.example" },
+      "to": [{ "name": "Jordan Quill", "address": "jordan@northglass-tutoring.example" }],
+      "subject": "Tutor schedule for November",
+      "date": "2026-10-22T13:45:00-04:00",
+      "snippet": "Draft attached. Tuesdays move to the east room.",
+      "headers": { "Message-ID": "<sched-11@northglass-tutoring.example>" }
+    },
+    {
+      "id": "w-02",
+      "inbox": "work",
+      "from": { "name": "Slatecloud Billing", "address": "billing@slatecloud.example" },
+      "to": [{ "address": "jordan@northglass-tutoring.example" }],
+      "subject": "Invoice INV-2207 for October",
+      "date": "2026-10-01T00:00:00Z",
+      "snippet": "Your invoice is ready. Amount due: 12.00.",
+      "headers": { "Message-ID": "<inv-2207@slatecloud.example>" }
+    },
+    {
+      "id": "w-03",
+      "inbox": "work",
+      "from": { "name": "Jordan Quill", "address": "jordan@northglass-tutoring.example" },
+      "to": [{ "address": "rooms@northglass-tutoring.example" }],
+      "subject": "Room booking note",
+      "date": "2026-10-16T10:00:00-04:00",
+      "snippet": "Note to self: ask about the east room.",
+      "headers": { "Message-ID": "<note-1@northglass-tutoring.example>" }
+    },
+    {
+      "id": "w-04",
+      "inbox": "work",
+      "from": { "name": "Jordan Quill", "address": "jordan@northglass-tutoring.example" },
+      "to": [{ "address": "rooms@northglass-tutoring.example" }],
+      "subject": "Re: Room booking note",
+      "date": "2026-10-16T10:20:00-04:00",
+      "snippet": "Following up on my own note.",
+      "headers": { "Message-ID": "<note-2@northglass-tutoring.example>", "References": "<note-1@northglass-tutoring.example>" }
+    },
+    {
+      "id": "w-05",
+      "inbox": "work",
+      "from": { "name": "Northglass Calendar", "address": "calendar@northglass-tutoring.example" },
+      "to": [{ "address": "jordan@northglass-tutoring.example" }],
+      "subject": "Reminder: staff meeting at 3",
+      "date": "2026-10-23T12:00:00-04:00",
+      "snippet": "Staff meeting in the east room.",
+      "headers": { "Message-ID": "<cal-3301@northglass-tutoring.example>", "Auto-Submitted": "auto-generated" }
+    },
+    {
+      "id": "s-01",
+      "inbox": "school",
+      "from": { "name": "Wrenfield PTA", "address": "pta@wrenfield.example" },
+      "to": [{ "address": "families@wrenfield.example" }],
+      "subject": "Fall fair volunteers",
+      "date": "2026-10-23T16:00:00-04:00",
+      "snippet": "We need six volunteers for the bake table.",
+      "headers": { "message-id": "PTA-1023@Wrenfield.example", "List-Id": "<pta.wrenfield.example>" }
+    },
+    {
+      "id": "s-02",
+      "inbox": "school",
+      "from": { "name": "Ms. Ortega", "address": "t.ortega@wrenfield.example" },
+      "to": [{ "address": "jordan.q@student.wrenfield.example" }],
+      "subject": "Field trip permission slip",
+      "date": "2026-10-22T15:10:00-04:00",
+      "snippet": "Please sign and return by Monday.",
+      "headers": { "Message-ID": "<slip-9@wrenfield.example>" }
+    },
+    {
+      "id": "s-03",
+      "inbox": "school",
+      "from": { "name": "Wrenfield Accounts", "address": "no-reply@accounts.wrenfield.example" },
+      "to": [{ "address": "jordan.q@student.wrenfield.example" }],
+      "subject": "New sign-in to your student account",
+      "date": "2026-10-21T07:58:00-04:00",
+      "snippet": "If this wasn't you, reset your password.",
+      "headers": { "Message-ID": "<acct-17@accounts.wrenfield.example>" }
+    },
+    {
+      "id": "s-04",
+      "inbox": "school",
+      "from": { "name": "Bramblequill Books", "address": "deals@bramblequill.example" },
+      "to": [{ "address": "jordan.q@student.wrenfield.example" }],
+      "subject": "20% off textbooks this weekend",
+      "date": "2026-10-19T06:00:00-04:00",
+      "snippet": "Student prices on every used textbook.",
+      "headers": { "Message-ID": "<deal-88@bramblequill.example>", "List-Unsubscribe": "<https://bramblequill.example/leave>" }
+    }
+  ]
+}
