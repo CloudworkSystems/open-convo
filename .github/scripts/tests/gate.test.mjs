@@ -122,6 +122,8 @@ test('CODEOWNERS covers the rules, decisions and key files, and not ordinary cod
     'apps/mac/Tests/ProtectionProofTests/Anything.swift',
     'apps/mac/Sources/VoiceCursorMac/OpenAIRealtimeTranscriber.swift',
     'apps/mac/Sources/VoiceCursorMac/OpenAIRealtimeSmoke.swift',
+    // "/**/" matches zero folders too.
+    'apps/mac/FooKeychain.swift', 'apps/mac/ParticipantX.swift',
   ];
   assert.deepEqual(protectedFiles(rules, files), files);
   const open = ['STATUS.md', 'README.md', 'apps/desk/src/app/App.tsx', 'packages/clarity/src/index.mjs',

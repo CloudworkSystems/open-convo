@@ -21,7 +21,10 @@ function toRegExp(pattern) {
   body = body
     .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
     .replace(/\*\*/g, '\u0000')
+    // "/**/" also matches zero folders, as in GitHub and gitignore.
+    .replace(/\/\u0000\//g, '/\u0001')
     .replace(/\*/g, '[^/]*')
+    .replace(/\u0001/g, '(?:.*/)?')
     .replace(/\u0000/g, '.*');
   const prefix = anchored ? '^' : '(^|.*/)';
   return new RegExp(`${prefix}${body}${directory ? '.*' : '(/.*)?$'}`);
