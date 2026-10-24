@@ -48,8 +48,9 @@ so it builds and tests on Linux too.
 
 - **Records are opaque.** A record is an ID, a record type (for example
   `conversation-page`, `task-list`, `memory-item`), a version stamp, the
-  device it came from, and an encrypted payload the sync core never opens.
-  The sync core never sees a key or plaintext.
+  device it came from, a "purged" flag (sync metadata, see "Two kinds of
+  deletion"), and an encrypted payload the sync core never opens. The sync
+  core never sees a key or plaintext.
 - **Version stamps** follow the household lists engine's rule
   ([household-lists-engine.md](household-lists-engine.md), "Built For Sync
   Later"): a logical counter that always moves past any stamp seen, then wall
@@ -74,8 +75,8 @@ so it builds and tests on Linux too.
 - **Reconciling after a crash.** In the app, a record and its outbox entry
   live in different places, so a crash can save one without the other. The
   checkpoint keeps, for each record, the last stamp the cloud acknowledged.
-  On start, the app hands the sync core every local record in full (ID,
-  stamp, record type and opaque payload), and the core makes the outbox
+  On start, the app hands the sync core every local record in full (the
+  whole record shape above, including the purged flag), and the core makes the outbox
   match the local store both ways. It queues any record whose stamp is newer
   than its last acknowledged one and isn't already queued, using the payload
   it was handed. It drops any queued entry whose record ID and stamp
@@ -211,7 +212,10 @@ Every case uses two or three simulated devices and invented records.
     against its records, it queues the edit and B has it after sync. In the
     reverse (checkpoint saved with a queued entry, record not saved), the
     entry is dropped: it is never uploaded, B never sees it, status returns
-    to synced, and nothing that was acknowledged is lost.
+    to synced, and nothing that was acknowledged is lost. A third case: A
+    saves a purge marker locally and is destroyed before its checkpoint;
+    after reconciling, the purge is queued as a purge, reaches the cloud, and
+    a stale edit from B still can't bring the record back.
 18. A merged result is saved by the cloud but the connection drops before
     A hears back. After A retries, the cloud holds exactly one new revision,
     the merge function was called once for that conflict, and B ends with
@@ -328,7 +332,9 @@ outbox entry keeps the cloud version its edit was based on, so a fetch
 before upload can't hide a conflict ("Conflicts", test 19). Its round on
 `88dfe79` added two P1s: a fetch merges with a queued edit before the local
 record is replaced, so reconciliation can't drop it (test 19), and "purged"
-is sync metadata that beats any stamp (test 5b).
+is sync metadata that beats any stamp (test 5b). Its round on `ba4386e`
+added a P1: the purged flag is part of the record shape reconciliation
+receives (test 17).
 
 ## Review And Finish Line
 
