@@ -42,9 +42,13 @@ export function protectedFiles(rules, files) {
 // changed in a pull request opened from the owner's account would need no
 // approval at all. Returns why such a pull request must wait, or null.
 // `files` lists each changed path, and a renamed file's old path too.
-export function ownerOpenedBlock({ prAuthor, files = [], rules = [] }) {
+// `complete` is false when GitHub cut the list short (it returns at most
+// 3,000 files), and then the pull request waits, since a protected file
+// could be among those left out.
+export function ownerOpenedBlock({ prAuthor, files = [], rules = [], complete = true }) {
   const owned = rules.some((rule) => rule.owners.some((o) => o.replace(/^@/, '') === prAuthor));
   if (!prAuthor || !owned) return null;
+  if (!complete) return "Opened from the code owner's account and too large to check every file; reopen it from cloudwork-bot";
   const hit = protectedFiles(rules, files);
   if (hit.length === 0) return null;
   return `Opened from the code owner's account and changes ${hit[0]}; reopen it from cloudwork-bot`;

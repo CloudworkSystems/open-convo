@@ -84,8 +84,10 @@ async function check(number) {
   const signal = evaluateCodexSignal({ headSha: pr.head.sha, prAuthor: pr.user?.login, comments, reviews, reactions, dismissals });
   // A pull request the owner opened skips GitHub's code-owner review, so it
   // waits here instead whenever it changes a protected file.
-  const files = (await gh.all(`${base}/pulls/${number}/files`)).flatMap((f) => [f.filename, f.previous_filename].filter(Boolean));
-  const blocked = ownerOpenedBlock({ prAuthor: pr.user?.login, files, rules: await codeownersRules() });
+  const changed = await gh.all(`${base}/pulls/${number}/files`);
+  const files = changed.flatMap((f) => [f.filename, f.previous_filename].filter(Boolean));
+  const complete = changed.length >= pr.changed_files;
+  const blocked = ownerOpenedBlock({ prAuthor: pr.user?.login, files, rules: await codeownersRules(), complete });
   const approved = signal.approved && !blocked;
   const reason = blocked ?? signal.reason;
   const state = approved ? 'success' : 'pending';

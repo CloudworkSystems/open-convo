@@ -490,3 +490,9 @@ test('the owner-opened rule leaves ordinary changes and bot pull requests alone'
   assert.equal(ownerOpenedBlock({ prAuthor: 'cloudwork-bot', files: ['AGENTS.md', '.github/CODEOWNERS'], rules }), null);
   assert.equal(ownerOpenedBlock({ prAuthor: undefined, files: ['AGENTS.md'], rules }), null);
 });
+
+test('an owner-opened pull request whose file list was cut short waits', () => {
+  const rules = parseCodeowners(readFileSync(new URL('../../CODEOWNERS', import.meta.url), 'utf8'));
+  assert.ok(ownerOpenedBlock({ prAuthor: OWNER_LOGIN, files: ['packages/x/a.mjs'], rules, complete: false }));
+  assert.equal(ownerOpenedBlock({ prAuthor: 'cloudwork-bot', files: ['packages/x/a.mjs'], rules, complete: false }), null);
+});
