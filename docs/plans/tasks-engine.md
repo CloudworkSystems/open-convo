@@ -52,28 +52,33 @@ and loaded from one JSON file per person):
   time and time zone) or an offset before the due time (for example 1 day,
   2 hours). A date-only task's offset counts from 09:00 on its due day in the
   owner's zone (a setting, default 09:00).
-- **Repeats** (optional), one of:
-  - every N days (N 1 to 365);
-  - every N weeks, plain: no weekdays are stored; on schedule each next
-    due date is N weeks after the previous due date (so it keeps the first
-    due date's weekday), and after done it is N weeks after the completion
-    date;
-  - every N weeks on chosen weekdays (at least one weekday; an empty set is
-    refused);
-  - every N months on a day of the month (1 to 31; a month without that day
-    uses its last day, so "the 31st" falls on November 30) or on a numbered
-    weekday ("the second Tuesday", "the last Friday");
-  - every N years on a date (February 29 falls on February 28 in other
-    years).
-  Each repeat is either **on schedule** (the next due date follows the
-  pattern from the previous due date, whenever it was done) or **after done**
-  (the next due date counts from the day it was completed: "water every three
-  days" after you actually water). **After done** is allowed only for plain
-  intervals: every N days, every N weeks without chosen weekdays, every N
-  months and every N years. A repeat with chosen weekdays, a day of the
-  month, a numbered weekday or a yearly date is on schedule only; asking for
-  after done on one is refused with a plain message. A repeat may end after
-  a count or on a date.
+- **Repeats** (optional). A task with a repeat must have a due date: its
+  first due date is the repeat's start, and a repeat without one is refused.
+  A repeat is `{ kind, every, mode, ... }`, with `every` (N) from 1 to 365
+  for days and 1 to 99 otherwise, `mode` `onSchedule` or `afterDone`, and
+  one of these kinds:
+  - `days`: every N days.
+  - `weeks`: every N weeks, plain. No weekdays are stored; on schedule each
+    due date is N weeks after the previous one, so it keeps the first due
+    date's weekday.
+  - `weekdays`: every N weeks on chosen weekdays (at least one; an empty
+    set is refused).
+  - `months`: every N months, plain. On schedule each due date keeps the
+    first due date's day of the month, and a month without that day uses
+    its last day (the 31st falls on November 30, then back to December 31).
+  - `monthDay`: every N months on a chosen day of the month (1 to 31,
+    clamped the same way).
+  - `monthWeekday`: every N months on a numbered weekday ("the second
+    Tuesday", "the last Friday").
+  - `years`: every N years, plain, keeping the first due date's month and
+    day (February 29 falls on February 28 in other years).
+  **On schedule** means the next due date follows the pattern from the
+  previous due date, whenever it was done. **After done** means the next
+  due date counts from the day it was done ("water every three days" after
+  you actually water), and is allowed only for the plain kinds (`days`,
+  `weeks`, `months`, `years`); asking for it with `weekdays`, `monthDay` or
+  `monthWeekday` is refused with a plain message. A repeat may end after a
+  count or on a date.
 - **Completing a repeating task** records the completion and moves the task
   to its next due date, keeping one task with a history, not a pile of
   copies. Completing it early, late or twice in a day follows the rules
@@ -221,7 +226,7 @@ and tasks only. At least:
    February; missed on-schedule
    occurrences show once as overdue, not piled up.
 4. Repeat ends: after a count and on a date; the last completion leaves the
-   task done.
+   task done. A repeat on a task with no due date is refused.
 5. Time zones: a 9:00 New York task stays at 9:00 across both clock changes;
    a nonexistent and a repeated wall time resolve as above; viewing from
    London and Tokyo converts timed tasks and leaves date-only tasks on their

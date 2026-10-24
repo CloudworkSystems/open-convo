@@ -168,9 +168,11 @@ with a plain message naming the request's position.
    plan is the one that was shown.
 
 **Same input, same plan.** The same files give byte-identical JSON, and
-shuffling the messages or reordering requests that don't overlap gives the
-same plan and seal. Nothing depends on the clock, time zone, locale or random
-values.
+shuffling the messages gives the same plan and seal. Reordering requests
+that don't overlap gives the same `seal`, `actions` minus `matchedBy`, and
+`unsubscribe`; `matchedBy`, `requests` and `blocked` name requests by their
+position in the file, so they follow the new order. Nothing depends on the
+clock, time zone, locale or random values.
 
 ## Output
 
@@ -226,7 +228,9 @@ mail only (`.example` addresses, invented people and businesses). At least:
    copies, and the seal covers both copies.
 9. The seal: the same files give the same seal; adding, removing or
    changing any message copy, action or unsubscribe URL changes it;
-   shuffling the messages file doesn't. A test recomputes the seal from the
+   shuffling the messages file doesn't; swapping two requests that don't
+   overlap keeps the seal and actions and renumbers only `matchedBy`,
+   `requests` and `blocked`. A test recomputes the seal from the
    README's canonical form.
 10. Input checks: everything the sorting engine refuses is refused here too;
     plus a bad `pile`, an unknown action, a target with two kinds, more than
