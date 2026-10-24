@@ -36,3 +36,16 @@ export function protectedFiles(rules, files) {
     return owners !== null && owners.length > 0;
   });
 }
+
+// GitHub skips the code-owner review when the code owner opened the pull
+// request (docs/plans/merge-gate.md, scratch test 3), so a protected file
+// changed in a pull request opened from the owner's account would need no
+// approval at all. Returns why such a pull request must wait, or null.
+// `files` lists each changed path, and a renamed file's old path too.
+export function ownerOpenedBlock({ prAuthor, files = [], rules = [] }) {
+  const owned = rules.some((rule) => rule.owners.some((o) => o.replace(/^@/, '') === prAuthor));
+  if (!prAuthor || !owned) return null;
+  const hit = protectedFiles(rules, files);
+  if (hit.length === 0) return null;
+  return `Opened from the code owner's account and changes ${hit[0]}; reopen it from cloudwork-bot`;
+}
