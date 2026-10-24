@@ -116,23 +116,24 @@ export function layoutRails(snapshot: RailMapSnapshot): RailRow[] {
     lanes.push(null);
     return lanes.length - 1;
   };
-  const rows: { commit: RailCommit; lane: number; before: (string | null)[]; after: (string | null)[] }[] = [];
+  const rows: { commit: RailCommit; lane: number; before: (string | null)[]; after: (string | null)[]; opened: Set<number> }[] = [];
   for (const commit of snapshot.commits) {
     const before = [...lanes];
     const waiting = lanes.flatMap((value, lane) => value === commit.hash ? [lane] : []);
     const lane = main.has(commit.hash) ? 0 : waiting[0] ?? free();
     for (const index of waiting) lanes[index] = null;
+    // Every parent edge waits in a lane of its own, even when another lane
+    // already waits for the same commit: the lanes meet at the parent's row,
+    // so no track bends into a lane early and looks joined to a commit above.
+    const opened = new Set<number>();
     commit.parents.forEach((parent, index) => {
       if (!known.has(parent)) return;
-      // The main line always continues in lane 0, even when a branch lane
-      // already waits for the same parent; both lanes meet at its row.
-      if (lane === 0 && index === 0 && main.has(parent)) { lanes[0] = parent; return; }
-      if (lanes.includes(parent)) return;
-      if (index === 0 && lane > 0 && lanes[lane] === null) lanes[lane] = parent;
-      else lanes[free()] = parent;
+      const target = index === 0 && lanes[lane] === null && (lane > 0 || main.has(parent)) ? lane : free();
+      lanes[target] = parent;
+      opened.add(target);
     });
     while (lanes.length > 1 && lanes[lanes.length - 1] === null) lanes.pop();
-    rows.push({ commit, lane, before, after: [...lanes] });
+    rows.push({ commit, lane, before, after: [...lanes], opened });
   }
   return rows.map((row, index) => {
     const next = rows[index + 1];
@@ -140,8 +141,8 @@ export function layoutRails(snapshot: RailMapSnapshot): RailRow[] {
     row.after.forEach((hash, lane) => {
       if (hash === null) return;
       const to = next && next.commit.hash === hash ? next.lane : lane;
-      if (row.commit.parents.includes(hash)) segments.push({ from: row.lane, to, lane });
-      if (row.before[lane] === hash) segments.push({ from: lane, to, lane });
+      if (row.opened.has(lane)) segments.push({ from: row.lane, to, lane });
+      else if (row.before[lane] === hash) segments.push({ from: lane, to, lane });
     });
     return { commit: row.commit, lane: row.lane, onMain: main.has(row.commit.hash), merge: row.commit.parents.length > 1, segments };
   });

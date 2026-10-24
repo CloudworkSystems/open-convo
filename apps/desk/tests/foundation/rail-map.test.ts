@@ -66,6 +66,26 @@ test('lanes keep main in lane 0 and give each branch its own track', () => {
   assert.deepEqual(rows.at(-1)!.segments, []);
 });
 
+test('a branch whose parent is the main tip keeps its own track past newer commits on other branches', () => {
+  const base = invented();
+  // git log --topo-order --date-order can list o1 (parent m3), then x1 (another branch), then m3.
+  const snapshot: RailMapSnapshot = {
+    ...base,
+    commits: [
+      { hash: 'o1', parents: ['m3'], date: '2026-10-10T12:00:00Z', subject: 'Invented open work', refs: ['open'] },
+      { hash: 'x1', parents: ['m2'], date: '2026-10-10T11:00:00Z', subject: 'Invented other work', refs: ['other'] },
+      { hash: 'm3', parents: ['m2'], date: '2026-10-10T10:00:00Z', subject: 'Invented main tip', refs: ['main'] },
+      { hash: 'm2', parents: ['outside'], date: '2026-10-10T08:00:00Z', subject: 'Invented main change', refs: [] },
+    ],
+  };
+  const rows = layoutRails(snapshot);
+  const openLane = rows[0].lane;
+  assert.notEqual(openLane, 0);
+  assert.ok(!rows[0].segments.some((segment) => segment.to === 0 && segment.lane !== 0), 'The open branch bends into main before x1.');
+  assert.ok(rows[1].segments.some((segment) => segment.from === openLane && segment.to === 0), 'The open branch never reaches m3.');
+  assert.ok(rows[1].segments.some((segment) => segment.from === 0 && segment.to === 0), 'The main line breaks at x1.');
+});
+
 test('pull requests attach to branch tips and merge commits; the latest pull wins a branch', () => {
   const snapshot = invented();
   const index = indexPulls(snapshot.pulls);
