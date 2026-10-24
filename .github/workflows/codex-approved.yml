@@ -31,7 +31,10 @@ permissions:
   statuses: write
 
 concurrency:
-  group: codex-approved-${{ github.event.pull_request.number || github.event.issue.number || 'all' }}
+  # One group per pull request, whatever triggered the run (a manual run with
+  # a number joins that pull request's group), so two runs never ask the
+  # triage judge about the same pull request at once.
+  group: codex-approved-${{ github.event.pull_request.number || github.event.issue.number || inputs.pull_request || 'all' }}
   cancel-in-progress: false
 
 jobs:

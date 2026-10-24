@@ -67,7 +67,12 @@ async function withEditHistory(comments) {
 // and set of findings, and pass if it rates every finding a nit
 // (docs/plans/codex-triage.md). Without the API key secret this never asks,
 // and the result stays whatever the Codex signal said.
-async function triage({ number, pr, comments, reviews, dismissals, reason }) {
+//
+// Only runs for one pull request may ask the judge: those share the
+// pull request's concurrency group, so two runs never ask at once. A run
+// over every open pull request (hourly, or manual without a number) only
+// reads verdicts already posted.
+async function triage({ number, pr, comments, reviews, dismissals, reason, mayJudge }) {
   const headSha = pr.head.sha;
   const onHead = reviews.some((r) => r.user?.login === CODEX_LOGIN && r.commit_id === headSha && r.state !== 'APPROVED');
   if (!onHead) return { approved: false, reason };
@@ -79,7 +84,7 @@ async function triage({ number, pr, comments, reviews, dismissals, reason }) {
   }
   let current = comments;
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!latestVerdict({ headSha, findings: eligibility.findings, comments }) && apiKey) {
+  if (mayJudge && apiKey && !latestVerdict({ headSha, findings: eligibility.findings, comments })) {
     try {
       const verdicts = await judgeFindings({ findings: eligibility.findings, prTitle: pr.title, apiKey });
       await gh.post(`${base}/issues/${number}/comments`, { body: verdictComment({ headSha, findings: eligibility.findings, verdicts }) });
@@ -94,7 +99,7 @@ async function triage({ number, pr, comments, reviews, dismissals, reason }) {
   return { approved: false, reason };
 }
 
-async function check(number) {
+async function check(number, mayJudge) {
   const pr = await gh.get(`${base}/pulls/${number}`);
   if (pr.state !== 'open') return;
   const [comments, reviews, reactions] = await Promise.all([
@@ -109,7 +114,7 @@ async function check(number) {
     ? (await gh.all(`${base}/issues/${number}/events`)).filter((e) => e.event === 'review_dismissed')
     : [];
   let { approved, reason } = evaluateCodexSignal({ headSha: pr.head.sha, prAuthor: pr.user?.login, comments, reviews, reactions, dismissals });
-  if (!approved) ({ approved, reason } = await triage({ number, pr, comments, reviews, dismissals, reason }));
+  if (!approved) ({ approved, reason } = await triage({ number, pr, comments, reviews, dismissals, reason, mayJudge }));
   const state = approved ? 'success' : 'pending';
 
   const current = await gh.get(`${base}/commits/${pr.head.sha}/status`);
@@ -126,10 +131,10 @@ async function check(number) {
   console.log(`#${number} ${pr.head.sha.slice(0, 7)}: ${state} (${reason})`);
 }
 
-const numbers = pullNumbersFromEvent()
-  ?? (await gh.all(`${base}/pulls?state=open`)).map((p) => p.number);
+const fromEvent = pullNumbersFromEvent();
+const numbers = fromEvent ?? (await gh.all(`${base}/pulls?state=open`)).map((p) => p.number);
 let failed = false;
 for (const number of numbers) {
-  try { await check(number); } catch (error) { failed = true; console.error(`#${number}: ${error.message}`); }
+  try { await check(number, fromEvent !== null); } catch (error) { failed = true; console.error(`#${number}: ${error.message}`); }
 }
 if (failed) process.exit(1);

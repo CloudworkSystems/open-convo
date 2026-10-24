@@ -70,7 +70,8 @@ export function triageEligibility({ headSha, prAuthor, reviews = [], reviewComme
 
   const findings = [];
   for (const review of onHead) {
-    const comments = reviewComments.filter((c) => c.pull_request_review_id === review.id);
+    // Replies to a finding carry the finding's review id; only the findings count.
+    const comments = reviewComments.filter((c) => c.pull_request_review_id === review.id && !c.in_reply_to_id);
     // A review with findings but no finding we can read: fail closed.
     if (!comments.length) return no('A Codex review on the head has no readable findings.', { rounds, lastFinding });
     for (const c of comments) {

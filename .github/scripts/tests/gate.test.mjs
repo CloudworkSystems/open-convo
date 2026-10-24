@@ -571,3 +571,16 @@ test('triage: the workflow can comment, gets the judge key, and still never chec
   assert.match(wf, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
   assert.doesNotMatch(wf, /head\.sha|head\.ref|pull_request\.head/);
 });
+
+test('triage: replies to a finding are not findings', () => {
+  const reply = { ...finding(33, 3), user: impostor, body: 'Fixed in abc.', in_reply_to_id: 31 };
+  assert.equal(triageEligibility({ ...loop(), reviewComments: [finding(31, 3), finding(32, 3, 3), reply] }).eligible, true);
+});
+
+test('triage: only single pull request runs ask the judge, in that pull request\'s concurrency group', () => {
+  const wf = readFileSync(new URL('../../workflows/codex-approved.yml', import.meta.url), 'utf8');
+  assert.match(wf, /group: codex-approved-\$\{\{ github\.event\.pull_request\.number \|\| github\.event\.issue\.number \|\| inputs\.pull_request \|\| 'all' \}\}/);
+  const script = readFileSync(new URL('../codex-approved.mjs', import.meta.url), 'utf8');
+  assert.match(script, /if \(mayJudge && apiKey/);
+  assert.match(script, /check\(number, fromEvent !== null\)/);
+});

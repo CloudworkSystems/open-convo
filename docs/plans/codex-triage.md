@@ -1,7 +1,14 @@
 # Codex Triage: Ending Review Loops On Minor Findings
 
-Status: Proposed October 24, 2026, at the owner's request ("do the changes").
-Session: thread "Stop Codex review loops on nits".
+Status: In progress (Oct 24): built in this pull request, judge off until the owner adds the API key.
+
+Written October 24, 2026 at the owner's request ("do the changes"). Session:
+thread "Stop Codex review loops on nits". **Builder:** Claude (cloud,
+`cloudwork-bot`). **Reviewers:** Codex and Gemini; the owner approves, since
+it touches protected paths. **Finish line:** this pull request merges with the
+gate tests passing, the owner adds the `ANTHROPIC_API_KEY` secret, and the
+first pull request that reaches the judge gets a verdict comment and the
+matching `codex-approved` result (then the status becomes Built).
 
 ## Why
 
@@ -80,8 +87,10 @@ owner's approval, and the owner's `owner-accepts-findings` note still works.
 ## Where It Runs
 
 Inside the existing `codex-approved` workflow, which runs only from `main`
-and never checks out pull request code. It asks the judge at most once per
-head commit and set of findings, and records the verdict as a comment on the
+and never checks out pull request code. Only runs for a single pull request
+ask the judge; they share that pull request's concurrency group, so two runs
+never ask at once (the hourly run over every pull request only reads posted
+verdicts). It asks the judge at most once per head commit and set of findings, and records the verdict as a comment on the
 pull request so everyone can read why it passed. To post that comment, the
 workflow's token gains `issues: write` (it had `statuses: write` only).
 
