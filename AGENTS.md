@@ -47,9 +47,10 @@ reads from and writes to `CloudworkSystems/open-convo`.
   [docs/plans/merge-gate.md](docs/plans/merge-gate.md)).** GitHub merges a
   pull request when the gate passes: `tests` and `codex-approved` pass on the
   latest commit, and the owner approves any protected path in
-  `.github/CODEOWNERS`. Authors in the main build switch on auto-merge when
-  they open a pull request; for outside builders, the coordinator switches it
-  on after its plan check passes. Agents never merge by hand. Every agent
+  `.github/CODEOWNERS`. Claude-built and Codex-built pull requests open with
+  auto-merge off. The coordinator switches it on once the independent review
+  ("Gemini reviews" below) and any plan check are clean on the latest
+  commit; for GrokBot, after its plan check passes. Agents never merge by hand. Every agent
   signs in to GitHub as `cloudwork-bot` (three app exceptions are listed in
   Accounts And Provenance), so the owner can approve their protected-path
   pull requests. Codex reviews every pull request on
@@ -212,8 +213,8 @@ request itself, so the owner doesn't have to carry messages:
 | Who | Account | Its one job |
 |---|---|---|
 | The owner | `CloudworkSystems` | Decisions, approvals on protected paths, the 8 AM list |
-| Claude coordinator (thread "261012 OC Coordinator") | `cloudwork-bot` | The planning session in plans and earlier decisions: checks outside builders' pull requests against their plans, switches on auto-merge when a check passes (for Codex-built work, also only after the independent review is clean), answers builders' plan questions, keeps this table current |
-| Claude building sessions | `cloudwork-bot` | Build on a named branch; open the pull request with auto-merge on |
+| Claude coordinator (thread "261012 OC Coordinator") | `cloudwork-bot` | The planning session in plans and earlier decisions: checks outside builders' pull requests against their plans, switches on auto-merge once the independent review and any plan check are clean on the latest commit, answers builders' plan questions, keeps this table current |
+| Claude building sessions | `cloudwork-bot` | Build on a named branch; open the pull request with auto-merge off (the coordinator switches it on) |
 | GrokBot teams (Cursor) | `cloudwork-bot` | Each builds one module from its plan and fixes findings on its own pull request |
 | Codex | its own app | Reviews every pull request; builds Codex modules |
 | Gemini Code Assist | its own app | Impartial reviewer of Codex-built and Claude-built pull requests (advisory for now) |

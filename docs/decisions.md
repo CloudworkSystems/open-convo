@@ -12,7 +12,10 @@ full plan and history are in [PLAN.md](../PLAN.md).
   work. Gemini is advisory to start: critical and high findings count as P1,
   medium as P2, fixed or answered before auto-merge goes on; no required
   check reads it yet. Until it posts reviews, a fresh Claude review stands
-  in. Agents ask for `/gemini review` only from `cloudwork-bot` (AGENTS.md
+  in. Claude-built and Codex-built pull requests open with auto-merge off;
+  the coordinator switches it on once the independent review and any plan
+  check are clean on the latest commit.
+  Agents ask for `/gemini review` only from `cloudwork-bot` (AGENTS.md
   "Review Loop"). Open: Argon through the Gemini CLI or an API key kept as a
   repository secret, and whether Gemini becomes a required check.
 - **Oct 23:** Mac app builds and full Mac test runs on the owner's Mac go one
