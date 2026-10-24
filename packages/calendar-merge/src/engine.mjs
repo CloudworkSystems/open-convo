@@ -9,7 +9,7 @@ import {
 } from './time.mjs';
 
 export const SCHEMA_VERSION = 1;
-export const LIMITS = Object.freeze({
+const DEFAULT_LIMITS = {
   sources: 20,
   sourceBytes: 5 * 1024 * 1024,
   idLength: 40,
@@ -19,22 +19,38 @@ export const LIMITS = Object.freeze({
   seriesSteps: 100_000, // repeat periods visited for one series
   callSteps: 2_000_000, // repeat periods visited in one call
   seriesValues: 50_000, // RDATE and EXDATE values in one series
-  callValues: 200_000, // dates read through a time zone in one call
+  callValues: 1_000_000, // dates read through a time zone in one call
+  callOccurrences: 100_000, // occurrences listed by one call
   // Each source gets an equal share of the call's steps and values, so one
   // hostile calendar can only use up its own share.
-});
+};
+export const LIMITS = Object.freeze({ ...DEFAULT_LIMITS });
+
+// The limits in force. Only tests change them (setLimitsForTests), to reach
+// a budget with small inputs.
+let limits = { ...DEFAULT_LIMITS };
+export function setLimitsForTests(overrides) {
+  limits = { ...DEFAULT_LIMITS, ...overrides };
+  return () => { limits = { ...DEFAULT_LIMITS }; };
+}
 
 // The work budget of one source in one call.
 function sourceBudget(sourceCount) {
-  const stepsShare = Math.floor(LIMITS.callSteps / Math.max(1, sourceCount));
-  const valuesShare = Math.floor(LIMITS.callValues / Math.max(1, sourceCount));
-  return { steps: stepsShare, values: valuesShare, stepsShare, valuesShare };
+  const n = Math.max(1, sourceCount);
+  const stepsShare = Math.floor(limits.callSteps / n);
+  const valuesShare = Math.floor(limits.callValues / n);
+  const occurrencesShare = Math.floor(limits.callOccurrences / n);
+  return { steps: stepsShare, values: valuesShare, occurrences: occurrencesShare, stepsShare, valuesShare, occurrencesShare };
 }
+
+// A work limit that is the source's share running out (not a per-series
+// limit): another source's copy of the same series may still have room.
+class ShareLimit extends WorkLimit {}
 
 // resolveValue, counted against a source's budget when it needs a time zone.
 function budgetedResolve(value, fallbackZone, budget) {
   if (value.kind === 'date' || value.utc) return resolveValue(value, fallbackZone);
-  if (budget.values <= 0) throw new WorkLimit(`this calendar's share of time zone work (${budget.valuesShare} dates) is used up`);
+  if (budget.values <= 0) throw new ShareLimit(`this calendar's share of time zone work (${budget.valuesShare} dates) is used up`);
   budget.values -= 1;
   return resolveValue(value, fallbackZone);
 }
@@ -58,20 +74,20 @@ function utf8Length(text) {
 
 function checkSources(sources) {
   if (!Array.isArray(sources)) refuse('Calendars must be given as a list.');
-  if (sources.length > LIMITS.sources) refuse(`Too many calendars: ${sources.length} given, at most ${LIMITS.sources}.`);
+  if (sources.length > limits.sources) refuse(`Too many calendars: ${sources.length} given, at most ${limits.sources}.`);
   const seen = new Set();
   return sources.map((source, index) => {
     if (!source || typeof source !== 'object') refuse(`Calendar ${index + 1} is not an object with id, name and ics.`);
     const { id, ics } = source;
-    if (typeof id !== 'string' || id.length < 1 || id.length > LIMITS.idLength) {
-      refuse(`Calendar ${index + 1} needs an id of 1 to ${LIMITS.idLength} characters.`);
+    if (typeof id !== 'string' || id.length < 1 || id.length > limits.idLength) {
+      refuse(`Calendar ${index + 1} needs an id of 1 to ${limits.idLength} characters.`);
     }
     if (seen.has(id)) refuse(`Calendar id "${id}" is used twice; each id must be unique.`);
     seen.add(id);
     const name = source.name === undefined ? id : source.name;
     if (typeof name !== 'string') refuse(`Calendar "${id}" has a name that isn't text.`);
     if (typeof ics !== 'string') refuse(`Calendar "${id}" has no .ics text.`);
-    if (ics.length > LIMITS.sourceBytes || utf8Length(ics) > LIMITS.sourceBytes) {
+    if (ics.length > limits.sourceBytes || utf8Length(ics) > limits.sourceBytes) {
       refuse(`Calendar "${id}" is over 5 MB.`);
     }
     return { id, name, ics, index };
@@ -85,8 +101,8 @@ function checkQuery(query) {
   const toDay = typeof query.to === 'string' ? parseIsoDate(query.to) : null;
   if (toDay === null) refuse('"to" must be a date written YYYY-MM-DD.');
   if (toDay < fromDay) refuse('"to" is before "from".');
-  if (toDay - fromDay + 1 > LIMITS.rangeDates) {
-    refuse(`The range covers ${toDay - fromDay + 1} dates; at most ${LIMITS.rangeDates} are allowed.`);
+  if (toDay - fromDay + 1 > limits.rangeDates) {
+    refuse(`The range covers ${toDay - fromDay + 1} dates; at most ${limits.rangeDates} are allowed.`);
   }
   const zone = canonicalZone(query.timeZone);
   if (!zone) refuse(`"${String(query.timeZone)}" is not a time zone name (use an IANA name such as America/New_York).`);
@@ -130,8 +146,25 @@ function stampOf(prop) {
   return value.day * DAY_MS + value.sec * 1000;
 }
 
+// Decides a full tie between copies by their content (METHOD included), never
+// by their place in the file.
 function fingerprint(raw) {
-  return JSON.stringify([...raw.props.keys()].sort().map((name) => [name, raw.props.get(name).map((p) => [p.params, p.value])]));
+  return JSON.stringify([raw.method, ...[...raw.props.keys()].sort().map((name) => [name, raw.props.get(name).map((p) => [p.params, p.value])])]);
+}
+
+// The last written date an event without repeats can reach, or null.
+function oneOffLastDay(start, first) {
+  const dtend = first('DTEND');
+  const duration = first('DURATION');
+  if (dtend) {
+    const end = parseDateValue(dtend.value, dtend.params);
+    return end ? Math.max(start.day, end.day) : null;
+  }
+  if (duration) {
+    const d = parseDuration(duration.value);
+    return d ? start.day + d.weeks * 7 + d.days + Math.ceil((d.hours * 3600 + d.minutes * 60 + d.seconds) / 86_400) : null;
+  }
+  return start.kind === 'date' ? start.day + 1 : start.day;
 }
 
 // One VEVENT to a copy (an event or a cancellation record), or a problem.
@@ -171,7 +204,18 @@ function interpret(raw, source, ctx, budget) {
     if (!cancelled) return skip('no DTSTART');
     rid = readRid(ctx.zone);
     if (rid?.error) return skip(rid.error);
-    return { copy: { ...base, kind: 'record', rid, ridKey: rid ? keyOf(rid) : null } };
+    return { copy: { ...base, kind: 'record', rid, ridKey: rid ? keyOf(rid) : null, ridRange } };
+  }
+
+  // An event without repeats whose written dates are two days or more outside
+  // the range can't show: it is kept only to take part in the same-UID order,
+  // and costs no time zone work.
+  if (!ridProp && !raw.props.has('RRULE') && !raw.props.has('RDATE')) {
+    const written = parseDateValue(dtstartProp.value, dtstartProp.params);
+    const lastDay = written ? oneOffLastDay(written, first) : null;
+    if (lastDay !== null && (written.day > ctx.toDay + 2 || lastDay < ctx.fromDay - 2)) {
+      return { copy: { ...base, kind: 'event', outOfRange: true, status, rid: null, ridKey: null, ridRange: false } };
+    }
   }
 
   const startValue = parseDateValue(dtstartProp.value, dtstartProp.params);
@@ -296,16 +340,16 @@ function seriesWindow(copy, q) {
 // problems }. A series that would take more work than its share of the
 // budget (its source's share of the call's budget) shows only its first
 // occurrence, with `workLimit` saying why. Each source has its own budget.
-export function expandSeries(copy, q, { forceSingle = false, stats = { steps: 0 } } = {}) {
-  const budget = q.budgets?.[copy.sourceIndex] ?? sourceBudget(1);
+export function expandSeries(copy, q, { forceSingle = false, stats = { steps: 0 }, budgetSource = copy.sourceIndex } = {}) {
+  const budget = q.budgets?.[budgetSource] ?? sourceBudget(1);
   const notSupported = forceSingle || copy.ruleProblem !== null;
   try {
     const result = expandFully(copy, q, notSupported, stats, budget);
-    return { ...result, notSupported, workLimit: null };
+    return { ...result, notSupported, workLimit: null, shareLimit: false };
   } catch (error) {
     if (!(error instanceof WorkLimit)) throw error;
     const { instances } = expandFully(copy, q, true, { steps: 0 }, budget);
-    return { instances, problems: [], notSupported: true, workLimit: error.message };
+    return { instances, problems: [], notSupported: true, workLimit: error.message, shareLimit: error instanceof ShareLimit };
   } finally {
     budget.steps = Math.max(0, budget.steps - stats.steps);
   }
@@ -317,13 +361,13 @@ function expandFully(copy, q, single, stats, budget) {
   const all = new Map();
   const allDay = copy.start.date;
   const window = seriesWindow(copy, q);
-  const sourceBound = budget.steps < LIMITS.seriesSteps;
-  const maxSteps = sourceBound ? budget.steps : LIMITS.seriesSteps;
+  const sourceBound = budget.steps < limits.seriesSteps;
+  const maxSteps = sourceBound ? budget.steps : limits.seriesSteps;
   const expandRule = (...args) => {
     try {
       return expandRuleDays(...args, stats, maxSteps);
     } catch (error) {
-      if (error instanceof WorkLimit && sourceBound) throw new WorkLimit(`this calendar's share of the work (${budget.stepsShare} repeat periods) is used up`);
+      if (error instanceof WorkLimit && sourceBound) throw new ShareLimit(`this calendar's share of the work (${budget.stepsShare} repeat periods) is used up`);
       throw error;
     }
   };
@@ -335,8 +379,8 @@ function expandFully(copy, q, single, stats, budget) {
     const key = keyOf(resolvedStart);
     if (!all.has(key)) all.set(key, { ...instance, origKey: key, origLabel: labelOf(resolvedStart) });
   };
-  if (!single && copy.rdates.length + copy.exdates.length > LIMITS.seriesValues) {
-    throw new WorkLimit(`more than ${LIMITS.seriesValues} RDATE and EXDATE values`);
+  if (!single && copy.rdates.length + copy.exdates.length > limits.seriesValues) {
+    throw new WorkLimit(`more than ${limits.seriesValues} RDATE and EXDATE values`);
   }
 
   if (allDay) {
@@ -357,7 +401,7 @@ function expandFully(copy, q, single, stats, budget) {
       let pastUntil;
       if (until && until.kind === 'date') pastUntil = (day) => day > until.day;
       else if (until) {
-        const untilResolved = resolve(until);
+        const untilResolved = resolveValue(until, zone); // one per series: not counted
         const untilMs = untilResolved.error ? Infinity : untilResolved.ms;
         pastUntil = (day) => instantOf(day) > untilMs;
       }
@@ -474,7 +518,6 @@ function overrideInstance(copy) {
 }
 
 function mergeUid(group, q, problems) {
-  const out = [];
   const masterCopies = [...group.masters].sort(compareCopies);
   const masterAll = [...group.masters, ...group.records].sort(compareCopies);
   const display = masterCopies[0] ?? null;
@@ -500,13 +543,24 @@ function mergeUid(group, q, problems) {
     const winner = contenders[0];
     if (winner.virtualMaster) continue; // the series copy is newer: nothing changes
     const sources = new Set([...masterSources, ...copies.map((c) => c.sourceIndex), ...entry.records.map((r) => r.sourceIndex)]);
-    changed.set(ridKey, { override: copies[0] ?? null, cancelled: winner.kind === 'record', sources, rid: entry.rid });
+    // Only the winning copy's RANGE counts: a stale RANGE override that loses
+    // to a newer cancellation changes nothing beyond its own occurrence.
+    changed.set(ridKey, { override: copies[0] ?? null, cancelled: winner.kind === 'record', sources, rid: entry.rid, range: Boolean(winner.ridRange) });
   }
 
-  const thisAndFuture = [...changed.values()].filter((c) => c.override?.ridRange);
-  if (display) {
-    const forceSingle = thisAndFuture.length > 0;
-    const { instances, notSupported, workLimit, problems: found } = expandSeries(display, q, { forceSingle });
+  const items = [];
+  let degraded = false;
+  let lineFor = display ?? [...group.overrides.values()].flatMap((o) => o.copies)[0];
+  if (display && !display.outOfRange) {
+    const thisAndFuture = [...changed.values()].some((c) => c.range);
+    // The series is charged to the shown copy's source; if that source's
+    // share is used up, another source holding a copy of it may pay.
+    let result;
+    for (const budgetSource of [...new Set(masterCopies.map((c) => c.sourceIndex))]) {
+      result = expandSeries(display, q, { forceSingle: thisAndFuture, budgetSource });
+      if (!result.shareLimit) break;
+    }
+    const { instances, notSupported, workLimit, problems: found } = result;
     problems.push(...found);
     if (workLimit) {
       problems.push({ sourceIndex: display.sourceIndex, line: display.line, text: `"${display.uid}" needs too much work to expand (${workLimit}); only its first occurrence is shown` });
@@ -514,38 +568,47 @@ function mergeUid(group, q, problems) {
       const why = display.ruleProblem ?? 'RANGE=THISANDFUTURE';
       problems.push({ sourceIndex: display.sourceIndex, line: display.line, text: `repeat rule of "${display.uid}" not supported (${why}); only its first occurrence is shown` });
     }
-    let list = [...instances.values()].sort((a, b) => (a.allDay ? a.startDay - b.startDay : a.startMs - b.startMs) || byCodeUnits(a.origKey, b.origKey));
-    if (list.length > LIMITS.seriesOccurrences) {
-      problems.push({ sourceIndex: display.sourceIndex, line: display.line, text: `"${display.uid}" has more than ${LIMITS.seriesOccurrences} occurrences in the range; only the first ${LIMITS.seriesOccurrences} are shown` });
-      list = list.slice(0, LIMITS.seriesOccurrences);
-    }
-    for (const instance of list) {
+    degraded = notSupported;
+    for (const instance of instances.values()) {
       const change = changed.get(instance.origKey);
-      if (change && change.override) continue; // replaced by the changed copy below
-      out.push(makeOccurrence(display, instance, {
+      // A degraded series shows only its first occurrence: changed copies
+      // are left out, though a cancellation of that occurrence still counts.
+      if (change && change.override && !degraded) continue; // replaced by the changed copy below
+      items.push({ copy: display, instance, extra: {
         sources: change ? change.sources : masterSources,
         cancelled: seriesCancelled || Boolean(change?.cancelled),
         isRepeat: display.isRepeat,
         isChanged: false,
         repeatNotSupported: notSupported,
-      }));
+      } });
     }
   }
 
-  for (const change of changed.values()) {
-    if (!change.override) continue;
-    const instance = overrideInstance(change.override);
-    if (!inRange(instance, q)) continue;
-    out.push(makeOccurrence(change.override, instance, {
-      origLabel: labelOf(change.rid),
-      sources: change.sources,
-      cancelled: seriesCancelled || change.cancelled,
-      isRepeat: true,
-      isChanged: true,
-      repeatNotSupported: Boolean(change.override.ridRange),
-    }));
+  if (!degraded) {
+    for (const change of changed.values()) {
+      if (!change.override) continue;
+      const instance = overrideInstance(change.override);
+      if (!inRange(instance, q)) continue;
+      items.push({ copy: change.override, instance, extra: {
+        origLabel: labelOf(change.rid),
+        sources: change.sources,
+        cancelled: seriesCancelled || change.cancelled,
+        isRepeat: true,
+        isChanged: true,
+        repeatNotSupported: false,
+      } });
+    }
   }
-  return out;
+
+  // The series limit counts the series' own and its changed occurrences.
+  const startOf = (item) => (item.instance.allDay ? item.instance.startDay * DAY_MS : item.instance.startMs);
+  items.sort((a, b) => (startOf(a) - startOf(b)) || byCodeUnits(a.extra.origLabel ?? a.instance.origLabel, b.extra.origLabel ?? b.instance.origLabel));
+  if (items.length > limits.seriesOccurrences) {
+    problems.push({ sourceIndex: lineFor.sourceIndex, line: lineFor.line, text: `"${lineFor.uid}" has more than ${limits.seriesOccurrences} occurrences in the range; only the first ${limits.seriesOccurrences} are shown` });
+    items.length = limits.seriesOccurrences;
+  }
+  const occurrences = items.map(({ copy, instance, extra }) => makeOccurrence(copy, instance, extra));
+  return { occurrences, charge: lineFor };
 }
 
 // Different UIDs, same title and time: grouped one to one, never two
@@ -673,8 +736,28 @@ export async function mergeCalendars(sources, query) {
   }
 
   let occurrences = [];
-  for (const uid of [...groups.keys()].sort(byCodeUnits)) occurrences.push(...mergeUid(groups.get(uid), q, problems));
-  if (!q.includeCancelled) occurrences = occurrences.filter((o) => o.status !== 'cancelled');
+  // Occurrences are charged to their source's share, in UID order, so the
+  // same input always stops at the same place.
+  const dropped = new Map();
+  for (const uid of [...groups.keys()].sort(byCodeUnits)) {
+    const { occurrences: found, charge } = mergeUid(groups.get(uid), q, problems);
+    const shown = q.includeCancelled ? found : found.filter((o) => o.status !== 'cancelled');
+    if (!shown.length) continue;
+    const budget = q.budgets[charge.sourceIndex];
+    if (shown.length > budget.occurrences) {
+      const entry = dropped.get(charge.sourceIndex) ?? { count: 0, events: 0, first: charge };
+      entry.count += shown.length - budget.occurrences;
+      entry.events += 1;
+      dropped.set(charge.sourceIndex, entry);
+      shown.length = budget.occurrences;
+    }
+    budget.occurrences -= shown.length;
+    occurrences.push(...shown);
+  }
+  for (const [sourceIndex, entry] of dropped) {
+    const share = q.budgets[sourceIndex].occurrencesShare;
+    problems.push({ sourceIndex, line: entry.first.line, text: `${entry.count} occurrences of ${entry.events} event${entry.events === 1 ? '' : 's'} not shown, the first "${entry.first.uid}": this calendar's share of occurrences (${share}) is used up` });
+  }
   occurrences = sortOccurrences(matchTitleAndTime(occurrences), q);
 
   problems.sort((a, b) => (a.sourceIndex - b.sourceIndex) || (a.line - b.line) || byCodeUnits(a.text, b.text));

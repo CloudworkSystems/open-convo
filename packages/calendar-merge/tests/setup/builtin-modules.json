@@ -196,6 +196,14 @@
     "mark": "no network"
   },
   {
+    "name": "sea",
+    "mark": "no network"
+  },
+  {
+    "name": "sqlite",
+    "mark": "no network"
+  },
+  {
     "name": "stream",
     "mark": "no network"
   },
@@ -217,6 +225,14 @@
   },
   {
     "name": "sys",
+    "mark": "no network"
+  },
+  {
+    "name": "test",
+    "mark": "no network"
+  },
+  {
+    "name": "test/reporters",
     "mark": "no network"
   },
   {

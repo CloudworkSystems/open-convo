@@ -75,7 +75,8 @@ console.log(formatAgenda(result));
   and periods) and `EXDATE` (several lines, comma lists, matched by instant,
   or by date for all-day events); changed occurrences (`RECURRENCE-ID`).
   A series without `COUNT` jumps straight to the range; one with `COUNT` is
-  counted from `DTSTART`. At most 10,000 occurrences of one series in a range.
+  counted from `DTSTART`. At most 10,000 occurrences of one series in a range,
+  its changed occurrences included.
 - Status: none means `confirmed`. `STATUS:CANCELLED` or a `METHOD:CANCEL` file
   cancels; a cancelled series hides all its occurrences. A cancelled `VEVENT`
   with a `UID` and no `DTSTART` is a cancellation record, matched by `UID`
@@ -96,7 +97,9 @@ console.log(formatAgenda(result));
 `BYSECOND`, `BYWEEKNO`, `BYYEARDAY`; `RANGE=THISANDFUTURE`; `COUNT` above
 1,000,000; and rules the standard doesn't allow (see E2). Such a series shows
 only its first occurrence, marked `repeatNotSupported: true`, and is listed in
-`problems`. Fetching, editing, alarms, free/busy and to-dos are out of scope.
+`problems`; its changed copies are left out (E30). `RANGE=THISANDFUTURE` counts
+only on the winning copy of a changed occurrence, which can be a cancellation
+record (E29). Fetching, editing, alarms, free/busy and to-dos are out of scope.
 
 ## Output
 
@@ -130,36 +133,49 @@ only its first occurrence, marked `repeatNotSupported: true`, and is listed in
 Calendars come from outside, so one call's work is bounded, not only its
 input size.
 
-- A series may visit at most 100,000 repeat periods and hold at most 50,000
-  `RDATE` and `EXDATE` values.
-- One call may visit at most 2,000,000 repeat periods and read at most
-  200,000 dates through a time zone. Each source gets an equal share of both
-  (with 20 sources, 100,000 periods and 10,000 dates each), so a hostile
-  calendar can only use up its own share; a series is charged to the source
-  of the copy that is shown.
+- A series may visit at most 100,000 repeat periods, hold at most 50,000
+  `RDATE` and `EXDATE` values, and list at most 10,000 occurrences.
+- One call may visit at most 2,000,000 repeat periods, read at most
+  1,000,000 dates through a time zone, and list at most 100,000 occurrences.
+  Each source gets an equal share of all three (with 20 sources: 100,000
+  periods, 50,000 dates and 5,000 occurrences each), so a hostile calendar
+  can only use up its own share.
+- A series is charged to the source of the copy that is shown. If that
+  source's share is used up, the next source holding a copy of the same
+  series pays instead.
+- Events without repeats (no `RRULE`, `RDATE` or `RECURRENCE-ID`) whose
+  written dates are two days or more outside the range are set aside before
+  any time zone work (E28), so years of past meetings cost almost nothing and
+  don't use up the share.
 - Dates read through a time zone include `DTSTART`, `DTEND`,
-  `RECURRENCE-ID`, `RDATE`, `EXDATE` and a local `UNTIL`. UTC times and
-  all-day dates cost nothing. `DTSTAMP` and `LAST-MODIFIED` are always read
-  as UTC (E20), so they never need time zone work.
+  `RECURRENCE-ID`, `RDATE` and `EXDATE`. UTC times and all-day dates cost
+  nothing; a series' `UNTIL` is read once and isn't counted. `DTSTAMP` and
+  `LAST-MODIFIED` are always read as UTC (E20).
 - A series that would go past a limit shows only its first occurrence,
   marked `repeatNotSupported: true`, and is listed in `problems` ("needs too
   much work to expand"). An event whose own `DTSTART`, `DTEND` or
-  `RECURRENCE-ID` can't be read because its source's share is used up is
+  `RECURRENCE-ID` can't be read because its source's date share is used up is
   skipped; each source lists these once ("N events skipped, the first
-  here"). Which events those are can depend on their order in the file.
+  here"). Occurrences past a source's occurrence share are left out, in UID
+  order, and each source lists that once ("N occurrences of M events not
+  shown"). For ordinary calendars none of these shares is reached, so the
+  result doesn't depend on the order of events or the number of sources.
 - `RDATE` and `EXDATE` values whose written date is outside the range (with a
   day to spare) are skipped before any time zone work. Time zone offsets are
   cached per zone and hour, and time zone names are cached.
 
 `tests/16-work-budget.test.mjs` covers a hostile 164-byte `COUNT` rule, a
-hostile source next to a normal one, large out-of-range `RDATE` lists, and
-the per-source date share. Those tests count problems and occurrences rather
-than time.
+hostile source next to a normal one, years of one-off history (in both
+orders and with extra sources), large out-of-range `RDATE` lists, and the
+date and occurrence shares. Tests reach the shares with small inputs through
+`setLimitsForTests` in `src/engine.mjs`, and count problems and occurrences
+rather than time.
 
 ## Edge cases
 
 Cases the plan doesn't name, decided by RFC 5545's defaults where it has one.
-Each has a test in `tests/15-edge-cases.test.mjs` under the same number.
+Each has a test under the same number, in `tests/15-edge-cases.test.mjs`
+(E1 to E27) or `tests/17-review-fixes.test.mjs` (E28 to E31).
 
 - **E1.** `DTSTART` always counts as the first occurrence, even when it
   doesn't match the rule (RFC 5545 3.3.10).
@@ -223,6 +239,20 @@ Each has a test in `tests/15-edge-cases.test.mjs` under the same number.
   it reads whole and line numbers stay the same. The
   library takes text, so anything else that hands it text (a later fetch
   layer, for example) needs the same care.
+- **E28.** An event without repeats whose written dates are two days or more
+  outside the range is set aside unread: it still takes part in the same-`UID`
+  order (so a newer copy moved out of the range still wins), but problems in
+  its dates or time zone aren't listed.
+- **E29.** `RANGE=THISANDFUTURE` counts only when it is on the winning copy
+  of a changed occurrence, an override or a cancellation record; a stale
+  `RANGE` override that loses to a newer cancellation changes only its own
+  occurrence.
+- **E30.** A series shown as its first occurrence only (an unsupported rule,
+  `RANGE=THISANDFUTURE` or a work limit) leaves out its changed copies; a
+  cancellation of that first occurrence still applies.
+- **E31.** `METHOD` is part of the content that decides a full tie between
+  copies, so a `PUBLISH` and a `CANCEL` block of the same event give the same
+  result in either order.
 
 ## Windows time zone names
 
@@ -236,8 +266,10 @@ copied as data. Unicode CLDR data is used under the Unicode License v3
 ## Tests
 
 `tests/01-…` to `tests/14-…` follow the plan's numbered tests, and
-`tests/15-edge-cases.test.mjs` the edge cases above, and
-`tests/16-work-budget.test.mjs` the work limits. Every test file loads
+`tests/15-edge-cases.test.mjs` the edge cases above,
+`tests/16-work-budget.test.mjs` the work limits, and
+`tests/17-review-fixes.test.mjs` E28 to E31 and the series limit for changed
+occurrences. Every test file loads
 `tests/setup/guard.mjs` first, which blocks every network and process entry
 point of Node 22's built-in modules and every file write, and fails a test
 that calls one; `tests/setup/builtin-modules.json` lists Node's built-in

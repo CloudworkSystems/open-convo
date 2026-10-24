@@ -78,7 +78,10 @@ test('a full merge and agenda call no network, process or write entry point', as
 
 test('the built-in module snapshot covers every Node built-in, and the stubbed ones match the guard', () => {
   const known = new Set(snapshot.map((entry) => entry.name));
-  const missing = builtinModules.filter((name) => !known.has(name));
+  // Newer Node versions also list prefix-only built-ins as "node:name" (Node 24:
+  // node:sea, node:sqlite, node:test, node:test/reporters); the snapshot holds
+  // them without the prefix.
+  const missing = builtinModules.map((name) => name.replace(/^node:/, '')).filter((name) => !known.has(name));
   assert.deepEqual(missing, [], 'a new built-in module: decide whether it can reach the network, stub it in tests/setup/guard.mjs, then add it to the snapshot');
   const marks = new Set(['network or process: stubbed', 'network only through the stubbed net and tls entry points', 'no network']);
   for (const entry of snapshot) assert.ok(marks.has(entry.mark), entry.name);

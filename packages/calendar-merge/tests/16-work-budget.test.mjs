@@ -4,7 +4,8 @@
 import './setup/guard.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { cal, ev, merge } from './helpers.mjs';
+import { cal, ev, merge, reorderEvents } from './helpers.mjs';
+import { setLimitsForTests } from '../src/engine.mjs';
 import { LIMITS } from '../src/index.mjs';
 import { formatDate } from '../src/time.mjs';
 
@@ -43,21 +44,73 @@ test('a hostile source uses up only its own share: the reviewer\'s cross-source 
 });
 
 test('time zone work for DTSTART and DTEND counts against the source\'s share; the other sources are untouched', async () => {
-  // With 20 sources each gets callValues / 20 dates; each event here needs two.
-  const share = Math.floor(LIMITS.callValues / 20);
-  const count = share / 2 + 1;
-  const lines = [];
-  for (let i = 0; i < count; i += 1) {
-    const day = formatDate(20_000 + (i % 700)).replaceAll('-', ''); // 2024-10-04 to 2026-09-03
-    lines.push(ev(`UID:z${i}@test.example`, 'SUMMARY:Z', `DTSTART;TZID=Europe/Paris:${day}T090000`, `DTEND;TZID=Europe/Paris:${day}T100000`));
+  // Small limits so a small input reaches them: 2 sources, 20 dates each.
+  const restore = setLimitsForTests({ callValues: 40 });
+  try {
+    const busy = cal(...Array.from({ length: 15 }, (_, i) => ev(`UID:z${String(i).padStart(2, '0')}@test.example`, 'SUMMARY:Z',
+      `DTSTART;TZID=Europe/Paris:2026110${1 + (i % 7)}T090000`, `DTEND;TZID=Europe/Paris:2026110${1 + (i % 7)}T100000`)));
+    const calm = cal(ev('UID:ok@test.example', 'SUMMARY:Fine', 'DTSTART;TZID=America/New_York:20261103T090000', 'DURATION:PT1H'));
+    const result = await merge({ busy, calm }, NOV);
+    assert.equal(result.occurrences.filter((o) => o.title === 'Z').length, 10);
+    assert.equal(result.occurrences.filter((o) => o.title === 'Fine').length, 1);
+    assert.deepEqual(result.problems, ['Source "busy", line 64: 5 events skipped, the first here: this calendar\'s share of time zone work (20 dates) is used up.']);
+  } finally {
+    restore();
   }
-  const sources = { busy: cal(...lines) };
-  for (let i = 1; i < 20; i += 1) sources[`s${i}`] = cal(ev(`UID:ok${i}@test.example`, 'SUMMARY:Fine', 'DTSTART;TZID=America/New_York:20261103T090000', 'DURATION:PT1H'));
-  const result = await merge(sources, NOV);
-  assert.deepEqual(result.occurrences.map((o) => [o.title, o.sources.length]), [['Fine', 19]]);
-  const [problem] = result.problems;
-  assert.equal(result.problems.length, 1);
-  assert.match(problem, new RegExp(`^Source "busy", line \\d+: 1 event skipped: this calendar's share of time zone work \\(${share} dates\\) is used up\\.$`));
+});
+
+test('old one-off history costs no time zone work: the reviewer\'s q1 case, in both orders and with more sources', async () => {
+  const history = [];
+  for (let i = 0; i < 5_200; i += 1) {
+    const day = formatDate(17_532 + (i % 2_900)).replaceAll('-', ''); // 2018-01-01 onward
+    history.push(ev(`UID:h${i}@work.example`, 'SUMMARY:Old meeting', `DTSTART;TZID=America/New_York:${day}T100000`, `DTEND;TZID=America/New_York:${day}T110000`, 'DTSTAMP:20250101T000000Z'));
+  }
+  const inRange = [
+    ev('UID:review@work.example', 'SUMMARY:Quarterly review', 'DTSTART;TZID=America/New_York:20261103T140000', 'DTEND;TZID=America/New_York:20261103T150000'),
+    ev('UID:standup@work.example', 'SUMMARY:Standup', 'DTSTART;TZID=America/New_York:20260105T090000', 'DURATION:PT15M', 'RRULE:FREQ=WEEKLY;BYDAY=MO,TH;UNTIL=20271231T090000'),
+  ];
+  const seen = new Set();
+  for (const ics of [cal(...history, ...inRange), cal(...inRange, ...history)]) {
+    for (const extra of [0, 4, 19]) {
+      const sources = [{ id: 'work', name: 'work', ics }];
+      for (let i = 0; i < extra; i += 1) sources.push({ id: `s${i}`, name: `s${i}`, ics: cal() });
+      const result = await merge(sources, NOV);
+      assert.deepEqual(result.occurrences.map((o) => [o.title, o.start.local, o.repeatNotSupported]), [
+        ['Standup', '2026-11-02T09:00:00-05:00', false],
+        ['Quarterly review', '2026-11-03T14:00:00-05:00', false],
+        ['Standup', '2026-11-05T09:00:00-05:00', false],
+      ]);
+      assert.deepEqual(result.problems, []);
+      seen.add(JSON.stringify(result.occurrences.map(({ sources: _, ...o }) => o)));
+    }
+  }
+  assert.equal(seen.size, 1);
+});
+
+test('occurrences are capped per source share, deterministically, with a problem', async () => {
+  const restore = setLimitsForTests({ callOccurrences: 50 });
+  try {
+    const daily = cal(...Array.from({ length: 10 }, (_, i) => ev(`UID:d${i}@test.example`, 'SUMMARY:Daily', `DTSTART:20261101T${String(10 + i)}0000Z`, 'RRULE:FREQ=DAILY')));
+    const other = cal(ev('UID:o@test.example', 'SUMMARY:Other', 'DTSTART:20261101T080000Z', 'RRULE:FREQ=DAILY'));
+    const result = await merge({ daily, other }, NOV);
+    assert.equal(result.occurrences.filter((o) => o.title === 'Daily').length, 25);
+    assert.equal(result.occurrences.filter((o) => o.title === 'Other').length, 7);
+    // d0, d1 and d2 fit (7 + 7 + 7 = 21), d3 gets 4 of 7, d4 to d9 none.
+    assert.deepEqual(result.problems, ['Source "daily", line 22: 45 occurrences of 7 events not shown, the first "d3@test.example": this calendar\'s share of occurrences (25) is used up.']);
+    const again = await merge({ daily: reorderEvents(daily, (ix) => [...ix].reverse()), other }, NOV);
+    assert.deepEqual(again.occurrences, result.occurrences);
+  } finally {
+    restore();
+  }
+});
+
+test('a series whose shown copy\'s source is out of budget is paid for by another source holding a copy', async () => {
+  const invite = cal(...Array.from({ length: 20 }, (_, i) => hostile(`!${i}`)),
+    ev('UID:standup@work.example', 'SUMMARY:Standup', 'DTSTART;TZID=America/New_York:20260105T090000', 'DURATION:PT30M', 'RRULE:FREQ=WEEKLY;BYDAY=MO,TH', 'DTSTAMP:20260102T000000Z'));
+  const work = cal(ev('UID:standup@work.example', 'SUMMARY:Standup', 'DTSTART;TZID=America/New_York:20260105T090000', 'DURATION:PT30M', 'RRULE:FREQ=WEEKLY;BYDAY=MO,TH', 'DTSTAMP:20260101T000000Z'));
+  const result = await merge({ work, invite }, { from: '2026-11-01', to: '2026-11-30' });
+  assert.equal(result.occurrences.filter((o) => o.title === 'Standup').length, 9);
+  assert.ok(!result.problems.some((p) => p.includes('standup')));
 });
 
 test('DTSTAMP and LAST-MODIFIED are read as UTC: a TZID on them is ignored', async () => {
