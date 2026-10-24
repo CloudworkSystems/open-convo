@@ -35,6 +35,7 @@ export const LIMITS = Object.freeze({
   snippetChars: 2_000,
   questionSnippetChars: 1_000,
   reasonChars: 160,
+  ruleMatchChars: 80,
 });
 
 export const DEFAULTS = Object.freeze({ confidenceFloor: 0.6, timeoutMs: 30_000 });

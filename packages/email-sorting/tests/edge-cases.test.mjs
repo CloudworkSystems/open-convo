@@ -1,4 +1,4 @@
-// One test per choice in the README's "Edge cases" section (E1 to E16):
+// One test per choice in the README's "Edge cases" section (E1 to E18):
 // cases the plan doesn't name, settled by the RFC 5322 (and RFC 3339, RFC
 // 2919, RFC 3834) defaults.
 
@@ -190,4 +190,22 @@ test('E16. a supplied settings value of null, a list, text or a number is refuse
   }
   const result = await sortMessages(input([mail()]), undefined, createScriptedClassifier([{ inbox: 'home', id: 'm-1', answer: answer('people') }]));
   assert.equal(byId(result, 'm-1').pile, 'people');
+});
+
+test('E17. a rule shows in reasons as one trimmed line of at most 80 characters', async () => {
+  const padded = `@ \t Shop.example\n${' '.repeat(10_000)}\t`;
+  const long = `${'a'.repeat(200)}@long.example`;
+  const { result, classifier } = await ask([
+    mail({ id: 'a', from: { address: 'x@shop.example' } }),
+    mail({ id: 'b', from: { address: 'y@shop.example' } }),
+    mail({ id: 'c', from: { address: long } }),
+  ], [], settings({ senderRules: [{ match: padded, category: 'receipts' }, { match: ` ${long}\t`, category: 'alerts' }] }));
+  assert.equal(classifier.questions.length, 0);
+  for (const id of ['a', 'b']) {
+    assert.equal(byId(result, id).pile, 'receipts');
+    assert.equal(byId(result, id).reason, 'Your rule: mail from @Shop.example goes to Receipts');
+  }
+  assert.equal(byId(result, 'c').pile, 'alerts');
+  assert.equal(byId(result, 'c').reason, `Your rule: mail from ${'a'.repeat(79)}… goes to Alerts`);
+  for (const id of ['a', 'b', 'c']) assert.doesNotMatch(byId(result, id).reason, /[\n\t\u2028\u2029]|\s{2}/);
 });

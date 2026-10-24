@@ -218,6 +218,13 @@ a test in `tests/edge-cases.test.mjs` under the same number.
 - **E16.** Settings that are supplied must be an object: a settings file
   holding `null` (or a list, text or number) is refused. Only leaving the
   settings out gives the defaults.
+- **E17.** A sender rule shows in its reason as one line: white space
+  (line feeds, tabs, runs of spaces) becomes one space, the match is
+  trimmed (after the `@` too, for a domain rule) and cut to 80 characters,
+  ending in `…` when cut. Letter case is kept as written.
+- **E18.** A file path that opens but can't be read (for example a folder)
+  is refused with the same plain message and exit code 1 as one that can't
+  be opened.
 
 ## What this slice does not do
 

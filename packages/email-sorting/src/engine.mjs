@@ -196,6 +196,25 @@ function ruleFor(address, rules) {
   return rules.find(rule => rule.match.startsWith('@') && `@${lower(rule.match.slice(1).trim())}` === domain) || null;
 }
 
+// A rule's match as shown in a reason: one line (line feeds, tabs and other
+// white space collapse to one space), trimmed (after the "@" too, for a
+// domain rule) and cut to 80 characters, the last being "…" when cut. A
+// padded or very long setting can't grow every reason. Worked out once per
+// rule, not once per conversation.
+const shownMatches = new WeakMap();
+
+function shownMatch(match) {
+  const oneLine = text => text.replace(/\s+/g, ' ').trim();
+  const text = match.startsWith('@') ? `@${oneLine(match.slice(1))}` : oneLine(match);
+  if (cutChars(text, LIMITS.ruleMatchChars) === text) return text;
+  return `${cutChars(text, LIMITS.ruleMatchChars - 1).trimEnd()}…`;
+}
+
+function ruleReason(rule) {
+  if (!shownMatches.has(rule)) shownMatches.set(rule, shownMatch(rule.match));
+  return `Your rule: mail from ${shownMatches.get(rule)} goes to ${PILE_NAMES[rule.category]}`;
+}
+
 // The model's reason, cleaned: line breaks and tabs become spaces, other
 // control characters are removed, runs of white space collapse to one
 // space, the result is trimmed and cut to 160 characters.
@@ -298,7 +317,7 @@ async function decide(conversation, settings, classifier, problems) {
   const message = deciding.source;
   const rule = ruleFor(message.from.address, settings.senderRules);
   if (rule) {
-    return { pile: rule.category, decidedBy: 'rule', reason: `Your rule: mail from ${rule.match} goes to ${PILE_NAMES[rule.category]}` };
+    return { pile: rule.category, decidedBy: 'rule', reason: ruleReason(rule) };
   }
   const facts = headerFacts(message, settings);
   const question = buildQuestion(deciding, facts, items.length);

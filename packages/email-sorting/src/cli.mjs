@@ -33,7 +33,8 @@ function parseArgs(argv) {
   return args;
 }
 
-// Refuses a file over the size limit before reading it.
+// Refuses a file over the size limit before reading it. Open, size and
+// read failures all become the plain refusal (exit code 1).
 function readLimited(path, label) {
   let fd;
   try {
@@ -42,11 +43,21 @@ function readLimited(path, label) {
     throw new EmailSortError(`Couldn't open the ${label} file.`);
   }
   try {
-    const { size } = fstatSync(fd);
+    let size;
+    try {
+      ({ size } = fstatSync(fd));
+    } catch {
+      throw new EmailSortError(`Couldn't read the ${label} file.`);
+    }
     if (size > LIMITS.fileBytes) {
       throw new EmailSortError(`The ${label} file is ${size} bytes; the limit is ${LIMITS.fileBytes} bytes (5 MB).`);
     }
-    return readFileSync(fd);
+    // A path can open but not read, for example a folder.
+    try {
+      return readFileSync(fd);
+    } catch {
+      throw new EmailSortError(`Couldn't read the ${label} file.`);
+    }
   } finally {
     closeSync(fd);
   }

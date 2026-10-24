@@ -23,6 +23,16 @@ test('the command reports a missing file plainly', async () => {
   assert.match(run.stderr, /^email-sorting: Couldn't open the messages file\./);
 });
 
+test('E18. the command refuses a path that opens but cannot be read, such as a folder', async () => {
+  const folder = fileURLToPath(new URL('./fixtures/', import.meta.url));
+  for (const [argv, label] of [[['--messages', folder], 'messages'], [['--messages', FIXTURE, '--settings', folder], 'settings']]) {
+    const run = await runCommand(main, argv);
+    assert.equal(run.code, 1, label);
+    assert.equal(run.stdout, '');
+    assert.match(run.stderr, new RegExp(`^email-sorting: Couldn't (open|read) the ${label} file\\.\\nUsage: `));
+  }
+});
+
 test('the command refuses a settings file with a rule naming an unknown pile and prints no result', async () => {
   const run = await runCommand(main, ['--messages', FIXTURE, '--settings', fileURLToPath(new URL('./fixtures/bad-rule-settings.json', import.meta.url))]);
   assert.equal(run.code, 1);
