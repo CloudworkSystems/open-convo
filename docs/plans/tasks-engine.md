@@ -157,6 +157,15 @@ A. Two rules specific to tasks:
   set, so two devices completing different occurrences both count and the
   same record arriving twice counts once. The next due date is computed from
   the merged records, never stored as the winner of a field race.
+- **Records are never deleted; they are withdrawn.** Reopening a
+  repeating occurrence, or undoing its completion, skip or snooze, sets the
+  record's `withdrawn` field, a stamped field like any other (the higher
+  version stamp wins, so a later re-complete on another device can set it
+  back). A withdrawn record stays in the file so a device that still has
+  the original can't bring it back, shows in history as undone, and is
+  ignored everywhere else: it never moves a series on and never applies as
+  a snooze. Reopening a one-off task is an ordinary stamped change to its
+  `state`.
 - **An occurrence is named by its scheduled due date** (the date, or the
   date and wall time with its zone) as it was when the record was made.
   Each completion and skip record stores that name, the instant it was made,
@@ -165,7 +174,8 @@ A. Two rules specific to tasks:
   is made, so travel or a later change to the owner's zone never moves it.
   Records never change when the rule changes.
 - **The next due date always comes from the winning rule and the merged
-  completion and skip records** (snoozes never count here), whichever
+  completion and skip records that aren't withdrawn** (snoozes never count
+  here), whichever
   device's edit won. The latest record is the one with
   the latest occurrence name, then the latest action date, then the latest
   instant, then the highest record ID. On schedule, the next due date is
@@ -232,7 +242,11 @@ and tasks only. At least:
    delete versus edit, equal timestamps, clock skew, an offline copy after
    Trash is emptied), plus two devices completing different occurrences, the
    same occurrence, and a completion on one device while the other edits the
-   repeat rule (weekly on Monday changed to weekly on Thursday: the Monday
+   repeat rule; one device reopens an occurrence while the other, which
+   already has the completion, merges later (the occurrence stays reopened,
+   and the series is back on it on both devices); a later re-complete beats
+   an earlier withdrawal; and the rule edit case (weekly on Monday changed
+   to weekly on Thursday: the Monday
    completion stays in history and the next due date is the first Thursday
    after it, on both devices, whichever order they merge in). Merging is commutative, associative and idempotent on random
    invented histories (a fixed seed, at least 500 cases).
