@@ -1,4 +1,4 @@
-// One test per choice in the README's "Edge cases" section (E1 to E22):
+// One test per choice in the README's "Edge cases" section (E1 to E26):
 // cases the plan doesn't name, settled by the RFC 5322 (and RFC 3339, RFC
 // 2919, RFC 3834) defaults.
 
@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import {
-  createScriptedClassifier, formatSummary, parseSettingsFile, sortMessages,
+  cleanReason, createScriptedClassifier, formatSummary, parseSettingsFile, sortMessages,
 } from '../src/index.mjs';
 import { answer, byId, input, mail, pileOf, settings } from './helpers.mjs';
 
@@ -149,13 +149,13 @@ test('E12. the 5 MB limit is 5 MiB of bytes, and it applies to the settings file
   assert.throws(() => parseSettingsFile(big), /The settings file is \d+ bytes; the limit is 5242880 bytes/);
 });
 
-test('E13. the summary escapes backslashes, carriage returns and Unicode line separators too', () => {
+test('E13. the summary escapes backslashes, line separators and bidi controls too', () => {
   const summary = formatSummary({
     schemaVersion: 1,
-    piles: [{ category: 'people', count: 1, groups: [{ key: 'k', label: 'a\\n\u2028\u2029', count: 1, messages: [] }] }],
+    piles: [{ category: 'people', count: 1, groups: [{ key: 'k', label: 'a\\n\u2028\u2029\u202e', count: 1, messages: [] }] }],
     problems: ['bad\nthing'],
   });
-  assert.equal(summary, 'People: 1 from 1 sender\n  a\\\\n\\u2028\\u2029: 1\nProblems:\n  bad\\nthing\n');
+  assert.equal(summary, 'People: 1 from 1 sender\n  a\\\\n\\u2028\\u2029\\u202e: 1\nProblems:\n  bad\\nthing\n');
 });
 
 test('E14. a blank sender name counts as no name for group labels', async () => {
@@ -312,4 +312,47 @@ test('E22. a leap second is accepted only at 23:59:60 UTC on the last day of a m
     '2016-12-31T22:59:60+01:00', '2017-01-01T00:59:60Z', '2016-02-28T23:59:60Z', '2016-12-31T23:59:61Z']) {
     await assert.rejects(ask([mail({ date })], []), /"date" must be an RFC 3339 date-time/, date);
   }
+});
+
+test('E24. classifier fields are read once and the copied answer stays in one fixed pile', async () => {
+  const reads = { category: 0, confidence: 0, reason: 0 };
+  const classifierAnswer = {};
+  Object.defineProperties(classifierAnswer, {
+    category: { enumerable: true, get: () => (++reads.category === 1 ? 'people' : 'vip') },
+    confidence: { enumerable: true, get: () => (++reads.confidence === 1 ? 0.9 : 2) },
+    reason: { enumerable: true, get: () => (++reads.reason === 1 ? 'A direct note' : 'Changed later') },
+  });
+  const classifier = { classify: async () => classifierAnswer };
+  const result = await sortMessages(input([mail()]), settings(), classifier);
+  assert.deepEqual(reads, { category: 1, confidence: 1, reason: 1 });
+  assert.equal(pileOf(result, 'people').count, 1);
+  assert.equal(result.piles.reduce((total, pile) => total + pile.count, 0), 1);
+  assert.equal(byId(result, 'm-1').reason, 'A direct note');
+});
+
+test('E25. every bidi formatting control is escaped before a summary group count', () => {
+  const controls = ['\u202a', '\u202b', '\u202c', '\u202d', '\u202e', '\u2066', '\u2067', '\u2068', '\u2069'];
+  const label = controls.join('');
+  const escaped = controls.map(ch => `\\u${ch.codePointAt(0).toString(16)}`).join('');
+  const summary = formatSummary({
+    schemaVersion: 1,
+    piles: [{ category: 'alerts', count: 7, groups: [{ key: 'k', label, count: 7, messages: [] }] }],
+    problems: [],
+  });
+  assert.ok(summary.includes(`  ${escaped}: 7\n`));
+  for (const control of controls) assert.equal(summary.includes(control), false);
+});
+
+test('E26. reason cleanup bounds huge input and marks only input-bound cuts with real text', () => {
+  const huge = cleanReason('x'.repeat(3 * 1024 * 1024), 'people');
+  assert.equal(huge, `${'x'.repeat(159)}…`);
+  assert.equal([...huge].length, 160);
+
+  // The input bound is four output lengths plus one output-length allowance.
+  const justUnder = `${' '.repeat(640)}${'a'.repeat(159)}`;
+  const justOver = `${' '.repeat(641)}${'b'.repeat(160)}`;
+  const padded = `Short reason${' '.repeat(1000)}`;
+  assert.equal(cleanReason(justUnder, 'people'), 'a'.repeat(159));
+  assert.equal(cleanReason(justOver, 'people'), `${'b'.repeat(159)}…`);
+  assert.equal(cleanReason(padded, 'people'), 'Short reason');
 });

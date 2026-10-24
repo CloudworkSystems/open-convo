@@ -212,7 +212,8 @@ a test in `tests/edge-cases.test.mjs` under the same number.
   same limit applies to the settings file.
 - **E13.** In the plain summary, mail text is one line: `\` is written as
   `\\`, and line feed, tab, carriage return, U+2028 and U+2029 as `\n`,
-  `\t`, `\r`, `\u2028` and `\u2029`.
+  `\t`, `\r`, `\u2028` and `\u2029`. Bidirectional format characters U+202A
+  to U+202E and U+2066 to U+2069 are also written as lower-case `\u` escapes.
 - **E14.** A blank sender name counts as no name for group labels.
 - **E15.** A classifier answer (or failure) that arrives after the timeout is
   ignored and never surfaces as an error.
@@ -230,8 +231,10 @@ a test in `tests/edge-cases.test.mjs` under the same number.
   keyword, a work domain, the model's reason) goes through one helper:
   each run of white space or control characters (carriage return, line
   feed, tab, U+2028, U+2029 and the rest of Unicode Cc) becomes one space,
-  the text is trimmed and cut, ending in `…` when cut. Values inside a
-  reason are cut to 80 characters; the whole reason to 160.
+  the text is trimmed and cut, ending in `…` when real text is cut. Work is
+  bounded before flattening to five times the output limit. Text past that
+  input bound adds `…`; white space or control characters alone do not.
+  Values inside a reason are cut to 80 characters; the whole reason to 160.
 - **E20.** Headers are looked up in one place, the same way everywhere: a
   key matches a header name exactly apart from the case of ASCII letters.
   Keys are never trimmed, so `" List-Id "` or `"Precedence\t"` is an
@@ -255,6 +258,15 @@ a test in `tests/edge-cases.test.mjs` under the same number.
   case or spacing) never applies; an exact rule beats a domain rule wherever
   it sits in the file. The owner's addresses and work domains are
   indexed the same way.
+- **E24.** A classifier answer's `category`, `confidence` and `reason` are
+  each read once into plain values. Only those values are checked and used,
+  and every decision is checked against the six fixed piles before grouping.
+- **E25.** Every bidirectional format character named in E13 is escaped in a
+  plain-summary group label, so it cannot visually reorder the count.
+- **E26.** Reason cleanup examines at most five times its output limit before
+  flattening. Real text past that input bound ends in `…`, including when the
+  bounded prefix would otherwise flatten below the output limit. White space
+  or control characters alone past the bound do not add `…`.
 
 ## What this slice does not do
 

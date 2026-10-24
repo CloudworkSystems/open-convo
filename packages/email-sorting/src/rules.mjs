@@ -95,10 +95,21 @@ export function own(object, key) {
 // domains, the model's reason): every run of white space or control
 // characters (CR, LF, tab, U+2028, U+2029 and the rest of Unicode Cc)
 // becomes one space, the result is trimmed and cut to `max` characters,
-// the last being "…" when cut. So a reason is always one bounded line.
+// the last being "…" when cut. Input is bounded before the regular
+// expression pass. So a reason is always one bounded line.
 export function oneLine(text, max) {
-  const flat = String(text).replace(/[\s\u0000-\u001F\u007F-\u009F]+/g, ' ').trim();
-  if (cutChars(flat, max) === flat) return flat;
+  const source = String(text);
+  // Four output lengths for useful text, plus one for leading white space.
+  const bounded = cutChars(source, max * 5);
+  const whiteOrControl = /[\s\u0000-\u001F\u007F-\u009F]/u;
+  let realTextPastBound = false;
+  for (let index = bounded.length; index < source.length; index += 1) {
+    if (whiteOrControl.test(source[index])) continue;
+    realTextPastBound = true;
+    break;
+  }
+  const flat = bounded.replace(/[\s\u0000-\u001F\u007F-\u009F]+/g, ' ').trim();
+  if (!realTextPastBound && cutChars(flat, max) === flat) return flat;
   return `${cutChars(flat, max - 1).trimEnd()}…`;
 }
 

@@ -253,20 +253,26 @@ export function cleanReason(reason, category) {
   return text === '' ? `The model chose ${PILE_NAMES[category]}` : text;
 }
 
-function contractProblem(answer) {
-  if (answer === null || typeof answer !== 'object' || Array.isArray(answer)) return 'the model\'s answer was not an object';
+function checkedAnswer(answer) {
+  if (answer === null || typeof answer !== 'object' || Array.isArray(answer)) {
+    return { problem: 'the model\'s answer was not an object' };
+  }
+  const copy = {};
   for (const field of ['category', 'confidence', 'reason']) {
-    if (!own(answer, field) || answer[field] === undefined) return `the model's answer was missing "${field}"`;
+    if (!own(answer, field)) return { problem: `the model's answer was missing "${field}"` };
+    const value = answer[field];
+    if (value === undefined) return { problem: `the model's answer was missing "${field}"` };
+    copy[field] = value;
   }
-  if (typeof answer.category !== 'string' || !CATEGORIES.includes(answer.category)) {
-    return 'the model answered with a pile outside the fixed list';
+  if (typeof copy.category !== 'string' || !CATEGORIES.includes(copy.category)) {
+    return { problem: 'the model answered with a pile outside the fixed list' };
   }
-  if (typeof answer.confidence !== 'number' || !Number.isFinite(answer.confidence)
-    || answer.confidence < 0 || answer.confidence > 1) {
-    return "the model's confidence was outside 0 to 1";
+  if (typeof copy.confidence !== 'number' || !Number.isFinite(copy.confidence)
+    || copy.confidence < 0 || copy.confidence > 1) {
+    return { problem: "the model's confidence was outside 0 to 1" };
   }
-  if (typeof answer.reason !== 'string') return "the model's reason was not text";
-  return null;
+  if (typeof copy.reason !== 'string') return { problem: "the model's reason was not text" };
+  return { answer: copy };
 }
 
 function fallback(message, facts) {
@@ -348,8 +354,9 @@ async function decide(conversation, settings, index, classifier, problems) {
   }
   const facts = headerFacts(message, index);
   const question = buildQuestion(deciding, facts, items.length);
-  const { answer, problem: askProblem } = await ask(classifier, question, settings.timeoutMs);
-  const problem = askProblem || contractProblem(answer);
+  const asked = await ask(classifier, question, settings.timeoutMs);
+  const checked = asked.problem ? asked : checkedAnswer(asked.answer);
+  const { answer, problem } = checked;
   if (problem) {
     const { pile, fact } = fallback(message, facts);
     problems.push(`Conversation ${shownValue(conversation.key)} was sorted without the model because ${problem}.`);
@@ -416,6 +423,9 @@ export async function sortMessages(input, settings, classifier) {
   // One question at a time, in conversation-key order.
   for (const conversation of conversations) {
     const decision = await decide(conversation, config, index, classifier, problems);
+    if (!CATEGORIES.includes(decision.pile)) {
+      throw new Error('Internal error: a decision used a pile outside the fixed list.');
+    }
     for (const item of conversation.items) {
       entries.push({
         item,
