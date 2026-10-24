@@ -150,20 +150,25 @@ A. Two rules specific to tasks:
   same record arriving twice counts once. The next due date is computed from
   the merged records, never stored as the winner of a field race.
 - **An occurrence is named by its scheduled due date** (the date, or the
-  date and wall time with its zone) as it was when the record was made, and
-  the record stores that name and, for a completion, the completion instant.
+  date and wall time with its zone) as it was when the record was made.
+  Each completion and skip record stores that name, the instant it was made,
+  and its **action date**: the calendar date in the owner's zone at that
+  instant, with that zone's name. The action date is fixed when the record
+  is made, so travel or a later change to the owner's zone never moves it.
   Records never change when the rule changes.
 - **The next due date always comes from the winning rule and the merged
-  records**, whichever device's edit won: take the latest recorded
-  occurrence name (completion or skip; for after done, the latest completion
-  date). On schedule, the next due date is the winning rule's first date
-  after that occurrence's date; after done, it is N units after that
-  completion date. A record whose occurrence isn't a date of the winning
-  rule stays in history and still moves the series on; it is never dropped.
-  With no records, the next due date is the rule's first date on or after
-  its start date. So a completion made under the old rule, merged with a
-  rule edit from another device, gives the same next due date on every
-  device.
+  records**, whichever device's edit won. The latest record is the one with
+  the latest occurrence name, then the latest action date, then the latest
+  instant, then the highest record ID. On schedule, the next due date is
+  the winning rule's first date after the latest record's occurrence date.
+  After done, it is N units after the latest record's action date, and a
+  skip counts the same as a completion here: skipping "water every three
+  days" today makes it due three days from today, with no completion
+  recorded. A record whose occurrence isn't a date of the winning rule stays
+  in history and still moves the series on; it is never dropped. With no
+  records, the next due date is the rule's first date on or after its start
+  date. So a completion made under the old rule, merged with a rule edit
+  from another device, gives the same next due date on every device.
 - **Completing the same occurrence on two devices** keeps both records and
   counts the occurrence once.
 
@@ -191,7 +196,9 @@ and tasks only. At least:
 3. On schedule versus after done: completing late, early and twice on one
    day each give the next due date the rules above say; after done on a
    patterned repeat (chosen weekdays, a month day, a numbered weekday) is
-   refused; after done every month from January 31 gives the last day of
+   refused; skipping an after-done task that was never completed moves it N
+   units past the skip's action date; a completion at 23:30 in New York
+   keeps its New York action date after the owner's zone changes to Tokyo; after done every month from January 31 gives the last day of
    February; missed on-schedule
    occurrences show once as overdue, not piled up.
 4. Repeat ends: after a count and on a date; the last completion leaves the
