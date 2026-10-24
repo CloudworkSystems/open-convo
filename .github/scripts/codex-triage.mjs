@@ -202,18 +202,23 @@ export async function judgeFindings({ findings, prTitle, apiKey, fetchImpl = fet
   });
   // Never log the response body: it can echo the request.
   if (!response.ok) throw new Error(`judge request failed: ${response.status}`);
-  const message = await response.json();
-  if (message.stop_reason !== 'end_turn') throw new Error(`judge stopped early: ${message.stop_reason}`);
+  // From here on the call was answered (and billed): errors carry `billed`,
+  // so the caller keeps its claim and no later run pays for the same call.
+  const billed = (text) => Object.assign(new Error(text), { billed: true });
+  let message;
+  try { message = await response.json(); } catch { throw billed('judge sent an unreadable answer'); }
+  if (message.stop_reason !== 'end_turn') throw billed(`judge stopped early: ${message.stop_reason}`);
   const text = (message.content ?? []).find((b) => b.type === 'text')?.text;
-  const verdicts = JSON.parse(text ?? '').verdicts;
+  let verdicts;
+  try { verdicts = JSON.parse(text ?? '').verdicts; } catch { throw billed('judge answer is not JSON'); }
   const wanted = new Set(findings.map((f) => f.id));
   const got = new Map();
   for (const v of verdicts ?? []) {
-    if (!wanted.has(String(v.id)) || got.has(String(v.id))) throw new Error('judge answered for an unknown or repeated finding');
-    if (!['nit', 'real'].includes(v.verdict) || typeof v.confidence !== 'number' || !(v.confidence >= 0 && v.confidence <= 1)) throw new Error('judge gave a malformed verdict');
+    if (!wanted.has(String(v.id)) || got.has(String(v.id))) throw billed('judge answered for an unknown or repeated finding');
+    if (!['nit', 'real'].includes(v.verdict) || typeof v.confidence !== 'number' || !(v.confidence >= 0 && v.confidence <= 1)) throw billed('judge gave a malformed verdict');
     got.set(String(v.id), { id: String(v.id), verdict: v.verdict, confidence: v.confidence, reason: String(v.reason ?? '') });
   }
-  if (got.size !== wanted.size) throw new Error('judge skipped a finding');
+  if (got.size !== wanted.size) throw billed('judge skipped a finding');
   return findings.map((f) => got.get(f.id));
 }
 

@@ -613,3 +613,16 @@ test('triage: editing or deleting a verdict re-runs the gate', () => {
   const wf = readFileSync(new URL('../../workflows/codex-approved.yml', import.meta.url), 'utf8');
   assert.match(wf, /github\.event\.comment\.user\.login == 'github-actions\[bot\]'/);
 });
+
+test('triage: only failures before the judge answers are unbilled (and release the claim)', async () => {
+  const e = triageEligibility(loop());
+  const reply = (body, stop = 'end_turn') => async () => ({ ok: true, json: async () => ({ stop_reason: stop, content: [{ type: 'text', text: JSON.stringify(body) }] }) });
+  const billedError = (p) => p.then(() => null, (error) => error.billed === true);
+  assert.equal(await billedError(judgeFindings({ findings: e.findings, apiKey: 'k', fetchImpl: reply({ verdicts: nits(e) }, 'refusal') })), true);
+  assert.equal(await billedError(judgeFindings({ findings: e.findings, apiKey: 'k', fetchImpl: reply({ verdicts: nits(e).slice(0, 1) }) })), true);
+  assert.equal(await billedError(judgeFindings({ findings: e.findings, apiKey: 'k', fetchImpl: async () => ({ ok: true, json: async () => ({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'not json' }] }) }) })), true);
+  assert.equal(await billedError(judgeFindings({ findings: e.findings, apiKey: 'k', fetchImpl: async () => ({ ok: false, status: 529 }) })), false);
+  assert.equal(await billedError(judgeFindings({ findings: e.findings, apiKey: 'k', fetchImpl: async () => { throw new Error('network'); } })), false);
+  const script = readFileSync(new URL('../codex-approved.mjs', import.meta.url), 'utf8');
+  assert.match(script, /if \(!error\.billed\) await gh\.patch/);
+});

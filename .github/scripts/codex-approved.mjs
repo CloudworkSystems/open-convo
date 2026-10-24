@@ -94,7 +94,9 @@ async function triage({ number, pr, comments, reviews, dismissals, reason, mayJu
         verdicts = await judgeFindings({ findings, prTitle: pr.title, apiKey });
       } catch (error) {
         console.error(`#${number}: triage judge unavailable: ${error.message}`);
-        await gh.patch(`${base}/issues/comments/${claim.id}`, { body: releasedComment({ headSha, error: error.message }) });
+        // Release the claim only if the judge never answered (nothing billed).
+        // An answered but unusable call keeps it: the check stays pending.
+        if (!error.billed) await gh.patch(`${base}/issues/comments/${claim.id}`, { body: releasedComment({ headSha, error: error.message }) });
       }
       if (verdicts) {
         await gh.patch(`${base}/issues/comments/${claim.id}`, { body: verdictComment({ headSha, findings, verdicts }) });
