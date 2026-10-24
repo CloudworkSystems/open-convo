@@ -86,7 +86,12 @@ agenda.
 1. **Check the input** as above.
 2. **Events for the day:** timed events that overlap the day (start of
    `date` to start of the next date in `timeZone`), and all-day events whose
-   date range includes `date`. Cancelled events are left out and counted.
+   date range includes `date`. A timed event with no length (`start` equal
+   to `end`, as the calendar merge engine gives for an event with neither
+   `DTEND` nor `DURATION`) is kept when its start falls inside the day,
+   from the day's start up to but not including the next day's start; it
+   never clashes and never blocks free time. Cancelled events are left out
+   and counted.
    A timed event that started yesterday or runs past midnight is kept and
    marked `startsBefore` or `endsAfter`.
 3. **Timeline:** all-day events first (by title, then key), then timed
@@ -140,8 +145,9 @@ data only. At least:
 1. A full invented day (events across two calendars, tasks, habits, lists)
    gives an agenda whose JSON matches a saved expected file exactly.
 2. Events for the day: an event from yesterday into today, one from today
-   into tomorrow, a multi-day all-day event, a cancelled event, and an event
-   entirely on another day each land (or don't) as the rules say.
+   into tomorrow, a multi-day all-day event, a cancelled event, an event
+   entirely on another day, a no-length event at 12:00, and a no-length
+   event at the next day's 00:00 each land (or don't) as the rules say.
 3. Clashes: overlap by one minute clashes; back-to-back doesn't; a tentative
    event clashing with a confirmed one is marked; three mutually overlapping
    events give three clashes.
