@@ -424,3 +424,21 @@ test('edge cases: archived spots take check-ins, odd photo references are refuse
   const back = view.spot('spot-back');
   assert.deepEqual([back.inTrash, back.returned, back.label, back.region], [false, true, '', 'other']);
 });
+
+test('emptying Trash drops only the deleted records of that type and spot, even when IDs repeat elsewhere', () => {
+  const { mac } = pair();
+  mac.addCheckIn({ spotId: 'spot-back', capturedAt: '2026-10-02T08:00:00-04:00', answers: ALL_NO }, { id: 'same-id' });
+  mac.recordClinicianVisit('spot-wrist', { at: '2026-10-03T08:00:00-04:00' }, { id: 'same-id' });
+  mac.addCheckIn({ spotId: 'spot-wrist', capturedAt: '2026-10-04T08:00:00-04:00', answers: ALL_NO }, { id: 'other-id' });
+  mac.removeSpot('spot-back');
+  mac.emptyTrash();
+  const tomb = mac.getPerson().spots.find(spot => spot.id === 'spot-back');
+  assert.deepEqual(tomb.purged, { checkIns: ['same-id'], visits: [] });
+  const reloaded = deserializePerson(mac.save());
+  const merged = mergePeople(reloaded, mac.getPerson());
+  assert.deepEqual(merged.visits.map(visit => visit.id), ['same-id']);
+  assert.deepEqual(merged.checkIns.map(record => record.id), ['other-id']);
+  const viewer = new SkinCheck({ deviceId: 'v', person: reloaded });
+  viewer.load(mac.save());
+  assert.equal(viewer.spotOutcome('spot-wrist').visit.id, 'same-id');
+});

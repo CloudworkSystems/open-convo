@@ -156,7 +156,7 @@ and must be rendered as text.
     "id": "example-spot",
     "life": {"value": true, "stamp": {"counter": 2, "time": 100, "device": "example-mac"}},
     "purge": null,
-    "purged": [],
+    "purged": {"checkIns": [], "visits": []},
     "fields": {
       "place": {"value": {"region": "upperBack", "note": ""}, "stamp": {"counter": 2, "time": 100, "device": "example-mac"}},
       "label": {"value": "Shoulder mole", "stamp": {"counter": 2, "time": 100, "device": "example-mac"}},
@@ -188,7 +188,9 @@ and must be rendered as text.
 
 A spot whose Trash was emptied keeps only a deletion marker: `life` is
 `false` with the same stamp as `purge`, its fields are gone, and `purged`
-lists the IDs of the check-ins and visits deleted with it. A future sync
+lists the IDs of the check-ins and of the visits deleted with it, each
+under its own type. A merge drops a record only when its own spot lists its
+ID under that record's type. A future sync
 adapter must keep these markers; dropping them would let an offline copy
 bring deleted records back. Unknown keys, an unknown `schemaVersion`, or a
 check-in or visit for a spot that is not in the file are refused.

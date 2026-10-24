@@ -221,13 +221,19 @@ function validateVisit(record) {
   identity(record.id, 'Visit ID'); identity(record.spotId, 'Spot ID'); instant(record.at, 'Visit time'); string(record.note, 'Visit note');
   if (typeof record.dateOnly !== 'boolean' || !validStamp(record.stamp)) fail('Invalid clinician visit in skin check file.');
 }
+// IDs of the records deleted with a spot when Trash was emptied, kept per record type.
+const PURGED_KINDS = ['checkIns', 'visits'];
+const noPurged = () => ({ checkIns: [], visits: [] });
+const unionPurged = (...lists) => Object.fromEntries(PURGED_KINDS.map(kind => [kind, [...new Set(lists.flatMap(list => list[kind]))].sort()]));
 function validateSpot(spot) {
   if (!object(spot) || !onlyKeys(spot, ['id', 'life', 'purge', 'fields', 'purged'])) fail('Invalid spot in skin check file.');
   identity(spot.id, 'Spot ID');
   if (!object(spot.life) || typeof spot.life.value !== 'boolean' || !validStamp(spot.life.stamp) ||
-    (spot.purge !== null && !validStamp(spot.purge)) || !Array.isArray(spot.purged) ||
-    !spot.purged.every(id => typeof id === 'string' && id.length > 0)) fail('Invalid spot in skin check file.');
-  if (spot.purge === null && spot.purged.length) fail('Invalid spot in skin check file.');
+    (spot.purge !== null && !validStamp(spot.purge)) || !object(spot.purged) || !onlyKeys(spot.purged, PURGED_KINDS) ||
+    PURGED_KINDS.some(kind => !Array.isArray(spot.purged[kind]) || !spot.purged[kind].every(id => typeof id === 'string' && id.length > 0))) {
+    fail('Invalid spot in skin check file.');
+  }
+  if (spot.purge === null && PURGED_KINDS.some(kind => spot.purged[kind].length)) fail('Invalid spot in skin check file.');
   validateFields(spot.fields, SPOT_FIELDS, 'spot');
 }
 function validate(person) {
@@ -263,7 +269,7 @@ function canonical(person) {
     fields: records(person.fields, {}),
     spots: person.spots.map(spot => ({
       id: spot.id, life: clone(spot.life), purge: clone(spot.purge),
-      fields: records(spot.fields, {}), purged: [...new Set(spot.purged)].sort(),
+      fields: records(spot.fields, {}), purged: unionPurged(spot.purged),
     })).sort(byId),
     checkIns: person.checkIns.map(record => clone(record)).sort(byId),
     visits: person.visits.map(record => clone(record)).sort(byId),
@@ -274,7 +280,7 @@ function mergeSpot(a, b) {
   const purge = latest(a.purge, b.purge);
   let life = register(a.life, b.life);
   if (purge && compareStamps(life.stamp, purge) <= 0) life = { value: false, stamp: clone(purge) };
-  return { id: a.id, life, purge: clone(purge), fields: records(a.fields, b.fields, purge), purged: [...new Set([...a.purged, ...b.purged])].sort() };
+  return { id: a.id, life, purge: clone(purge), fields: records(a.fields, b.fields, purge), purged: unionPurged(a.purged, b.purged) };
 }
 // Check-ins and visits never change after they are made: merged as a set by ID.
 function mergeSet(left, right, what) {
@@ -293,14 +299,16 @@ export function mergePeople(left, right) {
   const a = new Map(left.spots.map(spot => [spot.id, spot]));
   const b = new Map(right.spots.map(spot => [spot.id, spot]));
   const spots = [...new Set([...a.keys(), ...b.keys()])].sort().map(id => mergeSpot(a.get(id), b.get(id)));
-  const purged = new Set(spots.flatMap(spot => spot.purged));
+  // A record is dropped only when its own spot lists its ID under its own type.
+  const purged = kind => new Set(spots.flatMap(spot => spot.purged[kind].map(id => `${spot.id}\n${id}`)));
+  const [goneCheckIns, goneVisits] = [purged('checkIns'), purged('visits')];
   return canonical(validate({
     schemaVersion: SCHEMA_VERSION,
     id: left.id,
     fields: records(left.fields, right.fields),
     spots,
-    checkIns: mergeSet(left.checkIns, right.checkIns, 'check-ins').filter(record => !purged.has(record.id)),
-    visits: mergeSet(left.visits, right.visits, 'clinician visits').filter(record => !purged.has(record.id)),
+    checkIns: mergeSet(left.checkIns, right.checkIns, 'check-ins').filter(record => !goneCheckIns.has(`${record.spotId}\n${record.id}`)),
+    visits: mergeSet(left.visits, right.visits, 'clinician visits').filter(record => !goneVisits.has(`${record.spotId}\n${record.id}`)),
   }));
 }
 export function serializePerson(person) { return JSON.stringify(canonical(validate(person))); }
@@ -545,7 +553,7 @@ export class SkinCheck {
     const created = createdAt ?? new Date(this.#now()).toISOString();
     instant(created, 'Created time');
     const stamp = this.#stamp();
-    const spot = { id, life: { value: true, stamp }, purge: null, fields: {}, purged: [] };
+    const spot = { id, life: { value: true, stamp }, purge: null, fields: {}, purged: noPurged() };
     for (const [key, value] of [['place', place], ['label', label], ['createdAt', created], ['archived', false], ['reminder', DEFAULT_REMINDER]]) this.#set(spot, key, value, stamp);
     this.#person.spots.push(spot);
     this.#person.spots.sort(byId);
@@ -580,11 +588,11 @@ export class SkinCheck {
     if (!doomed.length) return 0;
     const stamp = this.#stamp();
     for (const spot of doomed) {
-      const ids = [...this.#person.checkIns, ...this.#person.visits].filter(record => record.spotId === spot.id).map(record => record.id);
+      const ids = list => list.filter(record => record.spotId === spot.id).map(record => record.id);
       spot.life = { value: false, stamp: clone(stamp) };
       spot.purge = clone(stamp);
       spot.fields = {};
-      spot.purged = [...new Set([...spot.purged, ...ids])].sort();
+      spot.purged = unionPurged(spot.purged, { checkIns: ids(this.#person.checkIns), visits: ids(this.#person.visits) });
       this.#person.checkIns = this.#person.checkIns.filter(record => record.spotId !== spot.id);
       this.#person.visits = this.#person.visits.filter(record => record.spotId !== spot.id);
     }

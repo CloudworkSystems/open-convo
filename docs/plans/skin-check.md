@@ -1,6 +1,6 @@
 # Skin Check: iPhone Source And Desk Health View (PRD)
 
-Status: Built, slice 1 (Oct 24): the owner approved the plan on #133 and chose no image classifier; slice 1, the engine in `packages/skin-check/`, is built. Slices 2 and 3 wait on their own plan revisions.
+Status: Built (Oct 24): slice 1, the engine in `packages/skin-check/`, is built; the owner approved the plan on #133 and chose no image classifier. Slices 2 and 3 wait on their own plan revisions.
 
 Written October 24, 2026 by a Claude building session (thread "Build skin
 cancer risk iOS submodule") from the owner's request: "a tiny submodule, a
