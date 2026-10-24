@@ -121,6 +121,7 @@ test('the bundled snapshot is valid and carries no author or email fields', () =
   assert.ok(snapshot.commits.length > 0);
   assert.ok(snapshot.commits.every((commit) => /^[0-9a-f]{40}$/.test(commit.hash) && commit.parents.every((parent) => /^[0-9a-f]{40}$/.test(parent))), 'Snapshot hashes must be full, so short prefixes can never collide.');
   assert.ok(snapshot.commits.some((commit) => commit.refs.includes(snapshot.mainBranch)), 'The main branch tip is missing.');
+  assert.ok(snapshot.commits.some((commit) => commit.mergedPull !== undefined && !commit.subject.startsWith('Merge pull request')), 'Squash-merged pull requests are not linked to their commits.');
   assert.doesNotMatch(raw, /"(author|email|committer)"/);
   assert.doesNotMatch(raw, /@[a-z0-9-]+\.[a-z]{2,}/i, 'An email address is in the snapshot.');
   layoutRails(snapshot);

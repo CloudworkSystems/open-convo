@@ -41,11 +41,14 @@ for (const line of git('for-each-ref', 'refs/remotes/origin', '--format=%(refnam
 }
 if (![...refs.values()].flat().includes(mainBranch)) throw new Error(`origin/${mainBranch} is missing. Run git fetch --prune origin first.`);
 
+// Squash merges land on main's first-parent line as one commit named
+// "Title (#123)", with no "Merge pull request" subject to read.
+const mainFirstParents = new Set(git('rev-list', '--first-parent', `--max-count=${maxCommits}`, `origin/${mainBranch}`).trim().split('\n'));
 const since = new Date(Date.now() - days * 86_400_000).toISOString();
 const log = git('log', '--remotes=origin', '--topo-order', '--date-order', `--since=${since}`, `--max-count=${maxCommits}`, '--format=%H%x00%P%x00%cI%x00%s%x1e');
 const commits = log.split('\x1e').map((entry) => entry.trim()).filter(Boolean).map((entry) => {
   const [hash, parents, date, subject] = entry.split('\0');
-  const merged = /^Merge pull request #(\d+) /.exec(subject);
+  const merged = /^Merge pull request #(\d+) /.exec(subject) ?? (mainFirstParents.has(hash) ? /\(#(\d+)\)$/.exec(subject) : null);
   return {
     hash, parents: parents ? parents.split(' ') : [], date, subject,
     refs: refs.get(hash) ?? [], ...(merged ? { mergedPull: Number(merged[1]) } : {}),
@@ -79,7 +82,8 @@ const pulls = listed ? listed.map((pull) => {
   };
 }) : commits.filter((commit) => commit.mergedPull !== undefined).map((commit) => {
   const branch = /^Merge pull request #\d+ from [^/]+\/(\S+)/.exec(commit.subject)?.[1] ?? '';
-  return { number: commit.mergedPull, title: branch, state: 'merged', branch, createdAt: commit.date, endedAt: commit.date };
+  const title = branch || commit.subject.replace(/\s*\(#\d+\)$/, '');
+  return { number: commit.mergedPull, title, state: 'merged', branch, createdAt: commit.date, endedAt: commit.date };
 });
 pulls.sort((a, b) => a.number - b.number);
 
