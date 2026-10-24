@@ -74,10 +74,11 @@ so it builds and tests on Linux too.
 - **Reconciling after a crash.** In the app, a record and its outbox entry
   live in different places, so a crash can save one without the other. The
   checkpoint keeps, for each record, the last stamp the cloud acknowledged.
-  On start, the app hands the sync core the ID and stamp of every local
-  record, and the core makes the outbox match the local store both ways. It
-  queues any record whose stamp is newer than its last acknowledged one and
-  isn't already queued. It drops any queued entry whose record ID and stamp
+  On start, the app hands the sync core every local record in full (ID,
+  stamp, record type and opaque payload), and the core makes the outbox
+  match the local store both ways. It queues any record whose stamp is newer
+  than its last acknowledged one and isn't already queued, using the payload
+  it was handed. It drops any queued entry whose record ID and stamp
   aren't in the local store, so an edit that was never saved locally is
   never uploaded and doesn't leave the status stuck on "waiting". An edit
   saved just before a crash is therefore never stranded, and one that wasn't
@@ -85,9 +86,13 @@ so it builds and tests on Linux too.
 - **The clock moves forward.** Every fetched stamp pushes the device's
   logical counter past it, so the next local change always gets a higher
   stamp than anything the device has seen.
-- **Conflicts.** When the cloud already holds a newer version of a record,
-  the sync core does not pick a winner blindly. It hands both copies to a
-  **merge function registered for that record type** and uploads the result.
+- **Conflicts.** A conflict is any upload where the cloud's copy of the
+  record differs from the version this device last saw, whichever has the
+  higher stamp: two devices edited it while apart. The sync core does not
+  pick a winner blindly. It hands both copies to a **merge function
+  registered for that record type** and uploads the result, so the edit that
+  reaches the cloud second never simply overwrites the first. Stamps decide
+  only in the no-merge-function fallback below.
   **Where decryption happens:** the merge function is supplied by the app,
   which holds the keys. It decrypts both copies, merges the contents with the
   module's own merge rules (for task lists, the household lists engine's
@@ -141,7 +146,8 @@ Every case uses two or three simulated devices and invented records.
 2. A and B change different records while offline; both changes survive.
 3. A and B change the same record while offline; the registered merge
    function decides, and both devices end with the same result whichever
-   syncs first.
+   syncs first, including when the higher-stamped edit reaches the cloud
+   second (the merge function is still called; nothing is overwritten).
 4. Same as 3 with no merge function: higher stamp wins, the other copy is kept
    as a conflict copy, and status says "needs attention".
 5. A logically deletes a record; B, offline, edits its older copy; after
@@ -279,7 +285,10 @@ saving a record and saving the outbox, written in as "Reconciling after a
 crash" (test 17) and next-slice requirement 3. Its round on `c71c082`
 added a P1 on queued entries whose record was never saved (dropped on
 reconciliation, test 17) and a P2 to keep the builder's requirements in
-this plan rather than on the pull request (done).
+this plan rather than on the pull request (done). Its round on `0cf717e` added two
+P1s: every divergent cloud copy goes through the merge function, not only
+an older-stamped one ("Conflicts"), and reconciliation receives full
+records, so it can rebuild an outbox entry with its payload.
 
 ## Review And Finish Line
 
