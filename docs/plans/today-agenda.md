@@ -65,9 +65,11 @@ never reads the clock and never calls `process.exit`.
   `status` is `confirmed` (default), `tentative` or `cancelled`. This is the
   shape of one occurrence in the calendar merge engine's JSON output, reduced
   to these fields; the README shows the mapping.
-- `tasks`: up to 1,000, each `{ id, title, due?, dueTime?, overdueSince?,
+- `tasks`: up to 1,000 open tasks, each `{ id, title, due?, dueTime?,
   priority?, list? }`. `due` is a date; `dueTime` an instant; `priority` is
-  `high` or absent.
+  `high` or absent. A task with `dueTime` must also have `due`, equal to
+  `dueTime`'s date in `timeZone`; anything else is refused. Whether a task
+  is overdue is never an input: the agenda works it out (step 7).
 - `habits`: up to 100, each `{ id, name, state }` where `state` is
   `open`, `done` or `rest` for this date.
 - `lists`: up to 50, each `{ id, name, open }`, `open` being the number of
@@ -111,10 +113,14 @@ agenda.
    the timed event with the earliest `start` after `now`, ties broken by
    timeline order, with minutes until it starts, or none. No-length events
    are never in progress; one starting after `now` can be `next`.
-7. **Tasks:** overdue first (oldest `overdueSince` first), then due today
-   with a time (by time), then due today without a time; high priority first
-   within each, then title, then id. Tasks due on other dates are left out
-   and counted.
+7. **Tasks:** a task is **overdue** when its due moment is before `now`:
+   `dueTime` before `now`, or, for a date-only task, `due` before the date
+   of `now` in `timeZone`. It is **due today** when it isn't overdue and
+   `due` equals `date`. Overdue tasks come first (earliest due moment
+   first, a date-only task counting as the start of its date), then due
+   today with a time (by time), then due today without a time; high
+   priority first within each, then title, then id. Tasks with no `due`, or
+   due on a later date, are left out and counted.
 8. **Habits:** open ones listed by name; done and rest counted. The wording
    never grades: "3 habits still open today", never "missed" or "behind" (the
    habit grid's rule).
@@ -164,7 +170,11 @@ data only. At least:
    the evening before; two overlapping events both in progress, listed in
    timeline order; two events starting at the same next time, the first in
    timeline order chosen.
-7. Tasks, habits and lists order and counts as above.
+7. Tasks, habits and lists order and counts as above. A date-only task due
+   yesterday is overdue; a task due today at 09:00 is overdue at 10:00 and
+   due today at 08:00; with `now` the evening before `date`, a task due on
+   `date` is due today, not overdue; a `dueTime` whose local date doesn't
+   match `due` is refused.
 8. The summary: each sentence appears only when it has something to say;
    singular and plural are right; no grading words appear in any output (a
    test scans for words such as "missed", "failed", "behind", "score").
