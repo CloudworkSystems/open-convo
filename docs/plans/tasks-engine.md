@@ -63,8 +63,12 @@ and loaded from one JSON file per person):
   Each repeat is either **on schedule** (the next due date follows the
   pattern from the previous due date, whenever it was done) or **after done**
   (the next due date counts from the day it was completed: "water every three
-  days" after you actually water). A repeat may end after a count or on a
-  date.
+  days" after you actually water). **After done** is allowed only for plain
+  intervals: every N days, every N weeks without chosen weekdays, every N
+  months and every N years. A repeat with chosen weekdays, a day of the
+  month, a numbered weekday or a yearly date is on schedule only; asking for
+  after done on one is refused with a plain message. A repeat may end after
+  a count or on a date.
 - **Completing a repeating task** records the completion and moves the task
   to its next due date, keeping one task with a history, not a pile of
   copies. Completing it early, late or twice in a day follows the rules
@@ -117,8 +121,12 @@ again", streaks or scores (the same rule as the habit grid).
   task shows as overdue on the oldest missed occurrence only once (missed
   occurrences are not piled up). Completing early moves to the next
   occurrence after the one completed.
-- **After done** repeats: the next due date is N units after the completion
-  date in the owner's zone, keeping the task's time of day.
+- **After done** repeats: the next due date is N days, weeks, months or
+  years after the completion date in the owner's zone, keeping the task's
+  time of day. Months and years keep the completion's day of the month, and
+  a month without that day uses its last day (completed January 31, every
+  month: due February 28 or 29); the next step counts again from the next
+  completion, so it doesn't drift back.
 - Time zones are IANA names, checked with Node's built-in `Intl`. No time
   zone data is bundled.
 
@@ -161,7 +169,10 @@ and tasks only. At least:
    Tuesday", every 2 weeks on Monday and Thursday, and February 29 in leap
    and other years.
 3. On schedule versus after done: completing late, early and twice on one
-   day each give the next due date the rules above say; missed on-schedule
+   day each give the next due date the rules above say; after done on a
+   patterned repeat (chosen weekdays, a month day, a numbered weekday) is
+   refused; after done every month from January 31 gives the last day of
+   February; missed on-schedule
    occurrences show once as overdue, not piled up.
 4. Repeat ends: after a count and on a date; the last completion leaves the
    task done.

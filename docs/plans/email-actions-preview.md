@@ -121,20 +121,27 @@ with a plain message naming the request's position.
      he writes to: "This address also receives mail here; pick messages one
      by one". A domain target is blocked the same way when any address in
      that domain appears in such a `to` field.
-5. **Overlaps.** A message matched by more than one request keeps the
-   strongest action, in the order `spam`, then `delete`, then `unsubscribe`
-   (a spam report also removes the message; an unsubscribe touches only the
-   sender). The plan says, for each such message, which requests matched it
-   and which action it kept.
+5. **Overlaps.** Unsubscribing is about a sender; deleting and reporting
+   spam are about messages. They are independent, so an unsubscribe is
+   always kept for its sender group even when the same messages are also
+   deleted or reported. Between the two message actions, a message matched
+   by both keeps `spam` (a spam report also removes the message) and is
+   listed once, under `spam`. The plan says, for each such message, which
+   requests matched it and which message action it kept, and lists every
+   unsubscribe in `unsubscribe` whatever happens to its messages.
 6. **How each unsubscribe would be done**, per sender group, from the
    newest message's `List-Unsubscribe` (RFC 2369) and `List-Unsubscribe-Post`
    (RFC 8058) headers:
    - `oneClick`: an `https:` URL in `List-Unsubscribe` and
      `List-Unsubscribe-Post: List-Unsubscribe=One-Click` present. The later
      executor would send one POST and nothing else.
-   - `mailto`: a `mailto:` address in `List-Unsubscribe`. The later executor
-     would send one plain message, after the owner sees its address and
-     subject.
+   - `mailto`: a `mailto:` URI in `List-Unsubscribe`, parsed as RFC 6068
+     says. The plan lists the exact message the later executor would send:
+     its `to` addresses, `subject` and `body` (each empty if the URI gives
+     none). Any other header field in the URI (`cc`, `bcc`, `from` and the
+     rest) makes the method `none`, reason "This unsubscribe address asks to
+     send extra mail fields". The executor would send exactly that message,
+     with nothing added, after the owner has seen it.
    - `webPage`: only an `https:` URL without the one-click header. The
      executor would not open it on its own; the Desk would show the link for
      the owner to open himself.
@@ -153,7 +160,8 @@ with a plain message naming the request's position.
 8. **The seal.** The plan carries `seal`: the SHA-256 (Node's built-in
    `crypto`) of a canonical JSON form of exactly what would be done: each
    action, each message copy (`inbox`, `id`) under it, and each unsubscribe
-   method with its URL or address. Same actions, same seal; any change to
+   method with everything the executor would send: the URL for one-click
+   and web page, and the `to`, `subject` and `body` for mailto. Same actions, same seal; any change to
    what would be done changes it. The README documents the canonical form so
    the later executor can recompute it and refuse a plan that doesn't match.
    The seal is not a secret and not a signature; it only proves the executed
@@ -174,8 +182,8 @@ values.
   `ids` per inbox, `from`, `subject`, `date`, `pile` and `matchedBy`
   (request positions). Snippets and headers are not copied.
 - `unsubscribe`: one entry per sender group being unsubscribed: `key`,
-  `label`, `method`, and the `url` or `address` it would use (or the reason
-  for `none`).
+  `label`, `method`, and what it would use: the `url`, or for mailto the
+  `to`, `subject` and `body` (or the reason for `none`).
 - `blocked`: each blocked request with its position and reason.
 - `requests`: per request, how many messages it matched, kept and left out,
   and why.
@@ -205,12 +213,15 @@ mail only (`.example` addresses, invented people and businesses). At least:
 5. A request matching nothing is blocked; a target address that also
    receives mail in the input is blocked.
 6. Overlaps: a message matched by a delete and a spam request keeps spam,
-   and lists both requests.
+   and lists both requests; a sender matched by an unsubscribe and a delete
+   keeps both the unsubscribe and the delete.
 7. Unsubscribe methods: one-click (with the RFC 8058 header), mailto, web
    page only, `http:` only, a URL with credentials, an oversized URL, an
    empty header and a missing header each give the right method and reason.
    A header holding both a `mailto:` and an `https:` URL, in either order,
-   prefers one-click when allowed, then mailto, then the web page.
+   prefers one-click when allowed, then mailto, then the web page. A
+   `mailto:` with `subject` and `body` lists both, and changing either
+   changes the seal; one with `cc` or `bcc` is `none`.
 8. Duplicates: the same `Message-ID` in two inboxes is one message with two
    copies, and the seal covers both copies.
 9. The seal: the same files give the same seal; adding, removing or

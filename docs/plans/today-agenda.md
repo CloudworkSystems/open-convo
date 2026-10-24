@@ -73,8 +73,10 @@ never reads the clock and never calls `process.exit`.
 - `lists`: up to 50, each `{ id, name, open }`, `open` being the number of
   unchecked items (0 to 10,000).
 
-Every text field is 1 to 500 characters (titles) or up to 200 (names,
-locations, calendars). Unknown fields, missing required fields, repeated
+Titles are up to 500 characters; names, locations and calendars up to 200.
+An event's `title` may be empty (the calendar merge engine gives `""` for an
+event without `SUMMARY`), and the agenda shows it as "(No title)"; every
+other title and name is at least 1 character. Unknown fields, missing required fields, repeated
 `key` or `id` within a section, and bad dates or zones are refused with a
 plain message naming the section and position. A refusal produces no
 agenda.
@@ -154,7 +156,9 @@ data only. At least:
 8. The summary: each sentence appears only when it has something to say;
    singular and plural are right; no grading words appear in any output (a
    test scans for words such as "missed", "failed", "behind", "score").
-9. Input checks: each refusal above, naming the section and position; the
+9. Input checks: each refusal above, naming the section and position; an
+   event with an empty title is accepted and shown as "(No title)", while a
+   task with an empty title is refused; the
    same `key` in events and the same `id` in tasks are refused; the same
    value across different sections is fine.
 10. Hostile but valid text (quotes, `<script>`, emoji, right-to-left text,
