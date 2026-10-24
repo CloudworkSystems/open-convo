@@ -1,5 +1,7 @@
 # Sync Core (PRD)
 
+Status: Draft (Oct 24): in review on #127; GrokBot team B builds it once it merges.
+
 Written October 22, 2026 by the planning session from the owner's decisions
 that day (recorded in [docs/decisions.md](../decisions.md)). Session name:
 `OC-261022-plan-day-one-and-sync`. Umbrella: Personal. First slice of the
