@@ -103,10 +103,15 @@ so it builds and tests on Linux too.
   apart. Fetching another device's edit before uploading doesn't move the
   base, so the queued edit is still merged with it, never written over it.
   A fetch never replaces a local record that has a queued edit: the core
-  first merges the fetched copy with the queued edit (or, with no merge
-  function, keeps the queued edit and saves the fetched copy as a conflict
-  copy), queues the result with the fetched version as its new base, and
-  only then hands it to the app to save. So the local store always holds
+  first merges the fetched copy with the queued edit, queues the result
+  with the fetched version as its new base, and only then hands it to the
+  app to save. With no merge function it applies the same "higher stamp
+  wins" rule an upload would: if the queued edit has the higher stamp, it
+  stays queued with the fetched version as its new base and the fetched
+  copy is saved as a conflict copy; if the fetched copy is higher, it
+  replaces the local record, the queued edit leaves the outbox and is kept
+  as a conflict copy, and nothing is uploaded. Either way the result
+  doesn't depend on whether the fetch or the upload ran first. So the local store always holds
   the version that is queued, and reconciliation after a restart finds it.
   The record's last-seen change tag moves to the fetched version only once
   the app confirms it saved the merged record (and the fetch's change token
@@ -192,7 +197,10 @@ Every case uses two or three simulated devices and invented records.
    as a conflict copy, and status says "needs attention". When the device is
    recreated from its checkpoint before the app confirms it saved the
    conflict copy, the copy is still there and the status still says "needs
-   attention".
+   attention". Also run with A fetching B's version before A uploads, once
+   with A's stamp lower and once higher: both devices end with the
+   higher-stamped version and the other kept as a conflict copy, the same
+   as when A uploads first.
 5. A logically deletes a record; B, offline, edits its older copy; after
    sync the deletion wins (older edit). Then A restores the record with a
    later stamp; after sync it is back on both devices.
@@ -371,7 +379,9 @@ base, and reconciliation pushes the logical clock past every local stamp
 (test 17, fourth case and the follow-up edit). Its round on `93bfb99`
 added two P1s: conflict copies stay in the checkpoint until the app has
 saved them (test 4), and a fetch-merge moves the record's base only after
-the merged record is saved locally (test 19).
+the merged record is saved locally (test 19). Its round on `db8b8d2` added
+a P1: with no merge function, a fetch applies "higher stamp wins" too, so
+the result doesn't depend on fetch-or-upload order (test 4).
 
 ## Review And Finish Line
 
