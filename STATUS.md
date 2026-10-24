@@ -1,6 +1,6 @@
 # Status
 
-Updated October 21, 2026. The short version of where the build is. The full
+Updated October 24, 2026. The short version of where the build is. The full
 plan is in [PLAN.md](PLAN.md).
 
 ## Now
@@ -90,7 +90,9 @@ Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
 **Calendar merge engine** (Personal, launch set), Codex builds, Gemini Code Assist reviews; plan approved (`docs/plans/calendar-merge-engine.md`); Codex can start when a builder place is free.
 
-**Skin check** (Personal, new Health module), Claude builds, Gemini Code Assist reviews; plan in review (`docs/plans/skin-check.md`). Slice 1 is a standalone engine; the iPhone source and Desk view wait for the iPhone capture app.
+**Cloudwork Rail Map** (Desk, Cloudwork Nexus), Claude builds; a fifth Nexus view showing this repository's branches, commits and pull requests from a saved snapshot (`apps/desk/scripts/rail-map-snapshot.mjs`); merged October 24 (#132).
+
+**Skin check** (Personal, new Health module), Claude builds, Gemini Code Assist reviews; plan approved (`docs/plans/skin-check.md`). Slice 1 is a standalone engine; the iPhone source and Desk view wait for the iPhone capture app.
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:

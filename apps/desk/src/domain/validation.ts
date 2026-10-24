@@ -125,7 +125,7 @@ export function validateState(input: unknown): StateValidation {
     }
   }
   if (!record(input.selection) || !exact(input.selection, ['goalId', 'sessionId', 'route']) || !(input.selection.goalId === null || (identifier(input.selection.goalId) && goalIds.has(input.selection.goalId))) || !(input.selection.sessionId === null || (identifier(input.selection.sessionId) && sessionGoals.has(input.selection.sessionId) && sessionGoals.get(input.selection.sessionId) === input.selection.goalId)) || !oneOf(input.selection.route, ['setup', 'sessions', 'work', 'memory', 'data'])) return invalid('The selected session, domain or route is invalid.');
-  if (!record(input.preferences) || !withOptional(input.preferences, ['theme'], ['nexusView']) || !oneOf(input.preferences.theme, ['system', 'light', 'dark']) || !(input.preferences.nexusView === undefined || oneOf(input.preferences.nexusView, ['navigator', 'canvas', 'atlas', 'roadmap']))) return invalid('A view preference is invalid.');
+  if (!record(input.preferences) || !withOptional(input.preferences, ['theme'], ['nexusView']) || !oneOf(input.preferences.theme, ['system', 'light', 'dark']) || !(input.preferences.nexusView === undefined || oneOf(input.preferences.nexusView, ['navigator', 'canvas', 'atlas', 'railmap', 'roadmap']))) return invalid('A view preference is invalid.');
   if (!record(input.capabilities) || !exact(input.capabilities, ['mode', 'provider', 'native']) || input.capabilities.mode !== 'synthetic' || input.capabilities.provider !== (input.schemaVersion === 1 ? 'demo-only' : 'runtime-selected') || input.capabilities.native !== 'unavailable') return invalid('The invented-data workspace has invalid capability metadata.');
   return { valid: true, state: input as unknown as DeskState };
 }

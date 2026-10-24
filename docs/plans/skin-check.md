@@ -1,6 +1,6 @@
 # Skin Check: iPhone Source And Desk Health View (PRD)
 
-Status: Draft (Oct 24): proposed from the owner's request in the "261024 OC STEERING" project; waiting on the owner's approval and the Owner Questions below.
+Status: Approved (Oct 24): the owner approved the plan on #133 and chose no image classifier; slice 1 starts once this merges.
 
 Written October 24, 2026 by a Claude building session (thread "Build skin
 cancer risk iOS submodule") from the owner's request: "a tiny submodule, a
@@ -224,8 +224,9 @@ building, naming the phone and Desk files they may touch.
 Builders use the recommended answer unless the owner changes it before the
 code pull request merges.
 
-1. **An AI image classifier.** Recommendation: **none for now**; build the
-   record and self-check only. Reasons:
+1. **An AI image classifier.** Answered October 24: **none for now** (the
+   owner chose the recommendation). Build the record and self-check only.
+   Reasons:
    - The large public skin-lesion datasets are mostly dermatoscope images,
      not phone photos, and the best known one (HAM10000, part of the ISIC
      archive) is licensed CC BY-NC 4.0, non-commercial only. Other ISIC
