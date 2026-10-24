@@ -3,7 +3,7 @@ import type { ConversationRun, ParticipantIdentity } from './conversation-run-ty
 
 export type DeskRoute = 'setup' | 'sessions' | 'work' | 'memory' | 'data';
 export type ThemePreference = 'system' | 'light' | 'dark';
-export type NexusView = 'navigator' | 'canvas' | 'atlas' | 'roadmap';
+export type NexusView = 'navigator' | 'canvas' | 'atlas' | 'railmap' | 'roadmap';
 
 export interface Goal {
   id: string;
