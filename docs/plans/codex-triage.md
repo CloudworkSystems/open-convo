@@ -113,6 +113,14 @@ before. Expected cost is a few cents per judged commit.
   and "real when unsure" reduce this; the verdict comment makes each call
   reviewable, and any session that disagrees can raise it on the pull request.
 - **Cost.** One request per judged head commit; no request without the secret.
+- **Dismissed serious findings.** The judge sees only the head's findings, so
+  it relies on Codex repeating anything still wrong. The review guidelines
+  therefore let Codex drop an answered finding only if it is P2 or P3; a P0
+  or P1 is raised again until the code fixes it or Codex agrees.
+- **Who posts verdicts.** A verdict counts because `github-actions[bot]`
+  posted it, and any workflow on a same-repo branch posts as that account.
+  That is the same exposure the existing `codex-approved` status already
+  has, so it adds no new hole.
 
 ## Follow-Ups
 
