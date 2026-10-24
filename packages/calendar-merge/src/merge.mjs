@@ -13,10 +13,11 @@ import { formatAgenda } from './agenda.mjs';
 const USAGE = 'Usage: node src/merge.mjs --from YYYY-MM-DD --to YYYY-MM-DD --tz Area/City <file.ics> ... [--json] [--include-cancelled]';
 
 // RFC 5545 folds lines by octets, so a fold can split a multi-byte UTF-8
-// character. Before decoding, the split character's continuation bytes are
-// moved in front of the fold: unfolding then gives the same text, and line
-// numbers don't change. Anything else that hands the engine text (a later
-// fetch layer, for example) needs the same care.
+// character, even more than once. Before decoding, the unfinished start of a
+// character in front of a fold is moved to just after the fold's space or
+// tab, so each character is whole on one physical line: unfolding then gives
+// the same text, and line numbers don't change. Anything else that hands the
+// engine text (a later fetch layer, for example) needs the same care.
 export function decodeIcs(bytes) {
   if (typeof bytes === 'string') return bytes;
   const out = [];
@@ -25,15 +26,19 @@ export function decodeIcs(bytes) {
     const b = bytes[i];
     const lineBreak = b === 0x0a ? 1 : b === 0x0d && bytes[i + 1] === 0x0a ? 2 : 0;
     if (lineBreak && (bytes[i + lineBreak] === 0x20 || bytes[i + lineBreak] === 0x09)) {
-      let j = i + lineBreak + 1;
-      const moved = [];
-      while (j < bytes.length && (bytes[j] & 0xc0) === 0x80) { moved.push(bytes[j]); j += 1; }
-      if (moved.length) {
-        out.push(...moved);
-        for (let k = i; k <= i + lineBreak; k += 1) out.push(bytes[k]);
-        i = j;
-        continue;
+      // Find an unfinished character at the end of what is written so far.
+      let k = out.length;
+      while (k > 0 && out.length - k < 3 && (out[k - 1] & 0xc0) === 0x80) k -= 1;
+      let carried = [];
+      if (k > 0) {
+        const lead = out[k - 1];
+        const length = lead >= 0xf0 ? 4 : lead >= 0xe0 ? 3 : lead >= 0xc0 ? 2 : 1;
+        if (length > 1 && out.length - (k - 1) < length) carried = out.splice(k - 1);
       }
+      for (let j = i; j <= i + lineBreak; j += 1) out.push(bytes[j]);
+      out.push(...carried);
+      i += lineBreak + 1;
+      continue;
     }
     out.push(b);
     i += 1;

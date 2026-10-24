@@ -20,7 +20,24 @@ export const LIMITS = Object.freeze({
   callSteps: 2_000_000, // repeat periods visited in one call
   seriesValues: 50_000, // RDATE and EXDATE values in one series
   callValues: 200_000, // dates read through a time zone in one call
+  // Each source gets an equal share of the call's steps and values, so one
+  // hostile calendar can only use up its own share.
 });
+
+// The work budget of one source in one call.
+function sourceBudget(sourceCount) {
+  const stepsShare = Math.floor(LIMITS.callSteps / Math.max(1, sourceCount));
+  const valuesShare = Math.floor(LIMITS.callValues / Math.max(1, sourceCount));
+  return { steps: stepsShare, values: valuesShare, stepsShare, valuesShare };
+}
+
+// resolveValue, counted against a source's budget when it needs a time zone.
+function budgetedResolve(value, fallbackZone, budget) {
+  if (value.kind === 'date' || value.utc) return resolveValue(value, fallbackZone);
+  if (budget.values <= 0) throw new WorkLimit(`this calendar's share of time zone work (${budget.valuesShare} dates) is used up`);
+  budget.values -= 1;
+  return resolveValue(value, fallbackZone);
+}
 
 function refuse(message) {
   throw new Error(message);
@@ -102,16 +119,15 @@ function labelOf(resolved) {
   return formatUtc(resolved.ms);
 }
 
+// DTSTAMP and LAST-MODIFIED are UTC (RFC 5545 3.8.7.2, 3.8.7.3). A value
+// written without Z, or with a TZID (which is ignored), is read as UTC too,
+// so they never need time zone work.
 function stampOf(prop) {
   if (!prop) return null;
-  const value = parseDateValue(prop.value, prop.params);
+  const value = parseDateValue(prop.value, {});
   if (!value) return null;
   if (value.kind === 'date') return value.day * DAY_MS;
-  if (value.tzid !== null) {
-    const zone = zoneFromTzid(value.tzid);
-    if (zone) return wallToInstant(zone, value.day, value.sec);
-  }
-  return value.day * DAY_MS + value.sec * 1000; // UTC, or floating read as UTC
+  return value.day * DAY_MS + value.sec * 1000;
 }
 
 function fingerprint(raw) {
@@ -119,7 +135,7 @@ function fingerprint(raw) {
 }
 
 // One VEVENT to a copy (an event or a cancellation record), or a problem.
-function interpret(raw, source, ctx) {
+function interpret(raw, source, ctx, budget) {
   const first = (name) => raw.props.get(name)?.[0];
   const where = { sourceIndex: source.index, line: raw.line };
   const uid = first('UID')?.value.trim();
@@ -148,7 +164,7 @@ function interpret(raw, source, ctx) {
     const value = parseDateValue(ridProp.value, ridProp.params);
     if (!value) return { error: 'RECURRENCE-ID is not a readable date' };
     ridRange = (ridProp.params.RANGE || []).some((r) => r.toUpperCase() === 'THISANDFUTURE');
-    return resolveValue(value, fallbackZone);
+    return budgetedResolve(value, fallbackZone, budget);
   };
 
   if (!dtstartProp) {
@@ -160,7 +176,7 @@ function interpret(raw, source, ctx) {
 
   const startValue = parseDateValue(dtstartProp.value, dtstartProp.params);
   if (!startValue) return skip('DTSTART is not a readable date');
-  const start = resolveValue(startValue, ctx.zone);
+  const start = budgetedResolve(startValue, ctx.zone, budget);
   if (start.error) return skip(start.error);
   const zone = start.date ? null : start.zone;
 
@@ -176,7 +192,7 @@ function interpret(raw, source, ctx) {
       if (days < 0) return skip('it ends before it starts');
       duration = { days: Math.max(days, 1) };
     } else {
-      const end = resolveValue(endValue, zone);
+      const end = budgetedResolve(endValue, zone, budget);
       if (end.error) return skip(end.error);
       if (end.ms < start.ms) return skip('it ends before it starts');
       duration = { nominalDays: 0, exactMs: end.ms - start.ms };
@@ -278,10 +294,10 @@ function seriesWindow(copy, q) {
 // Instances of a series (or a single event) that touch the range, keyed by
 // their original start. Returns { instances: Map, notSupported, workLimit,
 // problems }. A series that would take more work than its share of the
-// budget (q.budget, shared by the whole call) shows only its first
-// occurrence, with `workLimit` saying why.
+// budget (its source's share of the call's budget) shows only its first
+// occurrence, with `workLimit` saying why. Each source has its own budget.
 export function expandSeries(copy, q, { forceSingle = false, stats = { steps: 0 } } = {}) {
-  const budget = q.budget ?? { steps: LIMITS.callSteps, values: LIMITS.callValues };
+  const budget = q.budgets?.[copy.sourceIndex] ?? sourceBudget(1);
   const notSupported = forceSingle || copy.ruleProblem !== null;
   try {
     const result = expandFully(copy, q, notSupported, stats, budget);
@@ -301,17 +317,20 @@ function expandFully(copy, q, single, stats, budget) {
   const all = new Map();
   const allDay = copy.start.date;
   const window = seriesWindow(copy, q);
-  const maxSteps = Math.min(LIMITS.seriesSteps, budget.steps);
-  // Values outside the window can't touch the range: they are skipped before
-  // any time zone work. The others count against the call's value budget.
-  const outside = (day) => day < window.fromDay - 1 || day > window.toDay + 1;
-  const resolve = (value) => {
-    if (!value.utc) {
-      if (budget.values <= 0) throw new WorkLimit(`more than ${LIMITS.callValues} dates to read in one call`);
-      budget.values -= 1;
+  const sourceBound = budget.steps < LIMITS.seriesSteps;
+  const maxSteps = sourceBound ? budget.steps : LIMITS.seriesSteps;
+  const expandRule = (...args) => {
+    try {
+      return expandRuleDays(...args, stats, maxSteps);
+    } catch (error) {
+      if (error instanceof WorkLimit && sourceBound) throw new WorkLimit(`this calendar's share of the work (${budget.stepsShare} repeat periods) is used up`);
+      throw error;
     }
-    return resolveValue(value, copy.zone);
   };
+  // Values outside the window can't touch the range: they are skipped before
+  // any time zone work. The others count against the source's value budget.
+  const outside = (day) => day < window.fromDay - 1 || day > window.toDay + 1;
+  const resolve = (value) => budgetedResolve(value, copy.zone, budget);
   const add = (resolvedStart, instance) => {
     const key = keyOf(resolvedStart);
     if (!all.has(key)) all.set(key, { ...instance, origKey: key, origLabel: labelOf(resolvedStart) });
@@ -325,7 +344,7 @@ function expandFully(copy, q, single, stats, budget) {
     let dates = [copy.start.day];
     if (copy.rule && !single) {
       const until = copy.rule.untilValue;
-      dates = expandRuleDays(copy.rule, copy.start.day, window, until ? (day) => day > until.day : undefined, stats, maxSteps);
+      dates = expandRule(copy.rule, copy.start.day, window, until ? (day) => day > until.day : undefined);
     }
     for (const day of dates) add({ date: true, day }, { allDay: true, startDay: day, endDay: day + days });
   } else {
@@ -338,11 +357,11 @@ function expandFully(copy, q, single, stats, budget) {
       let pastUntil;
       if (until && until.kind === 'date') pastUntil = (day) => day > until.day;
       else if (until) {
-        const untilResolved = resolveValue(until, zone);
+        const untilResolved = resolve(until);
         const untilMs = untilResolved.error ? Infinity : untilResolved.ms;
         pastUntil = (day) => instantOf(day) > untilMs;
       }
-      dates = expandRuleDays(copy.rule, copy.start.day, window, pastUntil, stats, maxSteps);
+      dates = expandRule(copy.rule, copy.start.day, window, pastUntil);
     }
     for (const day of dates) {
       const startMs = instantOf(day);
@@ -359,7 +378,8 @@ function expandFully(copy, q, single, stats, budget) {
         if (!startValue || startValue.kind !== 'time' || allDay) { at(`RDATE period "${rdate.text}" skipped: not readable for this event`); continue; }
         const endValue = parseDateValue(endText, { TZID: rdate.params.TZID });
         const d = endValue ? null : parseDuration(endText);
-        const lastDay = endValue ? endValue.day : startValue.day + (d ? d.weeks * 7 + d.days + 1 : 0);
+        const lastDay = endValue ? endValue.day
+          : startValue.day + (d ? d.weeks * 7 + d.days + Math.ceil((d.hours * 3600 + d.minutes * 60 + d.seconds) / 86_400) + 1 : 0);
         if (startValue.day > window.toDay + 1 || lastDay < window.fromDay - 1) continue;
         const s = resolve(startValue);
         if (s.error) { at(`RDATE "${rdate.text}" skipped: ${s.error}`); continue; }
@@ -606,7 +626,7 @@ export async function mergeCalendars(sources, query) {
     ...checked,
     rangeStart: wallToInstant(checked.zone, checked.fromDay, 0),
     rangeEnd: wallToInstant(checked.zone, checked.toDay + 1, 0),
-    budget: { steps: LIMITS.callSteps, values: LIMITS.callValues },
+    budgets: sourceList.map(() => sourceBudget(sourceList.length)),
   };
 
   const problems = [];
@@ -624,8 +644,17 @@ export async function mergeCalendars(sources, query) {
       throw error;
     }
     for (const problem of read.problems) problems.push({ sourceIndex: source.index, ...problem });
+    const workSkipped = { count: 0, first: null };
     for (const raw of read.events) {
-      const result = interpret(raw, source, q);
+      let result;
+      try {
+        result = interpret(raw, source, q, q.budgets[source.index]);
+      } catch (error) {
+        if (!(error instanceof WorkLimit)) throw error;
+        workSkipped.count += 1;
+        if (workSkipped.count === 1) workSkipped.first = { line: raw.line, reason: error.message };
+        continue;
+      }
       if (result.problem) { problems.push(result.problem); continue; }
       const { copy } = result;
       const group = groupFor(copy.uid);
@@ -636,6 +665,10 @@ export async function mergeCalendars(sources, query) {
         const entry = group.overrides.get(copy.ridKey);
         (copy.kind === 'record' ? entry.records : entry.copies).push(copy);
       }
+    }
+    if (workSkipped.count) {
+      const what = workSkipped.count === 1 ? '1 event skipped' : `${workSkipped.count} events skipped, the first here`;
+      problems.push({ sourceIndex: source.index, line: workSkipped.first.line, text: `${what}: ${workSkipped.first.reason}` });
     }
   }
 

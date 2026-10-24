@@ -128,15 +128,33 @@ only its first occurrence, marked `repeatNotSupported: true`, and is listed in
 ## Work limits
 
 Calendars come from outside, so one call's work is bounded, not only its
-input size. A series may visit at most 100,000 repeat periods and hold at most
-50,000 `RDATE` and `EXDATE` values; one call may visit at most 2,000,000
-periods and read at most 200,000 dates through a time zone. A series that
-would go past a limit shows only its first occurrence, marked
-`repeatNotSupported: true`, and is listed in `problems` ("needs too much work
-to expand"). `RDATE` and `EXDATE` values whose written date is outside the
-range (with a day to spare) are skipped before any time zone work, and time
-zone offsets are cached per zone and hour. `tests/16-work-budget.test.mjs`
-covers a hostile 164-byte `COUNT` rule and large out-of-range `RDATE` lists.
+input size.
+
+- A series may visit at most 100,000 repeat periods and hold at most 50,000
+  `RDATE` and `EXDATE` values.
+- One call may visit at most 2,000,000 repeat periods and read at most
+  200,000 dates through a time zone. Each source gets an equal share of both
+  (with 20 sources, 100,000 periods and 10,000 dates each), so a hostile
+  calendar can only use up its own share; a series is charged to the source
+  of the copy that is shown.
+- Dates read through a time zone include `DTSTART`, `DTEND`,
+  `RECURRENCE-ID`, `RDATE`, `EXDATE` and a local `UNTIL`. UTC times and
+  all-day dates cost nothing. `DTSTAMP` and `LAST-MODIFIED` are always read
+  as UTC (E20), so they never need time zone work.
+- A series that would go past a limit shows only its first occurrence,
+  marked `repeatNotSupported: true`, and is listed in `problems` ("needs too
+  much work to expand"). An event whose own `DTSTART`, `DTEND` or
+  `RECURRENCE-ID` can't be read because its source's share is used up is
+  skipped; each source lists these once ("N events skipped, the first
+  here"). Which events those are can depend on their order in the file.
+- `RDATE` and `EXDATE` values whose written date is outside the range (with a
+  day to spare) are skipped before any time zone work. Time zone offsets are
+  cached per zone and hour, and time zone names are cached.
+
+`tests/16-work-budget.test.mjs` covers a hostile 164-byte `COUNT` rule, a
+hostile source next to a normal one, large out-of-range `RDATE` lists, and
+the per-source date share. Those tests count problems and occurrences rather
+than time.
 
 ## Edge cases
 
@@ -186,7 +204,8 @@ Each has a test in `tests/15-edge-cases.test.mjs` under the same number.
 - **E18.** An occurrence that began before the range is sorted and listed
   under the range's first day.
 - **E19.** The query's time zone must be a name; offset forms are refused.
-- **E20.** `LAST-MODIFIED` and `DTSTAMP` without `Z` are read as UTC; they
+- **E20.** `LAST-MODIFIED` and `DTSTAMP` are UTC (RFC 5545). One written
+  without `Z`, or with a `TZID` (which is ignored), is read as UTC too; they
   only break ties.
 - **E21.** `METHOD` applies to its whole `VCALENDAR` wherever it is written,
   and a file may hold several `VCALENDAR`s.
@@ -198,9 +217,10 @@ Each has a test in `tests/15-edge-cases.test.mjs` under the same number.
 - **E25.** An event missing its `END:VEVENT` (another `BEGIN:VEVENT`,
   `END:VCALENDAR` or the end of the file comes first) is skipped and listed.
 - **E26.** Parameter values are decoded as RFC 6868 says (`^n`, `^'`, `^^`).
-- **E27.** RFC 5545 folds by octets, so a fold can split a multi-byte UTF-8
-  character. The command moves the split character's bytes in front of the
-  fold before decoding, so it reads whole and line numbers stay the same. The
+- **E27.** RFC 5545 folds by octets, so a fold (or several) can split a
+  multi-byte UTF-8 character. Before decoding, the command moves the
+  unfinished start of a character to just after the fold's space or tab, so
+  it reads whole and line numbers stay the same. The
   library takes text, so anything else that hands it text (a later fetch
   layer, for example) needs the same care.
 

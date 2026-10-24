@@ -242,3 +242,13 @@ test('E27: the command restores a multi-byte character that a fold split', async
   assert.equal(JSON.parse(printed).occurrences[0].title, 'Café été');
   assert.equal(decodeIcs(folded).split('\r\n').length, new TextDecoder().decode(folded).split('\r\n').length);
 });
+
+test('E27: a character split by two folds is restored too, and line numbers stay the same', () => {
+  const emoji = new TextEncoder().encode('\u{1F600}');
+  const ascii = (text) => [...new TextEncoder().encode(text)];
+  // "X:" then the 4-byte emoji folded after its first and second bytes.
+  const bytes = Uint8Array.from([...ascii('X:'), emoji[0], 0x0a, 0x20, emoji[1], 0x0d, 0x0a, 0x09, emoji[2], emoji[3], 0x0a]);
+  const text = decodeIcs(bytes);
+  assert.equal(text.replace(/\r?\n[ \t]/g, ''), 'X:\u{1F600}\n');
+  assert.equal(text.split(/\r?\n/).length, 4);
+});

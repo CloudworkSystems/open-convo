@@ -102,13 +102,22 @@ function formatterFor(zone) {
 
 // The canonical IANA name for `name`, or null. Offset forms such as "+05:00"
 // are not names and are refused.
+// Answers are cached by name (building an Intl formatter is the slow part);
+// the cache is cleared when it grows large.
+const zoneNames = new Map();
+
 export function canonicalZone(name) {
   if (typeof name !== 'string' || !/^[A-Za-z]/.test(name)) return null;
+  if (zoneNames.has(name)) return zoneNames.get(name);
+  let zone;
   try {
-    return new Intl.DateTimeFormat('en-US', { timeZone: name }).resolvedOptions().timeZone;
+    zone = new Intl.DateTimeFormat('en-US', { timeZone: name }).resolvedOptions().timeZone;
   } catch {
-    return null;
+    zone = null;
   }
+  if (zoneNames.size > 10_000) zoneNames.clear();
+  zoneNames.set(name, zone);
+  return zone;
 }
 
 // A TZID as written in a file: an IANA name, or a Windows name from the CLDR
