@@ -50,7 +50,7 @@ rule, not just a disclaimer:
    linked to your Mac," inside the capture app: tap it, pick the spot on a
    body outline, take a guided photo, answer every self-check question
    below (the five ABCDE questions, the two urgent ones, the comparison
-   question and the new-spot question), done. "Done" stays unavailable
+   question, the new-spot question and the open question), done. "Done" stays unavailable
    until each question has an answer, and "not sure" counts as one. No
    timeline, history or results on the phone. Photos and answers move to the
    Mac the same way other captured sources do until step 9: AirDrop
@@ -95,16 +95,20 @@ A small library in `packages/skin-check/`:
   5. Has it changed in size, shape, color or feeling since you last looked?
      (Evolving)
   Plus two urgent questions: "Has it bled without being hurt?" and "Is it a
-  sore that hasn't healed in three weeks?"; one comparison question: "Does
-  it look different from your other spots?" (the "ugly duckling" sign); and
-  one new-spot question: "Is this a spot you hadn't noticed before (new in
-  the last few months)?" The new-spot question is asked on the spot's first
+  sore that hasn't healed in three weeks, or that heals and keeps coming
+  back in the same place?"; one comparison question: "Does it look
+  different from your other spots?" (the "ugly duckling" sign); one
+  new-spot question: "Is this a spot you hadn't noticed before (new in the
+  last few months)?"; and one open question: "Is there anything else about
+  this spot that worries you (itching, tenderness, a crust, anything)?"
+  The open question catches signs the list doesn't name. The new-spot question is asked on the spot's first
   check-in and can be answered again later. It records whether the spot is
   new on the skin, which the spot's created date in the app cannot tell.
 - **What needs a clinician's look.** Plain rules, no scores:
   - Any urgent answer "yes": **book an appointment soon**, with the reason.
   - Any other answer of "yes" or "not sure" to any question (A to E, the
-    comparison question, the new-spot question, or "not sure" on an urgent
+    comparison question, the new-spot question, the open question, or "not
+    sure" on an urgent
     question): **worth showing a clinician**, with the reasons. Dermatology
     guidance says to see a dermatologist for any one of these signs, so one
     is enough, and doubt counts as a sign. A missing answer counts as "not
@@ -150,8 +154,9 @@ people and spots only. At least:
 3. Each rule above produces the right outcome and reason. For each
    question in turn, a single "yes" or "not sure" with every other answer
    "no" is worth a clinician's look (urgent "yes" is book soon); a missing
-   answer counts as "not sure"; urgent answers always win; and only all
-   "no" gives "no warning sign noted by you".
+   answer counts as "not sure"; urgent answers always win (including a
+   sore that heals and comes back); and only all "no" gives "no warning
+   sign noted by you".
 4. No output text contains reassuring or grading words: a test scans every
    string the engine produces (outcomes, reasons, summary) for words such as
    "safe", "benign", "normal", "low risk", "healthy", "clear", "fine",
