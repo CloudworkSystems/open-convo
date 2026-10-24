@@ -300,15 +300,15 @@ export function mergePeople(left, right) {
   const b = new Map(right.spots.map(spot => [spot.id, spot]));
   const spots = [...new Set([...a.keys(), ...b.keys()])].sort().map(id => mergeSpot(a.get(id), b.get(id)));
   // A record is dropped only when its own spot lists its ID under its own type.
-  const purged = kind => new Set(spots.flatMap(spot => spot.purged[kind].map(id => `${spot.id}\n${id}`)));
+  const purged = kind => new Set(spots.flatMap(spot => spot.purged[kind].map(id => JSON.stringify([spot.id, id]))));
   const [goneCheckIns, goneVisits] = [purged('checkIns'), purged('visits')];
   return canonical(validate({
     schemaVersion: SCHEMA_VERSION,
     id: left.id,
     fields: records(left.fields, right.fields),
     spots,
-    checkIns: mergeSet(left.checkIns, right.checkIns, 'check-ins').filter(record => !goneCheckIns.has(`${record.spotId}\n${record.id}`)),
-    visits: mergeSet(left.visits, right.visits, 'clinician visits').filter(record => !goneVisits.has(`${record.spotId}\n${record.id}`)),
+    checkIns: mergeSet(left.checkIns, right.checkIns, 'check-ins').filter(record => !goneCheckIns.has(JSON.stringify([record.spotId, record.id]))),
+    visits: mergeSet(left.visits, right.visits, 'clinician visits').filter(record => !goneVisits.has(JSON.stringify([record.spotId, record.id]))),
   }));
 }
 export function serializePerson(person) { return JSON.stringify(canonical(validate(person))); }

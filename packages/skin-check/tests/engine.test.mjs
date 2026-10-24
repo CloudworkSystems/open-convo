@@ -442,3 +442,16 @@ test('emptying Trash drops only the deleted records of that type and spot, even 
   viewer.load(mac.save());
   assert.equal(viewer.spotOutcome('spot-wrist').visit.id, 'same-id');
 });
+
+test('deletion markers match spot and record IDs exactly, even when IDs contain newlines', () => {
+  const skin = engine();
+  skin.addSpot({ region: 'neck' }, { id: 'a\nb' });
+  skin.addSpot({ region: 'chest' }, { id: 'a' });
+  skin.addCheckIn({ spotId: 'a\nb', capturedAt: '2026-10-02T08:00:00Z', answers: ALL_NO }, { id: 'c' });
+  skin.addCheckIn({ spotId: 'a', capturedAt: '2026-10-02T08:00:00Z', answers: ALL_NO }, { id: 'b\nc' });
+  const offline = skin.getPerson();
+  skin.removeSpot('a\nb');
+  skin.emptyTrash();
+  const merged = mergePeople(skin.getPerson(), offline);
+  assert.deepEqual(merged.checkIns.map(record => [record.spotId, record.id]), [['a', 'b\nc']]);
+});
