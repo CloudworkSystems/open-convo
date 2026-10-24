@@ -252,13 +252,15 @@ function validate(person) {
     if (spots.has(spot.id)) fail('Duplicate spot ID in skin check file.');
     spots.add(spot.id);
   }
-  for (const [list, check, what] of [[person.checkIns, validateCheckIn, 'check-in'], [person.visits, validateVisit, 'visit']]) {
+  for (const [list, check, what, kind] of [[person.checkIns, validateCheckIn, 'check-in', 'checkIns'], [person.visits, validateVisit, 'visit', 'visits']]) {
     const ids = new Set();
+    const gone = new Set(person.spots.flatMap(spot => spot.purged[kind].map(id => JSON.stringify([spot.id, id]))));
     for (const record of list) {
       check(record);
       const key = JSON.stringify([record.spotId, record.id]);
       if (ids.has(key)) fail(`Duplicate ${what} ID in skin check file.`);
       if (!spots.has(record.spotId)) fail(`A ${what} refers to a spot that is not in the file.`);
+      if (gone.has(key)) fail(`A ${what} in the skin check file was permanently deleted with its spot.`);
       ids.add(key);
     }
   }

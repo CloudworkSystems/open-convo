@@ -411,6 +411,8 @@ test('the engine does not change returned copies and refuses a file for another 
   assert.throws(() => mac.load(other.save()), /different person/);
 });
 
+const offlineRecord = skin => skin.getPerson().checkIns[0];
+
 // Edge cases named in the README.
 test('edge cases: archived spots take check-ins, odd photo references are refused, a later restore brings a spot back', () => {
   const { mac, phone } = pair();
@@ -446,6 +448,11 @@ test('emptying Trash drops only the deleted records of that type and spot, even 
   mac.emptyTrash();
   const tomb = mac.getPerson().spots.find(spot => spot.id === 'spot-back');
   assert.deepEqual(tomb.purged, { checkIns: ['same-id'], visits: [] });
+  // A file that keeps a record its own deletion marker names is refused rather than reviving the spot.
+  const contradictory = JSON.parse(mac.save());
+  contradictory.checkIns.push({ ...offlineRecord(mac), spotId: 'spot-back', id: 'same-id' });
+  assert.throws(() => deserializePerson(JSON.stringify(contradictory)), /permanently deleted with its spot/);
+  assert.throws(() => new SkinCheck({ deviceId: 'v', person: contradictory }), /permanently deleted with its spot/);
   const reloaded = deserializePerson(mac.save());
   const merged = mergePeople(reloaded, mac.getPerson());
   assert.deepEqual(merged.visits.map(visit => visit.id), ['same-id']);
