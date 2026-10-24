@@ -178,3 +178,42 @@ test('a RANGE=THISANDFUTURE change from another source is named in its problem, 
   assert.deepEqual(days(result), ['2026-11-02*', '2026-11-03']);
   assert.deepEqual(result.problems, [`Source "b", line ${4 + ev('UID:other@test.example', 'SUMMARY:Other', 'DTSTART:20261103T150000Z').length}: repeat rule of "s@test.example" not supported (RANGE=THISANDFUTURE); only its first occurrence is shown.`]);
 });
+
+test('no extreme value makes the call fail: each bad event is skipped and listed (review r9)', async () => {
+  const S = 'DTSTART:20261102T090000Z';
+  const cases = [
+    [S, 'DURATION:P100000000D'], [S, 'DURATION:PT99999999999999999999H'], [S, 'DURATION:P99999999999W'],
+    [S, `DURATION:P${'9'.repeat(400)}D`], ['DTSTART;VALUE=DATE:20261102', 'DURATION:P100000000D'],
+    ['DTSTART:99991231T235959Z', 'DURATION:P3660000D', 'RRULE:FREQ=DAILY'], ['DTSTART;VALUE=DATE:99991231', 'RRULE:FREQ=YEARLY'],
+    ['DTSTART;TZID=America/New_York:00010101T000000', 'RRULE:FREQ=WEEKLY'], [S, 'DTEND;TZID=Asia/Tokyo:99991231T235959'],
+    [S, 'RRULE:FREQ=DAILY;UNTIL=99991231T235959Z'], [S, 'RRULE:FREQ=DAILY;UNTIL=00010101'],
+    [S, 'RRULE:FREQ=YEARLY;INTERVAL=99999999999999999999'], [S, 'RRULE:FREQ=WEEKLY;INTERVAL=99999999999999999999999'],
+    [S, 'RRULE:FREQ=MONTHLY;BYDAY=MO;BYSETPOS=-99999999999999999999'], [S, 'RRULE:FREQ=MONTHLY;BYMONTHDAY=-9999999999999'],
+    [S, 'RRULE:FREQ=MONTHLY;BYDAY=99999999999MO'], [S, 'RRULE:FREQ=DAILY;COUNT=99999999999999999999'],
+    [S, 'RDATE;VALUE=PERIOD:20261103T090000Z/P100000000D'], [S, `RDATE;VALUE=PERIOD:20261103T090000Z/PT${'9'.repeat(30)}S`],
+    [S, 'RDATE;VALUE=PERIOD;TZID=Pacific/Kiritimati:99991231T235959/P3660000D'], [S, 'RDATE:99991231T235959Z,00010101T000000Z'],
+    ['RECURRENCE-ID:99991231T235959Z', 'DTSTART:99991231T235959Z', 'DURATION:P1D'],
+  ];
+  const ranges = [{ from: '2026-11-01', to: '2026-11-30' }, { from: '9999-12-01', to: '9999-12-31', timeZone: 'Pacific/Kiritimati' }, { from: '0001-01-01', to: '0001-01-31' }];
+  for (const props of cases) {
+    for (const range of ranges) {
+      const result = await merge({ a: cal(ev('UID:x@test.example', 'SUMMARY:X', ...props)) }, range);
+      assert.ok(Array.isArray(result.occurrences), props.join(' '));
+    }
+  }
+  const huge = await merge({ a: cal(ev('UID:x@test.example', 'DTSTART:20261102T090000Z', 'DURATION:P100000000D')) }, NOV);
+  assert.deepEqual(huge.problems, ['Source "a", line 4: event "x@test.example" skipped: DURATION is not readable or is longer than 10,000 years.']);
+});
+
+test('a floating DTEND is read in the query\'s zone, even when DTSTART has a TZID (review r9)', async () => {
+  const event = ev('UID:f@test.example', 'SUMMARY:Mixed', 'DTSTART;TZID=America/New_York:20261102T090000', 'DTEND:20261102T120000');
+  const result = await merge({ a: cal(event) }, { ...NOV, timeZone: 'America/Los_Angeles' });
+  assert.deepEqual(result.occurrences.map((o) => [o.start.utc, o.end.utc]), [['2026-11-02T14:00:00Z', '2026-11-02T20:00:00Z']]);
+});
+
+test('a UID is unescaped like other text before copies are matched (review r9)', async () => {
+  const escaped = cal(ev('UID:team\\,one@test.example', 'SUMMARY:Old', 'DTSTART:20261103T150000Z'));
+  const plain = cal(ev('UID:team,one@test.example', 'SUMMARY:New', 'DTSTART:20261103T150000Z', 'SEQUENCE:1'));
+  const result = await merge({ a: escaped, b: plain }, NOV);
+  assert.deepEqual(result.occurrences.map((o) => [o.uid, o.title, o.matchedBy]), [['team,one@test.example', 'New', 'uid']]);
+});

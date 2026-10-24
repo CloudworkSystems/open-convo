@@ -55,6 +55,8 @@ console.log(formatAgenda(result));
 
 - Lines are unfolded (space or tab), CRLF or LF endings, text unescaped
   (`\n`, `\,`, `\;`, `\\`), parameters may be quoted, names in any case.
+  `UID` is text too: it is unescaped before copies are matched, so
+  `team\,one` and `team,one` are the same event.
 - Only `VEVENT`s: `UID`, `SUMMARY`, `LOCATION`, `DTSTART`, `DTEND` or
   `DURATION`, `RRULE`, `RDATE`, `EXDATE`, `RECURRENCE-ID`, `STATUS`,
   `SEQUENCE`, `DTSTAMP`, `LAST-MODIFIED`, and the calendar's `METHOD`.
@@ -200,7 +202,16 @@ Each has a test under the same number, in `tests/15-edge-cases.test.mjs`
 - **E5.** An all-day event whose `DTEND` equals `DTSTART`, or with
   `DURATION:P0D`, lasts one day.
 - **E6.** `DTEND` of another value type than `DTSTART`, and a `DURATION` with
-  hours on an all-day event, make the event unreadable (skipped, listed).
+  hours on an all-day event, make the event unreadable (skipped, listed). So
+  does a `DURATION`, or an `RDATE` period's length, over 10,000 years. No
+  value in a calendar makes the whole call fail: anything that still can't be
+  placed on a date skips its event with a problem ("out of range").
+- **E6a.** A floating `DTEND` (no `TZID`, no `Z`) is read in the query's zone,
+  even when `DTSTART` has a `TZID`: RFC 5545 3.3.5 defines a floating time as
+  the same wall time wherever it is viewed. (Floating `RDATE`, `EXDATE`,
+  `RECURRENCE-ID` and `UNTIL` values instead follow the series' own clock,
+  E12, because they name its occurrences; an `RDATE` period's end follows its
+  start.)
 - **E7.** `DURATION` days and weeks are nominal (they follow local time over a
   clock change); hours, minutes and seconds are exact. A `DTEND` gives every
   occurrence the same exact length as the first (RFC 5545 3.8.5.3).

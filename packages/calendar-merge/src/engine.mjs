@@ -169,7 +169,9 @@ function oneOffLastDay(start, first) {
 function interpret(raw, source, ctx, budget, full = false) {
   const first = (name) => raw.props.get(name)?.[0];
   const where = { sourceIndex: source.index, line: raw.line };
-  const uid = first('UID')?.value.trim();
+  // UID is TEXT: unescaped like SUMMARY, so \, and , name the same event.
+  const uidProp = first('UID');
+  const uid = uidProp ? unescapeText(uidProp.value.trim()) : '';
   if (!uid) return { problem: { ...where, text: 'event skipped: no UID' } };
   const statusText = (first('STATUS')?.value || '').trim().toUpperCase();
   const cancelled = raw.method === 'CANCEL' || statusText === 'CANCELLED';
@@ -235,14 +237,16 @@ function interpret(raw, source, ctx, budget, full = false) {
       if (days < 0) return skip('it ends before it starts');
       duration = { days: Math.max(days, 1) };
     } else {
-      const end = budgetedResolve(endValue, zone, budget);
+      // A floating DTEND (no TZID, no Z) is the viewer's wall time (RFC 5545
+      // 3.3.5), so it is read in the query's zone even when DTSTART has a TZID.
+      const end = budgetedResolve(endValue, ctx.zone, budget);
       if (end.error) return skip(end.error);
       if (end.ms < start.ms) return skip('it ends before it starts');
       duration = { nominalDays: 0, exactMs: end.ms - start.ms };
     }
   } else if (durationProp) {
     const parsed = parseDuration(durationProp.value);
-    if (!parsed) return skip('DURATION is not readable');
+    if (!parsed) return skip('DURATION is not readable or is longer than 10,000 years');
     const days = parsed.weeks * 7 + parsed.days;
     const exactMs = (parsed.hours * 3600 + parsed.minutes * 60 + parsed.seconds) * 1000;
     if (parsed.sign < 0 && (days || exactMs)) return skip('it ends before it starts');
@@ -441,7 +445,7 @@ function expandFully(copy, q, single, stats, budget) {
           // (its TZID, UTC, or the event's zone when floating), not the event's.
           endMs = wallToInstant(s.zone, s.day + d.weeks * 7 + d.days, s.sec) + (d.hours * 3600 + d.minutes * 60 + d.seconds) * 1000;
         }
-        if (endMs === undefined || endMs === null || endMs < s.ms) { at(`RDATE period "${rdate.text}" skipped: its end is not readable`); continue; }
+        if (endMs === undefined || endMs === null || endMs < s.ms) { at(`RDATE period "${rdate.text}" skipped: its end is not readable or is more than 10,000 years away`); continue; }
         add(s, { allDay: false, startMs: s.ms, endMs, wallDay: wallAt(copy.zone, s.ms).day }, true);
         continue;
       }
@@ -629,6 +633,27 @@ function mergeUid(group, q, problems) {
   return made;
 }
 
+// Values are bounded when read (dates to years 0001-9999, durations to
+// 10,000 years), so date arithmetic stays representable. Should any input
+// still reach a RangeError, that event is skipped and listed: no calendar
+// can make the whole call fail.
+function outOfRange(sourceIndex, line) {
+  return { sourceIndex, line, text: 'event skipped: a date or time in it is out of range' };
+}
+
+function safeMergeUid(group, q, problems) {
+  const before = problems.length;
+  try {
+    return mergeUid(group, q, problems);
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error;
+    problems.length = before;
+    const top = [...group.masters, ...group.records, ...[...group.overrides.values()].flatMap((o) => [...o.copies, ...o.records])].sort(compareCopies)[0];
+    problems.push(outOfRange(top.sourceIndex, top.line));
+    return [];
+  }
+}
+
 // Different UIDs, same title and time: grouped one to one, never two
 // occurrences from one source in a group.
 function matchTitleAndTime(occurrences) {
@@ -731,6 +756,7 @@ export async function mergeCalendars(sources, query) {
       try {
         result = interpret(raw, source, q, q.budgets[source.index]);
       } catch (error) {
+        if (error instanceof RangeError) { problems.push(outOfRange(source.index, raw.line)); continue; }
         if (!(error instanceof WorkLimit)) throw error;
         workSkipped.count += 1;
         if (workSkipped.count === 1) workSkipped.first = { line: raw.line, reason: error.message };
@@ -766,6 +792,7 @@ export async function mergeCalendars(sources, query) {
       try {
         result = interpret(aside.raw, aside.source, q, q.budgets[aside.source.index], true);
       } catch (error) {
+        if (error instanceof RangeError) { problems.push(outOfRange(aside.source.index, aside.raw.line)); continue; }
         if (!(error instanceof WorkLimit)) throw error;
         result = { problem: { sourceIndex: aside.source.index, line: aside.raw.line, text: `event "${aside.uid}" skipped: ${error.message}` } };
       }
@@ -779,7 +806,7 @@ export async function mergeCalendars(sources, query) {
   // the same place and one source can't use up another's share.
   const dropped = new Map();
   for (const uid of [...groups.keys()].sort(byCodeUnits)) {
-    for (const { copy, occurrence } of mergeUid(groups.get(uid), q, problems)) {
+    for (const { copy, occurrence } of safeMergeUid(groups.get(uid), q, problems)) {
       const budget = q.budgets[copy.sourceIndex];
       if (budget.occurrences > 0) {
         budget.occurrences -= 1;

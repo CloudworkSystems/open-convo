@@ -90,11 +90,18 @@ export function parseDateValue(value, params = {}) {
   return { kind: 'time', day: daysFromCivil(y, m, d), sec: hh * 3600 + mm * 60 + ss, utc, tzid: utc ? null : tzid };
 }
 
-// [+-]P(nW | nDTnHnMnS)  ->  { sign, weeks, days, hours, minutes, seconds } or null.
+// The longest duration read: 10,000 years of days. Anything longer can't
+// be placed on a calendar date, so it is treated as unreadable.
+export const MAX_DURATION_DAYS = 3_660_000;
+
+// [+-]P(nW | nDTnHnMnS)  ->  { sign, weeks, days, hours, minutes, seconds } or
+// null, also when it is longer than MAX_DURATION_DAYS.
 export function parseDuration(value) {
   const match = /^([+-])?P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(value.trim().toUpperCase());
   if (!match || value.trim().toUpperCase().endsWith('T') || /^[+-]?P$/.test(value.trim().toUpperCase())) return null;
+  if (match.slice(2).some((n) => n !== undefined && n.replace(/^0+/, '').length > 12)) return null;
   const [weeks, days, hours, minutes, seconds] = match.slice(2).map((n) => Number(n || 0));
+  if (weeks * 7 + days + (hours * 3600 + minutes * 60 + seconds) / 86_400 > MAX_DURATION_DAYS) return null;
   return { sign: match[1] === '-' ? -1 : 1, weeks, days, hours, minutes, seconds };
 }
 
