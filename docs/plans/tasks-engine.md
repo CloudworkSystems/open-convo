@@ -212,8 +212,12 @@ A. Two rules specific to tasks:
   recorded. A record whose occurrence isn't a date of the winning rule stays
   in history and still moves the series on; it is never dropped. With no
   records, the next due date is the rule's first date on or after its start
-  date. So a completion made under the old rule, merged with a rule edit
-  from another device, gives the same next due date on every device.
+  date. In every case the next due date is never before the winning
+  rule's `start`: a result earlier than `start` becomes `start` (a yearly
+  task last done 2025-12-31 and due 2026-12-31, changed to daily, is next
+  due 2026-12-31, not 2026-01-01). So a completion made under the old rule,
+  merged with a rule edit from another device, gives the same next due
+  date on every device.
 - **Completing the same occurrence on two devices** keeps both records and
   counts the occurrence once.
 
@@ -282,7 +286,9 @@ and tasks only. At least:
    reopen counts again, and a later re-complete beats an earlier withdrawal; and the rule edit case (weekly on Monday changed
    to weekly on Thursday: the Monday
    completion stays in history and the next due date is the first Thursday
-   after it, on both devices, whichever order they merge in). Merging is commutative, associative and idempotent on random
+   after it, on both devices, whichever order they merge in; a yearly task
+   changed to daily is next due on its new `start`, not the day after its
+   last completion). Merging is commutative, associative and idempotent on random
    invented histories (a fixed seed, at least 500 cases).
 10. No grading words in any text the engine produces (as in the habit grid,
     test 7).
