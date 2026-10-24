@@ -86,7 +86,12 @@ and loaded from one JSON file per person):
   you actually water), and is allowed only for the plain kinds (`days`,
   `weeks`, `months`, `years`); asking for it with `weekdays`, `monthDay` or
   `monthWeekday` is refused with a plain message. A repeat may end after a
-  count or on a date.
+  count (`endAfter`, 1 to 999 occurrences) or on a date (`endOn`, inclusive),
+  stored on the repeat and stamped with it. The count is of distinct closed
+  occurrences: each occurrence name with at least one counting completion or
+  skip counts once, however many records it has. When the next due date
+  would be past `endOn`, or the count has reached `endAfter`, there is no
+  next occurrence and the task is done.
 - **Completing a repeating task** records the completion and moves the task
   to its next due date, keeping one task with a history, not a pile of
   copies. Completing it early, late or twice in a day follows the rules
@@ -214,7 +219,9 @@ A. Two rules specific to tasks:
   recorded. A record whose occurrence isn't a date of the winning rule stays
   in history and still moves the series on; it is never dropped. With no
   records, the next due date is the rule's first date on or after its start
-  date. In every case the next due date is never before the winning
+  date. The repeat's end (`endAfter` or `endOn`) is checked last: if it
+  has been reached, there is no next due date and the task is done. In
+  every case the next due date is never before the winning
   rule's `start`: a result earlier than `start` becomes `start` (a yearly
   task last done 2025-12-31 and due 2026-12-31, changed to daily, is next
   due 2026-12-31, not 2026-01-01). So a completion made under the old rule,
@@ -253,7 +260,8 @@ and tasks only. At least:
    February; missed on-schedule
    occurrences show once as overdue, not piled up.
 4. Repeat ends: after a count and on a date; the last completion leaves the
-   task done. A repeat on a task with no due date is refused, and so is a
+   task done, with skips counting toward `endAfter` and two records for one
+   occurrence counting once. A repeat on a task with no due date is refused, and so is a
    patterned repeat whose start isn't one of its dates.
 5. Time zones: a 9:00 New York task stays at 9:00 across both clock changes;
    a nonexistent and a repeated wall time resolve as above; viewing from
