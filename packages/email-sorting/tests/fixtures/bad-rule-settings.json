@@ -1,0 +1,4 @@
+{
+  "schemaVersion": 1,
+  "senderRules": [{ "match": "@marrowlane.example", "category": "vip" }]
+}
