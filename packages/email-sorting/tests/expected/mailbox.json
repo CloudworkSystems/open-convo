@@ -1,0 +1,436 @@
+{
+  "schemaVersion": 1,
+  "piles": [
+    {
+      "category": "people",
+      "count": 3,
+      "groups": [
+        {
+          "key": "address:avery.lin@sparrowpost.example",
+          "label": "Avery Lin",
+          "count": 2,
+          "messages": [
+            {
+              "id": "h-07",
+              "inboxes": [
+                "home"
+              ],
+              "from": {
+                "name": "Avery Lin",
+                "address": "avery.lin@sparrowpost.example"
+              },
+              "subject": "Re: Dinner Saturday?",
+              "date": "2026-10-19T08:30:00-07:00",
+              "pile": "people",
+              "decidedBy": "model",
+              "reason": "A reply in a conversation",
+              "conversation": "id:dinner-1@sparrowpost.example"
+            },
+            {
+              "id": "h-05",
+              "inboxes": [
+                "home"
+              ],
+              "from": {
+                "name": "Avery Lin",
+                "address": "avery.lin@sparrowpost.example"
+              },
+              "subject": "Dinner Saturday?",
+              "date": "2026-10-18T19:40:00-07:00",
+              "pile": "people",
+              "decidedBy": "model",
+              "reason": "A reply in a conversation",
+              "conversation": "id:dinner-1@sparrowpost.example"
+            }
+          ]
+        },
+        {
+          "key": "address:jordan@quillhome.example",
+          "label": "Jordan Quill",
+          "count": 1,
+          "messages": [
+            {
+              "id": "h-06",
+              "inboxes": [
+                "home"
+              ],
+              "from": {
+                "name": "Jordan Quill",
+                "address": "Jordan@QuillHome.example"
+              },
+              "subject": "Re: Dinner Saturday?",
+              "date": "2026-10-19T09:05:00-04:00",
+              "pile": "people",
+              "decidedBy": "model",
+              "reason": "A reply in a conversation",
+              "conversation": "id:dinner-1@sparrowpost.example"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category": "work",
+      "count": 1,
+      "groups": [
+        {
+          "key": "address:priya@northglass-tutoring.example",
+          "label": "Priya Natal",
+          "count": 1,
+          "messages": [
+            {
+              "id": "w-01",
+              "inboxes": [
+                "work"
+              ],
+              "from": {
+                "name": "Priya Natal",
+                "address": "priya@northglass-tutoring.example"
+              },
+              "subject": "Tutor schedule for November",
+              "date": "2026-10-22T13:45:00-04:00",
+              "pile": "work",
+              "decidedBy": "model",
+              "reason": "From a work domain",
+              "conversation": "id:sched-11@northglass-tutoring.example"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category": "alerts",
+      "count": 4,
+      "groups": [
+        {
+          "key": "address:calendar@northglass-tutoring.example",
+          "label": "Northglass Calendar",
+          "count": 1,
+          "messages": [
+            {
+              "id": "w-05",
+              "inboxes": [
+                "work"
+              ],
+              "from": {
+                "name": "Northglass Calendar",
+                "address": "calendar@northglass-tutoring.example"
+              },
+              "subject": "Reminder: staff meeting at 3",
+              "date": "2026-10-23T12:00:00-04:00",
+              "pile": "alerts",
+              "decidedBy": "model",
+              "reason": "Looks like a shipping update or reminder",
+              "conversation": "id:cal-3301@northglass-tutoring.example"
+            }
+          ]
+        },
+        {
+          "key": "address:no-reply@quarrystone-bank.example",
+          "label": "Quarrystone Bank",
+          "count": 1,
+          "messages": [
+            {
+              "id": "h-04",
+              "inboxes": [
+                "home"
+              ],
+              "from": {
+                "name": "Quarrystone Bank",
+                "address": "no-reply@quarrystone-bank.example"
+              },
+              "subject": "Your verification code",
+              "date": "2026-10-22T08:15:09Z",
+              "pile": "alerts",
+              "decidedBy": "model",
+              "reason": "Looks like a security or account notice",
+              "conversation": "id:otp-8812@quarrystone-bank.example"
+            }
+          ]
+        },
+        {
+          "key": "address:no-reply@accounts.wrenfield.example",
+          "label": "Wrenfield Accounts",
+          "count": 1,
+          "messages": [
+            {
+              "id": "s-03",
+              "inboxes": [
+                "school"
+              ],
+              "from": {
+                "name": "Wrenfield Accounts",
+                "address": "no-reply@accounts.wrenfield.example"
+              },
+              "subject": "New sign-in to your student account",
+              "date": "2026-10-21T07:58:00-04:00",
+              "pile": "alerts",
+              "decidedBy": "model",
+              "reason": "Looks like a security or account notice",
+              "conversation": "id:acct-17@accounts.wrenfield.example"
+            }
+          ]
+        },
+        {
+          "key": "address:updates@tallowparcel.example",
+          "label": "Tallow Parcel",
+          "count": 1,
+          "messages": [
+            {
+              "id": "h-08",
+              "inboxes": [
+                "home"
+              ],
+              "from": {
+                "name": "Tallow Parcel",
+                "address": "updates@tallowparcel.example"
+              },
+              "subject": "Your package has shipped",
+              "date": "2026-10-21T11:00:00+01:00",
+              "pile": "alerts",
+              "decidedBy": "model",
+              "reason": "Looks like a shipping update or reminder",
+              "conversation": "id:ship-4410@tallowparcel.example"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category": "receipts",
+      "count": 2,
+      "groups": [
+        {
+          "key": "address:orders@marrowlane.example",
+          "label": "Marrow Lane Orders",
+          "count": 1,
+          "messages": [
+            {
+              "id": "h-03",
+              "inboxes": [
+                "home"
+              ],
+              "from": {
+                "name": "Marrow Lane Orders",
+                "address": "orders@marrowlane.example"
+              },
+              "subject": "Thanks for your pre-order",
+              "date": "2026-10-21T18:02:00-04:00",
+              "pile": "receipts",
+              "decidedBy": "rule",
+              "reason": "Your rule: mail from orders@marrowlane.example goes to Receipts",
+              "conversation": "id:po-55120@marrowlane.example"
+            }
+          ]
+        },
+        {
+          "key": "address:billing@slatecloud.example",
+          "label": "Slatecloud Billing",
+          "count": 1,
+          "messages": [
+            {
+              "id": "w-02",
+              "inboxes": [
+                "work"
+              ],
+              "from": {
+                "name": "Slatecloud Billing",
+                "address": "billing@slatecloud.example"
+              },
+              "subject": "Invoice INV-2207 for October",
+              "date": "2026-10-01T00:00:00Z",
+              "pile": "receipts",
+              "decidedBy": "model",
+              "reason": "Mentions an order, payment or booking",
+              "conversation": "id:inv-2207@slatecloud.example"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category": "newsletters",
+      "count": 4,
+      "groups": [
+        {
+          "key": "list:pta.wrenfield.example",
+          "label": "Wrenfield PTA",
+          "count": 1,
+          "messages": [
+            {
+              "id": "h-09",
+              "inboxes": [
+                "home",
+                "school"
+              ],
+              "from": {
+                "name": "Wrenfield PTA",
+                "address": "pta@wrenfield.example"
+              },
+              "subject": "Fall fair volunteers",
+              "date": "2026-10-23T16:00:00-04:00",
+              "pile": "newsletters",
+              "decidedBy": "model",
+              "reason": "Sent to a mailing list",
+              "conversation": "id:pta-1023@wrenfield.example"
+            }
+          ]
+        },
+        {
+          "key": "list:news.marrowlane.example",
+          "label": "Marrow Lane Bakery",
+          "count": 2,
+          "messages": [
+            {
+              "id": "h-01",
+              "inboxes": [
+                "home"
+              ],
+              "from": {
+                "name": "Marrow Lane Bakery",
+                "address": "news@marrowlane.example"
+              },
+              "subject": "This week's loaves: rye is back",
+              "date": "2026-10-20T07:30:00-04:00",
+              "pile": "newsletters",
+              "decidedBy": "rule",
+              "reason": "Your rule: mail from @marrowlane.example goes to Newsletters",
+              "conversation": "id:loaves-1020@marrowlane.example"
+            },
+            {
+              "id": "h-02",
+              "inboxes": [
+                "home"
+              ],
+              "from": {
+                "name": "Marrow Lane Bakery",
+                "address": "news@marrowlane.example"
+              },
+              "subject": "Pumpkin season starts Saturday",
+              "date": "2026-10-13T07:30:00-04:00",
+              "pile": "newsletters",
+              "decidedBy": "rule",
+              "reason": "Your rule: mail from @marrowlane.example goes to Newsletters",
+              "conversation": "id:loaves-1013@marrowlane.example"
+            }
+          ]
+        },
+        {
+          "key": "address:deals@bramblequill.example",
+          "label": "Bramblequill Books",
+          "count": 1,
+          "messages": [
+            {
+              "id": "s-04",
+              "inboxes": [
+                "school"
+              ],
+              "from": {
+                "name": "Bramblequill Books",
+                "address": "deals@bramblequill.example"
+              },
+              "subject": "20% off textbooks this weekend",
+              "date": "2026-10-19T06:00:00-04:00",
+              "pile": "newsletters",
+              "decidedBy": "model",
+              "reason": "Sent to a mailing list",
+              "conversation": "id:deal-88@bramblequill.example"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category": "other",
+      "count": 4,
+      "groups": [
+        {
+          "key": "address:t.ortega@wrenfield.example",
+          "label": "Ms. Ortega",
+          "count": 1,
+          "messages": [
+            {
+              "id": "s-02",
+              "inboxes": [
+                "school"
+              ],
+              "from": {
+                "name": "Ms. Ortega",
+                "address": "t.ortega@wrenfield.example"
+              },
+              "subject": "Field trip permission slip",
+              "date": "2026-10-22T15:10:00-04:00",
+              "pile": "other",
+              "decidedBy": "not-sure",
+              "reason": "Not sure: the model's best guess was People",
+              "conversation": "id:slip-9@wrenfield.example"
+            }
+          ]
+        },
+        {
+          "key": "address:rowan@sparrowpost.example",
+          "label": "Rowan Park",
+          "count": 1,
+          "messages": [
+            {
+              "id": "h-10",
+              "inboxes": [
+                "home"
+              ],
+              "from": {
+                "name": "Rowan Park",
+                "address": "rowan@sparrowpost.example"
+              },
+              "subject": "Photos from the hike",
+              "date": "2026-10-17T21:12:00-04:00",
+              "pile": "other",
+              "decidedBy": "not-sure",
+              "reason": "Not sure: the model's best guess was People",
+              "conversation": "msg:[\"home\",\"h-10\"]"
+            }
+          ]
+        },
+        {
+          "key": "address:jordan@northglass-tutoring.example",
+          "label": "Jordan Quill",
+          "count": 2,
+          "messages": [
+            {
+              "id": "w-04",
+              "inboxes": [
+                "work"
+              ],
+              "from": {
+                "name": "Jordan Quill",
+                "address": "jordan@northglass-tutoring.example"
+              },
+              "subject": "Re: Room booking note",
+              "date": "2026-10-16T10:20:00-04:00",
+              "pile": "other",
+              "decidedBy": "fallback",
+              "reason": "Only messages you sent",
+              "conversation": "id:note-1@northglass-tutoring.example"
+            },
+            {
+              "id": "w-03",
+              "inboxes": [
+                "work"
+              ],
+              "from": {
+                "name": "Jordan Quill",
+                "address": "jordan@northglass-tutoring.example"
+              },
+              "subject": "Room booking note",
+              "date": "2026-10-16T10:00:00-04:00",
+              "pile": "other",
+              "decidedBy": "fallback",
+              "reason": "Only messages you sent",
+              "conversation": "id:note-1@northglass-tutoring.example"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "problems": []
+}

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "myAddresses": [
+    "jordan@quillhome.example",
+    "jordan@northglass-tutoring.example",
+    "jordan.q@student.wrenfield.example"
+  ],
+  "workDomains": ["northglass-tutoring.example"],
+  "senderRules": [
+    { "match": "orders@marrowlane.example", "category": "receipts" },
+    { "match": "@marrowlane.example", "category": "newsletters" }
+  ]
+}

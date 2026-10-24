@@ -1,5 +1,7 @@
 # Household Lists Engine (PRD)
 
+Status: Built (Oct 21): merged; follow-up fixes and Custom sort merged as #71.
+
 Written October 16, 2026 by the planning session from the owner's decisions.
 Session name: `OC-261016-household-lists-engine`. Umbrella: Family and Home.
 Built by an outside builder under AGENTS.md "Outside Builders". Builder:
