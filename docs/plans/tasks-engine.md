@@ -162,14 +162,21 @@ A. Two rules specific to tasks:
   set, so two devices completing different occurrences both count and the
   same record arriving twice counts once. The next due date is computed from
   the merged records, never stored as the winner of a field race.
-- **Records are never deleted; they are withdrawn.** Reopening a
-  repeating occurrence, or undoing its completion, skip or snooze, sets the
-  record's `withdrawn` field, a stamped field like any other (the higher
-  version stamp wins, so a later re-complete on another device can set it
-  back). A withdrawn record stays in the file so a device that still has
-  the original can't bring it back, shows in history as undone, and is
-  ignored everywhere else: it never moves a series on and never applies as
-  a snooze. Reopening a one-off task is an ordinary stamped change to its
+- **Records are never deleted; they are withdrawn or reopened.** Undoing
+  one completion, skip or snooze sets that record's `withdrawn` field, a
+  stamped field like any other (the higher version stamp wins). A withdrawn
+  record stays in the file so a device that still has the original can't
+  bring it back, shows in history as undone, and is ignored everywhere
+  else: it never moves a series on and never applies as a snooze.
+- **Reopening works on the occurrence, not on one record.** Reopening a
+  repeating occurrence adds a reopen record naming that occurrence, with its
+  own ID and version stamp. Every completion and skip record for that
+  occurrence with a lower version stamp than the occurrence's highest reopen
+  record is set aside, including ones the reopening device had not seen
+  yet; one with a higher stamp (a re-complete made after the reopen, on any
+  device) counts again. Set-aside records stay in history as undone and
+  never move the series on. Reopen records are merged as a set like the
+  others. Reopening a one-off task is an ordinary stamped change to its
   `state`.
 - **An occurrence is named by its scheduled due date** (the date, or the
   date and wall time with its zone) as it was when the record was made.
@@ -179,8 +186,8 @@ A. Two rules specific to tasks:
   is made, so travel or a later change to the owner's zone never moves it.
   Records never change when the rule changes.
 - **The next due date always comes from the winning rule and the merged
-  completion and skip records that aren't withdrawn** (snoozes never count
-  here), whichever
+  completion and skip records that aren't withdrawn or set aside by a
+  reopen** (snoozes never count here), whichever
   device's edit won. The latest record is the one with
   the latest occurrence name, then the latest action date, then the latest
   instant, then the highest record ID. On schedule, the next due date is
@@ -249,8 +256,11 @@ and tasks only. At least:
    same occurrence, and a completion on one device while the other edits the
    repeat rule; one device reopens an occurrence while the other, which
    already has the completion, merges later (the occurrence stays reopened,
-   and the series is back on it on both devices); a later re-complete beats
-   an earlier withdrawal; and the rule edit case (weekly on Monday changed
+   and the series is back on it on both devices); two devices complete the
+   same occurrence, then one reopens it after seeing only its own record
+   (both records are set aside and the occurrence is open on both devices,
+   whichever order they merge in); a re-complete after a reopen counts again,
+   and a later re-complete beats an earlier withdrawal; and the rule edit case (weekly on Monday changed
    to weekly on Thursday: the Monday
    completion stays in history and the next due date is the first Thursday
    after it, on both devices, whichever order they merge in). Merging is commutative, associative and idempotent on random
