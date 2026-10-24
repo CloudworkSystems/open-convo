@@ -48,7 +48,10 @@ rule, not just a disclaimer:
 2. **Slice 2, with the iPhone capture app (PLAN.md: right after step 5):**
    the iPhone side. On the phone it appears only as one source, "Skin check,
    linked to your Mac," inside the capture app: tap it, pick the spot on a
-   body outline, take a guided photo, answer the five questions, done. No
+   body outline, take a guided photo, answer every self-check question
+   below (the five ABCDE questions, the two urgent ones, the comparison
+   question and the new-spot question), done. "Done" stays unavailable
+   until each question has an answer, and "not sure" counts as one. No
    timeline, history or results on the phone. Photos and answers move to the
    Mac the same way other captured sources do until step 9: AirDrop
    (local only) or the owner-approved iCloud Drive folder (foundations
@@ -100,12 +103,14 @@ A small library in `packages/skin-check/`:
   new on the skin, which the spot's created date in the app cannot tell.
 - **What needs a clinician's look.** Plain rules, no scores:
   - Any urgent answer "yes": **book an appointment soon**, with the reason.
-  - "Evolving", "different from your other spots" or "new spot" answered
-    "yes": **worth showing a clinician**, with the reason.
-  - Any one of A to D answered "yes" or "not sure": **worth showing a
-    clinician**, with the reasons. Dermatology guidance says to see a
-    dermatologist for any one of these signs, so one is enough.
-  - Otherwise: **no warning sign noted by you**, always with the standard
+  - Any other answer of "yes" or "not sure" to any question (A to E, the
+    comparison question, the new-spot question, or "not sure" on an urgent
+    question): **worth showing a clinician**, with the reasons. Dermatology
+    guidance says to see a dermatologist for any one of these signs, so one
+    is enough, and doubt counts as a sign. A missing answer counts as "not
+    sure".
+  - Only when every question is answered "no": **no warning sign noted by
+    you**, always with the standard
     reminder. Never "low risk", "safe", "normal" or "benign".
   The engine returns these as data with the reason text; it never ranks
   spots against each other or produces a number.
@@ -142,10 +147,11 @@ people and spots only. At least:
 1. Spots: create, rename, move region, archive, remove, Trash and restore.
 2. Check-ins record answers and photo references, and refuse a check-in for
    an unknown or removed spot with a plain message.
-3. Each rule above produces the right outcome and reason, including a
-   single A to D "yes" or "not sure" being enough, a "new spot" answer of
-   "yes" with every other answer "no" being worth a clinician's look, and
-   urgent answers always winning.
+3. Each rule above produces the right outcome and reason. For each
+   question in turn, a single "yes" or "not sure" with every other answer
+   "no" is worth a clinician's look (urgent "yes" is book soon); a missing
+   answer counts as "not sure"; urgent answers always win; and only all
+   "no" gives "no warning sign noted by you".
 4. No output text contains reassuring or grading words: a test scans every
    string the engine produces (outcomes, reasons, summary) for words such as
    "safe", "benign", "normal", "low risk", "healthy", "clear", "fine",
@@ -182,8 +188,9 @@ is rewritten with that builder's rules before the code starts.
   `cloudwork-bot` on the branch `OC-261024-skin-check`, pull request into
   `main` with auto-merge off and the label `agent: claude`. Never push to
   `main`.
-- Files only under `packages/skin-check/` plus the STATUS.md line for this
-  module. Import nothing from `apps/` or another package.
+- Files only under `packages/skin-check/`, the STATUS.md line for this
+  module, and this plan's status line (`In progress` when the code pull
+  request opens, `Built` in the pull request that finishes slice 1). Import nothing from `apps/` or another package.
 - Written like the other packages: `.mjs`, Node 22 or later, `"type":
   "module"`, `"private": true`, tests with `node --test`. No new
   dependencies, no license file or `license` field.
