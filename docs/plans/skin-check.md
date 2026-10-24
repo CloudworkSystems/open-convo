@@ -36,8 +36,14 @@ rule, not just a disclaimer:
   always say "book an appointment soon" and never wait for a review cycle.
 - No AI image classifier in this plan. Owner Question 1 explains why and what
   it would take later. Without a classifier, the app makes no claim about
-  what a spot is, which keeps it a record-keeping tool rather than a medical
-  device.
+  what a spot is. That alone does not settle whether it is medical-device
+  software: EU and US rules look at the intended purpose, and turning
+  symptom answers into "see a clinician" advice may count. So slice 1 is an
+  engine tested on invented data, and **nothing from this module ships to
+  anyone but the owner** (no public Open Convo release, no App Store, no
+  TestFlight for others) until a regulatory assessment of its intended
+  purpose has been done and the owner has decided on it. That assessment is
+  an owner decision before slice 2 is planned (Owner Question 4).
 
 ## Plan Of Record
 
@@ -50,7 +56,8 @@ rule, not just a disclaimer:
    linked to your Mac," inside the capture app: tap it, pick the spot on a
    body outline, take a guided photo, answer every self-check question
    below (the five ABCDE questions, the two urgent ones, the comparison
-   question, the new-spot question and the open question), done. "Done"
+   question, the new-spot question, the non-mole question and the open
+   question), done. "Done"
    stays unavailable until each question has an answer, and "not sure"
    counts as one. If an urgent question is answered "yes", the phone shows
    "book an appointment soon" with the reason right away, before the record
@@ -102,15 +109,20 @@ A small library in `packages/skin-check/`:
   back in the same place?"; one comparison question: "Does it look
   different from your other spots?" (the "ugly duckling" sign); one
   new-spot question: "Is this a spot you hadn't noticed before (new in the
-  last few months)?"; and one open question: "Is there anything else about
-  this spot that worries you (itching, tenderness, a crust, anything)?"
-  The open question catches signs the list doesn't name. The new-spot question is asked on the spot's first
+  last few months)?"; one non-mole question: "Is it a rough or scaly
+  patch, a firm or shiny bump, or a pimple-like spot that hasn't gone
+  away?" (other skin cancers often look like these rather than a mole);
+  and one open question: "Is there anything else about this spot that
+  worries you (itching, tenderness, a crust, anything)?" The open question
+  catches signs the list doesn't name. The new-spot question is asked on
+  the spot's first
   check-in and can be answered again later. It records whether the spot is
   new on the skin, which the spot's created date in the app cannot tell.
 - **What needs a clinician's look.** Plain rules, no scores:
   - Any urgent answer "yes": **book an appointment soon**, with the reason.
   - Any other answer of "yes" or "not sure" to any question (A to E, the
-    comparison question, the new-spot question, the open question, or "not
+    comparison question, the new-spot question, the non-mole question, the
+    open question, or "not
     sure" on an urgent
     question): **worth showing a clinician**, with the reasons. Dermatology
     guidance says to see a dermatologist for any one of these signs, so one
@@ -258,3 +270,10 @@ code pull request merges.
    health photos until step 9's encrypted transfer, even if the owner
    approves iCloud Drive for links and clips. Skin photos are among the most
    sensitive things the phone will capture.
+4. **Regulatory assessment before anything ships.** Recommendation: keep
+   the module for the owner's own use until someone qualified assesses
+   whether its intended purpose makes it medical-device software (EU MDR
+   and MDCG 2019-11; FDA's device software functions guidance), and the
+   owner decides whether to narrow the purpose, seek clearance, or keep it
+   personal. Slice 1 is library code tested on invented data and offered
+   to no one as a product, so it can be built first.
