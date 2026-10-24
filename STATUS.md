@@ -80,11 +80,11 @@ First real use after step 5, synced through iCloud with the owner's approval.
 **Habit grid engine** (Personal), merged as #74 on October 21.
 Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
-**Annotation rounds checker** (Code): plan approved; GrokBot team A starts once #94 merges.
+**Annotation rounds checker** (Code), GrokBot (team A) builds, Codex reviews; plan approved (`docs/plans/annotation-rounds.md`); build in review (#111).
 
-**Site Engine: what will change** (Business), GrokBot (team B) builds, Codex reviews; plan approved (`docs/plans/site-engine-diff.md`); team B can start.
+**Site Engine: what will change** (Business), GrokBot (team B) builds, Codex reviews; merged as #119 on October 23.
 
-**Visibility report** (Business), GrokBot (team C) builds, Codex reviews; plan approved (`docs/plans/visibility-report.md`); team C can start.
+**Visibility report** (Business), GrokBot (team C) builds, Codex reviews; plan approved (`docs/plans/visibility-report.md`); build in review (#112).
 
 **Email sorting engine** (Personal, launch set), Codex builds, Gemini Code Assist reviews; plan approved (`docs/plans/email-sorting-engine.md`); Codex can start when a builder place is free.
 
