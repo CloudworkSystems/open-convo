@@ -140,13 +140,16 @@ input size.
   Each source gets an equal share of all three (with 20 sources: 100,000
   periods, 50,000 dates and 5,000 occurrences each), so a hostile calendar
   can only use up its own share.
-- A series is charged to the source of the copy that is shown. If that
-  source's share is used up, the next source holding a copy of the same
-  series pays instead.
+- Work and occurrences are charged to the source of the copy they come
+  from, and to no other: a series' expansion and its own occurrences to the
+  source of the copy that is shown, each changed occurrence to the source of
+  its override. A source that has used up its share degrades its own copies
+  only, and the problem names that source.
 - Events without repeats (no `RRULE`, `RDATE` or `RECURRENCE-ID`) whose
   written dates are two days or more outside the range are set aside before
   any time zone work (E28), so years of past meetings cost almost nothing and
-  don't use up the share.
+  don't use up the share. One that shares its UID with another copy is read
+  in full after all.
 - Dates read through a time zone include `DTSTART`, `DTEND`,
   `RECURRENCE-ID`, `RDATE` and `EXDATE`. UTC times and all-day dates cost
   nothing; a series' `UNTIL` is read once and isn't counted. `DTSTAMP` and
@@ -157,17 +160,19 @@ input size.
   `RECURRENCE-ID` can't be read because its source's date share is used up is
   skipped; each source lists these once ("N events skipped, the first
   here"). Occurrences past a source's occurrence share are left out, in UID
-  order, and each source lists that once ("N occurrences of M events not
-  shown"). For ordinary calendars none of these shares is reached, so the
+  order and then by start, and each source lists that once ("N occurrences
+  of M events not shown"). Cancelled occurrences that won't be shown count
+  toward neither the occurrence share nor the 10,000 series limit. For ordinary calendars none of these shares is reached, so the
   result doesn't depend on the order of events or the number of sources.
 - `RDATE` and `EXDATE` values whose written date is outside the range (with a
   day to spare) are skipped before any time zone work. Time zone offsets are
   cached per zone and hour, and time zone names are cached.
 
 `tests/16-work-budget.test.mjs` covers a hostile 164-byte `COUNT` rule, a
-hostile source next to a normal one, years of one-off history (in both
-orders and with extra sources), large out-of-range `RDATE` lists, and the
-date and occurrence shares. Tests reach the shares with small inputs through
+hostile source next to a normal one, a hostile source holding costly copies
+or changed occurrences of another source's events, years of one-off history
+(in both orders and with extra sources), large out-of-range `RDATE` lists,
+and the date and occurrence shares. Tests reach the shares with small inputs through
 `setLimitsForTests` in `src/engine.mjs`, and count problems and occurrences
 rather than time.
 
@@ -240,16 +245,18 @@ Each has a test under the same number, in `tests/15-edge-cases.test.mjs`
   library takes text, so anything else that hands it text (a later fetch
   layer, for example) needs the same care.
 - **E28.** An event without repeats whose written dates are two days or more
-  outside the range is set aside unread: it still takes part in the same-`UID`
-  order (so a newer copy moved out of the range still wins), but problems in
-  its dates or time zone aren't listed.
+  outside the range is set aside unread, and problems in its dates or time
+  zone aren't listed. If another copy of its `UID` exists, it is read in full
+  after all, so a newer copy moved out of the range still wins, and a broken
+  newer copy is skipped with a problem, whatever the range.
 - **E29.** `RANGE=THISANDFUTURE` counts only when it is on the winning copy
   of a changed occurrence, an override or a cancellation record; a stale
   `RANGE` override that loses to a newer cancellation changes only its own
   occurrence.
 - **E30.** A series shown as its first occurrence only (an unsupported rule,
   `RANGE=THISANDFUTURE` or a work limit) leaves out its changed copies; a
-  cancellation of that first occurrence still applies.
+  cancellation of that first occurrence still applies, whether it comes from
+  a cancellation record or an override with `STATUS:CANCELLED`.
 - **E31.** `METHOD` is part of the content that decides a full tie between
   copies, so a `PUBLISH` and a `CANCEL` block of the same event give the same
   result in either order.

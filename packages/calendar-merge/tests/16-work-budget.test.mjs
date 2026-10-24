@@ -104,13 +104,44 @@ test('occurrences are capped per source share, deterministically, with a problem
   }
 });
 
-test('a series whose shown copy\'s source is out of budget is paid for by another source holding a copy', async () => {
-  const invite = cal(...Array.from({ length: 20 }, (_, i) => hostile(`!${i}`)),
-    ev('UID:standup@work.example', 'SUMMARY:Standup', 'DTSTART;TZID=America/New_York:20260105T090000', 'DURATION:PT30M', 'RRULE:FREQ=WEEKLY;BYDAY=MO,TH', 'DTSTAMP:20260102T000000Z'));
-  const work = cal(ev('UID:standup@work.example', 'SUMMARY:Standup', 'DTSTART;TZID=America/New_York:20260105T090000', 'DURATION:PT30M', 'RRULE:FREQ=WEEKLY;BYDAY=MO,TH', 'DTSTAMP:20260101T000000Z'));
-  const result = await merge({ work, invite }, { from: '2026-11-01', to: '2026-11-30' });
-  assert.equal(result.occurrences.filter((o) => o.title === 'Standup').length, 9);
-  assert.ok(!result.problems.some((p) => p.includes('standup')));
+test('a costly copy is paid for only by its own source: a hostile source can\'t drain another (review r4)', async () => {
+  // With 2 sources, each has 1,000,000 repeat periods. "hostile" fills its
+  // share, then holds newer, costly copies of 11 UIDs it shares with
+  // "victim". Those copies are charged to "hostile" only, so the victim's
+  // private Gym series is untouched and no problem names the victim.
+  const shared = (k, extra) => ev(`UID:a${String(k).padStart(2, '0')}@corp.example`, 'SUMMARY:Shared', ...extra);
+  const gym = ev('UID:z-private@corp.example', 'SUMMARY:Gym', 'DTSTART:20261102T070000Z', 'DURATION:PT1H', 'RRULE:FREQ=WEEKLY');
+  const victim = cal(...Array.from({ length: 11 }, (_, k) => shared(k, ['DTSTART:20261102T090000Z', 'DURATION:PT30M', 'RRULE:FREQ=WEEKLY'])), gym);
+  const hostile = cal(
+    ...Array.from({ length: 10 }, (_, k) => ev(`UID:0fill${k}@hostile.example`, 'DTSTART:17000101T000000Z', 'RRULE:FREQ=DAILY;COUNT=500000')),
+    ...Array.from({ length: 11 }, (_, k) => shared(k, ['DTSTART:17000101T000000Z', 'RRULE:FREQ=DAILY;COUNT=500000', 'SEQUENCE:5'])),
+  );
+  const range = { from: '2026-11-01', to: '2027-12-01', timeZone: 'UTC' };
+  const alone = await merge({ victim, other: cal() }, range);
+  const attacked = await merge({ victim, hostile }, range);
+  const gyms = (r) => r.occurrences.filter((o) => o.title === 'Gym').map((o) => [o.start.utc, o.repeatNotSupported]);
+  assert.equal(gyms(alone).length, 57);
+  assert.deepEqual(gyms(attacked), gyms(alone));
+  assert.ok(!attacked.problems.some((p) => p.startsWith('Source "victim"')));
+  assert.ok(attacked.problems.every((p) => p.startsWith('Source "hostile"')));
+});
+
+test('changed occurrences are charged to their own source: a hostile source\'s overrides can\'t drop another\'s appointment (review r3)', async () => {
+  const restore = setLimitsForTests({ callOccurrences: 200 });
+  try {
+    // 2 sources, 100 occurrences each. "hostile" holds 150 changed copies of
+    // a weekly series that "victim" owns.
+    const minute = (i) => `202611${String(1 + Math.floor(i / 1440)).padStart(2, '0')}T${String(Math.floor(i / 60) % 24).padStart(2, '0')}${String(i % 60).padStart(2, '0')}00Z`;
+    const victim = cal(ev('UID:a0@corp.example', 'SUMMARY:Shared', 'DTSTART:20261102T090000Z', 'DURATION:PT30M', 'RRULE:FREQ=WEEKLY;COUNT=3'),
+      ev('UID:z-private@corp.example', 'SUMMARY:Doctor', 'DTSTART:20261110T150000Z', 'DURATION:PT1H'));
+    const hostile = cal(...Array.from({ length: 150 }, (_, i) => ev('UID:a0@corp.example', `RECURRENCE-ID:${minute(i)}`, `DTSTART:${minute(i)}`, 'SEQUENCE:9')));
+    const result = await merge({ victim, hostile }, { from: '2026-11-01', to: '2026-11-30', timeZone: 'UTC' });
+    assert.ok(result.occurrences.some((o) => o.title === 'Doctor'));
+    assert.equal(result.occurrences.filter((o) => o.isChanged).length, 100);
+    assert.deepEqual(result.problems, ['Source "hostile", line 604: 50 occurrences of 1 event not shown, the first "a0@corp.example": this calendar\'s share of occurrences (100) is used up.']);
+  } finally {
+    restore();
+  }
 });
 
 test('DTSTAMP and LAST-MODIFIED are read as UTC: a TZID on them is ignored', async () => {

@@ -58,11 +58,43 @@ test('E30: a degraded series shows only its first occurrence: its changed copies
 });
 
 test('E28: a one-off outside the range is set aside unread, but a newer copy of it still wins', async () => {
-  const moved = cal(ev('UID:m@test.example', 'SUMMARY:Dinner', 'DTSTART;TZID=Mars/Olympus:20261215T190000', 'SEQUENCE:2'));
+  const moved = cal(ev('UID:m@test.example', 'SUMMARY:Dinner', 'DTSTART;TZID=America/New_York:20261215T190000', 'SEQUENCE:2'));
   const old = cal(ev('UID:m@test.example', 'SUMMARY:Dinner', 'DTSTART;TZID=America/New_York:20261105T190000', 'SEQUENCE:1'));
+  // The newer copy moved the dinner to December: nothing shows in November.
   const result = await merge({ old, moved }, NOV);
-  // The newer copy moved the dinner to December: nothing shows in November,
-  // and its unknown time zone isn't read, so no problem is listed.
   assert.deepEqual(result.occurrences, []);
+  assert.deepEqual(result.problems, []);
+});
+
+test('E28: a set-aside copy that shares its UID is read in full, so a broken newer copy is judged the same whatever the range', async () => {
+  const broken = cal(ev('UID:m@test.example', 'SUMMARY:Dinner', 'DTSTART;TZID=Mars/Olympus:20261215T190000', 'SEQUENCE:2'));
+  const old = cal(ev('UID:m@test.example', 'SUMMARY:Dinner', 'DTSTART;TZID=America/New_York:20261105T190000', 'SEQUENCE:1'));
+  for (const to of ['2026-11-30', '2026-12-31']) {
+    const result = await merge({ old, broken }, { from: '2026-11-01', to });
+    assert.deepEqual(result.occurrences.map((o) => o.start.local), ['2026-11-05T19:00:00-05:00'], to);
+    assert.deepEqual(result.problems, ['Source "broken", line 4: event "m@test.example" skipped: unknown time zone "Mars/Olympus".'], to);
+  }
+  // A one-off alone outside the range stays unread: no problem.
+  const alone = await merge({ broken }, NOV);
+  assert.deepEqual(alone.problems, []);
+});
+
+test('a degraded series whose first occurrence is cancelled by an override with DTSTART and STATUS:CANCELLED shows it cancelled (review r6)', async () => {
+  const hourly = ev('UID:h@test.example', 'SUMMARY:Hourly', 'DTSTART;TZID=America/New_York:20261102T090000', 'DURATION:PT10M', 'RRULE:FREQ=HOURLY');
+  const cancel = ev('UID:h@test.example', 'SUMMARY:Hourly', 'RECURRENCE-ID;TZID=America/New_York:20261102T090000', 'DTSTART;TZID=America/New_York:20261102T090000', 'DURATION:PT10M', 'STATUS:CANCELLED', 'SEQUENCE:1');
+  const shown = await merge({ a: cal(hourly, cancel) }, { ...NOV, includeCancelled: true });
+  assert.deepEqual(shown.occurrences.map((o) => [o.title, o.status, o.repeatNotSupported]), [['Hourly', 'cancelled', true]]);
+  const hidden = await merge({ a: cal(hourly, cancel) }, NOV);
+  assert.deepEqual(hidden.occurrences, []);
+});
+
+test('the series limit is applied after cancellations that won\'t be shown are removed (review r6)', async () => {
+  const changes = [];
+  for (let i = 0; i <= LIMITS.seriesOccurrences; i += 1) {
+    const stamp = `202611${String(1 + Math.floor(i / 1440)).padStart(2, '0')}T${String(Math.floor(i / 60) % 24).padStart(2, '0')}${String(i % 60).padStart(2, '0')}00Z`;
+    changes.push(ev('UID:c@test.example', `RECURRENCE-ID:${stamp}`, `DTSTART:${stamp}`, i < LIMITS.seriesOccurrences ? 'STATUS:CANCELLED' : 'SUMMARY:Live'));
+  }
+  const result = await merge({ a: cal(...changes) }, { ...NOV, timeZone: 'UTC' });
+  assert.deepEqual(result.occurrences.map((o) => o.title), ['Live']);
   assert.deepEqual(result.problems, []);
 });

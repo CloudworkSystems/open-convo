@@ -43,14 +43,12 @@ function sourceBudget(sourceCount) {
   return { steps: stepsShare, values: valuesShare, occurrences: occurrencesShare, stepsShare, valuesShare, occurrencesShare };
 }
 
-// A work limit that is the source's share running out (not a per-series
-// limit): another source's copy of the same series may still have room.
-class ShareLimit extends WorkLimit {}
+
 
 // resolveValue, counted against a source's budget when it needs a time zone.
 function budgetedResolve(value, fallbackZone, budget) {
   if (value.kind === 'date' || value.utc) return resolveValue(value, fallbackZone);
-  if (budget.values <= 0) throw new ShareLimit(`this calendar's share of time zone work (${budget.valuesShare} dates) is used up`);
+  if (budget.values <= 0) throw new WorkLimit(`this calendar's share of time zone work (${budget.valuesShare} dates) is used up`);
   budget.values -= 1;
   return resolveValue(value, fallbackZone);
 }
@@ -168,7 +166,7 @@ function oneOffLastDay(start, first) {
 }
 
 // One VEVENT to a copy (an event or a cancellation record), or a problem.
-function interpret(raw, source, ctx, budget) {
+function interpret(raw, source, ctx, budget, full = false) {
   const first = (name) => raw.props.get(name)?.[0];
   const where = { sourceIndex: source.index, line: raw.line };
   const uid = first('UID')?.value.trim();
@@ -208,13 +206,14 @@ function interpret(raw, source, ctx, budget) {
   }
 
   // An event without repeats whose written dates are two days or more outside
-  // the range can't show: it is kept only to take part in the same-UID order,
-  // and costs no time zone work.
-  if (!ridProp && !raw.props.has('RRULE') && !raw.props.has('RDATE')) {
+  // the range can't show: it is set aside unread, costing no time zone work.
+  // If another copy of its UID turns up, it is read in full after all (see
+  // mergeCalendars), so the result never depends on the range.
+  if (!full && !ridProp && !raw.props.has('RRULE') && !raw.props.has('RDATE')) {
     const written = parseDateValue(dtstartProp.value, dtstartProp.params);
     const lastDay = written ? oneOffLastDay(written, first) : null;
     if (lastDay !== null && (written.day > ctx.toDay + 2 || lastDay < ctx.fromDay - 2)) {
-      return { copy: { ...base, kind: 'event', outOfRange: true, status, rid: null, ridKey: null, ridRange: false } };
+      return { copy: { ...base, kind: 'event', outOfRange: true, status, rid: null, ridKey: null, ridRange: false, raw, source } };
     }
   }
 
@@ -340,16 +339,16 @@ function seriesWindow(copy, q) {
 // problems }. A series that would take more work than its share of the
 // budget (its source's share of the call's budget) shows only its first
 // occurrence, with `workLimit` saying why. Each source has its own budget.
-export function expandSeries(copy, q, { forceSingle = false, stats = { steps: 0 }, budgetSource = copy.sourceIndex } = {}) {
-  const budget = q.budgets?.[budgetSource] ?? sourceBudget(1);
+export function expandSeries(copy, q, { forceSingle = false, stats = { steps: 0 } } = {}) {
+  const budget = q.budgets?.[copy.sourceIndex] ?? sourceBudget(1);
   const notSupported = forceSingle || copy.ruleProblem !== null;
   try {
     const result = expandFully(copy, q, notSupported, stats, budget);
-    return { ...result, notSupported, workLimit: null, shareLimit: false };
+    return { ...result, notSupported, workLimit: null };
   } catch (error) {
     if (!(error instanceof WorkLimit)) throw error;
     const { instances } = expandFully(copy, q, true, { steps: 0 }, budget);
-    return { instances, problems: [], notSupported: true, workLimit: error.message, shareLimit: error instanceof ShareLimit };
+    return { instances, problems: [], notSupported: true, workLimit: error.message };
   } finally {
     budget.steps = Math.max(0, budget.steps - stats.steps);
   }
@@ -367,7 +366,7 @@ function expandFully(copy, q, single, stats, budget) {
     try {
       return expandRuleDays(...args, stats, maxSteps);
     } catch (error) {
-      if (error instanceof WorkLimit && sourceBound) throw new ShareLimit(`this calendar's share of the work (${budget.stepsShare} repeat periods) is used up`);
+      if (error instanceof WorkLimit && sourceBound) throw new WorkLimit(`this calendar's share of the work (${budget.stepsShare} repeat periods) is used up`);
       throw error;
     }
   };
@@ -545,7 +544,7 @@ function mergeUid(group, q, problems) {
     const sources = new Set([...masterSources, ...copies.map((c) => c.sourceIndex), ...entry.records.map((r) => r.sourceIndex)]);
     // Only the winning copy's RANGE counts: a stale RANGE override that loses
     // to a newer cancellation changes nothing beyond its own occurrence.
-    changed.set(ridKey, { override: copies[0] ?? null, cancelled: winner.kind === 'record', sources, rid: entry.rid, range: Boolean(winner.ridRange) });
+    changed.set(ridKey, { override: copies[0] ?? null, cancelled: winner.kind === 'record' || winner.status === 'cancelled', sources, rid: entry.rid, range: Boolean(winner.ridRange) });
   }
 
   const items = [];
@@ -553,14 +552,9 @@ function mergeUid(group, q, problems) {
   let lineFor = display ?? [...group.overrides.values()].flatMap((o) => o.copies)[0];
   if (display && !display.outOfRange) {
     const thisAndFuture = [...changed.values()].some((c) => c.range);
-    // The series is charged to the shown copy's source; if that source's
-    // share is used up, another source holding a copy of it may pay.
-    let result;
-    for (const budgetSource of [...new Set(masterCopies.map((c) => c.sourceIndex))]) {
-      result = expandSeries(display, q, { forceSingle: thisAndFuture, budgetSource });
-      if (!result.shareLimit) break;
-    }
-    const { instances, notSupported, workLimit, problems: found } = result;
+    // The series is paid for by the shown copy's own source only: a source
+    // that has used up its share can't move the cost to another source.
+    const { instances, notSupported, workLimit, problems: found } = expandSeries(display, q, { forceSingle: thisAndFuture });
     problems.push(...found);
     if (workLimit) {
       problems.push({ sourceIndex: display.sourceIndex, line: display.line, text: `"${display.uid}" needs too much work to expand (${workLimit}); only its first occurrence is shown` });
@@ -600,15 +594,20 @@ function mergeUid(group, q, problems) {
     }
   }
 
-  // The series limit counts the series' own and its changed occurrences.
+  // The series limit counts the series' own and its changed occurrences,
+  // after the cancelled ones that won't be shown are removed.
   const startOf = (item) => (item.instance.allDay ? item.instance.startDay * DAY_MS : item.instance.startMs);
   items.sort((a, b) => (startOf(a) - startOf(b)) || byCodeUnits(a.extra.origLabel ?? a.instance.origLabel, b.extra.origLabel ?? b.instance.origLabel));
-  if (items.length > limits.seriesOccurrences) {
+  let made = items.map(({ copy, instance, extra }) => ({ copy, occurrence: makeOccurrence(copy, instance, extra) }));
+  if (!q.includeCancelled) made = made.filter(({ occurrence }) => occurrence.status !== 'cancelled');
+  if (made.length > limits.seriesOccurrences) {
     problems.push({ sourceIndex: lineFor.sourceIndex, line: lineFor.line, text: `"${lineFor.uid}" has more than ${limits.seriesOccurrences} occurrences in the range; only the first ${limits.seriesOccurrences} are shown` });
-    items.length = limits.seriesOccurrences;
+    made.length = limits.seriesOccurrences;
   }
-  const occurrences = items.map(({ copy, instance, extra }) => makeOccurrence(copy, instance, extra));
-  return { occurrences, charge: lineFor };
+  // Each occurrence carries the copy it came from, so it is charged to that
+  // copy's source: the series' own occurrences to the shown copy's source,
+  // each changed occurrence to its override's source.
+  return made;
 }
 
 // Different UIDs, same title and time: grouped one to one, never two
@@ -736,27 +735,48 @@ export async function mergeCalendars(sources, query) {
   }
 
   let occurrences = [];
-  // Occurrences are charged to their source's share, in UID order, so the
-  // same input always stops at the same place.
+  // A copy set aside unread (E28) that shares its UID with another copy is
+  // read in full after all, so a broken or newer copy outside the range is
+  // judged exactly as it would be inside it.
+  for (const group of groups.values()) {
+    const asides = group.masters.filter((c) => c.outOfRange);
+    if (!asides.length || (asides.length === group.masters.length && !group.records.length && !group.overrides.size)) continue;
+    for (const aside of asides) {
+      group.masters.splice(group.masters.indexOf(aside), 1);
+      let result;
+      try {
+        result = interpret(aside.raw, aside.source, q, q.budgets[aside.source.index], true);
+      } catch (error) {
+        if (!(error instanceof WorkLimit)) throw error;
+        result = { problem: { sourceIndex: aside.source.index, line: aside.raw.line, text: `event "${aside.uid}" skipped: ${error.message}` } };
+      }
+      if (result.problem) problems.push(result.problem);
+      else group.masters.push(result.copy);
+    }
+  }
+
+  // Occurrences are charged to the share of the source of the copy each came
+  // from, in UID order and then by start, so the same input always stops at
+  // the same place and one source can't use up another's share.
   const dropped = new Map();
   for (const uid of [...groups.keys()].sort(byCodeUnits)) {
-    const { occurrences: found, charge } = mergeUid(groups.get(uid), q, problems);
-    const shown = q.includeCancelled ? found : found.filter((o) => o.status !== 'cancelled');
-    if (!shown.length) continue;
-    const budget = q.budgets[charge.sourceIndex];
-    if (shown.length > budget.occurrences) {
-      const entry = dropped.get(charge.sourceIndex) ?? { count: 0, events: 0, first: charge };
-      entry.count += shown.length - budget.occurrences;
-      entry.events += 1;
-      dropped.set(charge.sourceIndex, entry);
-      shown.length = budget.occurrences;
+    for (const { copy, occurrence } of mergeUid(groups.get(uid), q, problems)) {
+      const budget = q.budgets[copy.sourceIndex];
+      if (budget.occurrences > 0) {
+        budget.occurrences -= 1;
+        occurrences.push(occurrence);
+        continue;
+      }
+      const entry = dropped.get(copy.sourceIndex) ?? { count: 0, uids: new Set(), first: copy };
+      entry.count += 1;
+      entry.uids.add(copy.uid);
+      dropped.set(copy.sourceIndex, entry);
     }
-    budget.occurrences -= shown.length;
-    occurrences.push(...shown);
   }
   for (const [sourceIndex, entry] of dropped) {
     const share = q.budgets[sourceIndex].occurrencesShare;
-    problems.push({ sourceIndex, line: entry.first.line, text: `${entry.count} occurrences of ${entry.events} event${entry.events === 1 ? '' : 's'} not shown, the first "${entry.first.uid}": this calendar's share of occurrences (${share}) is used up` });
+    const events = entry.uids.size;
+    problems.push({ sourceIndex, line: entry.first.line, text: `${entry.count} occurrences of ${events} event${events === 1 ? '' : 's'} not shown, the first "${entry.first.uid}": this calendar's share of occurrences (${share}) is used up` });
   }
   occurrences = sortOccurrences(matchTitleAndTime(occurrences), q);
 
