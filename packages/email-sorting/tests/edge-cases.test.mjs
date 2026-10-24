@@ -1,4 +1,4 @@
-// One test per choice in the README's "Edge cases" section (E1 to E18):
+// One test per choice in the README's "Edge cases" section (E1 to E19):
 // cases the plan doesn't name, settled by the RFC 5322 (and RFC 3339, RFC
 // 2919, RFC 3834) defaults.
 
@@ -208,4 +208,45 @@ test('E17. a rule shows in reasons as one trimmed line of at most 80 characters'
   assert.equal(byId(result, 'c').pile, 'alerts');
   assert.equal(byId(result, 'c').reason, `Your rule: mail from ${'a'.repeat(79)}… goes to Alerts`);
   for (const id of ['a', 'b', 'c']) assert.doesNotMatch(byId(result, id).reason, /[\n\t\u2028\u2029]|\s{2}/);
+});
+
+test('E19. every reason is one trimmed line of at most 160 characters, whatever text reaches it', async () => {
+  // Line feed, tab, U+2028, U+2029 and no-break space: the white space mail
+  // text and settings may hold (other control characters are refused).
+  const mess = ' \n\t\u2028\u2029\u00a0 ';
+  const longDomain = `ctl\n\t\u2028${'d'.repeat(200)}.example`;
+  const messages = [
+    mail({ id: 'rule', from: { address: 'x@ctl.example' } }),
+    mail({ id: 'auto', headers: { 'Auto-Submitted': `auto-${mess}generated${mess}${'g'.repeat(300)}` } }),
+    mail({ id: 'prec', headers: { Precedence: `${mess}bulk${mess}` } }),
+    mail({ id: 'work', from: { address: `x@${longDomain}` } }),
+    mail({ id: 'model' }),
+    mail({ id: 'unsure' }),
+    mail({ id: 'mine', from: { address: 'me@quillhome.example' } }),
+  ];
+  const config = settings({
+    myAddresses: ['me@quillhome.example'],
+    workDomains: [longDomain],
+    senderRules: [{ match: `@${mess}ctl.example${mess}${' '.repeat(1000)}`, category: 'receipts' }],
+  });
+  const { result } = await ask(messages, [
+    ...throwsFor('auto', 'prec', 'work'),
+    { inbox: 'home', id: 'model', answer: answer('people', 0.9, `${mess}a${mess}b${mess}${'c'.repeat(400)}`) },
+    { inbox: 'home', id: 'unsure', answer: answer('work', 0.1, `x${mess}y`) },
+  ], config);
+  const reasons = Object.fromEntries(messages.map(({ id }) => [id, byId(result, id).reason]));
+  assert.deepEqual(Object.fromEntries(messages.map(({ id }) => [id, byId(result, id).decidedBy])), {
+    rule: 'rule', auto: 'fallback', prec: 'fallback', work: 'fallback', model: 'model', unsure: 'not-sure', mine: 'owner-only',
+  });
+  for (const [id, reason] of Object.entries(reasons)) {
+    assert.ok([...reason].length <= 160, `${id}: ${reason}`);
+    assert.doesNotMatch(reason, /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u00a0]|\s{2}|^\s|\s$/, id);
+    assert.doesNotMatch(reason, /[^\S ]/, id);
+  }
+  assert.equal(reasons.rule, 'Your rule: mail from @ctl.example goes to Receipts');
+  assert.equal(reasons.auto, `Sorted without the model: the message has Auto-Submitted: auto- generated ${'g'.repeat(63)}…`);
+  assert.equal(reasons.prec, 'Sorted without the model: the message has Precedence: bulk');
+  assert.equal(reasons.work, `Sorted without the model: the sender's domain ctl ${'d'.repeat(75)}… is a work domain`);
+  assert.equal(reasons.model, `a b ${'c'.repeat(155)}…`);
+  for (const line of result.problems) assert.doesNotMatch(line, /[^\S ]/);
 });

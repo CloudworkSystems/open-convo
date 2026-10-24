@@ -139,8 +139,9 @@ this shape. The question holds only:
 
 The question is frozen. Mail is data: the answer is checked (category in the
 fixed list, confidence a number from 0 to 1, reason text), and the owner's
-rules always win. The reason is cleaned (line breaks and tabs become spaces,
-control characters removed, spaces collapsed, cut to 160 characters); an
+rules always win. The reason is cleaned (line breaks, tabs and control
+characters become spaces, spaces collapse, cut to 160 characters ending in
+`…`; edge case E19); an
 empty one becomes "The model chose *Pile*". An answer that takes longer than
 `timeoutMs` is ignored.
 
@@ -218,13 +219,19 @@ a test in `tests/edge-cases.test.mjs` under the same number.
 - **E16.** Settings that are supplied must be an object: a settings file
   holding `null` (or a list, text or number) is refused. Only leaving the
   settings out gives the defaults.
-- **E17.** A sender rule shows in its reason as one line: white space
-  (line feeds, tabs, runs of spaces) becomes one space, the match is
-  trimmed (after the `@` too, for a domain rule) and cut to 80 characters,
-  ending in `…` when cut. Letter case is kept as written.
+- **E17.** A sender rule shows in its reason as one line, cleaned as in
+  E19, trimmed after the `@` too for a domain rule, and cut to 80
+  characters. Letter case is kept as written.
 - **E18.** A file path that opens but can't be read (for example a folder)
   is refused with the same plain message and exit code 1 as one that can't
   be opened.
+- **E19.** Every reason is one line of at most 160 characters. All text
+  placed in a reason (a rule's match, an `Auto-Submitted` or `Precedence`
+  keyword, a work domain, the model's reason) goes through one helper:
+  each run of white space or control characters (carriage return, line
+  feed, tab, U+2028, U+2029 and the rest of Unicode Cc) becomes one space,
+  the text is trimmed and cut, ending in `…` when cut. Values inside a
+  reason are cut to 80 characters; the whole reason to 160.
 
 ## What this slice does not do
 

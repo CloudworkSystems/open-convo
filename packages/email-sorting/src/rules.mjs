@@ -35,7 +35,7 @@ export const LIMITS = Object.freeze({
   snippetChars: 2_000,
   questionSnippetChars: 1_000,
   reasonChars: 160,
-  ruleMatchChars: 80,
+  reasonValueChars: 80,
 });
 
 export const DEFAULTS = Object.freeze({ confidenceFloor: 0.6, timeoutMs: 30_000 });
@@ -87,6 +87,17 @@ export function isPlainObject(value) {
 
 export function own(object, key) {
   return Object.prototype.hasOwnProperty.call(object, key);
+}
+
+// The one way any text enters a reason (rule matches, header facts,
+// domains, the model's reason): every run of white space or control
+// characters (CR, LF, tab, U+2028, U+2029 and the rest of Unicode Cc)
+// becomes one space, the result is trimmed and cut to `max` characters,
+// the last being "…" when cut. So a reason is always one bounded line.
+export function oneLine(text, max) {
+  const flat = String(text).replace(/[\s\u0000-\u001F\u007F-\u009F]+/g, ' ').trim();
+  if (cutChars(flat, max) === flat) return flat;
+  return `${cutChars(flat, max - 1).trimEnd()}…`;
 }
 
 export function quote(text) {

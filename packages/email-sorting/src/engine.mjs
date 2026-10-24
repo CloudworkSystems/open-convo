@@ -3,7 +3,7 @@
 
 import {
   CATEGORIES, CATEGORY_DESCRIPTIONS, EmailSortError, LIMITS, PILE_NAMES, compareText, cutChars,
-  domainOf, lower, own,
+  domainOf, lower, oneLine, own,
 } from './rules.mjs';
 import { compareDates, parseDate, validateInput, validateSettings } from './validate.mjs';
 
@@ -196,36 +196,30 @@ function ruleFor(address, rules) {
   return rules.find(rule => rule.match.startsWith('@') && `@${lower(rule.match.slice(1).trim())}` === domain) || null;
 }
 
-// A rule's match as shown in a reason: one line (line feeds, tabs and other
-// white space collapse to one space), trimmed (after the "@" too, for a
-// domain rule) and cut to 80 characters, the last being "…" when cut. A
-// padded or very long setting can't grow every reason. Worked out once per
-// rule, not once per conversation.
-const shownMatches = new WeakMap();
-
-function shownMatch(match) {
-  const oneLine = text => text.replace(/\s+/g, ' ').trim();
-  const text = match.startsWith('@') ? `@${oneLine(match.slice(1))}` : oneLine(match);
-  if (cutChars(text, LIMITS.ruleMatchChars) === text) return text;
-  return `${cutChars(text, LIMITS.ruleMatchChars - 1).trimEnd()}…`;
+// A value placed inside a reason (a rule's match, a header keyword, a
+// domain): one line of at most 80 characters (see oneLine in rules.mjs).
+function shownValue(text) {
+  return oneLine(text, LIMITS.reasonValueChars);
 }
 
+// A rule's match as shown in a reason; for a domain rule the white space
+// after the "@" goes too. Worked out once per rule, not once per
+// conversation, so a padded setting is flattened only once.
+const shownMatches = new WeakMap();
+
 function ruleReason(rule) {
-  if (!shownMatches.has(rule)) shownMatches.set(rule, shownMatch(rule.match));
+  if (!shownMatches.has(rule)) {
+    const { match } = rule;
+    shownMatches.set(rule, match.startsWith('@') ? `@${shownValue(match.slice(1))}` : shownValue(match));
+  }
   return `Your rule: mail from ${shownMatches.get(rule)} goes to ${PILE_NAMES[rule.category]}`;
 }
 
-// The model's reason, cleaned: line breaks and tabs become spaces, other
-// control characters are removed, runs of white space collapse to one
-// space, the result is trimmed and cut to 160 characters.
+// The model's reason, cleaned like every other reason text (one line, cut
+// to 160 characters with "…"); an empty one is replaced.
 export function cleanReason(reason, category) {
-  const text = String(reason)
-    .replace(/[\n\t\r\u2028\u2029]/g, ' ')
-    .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  const cut = cutChars(text, LIMITS.reasonChars).trim();
-  return cut === '' ? `The model chose ${PILE_NAMES[category]}` : cut;
+  const text = oneLine(reason, LIMITS.reasonChars);
+  return text === '' ? `The model chose ${PILE_NAMES[category]}` : text;
 }
 
 function contractProblem(answer) {
@@ -248,13 +242,13 @@ function fallback(message, facts) {
   if (facts.hasListId) return { pile: 'newsletters', fact: 'the message has a List-Id header' };
   if (facts.hasListUnsubscribe) return { pile: 'newsletters', fact: 'the message has a List-Unsubscribe header' };
   if (facts.autoSubmitted !== null && facts.autoSubmitted !== 'no') {
-    return { pile: 'alerts', fact: `the message has Auto-Submitted: ${facts.autoSubmitted}` };
+    return { pile: 'alerts', fact: `the message has Auto-Submitted: ${shownValue(facts.autoSubmitted)}` };
   }
   if (['bulk', 'junk', 'list'].includes(facts.precedence)) {
-    return { pile: 'alerts', fact: `the message has Precedence: ${facts.precedence}` };
+    return { pile: 'alerts', fact: `the message has Precedence: ${shownValue(facts.precedence)}` };
   }
   if (facts.senderIsWorkDomain) {
-    return { pile: 'work', fact: `the sender's domain ${domainOf(message.from.address)} is a work domain` };
+    return { pile: 'work', fact: `the sender's domain ${shownValue(domainOf(message.from.address))} is a work domain` };
   }
   return { pile: 'other', fact: 'no header fact applied' };
 }
@@ -325,7 +319,7 @@ async function decide(conversation, settings, classifier, problems) {
   const problem = askProblem || contractProblem(answer);
   if (problem) {
     const { pile, fact } = fallback(message, facts);
-    problems.push(`Conversation ${conversation.key} was sorted without the model because ${problem}.`);
+    problems.push(`Conversation ${shownValue(conversation.key)} was sorted without the model because ${problem}.`);
     return { pile, decidedBy: 'fallback', reason: `Sorted without the model: ${fact}` };
   }
   if (answer.confidence < settings.confidenceFloor) {
@@ -401,7 +395,8 @@ export async function sortMessages(input, settings, classifier) {
           date: item.source.date,
           pile: decision.pile,
           decidedBy: decision.decidedBy,
-          reason: decision.reason,
+          // Every reason passes through oneLine once more, whatever built it.
+          reason: oneLine(decision.reason, LIMITS.reasonChars),
           conversation: conversation.key,
         },
       });

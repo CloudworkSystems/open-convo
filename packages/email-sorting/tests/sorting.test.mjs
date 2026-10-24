@@ -281,7 +281,7 @@ test('7. mail is data: instructions in mail and invented piles never leave the f
 });
 
 // ------------------------------------------------------------------ test 8
-test('8. the model\'s reason is cleaned and cut to 160 characters; an empty one is replaced', async () => {
+test('8. the model\'s reason is cleaned and cut to 160 characters ending in "…"; an empty one is replaced', async () => {
   const messy = `  Looks\u0000 like\ta\r\nreceipt\u0007\u009b ${'z'.repeat(500)}`;
   const classifier = createScriptedClassifier([
     { inbox: 'home', id: 'messy', answer: answer('receipts', 0.9, messy) },
@@ -290,6 +290,7 @@ test('8. the model\'s reason is cleaned and cut to 160 characters; an empty one 
   const result = await sortMessages(input([mail({ id: 'messy' }), mail({ id: 'empty' })]), settings(), classifier);
   const reason = byId(result, 'messy').reason;
   assert.equal(reason.length, 160);
+  assert.ok(reason.endsWith('z…'), reason);
   assert.ok(reason.startsWith('Looks like a receipt zzz'), reason);
   assert.doesNotMatch(reason, /[\u0000-\u001f\u007f-\u009f]/);
   assert.doesNotMatch(reason, / {2}/);
