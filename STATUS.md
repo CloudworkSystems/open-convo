@@ -94,6 +94,8 @@ reviews. Plan in review: [docs/plans/sync-core.md](docs/plans/sync-core.md).
 
 **Calendar merge engine** (Personal, launch set), Codex builds, Gemini Code Assist reviews; plan approved (`docs/plans/calendar-merge-engine.md`); Codex can start when a builder place is free.
 
+**Cloudwork Rail Map** (Desk, Cloudwork Nexus), Claude builds; a fifth Nexus view showing this repository's branches, commits and pull requests from a saved snapshot (`apps/desk/scripts/rail-map-snapshot.mjs`); merged October 24 (#132).
+
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:
 [docs/plans/merge-gate.md](docs/plans/merge-gate.md). Switched on for `main`
