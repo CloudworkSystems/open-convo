@@ -75,9 +75,13 @@ so it builds and tests on Linux too.
   live in different places, so a crash can save one without the other. The
   checkpoint keeps, for each record, the last stamp the cloud acknowledged.
   On start, the app hands the sync core the ID and stamp of every local
-  record, and the core queues any record whose stamp is newer than its last
-  acknowledged one and isn't already queued. An edit saved just before a
-  crash is therefore never stranded, whichever side was saved first.
+  record, and the core makes the outbox match the local store both ways. It
+  queues any record whose stamp is newer than its last acknowledged one and
+  isn't already queued. It drops any queued entry whose record ID and stamp
+  aren't in the local store, so an edit that was never saved locally is
+  never uploaded and doesn't leave the status stuck on "waiting". An edit
+  saved just before a crash is therefore never stranded, and one that wasn't
+  saved never leaks out, whichever side was saved first.
 - **The clock moves forward.** Every fetched stamp pushes the device's
   logical counter past it, so the next local change always gets a higher
   stamp than anything the device has seen.
@@ -114,7 +118,8 @@ so it builds and tests on Linux too.
   sync core sets a payload limit below that, leaving room for encryption
   overhead and metadata, and stores larger payloads as asset-style
   attachments in the fake cloud (as the real adapter will with CloudKit
-  assets). Oversized payloads never fail silently.
+  assets). Oversized payloads never fail silently. The README states the
+  limit and why.
 - **Status the app can show.** Synced, waiting, offline, or needs attention
   (with a plain reason), for each record type and overall. No silent failures.
 
@@ -174,9 +179,10 @@ Every case uses two or three simulated devices and invented records.
     deliberately non-associative stand-in fails that check.
 17. A device saves an edit to its local records and is destroyed before its
     checkpoint is saved; recreated from the older checkpoint and reconciled
-    against its records, it queues the edit and B has it after sync. The
-    reverse (checkpoint saved, record not) queues nothing new and loses
-    nothing that was acknowledged.
+    against its records, it queues the edit and B has it after sync. In the
+    reverse (checkpoint saved with a queued entry, record not saved), the
+    entry is dropped: it is never uploaded, B never sees it, status returns
+    to synced, and nothing that was acknowledged is lost.
 
 ## Out Of Scope For This Slice
 
@@ -261,14 +267,19 @@ tokens on interrupted downloads, the clock moving past fetched stamps, where
 decryption and content merging happen, and logical deletion versus purge.
 Its P2 on CloudKit's 1 MB field limit is also written in. Its last round on
 `faa5594` (reviewed again as #127) added one P1, written in above: an edit
-made while an upload is in flight stays queued (test 15). The P2s Codex
-raised are listed on #127 under "Requirements carried to the code pull
-request" for the builder to meet. Its round on `7e98760` added three P1s: the
+made while an upload is in flight stays queued (test 15). The one P2 Codex
+carried to the builder (the 1 MB field limit, modelled in the fake cloud
+with attachments for larger payloads and stated in the README) is written
+in above under "Size limits" and test 14; the plan itself is the whole
+contract. Its round on `7e98760` added three P1s: the
 merge laws and the three-device test are written in above (test 16), and
 per-record storage and key provisioning are written in as "Requirements For
 The Next Slice". Its round on `406d89c` added a P1 on crashes between
 saving a record and saving the outbox, written in as "Reconciling after a
-crash" (test 17) and next-slice requirement 3.
+crash" (test 17) and next-slice requirement 3. Its round on `c71c082`
+added a P1 on queued entries whose record was never saved (dropped on
+reconciliation, test 17) and a P2 to keep the builder's requirements in
+this plan rather than on the pull request (done).
 
 ## Review And Finish Line
 
