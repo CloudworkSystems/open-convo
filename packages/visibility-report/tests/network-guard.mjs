@@ -1,7 +1,11 @@
 /**
- * Blocks every network and process entry point the visibility report plan
- * names, before any test file imports them. Node 22's permission model has
- * no network permission, so the tests stub the entry points instead.
+ * Blocks every callable export of the network and process built-ins before
+ * any test file imports them. Node 22's permission model has no network
+ * permission, so the tests deny those entry points instead.
+ *
+ * A callable export throws, whether it is reached through `node:`, through
+ * `process.getBuiltinModule`, or as a global (`fetch`, `WebSocket`,
+ * `EventSource`). Non-function exports are left as they are.
  */
 import childProcess from 'node:child_process';
 import cluster from 'node:cluster';
@@ -47,15 +51,6 @@ export function clearNetworkCalls() {
   networkCalls.length = 0;
 }
 
-function blockedClass(name) {
-  return class BlockedEntry {
-    constructor() {
-      networkCalls.push({ name });
-      throw new Error(`Network blocked: ${name}`);
-    }
-  };
-}
-
 function assignExport(target, name, value) {
   if (!target || (typeof target !== 'object' && typeof target !== 'function')) return;
   try {
@@ -64,16 +59,13 @@ function assignExport(target, name, value) {
   } catch {
     // A getter such as dns.promises has no setter. Replace it below.
   }
-  try {
-    Object.defineProperty(target, name, {
-      value,
-      writable: true,
-      configurable: true,
-      enumerable: true,
-    });
-  } catch {
-    // Leave a sealed export unchanged.
-  }
+  Object.defineProperty(target, name, {
+    value,
+    writable: true,
+    configurable: true,
+    enumerable: true,
+  });
+  if (target[name] !== value) throw new Error(`Could not block ${name}.`);
 }
 
 function install(specifier, real, overrides) {
@@ -91,101 +83,48 @@ function install(specifier, real, overrides) {
   mock.module(specifier, { namedExports: named });
 }
 
-function stubFunctions(real, prefix, names) {
+function denyCallables(real, prefix) {
   const overrides = {};
-  for (const name of names) {
-    if (typeof real[name] === 'function') overrides[name] = block(`${prefix}.${name}`);
+  for (const name of Object.getOwnPropertyNames(real)) {
+    if (name === 'default') continue;
+    let value;
+    try {
+      value = real[name];
+    } catch {
+      continue;
+    }
+    if (typeof value === 'function') overrides[name] = block(`${prefix}.${name}`);
   }
   return overrides;
 }
 
+function denyModule(prefix, real) {
+  install(`node:${prefix}`, real, denyCallables(real, prefix));
+}
+
 globalThis.fetch = block('fetch');
-globalThis.WebSocket = blockedClass('WebSocket');
+globalThis.WebSocket = block('WebSocket');
+globalThis.EventSource = block('EventSource');
 
-net.Socket.prototype.connect = block('net.Socket.prototype.connect');
-net.Server.prototype.listen = block('net.Server.prototype.listen');
-tls.TLSSocket.prototype.connect = block('tls.TLSSocket.prototype.connect');
-
-install('node:net', net, {
-  connect: block('net.connect'),
-  createConnection: block('net.createConnection'),
-});
-install('node:tls', tls, {
-  connect: block('tls.connect'),
-});
-install('node:http', http, {
-  request: block('http.request'),
-  get: block('http.get'),
-});
-install('node:https', https, {
-  request: block('https.request'),
-  get: block('https.get'),
-});
-install('node:http2', http2, {
-  connect: block('http2.connect'),
-});
-const BlockedSocket = blockedClass('dgram.Socket');
-for (const name of [
-  'bind',
-  'connect',
-  'disconnect',
-  'send',
-  'sendto',
-  'addMembership',
-  'dropMembership',
-  'addSourceSpecificMembership',
-  'dropSourceSpecificMembership',
-]) {
-  if (typeof dgram.Socket?.prototype?.[name] === 'function') {
-    BlockedSocket.prototype[name] = block(`dgram.Socket.prototype.${name}`);
-  }
-}
-install('node:dgram', dgram, {
-  createSocket: block('dgram.createSocket'),
-  _createSocketHandle: block('dgram._createSocketHandle'),
-  Socket: BlockedSocket,
-});
-
-function isDnsQuery(name) {
-  return name === 'lookup' || name === 'lookupService' || name === 'reverse' || name.startsWith('resolve');
-}
-
-const dnsNames = Object.keys(dns).filter(isDnsQuery);
-const dnsPromiseNames = Object.keys(dnsPromises).filter(isDnsQuery);
-
-function stubResolverPrototype(Resolver, prefix, names) {
-  const prototype = Resolver?.prototype;
-  if (!prototype) return;
-  for (const name of names) {
-    if (typeof prototype[name] === 'function') prototype[name] = block(`${prefix}.${name}`);
-  }
-}
-
-stubResolverPrototype(dns.Resolver, 'dns.Resolver.prototype', dnsNames);
-stubResolverPrototype(dnsPromises.Resolver, 'dns/promises.Resolver.prototype', dnsPromiseNames);
-install('node:dns/promises', dnsPromises, stubFunctions(dnsPromises, 'dns/promises', dnsPromiseNames));
-install('node:dns', dns, {
-  ...stubFunctions(dns, 'dns', dnsNames),
-  promises: { ...dns.promises, ...stubFunctions(dnsPromises, 'dns/promises', dnsPromiseNames) },
-});
-
-install('node:inspector', inspector, { open: block('inspector.open') });
-install('node:inspector/promises', inspectorPromises, { open: block('inspector/promises.open') });
-
-const childNames = ['spawn', 'exec', 'execFile', 'fork', 'spawnSync', 'execSync', 'execFileSync', 'forkSync'];
-if (typeof childProcess.ChildProcess?.prototype?.spawn === 'function') {
-  childProcess.ChildProcess.prototype.spawn = block('child_process.ChildProcess.prototype.spawn');
-}
-install('node:child_process', childProcess, stubFunctions(childProcess, 'child_process', childNames));
-install('node:cluster', cluster, { fork: block('cluster.fork') });
-install('node:worker_threads', workerThreads, { Worker: blockedClass('worker_threads.Worker') });
+// dns.promises is the dns/promises module object. Deny that object first so
+// the getter on dns already points at blocked functions.
+denyModule('dns/promises', dnsPromises);
+denyModule('dns', dns);
+denyModule('net', net);
+denyModule('tls', tls);
+denyModule('dgram', dgram);
+denyModule('http', http);
+denyModule('https', https);
+denyModule('http2', http2);
+denyModule('inspector', inspector);
+denyModule('inspector/promises', inspectorPromises);
+denyModule('child_process', childProcess);
+denyModule('cluster', cluster);
+denyModule('worker_threads', workerThreads);
 
 try {
   const undici = await import('undici');
-  const overrides = stubFunctions(undici, 'undici', ['fetch', 'request', 'stream', 'connect']);
-  for (const name of ['Client', 'Pool', 'Agent']) {
-    if (typeof undici[name] === 'function') overrides[name] = blockedClass(`undici.${name}`);
-  }
+  const overrides = denyCallables(undici, 'undici');
   if (Object.keys(overrides).length > 0) install('undici', undici, overrides);
 } catch (error) {
   if (error?.code !== 'ERR_MODULE_NOT_FOUND') throw error;

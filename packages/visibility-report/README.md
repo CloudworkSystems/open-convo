@@ -4,8 +4,8 @@ A small library and command that turns one findings file into a plain-English
 visibility report. It ranks problems with fixed rules and writes Markdown and
 JSON. It does not gather findings, call the network, or use AI.
 
-macOS and Linux only. On Windows the command stops with an error. An output
-path that contains a backslash, a colon, or a trailing dot is refused.
+macOS and Linux only. On any other system the command stops with an error.
+An output path that contains a backslash, a colon, or a trailing dot is refused.
 
 Invented businesses only. This package adds no license of its own.
 

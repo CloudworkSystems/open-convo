@@ -51,6 +51,10 @@ function rejectUnknown(value, allowed, path) {
   }
 }
 
+function characterCount(value) {
+  return [...value].length;
+}
+
 function requireText(value, path, id, { multiline = false } = {}) {
   const where = named(id, path);
   if (typeof value !== 'string') fail(`${where} must be text.`);
@@ -58,7 +62,8 @@ function requireText(value, path, id, { multiline = false } = {}) {
     if (id === undefined) fail(`${path} contains a character that cannot be shown.`);
     fail(`Finding "${id}" field ${path} contains a character that cannot be shown.`);
   }
-  if (value.length < 1 || value.length > TEXT_MAX) fail(`${where} must be 1 to 500 characters.`);
+  const count = characterCount(value);
+  if (count < 1 || count > TEXT_MAX) fail(`${where} must be 1 to 500 characters.`);
   return value;
 }
 
@@ -69,7 +74,8 @@ function requireUrl(value, path, id) {
     if (id === undefined) fail(`${path} contains a character that cannot be shown.`);
     fail(`Finding "${id}" field ${path} contains a character that cannot be shown.`);
   }
-  if (value.length < 1 || value.length > TEXT_MAX) fail(`${where} must be 1 to 500 characters.`);
+  const count = characterCount(value);
+  if (count < 1 || count > TEXT_MAX) fail(`${where} must be 1 to 500 characters.`);
   if (!isHttpsUrl(value)) fail(`${where} is not an https:// address.`);
   return value;
 }

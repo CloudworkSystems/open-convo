@@ -68,7 +68,9 @@ export function run(argv, io = {}) {
   const stdout = io.stdout ?? process.stdout;
   const stderr = io.stderr ?? process.stderr;
   try {
-    if (process.platform === 'win32') fail('This report runs on macOS and Linux only.');
+    if (process.platform !== 'darwin' && process.platform !== 'linux') {
+      fail('This report runs on macOS and Linux only.');
+    }
     const args = parseArgs(argv);
     refuseSharedPaths(args.findings, args.json, args.md);
     let stat;

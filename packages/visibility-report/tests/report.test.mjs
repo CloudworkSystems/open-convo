@@ -785,66 +785,93 @@ test('stubbed entry points throw before they can connect', async () => {
   const childProcess = await import('node:child_process');
   const cluster = await import('node:cluster');
   const workerThreads = await import('node:worker_threads');
-  assert.throws(() => net.createConnection(), /Network blocked/);
-  assert.throws(() => new net.Socket().connect(1, '127.0.0.1'), /Network blocked/);
-  assert.throws(() => new net.Server().listen(0), /Network blocked: net\.Server\.prototype\.listen/);
-  assert.throws(() => http.createServer().listen(0), /Network blocked: net\.Server\.prototype\.listen/);
-  assert.throws(() => https.createServer().listen(0), /Network blocked: net\.Server\.prototype\.listen/);
-  assert.throws(() => tls.createServer().listen(0), /Network blocked: net\.Server\.prototype\.listen/);
-  assert.throws(() => http2.createServer().listen(0), /Network blocked: net\.Server\.prototype\.listen/);
-  assert.throws(() => tls.connect(443, 'example.com'), /Network blocked/);
-  assert.throws(() => tls.TLSSocket.prototype.connect.call({}), /Network blocked/);
-  assert.throws(() => http.get('http://127.0.0.1'), /Network blocked/);
-  assert.throws(() => http.request('http://127.0.0.1'), /Network blocked/);
-  assert.throws(() => https.get('https://127.0.0.1'), /Network blocked/);
-  assert.throws(() => https.request('https://127.0.0.1'), /Network blocked/);
-  assert.throws(() => http2.connect('https://127.0.0.1'), /Network blocked/);
-  assert.throws(() => dgram.createSocket('udp4'), /Network blocked/);
+  assert.throws(() => net.createConnection(), /Network blocked: net\.createConnection/);
+  assert.throws(() => new net.Socket(), /Network blocked: net\.Socket/);
+  assert.throws(() => new net.Server(), /Network blocked: net\.Server/);
+  assert.throws(() => http.createServer(), /Network blocked: http\.createServer/);
+  assert.throws(() => https.createServer(), /Network blocked: https\.createServer/);
+  assert.throws(() => tls.createServer(), /Network blocked: tls\.createServer/);
+  assert.throws(() => http2.createServer(), /Network blocked: http2\.createServer/);
+  assert.throws(() => tls.connect(443, 'example.com'), /Network blocked: tls\.connect/);
+  assert.throws(() => new tls.TLSSocket(), /Network blocked: tls\.TLSSocket/);
+  assert.throws(() => http.get('http://127.0.0.1'), /Network blocked: http\.get/);
+  assert.throws(() => http.request('http://127.0.0.1'), /Network blocked: http\.request/);
+  assert.throws(() => https.get('https://127.0.0.1'), /Network blocked: https\.get/);
+  assert.throws(() => https.request('https://127.0.0.1'), /Network blocked: https\.request/);
+  assert.throws(() => http2.connect('https://127.0.0.1'), /Network blocked: http2\.connect/);
+  assert.throws(() => new http.WebSocket('wss://example.com'), /Network blocked: http\.WebSocket/);
+  assert.throws(() => dgram.createSocket('udp4'), /Network blocked: dgram\.createSocket/);
   assert.throws(() => dgram._createSocketHandle('udp4'), /Network blocked: dgram\._createSocketHandle/);
   assert.throws(() => new dgram.Socket('udp4'), /Network blocked: dgram\.Socket/);
-  assert.throws(() => dgram.Socket.prototype.bind.call({}, 0), /Network blocked: dgram\.Socket\.prototype\.bind/);
-  assert.throws(() => dgram.Socket.prototype.send.call({}, 'x'), /Network blocked: dgram\.Socket\.prototype\.send/);
-  assert.throws(() => dgram.Socket.prototype.connect.call({}, 9, '127.0.0.1'), /Network blocked: dgram\.Socket\.prototype\.connect/);
-  assert.throws(() => dns.lookup('example.com', () => {}), /Network blocked/);
-  assert.throws(() => dns.resolve('example.com', () => {}), /Network blocked/);
-  assert.throws(() => dnsPromises.lookup('example.com'), /Network blocked/);
-  assert.throws(() => new dnsPromises.Resolver().resolve4('example.com'), /Network blocked: dns\/promises\.Resolver\.prototype\.resolve4/);
-  assert.throws(() => new dnsPromises.Resolver().resolve('example.com'), /Network blocked: dns\/promises\.Resolver\.prototype\.resolve/);
-  assert.throws(() => new dns.promises.Resolver().resolve4('example.com'), /Network blocked: dns\/promises\.Resolver\.prototype\.resolve4/);
-  assert.throws(() => new dns.Resolver().resolve4('example.com', () => {}), /Network blocked: dns\.Resolver\.prototype\.resolve4/);
+  assert.throws(() => dns.lookup('example.com', () => {}), /Network blocked: dns\.lookup/);
+  assert.throws(() => dns.resolve('example.com', () => {}), /Network blocked: dns\.resolve/);
+  assert.throws(() => dnsPromises.lookup('example.com'), /Network blocked: dns\/promises\.lookup/);
+  assert.throws(() => new dnsPromises.Resolver(), /Network blocked: dns\/promises\.Resolver/);
+  assert.throws(() => new dns.promises.Resolver(), /Network blocked: dns\/promises\.Resolver/);
+  assert.throws(() => new dns.Resolver(), /Network blocked: dns\.Resolver/);
   assert.throws(() => dns.reverse('127.0.0.1', () => {}), /Network blocked: dns\.reverse/);
   assert.throws(() => dns.lookupService('127.0.0.1', 443, () => {}), /Network blocked: dns\.lookupService/);
   assert.throws(() => dns.promises.reverse('127.0.0.1'), /Network blocked: dns\/promises\.reverse/);
   assert.throws(() => dns.promises.lookupService('127.0.0.1', 443), /Network blocked: dns\/promises\.lookupService/);
   assert.throws(() => dnsPromises.reverse('127.0.0.1'), /Network blocked: dns\/promises\.reverse/);
   assert.throws(() => dnsPromises.lookupService('127.0.0.1', 443), /Network blocked: dns\/promises\.lookupService/);
-  assert.throws(() => new dns.Resolver().reverse('127.0.0.1', () => {}), /Network blocked: dns\.Resolver\.prototype\.reverse/);
-  assert.throws(() => new dnsPromises.Resolver().reverse('127.0.0.1'), /Network blocked: dns\/promises\.Resolver\.prototype\.reverse/);
-  assert.throws(() => new dns.promises.Resolver().reverse('127.0.0.1'), /Network blocked: dns\/promises\.Resolver\.prototype\.reverse/);
-  assert.throws(() => inspector.open(), /Network blocked/);
-  assert.throws(() => inspectorPromises.open(), /Network blocked/);
-  assert.throws(() => childProcess.spawn('true'), /Network blocked/);
-  assert.throws(() => new childProcess.ChildProcess().spawn({ file: 'true', args: ['true'] }), /Network blocked: child_process\.ChildProcess\.prototype\.spawn/);
+  assert.throws(() => inspector.open(), /Network blocked: inspector\.open/);
+  assert.throws(() => inspectorPromises.open(), /Network blocked: inspector\/promises\.open/);
+  assert.throws(() => childProcess.spawn('true'), /Network blocked: child_process\.spawn/);
+  assert.throws(() => new childProcess.ChildProcess(), /Network blocked: child_process\.ChildProcess/);
   const builtinChild = process.getBuiltinModule('child_process');
   const builtinChildNode = process.getBuiltinModule('node:child_process');
   assert.throws(() => builtinChild.spawn('true'), /Network blocked: child_process\.spawn/);
-  assert.throws(() => new builtinChildNode.ChildProcess().spawn({ file: 'true', args: ['true'] }), /Network blocked: child_process\.ChildProcess\.prototype\.spawn/);
+  assert.throws(() => new builtinChildNode.ChildProcess(), /Network blocked: child_process\.ChildProcess/);
   assert.throws(() => process.getBuiltinModule('dns').lookup('example.com', () => {}), /Network blocked: dns\.lookup/);
   assert.throws(() => process.getBuiltinModule('node:dns/promises').resolve('example.com'), /Network blocked: dns\/promises\.resolve/);
   assert.throws(() => process.getBuiltinModule('dns').promises.lookup('example.com'), /Network blocked: dns\/promises\.lookup/);
+  assert.throws(() => new (process.getBuiltinModule('dns/promises').Resolver)(), /Network blocked: dns\/promises\.Resolver/);
   assert.throws(() => process.getBuiltinModule('dgram').createSocket('udp4'), /Network blocked: dgram\.createSocket/);
   assert.throws(() => new (process.getBuiltinModule('node:dgram').Socket)('udp4'), /Network blocked: dgram\.Socket/);
+  assert.throws(() => new (process.getBuiltinModule('node:http').WebSocket)('wss://example.com'), /Network blocked: http\.WebSocket/);
   assert.throws(() => process.getBuiltinModule('inspector').open(), /Network blocked: inspector\.open/);
-  assert.throws(() => childProcess.exec('true'), /Network blocked/);
-  assert.throws(() => childProcess.execFile('true'), /Network blocked/);
-  assert.throws(() => childProcess.fork('true'), /Network blocked/);
-  assert.throws(() => childProcess.spawnSync('true'), /Network blocked/);
-  assert.throws(() => childProcess.execSync('true'), /Network blocked/);
-  assert.throws(() => childProcess.execFileSync('true'), /Network blocked/);
-  assert.throws(() => cluster.fork(), /Network blocked/);
-  assert.throws(() => new workerThreads.Worker(new URL(import.meta.url)), /Network blocked/);
-  assert.throws(() => new WebSocket('wss://example.com'), /Network blocked/);
+  assert.throws(() => childProcess.exec('true'), /Network blocked: child_process\.exec/);
+  assert.throws(() => childProcess.execFile('true'), /Network blocked: child_process\.execFile/);
+  assert.throws(() => childProcess.fork('true'), /Network blocked: child_process\.fork/);
+  assert.throws(() => childProcess.spawnSync('true'), /Network blocked: child_process\.spawnSync/);
+  assert.throws(() => childProcess.execSync('true'), /Network blocked: child_process\.execSync/);
+  assert.throws(() => childProcess.execFileSync('true'), /Network blocked: child_process\.execFileSync/);
+  assert.throws(() => cluster.fork(), /Network blocked: cluster\.fork/);
+  assert.throws(() => new workerThreads.Worker(new URL(import.meta.url)), /Network blocked: worker_threads\.Worker/);
+  assert.throws(() => new WebSocket('wss://example.com'), /Network blocked: WebSocket/);
+  assert.throws(() => new EventSource('https://example.com'), /Network blocked: EventSource/);
   clearNetworkCalls();
+});
+
+test('every callable export of a network or process built-in throws', async () => {
+  function assertBlocked(value, label) {
+    assert.equal(typeof value, 'function', label);
+    assert.throws(() => value(), /Network blocked/, label);
+    clearNetworkCalls();
+  }
+  for (const name of STUBBED_MODULES) {
+    const sources = [
+      process.getBuiltinModule(name),
+      process.getBuiltinModule(`node:${name}`),
+      await import(`node:${name}`),
+    ];
+    for (const mod of sources) {
+      for (const key of Object.getOwnPropertyNames(mod)) {
+        let value;
+        try {
+          value = mod[key];
+        } catch {
+          continue;
+        }
+        if (typeof value !== 'function') continue;
+        assertBlocked(value, `${name}.${key}`);
+      }
+    }
+  }
+  assertBlocked(fetch, 'fetch');
+  assertBlocked(WebSocket, 'WebSocket');
+  assertBlocked(EventSource, 'EventSource');
 });
 
 test('the command reads no file other than the findings file', () => {
@@ -885,19 +912,41 @@ test('Windows and Windows-shaped output paths are refused', () => {
       assert.deepEqual(fs.readFileSync(findings), bytes);
     }
     const descriptor = Object.getOwnPropertyDescriptor(process, 'platform');
-    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     try {
-      const result = invoke(['--findings', findings]);
-      assert.equal(result.code, 1, result.stderr);
-      assert.match(result.stderr, /This report runs on macOS and Linux only/);
-      assert.equal(result.stdout, '');
-      assert.deepEqual(fs.readFileSync(findings), bytes);
+      for (const platform of ['win32', 'freebsd', 'aix']) {
+        Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+        const result = invoke(['--findings', findings]);
+        assert.equal(result.code, 1, `${platform}: ${result.stderr}`);
+        assert.match(result.stderr, /This report runs on macOS and Linux only/);
+        assert.equal(result.stdout, '');
+        assert.deepEqual(fs.readFileSync(findings), bytes);
+      }
     } finally {
       Object.defineProperty(process, 'platform', descriptor);
     }
   } finally {
     cleanup(dir);
   }
+});
+
+test('text and URL length count Unicode code points', () => {
+  const emoji = '😀';
+  const prefix = 'https://a.example/';
+  const accepted = problemByRank(4, 'emoji-ok');
+  accepted.details.wrongDetails = emoji.repeat(500);
+  const siteUrl = prefix + emoji.repeat(500 - [...prefix].length);
+  const { markdown, json } = render(doc([accepted], { siteUrl }));
+  assert.equal([...accepted.details.wrongDetails].length, 500);
+  assert.equal(accepted.details.wrongDetails.length, 1000);
+  assert.match(markdown, /😀/);
+  assert.equal(json.business.siteUrl, siteUrl);
+
+  const tooLong = problemByRank(4, 'emoji-long');
+  tooLong.details.wrongDetails = emoji.repeat(501);
+  expectRefuse(doc([tooLong]), /wrongDetails must be 1 to 500 characters/);
+
+  const longUrl = prefix + emoji.repeat(501 - [...prefix].length);
+  expectRefuse(doc([problemByRank(4, 'emoji-url')], { siteUrl: longUrl }), /business\.siteUrl must be 1 to 500 characters/);
 });
 
 test('a symlinked command path still counts as this program', () => {
