@@ -190,7 +190,9 @@ A. Two rules specific to tasks:
   device the reopen hadn't heard from (the add wins, as in an
   observed-remove set). Set-aside records stay in history as undone and
   never move the series on. Reopen records are merged as a set like the
-  others. Reopening a one-off task is an ordinary stamped change to its
+  others and carry the same stamped `withdrawn` field: undoing a reopen
+  withdraws it, and a withdrawn reopen sets nothing aside, so the records it
+  listed count again. Reopening a one-off task is an ordinary stamped change to its
   `state`.
 - **An occurrence is named by its scheduled due date** (the date, or the
   date and wall time with its zone) as it was when the record was made.
@@ -283,7 +285,8 @@ and tasks only. At least:
    counts, so the occurrence is done on both devices, whichever order they
    merge in, even when the unseen completion has the lower version stamp);
    reopening after seeing both records reopens it; a re-complete after a
-   reopen counts again, and a later re-complete beats an earlier withdrawal; and the rule edit case (weekly on Monday changed
+   reopen counts again; undoing a reopen on one device restores the
+   completion on both after merging; and a later re-complete beats an earlier withdrawal; and the rule edit case (weekly on Monday changed
    to weekly on Thursday: the Monday
    completion stays in history and the next due date is the first Thursday
    after it, on both devices, whichever order they merge in; a yearly task
