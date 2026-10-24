@@ -107,7 +107,14 @@ so it builds and tests on Linux too.
   function, keeps the queued edit and saves the fetched copy as a conflict
   copy), queues the result with the fetched version as its new base, and
   only then hands it to the app to save. So the local store always holds
-  the version that is queued, and reconciliation after a restart finds it. The sync core does not
+  the version that is queued, and reconciliation after a restart finds it.
+  The record's last-seen change tag moves to the fetched version only once
+  the app confirms it saved the merged record (and the fetch's change token
+  is saved only then too). If the device crashes after queuing the merge
+  but before that save, reconciliation drops the merged entry, re-queues
+  the old local edit with its old base, and the next upload finds the
+  conflict and merges again, so the other device's edit is never written
+  over. The sync core does not
   pick a winner blindly. It hands both copies to a **merge function
   registered for that record type** and uploads the result, so the edit that
   reaches the cloud second never simply overwrites the first. Stamps decide
@@ -121,7 +128,9 @@ so it builds and tests on Linux too.
   decrypt-merge-encrypt function, including calling the JavaScript list
   engine from the app, is the next slice's job. A record type with no merge
   function falls back to "higher stamp wins" and keeps the losing copy as a
-  conflict copy the app can show, so nothing is silently lost.
+  conflict copy the app can show, so nothing is silently lost. Conflict
+  copies are part of the checkpoint until the app confirms it has saved
+  them in its own store, so a quit before then doesn't lose them.
 - **Retries reuse the merge result.** The merge result is stamped and saved
   in the outbox (and so in the checkpoint) before it is uploaded, and a
   retry sends those same bytes; the merge function is not called again for
@@ -180,7 +189,10 @@ Every case uses two or three simulated devices and invented records.
    syncs first, including when the higher-stamped edit reaches the cloud
    second (the merge function is still called; nothing is overwritten).
 4. Same as 3 with no merge function: higher stamp wins, the other copy is kept
-   as a conflict copy, and status says "needs attention".
+   as a conflict copy, and status says "needs attention". When the device is
+   recreated from its checkpoint before the app confirms it saved the
+   conflict copy, the copy is still there and the status still says "needs
+   attention".
 5. A logically deletes a record; B, offline, edits its older copy; after
    sync the deletion wins (older edit). Then A restores the record with a
    later stamp; after sync it is back on both devices.
@@ -241,6 +253,10 @@ Every case uses two or three simulated devices and invented records.
     the merge function, and both devices end with both edits. The same holds
     when A is recreated from its checkpoint and reconciled after the fetched
     copy was saved locally and before the upload: A's edit is not dropped.
+    And when A is destroyed after the merged entry reaches its checkpoint
+    but before the merged record is saved locally, A reconciles from the old
+    local edit, the upload is still treated as a conflict, and both devices
+    end with both edits.
 
 ## Out Of Scope For This Slice
 
@@ -352,7 +368,10 @@ added a P1: the purged flag is part of the record shape reconciliation
 receives (test 17). Its round on `0c40e11` added two P1s: the checkpoint
 keeps each record's last-seen change tag so reconciliation can rebuild the
 base, and reconciliation pushes the logical clock past every local stamp
-(test 17, fourth case and the follow-up edit).
+(test 17, fourth case and the follow-up edit). Its round on `93bfb99`
+added two P1s: conflict copies stay in the checkpoint until the app has
+saved them (test 4), and a fetch-merge moves the record's base only after
+the merged record is saved locally (test 19).
 
 ## Review And Finish Line
 
