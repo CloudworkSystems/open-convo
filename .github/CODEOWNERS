@@ -5,6 +5,9 @@
 /AGENTS.md @CloudworkSystems
 /CLAUDE.md @CloudworkSystems
 /.github/ @CloudworkSystems
+# Folder rule files anywhere in the repo.
+AGENTS.md @CloudworkSystems
+CLAUDE.md @CloudworkSystems
 
 # Decisions.
 /PLAN.md @CloudworkSystems

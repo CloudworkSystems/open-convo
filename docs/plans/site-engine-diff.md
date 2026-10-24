@@ -1,5 +1,7 @@
 # Site Engine: What Will Change (PRD)
 
+Status: Built (Oct 23): merged as #119.
+
 Written October 21, 2026 by a building session for the planning side, from
 the approved scale-up plan (`docs/plans/scale-up.md`, option (a), which
 merges in #94 with the limit of three outside modules). The builder starts

@@ -1,5 +1,7 @@
 # Step 1 Scope: One App With Desk, Dictation and HUD
 
+Status: Built (Oct 14): see STATUS.md, Done.
+
 Written October 12, 2026. Docs only: nothing here is built until the owner
 approves. Step 1 in [PLAN.md](../../PLAN.md).
 

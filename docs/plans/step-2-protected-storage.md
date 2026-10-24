@@ -1,5 +1,7 @@
 # Step 2 Scope: Protected Storage on the Mac
 
+Status: In progress (Oct 21): all parts merged except the owner's trial.
+
 Written October 12, 2026 by the planning session. The building session builds
 it after step 1. Owner decisions are recorded at the end.
 

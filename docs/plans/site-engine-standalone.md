@@ -1,5 +1,7 @@
 # Site Engine, Standalone First Slice (PRD)
 
+Status: Built (Oct 18): merged as #55, with fixes in #60 and #64.
+
 Written October 15, 2026 by the planning session. Session name:
 `OC-261015-site-engine-standalone`. Design background:
 [docs/design-notes/site-engine.md](../design-notes/site-engine.md).
