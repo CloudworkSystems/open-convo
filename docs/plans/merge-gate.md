@@ -17,16 +17,17 @@ any agent could change the rules.
 
 ## The Design In One Picture
 
-This is the setup as it is now (October 20, 2026): `cloudwork-bot` exists
-with Write access and builders sign in as it; cloud Claude is still on the
-owner's connection until it is switched.
+This is the setup as it is now (October 23, 2026): `cloudwork-bot` exists
+with Write access, and every agent signs in as it, cloud Claude included
+since October 23. The owner's account is the owner's alone (AGENTS.md
+"Accounts And Provenance").
 
 | Who | Signs in as | Access |
 | --- | --- | --- |
 | Owner | `CloudworkSystems` | Admin. Used by the owner only. |
-| GrokBot, local Codex, Claude on the Mac | one shared bot account, `cloudwork-bot` | Write: branches, pull requests |
-| Claude in the cloud | the owner's connected account today (see "Cloud Claude" below) | Admin today; Write once switched |
-| Codex reviews | `chatgpt-codex-connector[bot]` (already separate) | Reviews only |
+| GrokBot, local Codex, Claude on the Mac and in the cloud, Claude scheduled tasks | one shared bot account, `cloudwork-bot` | Write: branches, pull requests |
+| Codex's GitHub app (reviews, cloud builds) | `chatgpt-codex-connector[bot]` (already separate) | Reviews and its own branches |
+| GitHub Actions workflows (`owner-queue`, the checks) | `github-actions[bot]` | Read-only tokens, with two write exceptions: `codex-approved` (statuses, to post the check) and `owner-queue` (issues, to rewrite #52) |
 
 **One bot account, not one per agent (owner decision, October 15).** GitHub's
 terms allow one free personal account plus one free machine account per person.
@@ -34,7 +35,9 @@ Three free bot accounts would break that and could be suspended, taking the
 gate down with them. One shared account is enough for the gate: what GitHub
 must tell apart is the owner (who can change rules) from the builders (who
 can't), and the reviewer is already a separate app. Which agent built a pull
-request is recorded in its branch name and a `Built-by:` line in each commit
+request is recorded by its `agent:` label and the sign-off line on every
+comment (AGENTS.md "Accounts And Provenance", October 23); earlier pull
+requests used the branch name and a `Built-by:` line in each commit
 message. If per-agent identities are needed later, use one GitHub App per
 agent (free, within the terms), not more accounts.
 
@@ -46,9 +49,8 @@ A pull request merges itself when all of these are true:
 3. **The owner approved the latest version**, but only if it touches a
    protected path (below). Any new commit after his approval cancels it.
 4. Auto-merge is switched on for the pull request (the author does this when
-   opening it; for outside builders, the planning session or the PR steward
-   does it after its
-   plan check passes).
+   opening it; for outside builders, the coordinator does it after its plan
+   check passes).
 
 No bot holds admin, so no bot can turn these rules off.
 
@@ -97,12 +99,14 @@ automatically once checks 1, 2 and 4 pass.
   forged-status test (a `codex-approved` status set with a token, not by
   GitHub Actions, did not satisfy the gate). Test 6 (a new commit dismisses
   the owner's approval) passed on #79.
-- **Codex ignores the bot's pull requests.** Codex skips both automatic
-  review and `@codex review` comments on pull requests opened by
-  `cloudwork-bot`, because the bot has no Codex account. Owner decision for
-  now: the session that opened the pull request posts `@codex review` from the
-  owner's account after each push. Giving the bot its own Codex account is to
-  be tried later and may involve spending.
+- **Codex reviews the bot's pull requests by itself (since October 23).**
+  Codex's open-convo setting reviews all pull requests on every push,
+  including those opened by `cloudwork-bot` (first seen on #120), so nobody
+  asks for reviews, and nobody posts from the owner's account (AGENTS.md
+  "Accounts And Provenance"). Codex still ignores `@codex` requests from the
+  bot, because the bot has no Codex account; giving it one may involve
+  spending. Until October 23, the session that opened a pull request posted
+  `@codex review` from the owner's account after each push.
 - **Designated reviewer (planned).** For Codex-built modules, Claude is the
   plan's designated reviewer. Letting `codex-approved` accept that reviewer
   in place of Codex is planned and needs the owner's approval before it's
@@ -138,18 +142,22 @@ chat, files or logs.
    which is also owner-protected. `repo` does let the token set commit
    statuses, so branch protection accepts `codex-approved` and `tests` only
    from GitHub Actions, and every workflow's own token is read-only except
-   the one that posts `codex-approved`, which runs from `main` and never
-   runs pull request code. Expires in 90 days. Put it in Keychain, then point
+   two, both of which run from `main` and never run pull request code: the
+   one that posts `codex-approved` (statuses) and `owner-queue` (issues, to
+   rewrite #52). Expires in 90 days. Put it in Keychain, then point
    each builder (GrokBot, local Codex) at it instead of the owner's login.
 4. Approve the repo setting changes before the session makes them.
 
 ## Cloud Claude
 
 Cloud Claude sessions reach GitHub through the account connected to the
-owner's Claude account, which is today the owner's. Until that changes, cloud
-Claude acts with admin rights, and the gate binds it by rule only (AGENTS.md),
-not by GitHub. It also means the owner can't approve Claude's protected-path
-pull requests, because GitHub doesn't let an author approve their own.
+owner's Claude account. **Since October 23 that is `cloudwork-bot`**, so cloud
+Claude has Write only, like the other builders, and the owner can approve its
+protected-path pull requests (#120 was the first). Before October 23 it was
+the owner's account: cloud Claude acted with admin rights, the gate bound it
+by rule only (AGENTS.md), not by GitHub, and the owner couldn't approve
+Claude's protected-path pull requests, because GitHub doesn't let an author
+approve their own.
 
 Fix, tried during the scratch tests: reconnect the Claude GitHub connection
 as `cloudwork-bot`. Cloud Claude then has Write only, like the other builders.
@@ -231,9 +239,10 @@ Run on a scratch branch protected exactly like `main`, with invented changes:
 
 ## Open Questions
 
-1. **Cloud Claude's login.** Whether reconnecting Claude's GitHub link as the
-   bot works is checked during the scratch tests (above).
-2. **Planning check for outside builders.** AGENTS.md has the planning session
+1. **Cloud Claude's login.** Answered October 23: reconnecting Claude's
+   GitHub link as the bot works, and cloud Claude now signs in as
+   `cloudwork-bot` (see "Cloud Claude").
+2. **Planning check for outside builders.** AGENTS.md has the coordinator (the planning session)
    check an outside builder's work against its plan. Proposed: it stays as a
    comment, not a gate, since tests and Codex already gate the merge.
 3. **Actions minutes.** Private repos get a monthly allowance of free Actions
@@ -242,7 +251,7 @@ Run on a scratch branch protected exactly like `main`, with invented changes:
 4. **Owner override.** With "applies to admins" on, the owner can't merge past
    an open Codex finding with one click. For now he can switch the rule off
    briefly in settings. A safer override waits until cloud Claude no longer
-   signs in as the owner.
+   signs in as the owner. (Since October 23 it signs in as `cloudwork-bot`.)
 
 ## Finish Line
 

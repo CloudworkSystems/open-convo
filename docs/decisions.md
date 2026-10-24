@@ -6,6 +6,37 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 23:** Hung Codex reviews restart by themselves. Codex's review of
+  #120 hung twice ("running" with no result) and an empty commit restarted it
+  both times, so the PR keeper now does that once per commit when a review
+  hangs (AGENTS.md "Coordinating On GitHub"). Codex may also use the owner's
+  credits for reviews after a rate limit (owner's Codex setting).
+- **Oct 23:** Codex builds two standalone engines from the public launch
+  set as an outside builder: email sorting
+  ([docs/plans/email-sorting-engine.md](plans/email-sorting-engine.md)) and
+  calendar merge
+  ([docs/plans/calendar-merge-engine.md](plans/calendar-merge-engine.md)).
+  Gemini Code Assist reviews them (Codex never reviews its own work), and
+  the coordinator checks each pull request against its plan. The plans'
+  owner questions are still open; builders use the recommended answers
+  unless the owner changes them before the code pull request merges.
+- **Oct 23:** One account per role. `CloudworkSystems` is the owner's alone;
+  every agent, Claude scheduled task and app connection that writes to GitHub
+  uses `cloudwork-bot` (one bot for all agents; Codex keeps its own app and
+  the repo's GitHub Actions workflows post as `github-actions[bot]`), and
+  each marks its work with an `agent:` label and a sign-off line (AGENTS.md
+  "Accounts And Provenance"). The PR steward no longer runs planning checks
+  or switches on auto-merge; the coordinator does both, including where older
+  plans name the steward, and for Codex-built work only after Claude's review
+  of the latest commit is clean.
+  Codex reviews every pull request on each push by itself, so no agent asks
+  for reviews from the owner's account. Outside-builder pull requests merge
+  by auto-merge after the coordinator's plan check, with no owner click.
+  Agents may show the owner the exact `owner-accepts-findings` line but never
+  post it. The coordinator is the Claude thread "261012 OC Coordinator" (the
+  planning session in earlier decisions); AGENTS.md "Who Does What" gives
+  every agent its one job. Up to five outside modules at a time (was three):
+  GrokBot's teams plus Codex as a builder, each from its own plan.
 - **Oct 21:** Scale-up plan approved ([docs/plans/scale-up.md](plans/scale-up.md)).
   Up to three outside modules at a time, each with its own builder or builder
   team; modules waiting only on review fixes don't count. None is waiting

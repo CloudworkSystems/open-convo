@@ -39,8 +39,7 @@ final class OllamaClientTests: XCTestCase {
     }
 
     func testNothingListeningIsOllamaNotRunning() async throws {
-        var port: UInt16 = 0
-        do { let fake = try FakeOllama(); port = fake.port } // closed when it goes out of scope
+        let port = try ClosedPort.make()
         let catalog = await OllamaClient(endpoint: OllamaEndpoint(port: port)).catalog()
         XCTAssertEqual(catalog, .unavailable(.ollamaNotRunning))
     }
