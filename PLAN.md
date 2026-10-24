@@ -149,7 +149,7 @@ built in parallel by an outside builder under AGENTS.md "Outside Builders":
   only: a standalone engine for spot records and the warning-sign
   self-check, no photos and no AI. The iPhone source and Desk Health view
   follow the iPhone capture app. Built by a Claude building session, not
-  an outside builder. Plan (draft):
+  an outside builder. Plan (approved):
   [docs/plans/skin-check.md](docs/plans/skin-check.md).
 - **Merge gate** (first piece of the Code umbrella): automatic merging once
   tests pass and Codex's review is clean, with protected paths still needing

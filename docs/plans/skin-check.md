@@ -50,9 +50,12 @@ rule, not just a disclaimer:
    linked to your Mac," inside the capture app: tap it, pick the spot on a
    body outline, take a guided photo, answer every self-check question
    below (the five ABCDE questions, the two urgent ones, the comparison
-   question, the new-spot question and the open question), done. "Done" stays unavailable
-   until each question has an answer, and "not sure" counts as one. No
-   timeline, history or results on the phone. Photos and answers move to the
+   question, the new-spot question and the open question), done. "Done"
+   stays unavailable until each question has an answer, and "not sure"
+   counts as one. If an urgent question is answered "yes", the phone shows
+   "book an appointment soon" with the reason right away, before the record
+   moves to the Mac. Otherwise the phone shows no timeline, history or
+   results. Photos and answers move to the
    Mac the same way other captured sources do until step 9: AirDrop
    (local only) or the owner-approved iCloud Drive folder (foundations
    principle 6; health photos are named as their own item in that approval).
@@ -126,9 +129,11 @@ A small library in `packages/skin-check/`:
   month, the owner can set one to twelve weeks or off). The engine only
   computes dates; it sends nothing.
 - **Visit summary.** A self-contained HTML page (and the same content as
-  plain text) listing the spots worth showing a clinician first, then the
-  rest, each with its region, label, dates checked, the owner's answers and
-  photo references, and the standard reminder at the top. Photos are
+  plain text) listing spots marked "book an appointment soon" first, then
+  those worth showing a clinician, then the rest, each with its outcome and
+  reasons (in the same words as the rules above), region, label, dates
+  checked, the owner's answers and photo references, and the standard
+  reminder at the top. Photos are
   referenced, not embedded, so the engine never handles image data.
 
 ## Built For Sync Later
@@ -165,8 +170,10 @@ people and spots only. At least:
 5. Change over time pairs latest with earliest and previous correctly,
    including a spot with one check-in and check-ins on the same day.
 6. Reminder dates across month ends, a leap day and a daylight-saving change.
-7. The visit summary lists clinician-worthy spots first, escapes all owner
-   text, and contains no image data or external links.
+7. The visit summary lists urgent spots first, then clinician-worthy
+   ones, shows each spot's outcome and reasons (an urgent spot keeps the
+   "book an appointment soon" wording), escapes all owner text, and
+   contains no image data or external links.
 8. Merge: the same cases as the household lists engine (different spots,
    same field, delete vs edit, equal timestamps, clock skew, offline copy
    after Trash is emptied), A into B equals B into A, and the same check-in
