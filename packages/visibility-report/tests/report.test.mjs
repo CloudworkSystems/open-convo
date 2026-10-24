@@ -679,7 +679,7 @@ test('hostile finding text cannot add a link, heading, or tag', () => {
         assistant: 'Askwell',
         question: 'Who repairs bikes in Hearthwick?',
         result: 'wrong-details',
-        wrongDetails: '[link](https://evil.example) # heading <img src=x>',
+        wrongDetails: '[link](https://evil.example) # heading <img src=x> ~~Sale~~',
       },
       source: urlSource('Askwell', tricky),
       checkedOn: RECENT,
@@ -698,6 +698,7 @@ test('hostile finding text cannot add a link, heading, or tag', () => {
   assert.match(markdown, /`\[link\]\(https:\/\/evil\.example\)`/);
   assert.match(markdown, /\\# heading/);
   assert.match(markdown, /&lt;img src=x&gt;/);
+  assert.match(markdown, /\\~\\~Sale\\~\\~/);
   assert.match(markdown, /<https:\/\/a\.example\/x%29%20%3Cy%3E%20\[z\]%28https:\/\/evil\.example%5Ca>/);
   const view = analyze(markdown);
   assert.equal(view.html.includes('<img'), false);
@@ -706,6 +707,9 @@ test('hostile finding text cannot add a link, heading, or tag', () => {
   assert.equal(view.hrefs.some((href) => href.endsWith('?a=1&b=2')), true);
   assert.equal(view.hrefs.some((href) => href.includes('&copy;')), true);
   assert.equal(view.chunks.some((chunk) => chunk.type === 'text' && chunk.content.includes('©')), false);
+  assert.equal(view.html.includes('<s>'), false);
+  assert.equal(view.html.includes('<del>'), false);
+  assert.match(view.html, /~~Sale~~/);
 });
 
 test('bare web and email addresses stay plain text', () => {
@@ -1217,7 +1221,7 @@ test('displayed text refuses hidden characters and keeps a line feed inside the 
         assistant: 'Askwell',
         question: 'Who repairs bikes in Hearthwick?',
         result: 'wrong-details',
-        wrongDetails: 'First line\n# not-a-heading\n- not-a-list',
+        wrongDetails: 'First line\n\nsecond\n# not-a-heading\n- not-a-list',
       },
     },
     {
@@ -1226,7 +1230,7 @@ test('displayed text refuses hidden characters and keeps a line feed inside the 
         service: 'Hearthwick Maps',
         mismatches: [{
           field: 'hours',
-          listing: 'Mon 9 to 5\n# not-a-heading\n- not-a-list',
+          listing: 'Mon 9 to 5\n\nSat 10 to 2\n# not-a-heading\n- not-a-list',
           website: 'Mon 10 to 6',
         }],
       },
@@ -1238,10 +1242,17 @@ test('displayed text refuses hidden characters and keeps a line feed inside the 
   }
   assert.match(kept.markdown, /First line/);
   assert.match(kept.markdown, /Mon 9 to 5/);
+  assert.match(kept.markdown, /second/);
+  assert.match(kept.markdown, /Sat 10 to 2/);
   const view = analyze(kept.markdown);
   assert.equal(view.html.includes('<h1>not-a-heading'), false);
+  assert.equal(view.html.includes('<pre>'), false);
+  assert.equal(view.html.includes('<code>'), false);
   assert.match(view.html, /First line/);
+  assert.match(view.html, /second/);
+  assert.match(view.html, /Sat 10 to 2/);
   assert.match(view.html, /not-a-heading/);
+  assert.match(kept.json.fixList[0].problems[0].sentences.join('\n'), /Mon 9 to 5\n\nSat 10 to 2/);
 });
 
 test('a findings file larger than 1 MB is refused', () => {

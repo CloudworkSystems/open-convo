@@ -78,7 +78,7 @@ function codeSpan(word) {
 }
 
 function escapeInline(text) {
-  return text.replace(/[\\&<>`*_\[\]()!#]/g, (ch) => {
+  return text.replace(/[\\&<>`*_\[\]()!#~]/g, (ch) => {
     if (ch === '&') return '&amp;';
     if (ch === '<') return '&lt;';
     if (ch === '>') return '&gt;';
@@ -104,7 +104,16 @@ function escapeLine(line) {
 export function escapeField(text, { multiline = false } = {}) {
   const lines = String(text).split('\n').map((line) => escapeLine(line));
   if (!multiline || lines.length === 1) return lines.join('\n');
-  return lines.map((line, index) => (index === 0 ? line : `    ${line}`)).join('  \n');
+  return lines.map((line, index) => {
+    // A whitespace-only line would end the paragraph and turn the next
+    // indented line into a code block. A backslash at the end of the line
+    // is a hard break, so the blank stays inside the entry.
+    const blank = line.trim() === '';
+    const body = blank ? '\\' : line;
+    const indented = index === 0 ? body : `    ${body}`;
+    if (blank || index === lines.length - 1) return indented;
+    return `${indented}  `;
+  }).join('\n');
 }
 
 export function formatSource(source) {
