@@ -231,7 +231,8 @@ const unionPurged = (...lists) => Object.fromEntries(PURGED_KINDS.map(kind => [k
 function validateSpot(spot) {
   if (!object(spot) || !onlyKeys(spot, ['id', 'life', 'purge', 'fields', 'purged'])) fail('Invalid spot in skin check file.');
   identity(spot.id, 'Spot ID');
-  if (!object(spot.life) || !onlyKeys(spot.life, ['value', 'stamp']) || typeof spot.life.value !== 'boolean' || !validStamp(spot.life.stamp) ||
+  if (!object(spot.life) || !onlyKeys(spot.life, ['added', 'removed']) || !validStamp(spot.life.added) ||
+    (spot.life.removed !== null && !validStamp(spot.life.removed)) ||
     (spot.purge !== null && !validStamp(spot.purge)) || !object(spot.purged) || !onlyKeys(spot.purged, PURGED_KINDS) ||
     PURGED_KINDS.some(kind => !Array.isArray(spot.purged[kind]) || !spot.purged[kind].every(id => typeof id === 'string' && id.length > 0))) {
     fail('Invalid spot in skin check file.');
@@ -239,7 +240,7 @@ function validateSpot(spot) {
   if (spot.purge === null && PURGED_KINDS.some(kind => spot.purged[kind].length)) fail('Invalid spot in skin check file.');
   validateFields(spot.fields, SPOT_FIELDS, 'spot');
   // Nothing on a spot may predate its emptied-Trash cutoff; a merge would already have dropped it.
-  if (spot.purge !== null && (compareStamps(spot.life.stamp, spot.purge) < 0 ||
+  if (spot.purge !== null && ((spot.life.removed && compareStamps(spot.life.removed, spot.purge) <= 0) ||
     Object.values(spot.fields).some(entry => compareStamps(entry.stamp, spot.purge) <= 0))) {
     fail('A spot in the skin check file has data older than its emptied Trash.');
   }
@@ -292,11 +293,11 @@ function canonical(person) {
 function mergeSpot(a, b) {
   if (!a || !b) return clone(a ?? b);
   const purge = latest(a.purge, b.purge);
-  // A removal from a copy that never saw the emptying stays below it, however high its counter;
-  // only a restore can bring an emptied spot back.
-  const lifeOf = side => !side.life.value && compareStamps(side.purge, purge) < 0 ? null : side.life;
-  let life = register(lifeOf(a), lifeOf(b));
-  if (!life || (purge && compareStamps(life.stamp, purge) <= 0)) life = { value: false, stamp: clone(purge) };
+  // A removal counts only from a copy that saw the latest emptying, so one made without seeing it never
+  // outranks it, however high its counter. The newest add or restore is kept beside it, so a restore an
+  // intermediate merge would have hidden still counts, and every merge order gives the same spot.
+  const removedOf = side => compareStamps(side.purge, purge) === 0 ? side.life.removed : null;
+  const life = { added: clone(latest(a.life.added, b.life.added)), removed: clone(latest(removedOf(a), removedOf(b))) };
   return { id: a.id, life, purge: clone(purge), fields: records(a.fields, b.fields, purge), purged: unionPurged(a.purged, b.purged) };
 }
 // Check-ins and visits never change after they are made: merged as a set by ID.
@@ -373,9 +374,17 @@ const compareCheckIns = (a, b) => instant(a.capturedAt, 'Capture time') - instan
 const compareVisits = (a, b) => instant(a.at, 'Visit time') - instant(b.at, 'Visit time') || lex(a.id, b.id);
 const visitView = visit => ({ id: visit.id, at: visit.at, date: visit.at.slice(0, 10), dateOnly: visit.dateOnly, note: visit.note });
 
+// The newest of a spot's latest add or restore, its latest removal and its emptied-Trash cutoff decides its state.
+function lifeNow(spot) {
+  let now = { value: true, stamp: spot.life.added };
+  if (compareStamps(spot.life.removed, now.stamp) > 0) now = { value: false, stamp: spot.life.removed };
+  if (compareStamps(spot.purge, now.stamp) > 0) now = { value: false, stamp: spot.purge };
+  return now;
+}
 function spotState(person, spot) {
-  if (spot.life.value) return 'active';
-  if (spot.purge && compareStamps(spot.life.stamp, spot.purge) === 0) {
+  const now = lifeNow(spot);
+  if (now.value) return 'active';
+  if (spot.purge && compareStamps(now.stamp, spot.purge) === 0) {
     // A check-in or visit the emptying device never saw brings the spot back.
     const returned = person.checkIns.some(record => record.spotId === spot.id) || person.visits.some(record => record.spotId === spot.id);
     return returned ? 'active' : 'gone';
@@ -515,7 +524,7 @@ function buildSummary(person, { date, includeArchived }) {
 
 function allStamps(person) {
   const stamps = Object.values(person.fields).map(entry => entry.stamp);
-  for (const spot of person.spots) stamps.push(spot.life.stamp, spot.purge, ...Object.values(spot.fields).map(entry => entry.stamp));
+  for (const spot of person.spots) stamps.push(spot.life.added, spot.life.removed, spot.purge, ...Object.values(spot.fields).map(entry => entry.stamp));
   for (const record of [...person.checkIns, ...person.visits]) stamps.push(record.stamp);
   return stamps.filter(Boolean);
 }
@@ -579,7 +588,7 @@ export class SkinCheck {
     const created = createdAt ?? new Date(this.#now()).toISOString();
     instant(created, 'Created time');
     const stamp = this.#stamp();
-    const spot = { id, life: { value: true, stamp }, purge: null, fields: {}, purged: noPurged() };
+    const spot = { id, life: { added: stamp, removed: null }, purge: null, fields: {}, purged: noPurged() };
     for (const [key, value] of [['place', place], ['label', label], ['createdAt', created], ['archived', false], ['reminder', DEFAULT_REMINDER]]) this.#set(spot, key, value, stamp);
     this.#person.spots.push(spot);
     this.#person.spots.sort(byId);
@@ -601,12 +610,12 @@ export class SkinCheck {
   }
   removeSpot(spotId) {
     const spot = this.#active(spotId, 'removing it');
-    spot.life = { value: false, stamp: this.#stamp() };
+    spot.life.removed = this.#stamp();
   }
   restoreSpot(spotId) {
     const spot = this.#find(spotId);
     if (spotState(this.#person, spot) !== 'trash') fail('That spot is not in Trash.');
-    spot.life = { value: true, stamp: this.#stamp() };
+    spot.life.added = this.#stamp();
   }
   /** Permanently deletes spots in Trash with their check-ins and visits. */
   emptyTrash() {
@@ -615,7 +624,7 @@ export class SkinCheck {
     const stamp = this.#stamp();
     for (const spot of doomed) {
       const ids = list => list.filter(record => record.spotId === spot.id).map(record => record.id);
-      spot.life = { value: false, stamp: clone(stamp) };
+      spot.life.removed = null;
       spot.purge = clone(stamp);
       spot.fields = {};
       spot.purged = unionPurged(spot.purged, { checkIns: ids(this.#person.checkIns), visits: ids(this.#person.visits) });
@@ -714,7 +723,7 @@ export class SkinCheck {
     // A spot that came back after Trash was emptied has lost its created time. The earliest stored time
     // stands in (a visit that brought it back, or its life stamp), so a skewed clock can only make it due sooner.
     const visits = this.#person.visits.filter(record => record.spotId === spotId).map(record => instant(record.at, 'Visit time'));
-    const from = last ? instant(last.capturedAt, 'Capture time') : view.createdAt ? instant(view.createdAt, 'Created time') : Math.min(spot.life.stamp.time, ...visits);
+    const from = last ? instant(last.capturedAt, 'Capture time') : view.createdAt ? instant(view.createdAt, 'Created time') : Math.min(lifeNow(spot).stamp.time, ...visits);
     const anchor = civilDate(from, this.timeZone);
     if (view.reminder === 'off') return { setting: 'off', anchor, due: null };
     const due = view.reminder === 'monthly' ? addMonths(anchor, 1) : addDays(anchor, view.reminder * 7);

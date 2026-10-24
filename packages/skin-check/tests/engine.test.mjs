@@ -397,7 +397,7 @@ test('saving and loading round-trips exactly; an unknown schemaVersion is refuse
   orphan.checkIns[0].spotId = 'missing';
   assert.throws(() => deserializePerson(JSON.stringify(orphan)), /not in the file/);
   // New edits after loading get counters above every stamp in the file.
-  const before = Math.max(...JSON.parse(json).spots.map(spot => spot.life.stamp.counter));
+  const before = Math.max(...JSON.parse(json).spots.map(spot => spot.life.added.counter));
   loaded.renameSpot('spot-wrist', 'After load');
   assert.ok(loaded.getPerson().spots.find(spot => spot.id === 'spot-wrist').fields.label.stamp.counter > before);
 });
@@ -455,7 +455,10 @@ test('emptying Trash drops only the deleted records of that type and spot, even 
   assert.throws(() => new SkinCheck({ deviceId: 'v', person: contradictory }), /permanently deleted with its spot/);
   const revived = JSON.parse(mac.save());
   const marker = revived.spots.find(spot => spot.id === 'spot-back');
-  marker.life = { value: true, stamp: { ...marker.purge, counter: marker.purge.counter - 1 } };
+  // An add older than the cutoff stays inert; a removal can only be newer than the cutoff it saw.
+  assert.ok(marker.life.added.counter < marker.purge.counter);
+  assert.equal(new SkinCheck({ deviceId: 'v', person: revived }).spots({ trash: true }).some(spot => spot.id === 'spot-back'), false);
+  marker.life.removed = { ...marker.purge, counter: marker.purge.counter - 1 };
   assert.throws(() => deserializePerson(JSON.stringify(revived)), /older than its emptied Trash/);
   const reloaded = deserializePerson(mac.save());
   const merged = mergePeople(reloaded, mac.getPerson());
@@ -578,6 +581,27 @@ test('two offline removals never bring back an emptied spot, whatever their coun
   assert.deepEqual(view.spots().map(spot => spot.id), ['spot-wrist']);
   const third = engine('tablet-c', { person: mac.getPerson() });
   assert.deepEqual(mergePeople(mergePeople(phone.getPerson(), third.getPerson()), mac.getPerson()), merged);
+});
+
+test('a restore survives an unseen later removal in every three-copy merge order', () => {
+  const { mac, phone } = pair();
+  const tablet = engine('tablet-c', { person: mac.getPerson() });
+  mac.removeSpot('spot-back');
+  mac.emptyTrash();
+  phone.removeSpot('spot-back');
+  for (let i = 0; i < 3; i += 1) phone.renameSpot('spot-wrist', `Edit ${i}`);
+  phone.restoreSpot('spot-back');
+  for (let i = 0; i < 10; i += 1) tablet.renameSpot('spot-wrist', `Busy ${i}`);
+  tablet.removeSpot('spot-back');
+  const [p, r, u] = [mac, phone, tablet].map(side => side.getPerson());
+  const results = [
+    mergePeople(mergePeople(p, u), r), mergePeople(mergePeople(r, u), p), mergePeople(mergePeople(p, r), u),
+    mergePeople(p, mergePeople(r, u)), mergePeople(u, mergePeople(p, r)), mergePeople(r, mergePeople(u, p)),
+  ];
+  for (const result of results) assert.deepEqual(result, results[0]);
+  const view = new SkinCheck({ deviceId: 'v', person: results[0] });
+  assert.equal(view.spot('spot-back').inTrash, false);
+  assert.ok(view.spots().some(spot => spot.id === 'spot-back'));
 });
 
 test('a missing evolving answer counts as not sure in the timeline', () => {

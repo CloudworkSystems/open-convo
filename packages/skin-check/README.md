@@ -162,7 +162,7 @@ and must be rendered as text.
   },
   "spots": [{
     "id": "example-spot",
-    "life": {"value": true, "stamp": {"counter": 2, "time": 100, "device": "example-mac"}},
+    "life": {"added": {"counter": 2, "time": 100, "device": "example-mac"}, "removed": null},
     "purge": null,
     "purged": {"checkIns": [], "visits": []},
     "fields": {
@@ -194,8 +194,14 @@ and must be rendered as text.
 }
 ```
 
-A spot whose Trash was emptied keeps only a deletion marker: `life` is
-`false` with the same stamp as `purge`, its fields are gone, and `purged`
+A spot's `life` holds the stamp of its latest add or restore (`added`) and of
+its latest removal made after its current emptied-Trash cutoff (`removed`, or
+`null`). The newest of `added`, `removed` and `purge` decides whether the spot
+is active, in Trash or deleted. A merge keeps the newer `added`, and keeps a
+`removed` only from a copy that saw the merged `purge`, so every merge order
+gives the same result. A spot whose Trash was emptied keeps only a deletion
+marker: `purge` is newer than `added`, `removed` is `null`, its fields are
+gone, and `purged`
 lists the IDs of the check-ins and of the visits deleted with it, each
 under its own type. A merge drops a record only when its own spot lists its
 ID under that record's type. A future sync
@@ -204,7 +210,7 @@ bring deleted records back. Unknown keys, an unknown `schemaVersion`, or a
 check-in or visit for a spot that is not in the file are refused, and so is
 a file missing its time zone or a spot (other than an emptied one) missing
 one of its fields, still holding a record that its spot's deletion marker
-names, or holding spot data older than that spot's emptied Trash.
+names, or holding a removal or field older than that spot's emptied Trash.
 
 ## Edge cases
 
@@ -220,7 +226,8 @@ Cases the plan doesn't name, each read the cautious way and covered by a test:
   of that observation vanishing. A copy of the old records alone never
   brings the spot back. A restore stamped after the emptying also brings it
   back, without its old details. A removal from a copy that never saw the
-  emptying never does, whatever its counter.
+  emptying never does, whatever its counter, and never hides a restore that
+another copy made after the emptying, in whatever order the copies merge.
 - **Delete versus offline edit.** A concurrent rename keeps its new label,
   but the spot stays in Trash until someone restores it.
 - **Archived spots** keep their outcome, accept check-ins, and are left out
