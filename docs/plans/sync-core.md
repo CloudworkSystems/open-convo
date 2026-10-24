@@ -91,7 +91,13 @@ so it builds and tests on Linux too.
   fetches. A conflict is any upload where the cloud's copy differs from that
   base version, whichever has the higher stamp: two devices edited it while
   apart. Fetching another device's edit before uploading doesn't move the
-  base, so the queued edit is still merged with it, never written over it. The sync core does not
+  base, so the queued edit is still merged with it, never written over it.
+  A fetch never replaces a local record that has a queued edit: the core
+  first merges the fetched copy with the queued edit (or, with no merge
+  function, keeps the queued edit and saves the fetched copy as a conflict
+  copy), queues the result with the fetched version as its new base, and
+  only then hands it to the app to save. So the local store always holds
+  the version that is queued, and reconciliation after a restart finds it. The sync core does not
   pick a winner blindly. It hands both copies to a **merge function
   registered for that record type** and uploads the result, so the edit that
   reaches the cloud second never simply overwrites the first. Stamps decide
@@ -129,7 +135,11 @@ so it builds and tests on Linux too.
   household lists engine's rules, and it goes through the registered merge
   function. A *purge* (emptying Trash) leaves a permanent marker (ID, stamp,
   "purged") so no older copy, from any device, can ever bring the record
-  back. Markers are kept; compacting them is out of scope.
+  back. "Purged" is sync metadata the core reads, not part of the opaque
+  payload, and it wins over every edit whatever its stamp, with or without
+  a merge function: a device whose counter ran ahead through other work
+  still can't revive a purged record. Markers are kept; compacting them is
+  out of scope.
 - **Size limits.** CloudKit refuses ordinary record fields over 1 MB. The
   sync core sets a payload limit below that, leaving room for encryption
   overhead and metadata, and stores larger payloads as asset-style
@@ -165,7 +175,9 @@ Every case uses two or three simulated devices and invented records.
    sync the deletion wins (older edit). Then A restores the record with a
    later stamp; after sync it is back on both devices.
 5b. A purges a record; B, offline, edits its older copy; after sync the
-   record stays purged and cannot come back.
+   record stays purged and cannot come back. This holds when B's edit has a
+   higher stamp than the purge (B's counter ran ahead through other work)
+   and the record type has no merge function.
 6. The connection drops halfway through an upload; after retry, nothing is
    missing and nothing is duplicated.
 7. B is offline for many changes, then catches up, including after its change
@@ -208,7 +220,8 @@ Every case uses two or three simulated devices and invented records.
 19. A edits a record offline and queues it; B edits the same record and
     syncs; A then fetches before it uploads. A's upload still goes through
     the merge function, and both devices end with both edits. The same holds
-    when A is recreated from its checkpoint between the fetch and the upload.
+    when A is recreated from its checkpoint and reconciled after the fetched
+    copy was saved locally and before the upload: A's edit is not dropped.
 
 ## Out Of Scope For This Slice
 
@@ -312,7 +325,10 @@ records, so it can rebuild an outbox entry with its payload. Its round on
 `20b4dc9` added a P1 on retrying an encrypted merge, written in as "Retries
 reuse the merge result" (test 18). Its round on `fd602d9` added a P1: each
 outbox entry keeps the cloud version its edit was based on, so a fetch
-before upload can't hide a conflict ("Conflicts", test 19).
+before upload can't hide a conflict ("Conflicts", test 19). Its round on
+`88dfe79` added two P1s: a fetch merges with a queued edit before the local
+record is replaced, so reconciliation can't drop it (test 19), and "purged"
+is sync metadata that beats any stamp (test 5b).
 
 ## Review And Finish Line
 
