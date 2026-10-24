@@ -134,6 +134,39 @@ reads from and writes to `CloudworkSystems/open-convo`.
   Desk refreshes itself when files change, so the inline browser shows the latest
   version. A normal browser is only for a second look.
 
+## Review Guidelines (For Codex And Every Reviewer, Owner Decision, October 24, 2026)
+
+Codex reads this section when it reviews a pull request. Reviews here kept
+looping for 8 to 17 rounds on ever-narrower edge cases, so:
+
+- Flag what would hurt the owner on a setup the project supports: macOS, the
+  Linux CI runners and Node 22, unless the pull request's plan names others.
+  Don't flag behavior on Windows, other Node versions or other systems the plan
+  doesn't target.
+- P0 is for something that would do serious harm as soon as it merges, such
+  as leaking secrets or private data, or losing the owner's data. P1 is for
+  wrong results, crashes, data loss, security or privacy holes, money spent
+  without consent, or a broken promise in the code or its plan.
+  P2 is for a realistic bug on a supported path. Style, wording, scenarios
+  that need deliberate misuse by the person running the tool, and further
+  hardening of a guard that already covers the realistic cases are P3 at
+  most, or not worth a comment.
+- On plan and docs pull requests (`docs/`, `PLAN.md`, `STATUS.md`), flag only
+  P0 and P1: places where the plan would lead to the wrong build. Build-level
+  detail belongs in the code pull request.
+- Don't raise again a P2 or P3 finding the pull request already answers or
+  explains as not applying, and don't reopen an area a previous round already
+  settled unless the new commit changed it. A P0 or P1 is raised again on
+  every round until the code fixes it or you agree with the answer.
+- Give all findings for a commit in one round, most severe first.
+
+When a pull request still has only P2 and P3 findings after three Codex
+rounds, an independent judge rates each remaining finding, and the
+`codex-approved` check passes if it calls every one a nit
+([docs/plans/codex-triage.md](docs/plans/codex-triage.md)). P0 and P1
+findings, findings the judge calls real, pull requests opened by the owner's
+account and the owner's approval of protected paths all still block.
+
 ## Outside Builders (Owner Decision, October 15, 2026)
 
 Codex or GrokBot may build a module only when the module stands on its own
