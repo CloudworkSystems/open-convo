@@ -10,7 +10,7 @@ type RailView = 'graph' | 'pulls' | 'branches';
 const views: { id: RailView; label: string }[] = [
   { id: 'graph', label: 'Commit graph' }, { id: 'pulls', label: 'Pull requests' }, { id: 'branches', label: 'Branches' },
 ];
-const ROW = 30, DAY = 28, LANE = 14, PAD = 12, FIRST_ROWS = 150;
+const ROW = 30, DAY = 28, LANE = 14, PAD = 12, FIRST_ROWS = 150, MAX_MATCHES = 300;
 const LANE_COLORS = 10;
 
 function readSnapshot(): RailMapSnapshot | null {
@@ -53,11 +53,12 @@ export function RailMap() {
           document.getElementById(`rail-tab-${next.id}`)?.focus();
         }}>{item.label}</button>)}
     </div>
-    <div role="tabpanel" id={`rail-panel-${view}`} aria-labelledby={`rail-tab-${view}`} className="rail-panel">
-      {view === 'graph' && <CommitGraph snapshot={snapshot} />}
-      {view === 'pulls' && <PullTimeline snapshot={snapshot} />}
-      {view === 'branches' && <BranchTable snapshot={snapshot} />}
-    </div>
+    {/* Every tab has its panel, so each tab's aria-controls points at a real element; only the selected one is filled. */}
+    {views.map((item) => <div key={item.id} role="tabpanel" id={`rail-panel-${item.id}`} aria-labelledby={`rail-tab-${item.id}`} className="rail-panel" hidden={view !== item.id}>
+      {view === item.id && item.id === 'graph' && <CommitGraph snapshot={snapshot} />}
+      {view === item.id && item.id === 'pulls' && <PullTimeline snapshot={snapshot} />}
+      {view === item.id && item.id === 'branches' && <BranchTable snapshot={snapshot} />}
+    </div>)}
     <p className="rail-footnote">A snapshot of the repository, not a live view. Refresh it with <code>node scripts/rail-map-snapshot.mjs</code> in apps/desk.</p>
   </section>;
 }
@@ -91,10 +92,11 @@ function CommitGraph({ snapshot }: { snapshot: RailMapSnapshot }) {
     <div className="rail-graph">
       {filtered
         ? filtered.length ? <div className="rail-rows" style={{ '--rail-gutter': `${PAD}px` } as CSSProperties}>
-          {filtered.slice(0, 300).map((row) => <CommitRow key={row.commit.hash} row={row} pulls={pulls} snapshot={snapshot} />)}
+          {filtered.slice(0, MAX_MATCHES).map((row) => <CommitRow key={row.commit.hash} row={row} pulls={pulls} snapshot={snapshot} />)}
         </div> : <p className="rail-empty">No commits match “{query.trim()}”.</p>
         : <Tracks rows={shown} pulls={pulls} snapshot={snapshot} />}
     </div>
+    {filtered && filtered.length > MAX_MATCHES && <p className="rail-more rail-muted" role="status">Showing the first {MAX_MATCHES} of {filtered.length} matching commits. Narrow the filter to see the rest.</p>}
     {!filtered && !showAll && rows.length > FIRST_ROWS && <div className="rail-more">
       <button type="button" className="secondary-button" onClick={() => setShowAll(true)}>Show older commits ({rows.length - FIRST_ROWS} more)</button>
     </div>}
@@ -117,7 +119,8 @@ function Tracks({ rows, pulls, snapshot }: { rows: RailRow[]; pulls: RailPullInd
   return <div className="rail-rows" style={{ '--rail-gutter': `${gutter}px` } as CSSProperties}>
     <svg className="rail-svg" width={gutter} height={y} viewBox={`0 0 ${gutter} ${y}`} aria-hidden="true">
       {rows.map((row, index) => {
-        const y0 = centers[index], y1 = centers[index + 1] ?? y0 + ROW;
+        // The last row's tracks run to the bottom edge, not past it.
+        const y0 = centers[index], y1 = centers[index + 1] ?? y;
         return row.segments.map((segment, part) => {
           const x0 = x(segment.from), x1 = x(segment.to);
           const bend = y0 + Math.min(ROW, y1 - y0) * .8;

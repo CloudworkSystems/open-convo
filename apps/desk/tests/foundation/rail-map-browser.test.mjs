@@ -75,6 +75,10 @@ for (const [label, viewport] of [['desktop', { width: 1280, height: 900 }], ['ph
     await expect(region.locator('.rail-row').first()).toBeVisible();
     assert.ok(await region.locator('.rail-main-ref').count() >= 1, 'The main branch tip is not labeled.');
     assert.equal(await pageOverflow(page), 0, 'The commit graph widened the page.');
+    const missingPanels = await region.evaluate((node) => [...node.querySelectorAll('[role="tab"]')]
+      .map((tab) => tab.getAttribute('aria-controls')).filter((id) => !document.getElementById(id)));
+    assert.deepEqual(missingPanels, [], 'A tab points at a panel that is not on the page.');
+    assert.equal(await region.locator('[role="tabpanel"]:visible').count(), 1, 'More than one panel is showing.');
 
     await region.getByRole('tab', { name: 'Pull requests', exact: true }).click();
     await expect(region.getByRole('tab', { name: 'Pull requests', exact: true })).toHaveAttribute('aria-selected', 'true');
@@ -88,6 +92,9 @@ for (const [label, viewport] of [['desktop', { width: 1280, height: 900 }], ['ph
     assert.equal(await pageOverflow(page), 0, 'The branch list widened the page.');
 
     await region.getByRole('tab', { name: 'Commit graph', exact: true }).click();
+    // Nearly every full hash has a 0, so this matches more commits than the list shows.
+    await region.getByLabel('Filter commits').fill('0');
+    await expect(region.getByRole('status')).toContainText(/Showing the first 300 of \d+ matching commits/);
     await region.getByLabel('Filter commits').fill('no commit says this 6f1c');
     await expect(region.getByText(/No commits match/)).toBeVisible();
     assert.deepEqual(errors, []);
