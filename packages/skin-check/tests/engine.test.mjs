@@ -386,6 +386,9 @@ test('saving and loading round-trips exactly; an unknown schemaVersion is refuse
   assert.throws(() => deserializePerson(JSON.stringify({ ...JSON.parse(json), schemaVersion: 2 })), /Unsupported schemaVersion; expected 1/);
   assert.throws(() => deserializePerson('{not json'), /Invalid skin check JSON/);
   assert.throws(() => deserializePerson(JSON.stringify({ ...JSON.parse(json), image: 'AAAA' })), /Unknown data/);
+  const extra = JSON.parse(json);
+  extra.spots[0].life.note = 'x';
+  assert.throws(() => deserializePerson(JSON.stringify(extra)), /Invalid spot/);
   const orphan = JSON.parse(json);
   orphan.checkIns[0].spotId = 'missing';
   assert.throws(() => deserializePerson(JSON.stringify(orphan)), /not in the file/);

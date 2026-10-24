@@ -228,7 +228,7 @@ const unionPurged = (...lists) => Object.fromEntries(PURGED_KINDS.map(kind => [k
 function validateSpot(spot) {
   if (!object(spot) || !onlyKeys(spot, ['id', 'life', 'purge', 'fields', 'purged'])) fail('Invalid spot in skin check file.');
   identity(spot.id, 'Spot ID');
-  if (!object(spot.life) || typeof spot.life.value !== 'boolean' || !validStamp(spot.life.stamp) ||
+  if (!object(spot.life) || !onlyKeys(spot.life, ['value', 'stamp']) || typeof spot.life.value !== 'boolean' || !validStamp(spot.life.stamp) ||
     (spot.purge !== null && !validStamp(spot.purge)) || !object(spot.purged) || !onlyKeys(spot.purged, PURGED_KINDS) ||
     PURGED_KINDS.some(kind => !Array.isArray(spot.purged[kind]) || !spot.purged[kind].every(id => typeof id === 'string' && id.length > 0))) {
     fail('Invalid spot in skin check file.');
