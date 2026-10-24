@@ -53,7 +53,8 @@ rule, not just a disclaimer:
    own in `packages/skin-check/`, tested on invented data. No app code, no
    storage code, no photos, no network, no AI. This is the part that can be
    built and proven today.
-2. **Slice 2, with the iPhone capture app (PLAN.md: right after step 5):**
+2. **Slice 2, with the iPhone app on the parallel sync line (PLAN.md, "A
+   parallel line"; built by the building lanes):**
    the iPhone side. On the phone it appears only as one source, "Skin check,
    linked to your Mac," inside the capture app: tap it, pick the spot on a
    body outline, take a guided photo, answer every self-check question
@@ -64,12 +65,15 @@ rule, not just a disclaimer:
    counts as one. If an urgent question is answered "yes", the phone shows
    "book an appointment soon" with the reason right away, before the record
    moves to the Mac. Otherwise the phone shows no timeline, history or
-   results. Photos and answers move to the
-   Mac the same way other captured sources do until step 9: AirDrop
-   (local only) or the owner-approved iCloud Drive folder (foundations
-   principle 6; health photos are named as their own item in that approval).
-   The phone deletes its copy once the Mac confirms receipt, unless the owner
-   chooses to keep it. Step 9's encrypted transfer replaces both later.
+   results. Photos and answers move to the Mac through the sync core and
+   CloudKit ([sync-core.md](sync-core.md)) once that is wired into both
+   apps: already-encrypted data in the owner's private iCloud database,
+   unlocked with the recovery key, after the one-time host approval
+   (foundations principle 6), with health photos named as their own item in
+   that approval. Before sync is wired, AirDrop (local only) is the only
+   way health photos move; never the iCloud Drive folder that the capture
+   app uses for links and clips. The phone deletes its copy once the Mac
+   confirms receipt, unless the owner chooses to keep it.
 3. **Slice 3, Desk Health view (after slice 2, needs step 2's protected
    storage and step 5's spaces):** a Health module under Personal with Skin
    check as its first submodule. Body outline with the owner's spots,
@@ -79,8 +83,10 @@ rule, not just a disclaimer:
    Personal space only, and never go to any AI model, local or cloud, unless
    the owner later approves a specific use.
 
-PLAN.md keeps the iPhone app after step 5 and the full iOS app at step 12.
-Moving slice 2 earlier is an owner decision (Owner Question 2).
+Since October 22, PLAN.md builds the iPhone app and sync on a parallel
+line that no longer waits for step 5. Slice 2 joins that iPhone app when
+the building lanes reach it, and only after the regulatory assessment in
+Owner Question 4 (Owner Question 2).
 
 ## Slice 1: What The Engine Does
 
@@ -293,13 +299,14 @@ code pull request merges.
    If the owner wants one later, the cautious path is a personal, on-device
    Core ML model used only by the owner, never distributed, outputting
    "worth a clinician's look" only, and planned separately.
-2. **When the phone part is built.** Recommendation: keep PLAN.md's order:
-   slice 1 now beside the main build, slice 2 with the iPhone capture app
-   right after step 5. Building the phone app earlier would start iOS work
-   before the Mac's protected storage trial and spaces exist, and the photos
-   would have nowhere sealed to land.
+2. **When the phone part is built.** Recommendation: slice 1 now; slice 2
+   as part of the iPhone app on the parallel sync line, once that app
+   exists, the sync core is wired in, and Owner Question 4 is settled.
+   Slice 3 still needs step 2's protected storage and step 5's spaces, so
+   photos have somewhere sealed to land on the Mac.
 3. **Health photos through iCloud Drive.** Recommendation: AirDrop only for
-   health photos until step 9's encrypted transfer, even if the owner
+   health photos until the sync core's encrypted CloudKit sync is wired in,
+   even if the owner
    approves iCloud Drive for links and clips. Skin photos are among the most
    sensitive things the phone will capture.
 4. **Regulatory assessment before anything ships.** Recommendation: keep
