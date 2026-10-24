@@ -1,7 +1,7 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import source from '../content/rail-map.json';
 import {
-  indexPulls, layoutRails, pullSpan, pullsForCommit, summarizeRails, validateRailMapSnapshot,
+  branchWork, indexPulls, layoutRails, pullSpan, pullsForCommit, summarizeRails, validateRailMapSnapshot,
   type RailMapSnapshot, type RailPull, type RailPullIndex, type RailRow,
 } from '../domain/rail-map';
 import './rail-map.css';
@@ -215,9 +215,10 @@ function BranchTable({ snapshot }: { snapshot: RailMapSnapshot }) {
       <tbody>{snapshot.branches.map((branch) => {
         const main = branch.name === snapshot.mainBranch;
         const pull = main ? undefined : pulls.byBranch.get(branch.name);
+        const work = branchWork(branch, pulls, snapshot.mainBranch);
         return <tr key={branch.name}>
           <td className="rail-branch-name" data-label="Branch"><code>{branch.name}</code><span>{branch.subject}</span></td>
-          <td data-label="State"><span className={`rail-state ${main ? 'trunk' : branch.ahead ? 'active' : 'done'}`}>{main ? 'trunk' : branch.ahead ? 'unmerged work' : 'fully merged'}</span></td>
+          <td data-label="State"><span className={`rail-state ${{ trunk: 'trunk', unmerged: 'active', merged: 'done' }[work]}`}>{{ trunk: 'trunk', unmerged: 'unmerged work', merged: 'fully merged' }[work]}</span></td>
           <td data-label="Pull request">{pull ? <PullBadges pulls={[pull]} repository={snapshot.repository} /> : <span className="rail-muted">none</span>}</td>
           <td className="num" data-label="Ahead">{branch.ahead}</td>
           <td className="num" data-label="Behind">{branch.behind}</td>

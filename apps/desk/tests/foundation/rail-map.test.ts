@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
-  indexPulls, layoutRails, mainLine, pullSpan, pullsForCommit, summarizeRails, validateRailMapSnapshot,
+  branchWork, indexPulls, layoutRails, mainLine, pullSpan, pullsForCommit, summarizeRails, validateRailMapSnapshot,
   type RailMapSnapshot,
 } from '../../src/domain/rail-map';
 
@@ -23,11 +23,14 @@ function invented(): RailMapSnapshot {
       { name: 'open', tip: 'o1', date: '2026-10-10T11:00:00Z', subject: 'Invented open work', ahead: 1, behind: 1 },
       { name: 'main', tip: 'm3', date: '2026-10-10T10:00:00Z', subject: 'Merge', ahead: 0, behind: 0 },
       { name: 'feature', tip: 'f2', date: '2026-10-10T09:00:00Z', subject: 'Invented feature, part 2', ahead: 0, behind: 2 },
+      // Squash-merged: its own commits never reached main, so it still shows as ahead.
+      { name: 'squashed', tip: 's1', date: '2026-09-30T09:00:00Z', subject: 'Invented squashed work', ahead: 2, behind: 5 },
     ],
     pulls: [
       { number: 2, title: 'Invented feature', state: 'merged', branch: 'feature', headHash: 'f2', agent: 'claude', createdAt: '2026-10-09T09:30:00Z', endedAt: '2026-10-10T10:00:00Z' },
       { number: 3, title: 'Invented open work', state: 'open', branch: 'open', headHash: 'o1', createdAt: '2026-10-10T11:10:00Z' },
       { number: 1, title: 'Invented old try', state: 'closed', branch: 'feature', createdAt: '2026-10-01T09:00:00Z', endedAt: '2026-10-02T09:00:00Z' },
+      { number: 4, title: 'Invented squashed work', state: 'merged', branch: 'squashed', headHash: 's1', createdAt: '2026-09-29T09:00:00Z', endedAt: '2026-09-30T10:00:00Z' },
     ],
   };
 }
@@ -95,6 +98,15 @@ test('pull requests attach to branch tips and merge commits; the latest pull win
   assert.deepEqual(byHash.m3, [2], 'The main tip names the pull it merged, not a pull for main.');
   assert.deepEqual(byHash.o1, [3]);
   assert.deepEqual(byHash.m2, []);
+});
+
+test('a branch whose tip a merged pull request squashed into main counts as merged', () => {
+  const snapshot = invented();
+  const index = indexPulls(snapshot.pulls);
+  const work = Object.fromEntries(snapshot.branches.map((branch) => [branch.name, branchWork(branch, index, 'main')]));
+  assert.deepEqual(work, { open: 'unmerged', main: 'trunk', feature: 'merged', squashed: 'merged' });
+  // A commit pushed after the squash merge is new work again.
+  assert.equal(branchWork({ ...snapshot.branches[3], tip: 's2', ahead: 3 }, index, 'main'), 'unmerged');
 });
 
 test('summary counts and timeline spans', () => {

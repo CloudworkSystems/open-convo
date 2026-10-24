@@ -172,14 +172,28 @@ export function pullsForCommit(commit: RailCommit, index: RailPullIndex, mainBra
   return found;
 }
 
+export type RailBranchWork = 'trunk' | 'unmerged' | 'merged';
+
+/**
+ * Whether a branch still has work main lacks. A squash merge leaves the
+ * branch's own commits off main, so a branch whose tip is exactly the head
+ * of a merged pull request counts as merged even though it shows as ahead.
+ */
+export function branchWork(branch: RailBranch, index: RailPullIndex, mainBranch: string): RailBranchWork {
+  if (branch.name === mainBranch) return 'trunk';
+  if (branch.ahead === 0) return 'merged';
+  return index.byHead.get(branch.tip)?.state === 'merged' ? 'merged' : 'unmerged';
+}
+
 export interface RailSummary { openPulls: number; mergedLastWeek: number; branchesWithWork: number; commits: number }
 
 export function summarizeRails(snapshot: RailMapSnapshot): RailSummary {
   const weekAgo = Date.parse(snapshot.takenAt) - 7 * 86_400_000;
+  const index = indexPulls(snapshot.pulls);
   return {
     openPulls: snapshot.pulls.filter((pull) => pull.state === 'open').length,
     mergedLastWeek: snapshot.pulls.filter((pull) => pull.state === 'merged' && pull.endedAt && Date.parse(pull.endedAt) >= weekAgo).length,
-    branchesWithWork: snapshot.branches.filter((branch) => branch.name !== snapshot.mainBranch && branch.ahead > 0).length,
+    branchesWithWork: snapshot.branches.filter((branch) => branchWork(branch, index, snapshot.mainBranch) === 'unmerged').length,
     commits: snapshot.commits.length,
   };
 }
