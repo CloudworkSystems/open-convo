@@ -6,6 +6,54 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 23:** Gemini Code Assist is the impartial reviewer (installed on
+  open-convo Oct 23). Codex reviews GrokBot's work; Gemini reviews Codex's
+  and Claude's, and Codex never counts as the independent review of its own
+  work. Gemini is advisory to start: critical and high findings count as P1,
+  medium as P2, fixed or answered before auto-merge goes on; no required
+  check reads it yet. Until it posts reviews, a fresh Claude review stands
+  in. Claude-built and Codex-built pull requests open with auto-merge off;
+  the coordinator switches it on once the independent review and any plan
+  check are clean on the latest commit.
+  Agents ask for `/gemini review` only from `cloudwork-bot` (AGENTS.md
+  "Review Loop"). Open: Argon through the Gemini CLI or an API key kept as a
+  repository secret, and whether Gemini becomes a required check.
+- **Oct 23:** Mac app builds and full Mac test runs on the owner's Mac go one
+  at a time, and no stress or load testing there without his OK. Agents run
+  on their own servers, so there is no cap on how many work at once; True
+  Convo's old two-heavy-sessions limit doesn't apply here (AGENTS.md
+  "Limits").
+- **Oct 23:** Hung Codex reviews restart by themselves. Codex's review of
+  #120 hung twice ("running" with no result) and an empty commit restarted it
+  both times, so the PR keeper now does that once per commit when a review
+  hangs (AGENTS.md "Coordinating On GitHub"). Codex may also use the owner's
+  credits for reviews after a rate limit (owner's Codex setting).
+- **Oct 23:** Codex builds two standalone engines from the public launch
+  set as an outside builder: email sorting
+  ([docs/plans/email-sorting-engine.md](plans/email-sorting-engine.md)) and
+  calendar merge
+  ([docs/plans/calendar-merge-engine.md](plans/calendar-merge-engine.md)).
+  Gemini Code Assist reviews them (Codex never reviews its own work), and
+  the coordinator checks each pull request against its plan. The plans'
+  owner questions are still open; builders use the recommended answers
+  unless the owner changes them before the code pull request merges.
+- **Oct 23:** One account per role. `CloudworkSystems` is the owner's alone;
+  every agent, Claude scheduled task and app connection that writes to GitHub
+  uses `cloudwork-bot` (one bot for all agents; Codex keeps its own app and
+  the repo's GitHub Actions workflows post as `github-actions[bot]`), and
+  each marks its work with an `agent:` label and a sign-off line (AGENTS.md
+  "Accounts And Provenance"). The PR steward no longer runs planning checks
+  or switches on auto-merge; the coordinator does both, including where older
+  plans name the steward, and for Codex-built work only after Claude's review
+  of the latest commit is clean.
+  Codex reviews every pull request on each push by itself, so no agent asks
+  for reviews from the owner's account. Outside-builder pull requests merge
+  by auto-merge after the coordinator's plan check, with no owner click.
+  Agents may show the owner the exact `owner-accepts-findings` line but never
+  post it. The coordinator is the Claude thread "261012 OC Coordinator" (the
+  planning session in earlier decisions); AGENTS.md "Who Does What" gives
+  every agent its one job. Up to five outside modules at a time (was three):
+  GrokBot's teams plus Codex as a builder, each from its own plan.
 - **Oct 22:** Day one and public launch (owner interview, planning session
   `OC-261022-plan-day-one-and-sync`). The day-one proof is a ChatGPT-style
   chat that works on a local model plus tasks and productivity as its first

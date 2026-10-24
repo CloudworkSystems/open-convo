@@ -39,3 +39,21 @@ tests use `sharp` (Apache-2.0) only to build and decode sample WebP files.
 The build command itself does not import it. Node 20.9 or newer is required.
 
 This slice does not publish, host, take payment, or call a model.
+
+## What will change
+
+```bash
+node packages/site-engine/src/diff.mjs --old <old.facts.json> --new <new.facts.json>
+```
+
+Prints one plain sentence per change the published page would show, or
+"Nothing on the site changes." `--json` prints that same list as data
+(`schemaVersion` and `changes`). The command reads the two facts files and
+the photos beside them. It does not write a site. A file the build would
+refuse is refused here too, and the message names that file as current or new.
+
+Sentences follow the page: name, tagline, description, photos, services,
+hours, location, contact, social links, then colors and the site address.
+Contact lines are "Phone", "Email", and "Booking link". A social link is
+shown as its label and address, and a label change reads "Label of <address>".
+The diff does not publish, host, take payment, or call a model.

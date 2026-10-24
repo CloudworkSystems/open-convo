@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "session": "OC-990101-sample-round",
+  "roundFile": "OC-990101-sample-round.md",
+  "items": [
+    {
+      "number": 1,
+      "screen": "Desk home",
+      "element": "The \"New note\" button",
+      "ownersWords": "Too small.\nChange: bigger, please.",
+      "change": "Make the button larger",
+      "screenshots": [
+        {
+          "name": "OC-990101-sample-round-01.png",
+          "present": true
+        }
+      ],
+      "done": false,
+      "problems": []
+    },
+    {
+      "number": 2,
+      "screen": "Desk home",
+      "element": "The title",
+      "ownersWords": "The title should say Notes.",
+      "change": "Rename the title to Notes",
+      "screenshots": [
+        {
+          "name": "OC-990101-sample-round-02.png",
+          "present": true
+        }
+      ],
+      "done": false,
+      "problems": []
+    }
+  ],
+  "problems": []
+}
