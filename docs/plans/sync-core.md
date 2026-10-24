@@ -81,14 +81,20 @@ so it builds and tests on Linux too.
   outbox entry surviving. On start, the app hands the sync core every local record in full (the
   whole record shape above, including the purged flag), and the core makes the outbox
   match the local store both ways. It queues any record whose stamp is newer
-  than its last acknowledged one and isn't already queued, using the payload
+  than its last acknowledged one, carries this device's ID (so it is a
+  local edit or a local merge result, not a copy fetched from another
+  device) and isn't already queued, using the payload
   it was handed and that record's saved change tag as the entry's base, so
   an edit another device made in the meantime is still found as a conflict
   and merged. (If the saved tag is older than the true base, the only cost
   is a merge that changes nothing, since merges are idempotent.) It also
   pushes the logical counter past every local stamp it was handed, so the
   next local edit can't reuse or sort below a stamp saved just before the
-  crash. It drops any queued entry whose record ID and stamp
+  crash. A record whose stamp carries another device's ID was fetched, not
+  edited here, so reconciliation never queues it, even when a crash lost
+  the checkpoint that recorded the fetch; when that fetch is replayed from
+  the older change token, a fetched copy with the same stamp as the local
+  record counts as already applied, with no conflict and no merge. It drops any queued entry whose record ID and stamp
   aren't in the local store, so an edit that was never saved locally is
   never uploaded and doesn't leave the status stuck on "waiting". An edit
   saved just before a crash is therefore never stranded, and one that wasn't
@@ -250,7 +256,10 @@ Every case uses two or three simulated devices and invented records.
     A's upload is treated as a conflict against B's version and merged, so
     B's edit isn't overwritten. In the first case, A then makes another local
     edit (with its wall clock set back), which gets a higher stamp than the
-    reconciled one and reaches B.
+    reconciled one and reaches B. A fifth case: A fetches B's edit and
+    saves it locally, then is destroyed before its checkpoint; after
+    reconciling and fetching again, A uploads nothing for that record, the
+    merge function isn't called, and both devices hold B's version.
 18. A merged result is saved by the cloud but the connection drops before
     A hears back. After A retries, the cloud holds exactly one new revision,
     the merge function was called once for that conflict, and B ends with
@@ -381,7 +390,10 @@ added two P1s: conflict copies stay in the checkpoint until the app has
 saved them (test 4), and a fetch-merge moves the record's base only after
 the merged record is saved locally (test 19). Its round on `db8b8d2` added
 a P1: with no merge function, a fetch applies "higher stamp wins" too, so
-the result doesn't depend on fetch-or-upload order (test 4).
+the result doesn't depend on fetch-or-upload order (test 4). Its round on
+`da67bdb` added a P1: reconciliation queues only stamps carrying this
+device's ID, and a replayed fetch with an equal stamp is already applied
+(test 17, fifth case).
 
 ## Review And Finish Line
 
