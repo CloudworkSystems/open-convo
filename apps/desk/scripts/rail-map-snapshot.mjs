@@ -2,7 +2,7 @@
 // Rebuild src/content/rail-map.json, the Rail Map's snapshot of this
 // repository: branches on origin, their commits and the pull requests.
 //
-//   node scripts/rail-map-snapshot.mjs [--pulls pulls.json] [--days 45]
+//   node scripts/rail-map-snapshot.mjs [--pulls pulls.json] [--days 45] [--no-fetch]
 //
 // Pull requests come from `--pulls` (the output of
 // `gh pr list --state all --limit 500 --json number,title,state,headRefName,headRefOid,labels,createdAt,mergedAt,closedAt`),
@@ -11,7 +11,8 @@
 // Hashes are kept in full so two commits never share an id; the view
 // shortens them for display. The snapshot keeps hashes, dates, subjects
 // and branch names only: no authors, emails or file contents.
-// Run `git fetch origin` first.
+// It first runs `git fetch --prune origin`, so branches deleted on GitHub
+// drop out; `--no-fetch` skips that and uses the refs already fetched.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -30,13 +31,15 @@ if (!Number.isInteger(days) || days < 1) throw new Error('--days must be a whole
 
 const git = (...rest) => execFileSync('git', ['-C', desk, ...rest], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 
+if (!args.includes('--no-fetch')) git('fetch', '--prune', '--quiet', 'origin');
+
 const refs = new Map();
 for (const line of git('for-each-ref', 'refs/remotes/origin', '--format=%(refname:strip=3)%00%(objectname)').trim().split('\n')) {
   const [name, hash] = line.split('\0');
   if (!name || name === 'HEAD') continue;
   refs.set(hash, [...(refs.get(hash) ?? []), name]);
 }
-if (![...refs.values()].flat().includes(mainBranch)) throw new Error(`origin/${mainBranch} is missing. Run git fetch origin first.`);
+if (![...refs.values()].flat().includes(mainBranch)) throw new Error(`origin/${mainBranch} is missing. Run git fetch --prune origin first.`);
 
 const since = new Date(Date.now() - days * 86_400_000).toISOString();
 const log = git('log', '--remotes=origin', '--topo-order', '--date-order', `--since=${since}`, `--max-count=${maxCommits}`, '--format=%H%x00%P%x00%cI%x00%s%x1e');
