@@ -105,8 +105,12 @@ agenda.
    `dayEnd`, not covered by any confirmed or tentative timed event, in local
    time. All-day events don't block time. If `now` is on `date`, free time
    before `now` is left out.
-6. **Next up:** if `now` is on `date`, the event in progress (if any) and the
-   next event to start, with minutes until it starts.
+6. **Next up:** if `now` is on `date`: `inProgress`, every confirmed or
+   tentative timed event with `start <= now < end` (an event starting
+   exactly at `now` counts), in timeline order, possibly empty; and `next`,
+   the timed event with the earliest `start` after `now`, ties broken by
+   timeline order, with minutes until it starts, or none. No-length events
+   are never in progress; one starting after `now` can be `next`.
 7. **Tasks:** overdue first (oldest `overdueSince` first), then due today
    with a time (by time), then due today without a time; high priority first
    within each, then title, then id. Tasks due on other dates are left out
@@ -157,7 +161,9 @@ data only. At least:
 5. Clock changes: the spring-forward and fall-back days in
    `America/New_York` show the right local times, durations and free time.
 6. Next up: in progress, between events, after the last event, and `now` on
-   the evening before.
+   the evening before; two overlapping events both in progress, listed in
+   timeline order; two events starting at the same next time, the first in
+   timeline order chosen.
 7. Tasks, habits and lists order and counts as above.
 8. The summary: each sentence appears only when it has something to say;
    singular and plural are right; no grading words appear in any output (a

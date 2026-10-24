@@ -54,7 +54,12 @@ and loaded from one JSON file per person):
   owner's zone (a setting, default 09:00).
 - **Repeats** (optional), one of:
   - every N days (N 1 to 365);
-  - every N weeks on chosen weekdays;
+  - every N weeks, plain: no weekdays are stored; on schedule each next
+    due date is N weeks after the previous due date (so it keeps the first
+    due date's weekday), and after done it is N weeks after the completion
+    date;
+  - every N weeks on chosen weekdays (at least one weekday; an empty set is
+    refused);
   - every N months on a day of the month (1 to 31; a month without that day
     uses its last day, so "the 31st" falls on November 30) or on a numbered
     weekday ("the second Tuesday", "the last Friday");
@@ -144,6 +149,21 @@ A. Two rules specific to tasks:
   set, so two devices completing different occurrences both count and the
   same record arriving twice counts once. The next due date is computed from
   the merged records, never stored as the winner of a field race.
+- **An occurrence is named by its scheduled due date** (the date, or the
+  date and wall time with its zone) as it was when the record was made, and
+  the record stores that name and, for a completion, the completion instant.
+  Records never change when the rule changes.
+- **The next due date always comes from the winning rule and the merged
+  records**, whichever device's edit won: take the latest recorded
+  occurrence name (completion or skip; for after done, the latest completion
+  date). On schedule, the next due date is the winning rule's first date
+  after that occurrence's date; after done, it is N units after that
+  completion date. A record whose occurrence isn't a date of the winning
+  rule stays in history and still moves the series on; it is never dropped.
+  With no records, the next due date is the rule's first date on or after
+  its start date. So a completion made under the old rule, merged with a
+  rule edit from another device, gives the same next due date on every
+  device.
 - **Completing the same occurrence on two devices** keeps both records and
   counts the occurrence once.
 
@@ -191,7 +211,9 @@ and tasks only. At least:
    delete versus edit, equal timestamps, clock skew, an offline copy after
    Trash is emptied), plus two devices completing different occurrences, the
    same occurrence, and a completion on one device while the other edits the
-   repeat rule. Merging is commutative, associative and idempotent on random
+   repeat rule (weekly on Monday changed to weekly on Thursday: the Monday
+   completion stays in history and the next due date is the first Thursday
+   after it, on both devices, whichever order they merge in). Merging is commutative, associative and idempotent on random
    invented histories (a fixed seed, at least 500 cases).
 10. No grading words in any text the engine produces (as in the habit grid,
     test 7).
