@@ -1,0 +1,10 @@
+{
+  "name": "@open-convo/calendar-merge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.mjs",
+  "bin": { "calendar-merge": "./src/merge.mjs" },
+  "scripts": { "test": "node --test" },
+  "engines": { "node": ">=22" }
+}
