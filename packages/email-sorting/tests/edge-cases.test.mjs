@@ -1,4 +1,4 @@
-// One test per choice in the README's "Edge cases" section (E1 to E26):
+// One test per choice in the README's "Edge cases" section (E1 to E29):
 // cases the plan doesn't name, settled by the RFC 5322 (and RFC 3339, RFC
 // 2919, RFC 3834) defaults.
 
@@ -9,6 +9,7 @@ import { test } from 'node:test';
 import {
   cleanReason, createScriptedClassifier, formatSummary, parseSettingsFile, sortMessages,
 } from '../src/index.mjs';
+import { oneLine as reasonOneLine } from '../src/rules.mjs';
 import { answer, byId, input, mail, pileOf, settings } from './helpers.mjs';
 
 function ask(messages, entries, config = settings()) {
@@ -343,16 +344,34 @@ test('E25. every bidi formatting control is escaped before a summary group count
   for (const control of controls) assert.equal(summary.includes(control), false);
 });
 
-test('E26. reason cleanup bounds huge input and marks only input-bound cuts with real text', () => {
+test('E26. reason cleanup bounds huge input and marks cut or uninspected suffixes', () => {
   const huge = cleanReason('x'.repeat(3 * 1024 * 1024), 'people');
   assert.equal(huge, `${'x'.repeat(159)}…`);
   assert.equal([...huge].length, 160);
 
-  // The input bound is four output lengths plus one output-length allowance.
+  // Preserve the former absolute five-output-length boundary on padded input.
   const justUnder = `${' '.repeat(640)}${'a'.repeat(159)}`;
   const justOver = `${' '.repeat(641)}${'b'.repeat(160)}`;
   const padded = `Short reason${' '.repeat(1000)}`;
   assert.equal(cleanReason(justUnder, 'people'), 'a'.repeat(159));
   assert.equal(cleanReason(justOver, 'people'), `${'b'.repeat(159)}…`);
   assert.equal(cleanReason(padded, 'people'), 'Short reason');
+});
+
+test('E27. bounded suffix inspection marks uninspected input and hidden real text as truncated', () => {
+  const padding = ' '.repeat(4 * 1024 * 1024);
+  assert.equal(cleanReason(`Brief reason${padding}`, 'people'), 'Brief reason…');
+  assert.equal(cleanReason(`Brief reason${padding}z`, 'people'), 'Brief reason…');
+  assert.equal(cleanReason(`Brief reason${' '.repeat(2000)}SECRET${' '.repeat(2000)}`, 'people'), 'Brief reason…');
+});
+
+test('E28. bounded leading white space does not consume the reason body bound', () => {
+  assert.equal(cleanReason(`${' '.repeat(900)}hello`, 'people'), 'hello');
+});
+
+test('E29. empty and bare-ellipsis cleaned reasons use the model-choice fallback', () => {
+  const separators = ' \t\u0000\u007f'.repeat(1024 * 1024);
+  assert.equal(cleanReason(separators, 'people'), 'The model chose People');
+  assert.equal(reasonOneLine(' … ', 160), '…');
+  assert.equal(cleanReason(' \t… ', 'people'), 'The model chose People');
 });

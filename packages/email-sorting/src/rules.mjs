@@ -92,24 +92,56 @@ export function own(object, key) {
 }
 
 // The one way any text enters a reason (rule matches, header facts,
-// domains, the model's reason): every run of white space or control
-// characters (CR, LF, tab, U+2028, U+2029 and the rest of Unicode Cc)
-// becomes one space, the result is trimmed and cut to `max` characters,
-// the last being "…" when cut. Input is bounded before the regular
-// expression pass. So a reason is always one bounded line.
+// domains, the model's reason): leading white space and control characters
+// are skipped within a fixed bound, then every remaining run of them (CR,
+// LF, tab, U+2028, U+2029 and the rest of Unicode Cc) becomes one space.
+// The result is trimmed and cut to `max` characters, the last being "…"
+// when bounded suffix inspection finds real text that was cut or leaves any
+// input uninspected. Every scan is bounded by a multiple of `max`, regardless
+// of input length. Only a flattened empty value returns ""; callers decide
+// whether a literal ellipsis has special meaning in their context.
 export function oneLine(text, max) {
   const source = String(text);
-  // Four output lengths for useful text, plus one for leading white space.
-  const bounded = cutChars(source, max * 5);
   const whiteOrControl = /[\s\u0000-\u001F\u007F-\u009F]/u;
-  let realTextPastBound = false;
-  for (let index = bounded.length; index < source.length; index += 1) {
-    if (whiteOrControl.test(source[index])) continue;
-    realTextPastBound = true;
-    break;
+
+  // A separate leading allowance keeps padding from consuming the body bound.
+  // If it is exhausted, treating the value as empty keeps work bounded.
+  const leadingLimit = Math.min(source.length, max * 8);
+  let start = 0;
+  while (start < leadingLimit && whiteOrControl.test(source[start])) start += 1;
+  if (start === leadingLimit && start < source.length) return '';
+
+  // Take at most five output lengths without slicing or walking the rest.
+  let bounded = '';
+  let end = start;
+  for (let count = 0; end < source.length && count < max * 5; count += 1) {
+    const codePoint = source.codePointAt(end);
+    const character = String.fromCodePoint(codePoint);
+    bounded += character;
+    end += character.length;
   }
+
+  // Inspect a fixed number of code units after a cut. Real text in that window
+  // means content was cut; so does input beyond the window, because it was not
+  // inspected and therefore cannot safely be treated as padding.
+  const suffixWasTruncated = (from) => {
+    const inspectionEnd = Math.min(source.length, from + max * 8);
+    for (let index = from; index < inspectionEnd; index += 1) {
+      if (!whiteOrControl.test(source[index])) return true;
+    }
+    return inspectionEnd < source.length;
+  };
+  let truncatedPastBound = suffixWasTruncated(end);
+
+  // Preserve the established boundary result when useful text straddled the
+  // former five-length input window; the inspection remains fixed-size.
+  if (!truncatedPastBound && start > 0 && start < max * 5 && source.length > max * 5) {
+    truncatedPastBound = suffixWasTruncated(max * 5);
+  }
+
   const flat = bounded.replace(/[\s\u0000-\u001F\u007F-\u009F]+/g, ' ').trim();
-  if (!realTextPastBound && cutChars(flat, max) === flat) return flat;
+  if (flat === '') return '';
+  if (!truncatedPastBound && cutChars(flat, max) === flat) return flat;
   return `${cutChars(flat, max - 1).trimEnd()}…`;
 }
 

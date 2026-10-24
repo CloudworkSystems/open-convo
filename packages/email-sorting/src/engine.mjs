@@ -241,16 +241,20 @@ const shownMatches = new WeakMap();
 function ruleReason(rule) {
   if (!shownMatches.has(rule)) {
     const { match } = rule;
-    shownMatches.set(rule, match.startsWith('@') ? `@${shownValue(match.slice(1))}` : shownValue(match));
+    // Rule matching already ignores surrounding white space. Give the reason
+    // that same matched value so display-only padding is not reported as lost
+    // rule text by oneLine's conservative suffix rule.
+    const trimmed = match.startsWith('@') ? match.slice(1).trim() : match.trim();
+    shownMatches.set(rule, match.startsWith('@') ? `@${shownValue(trimmed)}` : shownValue(trimmed));
   }
   return `Your rule: mail from ${shownMatches.get(rule)} goes to ${PILE_NAMES[rule.category]}`;
 }
 
 // The model's reason, cleaned like every other reason text (one line, cut
-// to 160 characters with "…"); an empty one is replaced.
+// to 160 characters with "…"); an empty or ellipsis-only one is replaced.
 export function cleanReason(reason, category) {
   const text = oneLine(reason, LIMITS.reasonChars);
-  return text === '' ? `The model chose ${PILE_NAMES[category]}` : text;
+  return text === '' || text === '…' ? `The model chose ${PILE_NAMES[category]}` : text;
 }
 
 function checkedAnswer(answer) {

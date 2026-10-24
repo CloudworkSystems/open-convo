@@ -232,8 +232,12 @@ a test in `tests/edge-cases.test.mjs` under the same number.
   each run of white space or control characters (carriage return, line
   feed, tab, U+2028, U+2029 and the rest of Unicode Cc) becomes one space,
   the text is trimmed and cut, ending in `…` when real text is cut. Work is
-  bounded before flattening to five times the output limit. Text past that
-  input bound adds `…`; white space or control characters alone do not.
+  bounded before flattening: a separate leading allowance is followed by a
+  body of five times the output limit and fixed-size suffix inspection.
+  Detected text past the body bound, or any input left beyond the inspected
+  suffix, adds `…`; inspected white space or control characters alone do not.
+  An empty model reason or one that cleans to only `…` uses the model-choice
+  fallback.
   Values inside a reason are cut to 80 characters; the whole reason to 160.
 - **E20.** Headers are looked up in one place, the same way everywhere: a
   key matches a header name exactly apart from the case of ASCII letters.
@@ -264,9 +268,22 @@ a test in `tests/edge-cases.test.mjs` under the same number.
 - **E25.** Every bidirectional format character named in E13 is escaped in a
   plain-summary group label, so it cannot visually reorder the count.
 - **E26.** Reason cleanup examines at most five times its output limit before
-  flattening. Real text past that input bound ends in `…`, including when the
-  bounded prefix would otherwise flatten below the output limit. White space
-  or control characters alone past the bound do not add `…`.
+  flattening. After a cut it inspects at most eight times the output limit in
+  code units. Real text in that fixed-size window ends the result in `…`; white
+  space or control characters alone do not when the entire suffix fits in the
+  window. The former five-length boundary uses the same fixed-size rule.
+- **E27.** Any input beyond the fixed suffix-inspection window is treated as
+  truncated because it was not inspected, even when it is white space. Thus a
+  multi-megabyte white-space suffix after a short reason ends in `…`, as does
+  real text hidden in the middle of a long padded suffix.
+- **E28.** Leading white space and control characters have a separate bounded
+  allowance of eight times the output limit, so they do not consume the
+  five-times body bound. If that allowance is exhausted before text is found,
+  the reason is empty.
+- **E29.** The reason-cleanup `oneLine` helper returns empty only when its
+  flattened text is empty and preserves a literal `…`. For model reasons,
+  `cleanReason` treats either an empty result or only `…` as empty and returns
+  `The model chose <Pile>`.
 
 ## What this slice does not do
 
