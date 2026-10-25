@@ -95,7 +95,8 @@ console.log(formatAgenda(result));
   same start and end and the same status are shown once
   (`matchedBy: "title-and-time"`), grouped one to one: occurrences are sorted
   by the smallest source index in their source set, then `uid`, then `key`,
-  and each joins the first group whose sources don't overlap its own. All
+  and each joins the first group whose sources don't overlap its own and
+  that holds no occurrence of its `UID` (E32). All
   fields come from one winning copy, including the `RECURRENCE-ID` label in
   the `key`, so the order copies come in never changes the output.
 
@@ -190,8 +191,9 @@ input size.
   cached per zone and hour, and time zone names are cached.
 - Title-and-time matching normalizes each title once, not once per
   occurrence, and resumes each search for a group where the last search for
-  the same set of sources stopped, so many look-alikes from one source cost
-  linear work, not quadratic.
+  the same set of sources (and, for the `UID` rule, the same set of sources
+  and `UID`) stopped, so many look-alikes from one source cost linear work,
+  not quadratic.
 
 `tests/16-work-budget.test.mjs` covers a hostile 164-byte `COUNT` rule, a
 hostile source next to a normal one, a hostile source holding costly copies
@@ -208,7 +210,7 @@ problems, occurrences, steps and group checks rather than time.
 
 Cases the plan doesn't name, decided by RFC 5545's defaults where it has one.
 Each has a test under the same number, in `tests/15-edge-cases.test.mjs`
-(E1 to E27) or `tests/17-review-fixes.test.mjs` (E28 to E31).
+(E1 to E27) or `tests/17-review-fixes.test.mjs` (E28 to E32).
 
 - **E1.** `DTSTART` always counts as the first occurrence, even when it
   doesn't match the rule (RFC 5545 3.3.10) and even when `UNTIL` is before
@@ -300,6 +302,10 @@ Each has a test under the same number, in `tests/15-edge-cases.test.mjs`
 - **E31.** `METHOD` is part of the content that decides a full tie between
   copies, so a `PUBLISH` and a `CANCEL` block of the same event give the same
   result in either order.
+- **E32.** Occurrences that share a `UID` are never grouped by title and
+  time, even when they come from different sources: changed occurrences of
+  one series (different `RECURRENCE-ID`s) moved to the same time stay two
+  instances. Title-and-time matching is only for different `UID`s.
 
 ## Windows time zone names
 
@@ -315,7 +321,7 @@ copied as data. Unicode CLDR data is used under the Unicode License v3
 `tests/01-…` to `tests/14-…` follow the plan's numbered tests, and
 `tests/15-edge-cases.test.mjs` the edge cases above,
 `tests/16-work-budget.test.mjs` the work limits, and
-`tests/17-review-fixes.test.mjs` E28 to E31 and the series limit for changed
+`tests/17-review-fixes.test.mjs` E28 to E32 and the series limit for changed
 occurrences, and `tests/18-rule-lists.test.mjs` the rule-list limits. Every test file loads
 `tests/setup/guard.mjs` first, which blocks every network and process entry
 point of Node 22's built-in modules and every file write, and fails a test

@@ -664,7 +664,7 @@ export function titleTimeChecksForTests() {
 }
 
 // Different UIDs, same title and time: grouped one to one, never two
-// occurrences from one source in a group.
+// occurrences from one source, nor two of one UID, in a group.
 function matchTitleAndTime(occurrences) {
   const buckets = new Map();
   // A series' occurrences share one title, so each title is normalized once
@@ -693,25 +693,41 @@ function matchTitleAndTime(occurrences) {
     bucket.sort((a, b) => (a.minSource - b.minSource) || byCodeUnits(a.uid, b.uid) || byCodeUnits(a.key, b.key));
     const groups = [];
     // Each occurrence joins the first group whose sources don't overlap its
-    // own. A group's sources only grow, so a group that overlaps one source
-    // set always will: the search for each source set resumes where the last
-    // one stopped instead of rescanning every group. Many look-alikes from
-    // one source cost linear work, not quadratic.
-    const resumeAt = new Map();
+    // own and that holds no occurrence of its UID: two instances of one
+    // series (different RECURRENCE-IDs moved to the same time) stay apart,
+    // whatever sources they come from. A group's sources and UIDs only grow,
+    // so a group that fails once for a source set (or for a source set and
+    // UID) always will: each search resumes where the last one for the same
+    // key stopped instead of rescanning every group. `bySources` skips only
+    // groups that overlap the source set, so it is shared by every UID with
+    // those sources, and many look-alikes from one source cost linear work.
+    const bySources = new Map();
+    const bySourcesAndUid = new Map();
     for (const occurrence of bucket) {
       const setKey = occurrence.sources.join(',');
-      let index = resumeAt.get(setKey) ?? 0;
+      const pairKey = `${setKey}|${occurrence.uid}`;
+      let sourcesFrom = bySources.get(setKey) ?? 0;
+      let index = Math.max(sourcesFrom, bySourcesAndUid.get(pairKey) ?? 0);
       for (; index < groups.length; index += 1) {
         titleTimeChecks += 1;
-        if (occurrence.sources.every((s) => !groups[index].sources.has(s))) break;
+        const candidate = groups[index];
+        if (occurrence.sources.some((s) => candidate.sources.has(s))) {
+          if (index === sourcesFrom) sourcesFrom += 1;
+          continue;
+        }
+        if (!candidate.uids.has(occurrence.uid)) break;
       }
       const group = groups[index];
-      resumeAt.set(setKey, index + 1);
+      // The chosen group now holds these sources and this UID.
+      if (index === sourcesFrom) sourcesFrom += 1;
+      bySources.set(setKey, sourcesFrom);
+      bySourcesAndUid.set(pairKey, index + 1);
       if (group) {
         group.members.push(occurrence);
         for (const s of occurrence.sources) group.sources.add(s);
+        group.uids.add(occurrence.uid);
       } else {
-        groups.push({ members: [occurrence], sources: new Set(occurrence.sources) });
+        groups.push({ members: [occurrence], sources: new Set(occurrence.sources), uids: new Set([occurrence.uid]) });
       }
     }
     for (const group of groups) {

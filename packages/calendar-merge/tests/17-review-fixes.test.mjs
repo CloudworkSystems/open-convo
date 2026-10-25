@@ -1,6 +1,7 @@
 // Review threads on #130: RANGE on cancellation records and losing overrides,
-// METHOD in the full-tie order, the series limit for changed occurrences, and
-// changed occurrences of a degraded series.
+// METHOD in the full-tie order, the series limit for changed occurrences,
+// changed occurrences of a degraded series, and same-UID instances kept apart
+// in title-and-time matching.
 import './setup/guard.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -241,5 +242,33 @@ test('any positive INTERVAL is read; a huge one gives DTSTART and nothing after 
       assert.deepEqual(utcs(result), ['2026-11-02T09:00:00Z'], `${freq} ${interval.length}`);
       assert.deepEqual(result.problems, [], `${freq} ${interval.length}`);
     }
+  }
+});
+
+test('E32: changed occurrences of one UID moved to the same time are never merged by title and time', async () => {
+  // The reviewer's case: no series anywhere (E22), the 2026-11-01 instance
+  // changed in source "a" and the 2026-11-02 instance in source "b", both
+  // moved to the same time with the same title. They are two instances.
+  const moved = (rid) => ev('UID:u@test.example', `RECURRENCE-ID:${rid}`, 'SUMMARY:Review', 'DTSTART:20261105T150000Z', 'DURATION:PT1H');
+  const a = cal(moved('20261101T150000Z'));
+  const b = cal(moved('20261102T150000Z'));
+  const row = (o) => [o.key, o.sources.map((s) => s.id).join(','), o.matchedBy, o.isChanged];
+  for (const sources of [{ a, b }, { b, a }]) {
+    const result = await merge(sources, NOV);
+    assert.deepEqual(result.occurrences.map(row), [
+      ['u@test.example/2026-11-01T15:00:00Z', 'a', null, true],
+      ['u@test.example/2026-11-02T15:00:00Z', 'b', null, true],
+    ]);
+    assert.deepEqual(result.problems, []);
+  }
+  // A look-alike with another UID still merges, with the first instance
+  // whose sources it doesn't overlap; the two instances stay apart.
+  const c = cal(ev('UID:other@test.example', 'SUMMARY:review', 'DTSTART:20261105T150000Z', 'DURATION:PT1H'));
+  for (const [sources, expected] of [
+    [{ a, b, c }, [['other@test.example/2026-11-05T15:00:00Z + u@test.example/2026-11-01T15:00:00Z', 'a,c', 'title-and-time', true], ['u@test.example/2026-11-02T15:00:00Z', 'b', null, true]]],
+    [{ b, a, c }, [['other@test.example/2026-11-05T15:00:00Z + u@test.example/2026-11-02T15:00:00Z', 'b,c', 'title-and-time', true], ['u@test.example/2026-11-01T15:00:00Z', 'a', null, true]]],
+  ]) {
+    const result = await merge(sources, NOV);
+    assert.deepEqual(result.occurrences.map(row), expected);
   }
 });
