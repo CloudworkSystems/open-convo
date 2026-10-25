@@ -155,6 +155,37 @@ on the protected store and under the owner's approval.
 - **Shipping without review.** The video's author argues advanced users can let
   agents deploy unreviewed. Open Convo keeps the owner as the final step.
 
+## A Terminal in True Convo (October 25, 2026)
+
+The owner asked whether True Convo should have a terminal, after notes on
+Herdr (a terminal multiplexer for coding agents) and two Pi videos. The
+earlier terminal talks were in True Convo and never came across, so this is
+the first record here. A view, not a plan or a decision:
+
+- **A terminal is one more client.** Idea 1 above already says agents run in
+  one place and screens connect to them. True Convo keeps agents alive in Pi
+  Durable's saved records, not in open terminal windows, so a tool whose job
+  is keeping terminals alive (Herdr) has nothing to add inside the product.
+  The owner may still use it on the Mac to juggle Claude Code and Codex jobs;
+  agent sessions left running there count as a service that outlives the
+  session.
+- **A terminal the owner types into** could become a Desk pane later, under
+  the OS shell direction (PLAN.md step 12). It needs no new rules.
+- **A terminal agents drive** is a channel that runs commands. It waits for
+  the real boundary in
+  [portable-capability-layer.md](portable-capability-layer.md), with zero
+  trust as the baseline for foreign agents
+  ([agent-profiles-and-adapters.md](agent-profiles-and-adapters.md)). The
+  same goes for a local socket that lets any script start agents (Herdr has
+  one), and for community Pi extensions such as `pi-subagents` and
+  `pi-mcp-adapter`. In IndyDevDan's demo, the Jev command guard blocks a
+  delete, is switched off in one click, and the delete runs. A classifier
+  filters (idea 4); it is not the boundary.
+- **Worth borrowing for step 6:** a working, blocked or done view across all
+  agents ("one screen for all agents"), fed by Pi Durable's records rather
+  than by reading terminals; a cheap model for explore sub-agents while the
+  main model stays strong; and turning single MCP tools on or off per server.
+
 ## Sources
 
 - Pi Durable source and README: https://github.com/earendil-works/pi/tree/main/packages/durable
@@ -163,4 +194,8 @@ on the protected store and under the owner's approval.
 - IndyDevDan, "Pi Durable PROACTIVE Agents: Jev Triggers My ON-CALL Pi Agent"
   (YouTube, `DNDYYHsypZg`).
 - Cloudflare Agents docs, Pi harness: https://developers.cloudflare.com/agents/harnesses/pi/
+- Herdr, an agent-aware terminal multiplexer (secondary write-ups, the
+  canonical repo not yet confirmed): https://betterstack.com/community/guides/ai/herdr-ai-agent/
+- A video on adding sub-agents and MCP to Pi (YouTube, `l3YCoX2i-78`),
+  October 2026.
 - Pi Durable launch profile: https://kingy.ai/ai-launch-tracker/pi-durable-experimental-package-2026-10-01/
