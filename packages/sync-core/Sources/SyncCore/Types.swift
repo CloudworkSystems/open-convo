@@ -155,6 +155,8 @@ public enum SyncError: Error, Equatable, Sendable {
     case tokenExpired
     case fieldTooLarge(bytes: Int, limit: Int)
     case syncDidNotFinish(String)
+    /// A save confirmation for an older revision arrived after a newer one.
+    case staleRevision
 }
 
 public enum SyncLimits {

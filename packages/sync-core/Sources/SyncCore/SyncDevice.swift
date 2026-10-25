@@ -159,6 +159,7 @@ public final class SyncDevice {
     public func confirmLocalSave(_ record: SyncRecord) throws {
         guard hasCheckpoint else { throw SyncError.checkpointRequired }
         let record = withoutPurgedPayload(record)
+        if confirmationWouldRestoreOlderBytes(record) { throw SyncError.staleRevision }
         local[record.id] = record
         if let pending = pendingReplacements[record.id], record.stamp == pending.winnerStamp {
             pendingReplacements.removeValue(forKey: record.id)
@@ -395,6 +396,16 @@ public final class SyncDevice {
             }
             openPage = OpenPage(zone: zone.raw, token: page.token, revisions: [], sealed: false)
             for change in page.changes {
+                observe(change.record.stamp)
+            }
+            // One page can list several revisions of one record. The app is
+            // asked to save only the last of those, so an older save cannot
+            // be written last and then skip the newest one.
+            var lastIndex: [String: Int] = [:]
+            for (index, change) in page.changes.enumerated() {
+                lastIndex[change.record.id] = index
+            }
+            for (index, change) in page.changes.enumerated() where lastIndex[change.record.id] == index {
                 try apply(change, zone: zone)
             }
             if var current = openPage {
@@ -692,6 +703,22 @@ public final class SyncDevice {
     /// Last-seen follows the newest fetched revision whose earlier revisions
     /// on this page are already confirmed. A later unsaved revision does not
     /// move it, and does not let the page token advance.
+    /// An older revision must not replace a newer one, and must not bring an
+/// edit back after a purge that was already saved.
+    private func confirmationWouldRestoreOlderBytes(_ record: SyncRecord) -> Bool {
+        if let current = local[record.id] {
+            if current.purged && !record.purged { return true }
+            if current.stamp > record.stamp && !record.purged { return true }
+        }
+        if let page = openPage,
+           page.revisions.contains(where: {
+               $0.record.id == record.id && !$0.confirmed && $0.record.stamp > record.stamp
+           }) {
+            return true
+        }
+        return false
+    }
+
     private func noteConfirmedRevision(_ id: String, on page: OpenPage) {
         var latest: PendingRevision?
         for revision in page.revisions where revision.record.id == id {

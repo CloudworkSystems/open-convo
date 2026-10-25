@@ -560,14 +560,15 @@ final class SyncCorePlanTests: XCTestCase {
         var requests: [AppSaveRequest] = []
         b.holdSaves { requests.append($0) }
         try b.sync()
-        XCTAssertGreaterThanOrEqual(requests.count, 3)
-        XCTAssertEqual(requests[0].record.payload, first.payload)
-        XCTAssertEqual(requests[1].record.payload, second.payload)
-        XCTAssertEqual(requests[2].record.payload, third.payload)
+        XCTAssertEqual(requests.map(\.record.payload), [third.payload])
+        XCTAssertNotEqual(requests[0].record.payload, first.payload)
+        XCTAssertNotEqual(requests[0].record.payload, second.payload)
         XCTAssertEqual(b.device.changeToken(), tokenBefore)
-        b.store.save(requests[0].record)
-        try b.device.confirmLocalSave(requests[0].record)
+        XCTAssertThrowsError(try b.device.confirmLocalSave(first)) { error in
+            XCTAssertEqual(error as? SyncError, .staleRevision)
+        }
         XCTAssertEqual(b.device.changeToken(), tokenBefore)
+        XCTAssertEqual(b.store.records["note"]?.payload, text("base"))
         let checkpoint = b.device.saveCheckpoint()
         try b.adopt(checkpoint)
         b.resumeSaves()
@@ -575,6 +576,43 @@ final class SyncCorePlanTests: XCTestCase {
         try b.sync()
         XCTAssertEqual(live(b, "note").payload, third.payload)
         XCTAssertNotEqual(b.device.changeToken(), tokenBefore)
+    }
+
+    func testOutOfOrderSaveCannotSkipANewerRevision() throws {
+        let cloud = FakeCloud()
+        let a = Peer("phone-a", cloud: cloud)
+        let b = Peer("phone-b", cloud: cloud)
+        a.boot()
+        b.boot()
+        _ = try a.edit("note", payload: text("base"))
+        try syncAll([a, b])
+        let tokenBefore = b.device.changeToken()
+        let edit = try a.edit("note", payload: text("edited note"))
+        try a.sync()
+        let purge = try a.edit("note", payload: edit.payload, purged: true)
+        try a.sync()
+        var requests: [AppSaveRequest] = []
+        b.holdSaves { requests.append($0) }
+        try b.sync()
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertTrue(requests[0].record.purged)
+        XCTAssertTrue(requests[0].record.payload.isEmpty)
+        b.store.save(requests[0].record)
+        try b.device.confirmLocalSave(requests[0].record)
+        XCTAssertThrowsError(try b.device.confirmLocalSave(edit)) { error in
+            XCTAssertEqual(error as? SyncError, .staleRevision)
+        }
+        XCTAssertTrue(live(b, "note").purged)
+        XCTAssertTrue(live(b, "note").payload.isEmpty)
+        XCTAssertNotEqual(b.device.changeToken(), tokenBefore)
+        let checkpoint = b.device.saveCheckpoint()
+        try b.adopt(checkpoint)
+        b.resumeSaves()
+        try b.device.reconcile(b.store.all())
+        try b.sync()
+        XCTAssertTrue(live(b, "note").purged)
+        XCTAssertFalse(holds(edit.payload, peer: b))
+        XCTAssertEqual(live(b, "note").stamp, purge.stamp)
     }
 
     func testPurgeDropsHeldConflictCopies() throws {
