@@ -7,8 +7,9 @@ or built. A plan in `docs/plans/` comes first if the owner wants it built.
 
 On a weekend with an unusual schedule, the owner asked whether the way Claude
 noticed he had replied could also help True Convo work out his preferred
-working hours. He suggested making it one of CONTINUITY's findings or a
-similar memory layer.
+working hours. He suggested making it one of the findings in CONTINUITY (the
+Desk's memory view, `apps/desk/src/features/Navigation.tsx`, with its records
+in `apps/desk/src/domain/types.ts`) or a similar memory layer.
 
 Claude didn't detect anything clever. The owner's GitHub approval reached it
 as an event with a time on it, and every chat message arrives with a note
@@ -32,7 +33,7 @@ Desk use and dictation sessions.
    labeled as an AI interpretation, not as a fact the owner approved.
 3. **The owner decides.** Following the foundations' "explicit save first"
    rule, the proposal is not a memory until the owner saves it. He can edit it
-   ("mornings are for the kids, not work"), keep it view-only, or forget it.
+   ("mornings are for errands, not work"), keep it view-only, or forget it.
    It uses the same remember, correct, forget and undo history as other
    CONTINUITY memories.
 4. **Notice unusual stretches, don't absorb them.** When a few days look
