@@ -272,3 +272,89 @@ test('E32: changed occurrences of one UID moved to the same time are never merge
     assert.deepEqual(result.occurrences.map(row), expected);
   }
 });
+
+// Review r9. Output compared across source orders lists each occurrence's
+// sources by id, since `sources` follows the order the calendars are given.
+const bySourceId = (result) => JSON.stringify({
+  ...result,
+  occurrences: result.occurrences.map((o) => ({ ...o, sources: [...o.sources].sort((x, y) => (x.id < y.id ? -1 : 1)) })),
+});
+
+test('a floating RECURRENCE-ID is read on the series\' clock even when the moved copy is in another zone (review r9)', async () => {
+  const weekly = ev('UID:f@test.example', 'SUMMARY:Weekly', 'DTSTART;TZID=America/New_York:20261102T090000', 'DURATION:PT1H', 'RRULE:FREQ=WEEKLY;COUNT=3');
+  const movedTo = (start) => ev('UID:f@test.example', 'SUMMARY:Moved', 'RECURRENCE-ID:20261109T090000', start, 'DURATION:PT1H', 'SEQUENCE:1');
+  const row = (o) => [o.key, o.title, o.start.utc, o.sources.map((s) => s.id).sort().join(','), o.matchedBy, o.isChanged];
+  for (const start of ['DTSTART:20261109T200000Z', 'DTSTART;TZID=Europe/London:20261109T200000', 'DTSTART:20261109T150000']) {
+    for (const timeZone of ['America/New_York', 'Europe/London']) {
+      const query = { ...NOV, timeZone };
+      const moved = movedTo(start);
+      const runs = [
+        await merge({ a: cal(weekly, moved) }, query),
+        await merge({ a: cal(moved, weekly) }, query),
+        await merge({ a: cal(weekly), b: cal(moved) }, query),
+        await merge({ b: cal(moved), a: cal(weekly) }, query),
+      ];
+      assert.equal(JSON.stringify(runs[0]), JSON.stringify(runs[1]), `${start} ${timeZone}`);
+      assert.equal(bySourceId(runs[2]), bySourceId(runs[3]), `${start} ${timeZone}`);
+      const movedUtc = start.endsWith('T150000') ? (timeZone === 'Europe/London' ? '2026-11-09T15:00:00Z' : '2026-11-09T20:00:00Z') : '2026-11-09T20:00:00Z';
+      assert.deepEqual(runs[2].occurrences.map(row), [
+        ['f@test.example/2026-11-02T14:00:00Z', 'Weekly', '2026-11-02T14:00:00Z', 'a', null, false],
+        ['f@test.example/2026-11-09T14:00:00Z', 'Moved', movedUtc, 'a,b', 'uid', true],
+        ['f@test.example/2026-11-16T14:00:00Z', 'Weekly', '2026-11-16T14:00:00Z', 'a', null, false],
+      ], `${start} ${timeZone}`);
+      assert.deepEqual(runs[2].problems, []);
+    }
+  }
+});
+
+test('a floating RECURRENCE-ID on a cancellation record is read on the series\' clock, not the query\'s (review r9 sweep)', async () => {
+  const weekly = ev('UID:f@test.example', 'SUMMARY:Weekly', 'DTSTART;TZID=America/New_York:20261102T090000', 'DURATION:PT1H', 'RRULE:FREQ=WEEKLY;COUNT=3');
+  const record = withMethod('CANCEL', ev('UID:f@test.example', 'RECURRENCE-ID:20261109T090000', 'SEQUENCE:1'));
+  const query = { ...NOV, timeZone: 'Europe/London' };
+  const one = await merge({ a: cal(weekly), b: record }, query);
+  const two = await merge({ b: record, a: cal(weekly) }, query);
+  assert.equal(bySourceId(one), bySourceId(two));
+  assert.deepEqual(utcs(one), ['2026-11-02T14:00:00Z', '2026-11-16T14:00:00Z']);
+  const shown = await merge({ a: cal(weekly), b: record }, { ...query, includeCancelled: true });
+  assert.deepEqual(shown.occurrences.map((o) => [o.key, o.status, o.sources.map((s) => s.id).join(',')]), [
+    ['f@test.example/2026-11-02T14:00:00Z', 'confirmed', 'a'],
+    ['f@test.example/2026-11-09T14:00:00Z', 'cancelled', 'a,b'],
+    ['f@test.example/2026-11-16T14:00:00Z', 'confirmed', 'a'],
+  ]);
+});
+
+test('a changed occurrence with a floating RECURRENCE-ID and no series reads it in its own zone (review r9, E22)', async () => {
+  const orphan = cal(ev('UID:o9@test.example', 'SUMMARY:Invited once', 'RECURRENCE-ID:20261109T090000', 'DTSTART;TZID=Europe/London:20261109T200000', 'DURATION:PT1H'));
+  for (const timeZone of ['America/New_York', 'Europe/London']) {
+    const result = await merge({ a: orphan }, { ...NOV, timeZone });
+    assert.deepEqual(result.occurrences.map((o) => [o.key, o.start.utc, o.isChanged, o.isRepeat]), [
+      ['o9@test.example/2026-11-09T09:00:00', '2026-11-09T20:00:00Z', true, true],
+    ]);
+    assert.deepEqual(result.problems, []);
+  }
+});
+
+test('a cancellation that loses to a newer series still lists its source on the occurrence (review r9, E23)', async () => {
+  const weekly = ev('UID:l@test.example', 'SUMMARY:Weekly', 'DTSTART;TZID=America/New_York:20261102T090000', 'DURATION:PT1H', 'RRULE:FREQ=WEEKLY;COUNT=3', 'SEQUENCE:2');
+  const stale = ev('UID:l@test.example', 'RECURRENCE-ID;TZID=America/New_York:20261109T090000', 'STATUS:CANCELLED', 'SEQUENCE:1');
+  const staleFloating = ev('UID:l@test.example', 'RECURRENCE-ID:20261109T090000', 'STATUS:CANCELLED', 'SEQUENCE:1');
+  const row = (o) => [o.key, o.status, o.sources.map((s) => s.id).sort().join(','), o.matchedBy];
+  for (const record of [stale, staleFloating]) {
+    for (const timeZone of ['America/New_York', 'Europe/London']) {
+      const query = { ...NOV, timeZone };
+      const one = await merge({ a: cal(weekly), b: cal(record) }, query);
+      const two = await merge({ b: cal(record), a: cal(weekly) }, query);
+      assert.equal(bySourceId(one), bySourceId(two));
+      assert.deepEqual(one.occurrences.map(row), [
+        ['l@test.example/2026-11-02T14:00:00Z', 'confirmed', 'a', null],
+        ['l@test.example/2026-11-09T14:00:00Z', 'confirmed', 'a,b', 'uid'],
+        ['l@test.example/2026-11-16T14:00:00Z', 'confirmed', 'a', null],
+      ]);
+      assert.deepEqual(one.problems, []);
+      // In one source, the order of the events never changes the output.
+      const same = await merge({ a: cal(weekly, record) }, query);
+      assert.equal(JSON.stringify(same), JSON.stringify(await merge({ a: cal(record, weekly) }, query)));
+      assert.deepEqual(same.occurrences.map(row)[1], ['l@test.example/2026-11-09T14:00:00Z', 'confirmed', 'a', null]);
+    }
+  }
+});

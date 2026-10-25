@@ -246,9 +246,15 @@ Each has a test under the same number, in `tests/15-edge-cases.test.mjs`
   same occurrence: the explicit copy still shows.
 - **E11.** A `RECURRENCE-ID` of another value type than the series' `DTSTART`
   matches no occurrence; the changed copy shows on its own.
-- **E12.** Floating `RECURRENCE-ID`, `EXDATE`, `RDATE` and `UNTIL` values are
-  read in the event's own zone (the query's zone for floating events and for
-  cancellation records without `DTSTART`).
+- **E12.** Floating `EXDATE`, `RDATE` and `UNTIL` values are read in the
+  event's own zone (the query's zone for floating events). A floating
+  `RECURRENCE-ID` follows the clock of the winning copy of the series, in
+  whatever source it is: also when the changed copy's own `DTSTART` has
+  another zone or `Z`, and on a cancellation record without `DTSTART`. Its
+  `key` then reads like the series' own occurrences (the start in UTC for a
+  zoned series). With no timed series in any source (a changed occurrence on
+  its own, E22, or an all-day series, E11), it is read in the changed copy's
+  own zone, or the query's zone for a cancellation record.
 - **E13.** `UNTIL` as a date on a timed series includes that whole date in
   the event's zone; on an all-day series a date-time `UNTIL` counts by its
   written date.
@@ -275,7 +281,9 @@ Each has a test under the same number, in `tests/15-edge-cases.test.mjs`
 - **E22.** A changed occurrence whose series is in no source shows on its own
   (`isChanged: true`, `isRepeat: true`).
 - **E23.** A changed occurrence lists the sources of its series and of its
-  changed copies.
+  changed copies. An occurrence also lists the source of every cancellation
+  of it, even one that loses to a newer copy of the series and so changes
+  nothing; from more than one source it is `matchedBy: "uid"`.
 - **E24.** A calendar given without a `name` is named by its `id`.
 - **E25.** An event missing its `END:VEVENT` (another `BEGIN:VEVENT`,
   `END:VCALENDAR` or the end of the file comes first) is skipped and listed.
@@ -321,8 +329,8 @@ copied as data. Unicode CLDR data is used under the Unicode License v3
 `tests/01-…` to `tests/14-…` follow the plan's numbered tests, and
 `tests/15-edge-cases.test.mjs` the edge cases above,
 `tests/16-work-budget.test.mjs` the work limits, and
-`tests/17-review-fixes.test.mjs` E28 to E32 and the series limit for changed
-occurrences, and `tests/18-rule-lists.test.mjs` the rule-list limits. Every test file loads
+`tests/17-review-fixes.test.mjs` E28 to E32, the series limit for changed
+occurrences and the review fixes to E12 and E23, and `tests/18-rule-lists.test.mjs` the rule-list limits. Every test file loads
 `tests/setup/guard.mjs` first, which blocks every network and process entry
 point of Node 22's built-in modules and every file write, and fails a test
 that calls one; `tests/setup/builtin-modules.json` lists Node's built-in

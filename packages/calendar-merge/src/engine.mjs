@@ -45,13 +45,20 @@ function sourceBudget(sourceCount) {
 
 
 
+// Counts one date read through a time zone against a source's budget.
+function chargeValue(budget) {
+  if (budget.values <= 0) throw new WorkLimit(`this calendar's share of time zone work (${budget.valuesShare} dates) is used up`);
+  budget.values -= 1;
+}
+
 // resolveValue, counted against a source's budget when it needs a time zone.
 function budgetedResolve(value, fallbackZone, budget) {
   if (value.kind === 'date' || value.utc) return resolveValue(value, fallbackZone);
-  if (budget.values <= 0) throw new WorkLimit(`this calendar's share of time zone work (${budget.valuesShare} dates) is used up`);
-  budget.values -= 1;
+  chargeValue(budget);
   return resolveValue(value, fallbackZone);
 }
+
+const isFloatingTime = (value) => value.kind !== 'date' && !value.utc && value.tzid === null;
 
 function refuse(message) {
   throw new Error(message);
@@ -190,7 +197,10 @@ function interpret(raw, source, ctx, budget, full = false) {
 
   const dtstartProp = first('DTSTART');
   const ridProp = first('RECURRENCE-ID');
-  // RECURRENCE-ID: floating values are read in the component's own zone.
+  // RECURRENCE-ID names an occurrence of the series, so a floating one is
+  // read on the series' clock (E12). The series may be in another source, so
+  // it is charged now and placed once every source is read (placeRid);
+  // `fallbackZone` is used only when there is no timed series.
   let rid = null;
   let ridRange = false;
   const readRid = (fallbackZone) => {
@@ -198,14 +208,21 @@ function interpret(raw, source, ctx, budget, full = false) {
     const value = parseDateValue(ridProp.value, ridProp.params);
     if (!value) return { error: 'RECURRENCE-ID is not a readable date' };
     ridRange = (ridProp.params.RANGE || []).some((r) => r.toUpperCase() === 'THISANDFUTURE');
+    if (isFloatingTime(value)) {
+      chargeValue(budget);
+      return { pending: { value, fallbackZone } };
+    }
     return budgetedResolve(value, fallbackZone, budget);
   };
+  const ridFields = () => (rid?.pending
+    ? { hasRid: true, rid: null, ridKey: null, ridPending: rid.pending, ridRange }
+    : { hasRid: Boolean(rid), rid, ridKey: rid ? keyOf(rid) : null, ridPending: null, ridRange });
 
   if (!dtstartProp) {
     if (!cancelled) return skip('no DTSTART');
     rid = readRid(ctx.zone);
     if (rid?.error) return skip(rid.error);
-    return { copy: { ...base, kind: 'record', rid, ridKey: rid ? keyOf(rid) : null, ridRange } };
+    return { copy: { ...base, kind: 'record', ...ridFields() } };
   }
 
   // An event without repeats whose written dates are two days or more outside
@@ -216,7 +233,7 @@ function interpret(raw, source, ctx, budget, full = false) {
     const written = parseDateValue(dtstartProp.value, dtstartProp.params);
     const lastDay = written ? oneOffLastDay(written, first) : null;
     if (lastDay !== null && (written.day > ctx.toDay + 2 || lastDay < ctx.fromDay - 2)) {
-      return { copy: { ...base, kind: 'event', outOfRange: true, status, rid: null, ridKey: null, ridRange: false, raw, source } };
+      return { copy: { ...base, kind: 'event', outOfRange: true, status, hasRid: false, rid: null, ridKey: null, ridPending: null, ridRange: false, raw, source } };
     }
   }
 
@@ -293,11 +310,23 @@ function interpret(raw, source, ctx, budget, full = false) {
       rdates: listValues('RDATE'),
       exdates: listValues('EXDATE'),
       isRepeat: Boolean(rruleProp || raw.props.has('RDATE')),
-      rid,
-      ridKey: rid ? keyOf(rid) : null,
-      ridRange,
+      ...ridFields(),
     },
   };
+}
+
+// Places a floating RECURRENCE-ID on the clock of `series`, the winning
+// copy of the series (E12): in its zone, keyed and labelled like the series'
+// own occurrences. Without a timed series (a changed occurrence on its own,
+// E22, or an all-day series, E11) it is read in the copy's own zone, as its
+// DTSTART is, or in the query's zone for a cancellation record.
+function placeRid(copy, series) {
+  const { value, fallbackZone } = copy.ridPending;
+  const timed = series && !series.start.date;
+  const resolved = resolveValue(value, timed ? series.zone : fallbackZone);
+  copy.rid = timed && !series.start.floating ? { ...resolved, floating: false } : resolved;
+  copy.ridKey = keyOf(copy.rid);
+  copy.ridPending = null;
 }
 
 // Higher SEQUENCE, then later LAST-MODIFIED, then later DTSTAMP, then the
@@ -559,8 +588,13 @@ function mergeUid(group, q, problems) {
     if (!copies.length) contenders.push({ ...display, virtualMaster: true });
     contenders.sort(compareCopies);
     const winner = contenders[0];
-    if (winner.virtualMaster) continue; // the series copy is newer: nothing changes
     const sources = new Set([...masterSources, ...copies.map((c) => c.sourceIndex), ...entry.records.map((r) => r.sourceIndex)]);
+    if (winner.virtualMaster) {
+      // The series copy is newer, so the occurrence is unchanged, but it still
+      // lists the sources of the cancellations it outranks (E23).
+      changed.set(ridKey, { override: null, cancelled: false, sources, rid: null, range: false, winner });
+      continue;
+    }
     // Only the winning copy's RANGE counts: a stale RANGE override that loses
     // to a newer cancellation changes nothing beyond its own occurrence.
     // The label comes from the winning copy, so equal RECURRENCE-IDs written
@@ -791,7 +825,7 @@ export async function mergeCalendars(sources, query) {
   const problems = [];
   const groups = new Map();
   const groupFor = (uid) => {
-    if (!groups.has(uid)) groups.set(uid, { masters: [], records: [], overrides: new Map() });
+    if (!groups.has(uid)) groups.set(uid, { masters: [], records: [], ridCopies: [], overrides: new Map() });
     return groups.get(uid);
   };
   for (const source of sourceList) {
@@ -818,13 +852,8 @@ export async function mergeCalendars(sources, query) {
       if (result.problem) { problems.push(result.problem); continue; }
       const { copy } = result;
       const group = groupFor(copy.uid);
-      if (copy.ridKey === null) {
-        (copy.kind === 'record' ? group.records : group.masters).push(copy);
-      } else {
-        if (!group.overrides.has(copy.ridKey)) group.overrides.set(copy.ridKey, { copies: [], records: [] });
-        const entry = group.overrides.get(copy.ridKey);
-        (copy.kind === 'record' ? entry.records : entry.copies).push(copy);
-      }
+      if (!copy.hasRid) (copy.kind === 'record' ? group.records : group.masters).push(copy);
+      else group.ridCopies.push(copy);
     }
     if (workSkipped.count) {
       const what = workSkipped.count === 1 ? '1 event skipped' : `${workSkipped.count} events skipped, the first here`;
@@ -838,7 +867,7 @@ export async function mergeCalendars(sources, query) {
   // judged exactly as it would be inside it.
   for (const group of groups.values()) {
     const asides = group.masters.filter((c) => c.outOfRange);
-    if (!asides.length || (asides.length === group.masters.length && !group.records.length && !group.overrides.size)) continue;
+    if (!asides.length || (asides.length === group.masters.length && !group.records.length && !group.ridCopies.length)) continue;
     for (const aside of asides) {
       group.masters.splice(group.masters.indexOf(aside), 1);
       let result;
@@ -851,6 +880,27 @@ export async function mergeCalendars(sources, query) {
       }
       if (result.problem) problems.push(result.problem);
       else group.masters.push(result.copy);
+    }
+  }
+
+  // Changed occurrences and cancellations with a RECURRENCE-ID are grouped
+  // once every copy of the series is read, so a floating RECURRENCE-ID is
+  // placed on the winning series copy's clock whatever source it is in.
+  for (const group of groups.values()) {
+    const series = [...group.masters].sort(compareCopies)[0] ?? null;
+    for (const copy of group.ridCopies) {
+      if (copy.ridPending) {
+        try {
+          placeRid(copy, series);
+        } catch (error) {
+          if (!(error instanceof RangeError)) throw error;
+          problems.push(outOfRange(copy.sourceIndex, copy.line));
+          continue;
+        }
+      }
+      if (!group.overrides.has(copy.ridKey)) group.overrides.set(copy.ridKey, { copies: [], records: [] });
+      const entry = group.overrides.get(copy.ridKey);
+      (copy.kind === 'record' ? entry.records : entry.copies).push(copy);
     }
   }
 
