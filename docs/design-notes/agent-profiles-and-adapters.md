@@ -68,10 +68,12 @@ cheapest model that does it well.
 
 ### Jeff Surfaces Choices; the Owner Makes Them (October 25)
 
-The owner's intent for Jeff and Jev (October 25): they are not final judges.
-They decide which options to show the owner when a choice comes up, such as
-which memory to file and where, what to show interest in, or which tone to take
-with a paragraph.
+Jeff has other jobs (action checks, sorting what comes in, typed yes/no
+answers; see `capabilities-and-primitives.md`). The owner's rule for all of
+them (October 25): where a choice needs his judgement, Jeff and the provider
+behind it never make the final call. They decide which options to show him,
+such as which memory to file and where, what to show interest in, or which tone
+to take with a paragraph.
 
 - **Jeff ranks; the owner picks.** Jeff orders the options and drops the
   unlikely ones, and the owner sees a short list on an approval card. Nothing is
