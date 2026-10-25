@@ -6,6 +6,14 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 25:** More work per dollar, without the owner or his Mac awake.
+  The PR keeper moves to the cloud, restarts a hung Codex review after 20
+  minutes instead of 60, updates a pull request from `main` only once it is
+  otherwise ready to merge, and relays Codex findings on GrokBot pull
+  requests to the builder with an `@cursor` comment. After three Codex
+  rounds, builders fix only P0 and P1 findings and leave P2 and P3 to the
+  triage judge (AGENTS.md "Review Guidelines" and "Coordinating On
+  GitHub").
 - **Oct 24:** Next outside modules: the email actions preview (Codex builds
   through the local Codex CLI, Gemini reviews), the tasks and reminders
   engine (GrokBot team A) and the Today agenda (GrokBot team C, after #112),
