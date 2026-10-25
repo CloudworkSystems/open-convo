@@ -29,6 +29,7 @@ public final class SyncDevice {
     private var conflicts: [SyncRecord] = []
     private var pendingReplacements: [String: PendingReplacement] = [:]
     private var pendingCleanups: [SyncRecord] = []
+    private var storedConflictCopies: [SyncRecord] = []
     private var local: [String: SyncRecord] = [:]
     private var openPage: OpenPage?
     private var merges: [String: MergeFunction] = [:]
@@ -57,6 +58,7 @@ public final class SyncDevice {
         device.conflicts = body.conflicts
         device.pendingReplacements = body.pendingReplacements
         device.pendingCleanups = body.pendingCleanups
+        device.storedConflictCopies = body.storedConflictCopies
         device.outbox = body.outbox.map {
             Entry(
                 record: $0.record,
@@ -111,7 +113,8 @@ public final class SyncDevice {
             },
             conflicts: conflicts,
             pendingReplacements: pendingReplacements,
-            pendingCleanups: pendingCleanups
+            pendingCleanups: pendingCleanups,
+            storedConflictCopies: storedConflictCopies
         )
         let data = CheckpointCodec.encode(body)
         lastCheckpoint = data
@@ -211,14 +214,18 @@ public final class SyncDevice {
     }
 
     public func confirmConflictCopiesStored(recordIDs: [String]? = nil) {
-        if let recordIDs {
-            let ids = Set(recordIDs)
-            conflicts.removeAll { ids.contains($0.id) }
-            pendingCleanups.removeAll { ids.contains($0.id) }
-        } else {
-            conflicts.removeAll()
-            pendingCleanups.removeAll()
+        let matches: (SyncRecord) -> Bool = { record in
+            guard let recordIDs else { return true }
+            return recordIDs.contains(record.id)
         }
+        let deleted = Set(pendingCleanups.filter(matches).map(\.id))
+        pendingCleanups.removeAll(where: matches)
+        storedConflictCopies.removeAll { deleted.contains($0.id) }
+        conflicts.removeAll { deleted.contains($0.id) }
+        for copy in conflicts.filter(matches) where !storedConflictCopies.contains(where: { $0.id == copy.id && $0.stamp == copy.stamp }) {
+            storedConflictCopies.append(copy)
+        }
+        conflicts.removeAll(where: matches)
     }
 
     /// The app hands over every local record after a restart. Queues this
@@ -759,10 +766,11 @@ public final class SyncDevice {
     }
 
     /// Moves conflict copies for a purged record into a checkpointed cleanup
-/// list. They stay there until the app confirms it deleted them.
+    /// list. They stay there until the app confirms it deleted them.
     private func stagePurgeCleanup(for id: String) -> [SyncRecord] {
-        let removed = conflicts.filter { $0.id == id }
+        let removed = conflicts.filter { $0.id == id } + storedConflictCopies.filter { $0.id == id }
         conflicts.removeAll { $0.id == id }
+        storedConflictCopies.removeAll { $0.id == id }
         pendingReplacements.removeValue(forKey: id)
         for copy in removed where !pendingCleanups.contains(where: { $0.id == copy.id && $0.stamp == copy.stamp }) {
             pendingCleanups.append(copy)

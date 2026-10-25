@@ -756,6 +756,54 @@ final class SyncCorePlanTests: XCTestCase {
         XCTAssertEqual(live(b, "note").payload, local.payload)
     }
 
+    func testStoredConflictCopyIsDeletedWhenPurged() throws {
+        let cloud = FakeCloud()
+        let a = Peer("phone-a", cloud: cloud)
+        let b = Peer("phone-b", cloud: cloud)
+        a.boot()
+        b.boot()
+        _ = try a.edit("note", payload: text("base"))
+        try syncAll([a, b])
+        let secret = try a.edit("note", payload: text("alpha-secret"))
+        for _ in 0..<3 { _ = try b.device.nextStamp() }
+        _ = try b.edit("note", payload: text("beta"))
+        try b.sync()
+        try a.sync(order: .fetchThenUpload)
+        XCTAssertTrue(a.device.conflictCopies().contains { $0.payload == secret.payload })
+        a.device.confirmConflictCopiesStored(recordIDs: ["note"])
+        XCTAssertFalse(a.device.conflictCopies().contains { $0.id == "note" })
+        XCTAssertNotEqual(a.device.status().kind, .needsAttention)
+        let remembered = a.device.saveCheckpoint()
+        try a.adopt(remembered)
+        var notices: [AppSaveRequest] = []
+        a.holdSaves { notices.append($0) }
+        let stamp = try a.device.nextStamp()
+        let purge = SyncRecord(
+            id: "note",
+            type: "task-list",
+            stamp: stamp,
+            purged: true,
+            payload: Data()
+        )
+        try a.device.queueLocalEdit(purge)
+        XCTAssertTrue(notices.contains { $0.conflictCopiesToRemove.contains { $0.payload == secret.payload } })
+        let pending = a.device.saveCheckpoint()
+        notices.removeAll()
+        try a.adopt(pending)
+        a.store.save(purge)
+        a.holdSaves { notices.append($0) }
+        try a.device.reconcile(a.store.all())
+        XCTAssertTrue(notices.contains { $0.conflictCopiesToRemove.contains { $0.payload == secret.payload } })
+        a.device.confirmConflictCopiesStored(recordIDs: ["note"])
+        let cleared = a.device.saveCheckpoint()
+        notices.removeAll()
+        try a.adopt(cleared)
+        a.holdSaves { notices.append($0) }
+        try a.device.reconcile(a.store.all())
+        XCTAssertFalse(notices.contains { !$0.conflictCopiesToRemove.isEmpty })
+        XCTAssertNotEqual(a.device.status().kind, .needsAttention)
+    }
+
     func testAcknowledgementCheckpointIsGivenToTheHost() throws {
         let cloud = FakeCloud()
         let a = Peer("phone-a", cloud: cloud)

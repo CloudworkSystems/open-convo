@@ -32,6 +32,9 @@ struct CheckpointBody: Codable, Equatable {
     var pendingReplacements: [String: PendingReplacement]
     /// Conflict payloads a purge must still delete from the app's store.
     var pendingCleanups: [SyncRecord]
+    /// Conflict copies the app has already stored. Kept until a purge's
+    /// deletion is confirmed, so the app can still be told to remove them.
+    var storedConflictCopies: [SyncRecord]
 }
 
 enum CheckpointCodec {
