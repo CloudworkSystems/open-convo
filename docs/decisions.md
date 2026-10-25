@@ -6,6 +6,11 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 24:** Next outside modules: the email actions preview (Codex builds
+  through the local Codex CLI, Gemini reviews), the tasks and reminders
+  engine (GrokBot team A) and the Today agenda (GrokBot team C, after #112),
+  both reviewed by Codex. Plans: `docs/plans/email-actions-preview.md`,
+  `tasks-engine.md` and `today-agenda.md`.
 - **Oct 23:** Gemini Code Assist is the impartial reviewer (installed on
   open-convo Oct 23). Codex reviews GrokBot's work; Gemini reviews Codex's
   and Claude's, and Codex never counts as the independent review of its own

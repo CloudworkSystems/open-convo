@@ -1,0 +1,17 @@
+{
+  "name": "@open-convo/visibility-report",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Turn visibility findings into a plain-English report. No network, no gathering.",
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": "./src/report.mjs",
+  "scripts": {
+    "test": "node --experimental-test-module-mocks --disable-warning=ExperimentalWarning --import ./tests/network-guard.mjs --test"
+  },
+  "devDependencies": {
+    "markdown-it": "^14.1.0"
+  }
+}
