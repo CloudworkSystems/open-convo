@@ -322,6 +322,19 @@ test('7. reminders fire once, follow an open occurrence, and a fixed one stays b
   weekly.editTask('sunday', { reminders: [{ dateTime: '2026-03-08T09:00', timeZone: ZONE, occurrence: '2026-03-08' }] });
   assert.equal(weekly.remindersDue(wallToInstant('2026-03-08T00:00', ZONE), wallToInstant('2026-03-09T00:00', ZONE), ZONE)[0].reminder.kind, 'fixed');
 
+  const moved = engine('moved-due');
+  moved.addTask({
+    title: 'Call the dentist',
+    due: '2026-04-01',
+    reminders: [{ dateTime: '2026-04-01T09:00', timeZone: ZONE, occurrence: '2026-04-01' }],
+  }, { taskId: 'call' });
+  const april = [wallToInstant('2026-04-01T00:00', ZONE), wallToInstant('2026-04-09T00:00', ZONE)];
+  assert.equal(moved.remindersDue(april[0], april[1], ZONE).length, 1);
+  moved.editTask('call', { due: '2026-04-08' });
+  assert.deepEqual(moved.remindersDue(april[0], april[1], ZONE), []);
+  moved.editTask('call', { reminders: [{ dateTime: '2026-04-08T09:00', timeZone: ZONE, occurrence: '2026-04-08' }] });
+  assert.equal(moved.remindersDue(april[0], april[1], ZONE)[0].occurrence, '2026-04-08');
+
   const done = engine('done-reminder');
   done.addTask({ title: 'One reminder', due: { dateTime: '2026-04-02T09:00', timeZone: ZONE }, reminders: [{ days: 1 }] }, { taskId: 'one' });
   done.complete('one', at('2026-04-01T12:00:00.000Z'), { recordId: 'gone' });

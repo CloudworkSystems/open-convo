@@ -369,8 +369,10 @@ function reminderMoments(task, ownerZone, dayStart) {
       moments.push({ index, reminder, occurrence, instant: offsetInstant(due, reminder, dayStart, ownerZone) });
       return;
     }
-    const repeating = Boolean(task.fields.repeat.value);
-    if (repeating && reminder.occurrence !== occurrence) return;
+    // A named fixed reminder belongs to one occurrence, including a one-off
+    // task. Rescheduling the due date leaves the old name behind, so it lapses
+    // until an edit moves it.
+    if (reminder.occurrence != null && reminder.occurrence !== occurrence) return;
     moments.push({
       index, reminder, occurrence,
       instant: wallToInstant(reminder.dateTime, reminder.timeZone),
