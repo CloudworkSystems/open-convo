@@ -53,10 +53,12 @@ and loaded from one JSON file per person):
   2 hours). A date-only task's offset counts from 09:00 on its due day in the
   owner's zone (a setting, default 09:00). Every reminder belongs to an
   occurrence: a fixed reminder stores the name of the occurrence it was set
-  for (a one-off task, dated or not, has a single occurrence named `once`), and an offset reminder follows whichever occurrence is current. When
-  the series moves on, a fixed reminder applies to the next occurrence only
-  if the owner moves it there; otherwise it lapses with its closed
-  occurrence.
+  for (a one-off task, dated or not, has a single occurrence named `once`),
+  and an offset reminder follows whichever occurrence is current. A fixed
+  reminder fires only while the occurrence it names is the task's current
+  open occurrence. When the series moves on, or a rule edit means its
+  occurrence is no longer the current one, it lapses unless the owner moves
+  it to the new current occurrence.
 - **Repeats** (optional). A task with a repeat must have a due date: its
   first due date is the repeat's start, and a repeat without one is refused.
   For the patterned kinds (`weekdays`, `monthDay`, `monthWeekday`) the start
@@ -207,8 +209,9 @@ A. Two rules specific to tasks:
   withdraws it, and a withdrawn reopen sets nothing aside, so the records it
   listed count again. Reopening a one-off task is an ordinary stamped change to its
   `state`.
-- **An occurrence is named by its scheduled due date** (the date, or the
-  date and wall time with its zone) as it was when the record was made.
+- **A repeating task's occurrence is named by its scheduled due date**
+  (the date, or the date and wall time with its zone) as it was when the
+  record was made; a one-off task's only occurrence is named `once`.
   Each completion and skip record stores that name, the instant it was made,
   and its **action date**: the calendar date in the owner's zone at that
   instant, with that zone's name. The action date is fixed when the record
@@ -283,7 +286,8 @@ and tasks only. At least:
    completed, or an occurrence skipped, before its reminder's moment returns
    no reminder, while the next open occurrence's reminders still come; a
    weekly task with a fixed Sunday reminder, completed on Saturday, returns
-   no Sunday reminder; `upcoming` for an untouched daily task with
+   no Sunday reminder, and neither does one whose Monday repeat was
+   changed to Thursday before Sunday; `upcoming` for an untouched daily task with
    `endAfter: 2` shows exactly two dates in a 30-day window.
 8. Snooze: each preset, including "next Monday" asked on a Monday; snoozing one occurrence of a repeating task leaves
    the next occurrence alone; a snooze never moves an on-schedule or
