@@ -66,9 +66,12 @@ the owner had to be walked through the clicks by hand. What we found:
   - shows in a "Site permissions" list where the owner can see and remove each
     grant, and that list is the only place a grant can be added outside an
     approval card;
-  - lapses after 90 days without use (the number is a starting point), and is
-    dropped at once when the agent profile changes its model, harness or
-    channels;
+  - belongs to the agent profile, not its model, so it survives a model swap
+    (foundations principle 5: swapping the model never changes what the
+    assistant may do). It is dropped at once when the profile's harness or
+    control channels change, since those decide how the agent reaches the
+    browser and what it could do there;
+  - lapses after 90 days without use (the number is a starting point);
   - never covers a change that can't be undone (see Actions), and never
     covers signing in.
 
