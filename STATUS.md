@@ -1,6 +1,6 @@
 # Status
 
-Updated October 21, 2026. The short version of where the build is. The full
+Updated October 24, 2026. The short version of where the build is. The full
 plan is in [PLAN.md](PLAN.md).
 
 ## Now
@@ -37,7 +37,7 @@ invented chats only, while the step 2 trial is pending. Scope:
 | PR 4c: Fake-Ollama host cases in the shared local vectors (26 cases, both sides) | Merged (#62) |
 | PR 5: Scripted kill-mid-reply proof | Merged (#65) |
 | PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-3-owner-trial.md)) | Waiting on the owner |
-| Trial fixes (Stop, Ollama notice) | In review |
+| Trial fixes (Stop, Ollama notice) | Merged (#76) |
 
 **Next build: the Claude Code adapter** (right after step 3; invented
 chats only). Scope:
@@ -45,7 +45,7 @@ chats only). Scope:
 
 | Part | State |
 | --- | --- |
-| PR 1: Scope | In review |
+| PR 1: Scope | Merged (#75) |
 
 ## Done
 
@@ -70,7 +70,7 @@ chats only). Scope:
 **Site Engine, standalone first slice**, built by an outside builder (GrokBot
 builds, Codex reviews). Plan:
 [docs/plans/site-engine-standalone.md](docs/plans/site-engine-standalone.md).
-In review.
+Merged (#55, fixes #60 and #64).
 
 **Household lists engine** (Family and Home), built by Codex alongside Site
 Engine; P2 follow-up implements the October 17 plan and purge guard; the fixes merged as #71 on October 21. Plan:
@@ -80,15 +80,29 @@ First real use after step 5, synced through iCloud with the owner's approval.
 **Habit grid engine** (Personal), merged as #74 on October 21.
 Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
-**Annotation rounds checker** (Code): plan approved; GrokBot team A starts once #94 merges.
+**Annotation rounds checker** (Code), GrokBot (team A) builds, Codex reviews; plan approved (`docs/plans/annotation-rounds.md`); build in review (#111).
 
-**Site Engine: what will change** (Business), GrokBot (team B) builds, Codex reviews; plan approved (`docs/plans/site-engine-diff.md`); team B can start.
+**Site Engine: what will change** (Business), GrokBot (team B) builds, Codex reviews; merged as #119 on October 23.
 
-**Visibility report** (Business), GrokBot (team C) builds, Codex reviews; plan approved (`docs/plans/visibility-report.md`); team C can start.
+**Visibility report** (Business), GrokBot (team C) builds, Codex reviews; plan approved (`docs/plans/visibility-report.md`); build in review (#112).
 
-**Email sorting engine** (Personal, launch set), Codex builds, Gemini Code Assist reviews; plan approved (`docs/plans/email-sorting-engine.md`); Codex can start when a builder place is free.
+**Sync core** (Personal; first slice of the iPhone and sync line, owner
+decision October 22): GrokBot team B builds, Codex reviews. Plan approved
+(`docs/plans/sync-core.md`, #127); build started October 24 (#137).
+
+**Email actions preview** (Personal, right after launch), Codex builds through the local Codex CLI, Gemini Code Assist reviews; plan in review (`docs/plans/email-actions-preview.md`).
+
+**Tasks and reminders engine** (Personal, day one), GrokBot team A builds, Codex reviews; plan in review (`docs/plans/tasks-engine.md`).
+
+**Today agenda** (Personal, day one), GrokBot team C builds once #112 merges, Codex reviews; plan in review (`docs/plans/today-agenda.md`).
+
+**Email sorting engine** (Personal, launch set), Claude builds (the owner's choice on October 24, in place of Codex), Gemini Code Assist reviews; plan `docs/plans/email-sorting-engine.md`; merged as #128 on October 24 (`packages/email-sorting/`).
 
 **Calendar merge engine** (Personal, launch set), Codex builds, Gemini Code Assist reviews; plan approved (`docs/plans/calendar-merge-engine.md`); Codex can start when a builder place is free.
+
+**Cloudwork Rail Map** (Desk, Cloudwork Nexus), Claude builds; a fifth Nexus view showing this repository's branches, commits and pull requests from a saved snapshot (`apps/desk/scripts/rail-map-snapshot.mjs`); merged October 24 (#132).
+
+**Skin check** (Personal, new Health module), Claude builds, Gemini Code Assist reviews; plan approved (`docs/plans/skin-check.md`). Slice 1, the standalone engine in `packages/skin-check/`, is built; the iPhone source joins the iPhone app on the parallel sync line, and the Desk view follows.
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:

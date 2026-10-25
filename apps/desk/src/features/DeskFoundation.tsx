@@ -15,6 +15,7 @@ import type { LocalCatalogView } from '../domain/local-participant';
 import { Conversation, type ComposerStop } from './Conversation';
 import { GoalPanel } from './GoalPanel';
 import { Canvas, Atlas } from './NexusViews';
+import { RailMap } from './RailMap';
 import { UserOptions } from './UserOptions';
 import { NexusPrimitives } from './NexusPrimitives';
 import { Data, Setup, Work, type SaveStatus } from './Modules';
@@ -291,7 +292,7 @@ export function DeskFoundation(props: DeskFoundationProps) {
     onOptions: (page: 'help' | 'appearance' | 'user') => { setOptionsPage(page); setNavigationOpen(false); },
   };
   const routeTitle = nexusActive
-    ? nexusView === 'navigator' ? 'Nexus Navigator' : nexusView === 'canvas' ? 'Cloudwork Canvas' : nexusView === 'atlas' ? 'Cloudwork Atlas' : 'Roadmap'
+    ? nexusView === 'navigator' ? 'Nexus Navigator' : nexusView === 'canvas' ? 'Cloudwork Canvas' : nexusView === 'atlas' ? 'Cloudwork Atlas' : nexusView === 'railmap' ? 'Cloudwork Rail Map' : 'Roadmap'
     : state.selection.route === 'memory' ? 'Memories'
       : state.selection.route === 'setup' ? 'Workspace setup' : 'DATA';
   const moduleTitle = state.selection.route === 'memory' ? 'Memories' : 'Cloudwork Data';
@@ -350,10 +351,10 @@ export function DeskFoundation(props: DeskFoundationProps) {
               <div>{!nexusActive && <span className="primary-module-heading">{moduleTitle}</span>}
                 <h1 className="sr-only">{routeTitle}</h1>
                 {nexusActive && <nav className="nexus-view-tabs" aria-label="Nexus views">
-                  {(['navigator', 'canvas', 'atlas', 'roadmap'] as const).map((view) => <button type="button" key={view} aria-current={view === nexusView ? 'page' : undefined}
+                  {(['navigator', 'canvas', 'atlas', 'railmap', 'roadmap'] as const).map((view) => <button type="button" key={view} aria-current={view === nexusView ? 'page' : undefined}
                     className={view === nexusView ? 'selected' : ''} onClick={() => props.onNexusViewChange(view)}>
                     <Icon name={view === 'navigator' ? 'folder' : view === 'roadmap' ? 'work' : view} size={20} />
-                    {view === 'navigator' ? 'Nexus Navigator' : view === 'canvas' ? 'Cloudwork Canvas' : view === 'atlas' ? 'Cloudwork Atlas' : 'Roadmap'}
+                    {view === 'navigator' ? 'Nexus Navigator' : view === 'canvas' ? 'Cloudwork Canvas' : view === 'atlas' ? 'Cloudwork Atlas' : view === 'railmap' ? 'Cloudwork Rail Map' : 'Roadmap'}
                   </button>)}
                 </nav>}
               </div>
@@ -399,6 +400,7 @@ export function DeskFoundation(props: DeskFoundationProps) {
             {state.selection.route === 'sessions' && nexusView === 'canvas' && <Canvas state={state} onDomain={openDomain} onSession={props.onSessionSelect}
               onDomainRenameRequest={openRename} onSessionRenameRequest={openSessionRename} />}
             {state.selection.route === 'sessions' && nexusView === 'atlas' && <Atlas state={state} onDomain={openDomain} onSession={props.onSessionSelect} />}
+            {state.selection.route === 'sessions' && nexusView === 'railmap' && <RailMap />}
             <div className="work-module-mount" hidden={!roadmapActive}>
               <Work state={state} active={roadmapActive} onWorkCreate={props.onWorkCreate} onDraftChange={(goalId, value) => props.onGoalDraftChange(goalId, 'workTitle', value)} readOnly={readOnly} />
             </div>

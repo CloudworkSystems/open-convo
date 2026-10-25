@@ -56,3 +56,10 @@ export function ownerOpenedBlock({ prAuthor, files = [], rules = [], complete = 
   if (hit.length === 0) return null;
   return `Opened from the code owner's account and changes ${hit[0]}; reopen it from cloudwork-bot`;
 }
+
+// Applies the hold to the gate's result, whether that came from the Codex
+// signal or the triage judge: a held pull request never passes, and its
+// reason replaces the other.
+export function withOwnerOpenedHold({ approved, reason }, blocked) {
+  return blocked ? { approved: false, reason: blocked } : { approved, reason };
+}

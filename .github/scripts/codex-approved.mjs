@@ -12,7 +12,8 @@
 import { readFileSync } from 'node:fs';
 import { client, repoFromEnv } from './github.mjs';
 import { evaluateCodexSignal, CODEX_LOGIN, OWNER_LOGIN } from './codex-signal.mjs';
-import { parseCodeowners, ownerOpenedBlock } from './codeowners.mjs';
+import { parseCodeowners, ownerOpenedBlock, withOwnerOpenedHold } from './codeowners.mjs';
+import { triageEligibility, triagePasses, alreadyClaimed, claimComment, releasedComment, judgeFindings, verdictComment, ACTIONS_LOGIN } from './codex-triage.mjs';
 
 const CONTEXT = 'codex-approved';
 const gh = client();
@@ -39,13 +40,20 @@ const EDIT_HISTORY = `query($ids: [ID!]!) {
       editor { __typename login }
       userContentEdits(first: 100) { totalCount nodes { deletedAt editor { __typename login } } }
     }
+    ... on PullRequestReviewComment {
+      id
+      lastEditedAt
+      editor { __typename login }
+      userContentEdits(first: 100) { totalCount nodes { deletedAt editor { __typename login } } }
+    }
   }
 }`;
 
-// Attaches `edit_history` to Codex's and the owner's comments. A comment whose record can't be
-// read gets null, which makes the signal check ignore it (fails closed).
+// Attaches `edit_history` to Codex's, the owner's and the triage judge's comments (issue or
+// review comments). A comment whose record can't be read gets null, which makes the checks
+// ignore it (fails closed).
 async function withEditHistory(comments) {
-  const ids = comments.filter((c) => [CODEX_LOGIN, OWNER_LOGIN].includes(c.user?.login) && c.node_id).map((c) => c.node_id);
+  const ids = comments.filter((c) => [CODEX_LOGIN, OWNER_LOGIN, ACTIONS_LOGIN].includes(c.user?.login) && c.node_id).map((c) => c.node_id);
   const history = new Map();
   for (let i = 0; i < ids.length; i += 50) {
     const data = await gh.graphql(EDIT_HISTORY, { ids: ids.slice(i, i + 50) });
@@ -67,7 +75,57 @@ async function codeownersRules() {
   return ownerRules;
 }
 
-async function check(number) {
+// A pull request stuck on minor Codex findings: ask the judge once per head
+// and set of findings, and pass if it rates every finding a nit
+// (docs/plans/codex-triage.md). Without the API key secret this never asks,
+// and the result stays whatever the Codex signal said.
+//
+// Only runs for one pull request may ask the judge: those share the
+// pull request's concurrency group, so two runs never ask at once. A run
+// over every open pull request (hourly, or manual without a number) only
+// reads verdicts already posted.
+async function triage({ number, pr, comments, reviews, dismissals, reason, mayJudge }) {
+  const headSha = pr.head.sha;
+  const onHead = reviews.some((r) => r.user?.login === CODEX_LOGIN && r.commit_id === headSha && r.state !== 'APPROVED');
+  if (!onHead) return { approved: false, reason };
+  const reviewComments = await withEditHistory(await gh.all(`${base}/pulls/${number}/comments`));
+  const eligibility = triageEligibility({ headSha, prAuthor: pr.user?.login, reviews, reviewComments, dismissals });
+  if (!eligibility.eligible) {
+    console.log(`#${number}: no triage (${eligibility.reason})`);
+    return { approved: false, reason };
+  }
+  let current = comments;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const { findings } = eligibility;
+  if (mayJudge && apiKey && !alreadyClaimed({ headSha, findings, comments })) {
+    // Claim first: if anything after the paid call fails, no later run pays again.
+    try {
+      const claim = await gh.post(`${base}/issues/${number}/comments`, { body: claimComment({ headSha, findings }) });
+      let verdicts;
+      try {
+        verdicts = await judgeFindings({ findings, prTitle: pr.title, apiKey });
+      } catch (error) {
+        console.error(`#${number}: triage judge unavailable: ${error.message}`);
+        // Release the claim only if the judge never answered (nothing billed).
+        // An answered but unusable call keeps it: the check stays pending.
+        if (!error.billed) await gh.patch(`${base}/issues/comments/${claim.id}`, { body: releasedComment({ headSha, error: error.message }) });
+      }
+      if (verdicts) {
+        await gh.patch(`${base}/issues/comments/${claim.id}`, { body: verdictComment({ headSha, findings, verdicts }) });
+        current = await gh.all(`${base}/issues/${number}/comments`).then(withEditHistory);
+      }
+    } catch (error) {
+      // A failed claim or verdict write leaves the check pending.
+      console.error(`#${number}: triage could not be recorded: ${error.message}`);
+    }
+  }
+  if (triagePasses({ headSha, eligibility, comments: current })) {
+    return { approved: true, reason: `Judge rated all ${eligibility.findings.length} remaining Codex finding(s) on ${headSha.slice(0, 7)} as nits.` };
+  }
+  return { approved: false, reason };
+}
+
+async function check(number, mayJudge) {
   const pr = await gh.get(`${base}/pulls/${number}`);
   if (pr.state !== 'open') return;
   const [comments, reviews, reactions] = await Promise.all([
@@ -81,15 +139,16 @@ async function check(number) {
   const dismissals = dismissed
     ? (await gh.all(`${base}/issues/${number}/events`)).filter((e) => e.event === 'review_dismissed')
     : [];
-  const signal = evaluateCodexSignal({ headSha: pr.head.sha, prAuthor: pr.user?.login, comments, reviews, reactions, dismissals });
   // A pull request the owner opened skips GitHub's code-owner review, so it
-  // waits here instead whenever it changes a protected file.
+  // waits here instead whenever it changes a protected file. Checked before
+  // triage, so no judge call is paid for a pull request that has to wait anyway.
   const changed = await gh.all(`${base}/pulls/${number}/files`);
   const files = changed.flatMap((f) => [f.filename, f.previous_filename].filter(Boolean));
   const complete = changed.length >= pr.changed_files;
   const blocked = ownerOpenedBlock({ prAuthor: pr.user?.login, files, rules: await codeownersRules(), complete });
-  const approved = signal.approved && !blocked;
-  const reason = blocked ?? signal.reason;
+  let result = evaluateCodexSignal({ headSha: pr.head.sha, prAuthor: pr.user?.login, comments, reviews, reactions, dismissals });
+  if (!result.approved && !blocked) result = await triage({ number, pr, comments, reviews, dismissals, reason: result.reason, mayJudge });
+  const { approved, reason } = withOwnerOpenedHold(result, blocked);
   const state = approved ? 'success' : 'pending';
 
   const current = await gh.get(`${base}/commits/${pr.head.sha}/status`);
@@ -106,10 +165,10 @@ async function check(number) {
   console.log(`#${number} ${pr.head.sha.slice(0, 7)}: ${state} (${reason})`);
 }
 
-const numbers = pullNumbersFromEvent()
-  ?? (await gh.all(`${base}/pulls?state=open`)).map((p) => p.number);
+const fromEvent = pullNumbersFromEvent();
+const numbers = fromEvent ?? (await gh.all(`${base}/pulls?state=open`)).map((p) => p.number);
 let failed = false;
 for (const number of numbers) {
-  try { await check(number); } catch (error) { failed = true; console.error(`#${number}: ${error.message}`); }
+  try { await check(number, fromEvent !== null); } catch (error) { failed = true; console.error(`#${number}: ${error.message}`); }
 }
 if (failed) process.exit(1);

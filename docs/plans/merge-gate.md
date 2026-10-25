@@ -1,5 +1,7 @@
 # Merge Gate: Automatic Merging With Enforced Checks
 
+Status: Built (Oct 20): the gate is on for `main`; planned follow-ups are listed under "Status" below.
+
 Written October 15, 2026 by the planning session at the owner's request.
 Revised the same day after Codex's first review (five P1s, answered under
 "Codex Round 1" below) and three owner decisions. Session name:
@@ -27,7 +29,7 @@ since October 23. The owner's account is the owner's alone (AGENTS.md
 | Owner | `CloudworkSystems` | Admin. Used by the owner only. |
 | GrokBot, local Codex, Claude on the Mac and in the cloud, Claude scheduled tasks | one shared bot account, `cloudwork-bot` | Write: branches, pull requests |
 | Codex's GitHub app (reviews, cloud builds) | `chatgpt-codex-connector[bot]` (already separate) | Reviews and its own branches |
-| GitHub Actions workflows (`owner-queue`, the checks) | `github-actions[bot]` | Read-only tokens, with two write exceptions: `codex-approved` (statuses, to post the check) and `owner-queue` (issues, to rewrite #52) |
+| GitHub Actions workflows (`owner-queue`, the checks) | `github-actions[bot]` | Read-only tokens, with two write exceptions: `codex-approved` (statuses, to post the check, and issues, to post the triage judge's verdict; see codex-triage.md) and `owner-queue` (issues, to rewrite #52) |
 
 **One bot account, not one per agent (owner decision, October 15).** GitHub's
 terms allow one free personal account plus one free machine account per person.

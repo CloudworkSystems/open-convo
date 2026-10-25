@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { evaluateCodexSignal, editedOnlyByCodex, dismissedByOwner, ownerAcceptance, CODEX_LOGIN, CODEX_BOT_LOGIN, OWNER_LOGIN } from '../codex-signal.mjs';
-import { parseCodeowners, protectedFiles, ownerOpenedBlock } from '../codeowners.mjs';
+import { parseCodeowners, protectedFiles, ownerOpenedBlock, withOwnerOpenedHold } from '../codeowners.mjs';
 import { packagesToTest, listPackages, OWN_JOB } from '../package-changes.mjs';
 
 const HEAD = '7af6dd5bd9'.padEnd(40, 'a');
@@ -122,12 +122,13 @@ test('CODEOWNERS covers the rules, decisions and key files, and not ordinary cod
     'apps/mac/Tests/ProtectionProofTests/Anything.swift',
     'apps/mac/Sources/VoiceCursorMac/OpenAIRealtimeTranscriber.swift',
     'apps/mac/Sources/VoiceCursorMac/OpenAIRealtimeSmoke.swift',
+    'docs/plans/AGENTS.md', 'packages/CLAUDE.md', 'sub/AGENTS.md',
     // "/**/" matches zero folders too.
     'apps/mac/FooKeychain.swift', 'apps/mac/ParticipantX.swift',
   ];
   assert.deepEqual(protectedFiles(rules, files), files);
   const open = ['STATUS.md', 'README.md', 'apps/desk/src/app/App.tsx', 'packages/clarity/src/index.mjs',
-    'docs/annotations/x.md', 'apps/mac/Sources/DeskHost/DeskHost.swift', 'docs/plans-old.md', 'sub/AGENTS.md',
+    'docs/annotations/x.md', 'apps/mac/Sources/DeskHost/DeskHost.swift', 'docs/plans-old.md', 'docs/AGENTS-notes.md',
     'apps/mac/Sources/VoiceCursorCore/ElectronFocusPolicy.swift', 'apps/mac/Sources/CorrectionMemory/LocalDataBoundary.swift'];
   assert.deepEqual(protectedFiles(rules, open), []);
 });
@@ -497,4 +498,166 @@ test('an owner-opened pull request whose file list was cut short waits', () => {
   const rules = parseCodeowners(readFileSync(new URL('../../CODEOWNERS', import.meta.url), 'utf8'));
   assert.ok(ownerOpenedBlock({ prAuthor: OWNER_LOGIN, files: ['packages/x/a.mjs'], rules, complete: false }));
   assert.equal(ownerOpenedBlock({ prAuthor: 'cloudwork-bot', files: ['packages/x/a.mjs'], rules, complete: false }), null);
+});
+
+test('the owner-opened hold applies after triage too', () => {
+  const blocked = "Opened from the code owner's account and changes AGENTS.md; reopen it from cloudwork-bot";
+  const judged = { approved: true, reason: 'Judge rated all 2 remaining Codex finding(s) on 1111111 as nits.' };
+  assert.deepEqual(withOwnerOpenedHold(judged, blocked), { approved: false, reason: blocked });
+  assert.deepEqual(withOwnerOpenedHold({ approved: true, reason: 'Codex is clean' }, blocked), { approved: false, reason: blocked });
+  assert.deepEqual(withOwnerOpenedHold(judged, null), judged);
+  assert.deepEqual(withOwnerOpenedHold({ approved: false, reason: 'waiting' }, null), { approved: false, reason: 'waiting' });
+  // The script checks the hold before calling the judge, so no paid call is made for a held pull request.
+  const script = readFileSync(new URL('../codex-approved.mjs', import.meta.url), 'utf8');
+  assert.match(script, /if \(!result\.approved && !blocked\) result = await triage/);
+});
+
+// Codex triage: the judge for pull requests stuck on minor findings
+// (docs/plans/codex-triage.md).
+import { triageEligibility, triagePasses, verdictComment, judgeFindings, findingPriority, ACTIONS_LOGIN, MIN_ROUNDS } from '../codex-triage.mjs';
+
+const C1 = '1111111111'.padEnd(40, 'c');
+const C2 = '2222222222'.padEnd(40, 'd');
+const unedited = { lastEditedAt: null, editor: null, userContentEdits: { totalCount: 0, nodes: [] } };
+const review = (id, sha, at = '2026-10-24T10:00:00Z') => ({ id, user: codex, commit_id: sha, state: 'COMMENTED', submitted_at: at });
+const finding = (id, reviewId, p = 2, extra = {}) => ({
+  id, node_id: `n${id}`, pull_request_review_id: reviewId, user: codex, path: 'src/a.mjs', line: 3, diff_hunk: '@@ -1 +1 @@\n+x',
+  body: `**<sub><sub>![P${p} Badge](https://img.shields.io/badge/P${p}-yellow?style=flat)</sub></sub>  Guard a rare case**\n\nDetails.\n\n<!-- codex-code-review-finding:v1 -->`,
+  edit_history: unedited, ...extra,
+});
+const loop = () => ({ headSha: HEAD, prAuthor: 'cloudwork-bot', reviews: [review(1, C1), review(2, C2), review(3, HEAD)], reviewComments: [finding(31, 3), finding(32, 3, 3)] });
+const actions = { login: ACTIONS_LOGIN, type: 'Bot' };
+const verdictFor = (elig, verdicts, at = '2026-10-24T11:00:00Z', extra = {}) => ({
+  user: actions, created_at: at, edit_history: unedited,
+  body: verdictComment({ headSha: HEAD, findings: elig.findings, verdicts }), ...extra,
+});
+const nits = (elig, confidence = 0.9) => elig.findings.map((f) => ({ id: f.id, verdict: 'nit', confidence, reason: 'edge case' }));
+
+test('triage: priority badges are read, anything else is null', () => {
+  assert.equal(findingPriority(finding(1, 1, 2).body), 2);
+  assert.equal(findingPriority(finding(1, 1, 1).body), 1);
+  assert.equal(findingPriority('no badge here'), null);
+});
+
+test('triage: P2/P3 findings after enough rounds are eligible', () => {
+  const e = triageEligibility(loop());
+  assert.equal(e.eligible, true, e.reason);
+  assert.equal(e.findings.length, 2);
+  assert.equal(MIN_ROUNDS, 3);
+});
+
+test('triage: too few rounds, a P1, an unreadable priority, or no findings are not eligible', () => {
+  assert.equal(triageEligibility({ ...loop(), reviews: [review(2, C2), review(3, HEAD)] }).eligible, false);
+  assert.equal(triageEligibility({ ...loop(), reviewComments: [finding(31, 3), finding(32, 3, 1)] }).eligible, false);
+  assert.equal(triageEligibility({ ...loop(), reviewComments: [finding(31, 3), finding(32, 3, 2, { body: 'Codex finding <!-- codex-code-review-finding:v1 -->' })] }).eligible, false);
+  assert.equal(triageEligibility({ ...loop(), reviewComments: [] }).eligible, false);
+  assert.equal(triageEligibility({ ...loop(), reviews: [review(1, C1), review(2, C2)] }).eligible, false);
+});
+
+test('triage: owner-opened pull requests and edited or foreign findings are not eligible', () => {
+  assert.equal(triageEligibility({ ...loop(), prAuthor: OWNER_LOGIN }).eligible, false);
+  const botEdit = { lastEditedAt: '2026-10-24T10:30:00Z', editor: { __typename: 'User', login: 'cloudwork-bot' }, userContentEdits: { totalCount: 1, nodes: [{ editor: { __typename: 'User', login: 'cloudwork-bot' } }] } };
+  assert.equal(triageEligibility({ ...loop(), reviewComments: [finding(31, 3), finding(32, 3, 2, { edit_history: botEdit })] }).eligible, false);
+  assert.equal(triageEligibility({ ...loop(), reviewComments: [finding(31, 3), finding(32, 3, 2, { user: impostor })] }).eligible, false);
+  assert.equal(triageEligibility({ ...loop(), reviewComments: [finding(31, 3), finding(32, 3, 2, { edit_history: null })] }).eligible, false);
+});
+
+test('triage: a later trusted verdict calling every finding a nit passes', () => {
+  const e = triageEligibility(loop());
+  assert.equal(triagePasses({ headSha: HEAD, eligibility: e, comments: [verdictFor(e, nits(e))] }), true);
+});
+
+test('triage: a real finding, low confidence, or a missing finding fails', () => {
+  const e = triageEligibility(loop());
+  const one = nits(e); one[1] = { ...one[1], verdict: 'real' };
+  assert.equal(triagePasses({ headSha: HEAD, eligibility: e, comments: [verdictFor(e, one)] }), false);
+  assert.equal(triagePasses({ headSha: HEAD, eligibility: e, comments: [verdictFor(e, nits(e, 0.79))] }), false);
+  const partial = verdictFor({ findings: e.findings.slice(0, 1) }, nits(e).slice(0, 1));
+  assert.equal(triagePasses({ headSha: HEAD, eligibility: e, comments: [partial] }), false);
+});
+
+test('triage: verdicts from another account, edited by someone else, older than the findings, or for another head fail', () => {
+  const e = triageEligibility(loop());
+  assert.equal(triagePasses({ headSha: HEAD, eligibility: e, comments: [verdictFor(e, nits(e), undefined, { user: impostor })] }), false);
+  const botEdit = { lastEditedAt: '2026-10-24T11:30:00Z', editor: { __typename: 'User', login: 'cloudwork-bot' }, userContentEdits: { totalCount: 1, nodes: [{ editor: { __typename: 'User', login: 'cloudwork-bot' } }] } };
+  assert.equal(triagePasses({ headSha: HEAD, eligibility: e, comments: [verdictFor(e, nits(e), undefined, { edit_history: botEdit })] }), false);
+  assert.equal(triagePasses({ headSha: HEAD, eligibility: e, comments: [verdictFor(e, nits(e), undefined, { edit_history: undefined })] }), false);
+  assert.equal(triagePasses({ headSha: HEAD, eligibility: e, comments: [verdictFor(e, nits(e), '2026-10-24T10:00:00Z')] }), false);
+  const other = { ...verdictFor(e, nits(e)), body: verdictComment({ headSha: OLD, findings: e.findings, verdicts: nits(e) }) };
+  assert.equal(triagePasses({ headSha: HEAD, eligibility: e, comments: [other] }), false);
+});
+
+test('triage: the judge result is checked strictly', async () => {
+  const e = triageEligibility(loop());
+  const reply = (body, stop = 'end_turn') => async () => ({ ok: true, json: async () => ({ stop_reason: stop, content: [{ type: 'text', text: JSON.stringify(body) }] }) });
+  const good = await judgeFindings({ findings: e.findings, apiKey: 'k', fetchImpl: reply({ verdicts: nits(e) }) });
+  assert.deepEqual(good.map((v) => v.id), e.findings.map((f) => f.id));
+  await assert.rejects(judgeFindings({ findings: e.findings, apiKey: 'k', fetchImpl: reply({ verdicts: nits(e).slice(0, 1) }) }));
+  await assert.rejects(judgeFindings({ findings: e.findings, apiKey: 'k', fetchImpl: reply({ verdicts: [...nits(e), nits(e)[0]] }) }));
+  await assert.rejects(judgeFindings({ findings: e.findings, apiKey: 'k', fetchImpl: reply({ verdicts: nits(e, 1.5) }) }));
+  await assert.rejects(judgeFindings({ findings: e.findings, apiKey: 'k', fetchImpl: reply({ verdicts: nits(e) }, 'refusal') }));
+  await assert.rejects(judgeFindings({ findings: e.findings, apiKey: 'k', fetchImpl: async () => ({ ok: false, status: 500 }) }));
+});
+
+test('triage: the workflow can comment, gets the judge key, and still never checks out pull request code', () => {
+  const wf = readFileSync(new URL('../../workflows/codex-approved.yml', import.meta.url), 'utf8');
+  assert.match(wf, /issues: write/);
+  assert.match(wf, /ANTHROPIC_API_KEY: \$\{\{ secrets\.ANTHROPIC_API_KEY \}\}/);
+  assert.match(wf, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
+  assert.doesNotMatch(wf, /head\.sha|head\.ref|pull_request\.head/);
+});
+
+test('triage: replies to a finding are not findings', () => {
+  const reply = { ...finding(33, 3), user: impostor, body: 'Fixed in abc.', in_reply_to_id: 31 };
+  assert.equal(triageEligibility({ ...loop(), reviewComments: [finding(31, 3), finding(32, 3, 3), reply] }).eligible, true);
+});
+
+test('triage: only single pull request runs ask the judge, in that pull request\'s concurrency group', () => {
+  const wf = readFileSync(new URL('../../workflows/codex-approved.yml', import.meta.url), 'utf8');
+  assert.match(wf, /group: codex-approved-\$\{\{ github\.event\.pull_request\.number \|\| github\.event\.issue\.number \|\| inputs\.pull_request \|\| 'all' \}\}/);
+  const script = readFileSync(new URL('../codex-approved.mjs', import.meta.url), 'utf8');
+  assert.match(script, /if \(mayJudge && apiKey/);
+  assert.match(script, /check\(number, fromEvent !== null\)/);
+});
+
+test('triage: a claim or an earlier verdict for this head and findings stops a second paid call', async () => {
+  const { alreadyClaimed, claimComment, releasedComment } = await import('../codex-triage.mjs');
+  const e = triageEligibility(loop());
+  const claim = { user: actions, created_at: '2026-10-24T11:00:00Z', body: claimComment({ headSha: HEAD, findings: e.findings }) };
+  assert.equal(alreadyClaimed({ headSha: HEAD, findings: e.findings, comments: [claim] }), true);
+  assert.equal(alreadyClaimed({ headSha: OLD, findings: e.findings, comments: [claim] }), false);
+  assert.equal(alreadyClaimed({ headSha: HEAD, findings: e.findings.slice(0, 1), comments: [claim] }), false);
+  assert.equal(alreadyClaimed({ headSha: HEAD, findings: e.findings, comments: [{ ...claim, user: impostor }] }), false);
+  const released = { ...claim, body: releasedComment({ headSha: HEAD, error: 'judge request failed: 500' }) };
+  assert.equal(alreadyClaimed({ headSha: HEAD, findings: e.findings, comments: [released] }), false);
+  const botEdit = { lastEditedAt: '2026-10-24T11:30:00Z', editor: { __typename: 'User', login: 'cloudwork-bot' }, userContentEdits: { totalCount: 1, nodes: [{ editor: { __typename: 'User', login: 'cloudwork-bot' } }] } };
+  const tampered = verdictFor(e, nits(e), undefined, { edit_history: botEdit });
+  assert.equal(alreadyClaimed({ headSha: HEAD, findings: e.findings, comments: [tampered] }), true);
+  assert.equal(triagePasses({ headSha: HEAD, eligibility: e, comments: [tampered] }), false);
+});
+
+test('triage: the claim is posted before the judge is called and then edited into the verdict', () => {
+  const script = readFileSync(new URL('../codex-approved.mjs', import.meta.url), 'utf8');
+  const claimAt = script.indexOf('claimComment({ headSha, findings })');
+  const judgeAt = script.indexOf('await judgeFindings(');
+  assert.ok(claimAt > 0 && judgeAt > claimAt);
+  assert.match(script, /gh\.patch\(`\$\{base\}\/issues\/comments\/\$\{claim\.id\}`, \{ body: verdictComment/);
+});
+
+test('triage: editing or deleting a verdict re-runs the gate', () => {
+  const wf = readFileSync(new URL('../../workflows/codex-approved.yml', import.meta.url), 'utf8');
+  assert.match(wf, /github\.event\.comment\.user\.login == 'github-actions\[bot\]'/);
+});
+
+test('triage: only an error reply from the API is unbilled (and releases the claim)', async () => {
+  const e = triageEligibility(loop());
+  const reply = (body, stop = 'end_turn') => async () => ({ ok: true, json: async () => ({ stop_reason: stop, content: [{ type: 'text', text: JSON.stringify(body) }] }) });
+  const billedError = (p) => p.then(() => null, (error) => error.billed === true);
+  assert.equal(await billedError(judgeFindings({ findings: e.findings, apiKey: 'k', fetchImpl: reply({ verdicts: nits(e) }, 'refusal') })), true);
+  assert.equal(await billedError(judgeFindings({ findings: e.findings, apiKey: 'k', fetchImpl: reply({ verdicts: nits(e).slice(0, 1) }) })), true);
+  assert.equal(await billedError(judgeFindings({ findings: e.findings, apiKey: 'k', fetchImpl: async () => ({ ok: true, json: async () => ({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'not json' }] }) }) })), true);
+  assert.equal(await billedError(judgeFindings({ findings: e.findings, apiKey: 'k', fetchImpl: async () => ({ ok: false, status: 529 }) })), false);
+  assert.equal(await billedError(judgeFindings({ findings: e.findings, apiKey: 'k', fetchImpl: async () => { throw new Error('network'); } })), true);
+  const script = readFileSync(new URL('../codex-approved.mjs', import.meta.url), 'utf8');
+  assert.match(script, /if \(!error\.billed\) await gh\.patch/);
 });

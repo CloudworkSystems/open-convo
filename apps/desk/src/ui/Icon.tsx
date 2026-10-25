@@ -19,7 +19,7 @@ export type IconName =
   | 'shield'
   | 'spark'
   | 'return' | 'folder' | 'user' | 'help' | 'monitor' | 'rail-open' | 'rail-closed'
-  | 'canvas' | 'atlas' | 'pin' | 'pin-filled' | 'ellipsis';
+  | 'canvas' | 'atlas' | 'railmap' | 'pin' | 'pin-filled' | 'ellipsis';
 // These controls are interface symbols, separate from the recovered brand mark.
 
 const paths: Record<IconName, ReactNode> = {
@@ -34,6 +34,7 @@ const paths: Record<IconName, ReactNode> = {
   'rail-closed': <><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M7 4v16" /></>,
   canvas: <><rect x="3" y="4" width="18" height="16" rx="2" /><rect x="6" y="7" width="5" height="4" rx="1" /><path d="M15 8h3M15 11h3M6 15h12M6 17h8" /></>,
   atlas: <><circle cx="12" cy="12" r="3" /><circle cx="5" cy="5" r="2" /><circle cx="20" cy="7" r="2" /><circle cx="7" cy="20" r="2" /><path d="m6.5 6.5 3.4 3.4m4.8.8 3.5-2.5M10.5 14.5l-2.4 3.7" /></>,
+  railmap: <><circle cx="6" cy="5" r="2" /><circle cx="6" cy="19" r="2" /><circle cx="18" cy="8" r="2" /><path d="M6 7v10M18 10c0 4-6 3-11.3 7.4" /></>,
   desk: (
     <>
       <path d="M4 5h16v12H4z" />

@@ -151,7 +151,9 @@ button.canvas-node:focus-visible { outline: 2px solid var(--tca-accent-strong); 
 @media (max-width: 599px) {
   .desk-header { padding: 15px; }
   .desk-header h1 { font-size: 22px; }
-  .nexus-view-tabs { gap: 1px; }
+  /* Five views stay on one row that scrolls sideways, so the header keeps its height. */
+  .nexus-view-tabs { gap: 1px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: calc(100vw - 80px); }
+  .nexus-view-tabs button { flex: none; white-space: nowrap; }
   .nexus-view-tabs button { padding: 6px; gap: 5px; font-size: 17px; }
   .nexus-view-tabs svg { width: 16px; height: 16px; }
   .row-menu-trigger, .row-pin-trigger { width: 32px; height: 36px; }

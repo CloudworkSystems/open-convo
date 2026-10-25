@@ -120,7 +120,7 @@ export function UserOptions({ page, theme, layout, onTheme, onLayout, onClose, o
       {page !== 'user' && dirty && <p className="settings-warning" role="status">Your profile edits are kept here. Return to User options to save them.</p>}
       <section hidden={page !== 'help'} className="settings-help"><h3>Find your way around</h3>
         <p>Session folders organize topics, projects or goals. Sessions outside those folders live in Ungrouped sessions. Open a folder to find its conversations.</p>
-        <p>Navigator and Canvas show the same sample records. Atlas is planned as a 3D knowledge view. Use Codex annotations to point out what needs to change.</p>
+        <p>Navigator and Canvas show the same sample records. Atlas is planned as a 3D knowledge view. Rail Map shows a saved snapshot of this project's branches and pull requests. Use Codex annotations to point out what needs to change.</p>
       </section>
       <form hidden={page !== 'user'} className="identity-settings" onSubmit={async (event) => {
         event.preventDefault();

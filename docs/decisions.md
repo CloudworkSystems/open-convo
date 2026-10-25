@@ -6,6 +6,11 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 24:** Next outside modules: the email actions preview (Codex builds
+  through the local Codex CLI, Gemini reviews), the tasks and reminders
+  engine (GrokBot team A) and the Today agenda (GrokBot team C, after #112),
+  both reviewed by Codex. Plans: `docs/plans/email-actions-preview.md`,
+  `tasks-engine.md` and `today-agenda.md`.
 - **Oct 23:** Gemini Code Assist is the impartial reviewer (installed on
   open-convo Oct 23). Codex reviews GrokBot's work; Gemini reviews Codex's
   and Claude's, and Codex never counts as the independent review of its own
@@ -54,6 +59,31 @@ full plan and history are in [PLAN.md](../PLAN.md).
   planning session in earlier decisions); AGENTS.md "Who Does What" gives
   every agent its one job. Up to five outside modules at a time (was three):
   GrokBot's teams plus Codex as a builder, each from its own plan.
+- **Oct 22:** Day one and public launch (owner interview, planning session
+  `OC-261022-plan-day-one-and-sync`). The day-one proof is a ChatGPT-style
+  chat that works on a local model plus tasks and productivity as its first
+  real job. Public launch needs the Mac and iPhone with private sync;
+  Apple-only (CloudKit) at launch, Windows and Android later. The iPhone app
+  and sync move from after step 5 to a parallel line starting now; its first
+  slice is the standalone sync core ([docs/plans/sync-core.md](plans/sync-core.md)),
+  built by the next free GrokBot team. Open Convo stays truly open source;
+  the True Convo name is protected by trademark, so copies that aren't a
+  subscriber's can't use it; "Powered by True Convo" in forks is deferred.
+  A module joins the core once it runs on the user's own keys or local
+  models at almost no ongoing cost to the project. Pricing and the business
+  plan stay out of this repo. The owner's starting tasks list, in order:
+  checklists (household lists engine), habit grid, email triage across
+  several inboxes, one combined calendar (later on a family wall display),
+  and start-on-iPhone, continue-on-Mac. Every user gets the whole harness,
+  which also teaches building their own local apps. The multi-level
+  white-label tiers from October 15 stay on top of the flat subscription.
+  Launch scope: chat, checklists, habit grid, iPhone-to-Mac continuity, a
+  read-only Personal calendar, and email sorting only (local model); email
+  actions follow right after launch, each asking first with a preview
+  (foundations principle 1; the owner asked for standing rules, which stay
+  limited to sorting unless he changes that principle); the family calendar,
+  voice to calendar and wall display stay at step 11. Building apps for users
+  comes after launch with step 6, and public copy says it is coming.
 - **Oct 21:** Scale-up plan approved ([docs/plans/scale-up.md](plans/scale-up.md)).
   Up to three outside modules at a time, each with its own builder or builder
   team; modules waiting only on review fixes don't count. None is waiting
