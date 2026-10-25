@@ -86,8 +86,13 @@ boot in under a second, reached over SSH, each with an HTTPS address
 account on October 25: the Personal plan is $15 a month for 2 CPUs and 4 GB
 of memory shared across all his VMs, 100 GB of disk and 200 GB of transfer
 a month. exe.dev also has a built-in AI model service ("llm") and its own
-agent, Shelley, which spend the account's credits; agents use neither
-without the owner's approval (no silent paid fallback, principle 6).
+agent, Shelley, which spend the account's credits. The `llm` integration is
+attached to every VM by default (`auto:all`,
+[exe.dev Integrations docs](https://hub.exe.dev/docs/integrations)). A rule
+that agents ask first is a commitment, not a wall (principle 12), so the
+owner detaches `llm` from the builders' VM unless he chooses to allow it,
+and no agent uses it or Shelley without his approval (no silent paid
+fallback, principle 6).
 Integrations, exe.dev's secret store, keeps a credential on exe.dev's
 servers and adds it to the VM's outgoing requests, so the VM and the agents
 on it never read it.
@@ -111,7 +116,11 @@ Rules for the VM:
 - **Nothing public on the builders' VM.** It serves no endpoint that takes
   requests from the internet: anything public, such as the front porch
   prototype, runs on a separate VM with no repository token, so a compromise
-  there can't reach write access to the repository.
+  there can't reach write access to the repository. Before that VM takes
+  any request from the internet, it has no integrations attached: `auto:all`
+  is turned off for it and `llm` and every other integration are detached,
+  so a compromised public service can't spend the account's credits or use
+  any stored credential.
 - **First jobs:** the owner's local Codex CLI jobs and the Gemini CLI, both
   working as `cloudwork-bot`, under the same review loop as every other agent.
 - **Credentials:** a separate classic `cloudwork-bot` token for the VM,
