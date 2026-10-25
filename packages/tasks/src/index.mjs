@@ -275,6 +275,9 @@ function normalizeDayStart(value) {
 function hasTitle(task) {
   return Boolean(task.fields.title);
 }
+function holdingPurgedFields(task) {
+  return Boolean(task.purge) && compareStamps(task.life.stamp, task.purge) <= 0;
+}
 function setAsideIds(task) {
   const aside = new Set();
   for (const record of task.records) {
@@ -414,19 +417,30 @@ function mergeRecord(a, b) {
   }
   return canonicalRecord({ ...a, fields: records(a.fields, b.fields) });
 }
+function fillTaskFields(fields, purge) {
+  const filled = {};
+  for (const key of TASK_KEYS) {
+    if (own(fields, key)) setOwn(filled, key, fields[key]);
+    else setOwn(filled, key, { value: canonicalValue(key, TASK_DEFAULTS[key]), stamp: clone(purge) });
+  }
+  return filled;
+}
 function mergeTask(a, b) {
   if (!a) return clone(b);
   if (!b) return clone(a);
   const purge = latest(a.purge, b.purge);
   const life = register(a.pendingLife ?? a.life, b.pendingLife ?? b.life);
-  if (purge && compareStamps(life.stamp, purge) <= 0) {
-    return { id: a.id, life: { value: false, stamp: clone(purge) }, purge: clone(purge), fields: {}, records: [] };
-  }
   const fields = records(a.fields, b.fields, purge);
   const ids = [...new Set([...a.records.map(record => record.id), ...b.records.map(record => record.id)])].sort();
   const left = new Map(a.records.map(record => [record.id, record]));
   const right = new Map(b.records.map(record => [record.id, record]));
   const mergedRecords = ids.map(id => mergeRecord(left.get(id), right.get(id))).filter(record => !purge || compareStamps(record.stamp, purge) > 0);
+  // A life event that is not newer than the cutoff does not restore the task,
+  // but field registers newer than the cutoff still have to survive. Dropping
+  // them here makes a later restore depend on merge order.
+  if (purge && compareStamps(life.stamp, purge) <= 0) {
+    return { id: a.id, life: { value: false, stamp: clone(purge) }, purge: clone(purge), fields, records: mergedRecords };
+  }
   if (!fields.title) {
     return {
       id: a.id,
@@ -437,7 +451,7 @@ function mergeTask(a, b) {
       ...(purge ? { pendingLife: life } : {}),
     };
   }
-  return { id: a.id, life, purge: clone(purge), fields, records: mergedRecords };
+  return { id: a.id, life, purge: clone(purge), fields: purge ? fillTaskFields(fields, purge) : fields, records: mergedRecords };
 }
 
 /** Pure merge. Neither input changes. Commutative, associative and idempotent on valid files. */
@@ -828,7 +842,7 @@ export class Tasks {
   emptyTrash() {
     const result = this.#change((person, stamp) => {
       for (const task of person.tasks) {
-        if (!task.life.value && !task.pendingLife && hasTitle(task)) {
+        if (!task.life.value && !task.pendingLife && hasTitle(task) && !holdingPurgedFields(task)) {
           task.fields = {};
           task.records = [];
           task.purge = clone(stamp);
@@ -935,7 +949,7 @@ export class Tasks {
     return row;
   }
   tasks({ trash = false } = {}) {
-    return this.#person.tasks.filter(task => hasTitle(task) && !task.pendingLife && task.life.value === !trash).map(task => task.id).sort();
+    return this.#person.tasks.filter(task => hasTitle(task) && !task.pendingLife && !holdingPurgedFields(task) && task.life.value === !trash).map(task => task.id).sort();
   }
   today(now, timeZone) {
     const instant = requireInstant(now);

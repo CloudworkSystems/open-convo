@@ -487,6 +487,36 @@ test('9. merge keeps both edits, both completions, and a reopened occurrence', (
   assert.equal(offline.save().includes('Eggs'), false);
   assert.deepEqual(offline.tasks({ trash: true }), []);
 
+  const made = new Tasks({ deviceId: 'origin', id: 'household', timeZone: 'UTC', now: () => T0 });
+  made.addTask({ title: 'Old title', note: 'Old note', due: '2026-05-01' }, { taskId: 'task' });
+  const base = made.getPerson();
+  const version = (counter, device) => ({ counter, time: T0 + counter, device });
+  const purged = structuredClone(base);
+  const purgedTask = purged.tasks[0];
+  purgedTask.life = { value: false, stamp: version(10, 'purger') };
+  purgedTask.purge = version(10, 'purger');
+  purgedTask.fields = {};
+  purgedTask.records = [];
+  const fields = structuredClone(base);
+  fields.tasks[0].fields.title = { value: 'Newer title', stamp: version(30, 'editor') };
+  const restore = structuredClone(base);
+  restore.tasks[0].life = { value: true, stamp: version(20, 'restorer') };
+  const copies = [purged, fields, restore];
+  const folded = (i, j, k) => mergePeople(mergePeople(copies[i], copies[j]), copies[k]);
+  const expected = folded(0, 1, 2);
+  for (const [i, j, k] of [[0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]) {
+    assert.deepEqual(folded(i, j, k), expected, `${i}${j}${k}`);
+  }
+  const broughtBack = expected.tasks.find(item => item.id === 'task');
+  assert.equal(broughtBack.life.value, true);
+  assert.equal(broughtBack.fields.title.value, 'Newer title');
+  const held = mergePeople(purged, fields);
+  assert.equal(held.tasks[0].life.value, false);
+  assert.equal(held.tasks[0].fields.title.value, 'Newer title');
+  const holder = new Tasks({ deviceId: 'holder', id: 'household', timeZone: 'UTC', now: () => T0 });
+  holder.importPerson(held);
+  assert.deepEqual(holder.tasks({ trash: true }), []);
+
   const monday = engine('monday-edit', T0 + 4);
   const thursday = engine('thursday-edit', T0 + 8);
   monday.addTask({ title: 'Meet', due: '2026-03-02', repeat: { kind: 'weeks', every: 1, mode: 'onSchedule' } }, { taskId: 'meet' });

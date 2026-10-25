@@ -103,7 +103,7 @@ Deleting a task sets `life` false and keeps the contents in Trash. Emptying Tras
 }
 ```
 
-An older copy cannot bring that content back. A later `addTask` may reuse the id. Registers newer than the cutoff, including a `pendingLife` event that arrived without a new title, are kept so three copies still merge in any order. Unknown `schemaVersion`, unknown fields, and unknown time zones are refused. There is no silent migration.
+An older copy cannot bring that content back. A later `addTask` may reuse the id. A field or record newer than the cutoff is kept even when the winning life stamp is not, so a later restore still sees it. A `pendingLife` event that arrived without a new title is kept too. Three copies merge in any order. Unknown `schemaVersion`, unknown fields, and unknown time zones are refused. There is no silent migration.
 
 Undo keeps up to 20 before/after snapshots in memory, not in the file. It writes a new stamp on each value that the undone change wrote, so a merged copy keeps the undo. Adding a task and undoing it leaves a purge marker. Importing clears undo history. Emptying Trash does too.
 
