@@ -53,7 +53,7 @@ and loaded from one JSON file per person):
   2 hours). A date-only task's offset counts from 09:00 on its due day in the
   owner's zone (a setting, default 09:00). Every reminder belongs to an
   occurrence: a fixed reminder stores the name of the occurrence it was set
-  for, and an offset reminder follows whichever occurrence is current. When
+  for (a one-off task, dated or not, has a single occurrence named `once`), and an offset reminder follows whichever occurrence is current. When
   the series moves on, a fixed reminder applies to the next occurrence only
   if the owner moves it there; otherwise it lapses with its closed
   occurrence.
