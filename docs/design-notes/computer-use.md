@@ -57,9 +57,12 @@ the owner had to be walked through the clicks by hand. What we found:
   location permission for a site** (owner decision, October 25). When the
   owner approves an agent on a site, the card offers "Just this time" or
   "Remember for this site". A remembered grant:
-  - covers one agent profile, one site (for example `ap.www.namecheap.com`)
-    and one level (view, or view and control). Another agent, another site or
-    a higher level asks again;
+  - covers one agent profile, one site (for example `ap.www.namecheap.com`),
+    one level (view, or view and control) and one named task, for example
+    "manage trueconvo.com's DNS records". Another agent, site, level or task
+    asks again. That keeps it a pass "for one task" (foundations, Agents) and
+    a standing rule the owner can see and switch off (foundations principle
+    1), so a grant made for one job is never reused for an unrelated one;
   - is kept by TCA on the device in its own permission store, not in browser
     cookies or the cache, which websites can read or clear. It never syncs to
     another device unless the owner turns that on;
