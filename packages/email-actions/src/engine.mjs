@@ -79,7 +79,7 @@ function mergeMessages(messages) {
       copies: entry.copies,
       copyKeys: new Set(entry.copies.map(copy => JSON.stringify([copy.inbox, copy.id]))),
       when: parseDate(source.date),
-      pile: source.pile ?? 'other',
+      pile: own(source, 'pile') ? source.pile : null,
       listId: listIdOf(source.headers),
       sender: addressKey(source.from.address),
     };
@@ -99,18 +99,20 @@ function labelFor(items) {
 }
 
 function outputMessage(item, matchedBy) {
-  const ids = {};
+  const idsByInbox = new Map();
   for (const copy of item.copies) {
-    if (!own(ids, copy.inbox)) ids[copy.inbox] = [];
-    ids[copy.inbox].push(copy.id);
+    if (!idsByInbox.has(copy.inbox)) idsByInbox.set(copy.inbox, []);
+    idsByInbox.get(copy.inbox).push(copy.id);
   }
+  const inboxes = [...idsByInbox.keys()].sort(compareText);
+  const ids = Object.fromEntries(inboxes.map(inbox => [inbox, idsByInbox.get(inbox)]));
   return {
-    inboxes: Object.keys(ids).sort(compareText),
+    inboxes,
     ids,
     from: copyPerson(item.source.from),
     subject: item.source.subject,
     date: item.source.date,
-    pile: item.pile,
+    pile: item.pile ?? 'unsorted',
     matchedBy: [...matchedBy].sort((a, b) => a - b),
   };
 }
@@ -125,10 +127,11 @@ function groupItems(items, matches) {
   }
   const output = [...groups.values()];
   for (const group of output) group.items.sort(newestFirst);
-  output.sort((left, right) => PILES.indexOf(left.pile) - PILES.indexOf(right.pile)
+  output.sort((left, right) => (left.pile === null ? PILES.length : PILES.indexOf(left.pile))
+    - (right.pile === null ? PILES.length : PILES.indexOf(right.pile))
     || -compareDates(left.items[0].when, right.items[0].when) || compareText(left.key, right.key));
   return output.map(group => ({
-    pile: group.pile,
+    pile: group.pile ?? 'unsorted',
     key: group.key,
     label: labelFor(group.items),
     count: group.items.length,
@@ -158,7 +161,6 @@ function candidateMatches(request, items) {
   const wanted = kind === 'listId' ? normalizeId(request.target.listId)
     : kind === 'sender' ? addressKey(request.target.sender) : lower(request.target.domain.slice(1).trim());
   return items.filter((item) => {
-    if (own(request, 'pile') && item.pile !== request.pile) return false;
     if (kind === 'sender') return item.sender === wanted;
     if (kind === 'domain') return domainOf(item.sender) === wanted;
     return item.listId === wanted;
@@ -168,10 +170,18 @@ function candidateMatches(request, items) {
 function reasonCounts(items) {
   const reasons = new Map();
   for (const item of items) {
-    const reason = `In ${PILE_NAMES[item.pile]}: pick these messages one by one`;
+    const reason = item.pile === null
+      ? 'Not sorted yet: pick these messages one by one'
+      : `In ${PILE_NAMES[item.pile]}: pick these messages one by one`;
     reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
   }
-  return [...reasons].map(([reason, count]) => ({ reason, count }));
+  const order = [
+    'In People: pick these messages one by one',
+    'In Work: pick these messages one by one',
+    'Not sorted yet: pick these messages one by one',
+  ];
+  return [...reasons].map(([reason, count]) => ({ reason, count }))
+    .sort((left, right) => order.indexOf(left.reason) - order.indexOf(right.reason));
 }
 
 function safeUrl(text, scheme) {
@@ -198,16 +208,21 @@ function parseMailto(text) {
   const values = { subject: '', body: '' };
   const seen = new Set();
   try {
-    to = url.pathname === '' ? [] : url.pathname.split(',').map(value => decodeURIComponent(value));
+    const address = decodeURIComponent(url.pathname);
+    if (!/^[^\s@<>,]+@[^\s@<>,]+$/u.test(address) || /[\r\n]/u.test(address)) return null;
+    to = [address];
     const queryAt = text.indexOf('?');
     if (queryAt !== -1) {
       for (const pair of text.slice(queryAt + 1).split('&')) {
+        if (pair === '') continue;
         const equalsAt = pair.indexOf('=');
         const rawName = equalsAt === -1 ? pair : pair.slice(0, equalsAt);
         const rawValue = equalsAt === -1 ? '' : pair.slice(equalsAt + 1);
         const name = asciiLower(decodeURIComponent(rawName));
+        const value = decodeURIComponent(rawValue);
+        if (/[\r\n]/u.test(name) || /[\r\n]/u.test(value)) return null;
         if (name !== 'subject' && name !== 'body') return { invalidFields: true };
-        if (!seen.has(name)) values[name] = decodeURIComponent(rawValue);
+        if (!seen.has(name)) values[name] = value;
         seen.add(name);
       }
     }
@@ -318,8 +333,12 @@ export function previewActions(input, requestInput) {
     }
     let matches = candidateMatches(request, items);
     if (kind !== 'messages') {
-      const leftOut = matches.filter(item => item.pile === 'people' || item.pile === 'work');
-      matches = matches.filter(item => item.pile !== 'people' && item.pile !== 'work');
+      const leftOut = matches.filter(item => item.pile === null
+        || (!own(request, 'pile') && (item.pile === 'people' || item.pile === 'work'))
+        || (own(request, 'pile') && item.pile === request.pile && (item.pile === 'people' || item.pile === 'work')));
+      matches = matches.filter(item => item.pile !== null
+        && (!own(request, 'pile') || item.pile === request.pile)
+        && item.pile !== 'people' && item.pile !== 'work');
       result.leftOut = leftOut.length;
       result.leftOutReasons = reasonCounts(leftOut);
     }

@@ -11,7 +11,7 @@ Code can call the synchronous `previewActions(messages, requests)` export from `
 
 ## Inputs
 
-The messages file has `schemaVersion: 1` and up to 10,000 messages in `messages`. It is limited to 5 MB. Each message has the sorting-engine fields `id`, `inbox`, `from`, `to`, `subject`, `date`, `snippet`, and `headers`, plus an optional `pile`: `people`, `work`, `alerts`, `receipts`, `newsletters`, or `other`. A missing `pile` counts as `other`. Only `Message-ID`, `List-Id`, `List-Unsubscribe`, and `List-Unsubscribe-Post` affect a preview.
+The messages file has `schemaVersion: 1` and up to 10,000 messages in `messages`. It is limited to 5 MB. Each message has the sorting-engine fields `id`, `inbox`, `from`, `to`, `subject`, `date`, `snippet`, and `headers`, plus an optional `pile`: `people`, `work`, `alerts`, `receipts`, `newsletters`, or `other`. A missing `pile` counts as unsorted and is reported as `unsorted` when directly selected. Only `Message-ID`, `List-Id`, `List-Unsubscribe`, and `List-Unsubscribe-Post` affect a preview.
 
 The requests file has `schemaVersion: 1` and 1 to 200 entries in `requests`. An entry has an `action` (`unsubscribe`, `spam`, or `delete`) and exactly one target:
 
@@ -24,11 +24,11 @@ An optional `pile` narrows sender, domain, and list targets. Unknown or missing 
 
 ## Guards
 
-Sender, domain, and list sweeps leave out People and Work messages and tell the owner to pick those messages one by one. A direct `messages` target may include them. This guard relies on the `pile` assigned by the sorting engine; a message with no `pile` counts as `other`.
+Sender, domain, and list sweeps leave out People and Work messages and tell the owner to pick those messages one by one. They also leave out messages with no `pile` as not sorted yet, including when a request has a `pile` filter. Each is counted in that request's `leftOut`; if every match is left out, the request is blocked as matching nothing. Only a direct `messages` target may include these messages.
 
 The preview also blocks sender and domain sweeps for addresses that receive mail in the input, blocks an empty match, and blocks these large consumer mail domains because a sweep could catch unrelated people:
 
-`aol.com`, `gmail.com`, `hotmail.com`, `icloud.com`, `live.com`, `outlook.com`, `proton.me`, `protonmail.com`, `yahoo.com`.
+`aol.com`, `gmail.com`, `googlemail.com`, `hotmail.com`, `icloud.com`, `live.com`, `mac.com`, `me.com`, `msn.com`, `outlook.com`, `proton.me`, `protonmail.com`, `yahoo.com`, `ymail.com`.
 
 Spam wins when both spam and delete match one message, but the kept message names every matching request. Unsubscribe remains independent of either message action.
 
@@ -69,7 +69,7 @@ Every action's copies are sorted by inbox then id. Unsubscribe entries are sorte
 - RFC 5322 field names compare case-insensitively without trimming. If differently cased copies of a field occur, their values are read in character-code order; the first non-empty field value is used.
 - `Message-ID` and `List-Id` use the first angle-bracketed token when present, otherwise the trimmed field body. Comparison is lower case. An identifier over 200 characters is replaced with a deterministic SHA-256 marker, matching the sorting engine.
 - RFC 2369 unsubscribe URIs must be inside angle brackets. Preference is usable one-click HTTPS, then usable mail, then HTTPS web page, regardless of header order.
-- RFC 6068 comma-separated recipients are kept in URI order. Percent encoding is decoded, while a literal `+` remains `+` rather than becoming a space. Repeated `subject` or `body` fields use the first value. A fragment or malformed percent encoding makes the mail URI unusable. An absent recipient, subject, or body becomes an empty list or empty text.
+- An RFC 6068 mail URI must name exactly one plain `local@domain` recipient. Empty recipients, recipient lists, display names, angle brackets, spaces, decoded CR/LF, and a `to` query field make it unusable. Percent encoding is decoded, while a literal `+` remains `+` rather than becoming a space. Repeated `subject` or `body` fields use the first value, empty query parameters (including a trailing `&`) are ignored, and decoded CR/LF in any query name or value is refused. A fragment or malformed percent encoding also makes the mail URI unusable. An absent subject or body becomes empty text.
 - Address and domain comparisons trim surrounding whitespace and use locale-independent lower case. Display text is returned unchanged.
 - Dates must be RFC 3339 date-times with an explicit offset. Equal instants are ordered by inbox and id, never by locale or file order.
 

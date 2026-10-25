@@ -5,7 +5,7 @@ import fsPromises from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
 import { test } from 'node:test';
 import {
-  COMMON_MAIL_DOMAINS, canonicalActionForm, formatSummary, parseJsonFile, previewActions,
+  COMMON_MAIL_DOMAINS, formatSummary, parseJsonFile, previewActions,
 } from '../src/index.mjs';
 import { main } from '../src/preview.mjs';
 import { clearNetworkCalls, networkCalls } from './network-guard.mjs';
@@ -46,12 +46,32 @@ function withoutMatchedBy(actions) {
   }));
 }
 
+function documentedCanonicalForm(actions, unsubscribe) {
+  return {
+    actions: actions.map(value => ({
+      action: value.action,
+      messages: value.groups.flatMap(group => group.messages.flatMap(message => message.inboxes
+        .flatMap(inbox => message.ids[inbox].map(id => ({ inbox, id })))))
+        .sort((left, right) => left.inbox < right.inbox ? -1
+          : left.inbox > right.inbox ? 1 : left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+    })),
+    unsubscribe: unsubscribe.map((entry) => {
+      const value = { key: entry.key, method: entry.method };
+      if (entry.method === 'oneClick' || entry.method === 'webPage') value.url = entry.url;
+      if (entry.method === 'mailto') Object.assign(value, {
+        to: entry.to, subject: entry.subject, body: entry.body,
+      });
+      return value;
+    }).sort((left, right) => left.key < right.key ? -1 : left.key > right.key ? 1 : 0),
+  };
+}
+
 test('1. complete invented fixtures match a saved exact plan shape', () => {
   const plan = previewActions(fixtureMessages, fixtureRequests);
   const expected = JSON.parse(readFileSync(new URL('./expected/fixture-plan.json', import.meta.url), 'utf8'));
   assert.deepEqual(plan, expected);
   const recomputed = createHash('sha256')
-    .update(JSON.stringify(canonicalActionForm(expected.actions, expected.unsubscribe))).digest('hex');
+    .update(JSON.stringify(documentedCanonicalForm(expected.actions, expected.unsubscribe))).digest('hex');
   assert.equal(expected.seal, recomputed);
 });
 
@@ -71,10 +91,21 @@ test('2. sender, domain, list and message targets match exactly; pile narrows a 
   assert.equal(result.requests[0].matched, 1);
   assert.equal(result.requests[1].matched, 3);
   assert.equal(result.requests[2].matched, 2);
+  assert.deepEqual(resultMessage(result, 'spam', 'a').matchedBy, [2]);
+  assert.deepEqual(resultMessage(result, 'spam', 'b').matchedBy, [1, 2]);
+  assert.deepEqual(resultMessage(result, 'spam', 'c').matchedBy, [2]);
+  assert.deepEqual(resultMessage(result, 'unsubscribe', 'a').matchedBy, [3]);
+  assert.deepEqual(resultMessage(result, 'unsubscribe', 'b').matchedBy, [3]);
   assert.deepEqual(resultMessage(result, 'delete', 'd').matchedBy, [4]);
+  assert.deepEqual(action(result, 'spam').groups.flatMap(group => group.messages)
+    .flatMap(message => Object.values(message.ids).flat()).sort(), ['a', 'b', 'c']);
+  assert.deepEqual(action(result, 'unsubscribe').groups.flatMap(group => group.messages)
+    .flatMap(message => Object.values(message.ids).flat()).sort(), ['a', 'b']);
+  assert.deepEqual(action(result, 'delete').groups.flatMap(group => group.messages)
+    .flatMap(message => Object.values(message.ids).flat()).sort(), ['d']);
 });
 
-test('3. People and Work are left out of sweeps, while direct messages may include them', () => {
+test('3. People, Work and unsorted mail are left out of sweeps, while direct messages may include them', () => {
   const input = messages([
     mail({ id: 'p', from: { address: 'same@fernway.example' }, pile: 'people' }),
     mail({ id: 'w', from: { address: 'same@fernway.example' }, pile: 'work' }),
@@ -82,15 +113,25 @@ test('3. People and Work are left out of sweeps, while direct messages may inclu
   ].map(value => { if (value.pile === undefined) delete value.pile; return value; }));
   const result = previewActions(input, requests([
     request('delete', { sender: 'same@fernway.example' }),
-    request('spam', { messages: [{ inbox: 'home', id: 'p' }] }),
+    request('spam', { messages: [{ inbox: 'home', id: 'p' }, { inbox: 'home', id: 'o' }] }),
+    request('delete', { sender: 'same@fernway.example' }, 'other'),
   ]));
   assert.deepEqual(result.requests[0].leftOutReasons, [
     { reason: 'In People: pick these messages one by one', count: 1 },
     { reason: 'In Work: pick these messages one by one', count: 1 },
+    { reason: 'Not sorted yet: pick these messages one by one', count: 1 },
   ]);
-  assert.equal(result.requests[0].matched, 1);
-  assert.equal(resultMessage(result, 'delete', 'o').pile, 'other');
+  assert.equal(result.requests[0].leftOut, 3);
+  assert.equal(result.requests[0].matched, 0);
+  assert.deepEqual(result.blocked, [
+    { position: 1, reason: 'Nothing matches this request' },
+    { position: 3, reason: 'Nothing matches this request' },
+  ]);
   assert.equal(resultMessage(result, 'spam', 'p').pile, 'people');
+  assert.equal(resultMessage(result, 'spam', 'o').pile, 'unsorted');
+  assert.deepEqual(result.requests[2].leftOutReasons, [
+    { reason: 'Not sorted yet: pick these messages one by one', count: 1 },
+  ]);
 });
 
 test('4. every listed common mail provider is blocked with the named reason', () => {
@@ -124,6 +165,14 @@ test('6. spam wins delete with both request positions; unsubscribe stays indepen
   assert.equal(result.requests[1].kept, 1);
   assert.equal(action(result, 'unsubscribe').count, 1);
   assert.equal(result.unsubscribe[0].method, 'webPage');
+
+  const keptTogether = previewActions(messages([item]), requests([
+    request('delete', { messages: [{ inbox: 'home', id: 'overlap' }] }),
+    request('unsubscribe', { messages: [{ inbox: 'home', id: 'overlap' }] }),
+  ]));
+  assert.equal(action(keptTogether, 'delete').count, 1);
+  assert.equal(action(keptTogether, 'unsubscribe').count, 1);
+  assert.equal(keptTogether.unsubscribe.length, 1);
 });
 
 test('7. unsubscribe methods and preference follow the headers', () => {
@@ -132,15 +181,15 @@ test('7. unsubscribe methods and preference follow the headers', () => {
     [headerMail('mail', 'Mail', '<mailto:leave@mailings.example?subject=stop&body=please>'), 'mailto'],
     [headerMail('web', 'Web', '<https://mailings.example/web>'), 'webPage'],
     [headerMail('http', 'Http', '<http://mailings.example/http>'), 'none', 'Only an insecure link'],
-    [headerMail('credentials', 'Credentials', '<https://user:pass@mailings.example/no>'), 'none'],
-    [headerMail('long', 'Long', `<https://mailings.example/${'x'.repeat(2000)}>`), 'none'],
-    [headerMail('empty', 'Empty', '   '), 'none'],
-    [mail({ id: 'missing', from: { address: 'missing@mailings.example' }, pile: 'newsletters' }), 'none'],
+    [headerMail('credentials', 'Credentials', '<https://user:pass@mailings.example/no>'), 'none', 'This sender gives no way to unsubscribe; you can delete or report it instead'],
+    [headerMail('long', 'Long', `<https://mailings.example/${'x'.repeat(2000)}>`), 'none', 'This sender gives no way to unsubscribe; you can delete or report it instead'],
+    [headerMail('empty', 'Empty', '   '), 'none', 'This sender gives no way to unsubscribe; you can delete or report it instead'],
+    [mail({ id: 'missing', from: { address: 'missing@mailings.example' }, pile: 'newsletters' }), 'none', 'This sender gives no way to unsubscribe; you can delete or report it instead'],
   ];
   for (const [message, method, reason] of cases) {
     const entry = planFor(message).unsubscribe[0];
     assert.equal(entry.method, method, message.id);
-    if (reason) assert.equal(entry.reason, reason);
+    if (method === 'none') assert.equal(entry.reason, reason, message.id);
   }
   for (const value of [
     '<mailto:leave@mailings.example>, <https://mailings.example/preferred>',
@@ -149,10 +198,10 @@ test('7. unsubscribe methods and preference follow the headers', () => {
     assert.equal(planFor(headerMail('prefer', 'Prefer', value, 'List-Unsubscribe=One-Click')).unsubscribe[0].method, 'oneClick');
     assert.equal(planFor(headerMail('prefer', 'Prefer', value)).unsubscribe[0].method, 'mailto');
   }
-  const mailPlan = planFor(headerMail('fields', 'Fields', '<mailto:a@mailings.example,b@mailings.example?subject=Stop&body=Please>'));
+  const mailPlan = planFor(headerMail('fields', 'Fields', '<mailto:a@mailings.example?subject=Stop&body=Please>'));
   assert.deepEqual(mailPlan.unsubscribe[0], {
     key: 'address:fields@mailings.example', label: 'Fields', method: 'mailto',
-    to: ['a@mailings.example', 'b@mailings.example'], subject: 'Stop', body: 'Please',
+    to: ['a@mailings.example'], subject: 'Stop', body: 'Please',
   });
   for (const field of ['cc', 'bcc']) {
     assert.equal(planFor(headerMail(field, field, `<mailto:leave@mailings.example?${field}=copy@mailings.example>`)).unsubscribe[0].reason,
@@ -184,6 +233,31 @@ test('8. duplicate Message-ID copies use the first reference as representative a
   assert.deepEqual(resultMessage(left, 'unsubscribe', 'first').ids, { a: ['first'], z: ['second'] });
 });
 
+test('8. an inbox named __proto__ is preserved in output, canonical form and seal', () => {
+  const protoCopy = mail({
+    id: 'proto-copy', inbox: '__proto__', from: { address: 'copies@fernway.example' },
+    headers: { 'Message-ID': '<proto-copy@fernway.example>' },
+  });
+  const homeCopy = { ...protoCopy, id: 'home-copy', inbox: 'home' };
+  const withProto = previewActions(messages([protoCopy, homeCopy]), oneRequest('delete', {
+    messages: [{ inbox: '__proto__', id: 'proto-copy' }],
+  }));
+  const withoutProto = previewActions(messages([homeCopy]), oneRequest('delete', {
+    messages: [{ inbox: 'home', id: 'home-copy' }],
+  }));
+  const output = resultMessage(withProto, 'delete', 'proto-copy');
+  assert.deepEqual(output.inboxes, ['__proto__', 'home']);
+  assert.equal(Object.hasOwn(output.ids, '__proto__'), true);
+  assert.deepEqual(output.ids.__proto__, ['proto-copy']);
+  const canonical = documentedCanonicalForm(withProto.actions, withProto.unsubscribe);
+  assert.deepEqual(canonical.actions.find(value => value.action === 'delete').messages, [
+    { inbox: '__proto__', id: 'proto-copy' },
+    { inbox: 'home', id: 'home-copy' },
+  ]);
+  assert.equal(withProto.seal, createHash('sha256').update(JSON.stringify(canonical)).digest('hex'));
+  assert.notEqual(withProto.seal, withoutProto.seal);
+});
+
 test('9. seal changes only with executable work, not order or request positions', () => {
   const one = mail({ id: 'one', inbox: 'a', from: { address: 'one@fernway.example' } });
   const two = headerMail('two', 'Two', '<https://mailings.example/two>', 'List-Unsubscribe=One-Click', { inbox: 'b' });
@@ -209,7 +283,7 @@ test('9. seal changes only with executable work, not order or request positions'
     { ...base.requests[0], position: 2 },
     base.requests[2],
   ]);
-  const recomputed = createHash('sha256').update(JSON.stringify(canonicalActionForm(base.actions, base.unsubscribe))).digest('hex');
+  const recomputed = createHash('sha256').update(JSON.stringify(documentedCanonicalForm(base.actions, base.unsubscribe))).digest('hex');
   assert.equal(base.seal, recomputed);
   const oneDelete = previewActions(messages([one]), oneRequest('delete', { messages: [{ inbox: 'a', id: 'one' }] }));
   assert.notEqual(oneDelete.seal, planFor(one, 'spam').seal);
@@ -260,22 +334,29 @@ test('11. hostile valid text is unchanged in JSON and escaped onto one summary l
   assert.equal(text.split('\n').filter(line => line.includes('<script>')).length, 1);
 });
 
-test('12. no clock or local-time method is read', () => {
+test('12. no clock or elapsed-time source is read', () => {
   const RealDate = Date;
-  const methods = ['getFullYear', 'getMonth', 'getDate', 'getHours', 'getMinutes', 'getSeconds', 'getTimezoneOffset'];
   class NoClockDate extends RealDate {
-    constructor(...args) {
-      if (args.length === 0) throw new Error('clock read');
-      super(...args);
-    }
+    constructor() { throw new Error('Date constructor read'); }
     static now() { throw new Error('clock read'); }
   }
-  for (const name of methods) NoClockDate.prototype[name] = () => { throw new Error(`local time read: ${name}`); };
+  const performanceHadOwnNow = Object.hasOwn(performance, 'now');
+  const performanceNow = Object.getOwnPropertyDescriptor(performance, 'now');
+  const realHrtime = process.hrtime;
+  const noHrtime = () => { throw new Error('process.hrtime read'); };
+  noHrtime.bigint = () => { throw new Error('process.hrtime.bigint read'); };
   globalThis.Date = NoClockDate;
+  Object.defineProperty(performance, 'now', {
+    value: () => { throw new Error('performance.now read'); }, configurable: true,
+  });
+  process.hrtime = noHrtime;
   try {
     assert.equal(planFor(mail({ id: 'clock' }), 'delete').schemaVersion, 1);
   } finally {
     globalThis.Date = RealDate;
+    process.hrtime = realHrtime;
+    if (performanceHadOwnNow) Object.defineProperty(performance, 'now', performanceNow);
+    else delete performance.now;
   }
 });
 
@@ -342,12 +423,12 @@ test('edge cases: unsubscribe URIs outside angle brackets are ignored', () => {
 
 test('edge cases: mailto uses first repeated fields and refuses fragments or malformed encoding', () => {
   const repeated = planFor(headerMail('repeated', 'Repeated',
-    '<mailto:first@mailings.example,second@mailings.example?subject=First&subject=Second&body=One&body=Two>'));
+    '<mailto:first@mailings.example?subject=First&subject=Second&body=One&body=Two>'));
   assert.deepEqual(repeated.unsubscribe[0], {
     key: 'address:repeated@mailings.example',
     label: 'Repeated',
     method: 'mailto',
-    to: ['first@mailings.example', 'second@mailings.example'],
+    to: ['first@mailings.example'],
     subject: 'First',
     body: 'One',
   });
@@ -357,13 +438,65 @@ test('edge cases: mailto uses first repeated fields and refuses fragments or mal
     '<mailto:leave@mailings.example?subject=%ZZ>')).unsubscribe[0].method, 'none');
 });
 
-test('edge cases: mailto permits empty recipients, subject and body', () => {
-  assert.deepEqual(planFor(headerMail('empty-mailto', 'Empty mailto', '<mailto:>')).unsubscribe[0], {
-    key: 'address:empty-mailto@mailings.example',
-    label: 'Empty mailto',
+test('mailto rejects CRLF decoded from the subject', () => {
+  assert.equal(planFor(headerMail('subject-crlf', 'Subject CRLF',
+    '<mailto:list@example.org?subject=hi%0D%0ABcc:%20v@evil.example>')).unsubscribe[0].method, 'none');
+});
+
+test('mailto rejects CRLF decoded inside the local part', () => {
+  assert.equal(planFor(headerMail('local-crlf', 'Local CRLF',
+    '<mailto:list%0D%0A@example.org>')).unsubscribe[0].method, 'none');
+});
+
+test('mailto rejects CRLF decoded after the domain', () => {
+  assert.equal(planFor(headerMail('domain-crlf', 'Domain CRLF',
+    '<mailto:list@example.org%0D%0ABcc:v@evil.example>')).unsubscribe[0].method, 'none');
+});
+
+test('mailto rejects a percent-encoded recipient separator', () => {
+  assert.equal(planFor(headerMail('encoded-comma', 'Encoded comma',
+    '<mailto:list@example.org%2Cv@evil.example>')).unsubscribe[0].method, 'none');
+});
+
+test('mailto rejects a recipient list', () => {
+  assert.equal(planFor(headerMail('recipient-list', 'Recipient list',
+    '<mailto:a@mailings.example,b@mailings.example?subject=Stop&body=Please>')).unsubscribe[0].method, 'none');
+});
+
+test('mailto rejects an invalid address', () => {
+  assert.equal(planFor(headerMail('invalid-address', 'Invalid address',
+    '<mailto:not-an-address>')).unsubscribe[0].method, 'none');
+});
+
+test('mailto rejects an empty recipient', () => {
+  assert.equal(planFor(headerMail('empty-mailto', 'Empty mailto', '<mailto:>')).unsubscribe[0].method, 'none');
+});
+
+test('mailto rejects a to query field', () => {
+  assert.equal(planFor(headerMail('query-to', 'Query to',
+    '<mailto:list@example.org?to=other@example.org>')).unsubscribe[0].method, 'none');
+});
+
+test('mailto accepts one valid recipient and subject', () => {
+  assert.deepEqual(planFor(headerMail('normal-mailto', 'Normal mailto',
+    '<mailto:unsubscribe@example.org?subject=unsubscribe>')).unsubscribe[0], {
+    key: 'address:normal-mailto@mailings.example',
+    label: 'Normal mailto',
     method: 'mailto',
-    to: [],
-    subject: '',
+    to: ['unsubscribe@example.org'],
+    subject: 'unsubscribe',
+    body: '',
+  });
+});
+
+test('mailto tolerates a trailing ampersand', () => {
+  assert.deepEqual(planFor(headerMail('trailing-ampersand', 'Trailing ampersand',
+    '<mailto:unsubscribe@example.org?subject=unsubscribe&>')).unsubscribe[0], {
+    key: 'address:trailing-ampersand@mailings.example',
+    label: 'Trailing ampersand',
+    method: 'mailto',
+    to: ['unsubscribe@example.org'],
+    subject: 'unsubscribe',
     body: '',
   });
 });

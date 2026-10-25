@@ -5,7 +5,8 @@ export const PILE_NAMES = Object.freeze({
 });
 export const ACTIONS = Object.freeze(['unsubscribe', 'spam', 'delete']);
 export const COMMON_MAIL_DOMAINS = Object.freeze([
-  'aol.com', 'gmail.com', 'hotmail.com', 'icloud.com', 'live.com', 'outlook.com', 'proton.me', 'protonmail.com', 'yahoo.com',
+  'aol.com', 'gmail.com', 'googlemail.com', 'hotmail.com', 'icloud.com', 'live.com', 'mac.com', 'me.com', 'msn.com',
+  'outlook.com', 'proton.me', 'protonmail.com', 'yahoo.com', 'ymail.com',
 ]);
 export const LIMITS = Object.freeze({
   fileBytes: 5 * 1024 * 1024,
