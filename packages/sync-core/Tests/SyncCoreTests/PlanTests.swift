@@ -615,6 +615,79 @@ final class SyncCorePlanTests: XCTestCase {
         XCTAssertEqual(live(b, "note").stamp, purge.stamp)
     }
 
+    func testPurgeCleanupStaysUntilTheAppConfirms() throws {
+        let cloud = FakeCloud()
+        let a = Peer("phone-a", cloud: cloud)
+        let b = Peer("phone-b", cloud: cloud)
+        a.boot()
+        b.boot()
+        _ = try a.edit("note", payload: text("base"))
+        try syncAll([a, b])
+        let fromA = try a.edit("note", payload: text("alpha-secret"))
+        for _ in 0..<3 { _ = try b.device.nextStamp() }
+        _ = try b.edit("note", payload: text("beta"))
+        try b.sync()
+        var captured: Data?
+        a.holdSaves { request in
+            captured = request.checkpointBeforeRequest
+        }
+        try a.sync(order: .fetchThenUpload)
+        let checkpoint = try XCTUnwrap(captured)
+        let restored = try SyncDevice.restore(from: checkpoint)
+        XCTAssertTrue(restored.conflictCopies().contains { $0.payload == fromA.payload })
+        let purge = SyncRecord(
+            id: "note",
+            type: "task-list",
+            stamp: VersionStamp(counter: 9, wallTimeMilliseconds: 1, deviceID: a.device.deviceID),
+            purged: true,
+            payload: Data()
+        )
+        a.store.save(purge)
+        try a.adopt(checkpoint)
+        var notices: [AppSaveRequest] = []
+        a.holdSaves { notices.append($0) }
+        try a.device.reconcile(a.store.all())
+        XCTAssertTrue(notices.contains { $0.conflictCopiesToRemove.contains { $0.payload == fromA.payload } })
+        XCTAssertEqual(a.device.status().kind, .needsAttention)
+        let kept = a.device.saveCheckpoint()
+        notices.removeAll()
+        try a.adopt(kept)
+        a.holdSaves { notices.append($0) }
+        try a.device.reconcile(a.store.all())
+        XCTAssertTrue(notices.contains { $0.conflictCopiesToRemove.contains { $0.payload == fromA.payload } })
+        a.device.confirmConflictCopiesStored(recordIDs: ["note"])
+        let cleared = a.device.saveCheckpoint()
+        notices.removeAll()
+        try a.adopt(cleared)
+        a.holdSaves { notices.append($0) }
+        try a.device.reconcile(a.store.all())
+        XCTAssertFalse(notices.contains { !$0.conflictCopiesToRemove.isEmpty })
+        XCTAssertNotEqual(a.device.status().kind, .needsAttention)
+        XCTAssertFalse(holds(fromA.payload, peer: a))
+    }
+
+    func testMergeLawsCompareNormalizedContents() throws {
+        var nonce: UInt8 = 0
+        func seal(_ plain: Data) -> Data {
+            nonce &+= 1
+            var sealed = plain
+            sealed.append(nonce)
+            return sealed
+        }
+        func open(_ sealed: Data) -> Data { sealed.dropLast() }
+        let merge: MergeFunction = { left, right in
+            let plain = bag(tokens(open(left.payload)).union(tokens(open(right.payload))))
+            return MergeOutput(payload: seal(plain))
+        }
+        let samples = ["A", "B", "C"].enumerated().map { index, name in
+            var record = sample(name, counter: UInt64(index + 1))
+            record.payload = seal(record.payload)
+            return record
+        }
+        XCTAssertTrue(MergeLaws.check(merge, samples: samples, normalize: open).isEmpty)
+        XCTAssertFalse(MergeLaws.check(merge, samples: samples).isEmpty)
+    }
+
     func testPurgeDropsHeldConflictCopies() throws {
         let cloud = FakeCloud()
         let a = Peer("phone-a", cloud: cloud)
@@ -641,7 +714,9 @@ final class SyncCorePlanTests: XCTestCase {
         )
         try a.device.queueLocalEdit(purge)
         XCTAssertFalse(a.device.conflictCopies().contains { $0.id == "note" })
-        XCTAssertTrue(notices.contains { $0.record.purged && $0.conflictCopies.isEmpty })
+        XCTAssertTrue(notices.contains { $0.conflictCopiesToRemove.contains { $0.payload == fromA.payload } })
+        XCTAssertEqual(a.device.status().kind, .needsAttention)
+        a.device.confirmConflictCopiesStored(recordIDs: ["note"])
         XCTAssertNotEqual(a.device.status().kind, .needsAttention)
         try a.device.confirmLocalSave(purge)
         a.resumeSaves()

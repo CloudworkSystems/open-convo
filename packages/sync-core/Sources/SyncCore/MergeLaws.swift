@@ -37,18 +37,23 @@ public struct MergeLawViolation: Equatable, Sendable {
 /// `samples` should be alternate copies of the same record. Intermediate
 /// copies keep the later of the two input stamps so a stamp-aware merge
 /// still sees a total order.
+///
+/// `normalize` turns a payload into the decrypted bytes the laws compare.
+/// A real decrypt-merge-encrypt function can pass the function that strips
+/// its fresh nonce. The default compares the bytes as they are.
 public enum MergeLaws {
     public static func check(
         _ merge: MergeFunction,
-        samples: [SyncRecord]
+        samples: [SyncRecord],
+        normalize: (Data) -> Data = { $0 }
     ) -> [MergeLawViolation] {
         guard samples.count >= 2 else {
             return [MergeLawViolation(law: .commutative, detail: "Need at least two copies to check the laws.")]
         }
         var violations: [MergeLawViolation] = []
         for left in samples {
-            let same = contents(merge(left, left))
-            if same != contents(of: left) {
+            let same = contents(merge(left, left), normalize: normalize)
+            if same != contents(of: left, normalize: normalize) {
                 violations.append(MergeLawViolation(
                     law: .idempotent,
                     detail: "Merging a copy with itself changed the contents."
@@ -62,7 +67,7 @@ public enum MergeLaws {
                 let right = samples[other]
                 let forward = merge(left, right)
                 let backward = merge(right, left)
-                if contents(forward) != contents(backward) {
+                if contents(forward, normalize: normalize) != contents(backward, normalize: normalize) {
                     violations.append(MergeLawViolation(
                         law: .commutative,
                         detail: "merge(a, b) and merge(b, a) differ for \(left.id)."
@@ -70,7 +75,8 @@ public enum MergeLaws {
                 }
                 let foldedLeft = merge(record(forward, left, right), left)
                 let foldedRight = merge(record(forward, left, right), right)
-                if contents(foldedLeft) != contents(forward) || contents(foldedRight) != contents(forward) {
+                if contents(foldedLeft, normalize: normalize) != contents(forward, normalize: normalize)
+                    || contents(foldedRight, normalize: normalize) != contents(forward, normalize: normalize) {
                     violations.append(MergeLawViolation(
                         law: .idempotent,
                         detail: "Merging a copy that was already folded in changed the contents."
@@ -87,7 +93,7 @@ public enum MergeLaws {
                         let c = samples[third]
                         let left = merge(record(merge(a, b), a, b), c)
                         let right = merge(a, record(merge(b, c), b, c))
-                        if contents(left) != contents(right) {
+                        if contents(left, normalize: normalize) != contents(right, normalize: normalize) {
                             violations.append(MergeLawViolation(
                                 law: .associative,
                                 detail: "merge(merge(a, b), c) and merge(a, merge(b, c)) differ."
@@ -106,12 +112,12 @@ public enum MergeLaws {
         return violations
     }
 
-    private static func contents(_ output: MergeOutput) -> (Data, Bool) {
-        (output.payload, output.purged)
+    private static func contents(_ output: MergeOutput, normalize: (Data) -> Data) -> (Data, Bool) {
+        (normalize(output.payload), output.purged)
     }
 
-    private static func contents(of record: SyncRecord) -> (Data, Bool) {
-        (record.payload, record.purged)
+    private static func contents(of record: SyncRecord, normalize: (Data) -> Data) -> (Data, Bool) {
+        (normalize(record.payload), record.purged)
     }
 
     private static func record(_ output: MergeOutput, _ left: SyncRecord, _ right: SyncRecord) -> SyncRecord {

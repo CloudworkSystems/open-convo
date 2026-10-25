@@ -50,7 +50,10 @@ Laws, judged on the payload and the purged flag:
 - Idempotent: `merge(a, a)` equals `a`, and merging a copy that is already
   folded in changes nothing.
 
-`MergeLaws.check(_:samples:)` reports any break. A type with no merge
+`MergeLaws.check(_:samples:normalize:)` reports any break. `normalize`
+maps a payload to its decrypted bytes, so a function that seals each
+result with a fresh nonce can still be checked. The default compares the
+payload bytes as they stand. A type with no merge
 function keeps the higher stamp and holds the other copy as a conflict until
 the app says it has stored that copy. Sync status is then "needs attention".
 

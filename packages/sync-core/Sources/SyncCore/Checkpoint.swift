@@ -30,6 +30,8 @@ struct CheckpointBody: Codable, Equatable {
     var memory: [String: StoredMemory]
     var conflicts: [SyncRecord]
     var pendingReplacements: [String: PendingReplacement]
+    /// Conflict payloads a purge must still delete from the app's store.
+    var pendingCleanups: [SyncRecord]
 }
 
 enum CheckpointCodec {

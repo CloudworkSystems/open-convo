@@ -23,6 +23,7 @@ public final class SyncDevice {
     private var memory: [String: RecordMemory] = [:]
     private var conflicts: [SyncRecord] = []
     private var pendingReplacements: [String: PendingReplacement] = [:]
+    private var pendingCleanups: [SyncRecord] = []
     private var local: [String: SyncRecord] = [:]
     private var openPage: OpenPage?
     private var merges: [String: MergeFunction] = [:]
@@ -50,6 +51,7 @@ public final class SyncDevice {
         }
         device.conflicts = body.conflicts
         device.pendingReplacements = body.pendingReplacements
+        device.pendingCleanups = body.pendingCleanups
         device.outbox = body.outbox.map {
             Entry(
                 record: $0.record,
@@ -103,7 +105,8 @@ public final class SyncDevice {
                 )
             },
             conflicts: conflicts,
-            pendingReplacements: pendingReplacements
+            pendingReplacements: pendingReplacements,
+            pendingCleanups: pendingCleanups
         )
         let data = CheckpointCodec.encode(body)
         lastCheckpoint = data
@@ -128,10 +131,7 @@ public final class SyncDevice {
         guard hasCheckpoint else { throw SyncError.checkpointRequired }
         try validateLocal(record)
         let record = withoutPurgedPayload(record)
-        let droppedConflict = record.purged && conflicts.contains { $0.id == record.id }
-        if record.purged {
-            discardRecordConflicts(record.id)
-        }
+        let cleanup = record.purged ? stagePurgeCleanup(for: record.id) : []
         observe(record.stamp)
         editEpoch += 1
         outbox.removeAll { $0.record.id == record.id }
@@ -145,13 +145,14 @@ public final class SyncDevice {
             epoch: editEpoch
         ))
         local[record.id] = record
-        if droppedConflict {
+        if !cleanup.isEmpty {
             let checkpoint = saveCheckpoint()
             deliver(AppSaveRequest(
                 record: record,
                 replaceLocalRecord: false,
                 conflictCopies: [],
-                checkpointBeforeRequest: checkpoint
+                checkpointBeforeRequest: checkpoint,
+                conflictCopiesToRemove: cleanup
             ))
         }
     }
@@ -187,8 +188,10 @@ public final class SyncDevice {
         if let recordIDs {
             let ids = Set(recordIDs)
             conflicts.removeAll { ids.contains($0.id) }
+            pendingCleanups.removeAll { ids.contains($0.id) }
         } else {
             conflicts.removeAll()
+            pendingCleanups.removeAll()
         }
     }
 
@@ -218,7 +221,17 @@ public final class SyncDevice {
         local = byID
         for record in byID.values {
             if record.purged {
-                discardRecordConflicts(record.id)
+                let cleanup = stagePurgeCleanup(for: record.id)
+                if !cleanup.isEmpty {
+                    let checkpoint = saveCheckpoint()
+                    deliver(AppSaveRequest(
+                        record: withoutPurgedPayload(record),
+                        replaceLocalRecord: false,
+                        conflictCopies: [],
+                        checkpointBeforeRequest: checkpoint,
+                        conflictCopiesToRemove: cleanup
+                    ))
+                }
             }
             guard record.stamp.deviceID == deviceID else { continue }
             if let pending = pendingReplacements[record.id], pending.losingStamp == record.stamp {
@@ -312,6 +325,13 @@ public final class SyncDevice {
         let relevantConflicts = conflicts.filter { record in
             guard let type else { return true }
             return record.type == type
+        }
+        let relevantCleanups = pendingCleanups.filter { record in
+            guard let type else { return true }
+            return record.type == type
+        }
+        if !relevantCleanups.isEmpty {
+            return SyncStatus(kind: .needsAttention, reason: "A purged copy still needs to be deleted.")
         }
         if !relevantConflicts.isEmpty || (type == nil && blockedReason != nil) {
             let reason = blockedReason ?? "A conflicting edit was kept and needs a look."
@@ -695,9 +715,16 @@ public final class SyncDevice {
         conflicts.filter { $0.id == id }
     }
 
-    private func discardRecordConflicts(_ id: String) {
+    /// Moves conflict copies for a purged record into a checkpointed cleanup
+/// list. They stay there until the app confirms it deleted them.
+    private func stagePurgeCleanup(for id: String) -> [SyncRecord] {
+        let removed = conflicts.filter { $0.id == id }
         conflicts.removeAll { $0.id == id }
         pendingReplacements.removeValue(forKey: id)
+        for copy in removed where !pendingCleanups.contains(where: { $0.id == copy.id && $0.stamp == copy.stamp }) {
+            pendingCleanups.append(copy)
+        }
+        return pendingCleanups.filter { $0.id == id }
     }
 
     /// Last-seen follows the newest fetched revision whose earlier revisions

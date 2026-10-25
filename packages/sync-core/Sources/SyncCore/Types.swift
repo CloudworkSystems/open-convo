@@ -100,6 +100,9 @@ public struct AppSaveRequest: Sendable {
     /// When true, the app's stored record for this id must become `record`.
     public var replaceLocalRecord: Bool
     public var conflictCopies: [SyncRecord]
+    /// Conflict copies the app still has stored and must delete. They stay
+    /// in the checkpoint until `confirmConflictCopiesStored`.
+    public var conflictCopiesToRemove: [SyncRecord]
     /// Checkpoint written before this request. A conflict copy in here is
     /// already durable if the app is being asked to replace its record.
     public var checkpointBeforeRequest: Data
@@ -108,12 +111,14 @@ public struct AppSaveRequest: Sendable {
         record: SyncRecord,
         replaceLocalRecord: Bool,
         conflictCopies: [SyncRecord],
-        checkpointBeforeRequest: Data
+        checkpointBeforeRequest: Data,
+        conflictCopiesToRemove: [SyncRecord] = []
     ) {
         self.record = record
         self.replaceLocalRecord = replaceLocalRecord
         self.conflictCopies = conflictCopies
         self.checkpointBeforeRequest = checkpointBeforeRequest
+        self.conflictCopiesToRemove = conflictCopiesToRemove
     }
 }
 
