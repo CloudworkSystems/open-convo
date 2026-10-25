@@ -435,6 +435,9 @@ breaking one is a stop-and-report event.
   finishable in one to two days.
 - The pull request says what was built, how to run the tests, what was not
   done, and anything unsure.
+- *Added October 25 (agreed change):* the report supports macOS and Linux
+  only, and it refuses an output path that contains a backslash, a colon or
+  a trailing dot.
 
 ## If GrokBot Stops
 
