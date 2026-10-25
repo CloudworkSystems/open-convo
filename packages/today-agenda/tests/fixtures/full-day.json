@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-26",
+  "timeZone": "America/New_York",
+  "now": "2026-10-26T11:00:00-04:00",
+  "events": [
+    {
+      "key": "pickup",
+      "title": "School pickup",
+      "start": "2026-10-26T15:15:00-04:00",
+      "end": "2026-10-26T15:45:00-04:00",
+      "allDay": false,
+      "calendar": "Family",
+      "location": "North gate"
+    },
+    {
+      "key": "review",
+      "title": "Design review",
+      "start": "2026-10-26T14:00:00-04:00",
+      "end": "2026-10-26T15:30:00-04:00",
+      "allDay": false,
+      "calendar": "Work",
+      "location": "Studio",
+      "status": "confirmed"
+    },
+    {
+      "key": "supplier",
+      "title": "Supplier call",
+      "start": "2026-10-26T14:00:00-04:00",
+      "end": "2026-10-26T14:45:00-04:00",
+      "allDay": false,
+      "calendar": "Work",
+      "status": "tentative"
+    },
+    {
+      "key": "bell",
+      "title": "Noon bell",
+      "start": "2026-10-26T12:00:00-04:00",
+      "end": "2026-10-26T12:00:00-04:00",
+      "allDay": false,
+      "calendar": "Work"
+    },
+    {
+      "key": "brief",
+      "title": "Morning briefing",
+      "start": "2026-10-26T09:00:00-04:00",
+      "end": "2026-10-26T09:30:00-04:00",
+      "allDay": false,
+      "calendar": "Work"
+    },
+    {
+      "key": "bake",
+      "title": "Overnight bake",
+      "start": "2026-10-25T23:00:00-04:00",
+      "end": "2026-10-26T00:30:00-04:00",
+      "allDay": false,
+      "calendar": "Family"
+    },
+    {
+      "key": "fair",
+      "title": "Town fair",
+      "start": "2026-10-26",
+      "end": "2026-10-27",
+      "allDay": true,
+      "calendar": "Family",
+      "location": "River park"
+    },
+    {
+      "key": "dropped",
+      "title": "Dropped standup",
+      "start": "2026-10-26T11:00:00-04:00",
+      "end": "2026-10-26T11:30:00-04:00",
+      "allDay": false,
+      "calendar": "Work",
+      "status": "cancelled"
+    }
+  ],
+  "tasks": [
+    { "id": "someday", "title": "Learn a new stitch" },
+    { "id": "later", "title": "Plan next month", "due": "2026-11-02" },
+    { "id": "notes", "title": "File the notes", "due": "2026-10-26" },
+    { "id": "walk", "title": "Outline the walkthrough", "due": "2026-10-26", "dueTime": "2026-10-26T16:00:00-04:00", "priority": "high" },
+    { "id": "draft", "title": "Send the draft", "due": "2026-10-26", "dueTime": "2026-10-26T09:00:00-04:00" },
+    { "id": "milk", "title": "Order oat milk", "due": "2026-10-25" },
+    { "id": "rent", "title": "Pay the studio rent", "due": "2026-10-20", "priority": "high", "list": "Bills" }
+  ],
+  "habits": [
+    { "id": "run", "name": "Easy run", "state": "rest" },
+    { "id": "water", "name": "Water the fern", "state": "done" },
+    { "id": "read", "name": "Read a chapter", "state": "open" },
+    { "id": "stretch", "name": "Stretch", "state": "open" }
+  ],
+  "lists": [
+    { "id": "packing", "name": "Packing", "open": 0 },
+    { "id": "hardware", "name": "Hardware", "open": 2 },
+    { "id": "groceries", "name": "Groceries", "open": 7 }
+  ]
+}

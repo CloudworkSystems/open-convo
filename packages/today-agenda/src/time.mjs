@@ -1,0 +1,252 @@
+// Civil dates and instants. Date.now, an argument-less Date and the local-time
+// Date methods are never used. Wall times come from Intl with an explicit
+// IANA zone and Latin digits, so the machine's zone and locale cannot change
+// a result.
+
+const formatters = new Map();
+
+function formatter(timeZone) {
+  let known = formatters.get(timeZone);
+  if (!known) {
+    known = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      numberingSystem: 'latn',
+      hourCycle: 'h23',
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    formatters.set(timeZone, known);
+  }
+  return known;
+}
+
+export function isIanaTimeZone(timeZone) {
+  if (typeof timeZone !== 'string' || timeZone.length < 1 || timeZone.length > 200) return false;
+  try {
+    formatter(timeZone);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function zonedParts(ms, timeZone) {
+  const bag = { year: 0, month: 0, day: 0, hour: 0, minute: 0, second: 0 };
+  for (const part of formatter(timeZone).formatToParts(ms)) {
+    if (Object.hasOwn(bag, part.type)) bag[part.type] = Number(part.value);
+  }
+  // A few ICU builds report midnight as hour 24 on the day that just ended.
+  if (bag.hour === 24) {
+    bag.hour = 0;
+    const next = new Date(Date.UTC(bag.year, bag.month - 1, bag.day) + 86_400_000);
+    bag.year = next.getUTCFullYear();
+    bag.month = next.getUTCMonth() + 1;
+    bag.day = next.getUTCDate();
+  }
+  return bag;
+}
+
+export function validYearMonthDay(year, month, day) {
+  if (!Number.isInteger(year) || year < 1 || year > 9999) return false;
+  if (!Number.isInteger(month) || month < 1 || month > 12) return false;
+  if (!Number.isInteger(day) || day < 1 || day > 31) return false;
+  const utc = new Date(Date.UTC(year, month - 1, day));
+  return utc.getUTCFullYear() === year && utc.getUTCMonth() === month - 1 && utc.getUTCDate() === day;
+}
+
+export function parseCivilDate(value) {
+  if (typeof value !== 'string' || !/^(\d{4})-(\d{2})-(\d{2})$/.test(value)) return null;
+  const year = Number(value.slice(0, 4));
+  const month = Number(value.slice(5, 7));
+  const day = Number(value.slice(8, 10));
+  if (!validYearMonthDay(year, month, day)) return null;
+  return { year, month, day, text: value };
+}
+
+export function addCivilDays(iso, days) {
+  const date = parseCivilDate(iso);
+  if (!date) return null;
+  const utc = new Date(Date.UTC(date.year, date.month - 1, date.day + days));
+  const year = utc.getUTCFullYear();
+  const month = utc.getUTCMonth() + 1;
+  const day = utc.getUTCDate();
+  return `${String(year).padStart(4, '0')}-${pad(month)}-${pad(day)}`;
+}
+
+const INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})$/;
+
+// Milliseconds since the epoch, or null. Extra fraction digits past
+// milliseconds are dropped. The calendar fields are checked, so a rolled
+// date such as February 31 is refused.
+export function parseInstant(value) {
+  if (typeof value !== 'string') return null;
+  const match = INSTANT.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  const fraction = match[7] ?? '';
+  const zone = match[8];
+  if (!validYearMonthDay(year, month, day)) return null;
+  if (hour > 23 || minute > 59 || second > 59) return null;
+  let offsetMinutes = 0;
+  if (zone !== 'Z') {
+    const sign = zone[0] === '-' ? -1 : 1;
+    const offsetHour = Number(zone.slice(1, 3));
+    const offsetMinute = Number(zone.slice(4, 6));
+    if (offsetHour > 23 || offsetMinute > 59) return null;
+    offsetMinutes = sign * (offsetHour * 60 + offsetMinute);
+  }
+  const millis = fraction.length === 0 ? 0 : Number(fraction.slice(0, 3).padEnd(3, '0'));
+  return Date.UTC(year, month - 1, day, hour, minute, second, millis) - offsetMinutes * 60_000;
+}
+
+export function formatInstant(ms) {
+  const date = new Date(ms);
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth() + 1;
+  const day = date.getUTCDate();
+  const hour = date.getUTCHours();
+  const minute = date.getUTCMinutes();
+  const second = date.getUTCSeconds();
+  const millis = date.getUTCMilliseconds();
+  const base = `${String(year).padStart(4, '0')}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:${pad(second)}`;
+  if (millis === 0) return `${base}Z`;
+  return `${base}.${String(millis).padStart(3, '0')}Z`;
+}
+
+function pad(value) {
+  return String(value).padStart(2, '0');
+}
+
+export function formatCivil(parts) {
+  return `${String(parts.year).padStart(4, '0')}-${pad(parts.month)}-${pad(parts.day)}`;
+}
+
+// Whole minutes drop the seconds. A non-zero second is kept so a 30-second
+// instant is not shown as the minute before it.
+export function formatWall(parts) {
+  const clock = `${pad(parts.hour)}:${pad(parts.minute)}`;
+  return parts.second ? `${clock}:${pad(parts.second)}` : clock;
+}
+
+export function formatLocal(parts) {
+  return `${formatCivil(parts)}T${formatWall(parts)}`;
+}
+
+export function civilDate(ms, timeZone) {
+  return formatCivil(zonedParts(ms, timeZone));
+}
+
+export function wallClock(ms, timeZone) {
+  return formatWall(zonedParts(ms, timeZone));
+}
+
+export function localDateTime(ms, timeZone) {
+  return formatLocal(zonedParts(ms, timeZone));
+}
+
+function matches(ms, year, month, day, hour, minute, second, timeZone) {
+  const parts = zonedParts(ms, timeZone);
+  return parts.year === year && parts.month === month && parts.day === day
+    && parts.hour === hour && parts.minute === minute && parts.second === second;
+}
+
+function offsetMs(instant, timeZone) {
+  const parts = zonedParts(instant, timeZone);
+  const asUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  return asUtc - instant;
+}
+
+// A fall-back hour happens twice, a DST delta apart. Keep the earlier instant.
+function preferEarlier(instant, year, month, day, hour, minute, second, timeZone) {
+  let best = instant;
+  for (const minutes of [30, 45, 60, 90, 120]) {
+    const candidate = instant - minutes * 60_000;
+    if (candidate < best && matches(candidate, year, month, day, hour, minute, second, timeZone)) {
+      best = candidate;
+    }
+  }
+  return best;
+}
+
+function tryExact(year, month, day, hour, minute, second, timeZone) {
+  const target = Date.UTC(year, month - 1, day, hour, minute, second);
+  let instant = target;
+  let previous = null;
+  for (let i = 0; i < 4; i += 1) {
+    const next = target - offsetMs(instant, timeZone);
+    // A spring-forward gap makes the offset guess oscillate. Give up and let
+    // the caller apply the offset from before the gap.
+    if (next === previous) return null;
+    previous = instant;
+    instant = next;
+    if (matches(instant, year, month, day, hour, minute, second, timeZone)) {
+      return preferEarlier(instant, year, month, day, hour, minute, second, timeZone);
+    }
+  }
+  if (matches(instant, year, month, day, hour, minute, second, timeZone)) {
+    return preferEarlier(instant, year, month, day, hour, minute, second, timeZone);
+  }
+  return null;
+}
+
+function shiftMinutes(year, month, day, hour, minute, delta) {
+  const utc = new Date(Date.UTC(year, month - 1, day, hour, minute + delta));
+  return {
+    year: utc.getUTCFullYear(),
+    month: utc.getUTCMonth() + 1,
+    day: utc.getUTCDate(),
+    hour: utc.getUTCHours(),
+    minute: utc.getUTCMinutes(),
+  };
+}
+
+// Place a local clock time in a zone. A time that does not exist is read
+// with the offset in effect before the gap, so 02:30 on a spring-forward
+// morning lands an hour later on the clock (03:30 in America/New_York).
+// A time that happens twice is the earlier one.
+export function zonedLocalToUtc(year, month, day, hour, minute, second, timeZone) {
+  const exact = tryExact(year, month, day, hour, minute, second, timeZone);
+  if (exact !== null) return exact;
+  for (let back = 1; back <= 360; back += 1) {
+    const prev = shiftMinutes(year, month, day, hour, minute, -back);
+    if (!validYearMonthDay(prev.year, prev.month, prev.day)) continue;
+    const found = tryExact(prev.year, prev.month, prev.day, prev.hour, prev.minute, second, timeZone);
+    if (found === null) continue;
+    const prevAsUtc = Date.UTC(prev.year, prev.month - 1, prev.day, prev.hour, prev.minute, second);
+    const offset = prevAsUtc - found;
+    return Date.UTC(year, month - 1, day, hour, minute, second) - offset;
+  }
+  return null;
+}
+
+export function startOfCivilDay(iso, timeZone) {
+  const date = parseCivilDate(iso);
+  if (!date) return null;
+  return zonedLocalToUtc(date.year, date.month, date.day, 0, 0, 0, timeZone);
+}
+
+const CLOCK = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+export function parseClock(value) {
+  if (typeof value !== 'string') return null;
+  const match = CLOCK.exec(value);
+  if (!match) return null;
+  return { hour: Number(match[1]), minute: Number(match[2]), text: value };
+}
+
+export function clockOnDate(iso, clock, timeZone) {
+  const date = parseCivilDate(iso);
+  const time = parseClock(clock);
+  if (!date || !time) return null;
+  return zonedLocalToUtc(date.year, date.month, date.day, time.hour, time.minute, 0, timeZone);
+}
