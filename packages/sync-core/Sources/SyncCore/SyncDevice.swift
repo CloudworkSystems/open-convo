@@ -128,6 +128,10 @@ public final class SyncDevice {
         guard hasCheckpoint else { throw SyncError.checkpointRequired }
         try validateLocal(record)
         let record = withoutPurgedPayload(record)
+        let droppedConflict = record.purged && conflicts.contains { $0.id == record.id }
+        if record.purged {
+            discardRecordConflicts(record.id)
+        }
         observe(record.stamp)
         editEpoch += 1
         outbox.removeAll { $0.record.id == record.id }
@@ -141,6 +145,15 @@ public final class SyncDevice {
             epoch: editEpoch
         ))
         local[record.id] = record
+        if droppedConflict {
+            let checkpoint = saveCheckpoint()
+            deliver(AppSaveRequest(
+                record: record,
+                replaceLocalRecord: false,
+                conflictCopies: [],
+                checkpointBeforeRequest: checkpoint
+            ))
+        }
     }
 
     public func confirmLocalSave(_ record: SyncRecord) throws {
@@ -154,19 +167,18 @@ public final class SyncDevice {
             outbox[index].appSaveConfirmed = true
             outbox[index].record = record
         }
-        guard var page = openPage, page.pending[record.id] != nil else { return }
-        page.pending[record.id] = nil
-        if let tag = page.tags[record.id] {
-            var mem = memory[record.id] ?? RecordMemory()
-            mem.lastSeenChangeTag = tag
-            mem.lastSeenStamp = record.stamp
-            memory[record.id] = mem
-            page.tags[record.id] = nil
-        }
-        openPage = page
-        if page.sealed && page.pending.isEmpty {
+        guard var page = openPage,
+              let index = page.revisions.lastIndex(where: {
+                  $0.record.id == record.id && $0.record.stamp == record.stamp && !$0.confirmed
+              })
+        else { return }
+        page.revisions[index].confirmed = true
+        noteConfirmedRevision(record.id, on: page)
+        if page.sealed && page.revisions.allSatisfy(\.confirmed) {
             tokens[page.zone] = page.token
             openPage = nil
+        } else {
+            openPage = page
         }
     }
 
@@ -204,6 +216,9 @@ public final class SyncDevice {
         }
         local = byID
         for record in byID.values {
+            if record.purged {
+                discardRecordConflicts(record.id)
+            }
             guard record.stamp.deviceID == deviceID else { continue }
             if let pending = pendingReplacements[record.id], pending.losingStamp == record.stamp {
                 continue
@@ -308,9 +323,10 @@ public final class SyncDevice {
             guard let type else { return true }
             return entry.record.type == type
         }
-        let waitingPage = openPage?.pending.values.contains { record in
+        let waitingPage = openPage?.revisions.contains { revision in
+            guard !revision.confirmed else { return false }
             guard let type else { return true }
-            return record.type == type
+            return revision.record.type == type
         } ?? false
         if waitingOutbox || waitingPage {
             return SyncStatus(kind: .waiting, reason: "Changes are waiting to upload.")
@@ -377,14 +393,14 @@ public final class SyncDevice {
                 tokens[zone.raw] = page.token
                 return
             }
-            openPage = OpenPage(zone: zone.raw, token: page.token, pending: [:], tags: [:], sealed: false)
+            openPage = OpenPage(zone: zone.raw, token: page.token, revisions: [], sealed: false)
             for change in page.changes {
                 try apply(change, zone: zone)
             }
             if var current = openPage {
                 current.sealed = true
                 openPage = current
-                if current.pending.isEmpty {
+                if current.revisions.allSatisfy(\.confirmed) {
                     tokens[zone.raw] = current.token
                     openPage = nil
                 } else {
@@ -588,8 +604,7 @@ public final class SyncDevice {
 
     private func deliverSave(_ record: SyncRecord, tag: String, zone: ZoneName, checkpoint: Data) {
         if var page = openPage {
-            page.pending[record.id] = record
-            page.tags[record.id] = tag
+            page.revisions.append(PendingRevision(record: record, tag: tag, confirmed: false))
             openPage = page
         }
         deliver(AppSaveRequest(
@@ -669,6 +684,27 @@ public final class SyncDevice {
         conflicts.filter { $0.id == id }
     }
 
+    private func discardRecordConflicts(_ id: String) {
+        conflicts.removeAll { $0.id == id }
+        pendingReplacements.removeValue(forKey: id)
+    }
+
+    /// Last-seen follows the newest fetched revision whose earlier revisions
+    /// on this page are already confirmed. A later unsaved revision does not
+    /// move it, and does not let the page token advance.
+    private func noteConfirmedRevision(_ id: String, on page: OpenPage) {
+        var latest: PendingRevision?
+        for revision in page.revisions where revision.record.id == id {
+            if !revision.confirmed { break }
+            latest = revision
+        }
+        guard let latest else { return }
+        var mem = memory[id] ?? RecordMemory()
+        mem.lastSeenChangeTag = latest.tag
+        mem.lastSeenStamp = latest.record.stamp
+        memory[id] = mem
+    }
+
     private func validateLocal(_ record: SyncRecord) throws {
         if record.id.isEmpty || record.type.isEmpty {
             throw SyncError.invalidRecord("A record needs an id and a type.")
@@ -714,11 +750,16 @@ private struct RecordMemory {
     var lastSeenStamp: VersionStamp?
 }
 
+private struct PendingRevision {
+    var record: SyncRecord
+    var tag: String
+    var confirmed: Bool
+}
+
 private struct OpenPage {
     var zone: String
     var token: Data
-    var pending: [String: SyncRecord]
-    var tags: [String: String]
+    var revisions: [PendingRevision]
     var sealed: Bool
 }
 
