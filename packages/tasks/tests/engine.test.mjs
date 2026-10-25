@@ -259,6 +259,16 @@ test('6. today, upcoming and overdue match the saved view', () => {
   };
   assert.deepEqual(actual, expected);
   assert.deepEqual(actual.today.map(row => row.id), ['reg', 'call', 'tickets', 'plants', 'book', 'stretch', 'letter']);
+  const later = engine('later-reminder');
+  later.addTask({
+    title: 'Evening letter',
+    due: '2026-03-20',
+    reminders: [{ dateTime: '2026-03-10T17:00', timeZone: ZONE }],
+  }, { taskId: 'evening' });
+  const morning = at('2026-03-10T12:00:00.000Z');
+  const fired = at('2026-03-10T21:00:00.000Z');
+  assert.equal(later.today(morning, ZONE).some(row => row.id === 'evening'), false);
+  assert.equal(later.today(fired, ZONE).some(row => row.id === 'evening'), true);
   assert.deepEqual(actual.overdue.map(row => row.id), ['reg', 'call']);
   assert.equal(actual.today.some(row => row.id === 'finished' || row.id === 'dropped'), false);
   assert.equal(actual.upcoming[1].tasks.find(row => row.id === 'fern').repeatsAfterDone, true);
@@ -464,8 +474,18 @@ test('9. merge keeps both edits, both completions, and a reopened occurrence', (
   one.complete('shared', at('2026-05-04T15:00:00.000Z'), { recordId: 'only' });
   two.importPerson(one.getPerson());
   two.reopen('shared', { recordId: 'reopen-both', now: at('2026-05-04T18:00:00.000Z') });
+  assert.equal(two.history('shared').find(row => row.id === 'only').undone, true);
   const reopened = fork(mergePeople(one.getPerson(), two.getPerson()), 'reopened');
   assert.equal(reopened.task('shared').occurrence, '2026-05-04');
+  assert.equal(reopened.history('shared').find(row => row.id === 'only').undone, true);
+  two.undo();
+  assert.equal(two.history('shared').find(row => row.id === 'only').undone, false);
+  assert.equal(two.task('shared').occurrence, '2026-05-11');
+  const skipped = engine('skip-reopen', T0 + 16);
+  skipped.addTask({ title: 'Skip me', due: '2026-05-11', repeat: { kind: 'weeks', every: 1, mode: 'onSchedule' } }, { taskId: 'skip-me' });
+  skipped.skip('skip-me', at('2026-05-11T15:00:00.000Z'), { recordId: 'skipped' });
+  skipped.reopen('skip-me', { recordId: 'reopen-skip', now: at('2026-05-11T18:00:00.000Z') });
+  assert.equal(skipped.history('skip-me').find(row => row.id === 'skipped').undone, true);
 
   const partialA = engine('partial-a', T0 + 13);
   const partialB = engine('partial-b', T0 - 100);
@@ -477,6 +497,8 @@ test('9. merge keeps both edits, both completions, and a reopened occurrence', (
   for (const [left, right] of [[partialA, partialB], [partialB, partialA]]) {
     const copy = fork(mergePeople(left.getPerson(), right.getPerson()), `part-${left.deviceId}`);
     assert.equal(copy.task('shared').occurrence, '2026-05-11');
+    assert.equal(copy.history('shared').find(row => row.id === 'a1').undone, true);
+    assert.equal(copy.history('shared').find(row => row.id === 'b1').undone, false);
   }
   const sawBoth = fork(partialA.getPerson(), 'saw-both', T0 + 14);
   sawBoth.importPerson(partialB.getPerson());

@@ -275,13 +275,16 @@ function normalizeDayStart(value) {
 function hasTitle(task) {
   return Boolean(task.fields.title);
 }
-function countingRecords(task) {
+function setAsideIds(task) {
   const aside = new Set();
   for (const record of task.records) {
-    if (record.type === 'reopen' && !record.fields.withdrawn.value) {
-      for (const id of record.fields.seen.value) aside.add(id);
-    }
+    if (record.type !== 'reopen' || record.fields.withdrawn.value) continue;
+    for (const id of record.fields.seen.value) aside.add(id);
   }
+  return aside;
+}
+function countingRecords(task) {
+  const aside = setAsideIds(task);
   return task.records.filter(record =>
     (record.type === 'completion' || record.type === 'skip') &&
     !record.fields.withdrawn.value &&
@@ -931,7 +934,8 @@ export class Tasks {
       if (statusOf(task) !== 'open') continue;
       const row = this.#present(task, zone, instant);
       const onDay = row.due?.kind === 'date' ? row.due.date === day : row.due ? civilDate(row.due.instant, zone) === day : false;
-      const reminded = reminderMoments(task, zone, dayStart).some(moment => civilDate(moment.instant, zone) === day);
+      const reminded = reminderMoments(task, zone, dayStart).some(moment =>
+        moment.instant <= instant && civilDate(moment.instant, zone) === day);
       if (!row.overdue && !onDay && !reminded) continue;
       rows.push(row);
     }
@@ -1005,7 +1009,9 @@ export class Tasks {
   }
   history(id) {
     const task = this.#any(id);
+    const aside = setAsideIds(task);
     return task.records.map(record => {
+      const setAside = (record.type === 'completion' || record.type === 'skip') && aside.has(record.id);
       const row = {
         id: record.id,
         type: record.type,
@@ -1013,7 +1019,7 @@ export class Tasks {
         instant: record.instant,
         actionDate: record.actionDate,
         actionZone: record.actionZone,
-        undone: record.fields.withdrawn.value,
+        undone: record.fields.withdrawn.value || setAside,
       };
       if (record.type === 'snooze') {
         row.reminderAt = canonicalWall(record.fields.reminderAt.value);
