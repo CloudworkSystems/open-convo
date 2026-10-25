@@ -179,13 +179,29 @@ public final class SyncDevice {
             outbox[index].appSaveConfirmed = true
             outbox[index].record = record
         }
-        guard var page = openPage,
-              let index = page.revisions.lastIndex(where: {
-                  $0.record.id == record.id && $0.record.stamp == record.stamp && !$0.confirmed
-              })
-        else { return }
-        page.revisions[index].confirmed = true
-        noteConfirmedRevision(record.id, on: page)
+        retireFetchedRevisions(for: record)
+    }
+
+    /// A newer local or merged record replaces a fetched save the app has
+    /// not finished. Leaving that save pending would stop every later download.
+    private func retireFetchedRevisions(for record: SyncRecord) {
+        guard var page = openPage else { return }
+        var changed = false
+        for index in page.revisions.indices {
+            let pending = page.revisions[index]
+            let sameRevision = pending.record.id == record.id && pending.record.stamp == record.stamp
+            let superseded = pending.record.id == record.id && pending.record.stamp < record.stamp
+            if pending.confirmed || (!sameRevision && !superseded) { continue }
+            page.revisions[index].confirmed = true
+            changed = true
+        }
+        guard changed else { return }
+        let acceptedOnPage = page.revisions.contains {
+            $0.record.id == record.id && $0.record.stamp == record.stamp
+        }
+        if acceptedOnPage {
+            noteConfirmedRevision(record.id, on: page)
+        }
         if page.sealed && page.revisions.allSatisfy(\.confirmed) {
             tokens[page.zone] = page.token
             openPage = nil

@@ -729,6 +729,33 @@ final class SyncCorePlanTests: XCTestCase {
         XCTAssertTrue(live(b, "note").payload.isEmpty)
     }
 
+    func testNewerLocalEditUnblocksADeferredDownload() throws {
+        let cloud = FakeCloud()
+        let a = Peer("phone-a", cloud: cloud)
+        let b = Peer("phone-b", cloud: cloud)
+        a.boot()
+        b.boot()
+        _ = try a.edit("note", payload: text("base"))
+        try syncAll([a, b])
+        let remote = try a.edit("note", payload: text("from-a"))
+        try a.sync()
+        b.holdSaves { _ in }
+        try b.sync()
+        let tokenWhileDeferred = b.device.changeToken()
+        let local = try b.edit("note", payload: text("from-b"))
+        XCTAssertGreaterThan(local.stamp, remote.stamp)
+        XCTAssertThrowsError(try b.device.confirmLocalSave(remote)) { error in
+            XCTAssertEqual(error as? SyncError, .staleRevision)
+        }
+        let later = try a.edit("other", payload: text("after"))
+        try a.sync()
+        b.resumeSaves()
+        try b.sync()
+        XCTAssertEqual(live(b, "other").payload, later.payload)
+        XCTAssertNotEqual(b.device.changeToken(), tokenWhileDeferred)
+        XCTAssertEqual(live(b, "note").payload, local.payload)
+    }
+
     func testAcknowledgementCheckpointIsGivenToTheHost() throws {
         let cloud = FakeCloud()
         let a = Peer("phone-a", cloud: cloud)
