@@ -6,11 +6,17 @@ capabilities arrive with Site Engine.
 
 ## Capabilities, Not Skills (Owner Decision)
 
-- A **skill** is a set of instructions only one AI program (Claude Code, Codex)
-  can read; it lives inside that program.
+- A **skill** is a set of instructions an AI program reads. Agent Skills
+  (`SKILL.md`) is now an open standard that several programs (Claude Code,
+  Codex, Cursor) read, but a skill still runs inside whichever program loads
+  it, without True Convo's approvals, caps or logs (owner, October 25).
 - A **capability** is something True Convo itself can do, offered through one
   interface, usable by any model (local, Claude, ChatGPT) through any harness
   (Pi, Claude Code), wrapped in True Convo's approvals, cost caps and logs.
+
+How capabilities adapt to each model, get tested on the local default, pass
+an install gate and retire: [portable-capability-layer.md](portable-capability-layer.md)
+(October 25).
 
 True Convo's `tools/capability-adapter` (October 11) is the starting point: one
 JSON command plus a tools-only MCP server, no HTTP port or background service,
