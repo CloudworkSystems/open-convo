@@ -96,7 +96,7 @@ reviews. Plan in review: [docs/plans/sync-core.md](docs/plans/sync-core.md).
 
 **Cloudwork Rail Map** (Desk, Cloudwork Nexus), Claude builds; a fifth Nexus view showing this repository's branches, commits and pull requests from a saved snapshot (`apps/desk/scripts/rail-map-snapshot.mjs`); merged October 24 (#132).
 
-**Skin check** (Personal, new Health module), Claude builds, Gemini Code Assist reviews; plan approved (`docs/plans/skin-check.md`). Slice 1 is a standalone engine; the iPhone source joins the iPhone app on the parallel sync line, and the Desk view follows.
+**Skin check** (Personal, new Health module), Claude builds, Gemini Code Assist reviews; plan approved (`docs/plans/skin-check.md`). Slice 1, the standalone engine in `packages/skin-check/`, is built; the iPhone source joins the iPhone app on the parallel sync line, and the Desk view follows.
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:
