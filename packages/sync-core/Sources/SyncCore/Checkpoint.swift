@@ -35,6 +35,9 @@ struct CheckpointBody: Codable, Equatable {
     /// Conflict copies the app has already stored. Kept until a purge's
     /// deletion is confirmed, so the app can still be told to remove them.
     var storedConflictCopies: [SyncRecord]
+    /// Conflict copies handed to the app to store, and not yet acknowledged.
+    /// A purge deletion cannot retire these until that save finishes.
+    var outstandingConflictSaves: [SyncRecord]
 }
 
 enum CheckpointCodec {

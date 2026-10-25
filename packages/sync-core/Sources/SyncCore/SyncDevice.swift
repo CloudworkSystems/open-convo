@@ -30,6 +30,8 @@ public final class SyncDevice {
     private var pendingReplacements: [String: PendingReplacement] = [:]
     private var pendingCleanups: [SyncRecord] = []
     private var storedConflictCopies: [SyncRecord] = []
+    private var outstandingConflictSaves: [SyncRecord] = []
+    private var redeliveringCleanup = false
     private var local: [String: SyncRecord] = [:]
     private var openPage: OpenPage?
     private var merges: [String: MergeFunction] = [:]
@@ -59,6 +61,7 @@ public final class SyncDevice {
         device.pendingReplacements = body.pendingReplacements
         device.pendingCleanups = body.pendingCleanups
         device.storedConflictCopies = body.storedConflictCopies
+        device.outstandingConflictSaves = body.outstandingConflictSaves
         device.outbox = body.outbox.map {
             Entry(
                 record: $0.record,
@@ -114,7 +117,8 @@ public final class SyncDevice {
             conflicts: conflicts,
             pendingReplacements: pendingReplacements,
             pendingCleanups: pendingCleanups,
-            storedConflictCopies: storedConflictCopies
+            storedConflictCopies: storedConflictCopies,
+            outstandingConflictSaves: outstandingConflictSaves
         )
         let data = CheckpointCodec.encode(body)
         lastCheckpoint = data
@@ -220,22 +224,30 @@ public final class SyncDevice {
     /// record stays unconfirmed until its own request is acknowledged.
     /// This does not confirm that a purge deletion finished.
     public func confirmConflictCopiesStored(_ copies: [SyncRecord]) {
-        let named = Set(copies.map { CopyKey(id: $0.id, stamp: $0.stamp) })
-        for copy in conflicts where named.contains(CopyKey(id: copy.id, stamp: copy.stamp)) {
-            if !storedConflictCopies.contains(where: { $0.id == copy.id && $0.stamp == copy.stamp }) {
+        let named = Set(copies.map { key($0) })
+        outstandingConflictSaves.removeAll { named.contains(key($0)) }
+        let blocked = pendingCleanups.filter { named.contains(key($0)) }
+        let blockedKeys = Set(blocked.map { key($0) })
+        for copy in conflicts where named.contains(key(copy)) && !blockedKeys.contains(key(copy)) {
+            if !storedConflictCopies.contains(where: { key($0) == key(copy) }) {
                 storedConflictCopies.append(copy)
             }
         }
-        conflicts.removeAll { named.contains(CopyKey(id: $0.id, stamp: $0.stamp)) }
+        conflicts.removeAll { named.contains(key($0)) && !blockedKeys.contains(key($0)) }
+        // The save finished after a purge and wrote the payload back.
+        if !blocked.isEmpty {
+            redeliverCleanup(blocked)
+        }
     }
 
-    /// The app deleted these exact conflict copies. Only the named stamps
-    /// leave the cleanup list, so an older save confirmation cannot clear
-    /// a newer purge deletion.
+    /// The app deleted these exact conflict copies. A copy whose storage
+    /// save is still in flight stays pending, so that save cannot recreate
+    /// the purged payload with nothing left to delete.
     public func confirmConflictCopiesRemoved(_ copies: [SyncRecord]) {
-        let named = Set(copies.map { CopyKey(id: $0.id, stamp: $0.stamp) })
-        pendingCleanups.removeAll { named.contains(CopyKey(id: $0.id, stamp: $0.stamp)) }
-        storedConflictCopies.removeAll { named.contains(CopyKey(id: $0.id, stamp: $0.stamp)) }
+        let named = Set(copies.map { key($0) })
+        let inFlight = Set(outstandingConflictSaves.map { key($0) })
+        pendingCleanups.removeAll { named.contains(key($0)) && !inFlight.contains(key($0)) }
+        storedConflictCopies.removeAll { named.contains(key($0)) && !inFlight.contains(key($0)) }
     }
 
     /// The app hands over every local record after a restart. Queues this
@@ -721,7 +733,28 @@ public final class SyncDevice {
     }
 
     private func deliver(_ request: AppSaveRequest) {
+        for copy in request.conflictCopies where !outstandingConflictSaves.contains(where: { key($0) == key(copy) }) {
+            outstandingConflictSaves.append(copy)
+        }
         appSaveHandler?(request)
+    }
+
+    /// Asks the app to delete conflict copies a late save just wrote back.
+    private func redeliverCleanup(_ copies: [SyncRecord]) {
+        guard !redeliveringCleanup, let first = copies.first else { return }
+        redeliveringCleanup = true
+        defer { redeliveringCleanup = false }
+        let record = outbox.first { $0.record.id == first.id && $0.record.purged }?.record
+            ?? local[first.id].flatMap { $0.purged ? withoutPurgedPayload($0) : nil }
+            ?? SyncRecord(id: first.id, type: first.type, stamp: first.stamp, purged: true, payload: Data())
+        let checkpoint = saveCheckpoint()
+        deliver(AppSaveRequest(
+            record: record,
+            replaceLocalRecord: false,
+            conflictCopies: [],
+            checkpointBeforeRequest: checkpoint,
+            conflictCopiesToRemove: copies
+        ))
     }
 
     private func acknowledge(_ snapshot: InFlight, tag: String) {
@@ -777,6 +810,10 @@ public final class SyncDevice {
     private struct CopyKey: Hashable {
         var id: String
         var stamp: VersionStamp
+    }
+
+    private func key(_ record: SyncRecord) -> CopyKey {
+        CopyKey(id: record.id, stamp: record.stamp)
     }
 
     private func holdsPurge(_ id: String) -> Bool {

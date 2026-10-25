@@ -716,7 +716,11 @@ final class SyncCorePlanTests: XCTestCase {
         XCTAssertFalse(a.device.conflictCopies().contains { $0.id == "note" })
         XCTAssertTrue(notices.contains { $0.conflictCopiesToRemove.contains { $0.payload == fromA.payload } })
         XCTAssertEqual(a.device.status().kind, .needsAttention)
-        a.device.confirmConflictCopiesRemoved(notices.flatMap(\.conflictCopiesToRemove))
+        let copies = notices.flatMap(\.conflictCopiesToRemove)
+        a.device.confirmConflictCopiesRemoved(copies)
+        XCTAssertEqual(a.device.status().kind, .needsAttention)
+        a.device.confirmConflictCopiesStored(copies)
+        a.device.confirmConflictCopiesRemoved(copies)
         XCTAssertNotEqual(a.device.status().kind, .needsAttention)
         try a.device.confirmLocalSave(purge)
         a.resumeSaves()
@@ -839,6 +843,59 @@ final class SyncCorePlanTests: XCTestCase {
         XCTAssertFalse(holds(text("brought-back"), peer: a))
         XCTAssertFalse(holds(text("brought-back"), peer: b))
         XCTAssertTrue(live(b, "note").payload.isEmpty)
+    }
+
+    func testInFlightConflictSaveKeepsPurgeCleanup() throws {
+        let cloud = FakeCloud()
+        let a = Peer("phone-a", cloud: cloud)
+        let b = Peer("phone-b", cloud: cloud)
+        a.boot()
+        b.boot()
+        _ = try a.edit("note", payload: text("base"))
+        try syncAll([a, b])
+        let secret = try a.edit("note", payload: text("alpha-secret"))
+        for _ in 0..<3 { _ = try b.device.nextStamp() }
+        _ = try b.edit("note", payload: text("beta"))
+        try b.sync()
+        var save: AppSaveRequest?
+        a.holdSaves { request in
+            if !request.conflictCopies.isEmpty { save = request }
+            if request.replaceLocalRecord {
+                a.store.save(request.record)
+                try? a.device.confirmLocalSave(request.record)
+            }
+        }
+        try a.sync(order: .fetchThenUpload)
+        let inFlight = try XCTUnwrap(save)
+        XCTAssertTrue(inFlight.conflictCopies.contains { $0.payload == secret.payload })
+        var notices: [AppSaveRequest] = []
+        a.holdSaves { notices.append($0) }
+        let stamp = try a.device.nextStamp()
+        let purge = SyncRecord(
+            id: "note",
+            type: "task-list",
+            stamp: stamp,
+            purged: true,
+            payload: Data()
+        )
+        try a.device.queueLocalEdit(purge)
+        let copies = notices.flatMap(\.conflictCopiesToRemove)
+        XCTAssertTrue(copies.contains { $0.payload == secret.payload })
+        a.device.confirmConflictCopiesRemoved(copies)
+        XCTAssertEqual(a.device.status().kind, .needsAttention)
+        let kept = a.device.saveCheckpoint()
+        try a.adopt(kept)
+        XCTAssertEqual(a.device.status().kind, .needsAttention)
+        notices.removeAll()
+        a.holdSaves { notices.append($0) }
+        a.device.confirmConflictCopiesStored(inFlight.conflictCopies)
+        XCTAssertTrue(notices.contains { $0.conflictCopiesToRemove.contains { $0.payload == secret.payload } })
+        XCTAssertEqual(a.device.status().kind, .needsAttention)
+        a.device.confirmConflictCopiesRemoved(inFlight.conflictCopies)
+        XCTAssertNotEqual(a.device.status().kind, .needsAttention)
+        let cleared = a.device.saveCheckpoint()
+        try a.adopt(cleared)
+        XCTAssertNotEqual(a.device.status().kind, .needsAttention)
     }
 
     func testStorageConfirmationKeepsANewerConflictCopy() throws {
@@ -997,6 +1054,10 @@ final class SyncCorePlanTests: XCTestCase {
             try a.device.confirmLocalSave(save.record)
         }
         a.device.confirmConflictCopiesRemoved(removal.conflictCopiesToRemove)
+        XCTAssertEqual(a.device.status().kind, .needsAttention)
+        a.device.confirmConflictCopiesStored(removal.conflictCopiesToRemove)
+        a.device.confirmConflictCopiesRemoved(removal.conflictCopiesToRemove)
+        XCTAssertNotEqual(a.device.status().kind, .needsAttention)
         a.resumeSaves()
         try syncAll([a, b])
         XCTAssertFalse(holds(secret.payload, peer: a))
