@@ -65,6 +65,13 @@ adapts and tests them.
   lists what it asks to do (send, spend, delete, reach the network), and those
   actions still go through the usual approvals. Licenses and credit follow the
   existing third-party rule.
+- **Imported scripts are untrusted code.** A declared list is only what the
+  skill claims; one approved script run could still read private files, reach
+  the network or delete data without another call the approval layer sees.
+  So a third-party script is not run until True Convo has a real boundary
+  that enforces its declared permissions, with a test that it can't be
+  bypassed (foundations, principle 12). Until then, a skill's scripts are
+  left out at install and only its instructions are used.
 - **Recipes retire themselves.** The example runs are repeated when a model
   changes. Once a model passes without the recipe, True Convo stops loading it
   for that model and keeps it for models that still need it. Redundancy is
