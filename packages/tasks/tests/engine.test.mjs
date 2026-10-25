@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
-  SCHEMA_VERSION, Tasks, civilDate, compareStamps, deserializePerson, mergePeople,
-  occurrenceDates, serializePerson, wallToInstant,
+  SCHEMA_VERSION, Tasks,   civilDate, compareStamps, deserializePerson, mergePeople,
+  occurrenceDates, serializePerson, wallClock, wallToInstant,
 } from '../src/index.mjs';
 import { VIEW_NOW, VIEW_ZONE, viewFixture } from './views-fixture.mjs';
 
@@ -215,6 +215,18 @@ test('4. a repeat ends after a count or on a date, and a closed occurrence count
   until.complete('until', at('2026-04-02T15:00:00.000Z'), { recordId: 'u2' });
   until.complete('until', at('2026-04-03T15:00:00.000Z'), { recordId: 'u3' });
   assert.equal(until.task('until').status, 'done');
+
+  const plain = engine('plain-due');
+  plain.addTask({ title: 'Daily', due: '2026-11-01', repeat: { kind: 'days', every: 1, mode: 'onSchedule' } }, { taskId: 'daily' });
+  plain.editTask('daily', { due: '2026-11-10', repeat: null });
+  assert.equal(plain.task('daily').repeat, null);
+  assert.equal(plain.task('daily').due.date, '2026-11-10');
+  plain.addTask({ title: 'Still repeating', due: '2026-11-01', repeat: { kind: 'days', every: 1, mode: 'onSchedule' } }, { taskId: 'kept' });
+  plain.complete('kept', at('2026-11-03T15:00:00.000Z'), { recordId: 'moved-on' });
+  const open = plain.task('kept').occurrence;
+  plain.editTask('kept', { repeat: null });
+  assert.equal(open, '2026-11-02');
+  assert.equal(plain.task('kept').due.date, open);
 });
 
 test('5. wall times stay put across clock changes and convert when viewed elsewhere', () => {
@@ -232,6 +244,9 @@ test('5. wall times stay put across clock changes and convert when viewed elsewh
   assert.equal(new Date(desk.task('gap').due.instant).toISOString(), '2026-03-08T07:30:00.000Z');
   assert.equal(new Date(desk.task('fold').due.instant).toISOString(), '2026-11-01T05:30:00.000Z');
   assert.equal(new Date(wallToInstant('2026-10-25T01:30', 'Europe/London')).toISOString(), '2026-10-25T00:30:00.000Z');
+  assert.equal(wallClock(wallToInstant('2026-10-04T02:30', 'Australia/Sydney'), 'Australia/Sydney'), '2026-10-04T03:30');
+  assert.equal(wallClock(wallToInstant('2026-09-27T02:30', 'Pacific/Auckland'), 'Pacific/Auckland'), '2026-09-27T03:30');
+  assert.equal(wallClock(wallToInstant('2026-10-04T02:15', 'Australia/Lord_Howe'), 'Australia/Lord_Howe'), '2026-10-04T02:45');
 
   desk.addTask({ title: 'Evening call', due: { dateTime: '2026-01-15T21:00', timeZone: ZONE } }, { taskId: 'evening' });
   desk.addTask({ title: 'Plain day', due: '2026-01-15' }, { taskId: 'plain' });
@@ -399,6 +414,20 @@ test('8. snooze presets, including next Monday on a Monday, leave the series put
   stale.complete('weekly', monday, { recordId: 'next' });
   assert.equal(stale.task('weekly').due.kind, 'date');
   assert.equal(stale.task('weekly').occurrence, '2026-03-09');
+
+  const both = engine('both-reminders');
+  both.addTask({
+    title: 'Two reminders',
+    due: '2026-03-10',
+    reminders: [
+      { dateTime: '2026-03-10T09:00', timeZone: ZONE, occurrence: '2026-03-10' },
+      { dateTime: '2026-03-10T17:00', timeZone: ZONE, occurrence: '2026-03-10' },
+    ],
+  }, { taskId: 'two' });
+  const noon = wallToInstant('2026-03-10T12:00', ZONE);
+  both.snooze('two', { at: { dateTime: '2026-03-11T17:00', timeZone: ZONE } }, noon, { recordId: 'move-next' });
+  const day = both.remindersDue(wallToInstant('2026-03-10T00:00', ZONE), wallToInstant('2026-03-12T00:00', ZONE), ZONE);
+  assert.deepEqual(day.map(row => row.at), ['2026-03-10T09:00', '2026-03-11T17:00']);
 });
 
 test('upcoming keeps only the occurrences a repeat still has', () => {

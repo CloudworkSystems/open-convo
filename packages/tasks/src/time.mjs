@@ -148,15 +148,31 @@ function wallMatches(instant, timeZone, year, month, day, hour, minute) {
 }
 
 function forwardGap(desired, timeZone) {
-  let previous = offsetMs(desired - 6 * 3600000, timeZone);
-  for (let cursor = desired - 6 * 3600000 + 15 * 60000; cursor <= desired + 6 * 3600000; cursor += 15 * 60000) {
+  // A positive-offset zone's spring-forward can sit more than six hours away
+  // from the naive UTC reading of the wall time. The candidate instants are
+  // desired minus each offset the zone uses nearby; the gap is the forward
+  // jump closest to those candidates.
+  const offsets = [...offsetsNear(desired, timeZone)];
+  if (offsets.length < 2) return 0;
+  const instants = offsets.map(offset => desired - offset);
+  const start = Math.min(...instants) - 3600000;
+  const end = Math.max(...instants) + 3600000;
+  const middle = (Math.min(...instants) + Math.max(...instants)) / 2;
+  let previous = offsetMs(start, timeZone);
+  let best = 0;
+  let bestDistance = Infinity;
+  for (let cursor = start + 15 * 60000; cursor <= end; cursor += 15 * 60000) {
     const offset = offsetMs(cursor, timeZone);
-    if (offset !== previous) {
-      if (offset > previous) return offset - previous;
-      previous = offset;
+    if (offset > previous) {
+      const distance = Math.abs(cursor - middle);
+      if (distance < bestDistance) {
+        best = offset - previous;
+        bestDistance = distance;
+      }
     }
+    previous = offset;
   }
-  return 0;
+  return best;
 }
 
 /**

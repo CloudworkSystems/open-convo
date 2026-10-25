@@ -384,9 +384,15 @@ function reminderMoments(task, ownerZone, dayStart) {
     const instant = wallToInstant(at.dateTime, at.timeZone);
     if (!moments.length) moments.push({ index: -1, reminder: { kind: 'snooze' }, occurrence, instant, snoozed: true });
     else {
-      let earliest = 0;
-      for (let i = 1; i < moments.length; i += 1) if (moments[i].instant < moments[earliest].instant || (moments[i].instant === moments[earliest].instant && moments[i].index < moments[earliest].index)) earliest = i;
-      moments[earliest] = { ...moments[earliest], instant, snoozed: true };
+      // Move the next reminder that has not already fired by the time of the snooze.
+      const action = snooze.instant;
+      let target = -1;
+      for (let i = 0; i < moments.length; i += 1) {
+        if (moments[i].instant < action) continue;
+        if (target < 0 || moments[i].instant < moments[target].instant || (moments[i].instant === moments[target].instant && moments[i].index < moments[target].index)) target = i;
+      }
+      if (target < 0) moments.push({ index: -1, reminder: { kind: 'snooze' }, occurrence, instant, snoozed: true });
+      else moments[target] = { ...moments[target], instant, snoozed: true };
     }
   }
   return moments;
@@ -694,8 +700,12 @@ export class Tasks {
       if (own(patch, 'priority')) task.fields.priority = { value: normalizePriority(patch.priority), stamp: clone(stamp) };
       if (own(patch, 'due')) task.fields.due = { value: normalizeDue(patch.due), stamp: clone(stamp) };
       if (own(patch, 'repeat') && patch.repeat == null) {
-        const date = currentDate(before) ?? dueCalendar(task.fields.due.value);
-        if (date && task.fields.due.value) task.fields.due = { value: scheduledDue(task.fields.due.value, date), stamp: clone(stamp) };
+        // A new due date in the same edit is the date the caller asked for.
+        // Without one, the one-off keeps the occurrence that was open.
+        if (!own(patch, 'due')) {
+          const date = currentDate(before) ?? dueCalendar(task.fields.due.value);
+          if (date && task.fields.due.value) task.fields.due = { value: scheduledDue(task.fields.due.value, date), stamp: clone(stamp) };
+        }
         task.fields.repeat = { value: null, stamp: clone(stamp) };
         task.fields.state = { value: 'open', stamp: clone(stamp) };
       } else if (own(patch, 'repeat')) {
@@ -1049,15 +1059,17 @@ function normalizeWall(input) {
   if (!object(input) || !validDateTime(input.dateTime)) fail('Snooze time must be YYYY-MM-DDTHH:MM.');
   return { dateTime: input.dateTime, timeZone: assertTimeZone(input.timeZone) };
 }
-function nextReminderClock(task, zone, dayStart) {
-  const moments = reminderMoments(task, zone, dayStart).slice().sort((a, b) => a.instant - b.instant);
-  if (moments.length) return wallClock(moments[0].instant, zone).slice(11, 16);
+function nextReminderClock(task, zone, dayStart, now) {
+  const moments = reminderMoments(task, zone, dayStart);
+  const upcoming = moments.filter(moment => moment.instant >= now);
+  const pool = (upcoming.length ? upcoming : moments).slice().sort((a, b) => a.instant - b.instant || a.index - b.index);
+  if (pool.length) return wallClock(pool[0].instant, zone).slice(11, 16);
   const due = effectiveDue(task, currentDate(task));
   if (due?.kind === 'dateTime') return due.dateTime.slice(11, 16);
   return dayStart;
 }
 function presetWall(task, preset, now, zone, dayStart) {
-  const clock = nextReminderClock(task, zone, dayStart);
+  const clock = nextReminderClock(task, zone, dayStart, now);
   const today = civilDate(now, zone);
   if (preset === 'laterToday') return { dateTime: wallClock(now + 3 * 60 * 60 * 1000, zone), timeZone: zone };
   if (preset === 'tomorrow') return { dateTime: `${addDays(today, 1)}T${clock}`, timeZone: zone };
