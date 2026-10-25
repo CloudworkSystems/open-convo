@@ -1,6 +1,6 @@
 # Today Agenda (PRD)
 
-Status: Approved (Oct 25): merged in #138; team C starts once its visibility report (#112) merges.
+Status: In progress (Oct 25): merged in #138; GrokBot team C started the build (#145) after #112 merged.
 
 Written October 24, 2026 by a Claude session (project "261024 OC Steering")
 from the owner's choice that day. Session name: `OC-261024-today-agenda`.

@@ -84,7 +84,7 @@ Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
 **Site Engine: what will change** (Business), GrokBot (team B) builds, Codex reviews; merged as #119 on October 23.
 
-**Visibility report** (Business), GrokBot (team C) builds, Codex reviews; plan approved (`docs/plans/visibility-report.md`); build in review (#112).
+**Visibility report** (Business), GrokBot (team C) builds, Codex reviews; plan approved (`docs/plans/visibility-report.md`); built and merged in #112 (Oct 25).
 
 **Sync core** (Personal; first slice of the iPhone and sync line, owner
 decision October 22): GrokBot team B builds, Codex reviews. Plan approved
@@ -94,7 +94,7 @@ decision October 22): GrokBot team B builds, Codex reviews. Plan approved
 
 **Tasks and reminders engine** (Personal, day one), GrokBot team A builds, Codex reviews; plan merged in #138, build started Oct 25 (#141) (`docs/plans/tasks-engine.md`).
 
-**Today agenda** (Personal, day one), GrokBot team C builds once #112 merges, Codex reviews; plan merged in #138 (`docs/plans/today-agenda.md`).
+**Today agenda** (Personal, day one), GrokBot team C is building it (#145), Codex reviews; plan merged in #138 (`docs/plans/today-agenda.md`).
 
 **Email sorting engine** (Personal, launch set), Claude builds (the owner's choice on October 24, in place of Codex), Gemini Code Assist reviews; plan `docs/plans/email-sorting-engine.md`; merged as #128 on October 24 (`packages/email-sorting/`).
 
