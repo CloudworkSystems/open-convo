@@ -1,6 +1,6 @@
 # Tasks And Reminders Engine (PRD)
 
-Status: Approved (Oct 25): merged in #138; GrokBot team A started the build (#141).
+Status: In progress (Oct 25): merged in #138; GrokBot team A started the build (#141).
 
 Written October 24, 2026 by a Claude session (project "261024 OC Steering")
 from the owner's choice that day. Session name: `OC-261024-tasks-engine`.
