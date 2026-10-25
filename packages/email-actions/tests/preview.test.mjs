@@ -233,7 +233,7 @@ test('8. duplicate Message-ID copies use the first reference as representative a
   assert.deepEqual(resultMessage(left, 'unsubscribe', 'first').ids, { a: ['first'], z: ['second'] });
 });
 
-test('8. an inbox named __proto__ is preserved in output, canonical form and seal', () => {
+test('9. an inbox named __proto__ is preserved in output, canonical form and seal', () => {
   const protoCopy = mail({
     id: 'proto-copy', inbox: '__proto__', from: { address: 'copies@fernway.example' },
     headers: { 'Message-ID': '<proto-copy@fernway.example>' },
@@ -258,7 +258,7 @@ test('8. an inbox named __proto__ is preserved in output, canonical form and sea
   assert.notEqual(withProto.seal, withoutProto.seal);
 });
 
-test('9. seal changes only with executable work, not order or request positions', () => {
+test('10. seal changes only with executable work, not order or request positions', () => {
   const one = mail({ id: 'one', inbox: 'a', from: { address: 'one@fernway.example' } });
   const two = headerMail('two', 'Two', '<https://mailings.example/two>', 'List-Unsubscribe=One-Click', { inbox: 'b' });
   const reqs = requests([
@@ -307,7 +307,7 @@ test('9. seal changes only with executable work, not order or request positions'
   assert.notEqual(oneCopy.seal, twoCopies.seal);
 });
 
-test('10. malformed input and request limits are refused with request positions', () => {
+test('11. malformed input and request limits are refused with request positions', () => {
   assert.throws(() => previewActions({ schemaVersion: 2, messages: [] }, oneRequest('delete', { sender: 'a@b.example' })), /schemaVersion/);
   assert.throws(() => previewActions(messages([{ ...mail(), extra: true }]), oneRequest('delete', { sender: 'a@b.example' })), /extra/);
   assert.throws(() => previewActions(messages([mail({ pile: 'maybe' })]), oneRequest('delete', { sender: 'a@b.example' })), /pile/);
@@ -324,7 +324,7 @@ test('10. malformed input and request limits are refused with request positions'
   assert.throws(() => parseJsonFile('{', 'messages'), /isn't valid JSON/);
 });
 
-test('11. hostile valid text is unchanged in JSON and escaped onto one summary line', () => {
+test('12. hostile valid text is unchanged in JSON and escaped onto one summary line', () => {
   const hostile = 'Quote " <script> 😀 \u202eleft\nnext\ttab';
   const item = mail({ id: 'hostile', from: { name: hostile, address: 'hostile@fernway.example' }, subject: hostile });
   const plan = planFor(item, 'delete');
@@ -334,7 +334,7 @@ test('11. hostile valid text is unchanged in JSON and escaped onto one summary l
   assert.equal(text.split('\n').filter(line => line.includes('<script>')).length, 1);
 });
 
-test('12. no clock or elapsed-time source is read', () => {
+test('13. no clock or elapsed-time source is read', () => {
   const RealDate = Date;
   class NoClockDate extends RealDate {
     constructor() { throw new Error('Date constructor read'); }
@@ -440,22 +440,70 @@ test('edge cases: mailto uses first repeated fields and refuses fragments or mal
 
 test('mailto rejects CRLF decoded from the subject', () => {
   assert.equal(planFor(headerMail('subject-crlf', 'Subject CRLF',
-    '<mailto:list@example.org?subject=hi%0D%0ABcc:%20v@evil.example>')).unsubscribe[0].method, 'none');
+    '<mailto:list@b.example?subject=hi%0D%0ABcc:%20v@evil.example>')).unsubscribe[0].method, 'none');
 });
 
 test('mailto rejects CRLF decoded inside the local part', () => {
   assert.equal(planFor(headerMail('local-crlf', 'Local CRLF',
-    '<mailto:list%0D%0A@example.org>')).unsubscribe[0].method, 'none');
+    '<mailto:list%0D%0A@b.example>')).unsubscribe[0].method, 'none');
 });
 
 test('mailto rejects CRLF decoded after the domain', () => {
   assert.equal(planFor(headerMail('domain-crlf', 'Domain CRLF',
-    '<mailto:list@example.org%0D%0ABcc:v@evil.example>')).unsubscribe[0].method, 'none');
+    '<mailto:list@b.example%0D%0ABcc:v@evil.example>')).unsubscribe[0].method, 'none');
 });
 
 test('mailto rejects a percent-encoded recipient separator', () => {
   assert.equal(planFor(headerMail('encoded-comma', 'Encoded comma',
-    '<mailto:list@example.org%2Cv@evil.example>')).unsubscribe[0].method, 'none');
+    '<mailto:list@b.example%2Cv@evil.example>')).unsubscribe[0].method, 'none');
+});
+
+test('mailto rejects an encoded question mark in the recipient', () => {
+  const uri = 'mailto:a@b.example%3Fsubject=x';
+  assert.equal(planFor(headerMail('strict-question', 'Strict question', `<${uri}>`)).unsubscribe[0].method, 'none', uri);
+});
+
+test('mailto rejects an encoded ampersand in the recipient', () => {
+  const uri = 'mailto:a@b.example%26cc=x';
+  assert.equal(planFor(headerMail('strict-ampersand', 'Strict ampersand', `<${uri}>`)).unsubscribe[0].method, 'none', uri);
+});
+
+test('mailto rejects a NUL in the local part', () => {
+  const uri = 'mailto:a%00b@b.example';
+  assert.equal(planFor(headerMail('strict-nul', 'Strict NUL', `<${uri}>`)).unsubscribe[0].method, 'none', uri);
+});
+
+test('mailto rejects a double dot in the local part', () => {
+  const uri = 'mailto:a..b@b.example';
+  assert.equal(planFor(headerMail('strict-double-dot', 'Strict double dot', `<${uri}>`)).unsubscribe[0].method, 'none', uri);
+});
+
+test('mailto rejects a single-label domain', () => {
+  const uri = 'mailto:a@b';
+  assert.equal(planFor(headerMail('strict-single-label', 'Strict single label', `<${uri}>`)).unsubscribe[0].method, 'none', uri);
+});
+
+test('mailto rejects colon and semicolon delimiters in the recipient', () => {
+  const uri = 'mailto:x:a@b.example;';
+  assert.equal(planFor(headerMail('strict-colon-semicolon', 'Strict colon semicolon', `<${uri}>`)).unsubscribe[0].method, 'none', uri);
+});
+
+test('mailto rejects a leading slash in the recipient', () => {
+  const uri = 'mailto:/a@c';
+  assert.equal(planFor(headerMail('strict-leading-slash', 'Strict leading slash', `<${uri}>`)).unsubscribe[0].method, 'none', uri);
+});
+
+test('mailto rejects forbidden controls in decoded fields but accepts tab in subject', () => {
+  for (const [name, query] of [
+    ['subject-nul', 'subject=before%00after'],
+    ['body-c1', 'body=before%C2%85after'],
+    ['subject-line-separator', 'subject=before%E2%80%A8after'],
+    ['field-name-nul', 'sub%00ject=value'],
+  ]) {
+    assert.equal(planFor(headerMail(name, name, `<mailto:list@b.example?${query}>`)).unsubscribe[0].method, 'none', name);
+  }
+  assert.equal(planFor(headerMail('subject-tab', 'Subject tab',
+    '<mailto:list@b.example?subject=before%09after>')).unsubscribe[0].subject, 'before\tafter');
 });
 
 test('mailto rejects a recipient list', () => {
@@ -474,16 +522,16 @@ test('mailto rejects an empty recipient', () => {
 
 test('mailto rejects a to query field', () => {
   assert.equal(planFor(headerMail('query-to', 'Query to',
-    '<mailto:list@example.org?to=other@example.org>')).unsubscribe[0].method, 'none');
+    '<mailto:list@b.example?to=other@b.example>')).unsubscribe[0].method, 'none');
 });
 
 test('mailto accepts one valid recipient and subject', () => {
   assert.deepEqual(planFor(headerMail('normal-mailto', 'Normal mailto',
-    '<mailto:unsubscribe@example.org?subject=unsubscribe>')).unsubscribe[0], {
+    '<mailto:unsubscribe@list.example?subject=unsubscribe>')).unsubscribe[0], {
     key: 'address:normal-mailto@mailings.example',
     label: 'Normal mailto',
     method: 'mailto',
-    to: ['unsubscribe@example.org'],
+    to: ['unsubscribe@list.example'],
     subject: 'unsubscribe',
     body: '',
   });
@@ -491,11 +539,11 @@ test('mailto accepts one valid recipient and subject', () => {
 
 test('mailto tolerates a trailing ampersand', () => {
   assert.deepEqual(planFor(headerMail('trailing-ampersand', 'Trailing ampersand',
-    '<mailto:unsubscribe@example.org?subject=unsubscribe&>')).unsubscribe[0], {
+    '<mailto:unsubscribe@list.example?subject=unsubscribe&>')).unsubscribe[0], {
     key: 'address:trailing-ampersand@mailings.example',
     label: 'Trailing ampersand',
     method: 'mailto',
-    to: ['unsubscribe@example.org'],
+    to: ['unsubscribe@list.example'],
     subject: 'unsubscribe',
     body: '',
   });
@@ -526,7 +574,7 @@ test('edge cases: dates need an offset and equal instants sort by inbox then id'
   assert.deepEqual(ordered, [['a', 'a'], ['a', 'b'], ['z', 'z']]);
 });
 
-test('13. network is denied and the library writes no files or opens message URLs', () => {
+test('14. network is denied and the library writes no files or opens message URLs', () => {
   assert.throws(() => fetch('https://example.com/'), /Network blocked/);
   assert.deepEqual(networkCalls, [{ name: 'fetch' }]);
   clearNetworkCalls();

@@ -69,7 +69,7 @@ Every action's copies are sorted by inbox then id. Unsubscribe entries are sorte
 - RFC 5322 field names compare case-insensitively without trimming. If differently cased copies of a field occur, their values are read in character-code order; the first non-empty field value is used.
 - `Message-ID` and `List-Id` use the first angle-bracketed token when present, otherwise the trimmed field body. Comparison is lower case. An identifier over 200 characters is replaced with a deterministic SHA-256 marker, matching the sorting engine.
 - RFC 2369 unsubscribe URIs must be inside angle brackets. Preference is usable one-click HTTPS, then usable mail, then HTTPS web page, regardless of header order.
-- An RFC 6068 mail URI must name exactly one plain `local@domain` recipient. Empty recipients, recipient lists, display names, angle brackets, spaces, decoded CR/LF, and a `to` query field make it unusable. Percent encoding is decoded, while a literal `+` remains `+` rather than becoming a space. Repeated `subject` or `body` fields use the first value, empty query parameters (including a trailing `&`) are ignored, and decoded CR/LF in any query name or value is refused. A fragment or malformed percent encoding also makes the mail URI unusable. An absent subject or body becomes empty text.
+- An RFC 6068 mail URI must name exactly one valid ASCII dot-atom `local@domain` recipient. The local part cannot be quoted and the domain must have at least two labels, with letters, digits, and interior hyphens only; IDN domains are not accepted. Empty recipients, recipient lists, display names, angle brackets, whitespace, a `to` query field, and the decoded address characters `?`, `&`, `;`, `:`, `/`, and `,` make it unusable. Percent encoding is decoded, while a literal `+` remains `+` rather than becoming a space. Repeated `subject` or `body` fields use the first value, and empty query parameters (including a trailing `&`) are ignored. Decoded field names, subjects, and bodies refuse C0 controls other than tab, DEL, C1 controls, U+2028, and U+2029; this includes the existing CR/LF refusal. A fragment or malformed percent encoding also makes the mail URI unusable. An absent subject or body becomes empty text.
 - Address and domain comparisons trim surrounding whitespace and use locale-independent lower case. Display text is returned unchanged.
 - Dates must be RFC 3339 date-times with an explicit offset. Equal instants are ordered by inbox and id, never by locale or file order.
 
@@ -78,3 +78,5 @@ Run all tests with:
 ```sh
 npm test
 ```
+
+The included invented fixture is a small, realistic multi-inbox mailbox. It covers People and Work protection, unsorted mail, duplicate `Message-ID` copies, and a blocked sweep without using real people, companies, or routable domains.

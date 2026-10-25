@@ -201,6 +201,15 @@ function listUnsubscribeUris(headers) {
   return [...value.matchAll(/<([^<>]*)>/g)].map(match => match[1].trim()).filter(Boolean);
 }
 
+const MAILTO_ADDRESS = /^[A-Za-z0-9!#$%'*+\-=^_`{|}~]+(?:\.[A-Za-z0-9!#$%'*+\-=^_`{|}~]+)*@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$/;
+const MAILTO_REFUSED_ADDRESS_CHARACTERS = /[?&;:/,]/;
+const MAILTO_REFUSED_CONTROL = /[\u0000-\u0008\u000a-\u001f\u007f-\u009f\u2028\u2029]/u;
+
+function validMailtoAddress(address) {
+  return !MAILTO_REFUSED_CONTROL.test(address) && !/\s/u.test(address)
+    && !MAILTO_REFUSED_ADDRESS_CHARACTERS.test(address) && MAILTO_ADDRESS.test(address);
+}
+
 function parseMailto(text) {
   const url = safeUrl(text, 'mailto:');
   if (url === null || url.hash !== '') return null;
@@ -209,7 +218,7 @@ function parseMailto(text) {
   const seen = new Set();
   try {
     const address = decodeURIComponent(url.pathname);
-    if (!/^[^\s@<>,]+@[^\s@<>,]+$/u.test(address) || /[\r\n]/u.test(address)) return null;
+    if (!validMailtoAddress(address)) return null;
     to = [address];
     const queryAt = text.indexOf('?');
     if (queryAt !== -1) {
@@ -220,7 +229,7 @@ function parseMailto(text) {
         const rawValue = equalsAt === -1 ? '' : pair.slice(equalsAt + 1);
         const name = asciiLower(decodeURIComponent(rawName));
         const value = decodeURIComponent(rawValue);
-        if (/[\r\n]/u.test(name) || /[\r\n]/u.test(value)) return null;
+        if (MAILTO_REFUSED_CONTROL.test(name) || MAILTO_REFUSED_CONTROL.test(value)) return null;
         if (name !== 'subject' && name !== 'body') return { invalidFields: true };
         if (!seen.has(name)) values[name] = value;
         seen.add(name);

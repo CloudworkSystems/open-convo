@@ -2,7 +2,9 @@
   "schemaVersion": 1,
   "requests": [
     { "action": "unsubscribe", "target": { "sender": "digest@lantern-post.example" } },
-    { "action": "delete", "target": { "listId": "weekly.lantern-post.example" } },
-    { "action": "spam", "target": { "messages": [{ "inbox": "home", "id": "alert-1" }] } }
+    { "action": "delete", "target": { "sender": "notices@maple-lab.example" } },
+    { "action": "spam", "target": { "messages": [{ "inbox": "home", "id": "alert-1" }] } },
+    { "action": "delete", "target": { "sender": "receipts@pebble-cart.example" } },
+    { "action": "delete", "target": { "sender": "shared@harbor-note.example" } }
   ]
 }
