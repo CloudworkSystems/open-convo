@@ -14,7 +14,9 @@ body {
 }
 
 a { color: var(--tca-ember-amber); }
-a:focus-visible { outline: 3px solid var(--tca-focus-ring); outline-offset: 2px; }
+/* Solid amber, not the translucent --tca-focus-ring: it keeps at least 3:1
+   against the dark page (WCAG 1.4.11). */
+a:focus-visible { outline: 3px solid var(--tca-ember-amber); outline-offset: 2px; }
 
 .page { max-width: 44rem; margin: 0 auto; padding: 3rem 1rem 4rem; }
 
