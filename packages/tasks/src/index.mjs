@@ -26,7 +26,7 @@ export const SCHEMA_VERSION = 1;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PERSON_KEYS = Object.freeze(['timeZone', 'dayStart']);
 const TASK_KEYS = Object.freeze(['title', 'note', 'list', 'priority', 'state', 'due', 'repeat', 'reminders']);
-const RECORD_KEYS = Object.freeze(['withdrawn', 'seen', 'reminderAt', 'due']);
+const RECORD_KEYS = Object.freeze(['withdrawn', 'seen', 'reminderAt', 'due', 'replaces']);
 const TASK_DEFAULTS = Object.freeze({
   title: '', note: '', list: null, priority: null, state: 'open', due: null, repeat: null, reminders: [],
 });
@@ -282,6 +282,15 @@ function hasTitle(task) {
 function holdingPurgedFields(task) {
   return Boolean(task.purge) && compareStamps(task.life.stamp, task.purge) <= 0;
 }
+function fieldsComplete(task) {
+  return TASK_KEYS.every(key => own(task.fields, key));
+}
+/** A purge marker may keep a newer title for a later merge. It is not a task you can open. */
+function usableTask(task) {
+  if (!hasTitle(task)) return false;
+  if (holdingPurgedFields(task) && !fieldsComplete(task)) return false;
+  return true;
+}
 function setAsideIds(task) {
   const aside = new Set();
   for (const record of task.records) {
@@ -373,32 +382,32 @@ function reminderMoments(task, ownerZone, dayStart) {
   task.fields.reminders.value.forEach((reminder, index) => {
     if (reminder.kind === 'offset') {
       if (!due) return;
-      moments.push({ index, reminder, occurrence, instant: offsetInstant(due, reminder, dayStart, ownerZone) });
+      const instant = offsetInstant(due, reminder, dayStart, ownerZone);
+      moments.push({ index, reminder, occurrence, instant, baseInstant: instant });
       return;
     }
     // A named fixed reminder belongs to one occurrence, including a one-off
     // task. Rescheduling the due date leaves the old name behind, so it lapses
     // until an edit moves it.
     if (reminder.occurrence != null && reminder.occurrence !== occurrence) return;
-    moments.push({
-      index, reminder, occurrence,
-      instant: wallToInstant(reminder.dateTime, reminder.timeZone),
-    });
+    const instant = wallToInstant(reminder.dateTime, reminder.timeZone);
+    moments.push({ index, reminder, occurrence, instant, baseInstant: instant });
   });
-  // Earlier snoozes already moved a reminder. Later ones must see that time,
-  // or the original moment looks past and comes back beside the new one.
-  const snoozes = task.records.filter(record =>
-    record.type === 'snooze' && !record.fields.withdrawn.value &&
-    (record.occurrence ?? null) === (occurrence ?? null) && record.fields.reminderAt.value,
-  ).sort((a, b) => compareStamps(a.stamp, b.stamp) || lex(a.id, b.id));
-  for (const snooze of snoozes) applySnooze(moments, snooze, occurrence);
+  // Only the highest stamp changes the reminders. It names the base reminder
+  // it moved, chosen when it was made from the snoozes that device had already
+  // seen, so a later snooze does not revive the original time and a losing
+  // concurrent snooze does not move a second reminder.
+  const snooze = winningSnooze(task, occurrence);
+  if (snooze?.fields.reminderAt.value) applyWinningSnooze(moments, snooze, occurrence);
   return moments;
 }
-function applySnooze(moments, snooze, occurrence) {
-  const at = snooze.fields.reminderAt.value;
-  const instant = wallToInstant(at.dateTime, at.timeZone);
-  if (!moments.length) {
-    moments.push({ index: -1, reminder: { kind: 'snooze' }, occurrence, instant, snoozed: true });
+function applyWinningSnooze(moments, snooze, occurrence) {
+  const instant = wallToInstant(snooze.fields.reminderAt.value.dateTime, snooze.fields.reminderAt.value.timeZone);
+  const replaces = snooze.fields.replaces?.value ?? null;
+  if (replaces != null) {
+    const index = moments.findIndex(moment => moment.baseInstant === replaces);
+    if (index >= 0) moments[index] = { ...moments[index], instant, snoozed: true };
+    else moments.push({ index: -1, reminder: { kind: 'snooze' }, occurrence, instant, baseInstant: instant, snoozed: true });
     return;
   }
   const action = snooze.instant;
@@ -407,8 +416,13 @@ function applySnooze(moments, snooze, occurrence) {
     if (moments[i].instant < action) continue;
     if (target < 0 || moments[i].instant < moments[target].instant || (moments[i].instant === moments[target].instant && moments[i].index < moments[target].index)) target = i;
   }
-  if (target < 0) moments.push({ index: -1, reminder: { kind: 'snooze' }, occurrence, instant, snoozed: true });
+  if (target < 0) moments.push({ index: -1, reminder: { kind: 'snooze' }, occurrence, instant, baseInstant: instant, snoozed: true });
   else moments[target] = { ...moments[target], instant, snoozed: true };
+}
+function replacedReminder(task, occurrence, now, zone, dayStart) {
+  const moments = reminderMoments(task, zone, dayStart).filter(moment => moment.instant >= now)
+    .sort((a, b) => a.instant - b.instant || a.index - b.index);
+  return moments[0]?.baseInstant ?? null;
 }
 
 function blankRecord(id, type, occurrence, instant, actionDate, actionZone, stamp, fields) {
@@ -563,6 +577,7 @@ function checkTask(task) {
     if (typeof record.fields.withdrawn.value !== 'boolean') fail('Invalid record in task file.');
     if (!Array.isArray(record.fields.seen.value) || record.fields.seen.value.some(id => typeof id !== 'string')) fail('Invalid record in task file.');
     checkDue(record.fields.due.value, 'due');
+    if (record.fields.replaces.value !== null && !Number.isSafeInteger(record.fields.replaces.value)) fail('Invalid record in task file.');
     if (record.fields.reminderAt.value != null) {
       const at = record.fields.reminderAt.value;
       exactKeys(at, ['dateTime', 'timeZone']);
@@ -668,7 +683,7 @@ export class Tasks {
   #any(id) {
     const task = this.#locate(id);
     if (!task) fail('Task not found.');
-    if (!hasTitle(task)) fail('Task was emptied from Trash.');
+    if (!usableTask(task)) fail('Task was emptied from Trash.');
     return task;
   }
   setTimeZone(timeZone) {
@@ -714,7 +729,7 @@ export class Tasks {
     if (!Object.keys(patch).length) fail('Nothing to change.');
     return this.#change((person, stamp) => {
       const task = person.tasks.find(item => item.id === id) ?? fail('Task not found.');
-      if (!hasTitle(task)) fail('Task was emptied from Trash.');
+      if (!usableTask(task)) fail('Task was emptied from Trash.');
       const before = clone(task);
       if (!task.life.value || task.pendingLife) {
         task.life = { value: true, stamp: clone(stamp) };
@@ -771,6 +786,7 @@ export class Tasks {
       seen: extra.seen ?? [],
       reminderAt: extra.reminderAt ?? null,
       due: extra.due ?? null,
+      replaces: extra.replaces ?? null,
     }));
     return id;
   }
@@ -793,7 +809,7 @@ export class Tasks {
   reopen(id, { occurrence, recordId, now = this.now() } = {}) {
     return this.#change((person, stamp) => {
       const task = person.tasks.find(item => item.id === id) ?? fail('Task not found.');
-      if (!hasTitle(task)) fail('Task was emptied from Trash.');
+      if (!usableTask(task)) fail('Task was emptied from Trash.');
       if (!task.life.value || task.pendingLife) fail('Task is in Trash.');
       if (!task.fields.repeat.value) {
         if (task.fields.state.value === 'open') fail('Task is open.');
@@ -812,7 +828,7 @@ export class Tasks {
   drop(id, now = this.now(), { recordId } = {}) {
     return this.#change((person, stamp) => {
       const task = person.tasks.find(item => item.id === id) ?? fail('Task not found.');
-      if (!hasTitle(task)) fail('Task was emptied from Trash.');
+      if (!usableTask(task)) fail('Task was emptied from Trash.');
       if (!task.life.value || task.pendingLife) fail('Task is in Trash.');
       if (task.fields.state.value === 'dropped') fail('This task is dropped.');
       task.fields.state = { value: 'dropped', stamp: clone(stamp) };
@@ -828,14 +844,15 @@ export class Tasks {
       const zone = person.fields.timeZone.value;
       const at = request.at ? normalizeWall(request.at) : presetWall(task, request.preset, instant, zone, person.fields.dayStart.value);
       const due = request.moveDue ? normalizeDue(request.due ?? { dateTime: at.dateTime, timeZone: at.timeZone }) : null;
-      this.#record(task, 'snooze', instant, stamp, recordId, { reminderAt: at, due });
+      const replaces = replacedReminder(task, occurrenceName(task.fields.due.value, currentDate(task)), instant, zone, person.fields.dayStart.value);
+      this.#record(task, 'snooze', instant, stamp, recordId, { reminderAt: at, due, replaces });
       task.life = { value: true, stamp: clone(stamp) };
     });
   }
   deleteTask(id) {
     return this.#change((person, stamp) => {
       const task = person.tasks.find(item => item.id === id) ?? fail('Task not found.');
-      if (!hasTitle(task)) fail('Task was emptied from Trash.');
+      if (!usableTask(task)) fail('Task was emptied from Trash.');
       if (!task.life.value && !task.pendingLife) fail('Task is in Trash.');
       task.life = { value: false, stamp: clone(stamp) };
       delete task.pendingLife;
@@ -844,7 +861,7 @@ export class Tasks {
   restoreTask(id) {
     return this.#change((person, stamp) => {
       const task = person.tasks.find(item => item.id === id) ?? fail('Task not found.');
-      if (!hasTitle(task)) fail('Task was emptied from Trash.');
+      if (!usableTask(task)) fail('Task was emptied from Trash.');
       if (task.life.value && !task.pendingLife) fail('Task is not in Trash.');
       task.life = { value: true, stamp: clone(stamp) };
       delete task.pendingLife;
@@ -920,7 +937,7 @@ export class Tasks {
           }
           continue;
         }
-        undoFields(live.fields, old.fields, record.fields, { withdrawn: false, seen: [], reminderAt: null, due: null }, RECORD_KEYS);
+        undoFields(live.fields, old.fields, record.fields, { withdrawn: false, seen: [], reminderAt: null, due: null, replaces: null }, RECORD_KEYS);
       }
     }
     history.pop();
@@ -929,7 +946,7 @@ export class Tasks {
   }
   #requireOpen(person, id) {
     const task = person.tasks.find(item => item.id === id) ?? fail('Task not found.');
-    if (!hasTitle(task)) fail('Task was emptied from Trash.');
+    if (!usableTask(task)) fail('Task was emptied from Trash.');
     if (!task.life.value || task.pendingLife) fail('Task is in Trash.');
     if (task.fields.state.value === 'dropped') fail('This task is dropped.');
     if (statusOf(task) === 'done') fail('This task is done.');

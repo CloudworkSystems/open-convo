@@ -441,6 +441,26 @@ test('8. snooze presets, including next Monday on a Monday, leave the series put
     again.remindersDue(at('2026-04-01T00:00:00.000Z'), at('2026-04-02T00:00:00.000Z'), 'UTC').map(row => row.at),
     ['2026-04-01T15:00'],
   );
+
+  const winner = engine('snooze-win', T0 + 5, 'UTC');
+  const loser = engine('snooze-lose', T0 + 1, 'UTC');
+  winner.addTask({
+    title: 'Two bells',
+    due: '2026-04-02',
+    reminders: [
+      { dateTime: '2026-04-02T09:00', timeZone: 'UTC', occurrence: '2026-04-02' },
+      { dateTime: '2026-04-02T10:00', timeZone: 'UTC', occurrence: '2026-04-02' },
+    ],
+  }, { taskId: 'bells' });
+  loser.importPerson(winner.getPerson());
+  const morning = at('2026-04-02T08:00:00.000Z');
+  winner.snooze('bells', { at: { dateTime: '2026-04-02T12:00', timeZone: 'UTC' } }, morning, { recordId: 'win' });
+  loser.snooze('bells', { at: { dateTime: '2026-04-02T07:00', timeZone: 'UTC' } }, morning, { recordId: 'lose' });
+  const raced = fork(mergePeople(winner.getPerson(), loser.getPerson()), 'snooze-race', T0 + 9);
+  assert.deepEqual(
+    raced.remindersDue(at('2026-04-02T00:00:00.000Z'), at('2026-04-03T00:00:00.000Z'), 'UTC').map(row => row.at),
+    ['2026-04-02T10:00', '2026-04-02T12:00'],
+  );
 });
 
 test('upcoming keeps only the occurrences a repeat still has', () => {
@@ -529,6 +549,8 @@ test('9. merge keeps both edits, both completions, and a reopened occurrence', (
   const holder = new Tasks({ deviceId: 'holder', id: 'household', timeZone: 'UTC', now: () => T0 });
   holder.importPerson(held);
   assert.deepEqual(holder.tasks({ trash: true }), []);
+  assert.throws(() => holder.task('task'), /emptied/);
+  assert.throws(() => holder.restoreTask('task'), /emptied/);
 
   const monday = engine('monday-edit', T0 + 4);
   const thursday = engine('thursday-edit', T0 + 8);
