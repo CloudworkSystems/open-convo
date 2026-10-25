@@ -105,6 +105,32 @@ test('2. sender, domain, list and message targets match exactly; pile narrows a 
     .flatMap(message => Object.values(message.ids).flat()).sort(), ['d']);
 });
 
+test('summary counts one sender selected from two piles once', () => {
+  const input = messages([
+    mail({ id: 'sender-alert', from: { address: 'sender@news.example' }, pile: 'alerts' }),
+    mail({ id: 'sender-newsletter', from: { address: 'sender@news.example' }, pile: 'newsletters' }),
+  ]);
+  const result = previewActions(input, oneRequest('delete', { sender: 'sender@news.example' }));
+  assert.equal(action(result, 'delete').groups.length, 2);
+  assert.equal(result.summary[1], 'Delete: 2 messages from 1 sender');
+});
+
+test('summary counts one List-Id selected from two piles once', () => {
+  const input = messages([
+    mail({
+      id: 'list-alert', from: { address: 'alerts@news.example' },
+      headers: { 'List-Id': '<digest.news.example>' }, pile: 'alerts',
+    }),
+    mail({
+      id: 'list-newsletter', from: { address: 'letters@news.example' },
+      headers: { 'List-Id': '<digest.news.example>' }, pile: 'newsletters',
+    }),
+  ]);
+  const result = previewActions(input, oneRequest('spam', { listId: 'digest.news.example' }));
+  assert.equal(action(result, 'spam').groups.length, 2);
+  assert.equal(result.summary[0], 'Spam: 2 messages from 1 sender');
+});
+
 test('3. People, Work and unsorted mail are left out of sweeps, while direct messages may include them', () => {
   const input = messages([
     mail({ id: 'p', from: { address: 'same@fernway.example' }, pile: 'people' }),

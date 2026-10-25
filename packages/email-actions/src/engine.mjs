@@ -307,7 +307,8 @@ function summaryLines(actions, unsubscribe) {
   for (const action of ['spam', 'delete']) {
     const value = byAction[action];
     const name = action === 'spam' ? 'Spam' : 'Delete';
-    lines.push(`${name}: ${value.count} message${value.count === 1 ? '' : 's'} from ${value.groups.length} sender${value.groups.length === 1 ? '' : 's'}`);
+    const senderCount = new Set(value.groups.map(group => group.key)).size;
+    lines.push(`${name}: ${value.count} message${value.count === 1 ? '' : 's'} from ${senderCount} sender${senderCount === 1 ? '' : 's'}`);
   }
   const counts = { oneClick: 0, mailto: 0, webPage: 0, none: 0 };
   for (const entry of unsubscribe) counts[entry.method] += 1;
