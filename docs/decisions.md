@@ -7,13 +7,14 @@ for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
 - **Oct 25:** More work per dollar, without the owner or his Mac awake.
-  The PR keeper moves to the cloud, restarts a hung Codex review after 20
-  minutes instead of 60, updates a pull request from `main` only once it is
+  The PR keeper moves to the cloud, counts a Codex review as hung after 20
+  minutes instead of 60 (restarting it at its next hourly run), updates a pull request from `main` only once it is
   otherwise ready to merge, and relays Codex findings on GrokBot pull
   requests to the builder with an `@cursor` comment. After three Codex
   rounds, builders fix only P0 and P1 findings and leave P2 and P3 to the
-  triage judge, unless no verdict arrives within two hours (AGENTS.md "Review Guidelines" and "Coordinating On
-  GitHub").
+  triage judge, unless no verdict arrives within two hours; Codex keeps
+  raising a finding left for the judge until the judge rates it (AGENTS.md
+  "Review Guidelines" and "Coordinating On GitHub").
 - **Oct 24:** Next outside modules: the email actions preview (Codex builds
   through the local Codex CLI, Gemini reviews), the tasks and reminders
   engine (GrokBot team A) and the Today agenda (GrokBot team C, after #112),

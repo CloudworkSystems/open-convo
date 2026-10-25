@@ -72,7 +72,8 @@ reads from and writes to `CloudworkSystems/open-convo`.
     requests.
   - *Code* is reviewed until Codex finishes with a 👍 on the pull request.
     Claude fixes every P1 and P2, or explains in the pull request why one does
-    not apply. Only the owner decides to merge with findings still open.
+    not apply, or after three Codex rounds leaves a P2 for the triage judge
+    (Review Guidelines). Only the owner decides to merge with findings still open.
   - The owner does that by posting a comment containing only this line,
     `owner-accepts-findings <full head sha>`, on the pull request himself,
     after reading what's left. Any other text in the comment makes it not
@@ -158,6 +159,9 @@ looping for 8 to 17 rounds on ever-narrower edge cases, so:
   explains as not applying, and don't reopen an area a previous round already
   settled unless the new commit changed it. A P0 or P1 is raised again on
   every round until the code fixes it or you agree with the answer.
+  A reply that only leaves a finding for the triage judge isn't an answer:
+  raise that finding again on every round until the judge rates it or the
+  code fixes it, so the judge sees it on the latest commit.
 - Give all findings for a commit in one round, most severe first.
 
 When a pull request still has only P2 and P3 findings after three Codex
@@ -217,7 +221,7 @@ request itself, so the owner doesn't have to carry messages:
 - Codex reviews each new commit by itself, usually within five minutes.
   When its review of a pull request's latest commit hangs (still "running"
   after 20 minutes, or not started 20 minutes after the push), the PR keeper
-  restarts it once by pushing
+  restarts it once at its next hourly run by pushing
   an empty commit, "Restart Codex review (no changes)", as the bot. An empty
   commit leaves the pull request's changes the same, so it needs no new
   Claude review. A restart commit is never restarted itself: when the latest
@@ -229,10 +233,14 @@ request itself, so the owner doesn't have to carry messages:
   auto-merge is on and its latest commit already passes `tests` and
   `codex-approved`. Each pull request then gets one update, right before it
   merges, instead of one every hour (owner decision, October 25, 2026).
+  On a pull request that touches a protected path, that update comes before
+  the owner is asked to approve, since an update dismisses his approval. If
+  one does dismiss it, the `owner-queue` workflow lists the pull request on
+  issue #52 again.
 - The PR keeper also relays review findings so work keeps moving while the
   owner and his Mac are away. When Codex has left findings on the latest
-  commit of a GrokBot pull request and no fix has followed within 20
-  minutes, it asks the builder to fix them in one `@cursor` comment per
+  commit of a GrokBot pull request and no fix has followed 20 minutes later,
+  at its next hourly run it asks the builder to fix them in one `@cursor` comment per
   commit, naming the findings and the plan. After three Codex rounds it
   relays only P0 and P1 findings and findings the judge called real, or
   every finding when no judge verdict has arrived two hours after Codex's
