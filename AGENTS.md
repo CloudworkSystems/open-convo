@@ -168,8 +168,10 @@ findings, findings the judge calls real, pull requests opened by the owner's
 account and the owner's approval of protected paths all still block.
 So after three Codex rounds, builders fix only P0 and P1 findings and leave
 P2 and P3 findings for the judge, answering each in one line on its review
-thread. They fix a P2 or P3 only when the judge calls it real (owner
-decision, October 25, 2026).
+thread. They fix a P2 or P3 when the judge calls it real, or when no judge
+verdict on the latest commit has arrived two hours after Codex's review
+(the judge can't run, or failed), so a pull request never waits on a
+judge that isn't there (owner decision, October 25, 2026).
 
 ## Outside Builders (Owner Decision, October 15, 2026)
 
@@ -232,7 +234,9 @@ request itself, so the owner doesn't have to carry messages:
   commit of a GrokBot pull request and no fix has followed within 20
   minutes, it asks the builder to fix them in one `@cursor` comment per
   commit, naming the findings and the plan. After three Codex rounds it
-  relays only P0 and P1 findings, or findings the judge called real. For
+  relays only P0 and P1 findings and findings the judge called real, or
+  every finding when no judge verdict has arrived two hours after Codex's
+  review. For
   Claude-built and Codex-built pull requests it only lists unanswered
   findings in its report. The keeper runs in the cloud as `cloudwork-bot`,
   not on the Mac (owner decision, October 25, 2026).

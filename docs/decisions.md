@@ -12,7 +12,7 @@ full plan and history are in [PLAN.md](../PLAN.md).
   otherwise ready to merge, and relays Codex findings on GrokBot pull
   requests to the builder with an `@cursor` comment. After three Codex
   rounds, builders fix only P0 and P1 findings and leave P2 and P3 to the
-  triage judge (AGENTS.md "Review Guidelines" and "Coordinating On
+  triage judge, unless no verdict arrives within two hours (AGENTS.md "Review Guidelines" and "Coordinating On
   GitHub").
 - **Oct 24:** Next outside modules: the email actions preview (Codex builds
   through the local Codex CLI, Gemini reviews), the tasks and reminders
