@@ -1,0 +1,334 @@
+{
+  "today": [
+    {
+      "id": "reg",
+      "title": "Renew registration",
+      "note": "",
+      "list": "Errands",
+      "priority": "high",
+      "status": "open",
+      "occurrence": "2026-03-01",
+      "due": {
+        "kind": "date",
+        "date": "2026-03-01"
+      },
+      "overdue": true,
+      "repeatsAfterDone": false,
+      "repeat": null
+    },
+    {
+      "id": "call",
+      "title": "Call the dentist",
+      "note": "",
+      "list": "Home",
+      "priority": null,
+      "status": "open",
+      "occurrence": "2026-03-10T09:00[America/New_York]",
+      "due": {
+        "kind": "dateTime",
+        "dateTime": "2026-03-10T09:00",
+        "timeZone": "America/New_York",
+        "instant": 1773147600000,
+        "resolved": "2026-03-10T09:00"
+      },
+      "overdue": true,
+      "repeatsAfterDone": false,
+      "repeat": null
+    },
+    {
+      "id": "tickets",
+      "title": "Book tickets",
+      "note": "",
+      "list": null,
+      "priority": null,
+      "status": "open",
+      "occurrence": "2026-03-10T18:00[America/New_York]",
+      "due": {
+        "kind": "dateTime",
+        "dateTime": "2026-03-10T18:00",
+        "timeZone": "America/New_York",
+        "instant": 1773180000000,
+        "resolved": "2026-03-10T18:00"
+      },
+      "overdue": false,
+      "repeatsAfterDone": false,
+      "repeat": null
+    },
+    {
+      "id": "plants",
+      "title": "Water the plants",
+      "note": "",
+      "list": "Home",
+      "priority": "high",
+      "status": "open",
+      "occurrence": "2026-03-10",
+      "due": {
+        "kind": "date",
+        "date": "2026-03-10"
+      },
+      "overdue": false,
+      "repeatsAfterDone": false,
+      "repeat": null
+    },
+    {
+      "id": "book",
+      "title": "Return the book",
+      "note": "",
+      "list": "Errands",
+      "priority": null,
+      "status": "open",
+      "occurrence": "2026-03-10",
+      "due": {
+        "kind": "date",
+        "date": "2026-03-10"
+      },
+      "overdue": false,
+      "repeatsAfterDone": false,
+      "repeat": null
+    },
+    {
+      "id": "stretch",
+      "title": "Stretch",
+      "note": "",
+      "list": null,
+      "priority": null,
+      "status": "open",
+      "occurrence": "2026-03-10",
+      "due": {
+        "kind": "date",
+        "date": "2026-03-10"
+      },
+      "overdue": false,
+      "repeatsAfterDone": false,
+      "repeat": {
+        "kind": "days",
+        "every": 1,
+        "mode": "onSchedule",
+        "endAfter": 2,
+        "endOn": null
+      }
+    },
+    {
+      "id": "letter",
+      "title": "Take the letter",
+      "note": "",
+      "list": null,
+      "priority": null,
+      "status": "open",
+      "occurrence": "2026-03-20",
+      "due": {
+        "kind": "date",
+        "date": "2026-03-20"
+      },
+      "overdue": false,
+      "repeatsAfterDone": false,
+      "repeat": null
+    }
+  ],
+  "upcoming": [
+    {
+      "date": "2026-03-10",
+      "tasks": [
+        {
+          "id": "call",
+          "title": "Call the dentist",
+          "note": "",
+          "list": "Home",
+          "priority": null,
+          "status": "open",
+          "occurrence": "2026-03-10T09:00[America/New_York]",
+          "due": {
+            "kind": "dateTime",
+            "dateTime": "2026-03-10T09:00",
+            "timeZone": "America/New_York",
+            "instant": 1773147600000,
+            "resolved": "2026-03-10T09:00"
+          },
+          "overdue": true,
+          "repeatsAfterDone": false,
+          "repeat": null
+        },
+        {
+          "id": "tickets",
+          "title": "Book tickets",
+          "note": "",
+          "list": null,
+          "priority": null,
+          "status": "open",
+          "occurrence": "2026-03-10T18:00[America/New_York]",
+          "due": {
+            "kind": "dateTime",
+            "dateTime": "2026-03-10T18:00",
+            "timeZone": "America/New_York",
+            "instant": 1773180000000,
+            "resolved": "2026-03-10T18:00"
+          },
+          "overdue": false,
+          "repeatsAfterDone": false,
+          "repeat": null
+        },
+        {
+          "id": "plants",
+          "title": "Water the plants",
+          "note": "",
+          "list": "Home",
+          "priority": "high",
+          "status": "open",
+          "occurrence": "2026-03-10",
+          "due": {
+            "kind": "date",
+            "date": "2026-03-10"
+          },
+          "overdue": false,
+          "repeatsAfterDone": false,
+          "repeat": null
+        },
+        {
+          "id": "book",
+          "title": "Return the book",
+          "note": "",
+          "list": "Errands",
+          "priority": null,
+          "status": "open",
+          "occurrence": "2026-03-10",
+          "due": {
+            "kind": "date",
+            "date": "2026-03-10"
+          },
+          "overdue": false,
+          "repeatsAfterDone": false,
+          "repeat": null
+        },
+        {
+          "id": "stretch",
+          "title": "Stretch",
+          "note": "",
+          "list": null,
+          "priority": null,
+          "status": "open",
+          "occurrence": "2026-03-10",
+          "due": {
+            "kind": "date",
+            "date": "2026-03-10"
+          },
+          "overdue": false,
+          "repeatsAfterDone": false,
+          "repeat": {
+            "kind": "days",
+            "every": 1,
+            "mode": "onSchedule",
+            "endAfter": 2,
+            "endOn": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-03-11",
+      "tasks": [
+        {
+          "id": "stretch",
+          "title": "Stretch",
+          "note": "",
+          "list": null,
+          "priority": null,
+          "status": "open",
+          "occurrence": "2026-03-11",
+          "due": {
+            "kind": "date",
+            "date": "2026-03-11"
+          },
+          "overdue": false,
+          "repeatsAfterDone": false,
+          "repeat": {
+            "kind": "days",
+            "every": 1,
+            "mode": "onSchedule",
+            "endAfter": 2,
+            "endOn": null
+          }
+        },
+        {
+          "id": "fern",
+          "title": "Water the fern",
+          "note": "",
+          "list": "Home",
+          "priority": null,
+          "status": "open",
+          "occurrence": "2026-03-11",
+          "due": {
+            "kind": "date",
+            "date": "2026-03-11"
+          },
+          "overdue": false,
+          "repeatsAfterDone": true,
+          "repeat": {
+            "kind": "days",
+            "every": 3,
+            "mode": "afterDone",
+            "endAfter": null,
+            "endOn": null
+          }
+        }
+      ]
+    },
+    {
+      "date": "2026-03-12",
+      "tasks": [
+        {
+          "id": "fee",
+          "title": "Pay the fee",
+          "note": "",
+          "list": "Errands",
+          "priority": null,
+          "status": "open",
+          "occurrence": "2026-03-12",
+          "due": {
+            "kind": "date",
+            "date": "2026-03-12"
+          },
+          "overdue": false,
+          "repeatsAfterDone": false,
+          "repeat": null
+        }
+      ]
+    }
+  ],
+  "overdue": [
+    {
+      "id": "reg",
+      "title": "Renew registration",
+      "note": "",
+      "list": "Errands",
+      "priority": "high",
+      "status": "open",
+      "occurrence": "2026-03-01",
+      "due": {
+        "kind": "date",
+        "date": "2026-03-01"
+      },
+      "overdue": true,
+      "repeatsAfterDone": false,
+      "repeat": null
+    },
+    {
+      "id": "call",
+      "title": "Call the dentist",
+      "note": "",
+      "list": "Home",
+      "priority": null,
+      "status": "open",
+      "occurrence": "2026-03-10T09:00[America/New_York]",
+      "due": {
+        "kind": "dateTime",
+        "dateTime": "2026-03-10T09:00",
+        "timeZone": "America/New_York",
+        "instant": 1773147600000,
+        "resolved": "2026-03-10T09:00"
+      },
+      "overdue": true,
+      "repeatsAfterDone": false,
+      "repeat": null
+    }
+  ]
+}
