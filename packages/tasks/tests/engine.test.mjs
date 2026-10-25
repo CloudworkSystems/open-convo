@@ -465,6 +465,21 @@ test('8. snooze presets, including next Monday on a Monday, leave the series put
     chain.remindersDue(at('2026-04-03T00:00:00.000Z'), at('2026-04-04T00:00:00.000Z'), 'UTC').map(row => row.at),
     ['2026-04-03T12:00', '2026-04-03T20:00'],
   );
+  const twin = engine('twin-time', T0, 'UTC');
+  twin.addTask({
+    title: 'Same minute',
+    due: { dateTime: '2026-04-04T09:00', timeZone: 'UTC' },
+    reminders: [
+      { dateTime: '2026-04-04T09:00', timeZone: 'UTC' },
+      { hours: 0 },
+    ],
+  }, { taskId: 'twin' });
+  twin.snooze('twin', { at: { dateTime: '2026-04-04T12:00', timeZone: 'UTC' } }, at('2026-04-04T08:00:00.000Z'), { recordId: 'first-twin' });
+  twin.snooze('twin', { at: { dateTime: '2026-04-04T13:00', timeZone: 'UTC' } }, at('2026-04-04T08:30:00.000Z'), { recordId: 'second-twin' });
+  assert.deepEqual(
+    twin.remindersDue(at('2026-04-04T00:00:00.000Z'), at('2026-04-05T00:00:00.000Z'), 'UTC').map(row => row.at),
+    ['2026-04-04T12:00', '2026-04-04T13:00'],
+  );
 
   const winner = engine('snooze-win', T0 + 5, 'UTC');
   const loser = engine('snooze-lose', T0 + 1, 'UTC');

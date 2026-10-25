@@ -414,7 +414,7 @@ function snoozesToApply(task, occurrence) {
   for (const record of task.records) {
     if (record.type !== 'snooze' || record.fields.withdrawn.value) continue;
     if ((record.occurrence ?? null) !== (occurrence ?? null) || !record.fields.reminderAt.value) continue;
-    const key = record.fields.replaces?.value == null ? 'new' : String(record.fields.replaces.value);
+    const key = record.fields.replaces?.value == null ? 'new' : `reminder:${record.fields.replaces.value}`;
     const current = best.get(key);
     if (!current || compareStamps(record.stamp, current.stamp) > 0 || (compareStamps(record.stamp, current.stamp) === 0 && lex(record.id, current.id) > 0)) {
       best.set(key, record);
@@ -426,7 +426,7 @@ function applyWinningSnooze(moments, snooze, occurrence) {
   const instant = wallToInstant(snooze.fields.reminderAt.value.dateTime, snooze.fields.reminderAt.value.timeZone);
   const replaces = snooze.fields.replaces?.value ?? null;
   if (replaces != null) {
-    const index = moments.findIndex(moment => moment.baseInstant === replaces);
+    const index = moments.findIndex(moment => moment.index === replaces);
     if (index >= 0) moments[index] = { ...moments[index], instant, snoozed: true };
     else moments.push({ index: -1, reminder: { kind: 'snooze' }, occurrence, instant, baseInstant: instant, snoozed: true });
     return;
@@ -441,9 +441,10 @@ function applyWinningSnooze(moments, snooze, occurrence) {
   else moments[target] = { ...moments[target], instant, snoozed: true };
 }
 function replacedReminder(task, occurrence, now, zone, dayStart) {
-  const moments = reminderMoments(task, zone, dayStart).filter(moment => moment.instant >= now)
+  const moments = reminderMoments(task, zone, dayStart).filter(moment => moment.instant >= now && moment.index >= 0)
     .sort((a, b) => a.instant - b.instant || a.index - b.index);
-  return moments[0]?.baseInstant ?? null;
+  // Index, not the instant: two reminders can share a time and must stay distinct.
+  return moments.length ? moments[0].index : null;
 }
 
 function blankRecord(id, type, occurrence, instant, actionDate, actionZone, stamp, fields) {
@@ -598,7 +599,7 @@ function checkTask(task) {
     if (typeof record.fields.withdrawn.value !== 'boolean') fail('Invalid record in task file.');
     if (!Array.isArray(record.fields.seen.value) || record.fields.seen.value.some(id => typeof id !== 'string')) fail('Invalid record in task file.');
     checkDue(record.fields.due.value, 'due');
-    if (record.fields.replaces.value !== null && !Number.isSafeInteger(record.fields.replaces.value)) fail('Invalid record in task file.');
+    if (record.fields.replaces.value !== null && (!Number.isSafeInteger(record.fields.replaces.value) || record.fields.replaces.value < 0)) fail('Invalid record in task file.');
     if (record.fields.reminderAt.value != null) {
       const at = record.fields.reminderAt.value;
       exactKeys(at, ['dateTime', 'timeZone']);
