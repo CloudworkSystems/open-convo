@@ -17,9 +17,9 @@ full plan and history are in [PLAN.md](../PLAN.md).
   each piece with its own plan. For the agents that build True Convo, the
   owner approves one exe.dev VM, which he signs up for and pays himself, so
   any model's agent can work while his Mac sleeps. Its first jobs are his
-  local Codex CLI jobs and the Gemini CLI, both as `cloudwork-bot` with a
-  fine-grained token limited to open-convo. Mac and iPhone builds stay on
-  the Mac.
+  local Codex CLI jobs and the Gemini CLI, both as `cloudwork-bot` with
+  their own classic `repo`-only token (no `workflow` scope, as in the merge
+  gate). Mac and iPhone builds stay on the Mac.
 - **Oct 25:** More work per dollar, without the owner or his Mac awake.
   The PR keeper moves to the cloud, counts a Codex review as hung after 20
   minutes instead of 60 (restarting it at its next hourly run), updates a pull request from `main` only once it is

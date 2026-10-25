@@ -100,9 +100,14 @@ Rules for the VM:
   pays and keeps the account.
 - **First jobs:** the owner's local Codex CLI jobs and the Gemini CLI, both
   working as `cloudwork-bot`, under the same review loop as every other agent.
-- **Credentials:** a fine-grained `cloudwork-bot` token limited to
-  `CloudworkSystems/open-convo`, kept on the VM and never in the repository or
-  logs. A Codex or Gemini sign-in goes there only when the owner sets it up.
+- **Credentials:** a separate classic `cloudwork-bot` token for the VM,
+  with only the `repo` scope and no `workflow` scope, as
+  [merge-gate.md](../plans/merge-gate.md) sets up for every builder.
+  Fine-grained tokens can't write here, because the bot is only a
+  collaborator on a personal-account repository, and the bot collaborates on
+  this repository alone. A separate token lets the VM's access be revoked
+  without touching the other builders'. It is kept on the VM and never in
+  the repository or logs. A Codex or Gemini sign-in goes there only when the owner sets it up.
   The VM never holds the `CloudworkSystems` account's credentials.
 - **Zero trust:** an unknown foreign agent (for example Meta's Muse agent)
   never shares the VM or its token with the trusted builders.
