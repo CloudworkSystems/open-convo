@@ -101,7 +101,7 @@ public struct AppSaveRequest: Sendable {
     public var replaceLocalRecord: Bool
     public var conflictCopies: [SyncRecord]
     /// Conflict copies the app still has stored and must delete. They stay
-    /// in the checkpoint until `confirmConflictCopiesStored`.
+    /// in the checkpoint until `confirmConflictCopiesRemoved`.
     public var conflictCopiesToRemove: [SyncRecord]
     /// Checkpoint written before this request. A conflict copy in here is
     /// already durable if the app is being asked to replace its record.
@@ -162,6 +162,8 @@ public enum SyncError: Error, Equatable, Sendable {
     case syncDidNotFinish(String)
     /// A save confirmation for an older revision arrived after a newer one.
     case staleRevision
+    /// A non-purged edit arrived while this device already holds a purge.
+    case recordPurged
 }
 
 public enum SyncLimits {

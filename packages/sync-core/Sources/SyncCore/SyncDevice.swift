@@ -143,6 +143,9 @@ public final class SyncDevice {
     public func queueLocalEdit(_ record: SyncRecord) throws {
         guard hasCheckpoint else { throw SyncError.checkpointRequired }
         try validateLocal(record)
+        if !record.purged && holdsPurge(record.id) {
+            throw SyncError.recordPurged
+        }
         let record = withoutPurgedPayload(record)
         let cleanup = record.purged ? stagePurgeCleanup(for: record.id) : []
         observe(record.stamp)
@@ -213,19 +216,26 @@ public final class SyncDevice {
         }
     }
 
+    /// The app stored these conflict copies. This does not confirm that a
+    /// purge deletion finished; a later purge can still ask for them back.
     public func confirmConflictCopiesStored(recordIDs: [String]? = nil) {
         let matches: (SyncRecord) -> Bool = { record in
             guard let recordIDs else { return true }
             return recordIDs.contains(record.id)
         }
-        let deleted = Set(pendingCleanups.filter(matches).map(\.id))
-        pendingCleanups.removeAll(where: matches)
-        storedConflictCopies.removeAll { deleted.contains($0.id) }
-        conflicts.removeAll { deleted.contains($0.id) }
         for copy in conflicts.filter(matches) where !storedConflictCopies.contains(where: { $0.id == copy.id && $0.stamp == copy.stamp }) {
             storedConflictCopies.append(copy)
         }
         conflicts.removeAll(where: matches)
+    }
+
+    /// The app deleted these exact conflict copies. Only the named stamps
+    /// leave the cleanup list, so an older save confirmation cannot clear
+    /// a newer purge deletion.
+    public func confirmConflictCopiesRemoved(_ copies: [SyncRecord]) {
+        let named = Set(copies.map { CopyKey(id: $0.id, stamp: $0.stamp) })
+        pendingCleanups.removeAll { named.contains(CopyKey(id: $0.id, stamp: $0.stamp)) }
+        storedConflictCopies.removeAll { named.contains(CopyKey(id: $0.id, stamp: $0.stamp)) }
     }
 
     /// The app hands over every local record after a restart. Queues this
@@ -245,6 +255,7 @@ public final class SyncDevice {
             pendingReplacements.removeValue(forKey: id)
         }
         outbox.removeAll { entry in
+            if entry.record.purged { return false }
             if let pending = pendingReplacements[entry.record.id], pending.losingStamp == entry.record.stamp {
                 return true
             }
@@ -252,6 +263,18 @@ public final class SyncDevice {
             return saved.stamp != entry.record.stamp
         }
         local = byID
+        for entry in outbox where entry.record.purged && byID[entry.record.id]?.purged != true {
+            local[entry.record.id] = entry.record
+            let cleanup = stagePurgeCleanup(for: entry.record.id)
+            let checkpoint = saveCheckpoint()
+            deliver(AppSaveRequest(
+                record: entry.record,
+                replaceLocalRecord: true,
+                conflictCopies: [],
+                checkpointBeforeRequest: checkpoint,
+                conflictCopiesToRemove: cleanup
+            ))
+        }
         for record in byID.values {
             if record.purged {
                 let cleanup = stagePurgeCleanup(for: record.id)
@@ -267,6 +290,7 @@ public final class SyncDevice {
                 }
             }
             guard record.stamp.deviceID == deviceID else { continue }
+            if !record.purged && holdsPurge(record.id) { continue }
             if let pending = pendingReplacements[record.id], pending.losingStamp == record.stamp {
                 continue
             }
@@ -748,6 +772,11 @@ public final class SyncDevice {
             isMergeResult: false,
             epoch: acceptingUploadsThroughEpoch ?? editEpoch
         ))
+    }
+
+    private struct CopyKey: Hashable {
+        var id: String
+        var stamp: VersionStamp
     }
 
     private func holdsPurge(_ id: String) -> Bool {
