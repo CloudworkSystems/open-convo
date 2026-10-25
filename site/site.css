@@ -39,6 +39,17 @@ h2 { font-size: 1.5rem; margin: 2.5rem 0 0.75rem; }
   background: var(--tca-ember-gradient-soft);
 }
 
+figure { margin: 1.5rem 0 2rem; }
+figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--tca-border-strong);
+  border-radius: 12px;
+  box-shadow: var(--tca-shadow-ember);
+}
+figcaption { margin-top: 0.6rem; font-size: 0.95rem; color: var(--tca-text-muted); }
+
 ul { padding-left: 1.25rem; }
 li { margin: 0.4rem 0; }
 
