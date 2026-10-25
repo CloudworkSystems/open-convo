@@ -770,7 +770,7 @@ final class SyncCorePlanTests: XCTestCase {
         try b.sync()
         try a.sync(order: .fetchThenUpload)
         XCTAssertTrue(a.device.conflictCopies().contains { $0.payload == secret.payload })
-        a.device.confirmConflictCopiesStored(recordIDs: ["note"])
+        a.device.confirmConflictCopiesStored(a.device.conflictCopies().filter { $0.payload == secret.payload })
         XCTAssertFalse(a.device.conflictCopies().contains { $0.id == "note" })
         XCTAssertNotEqual(a.device.status().kind, .needsAttention)
         let remembered = a.device.saveCheckpoint()
@@ -841,6 +841,50 @@ final class SyncCorePlanTests: XCTestCase {
         XCTAssertTrue(live(b, "note").payload.isEmpty)
     }
 
+    func testStorageConfirmationKeepsANewerConflictCopy() throws {
+        let cloud = FakeCloud()
+        let a = Peer("phone-a", cloud: cloud)
+        let b = Peer("phone-b", cloud: cloud)
+        a.boot()
+        b.boot()
+        _ = try a.edit("note", payload: text("base"))
+        try syncAll([a, b])
+        let older = try a.edit("note", payload: text("older-loss"))
+        for _ in 0..<3 { _ = try b.device.nextStamp() }
+        _ = try b.edit("note", payload: text("middle"))
+        try b.sync()
+        var firstRequest: AppSaveRequest?
+        a.holdSaves { request in
+            firstRequest = request
+            if request.replaceLocalRecord {
+                a.store.save(request.record)
+                try? a.device.confirmLocalSave(request.record)
+            }
+        }
+        try a.sync(order: .fetchThenUpload)
+        let first = try XCTUnwrap(firstRequest)
+        XCTAssertTrue(first.conflictCopies.contains { $0.payload == older.payload })
+        a.resumeSaves()
+        let later = try a.edit("note", payload: text("later-loss"))
+        for _ in 0..<3 { _ = try b.device.nextStamp() }
+        _ = try b.edit("note", payload: text("newest"))
+        try b.sync()
+        try a.sync(order: .fetchThenUpload)
+        XCTAssertTrue(a.device.conflictCopies().contains { $0.payload == older.payload })
+        XCTAssertTrue(a.device.conflictCopies().contains { $0.payload == later.payload })
+        a.device.confirmConflictCopiesStored(first.conflictCopies)
+        XCTAssertFalse(a.device.conflictCopies().contains { $0.payload == older.payload })
+        XCTAssertTrue(a.device.conflictCopies().contains { $0.payload == later.payload })
+        XCTAssertEqual(a.device.status().kind, .needsAttention)
+        let checkpoint = a.device.saveCheckpoint()
+        try a.adopt(checkpoint)
+        a.store.save(live(b, "note"))
+        try a.device.reconcile(a.store.all())
+        XCTAssertTrue(a.device.conflictCopies().contains { $0.payload == later.payload })
+        XCTAssertFalse(a.device.conflictCopies().contains { $0.payload == older.payload })
+        XCTAssertEqual(a.device.status().kind, .needsAttention)
+    }
+
     func testStoredCopyConfirmationDoesNotClearAPurgeCleanup() throws {
         let cloud = FakeCloud()
         let a = Peer("phone-a", cloud: cloud)
@@ -868,7 +912,7 @@ final class SyncCorePlanTests: XCTestCase {
         try a.device.queueLocalEdit(purge)
         let copies = notices.flatMap(\.conflictCopiesToRemove)
         XCTAssertTrue(copies.contains { $0.payload == secret.payload })
-        a.device.confirmConflictCopiesStored(recordIDs: ["note"])
+        a.device.confirmConflictCopiesStored(copies)
         XCTAssertEqual(a.device.status().kind, .needsAttention)
         let pending = a.device.saveCheckpoint()
         notices.removeAll()
@@ -1033,7 +1077,7 @@ extension SyncCorePlanTests {
         XCTAssertFalse(holding.isEmpty)
         for peer in holding {
             XCTAssertFalse((peer.device.status().reason ?? "").isEmpty)
-            peer.device.confirmConflictCopiesStored()
+            peer.device.confirmConflictCopiesStored(peer.device.conflictCopies())
             XCTAssertEqual(peer.device.status().kind, .synced)
         }
     }

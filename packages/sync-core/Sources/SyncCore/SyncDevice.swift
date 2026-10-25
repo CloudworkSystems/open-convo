@@ -216,17 +216,17 @@ public final class SyncDevice {
         }
     }
 
-    /// The app stored these conflict copies. This does not confirm that a
-    /// purge deletion finished; a later purge can still ask for them back.
-    public func confirmConflictCopiesStored(recordIDs: [String]? = nil) {
-        let matches: (SyncRecord) -> Bool = { record in
-            guard let recordIDs else { return true }
-            return recordIDs.contains(record.id)
+    /// The app stored these exact conflict copies. A newer copy of the same
+    /// record stays unconfirmed until its own request is acknowledged.
+    /// This does not confirm that a purge deletion finished.
+    public func confirmConflictCopiesStored(_ copies: [SyncRecord]) {
+        let named = Set(copies.map { CopyKey(id: $0.id, stamp: $0.stamp) })
+        for copy in conflicts where named.contains(CopyKey(id: copy.id, stamp: copy.stamp)) {
+            if !storedConflictCopies.contains(where: { $0.id == copy.id && $0.stamp == copy.stamp }) {
+                storedConflictCopies.append(copy)
+            }
         }
-        for copy in conflicts.filter(matches) where !storedConflictCopies.contains(where: { $0.id == copy.id && $0.stamp == copy.stamp }) {
-            storedConflictCopies.append(copy)
-        }
-        conflicts.removeAll(where: matches)
+        conflicts.removeAll { named.contains(CopyKey(id: $0.id, stamp: $0.stamp)) }
     }
 
     /// The app deleted these exact conflict copies. Only the named stamps
