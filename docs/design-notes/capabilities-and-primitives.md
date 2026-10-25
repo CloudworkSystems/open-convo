@@ -12,6 +12,11 @@ capabilities arrive with Site Engine.
   interface, usable by any model (local, Claude, ChatGPT) through any harness
   (Pi, Claude Code), wrapped in True Convo's approvals, cost caps and logs.
 
+How capabilities adapt to each model, get tested on the local default, pass
+an install gate and retire: [portable-capability-layer.md](portable-capability-layer.md)
+(October 25). Agent Skills (`SKILL.md`) has since become an open standard
+several programs read; that note covers what True Convo still adds.
+
 True Convo's `tools/capability-adapter` (October 11) is the starting point: one
 JSON command plus a tools-only MCP server, no HTTP port or background service,
 keys in Keychain. It moves to `packages/capabilities`.
