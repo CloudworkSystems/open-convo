@@ -67,8 +67,9 @@ the owner had to be walked through the clicks by hand. What we found:
     cookies or the cache, which websites can read or clear. It never syncs to
     another device unless the owner turns that on;
   - shows in a "Site permissions" list where the owner can see and remove each
-    grant, and that list is the only place a grant can be added outside an
-    approval card;
+    grant. That list is the only place a grant can be added outside an
+    approval card, and adding one there records the same details a card
+    would (the owner, the time, and the agent, site, level and task);
   - belongs to the agent profile, not its model, so it survives a model swap
     (foundations principle 5: swapping the model never changes what the
     assistant may do). It is dropped at once when the profile's harness or
@@ -150,7 +151,8 @@ ran on the Mac and drove the Mac's Chrome. So:
 ### Logging and the agent profile
 
 - Every action is logged with the agent, the app or site, view or control,
-  and the approval card it came from. Screenshots stay on the device unless
+  and the grant that allowed it, which in turn records the approval card or
+  "Site permissions" entry that created it. Screenshots stay on the device unless
   the owner shares them.
 - Each agent profile records which channels it may use: screen tools,
   browser extension, scripts. For an untrusted outside agent, such as Cam,
