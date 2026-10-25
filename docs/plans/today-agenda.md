@@ -1,6 +1,6 @@
 # Today Agenda (PRD)
 
-Status: Draft (Oct 24): owner chose this module for GrokBot team C on Oct 24; plan in review; team C starts once its visibility report (#112) merges.
+Status: Approved (Oct 25): merged in #138; team C starts once its visibility report (#112) merges.
 
 Written October 24, 2026 by a Claude session (project "261024 OC Steering")
 from the owner's choice that day. Session name: `OC-261024-today-agenda`.
@@ -75,7 +75,10 @@ never reads the clock and never calls `process.exit`.
 - `lists`: up to 50, each `{ id, name, open }`, `open` being the number of
   unchecked items (0 to 10,000).
 
-Titles are up to 500 characters; names, locations and calendars up to 200.
+Task titles are up to 500 characters; habit and list names, locations and
+calendars up to 200. Event titles have no length cap of their own (the
+calendar merge engine returns very long titles unchanged); the 2 MB file
+limit bounds them.
 An event's `title` may be empty (the calendar merge engine gives `""` for an
 event without `SUMMARY`), and the agenda shows it as "(No title)"; every
 other title and name is at least 1 character. Unknown fields, missing required fields, repeated
@@ -186,7 +189,8 @@ data only. At least:
    singular and plural are right; no grading words appear in any output (a
    test scans for words such as "missed", "failed", "behind", "score").
 9. Input checks: each refusal above, naming the section and position; an
-   event with an empty title is accepted and shown as "(No title)", while a
+   event with an empty title is accepted and shown as "(No title)", and one
+   with a 5,000-character title is accepted unchanged, while a
    task with an empty title is refused; the
    same `key` in events and the same `id` in tasks are refused; the same
    value across different sections is fine.

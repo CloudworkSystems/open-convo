@@ -90,11 +90,11 @@ Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 decision October 22): GrokBot team B builds, Codex reviews. Plan approved
 (`docs/plans/sync-core.md`, #127); build started October 24 (#137).
 
-**Email actions preview** (Personal, right after launch), Codex builds through the local Codex CLI, Gemini Code Assist reviews; plan in review (`docs/plans/email-actions-preview.md`).
+**Email actions preview** (Personal, right after launch), Codex builds through the local Codex CLI, Gemini Code Assist reviews; plan merged in #138, build handed to the Codex CLI job (#142) (`docs/plans/email-actions-preview.md`).
 
-**Tasks and reminders engine** (Personal, day one), GrokBot team A builds, Codex reviews; plan in review (`docs/plans/tasks-engine.md`).
+**Tasks and reminders engine** (Personal, day one), GrokBot team A builds, Codex reviews; plan merged in #138, build started Oct 25 (#141) (`docs/plans/tasks-engine.md`).
 
-**Today agenda** (Personal, day one), GrokBot team C builds once #112 merges, Codex reviews; plan in review (`docs/plans/today-agenda.md`).
+**Today agenda** (Personal, day one), GrokBot team C builds once #112 merges, Codex reviews; plan merged in #138 (`docs/plans/today-agenda.md`).
 
 **Email sorting engine** (Personal, launch set), Claude builds (the owner's choice on October 24, in place of Codex), Gemini Code Assist reviews; plan `docs/plans/email-sorting-engine.md`; merged as #128 on October 24 (`packages/email-sorting/`).
 

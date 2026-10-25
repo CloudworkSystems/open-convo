@@ -1,6 +1,6 @@
 # Tasks And Reminders Engine (PRD)
 
-Status: Draft (Oct 24): owner chose this module for GrokBot team A on Oct 24; plan in review.
+Status: Approved (Oct 25): merged in #138; GrokBot team A started the build (#141).
 
 Written October 24, 2026 by a Claude session (project "261024 OC Steering")
 from the owner's choice that day. Session name: `OC-261024-tasks-engine`.
@@ -51,7 +51,12 @@ and loaded from one JSON file per person):
 - **Reminders**: zero to five per task, each either a fixed moment (a date,
   time and time zone) or an offset before the due time (for example 1 day,
   2 hours). A date-only task's offset counts from 09:00 on its due day in the
-  owner's zone (a setting, default 09:00).
+  owner's zone (a setting, default 09:00). Every reminder belongs to an
+  occurrence: a fixed reminder stores the name of the occurrence it was set
+  for, and an offset reminder follows whichever occurrence is current. When
+  the series moves on, a fixed reminder applies to the next occurrence only
+  if the owner moves it there; otherwise it lapses with its closed
+  occurrence.
 - **Repeats** (optional). A task with a repeat must have a due date: its
   first due date is the repeat's start, and a repeat without one is refused.
   For the patterned kinds (`weekdays`, `monthDay`, `monthWeekday`) the start
@@ -99,7 +104,8 @@ and loaded from one JSON file per person):
   completion.
 - **Snooze** moves a task's next reminder (and, if asked, its due date) to a
   chosen moment, or by a preset: later today (+3 hours), tomorrow at the
-  reminder time, next Monday. Snoozing a repeating task changes only the
+  reminder time, next Monday (on a Monday, the Monday 7 days later, never
+  today). Snoozing a repeating task changes only the
   current occurrence. A snooze is its own record naming the occurrence it
   snoozes and the new reminder moment (and new due moment, if moved). It
   never moves a series on: only completion and skip records do. For the
@@ -123,7 +129,9 @@ clock and never uses the machine's time zone.
   high priority first, then title, then ID.
 - `upcoming(now, days)`: open tasks due in the next 1 to 60 days, grouped by
   date. An on-schedule repeating task is shown once per occurrence in the
-  window. An after-done task is shown only at its current due date, because
+  window, and the projection respects the repeat's end: projected
+  occurrences use up what remains of `endAfter`, and none fall after
+  `endOn`. An after-done task is shown only at its current due date, because
   its later dates depend on when it is next done; the entry is marked
   `repeatsAfterDone` so a view can say "then every 3 days after you do it".
 - `overdue(now)`: open tasks whose due moment has passed. A date-only task is
@@ -273,8 +281,11 @@ and tasks only. At least:
    `remindersDue` over back-to-back ranges returns each reminder exactly once,
    including across a daylight-saving change and a month end; a task
    completed, or an occurrence skipped, before its reminder's moment returns
-   no reminder, while the next open occurrence's reminders still come.
-8. Snooze: each preset; snoozing one occurrence of a repeating task leaves
+   no reminder, while the next open occurrence's reminders still come; a
+   weekly task with a fixed Sunday reminder, completed on Saturday, returns
+   no Sunday reminder; `upcoming` for an untouched daily task with
+   `endAfter: 2` shows exactly two dates in a 30-day window.
+8. Snooze: each preset, including "next Monday" asked on a Monday; snoozing one occurrence of a repeating task leaves
    the next occurrence alone; a snooze never moves an on-schedule or
    after-done series on; two devices snoozing the same occurrence end with
    the higher-stamped snooze; a snooze naming an old occurrence changes
