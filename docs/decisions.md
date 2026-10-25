@@ -20,9 +20,10 @@ full plan and history are in [PLAN.md](../PLAN.md).
   model's agent can work while his Mac sleeps. Its first jobs are his local
   Codex CLI jobs and the Gemini CLI, both as `cloudwork-bot` with their own
   classic `repo`-only token (no `workflow` scope, as in the merge gate),
-  kept readable only by the VM's user: an approved exception to Keychain-only
-  storage, since a Linux VM has no Keychain. Mac and iPhone builds stay on
-  the Mac.
+  kept in exe.dev's Integrations so the VM never reads it, not exe.dev's
+  own GitHub bot. Only if that fails, a file readable only by the VM's user
+  is an approved exception to Keychain-only storage. Mac and iPhone builds
+  stay on the Mac.
 - **Oct 25:** More work per dollar, without the owner or his Mac awake.
   The PR keeper moves to the cloud, counts a Codex review as hung after 20
   minutes instead of 60 (restarting it at its next hourly run), updates a pull request from `main` only once it is

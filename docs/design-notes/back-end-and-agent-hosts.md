@@ -82,7 +82,15 @@ when the owner's Mac sleeps.
 What exe.dev offers (from third-party pages, October 25, 2026; check against
 exe.dev before relying on it): persistent Linux VMs that keep their disk and
 boot in under a second, reached over SSH, each with an HTTPS address
-(`<name>.exe.xyz`) behind an email sign-in. Price unconfirmed.
+(`<name>.exe.xyz`) behind an email sign-in. Confirmed on the owner's
+account on October 25: the Personal plan is $15 a month for 2 CPUs and 4 GB
+of memory shared across all his VMs, 100 GB of disk and 200 GB of transfer
+a month. exe.dev also has a built-in AI model service ("llm") and its own
+agent, Shelley, which spend the account's credits; agents use neither
+without the owner's approval (no silent paid fallback, principle 6).
+Integrations, exe.dev's secret store, keeps a credential on exe.dev's
+servers and adds it to the VM's outgoing requests, so the VM and the agents
+on it never read it.
 
 | Work | Runs without the Mac today? | With the VM |
 | --- | --- | --- |
@@ -112,11 +120,15 @@ Rules for the VM:
   Fine-grained tokens can't write here, because the bot is only a
   collaborator on a personal-account repository, and the bot collaborates on
   this repository alone. A separate token lets the VM's access be revoked
-  without touching the other builders'. A Linux VM has no Keychain, so this
-  is an owner-approved exception to "secrets belong in Keychain": the token
-  is readable only by the VM's user account (a file with mode 600, or
-  exe.dev's own secret store if it has one) and never in the repository,
-  logs or the shell history. A Codex or Gemini sign-in goes there only when
+  without touching the other builders'. The owner creates it as
+  `cloudwork-bot` and stores it in exe.dev's Integrations, attached to the
+  builders' VM only, so it never sits on the VM (owner decision, October
+  25). exe.dev's ready-made GitHub connection is not used: it pushes as
+  exe.dev's own bot, a new identity the Accounts And Provenance rules don't
+  allow. Only if Integrations can't carry the token, the fallback is an
+  owner-approved exception to "secrets belong in Keychain", since a Linux VM
+  has no Keychain: a file readable only by the VM's user account (mode 600),
+  never in the repository, logs or the shell history. A Codex or Gemini sign-in goes there only when
   the owner sets it up. The VM never holds the `CloudworkSystems` account's
   credentials.
 - **Zero trust:** an unknown foreign agent (for example Meta's Muse agent)
