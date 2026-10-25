@@ -1,6 +1,6 @@
 # Visibility Report (PRD)
 
-Status: In progress (Oct 23): build in review (#112).
+Status: Built (Oct 25): merged in #112.
 
 Written October 21, 2026 by a building session for the planning side, from
 the approved scale-up plan (`docs/plans/scale-up.md`, option (a), which
