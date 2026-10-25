@@ -98,6 +98,15 @@ test('2. each repeat kind matches its dates across two years', () => {
   assert.deepEqual(occurrenceDates(rule({ kind: 'weekdays', every: 2, start: '2026-01-05', weekdays: ['thursday', 'monday'] }), 6), [
     '2026-01-05', '2026-01-08', '2026-01-19', '2026-01-22', '2026-02-02', '2026-02-05',
   ]);
+  const patterns = engine('patterns');
+  patterns.addTask({ title: 'Second Tuesday', due: '2026-01-13', repeat: { kind: 'monthWeekday', every: 1, mode: 'onSchedule', weekday: 'tuesday', which: 2 } }, { taskId: 'second' });
+  patterns.addTask({ title: 'Last Friday', due: '2026-01-30', repeat: { kind: 'monthWeekday', every: 1, mode: 'onSchedule', weekday: 'friday', which: 'last' } }, { taskId: 'last' });
+  patterns.addTask({ title: 'Monday and Thursday', due: '2026-01-05', repeat: { kind: 'weekdays', every: 2, mode: 'onSchedule', weekdays: ['thursday', 'monday'] } }, { taskId: 'both-days' });
+  assert.equal(patterns.task('second').repeat.weekday, 'tuesday');
+  assert.equal(patterns.task('second').repeat.which, 2);
+  assert.equal(patterns.task('last').repeat.which, -1);
+  assert.notDeepEqual(patterns.task('second').repeat, patterns.task('last').repeat);
+  assert.deepEqual(patterns.task('both-days').repeat.weekdays, ['monday', 'thursday']);
   assert.deepEqual(occurrenceDates(rule({ kind: 'months', every: 1, start: '2024-01-31' }), 6), [
     '2024-01-31', '2024-02-29', '2024-03-31', '2024-04-30', '2024-05-31', '2024-06-30',
   ]);
@@ -440,6 +449,21 @@ test('8. snooze presets, including next Monday on a Monday, leave the series put
   assert.deepEqual(
     again.remindersDue(at('2026-04-01T00:00:00.000Z'), at('2026-04-02T00:00:00.000Z'), 'UTC').map(row => row.at),
     ['2026-04-01T15:00'],
+  );
+  const chain = engine('chain', T0, 'UTC');
+  chain.addTask({
+    title: 'Morning and evening',
+    due: '2026-04-03',
+    reminders: [
+      { dateTime: '2026-04-03T09:00', timeZone: 'UTC', occurrence: '2026-04-03' },
+      { dateTime: '2026-04-03T17:00', timeZone: 'UTC', occurrence: '2026-04-03' },
+    ],
+  }, { taskId: 'pair' });
+  chain.snooze('pair', { at: { dateTime: '2026-04-03T12:00', timeZone: 'UTC' } }, at('2026-04-03T08:00:00.000Z'), { recordId: 'morning' });
+  chain.snooze('pair', { at: { dateTime: '2026-04-03T20:00', timeZone: 'UTC' } }, at('2026-04-03T13:00:00.000Z'), { recordId: 'evening' });
+  assert.deepEqual(
+    chain.remindersDue(at('2026-04-03T00:00:00.000Z'), at('2026-04-04T00:00:00.000Z'), 'UTC').map(row => row.at),
+    ['2026-04-03T12:00', '2026-04-03T20:00'],
   );
 
   const winner = engine('snooze-win', T0 + 5, 'UTC');

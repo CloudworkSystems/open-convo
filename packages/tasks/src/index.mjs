@@ -199,7 +199,17 @@ function publicDue(due) {
 }
 function publicRepeat(rule) {
   if (!rule) return null;
-  return { kind: rule.kind, every: rule.every, mode: rule.mode, endAfter: rule.endAfter, endOn: rule.endOn };
+  return {
+    kind: rule.kind,
+    every: rule.every,
+    mode: rule.mode,
+    weekdays: rule.weekdays ? rule.weekdays.slice() : null,
+    monthDay: rule.monthDay ?? null,
+    weekday: rule.weekday ?? null,
+    which: rule.which ?? null,
+    endAfter: rule.endAfter ?? null,
+    endOn: rule.endOn ?? null,
+  };
 }
 function viewDate(due, timeZone) {
   if (!due) return null;
@@ -393,13 +403,24 @@ function reminderMoments(task, ownerZone, dayStart) {
     const instant = wallToInstant(reminder.dateTime, reminder.timeZone);
     moments.push({ index, reminder, occurrence, instant, baseInstant: instant });
   });
-  // Only the highest stamp changes the reminders. It names the base reminder
-  // it moved, chosen when it was made from the snoozes that device had already
-  // seen, so a later snooze does not revive the original time and a losing
-  // concurrent snooze does not move a second reminder.
-  const snooze = winningSnooze(task, occurrence);
-  if (snooze?.fields.reminderAt.value) applyWinningSnooze(moments, snooze, occurrence);
+  // One winner per reminder that was moved. A later snooze of a different
+  // reminder keeps the earlier replacement. Two concurrent snoozes of the same
+  // reminder keep only the higher stamp, so the loser cannot shift a second one.
+  for (const snooze of snoozesToApply(task, occurrence)) applyWinningSnooze(moments, snooze, occurrence);
   return moments;
+}
+function snoozesToApply(task, occurrence) {
+  const best = new Map();
+  for (const record of task.records) {
+    if (record.type !== 'snooze' || record.fields.withdrawn.value) continue;
+    if ((record.occurrence ?? null) !== (occurrence ?? null) || !record.fields.reminderAt.value) continue;
+    const key = record.fields.replaces?.value == null ? 'new' : String(record.fields.replaces.value);
+    const current = best.get(key);
+    if (!current || compareStamps(record.stamp, current.stamp) > 0 || (compareStamps(record.stamp, current.stamp) === 0 && lex(record.id, current.id) > 0)) {
+      best.set(key, record);
+    }
+  }
+  return [...best.values()].sort((a, b) => compareStamps(a.stamp, b.stamp) || lex(a.id, b.id));
 }
 function applyWinningSnooze(moments, snooze, occurrence) {
   const instant = wallToInstant(snooze.fields.reminderAt.value.dateTime, snooze.fields.reminderAt.value.timeZone);

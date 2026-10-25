@@ -104,6 +104,10 @@
         "kind": "days",
         "every": 1,
         "mode": "onSchedule",
+        "weekdays": null,
+        "monthDay": null,
+        "weekday": null,
+        "which": null,
         "endAfter": 2,
         "endOn": null
       }
@@ -217,6 +221,10 @@
             "kind": "days",
             "every": 1,
             "mode": "onSchedule",
+            "weekdays": null,
+            "monthDay": null,
+            "weekday": null,
+            "which": null,
             "endAfter": 2,
             "endOn": null
           }
@@ -244,6 +252,10 @@
             "kind": "days",
             "every": 1,
             "mode": "onSchedule",
+            "weekdays": null,
+            "monthDay": null,
+            "weekday": null,
+            "which": null,
             "endAfter": 2,
             "endOn": null
           }
@@ -266,6 +278,10 @@
             "kind": "days",
             "every": 3,
             "mode": "afterDone",
+            "weekdays": null,
+            "monthDay": null,
+            "weekday": null,
+            "which": null,
             "endAfter": null,
             "endOn": null
           }
