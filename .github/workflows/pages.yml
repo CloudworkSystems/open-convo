@@ -1,0 +1,43 @@
+# Publishes the public website (site/ plus the Ember brand files it uses) to
+# GitHub Pages when main changes. Runs only main's own files, never a pull
+# request's. The custom domain (trueconvo.com) is set in the repo's Pages
+# settings, not here.
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths: ['site/**', 'brand/tokens.css', 'brand/fonts/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Stage the site
+        run: |
+          mkdir -p _site/brand
+          cp -R site/. _site/
+          cp brand/tokens.css _site/brand/
+          cp -R brand/fonts _site/brand/fonts
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
