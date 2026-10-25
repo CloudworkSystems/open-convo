@@ -52,6 +52,7 @@ final class SyncCorePlanTests: XCTestCase {
         try assertNoMerge(aHigher: false, fetchFirst: true)
         try assertConflictCopyCheckpoint()
         try assertDestroyAfterReplaceKeepsLoserOnce()
+        try assertCrashBeforeReplacementDoesNotRequeue()
     }
 
     func test05LogicalDeleteThenRestore() throws {
@@ -453,6 +454,93 @@ final class SyncCorePlanTests: XCTestCase {
         try assertReconcileKeepsSavedMerge()
         try assertUnsavedMergeIsRebuiltFromTheOldEdit()
     }
+
+    func testDeferredMergeSaveRunsOnce() throws {
+        let cloud = FakeCloud()
+        let a = Peer("phone-a", cloud: cloud)
+        let b = Peer("phone-b", cloud: cloud)
+        var calls = 0
+        var firstPayload: Data?
+        a.merge { left, right in
+            calls += 1
+            var payload = bag(tokens(left.payload).union(tokens(right.payload)))
+            payload.append(UInt8.random(in: 0...255))
+            if calls == 1 { firstPayload = payload }
+            return MergeOutput(payload: payload)
+        }
+        b.merge { left, right in
+            calls += 1
+            return unionMerge(left, right)
+        }
+        a.boot()
+        b.boot()
+        _ = try a.edit("note", payload: text("base"))
+        try syncAll([a, b])
+        _ = try a.edit("note", payload: text("from-a"))
+        _ = try b.edit("note", payload: text("from-b"))
+        try b.sync()
+        a.holdSaves { _ in }
+        try a.sync()
+        XCTAssertEqual(calls, 1)
+        let staged = try XCTUnwrap(a.device.queuedRecords().first { $0.isMergeResult })
+        XCTAssertFalse(staged.appSaveConfirmed)
+        XCTAssertFalse(staged.uploadable)
+        XCTAssertEqual(staged.record.payload, firstPayload)
+        XCTAssertEqual(cloud.record("note")?.record.payload, text("from-b"))
+    }
+
+    func testPurgeDropsLeftoverPayloadBytes() throws {
+        let cloud = FakeCloud()
+        let a = Peer("phone-a", cloud: cloud)
+        let b = Peer("phone-b", cloud: cloud)
+        a.boot()
+        b.boot()
+        let secret = text("private note that must not travel")
+        _ = try a.edit("page", type: "conversation-page", payload: secret)
+        try syncAll([a, b])
+        let stamp = try a.device.nextStamp()
+        let purge = SyncRecord(
+            id: "page",
+            type: "conversation-page",
+            stamp: stamp,
+            purged: true,
+            payload: secret
+        )
+        try a.device.queueLocalEdit(purge)
+        let queued = try XCTUnwrap(a.device.queuedRecords().first { $0.record.id == "page" })
+        XCTAssertTrue(queued.record.purged)
+        XCTAssertTrue(queued.record.payload.isEmpty)
+        try a.device.confirmLocalSave(purge)
+        XCTAssertTrue(a.device.queuedRecords().first { $0.record.id == "page" }?.record.payload.isEmpty == true)
+        try syncAll([a, b])
+        let stored = try XCTUnwrap(cloud.record("page"))
+        XCTAssertTrue(stored.record.purged)
+        XCTAssertTrue(stored.record.payload.isEmpty)
+        XCTAssertNotEqual(stored.ordinaryField, secret)
+        XCTAssertNil(stored.attachment)
+        XCTAssertTrue(live(b, "page").purged)
+        XCTAssertTrue(live(b, "page").payload.isEmpty)
+        XCTAssertFalse(holds(secret, peer: b))
+    }
+
+    func testUploadContinuesPast32Batches() throws {
+        let cloud = FakeCloud()
+        cloud.uploadBatchLimit = 1
+        let a = Peer("phone-a", cloud: cloud)
+        let b = Peer("phone-b", cloud: cloud)
+        a.boot()
+        b.boot()
+        for index in 1...40 {
+            _ = try a.edit("row-\(index)", payload: text("value-\(index)"))
+        }
+        try a.sync()
+        try b.sync()
+        XCTAssertTrue(a.device.queuedRecords().isEmpty)
+        for index in 1...40 {
+            XCTAssertEqual(live(b, "row-\(index)").payload, text("value-\(index)"))
+            XCTAssertEqual(cloud.revisionCount("row-\(index)"), 1)
+        }
+    }
 }
 
 extension SyncCorePlanTests {
@@ -590,6 +678,40 @@ extension SyncCorePlanTests {
         XCTAssertFalse(a.device.queuedRecords().contains { $0.record.payload == fromA.payload })
         XCTAssertEqual(a.device.status().kind, .needsAttention)
         XCTAssertEqual(a.device.deviceID.raw, "phone-a")
+    }
+
+    private func assertCrashBeforeReplacementDoesNotRequeue() throws {
+        let cloud = FakeCloud()
+        let a = Peer("phone-a", cloud: cloud)
+        let b = Peer("phone-b", cloud: cloud)
+        a.boot()
+        b.boot()
+        _ = try a.edit("note", payload: text("base"))
+        try syncAll([a, b])
+        let fromA = try a.edit("note", payload: text("alpha"))
+        for _ in 0..<3 { _ = try b.device.nextStamp() }
+        let fromB = try b.edit("note", payload: text("beta"))
+        try b.sync()
+        let revision = cloud.revisionCount("note")
+        var captured: Data?
+        a.holdSaves { request in
+            captured = request.checkpointBeforeRequest
+        }
+        try a.sync(order: .fetchThenUpload)
+        XCTAssertEqual(a.store.records["note"]?.payload, fromA.payload)
+        let bytes = try XCTUnwrap(captured)
+        try a.adopt(bytes)
+        XCTAssertEqual(a.device.deviceID.raw, "phone-a")
+        try a.device.reconcile(a.store.all())
+        XCTAssertFalse(a.device.queuedRecords().contains { $0.record.id == "note" })
+        a.resumeSaves()
+        try a.sync()
+        XCTAssertEqual(cloud.revisionCount("note"), revision)
+        XCTAssertFalse(a.device.queuedRecords().contains { $0.record.id == "note" })
+        XCTAssertEqual(live(a, "note").stamp, fromB.stamp)
+        XCTAssertEqual(live(a, "note").payload, fromB.payload)
+        XCTAssertEqual(a.device.conflictCopies().filter { $0.stamp == fromA.stamp }.count, 1)
+        XCTAssertEqual(a.device.status().kind, .needsAttention)
     }
 
     private func assertPurge(purgeFirst: Bool, registerMerge: Bool) throws {

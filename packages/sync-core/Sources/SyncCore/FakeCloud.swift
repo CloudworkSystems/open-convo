@@ -205,38 +205,42 @@ public final class FakeCloud {
         state: inout Zone,
         forceField: Bool
     ) throws -> StoredRecord {
-        let storage = forceField ? PayloadStorage.field : item.storage
+        var record = item.record
+        var storage = forceField ? PayloadStorage.field : item.storage
+        if record.purged {
+            record.payload = Data()
+            storage = .field
+        }
         let ordinary: Data
         let attachment: Data?
         switch storage {
         case .field:
-            if item.record.payload.count > SyncLimits.cloudKitFieldLimit {
+            if record.payload.count > SyncLimits.cloudKitFieldLimit {
                 throw SyncError.fieldTooLarge(
-                    bytes: item.record.payload.count,
+                    bytes: record.payload.count,
                     limit: SyncLimits.cloudKitFieldLimit
                 )
             }
-            ordinary = item.record.payload
+            ordinary = record.payload
             attachment = nil
         case .attachment:
-            let reference = Data("asset:\(item.record.id)".utf8)
+            let reference = Data("asset:\(record.id)".utf8)
             if reference.count > SyncLimits.cloudKitFieldLimit {
                 throw SyncError.fieldTooLarge(bytes: reference.count, limit: SyncLimits.cloudKitFieldLimit)
             }
             ordinary = reference
-            attachment = item.record.payload
+            attachment = record.payload
         }
         state.sequence += 1
         let tag = "ck-\(state.sequence)"
-        let purged = item.record.purged
         let stored = StoredRecord(
-            record: item.record,
+            record: record,
             changeTag: tag,
             basedOnStamp: item.basedOnStamp,
             storage: storage,
             revision: (previous?.revision ?? 0) + 1,
             ordinaryField: ordinary,
-            attachment: purged ? nil : attachment
+            attachment: attachment
         )
         state.history.append(HistoricalVersion(
             sequence: state.sequence,

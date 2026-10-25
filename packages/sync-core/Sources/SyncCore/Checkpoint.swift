@@ -14,6 +14,13 @@ struct StoredMemory: Codable, Equatable {
     var lastSeenStamp: VersionStamp?
 }
 
+/// The checkpoint already kept the losing edit as a conflict copy, and the
+/// app had not yet replaced its local record with the cloud winner.
+struct PendingReplacement: Codable, Equatable {
+    var losingStamp: VersionStamp
+    var winnerStamp: VersionStamp
+}
+
 struct CheckpointBody: Codable, Equatable {
     var schema: Int
     var deviceID: String
@@ -22,6 +29,7 @@ struct CheckpointBody: Codable, Equatable {
     var outbox: [StoredOutboxEntry]
     var memory: [String: StoredMemory]
     var conflicts: [SyncRecord]
+    var pendingReplacements: [String: PendingReplacement]
 }
 
 enum CheckpointCodec {

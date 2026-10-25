@@ -22,6 +22,7 @@ public final class SyncDevice {
     private var tokens: [String: Data] = [:]
     private var memory: [String: RecordMemory] = [:]
     private var conflicts: [SyncRecord] = []
+    private var pendingReplacements: [String: PendingReplacement] = [:]
     private var local: [String: SyncRecord] = [:]
     private var openPage: OpenPage?
     private var merges: [String: MergeFunction] = [:]
@@ -48,6 +49,7 @@ public final class SyncDevice {
             )
         }
         device.conflicts = body.conflicts
+        device.pendingReplacements = body.pendingReplacements
         device.outbox = body.outbox.map {
             Entry(
                 record: $0.record,
@@ -100,7 +102,8 @@ public final class SyncDevice {
                     lastSeenStamp: $0.lastSeenStamp
                 )
             },
-            conflicts: conflicts
+            conflicts: conflicts,
+            pendingReplacements: pendingReplacements
         )
         let data = CheckpointCodec.encode(body)
         lastCheckpoint = data
@@ -124,6 +127,7 @@ public final class SyncDevice {
     public func queueLocalEdit(_ record: SyncRecord) throws {
         guard hasCheckpoint else { throw SyncError.checkpointRequired }
         try validateLocal(record)
+        let record = withoutPurgedPayload(record)
         observe(record.stamp)
         editEpoch += 1
         outbox.removeAll { $0.record.id == record.id }
@@ -141,7 +145,11 @@ public final class SyncDevice {
 
     public func confirmLocalSave(_ record: SyncRecord) throws {
         guard hasCheckpoint else { throw SyncError.checkpointRequired }
+        let record = withoutPurgedPayload(record)
         local[record.id] = record
+        if let pending = pendingReplacements[record.id], record.stamp == pending.winnerStamp {
+            pendingReplacements.removeValue(forKey: record.id)
+        }
         if let index = outbox.firstIndex(where: { $0.record.id == record.id && $0.record.stamp == record.stamp }) {
             outbox[index].appSaveConfirmed = true
             outbox[index].record = record
@@ -181,24 +189,36 @@ public final class SyncDevice {
             observe(record.stamp)
             byID[record.id] = record
         }
+        let finishedReplacements = pendingReplacements.compactMap { id, pending in
+            byID[id]?.stamp == pending.winnerStamp ? id : nil
+        }
+        for id in finishedReplacements {
+            pendingReplacements.removeValue(forKey: id)
+        }
         outbox.removeAll { entry in
+            if let pending = pendingReplacements[entry.record.id], pending.losingStamp == entry.record.stamp {
+                return true
+            }
             guard let saved = byID[entry.record.id] else { return true }
             return saved.stamp != entry.record.stamp
         }
         local = byID
         for record in byID.values {
             guard record.stamp.deviceID == deviceID else { continue }
+            if let pending = pendingReplacements[record.id], pending.losingStamp == record.stamp {
+                continue
+            }
             if let acknowledged = memory[record.id]?.lastAcknowledged, record.stamp <= acknowledged {
                 continue
             }
             if let index = outbox.firstIndex(where: { $0.record.id == record.id && $0.record.stamp == record.stamp }) {
                 outbox[index].appSaveConfirmed = true
-                outbox[index].record = record
+                outbox[index].record = withoutPurgedPayload(record)
                 continue
             }
             editEpoch += 1
             outbox.append(Entry(
-                record: record,
+                record: withoutPurgedPayload(record),
                 baseChangeTag: memory[record.id]?.lastSeenChangeTag,
                 basedOnStamp: memory[record.id]?.lastSeenStamp,
                 appSaveConfirmed: true,
@@ -220,7 +240,12 @@ public final class SyncDevice {
             switch order {
             case .uploadThenFetch:
                 try push(cloud, zone: zone, beforeAcks: beforeApplyingUploadAcknowledgements)
-                try pull(cloud, zone: zone)
+                // A staged merge is checkpointed but not uploadable until the app
+                // confirms the save. Fetching now would merge the same server
+                // copy again and replace those bytes.
+                if !outbox.contains(where: { $0.isMergeResult && !$0.appSaveConfirmed }) {
+                    try pull(cloud, zone: zone)
+                }
             case .fetchThenUpload:
                 try pull(cloud, zone: zone)
                 try push(cloud, zone: zone, beforeAcks: beforeApplyingUploadAcknowledgements)
@@ -298,9 +323,7 @@ public final class SyncDevice {
         acceptingUploadsThroughEpoch = editEpoch
         defer { acceptingUploadsThroughEpoch = nil }
         var hookCalled = false
-        var spins = 0
-        while spins < 32 {
-            spins += 1
+        while true {
             let ready = outbox.filter {
                 $0.appSaveConfirmed && $0.durable && $0.epoch <= (acceptingUploadsThroughEpoch ?? $0.epoch)
             }
@@ -332,7 +355,6 @@ public final class SyncDevice {
             }
             _ = saveCheckpoint()
         }
-        throw SyncError.syncDidNotFinish("The upload did not settle.")
     }
 
     private func pull(_ cloud: FakeCloud, zone: ZoneName) throws {
@@ -446,6 +468,10 @@ public final class SyncDevice {
         }
         retainConflict(entry.record)
         outbox.removeAll { $0.record.id == entry.record.id }
+        pendingReplacements[entry.record.id] = PendingReplacement(
+            losingStamp: entry.record.stamp,
+            winnerStamp: remote.record.stamp
+        )
         let checkpoint = saveCheckpoint()
         stageIncoming(remote, zone: zone, checkpointFirst: true, checkpoint: checkpoint)
     }
@@ -464,7 +490,7 @@ public final class SyncDevice {
                 deviceID: deviceID
             ),
             purged: output.purged,
-            payload: output.payload
+            payload: output.purged ? Data() : output.payload
         )
         if output.purged {
             conflicts.removeAll { $0.id == merged.id }
@@ -506,7 +532,7 @@ public final class SyncDevice {
             } else if let purge = local[id], purge.purged {
                 editEpoch += 1
                 outbox.append(Entry(
-                    record: purge,
+                    record: withoutPurgedPayload(purge),
                     baseChangeTag: change.changeTag,
                     basedOnStamp: memory[id]?.lastSeenStamp,
                     appSaveConfirmed: true,
@@ -539,7 +565,12 @@ public final class SyncDevice {
         checkpoint: Data? = nil,
         deliverRecord: SyncRecord? = nil
     ) {
-        let incoming = deliverRecord ?? change.record
+        let incoming = withoutPurgedPayload(deliverRecord ?? change.record)
+        if let pending = pendingReplacements[incoming.id], incoming.stamp == pending.winnerStamp {
+            let saved = checkpoint ?? lastCheckpoint
+            deliverSave(incoming, tag: change.changeTag, zone: zone, checkpoint: saved)
+            return
+        }
         if !incoming.purged,
            deliverRecord == nil,
            merges[incoming.type] == nil,
@@ -610,9 +641,10 @@ public final class SyncDevice {
         guard outbox.contains(where: { $0.record.id == id }) == false else { return }
         guard let current = local[id], current.stamp.deviceID == deviceID else { return }
         if let acknowledged = memory[id]?.lastAcknowledged, current.stamp <= acknowledged { return }
+        if let pending = pendingReplacements[id], pending.losingStamp == current.stamp { return }
         editEpoch += 1
         outbox.append(Entry(
-            record: current,
+            record: withoutPurgedPayload(current),
             baseChangeTag: memory[id]?.lastSeenChangeTag,
             basedOnStamp: memory[id]?.lastSeenStamp,
             appSaveConfirmed: true,
@@ -654,6 +686,15 @@ public final class SyncDevice {
 
     private func storage(for payload: Data) -> PayloadStorage {
         payload.count > SyncLimits.inlinePayloadLimit ? .attachment : .field
+    }
+
+    /// A purge is a marker. Any payload handed in with it is discarded here,
+    /// before the bytes can be queued or uploaded.
+    private func withoutPurgedPayload(_ record: SyncRecord) -> SyncRecord {
+        guard record.purged, !record.payload.isEmpty else { return record }
+        var copy = record
+        copy.payload = Data()
+        return copy
     }
 }
 
