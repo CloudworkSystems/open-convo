@@ -19,10 +19,13 @@ Desk use and dictation sessions.
 ## What It Would Do
 
 1. **Count, don't record.** For each action the owner takes, add one to a
-   counter for that hour of the week (7 days × 24 hours = 168 counters).
-   Nothing about what the action was is kept: no text, no app name, no
-   recipient. Recent weeks count more than older ones, and anything older than
-   about eight weeks has faded out.
+   counter for that hour of that day. Nothing about what the action was is
+   kept: no text, no app name, no recipient. The last 14 days stay as one row
+   of 24 hourly counts per date, so a recent stretch can still be taken out.
+   When a day is 14 days old and wasn't marked away, it is folded into 168
+   hour-of-week counters (7 days × 24 hours) and its own row is deleted.
+   Recent weeks count more than older ones, and anything older than about
+   eight weeks has faded out.
 2. **Propose a finding.** Once there are a few weeks of counts, True Convo
    shows a proposal in CONTINUITY, for example: "You usually work 9 AM–1 PM
    and 8–11 PM on weekdays; weekends vary." It comes with a confidence. It is
@@ -34,8 +37,10 @@ Desk use and dictation sessions.
    CONTINUITY memories.
 4. **Notice unusual stretches, don't absorb them.** When a few days look
    nothing like the saved pattern, as on a trip, True Convo doesn't quietly
-   rewrite the pattern. It asks once ("Away this week?"), or the owner marks
-   the days as away. Those days are left out of the counts.
+   rewrite the pattern. It asks once ("Away this week?"), within the 14 days
+   while those dates still have their own rows, or the owner marks the days as
+   away. Away days' rows are deleted and never folded in. A day that wasn't
+   answered within the 14 days is folded in like any other.
 5. **Use it gently.** A saved working-hours memory is a soft guide for timing.
    It can decide when to send the daily list, when to ask for an approval, and
    when to hold a non-urgent message until morning. It never blocks anything
@@ -45,7 +50,8 @@ Desk use and dictation sessions.
 
 - **Off until switched on.** Collecting the counts is an opt-in setting, as
   the foundations require for any automatic filing.
-- **Only the counters.** The counts live in the owner's Personal memory space
+- **Only the counters.** The counts (at most 14 daily rows and the 168
+  weekly counters) live in the owner's Personal memory space
   on his own devices, with nothing about his actions beyond their hour. They
   never go into a business space, a shared space or a model's context, except
   as the one saved sentence when a context package needs it.
