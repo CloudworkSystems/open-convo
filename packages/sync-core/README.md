@@ -64,9 +64,11 @@ whatever the stamp, and the losing payload is not kept.
 ## Checkpoint
 
 `saveCheckpoint()` returns the outbox, clock, device ID, change tokens,
-per-record acknowledgement, and conflict copies as bytes. `restore(from:)`
-brings that device back, including its ID. Restoring with a different
-expected ID fails.
+per-record acknowledgement, and conflict copies as bytes. Set
+`persistCheckpoint` to store those bytes as soon as they are saved,
+including an acknowledgement that arrives while a newer edit is still
+queued. `restore(from:)` brings that device back, including its ID.
+Restoring with a different expected ID fails.
 
 A new device accepts no edit until that first checkpoint exists. On launch
 the app calls `reconcile` with every local record. The core queues this

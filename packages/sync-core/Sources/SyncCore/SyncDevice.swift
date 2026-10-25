@@ -9,6 +9,11 @@ public final class SyncDevice {
     /// Called when the app needs to store a record or a conflict copy.
     /// The handler may confirm saves. It must not call `sync`.
     public var appSaveHandler: ((AppSaveRequest) -> Void)?
+    /// Called with checkpoint bytes as soon as they are saved, before sync
+    /// continues. The host should store them. The callback must not call
+    /// `saveCheckpoint` again.
+    public var persistCheckpoint: ((Data) -> Void)?
+    private var deliveringCheckpoint = false
 
     public private(set) var logicalCounter: UInt64
     public private(set) var hasCheckpoint: Bool
@@ -110,6 +115,11 @@ public final class SyncDevice {
         )
         let data = CheckpointCodec.encode(body)
         lastCheckpoint = data
+        if !deliveringCheckpoint {
+            deliveringCheckpoint = true
+            persistCheckpoint?(data)
+            deliveringCheckpoint = false
+        }
         return data
     }
 
@@ -564,13 +574,13 @@ public final class SyncDevice {
 
     private func resolvePurge(_ change: CloudChange, zone: ZoneName) throws {
         let id = change.record.id
-        conflicts.removeAll { $0.id == id }
         let remotePurge = change.record.purged
         let localPurge = holdsPurge(id)
+        let cleanup = stagePurgeCleanup(for: id)
         if remotePurge && !localPurge {
             outbox.removeAll { $0.record.id == id }
             let checkpoint = saveCheckpoint()
-            stageIncoming(change, zone: zone, checkpointFirst: true, checkpoint: checkpoint)
+            stageIncoming(change, zone: zone, checkpointFirst: true, checkpoint: checkpoint, removals: cleanup)
             return
         }
         if localPurge && !remotePurge {
@@ -589,6 +599,15 @@ public final class SyncDevice {
                 ))
             }
             _ = saveCheckpoint()
+            if !cleanup.isEmpty {
+                deliver(AppSaveRequest(
+                    record: withoutPurgedPayload(local[id] ?? change.record),
+                    replaceLocalRecord: false,
+                    conflictCopies: [],
+                    checkpointBeforeRequest: lastCheckpoint,
+                    conflictCopiesToRemove: cleanup
+                ))
+            }
             return
         }
         if remotePurge {
@@ -597,7 +616,7 @@ public final class SyncDevice {
             if winner.stamp == change.record.stamp {
                 outbox.removeAll { $0.record.id == id }
                 let checkpoint = saveCheckpoint()
-                stageIncoming(change, zone: zone, checkpointFirst: true, checkpoint: checkpoint)
+                stageIncoming(change, zone: zone, checkpointFirst: true, checkpoint: checkpoint, removals: cleanup)
             } else if let index = outbox.firstIndex(where: { $0.record.id == id }) {
                 outbox[index].baseChangeTag = change.changeTag
                 _ = saveCheckpoint()
@@ -610,12 +629,13 @@ public final class SyncDevice {
         zone: ZoneName,
         checkpointFirst: Bool,
         checkpoint: Data? = nil,
-        deliverRecord: SyncRecord? = nil
+        deliverRecord: SyncRecord? = nil,
+        removals: [SyncRecord] = []
     ) {
         let incoming = withoutPurgedPayload(deliverRecord ?? change.record)
         if let pending = pendingReplacements[incoming.id], incoming.stamp == pending.winnerStamp {
             let saved = checkpoint ?? lastCheckpoint
-            deliverSave(incoming, tag: change.changeTag, zone: zone, checkpoint: saved)
+            deliverSave(incoming, tag: change.changeTag, zone: zone, checkpoint: saved, removals: removals)
             return
         }
         if !incoming.purged,
@@ -626,14 +646,20 @@ public final class SyncDevice {
            change.basedOnStamp != current.stamp {
             retainConflict(current)
             let saved = saveCheckpoint()
-            deliverSave(incoming, tag: change.changeTag, zone: zone, checkpoint: saved)
+            deliverSave(incoming, tag: change.changeTag, zone: zone, checkpoint: saved, removals: removals)
             return
         }
         let saved = checkpoint ?? (checkpointFirst ? saveCheckpoint() : lastCheckpoint)
-        deliverSave(incoming, tag: change.changeTag, zone: zone, checkpoint: saved)
+        deliverSave(incoming, tag: change.changeTag, zone: zone, checkpoint: saved, removals: removals)
     }
 
-    private func deliverSave(_ record: SyncRecord, tag: String, zone: ZoneName, checkpoint: Data) {
+    private func deliverSave(
+        _ record: SyncRecord,
+        tag: String,
+        zone: ZoneName,
+        checkpoint: Data,
+        removals: [SyncRecord] = []
+    ) {
         if var page = openPage {
             page.revisions.append(PendingRevision(record: record, tag: tag, confirmed: false))
             openPage = page
@@ -642,7 +668,8 @@ public final class SyncDevice {
             record: record,
             replaceLocalRecord: true,
             conflictCopies: conflicts(for: record.id),
-            checkpointBeforeRequest: checkpoint
+            checkpointBeforeRequest: checkpoint,
+            conflictCopiesToRemove: removals
         ))
     }
 

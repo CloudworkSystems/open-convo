@@ -728,6 +728,80 @@ final class SyncCorePlanTests: XCTestCase {
         XCTAssertTrue(live(b, "note").purged)
         XCTAssertTrue(live(b, "note").payload.isEmpty)
     }
+
+    func testAcknowledgementCheckpointIsGivenToTheHost() throws {
+        let cloud = FakeCloud()
+        let a = Peer("phone-a", cloud: cloud)
+        let b = Peer("phone-b", cloud: cloud)
+        a.boot()
+        b.boot()
+        _ = try a.edit("note", payload: text("base"))
+        try syncAll([a, b])
+        let first = try a.edit("note", payload: text("first"))
+        var savedDuringSync: Data?
+        a.device.persistCheckpoint = { savedDuringSync = $0 }
+        var newer: SyncRecord?
+        try a.sync(beforeAcks: {
+            do {
+                newer = try a.edit("note", payload: text("second"))
+            } catch {
+                XCTFail("edit during upload failed: \(error)")
+            }
+        })
+        let second = try XCTUnwrap(newer)
+        let hosted = try XCTUnwrap(savedDuringSync)
+        try a.adopt(hosted)
+        let queued = try XCTUnwrap(a.device.queuedRecords().first { $0.record.stamp == second.stamp })
+        XCTAssertEqual(queued.baseChangeTag, cloud.record("note")?.changeTag)
+        XCTAssertNotEqual(queued.baseChangeTag, nil)
+        var merges = 0
+        a.merge { _, _ in
+            merges += 1
+            return MergeOutput(payload: text("should-not-merge"))
+        }
+        try syncAll([a, b])
+        XCTAssertEqual(merges, 0)
+        XCTAssertTrue(a.device.conflictCopies().isEmpty)
+        XCTAssertEqual(live(b, "note").payload, text("second"))
+        XCTAssertNotEqual(live(b, "note").stamp, first.stamp)
+    }
+
+    func testRemotePurgeAsksToDeleteConflictCopies() throws {
+        let cloud = FakeCloud()
+        let a = Peer("phone-a", cloud: cloud)
+        let b = Peer("phone-b", cloud: cloud)
+        a.boot()
+        b.boot()
+        _ = try a.edit("note", payload: text("base"))
+        try syncAll([a, b])
+        let secret = try a.edit("note", payload: text("alpha-secret"))
+        for _ in 0..<3 { _ = try b.device.nextStamp() }
+        _ = try b.edit("note", payload: text("beta"))
+        try b.sync()
+        try a.sync(order: .fetchThenUpload)
+        XCTAssertTrue(a.device.conflictCopies().contains { $0.payload == secret.payload })
+        let purge = try b.edit("note", payload: Data(), purged: true)
+        try b.sync()
+        var notices: [AppSaveRequest] = []
+        a.holdSaves { notices.append($0) }
+        try a.sync()
+        let removal = try XCTUnwrap(notices.first { !$0.conflictCopiesToRemove.isEmpty })
+        XCTAssertTrue(removal.record.purged)
+        XCTAssertTrue(removal.conflictCopiesToRemove.contains { $0.payload == secret.payload })
+        let kept = try SyncDevice.restore(from: removal.checkpointBeforeRequest)
+        XCTAssertEqual(kept.status().kind, .needsAttention)
+        if let save = notices.first(where: { $0.replaceLocalRecord && $0.record.purged }) {
+            a.store.save(save.record)
+            try a.device.confirmLocalSave(save.record)
+        }
+        a.device.confirmConflictCopiesStored(recordIDs: ["note"])
+        a.resumeSaves()
+        try syncAll([a, b])
+        XCTAssertFalse(holds(secret.payload, peer: a))
+        XCTAssertFalse(holds(secret.payload, peer: b))
+        XCTAssertTrue(live(a, "note").purged)
+        XCTAssertEqual(live(a, "note").stamp, purge.stamp)
+    }
 }
 
 extension SyncCorePlanTests {
