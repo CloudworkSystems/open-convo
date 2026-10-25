@@ -657,6 +657,10 @@ test('11. saving and loading round-trips, and bad files are refused', () => {
   const badZone = structuredClone(before);
   badZone.fields.timeZone.value = 'Not/AZone';
   assert.match(message(() => deserializePerson(JSON.stringify(badZone))), /Unknown time zone/);
+  const extraStamp = structuredClone(before);
+  extraStamp.fields.timeZone.stamp.note = 'extra';
+  assert.throws(() => deserializePerson(JSON.stringify(extraStamp)), /Invalid field or version stamp/);
+  assert.throws(() => new Tasks({ deviceId: 'phone-a', id: 'maple-household', timeZone: ZONE }), /clock function is required/);
 
   const conflict = structuredClone(before);
   const stamp = conflict.tasks[0].fields.title.stamp;

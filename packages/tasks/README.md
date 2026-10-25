@@ -49,7 +49,7 @@ The caller owns the file. `save()` returns a string and `load(json)` reads one. 
 
 Import `Tasks`, `mergePeople`, `serializePerson`, `deserializePerson`, `compareStamps`, `occurrenceDates`, `wallToInstant`, `civilDate`, `wallClock`, and `SCHEMA_VERSION` from `src/index.mjs`.
 
-`new Tasks({ deviceId, id, timeZone, dayStart = '09:00', now = Date.now, undoLimit = 20 })` holds one person. Give each writer a unique device id. `now` returns integer milliseconds and is used only for version stamps. `dayStart` is the clock time a date-only offset reminder counts from (default `09:00`).
+`new Tasks({ deviceId, id, timeZone, now, dayStart = '09:00', undoLimit = 20 })` holds one person. Give each writer a unique device id. `now` is required: a function that returns integer milliseconds, used only for version stamps. The engine does not call `Date.now`. `dayStart` is the clock time a date-only offset reminder counts from (default `09:00`).
 
 - `addTask(fields, { taskId }?)` returns a permanent id. `title` is 1 to 500 characters. Optional `note` (up to 5,000), `list` (up to 200), `priority` (`high` or none), `due`, `repeat`, and up to five `reminders`.
 - `editTask(id, fields)` changes only the supplied fields. Editing a trashed task restores it. A repeat on a task with no due date is refused. A patterned repeat whose start is not one of its dates is refused. `afterDone` is refused for `weekdays`, `monthDay`, and `monthWeekday`.

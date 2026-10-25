@@ -140,7 +140,7 @@ function canonical(person) {
 }
 
 function validStamp(stamp) {
-  return object(stamp) && Number.isSafeInteger(stamp.counter) && stamp.counter > 0 &&
+  return object(stamp) && exactOwn(stamp, ['counter', 'time', 'device']) && Number.isSafeInteger(stamp.counter) && stamp.counter > 0 &&
     Number.isSafeInteger(stamp.time) && typeof stamp.device === 'string' && stamp.device.length > 0 && stamp.device.length <= 200;
 }
 function exactKeys(value, keys) {
@@ -587,9 +587,10 @@ export class Tasks {
   #history = [];
   #counter = 0;
   #pristine = true;
-  constructor({ deviceId, now = Date.now, undoLimit = 20, id = randomUUID(), timeZone, dayStart = '09:00' } = {}) {
+  constructor({ deviceId, now, undoLimit = 20, id = randomUUID(), timeZone, dayStart = '09:00' } = {}) {
     this.deviceId = identity(deviceId, 'Device ID');
-    if (typeof now !== 'function' || !Number.isSafeInteger(undoLimit) || undoLimit < 0) fail('Invalid clock or undo limit.');
+    if (typeof now !== 'function') fail('A clock function is required.');
+    if (!Number.isSafeInteger(undoLimit) || undoLimit < 0) fail('Invalid clock or undo limit.');
     this.now = now;
     this.undoLimit = undoLimit;
     this.id = identity(id, 'Person ID');
