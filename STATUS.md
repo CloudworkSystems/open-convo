@@ -1,6 +1,6 @@
 # Status
 
-Updated October 24, 2026. The short version of where the build is. The full
+Updated October 25, 2026. The short version of where the build is. The full
 plan is in [PLAN.md](PLAN.md).
 
 ## Now
@@ -88,7 +88,8 @@ Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 
 **Sync core** (Personal; first slice of the iPhone and sync line, owner
 decision October 22): GrokBot team B builds it as its next module, Codex
-reviews. Plan in review: [docs/plans/sync-core.md](docs/plans/sync-core.md).
+reviews. Plan approved (merged as #127 on October 24):
+[docs/plans/sync-core.md](docs/plans/sync-core.md). Build in review (#139).
 
 **Email sorting engine** (Personal, launch set), Claude builds (the owner's choice on October 24, in place of Codex), Gemini Code Assist reviews; plan `docs/plans/email-sorting-engine.md`; merged as #128 on October 24 (`packages/email-sorting/`).
 

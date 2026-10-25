@@ -1,6 +1,6 @@
 # Sync Core (PRD)
 
-Status: Draft (Oct 24): in review on #127; GrokBot team B builds it once it merges.
+Status: In progress (Oct 25): approved and merged in #127 (Oct 24); GrokBot team B is building it in #139 (issue #137).
 
 Written October 22, 2026 by the planning session from the owner's decisions
 that day (recorded in [docs/decisions.md](../decisions.md)). Session name:
