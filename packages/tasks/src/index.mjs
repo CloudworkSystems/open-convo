@@ -149,6 +149,10 @@ function exactKeys(value, keys) {
   for (const key of Object.keys(value)) if (!allowed.has(key)) fail('Unknown field in task file.');
   for (const key of keys) if (!own(value, key)) fail('Invalid task in task file.');
 }
+function checkLifeRegister(entry) {
+  exactKeys(entry, ['value', 'stamp']);
+  if (typeof entry.value !== 'boolean' || !validStamp(entry.stamp)) fail('Invalid task in task file.');
+}
 function checkRegister(entry) {
   if (!object(entry) || !validStamp(entry.stamp) || !exactOwn(entry, ['value', 'stamp'])) fail('Invalid field or version stamp in task file.');
 }
@@ -381,24 +385,30 @@ function reminderMoments(task, ownerZone, dayStart) {
       instant: wallToInstant(reminder.dateTime, reminder.timeZone),
     });
   });
-  const snooze = winningSnooze(task, occurrence);
-  if (snooze?.fields.reminderAt.value) {
-    const at = snooze.fields.reminderAt.value;
-    const instant = wallToInstant(at.dateTime, at.timeZone);
-    if (!moments.length) moments.push({ index: -1, reminder: { kind: 'snooze' }, occurrence, instant, snoozed: true });
-    else {
-      // Move the next reminder that has not already fired by the time of the snooze.
-      const action = snooze.instant;
-      let target = -1;
-      for (let i = 0; i < moments.length; i += 1) {
-        if (moments[i].instant < action) continue;
-        if (target < 0 || moments[i].instant < moments[target].instant || (moments[i].instant === moments[target].instant && moments[i].index < moments[target].index)) target = i;
-      }
-      if (target < 0) moments.push({ index: -1, reminder: { kind: 'snooze' }, occurrence, instant, snoozed: true });
-      else moments[target] = { ...moments[target], instant, snoozed: true };
-    }
-  }
+  // Earlier snoozes already moved a reminder. Later ones must see that time,
+  // or the original moment looks past and comes back beside the new one.
+  const snoozes = task.records.filter(record =>
+    record.type === 'snooze' && !record.fields.withdrawn.value &&
+    (record.occurrence ?? null) === (occurrence ?? null) && record.fields.reminderAt.value,
+  ).sort((a, b) => compareStamps(a.stamp, b.stamp) || lex(a.id, b.id));
+  for (const snooze of snoozes) applySnooze(moments, snooze, occurrence);
   return moments;
+}
+function applySnooze(moments, snooze, occurrence) {
+  const at = snooze.fields.reminderAt.value;
+  const instant = wallToInstant(at.dateTime, at.timeZone);
+  if (!moments.length) {
+    moments.push({ index: -1, reminder: { kind: 'snooze' }, occurrence, instant, snoozed: true });
+    return;
+  }
+  const action = snooze.instant;
+  let target = -1;
+  for (let i = 0; i < moments.length; i += 1) {
+    if (moments[i].instant < action) continue;
+    if (target < 0 || moments[i].instant < moments[target].instant || (moments[i].instant === moments[target].instant && moments[i].index < moments[target].index)) target = i;
+  }
+  if (target < 0) moments.push({ index: -1, reminder: { kind: 'snooze' }, occurrence, instant, snoozed: true });
+  else moments[target] = { ...moments[target], instant, snoozed: true };
 }
 
 function blankRecord(id, type, occurrence, instant, actionDate, actionZone, stamp, fields) {
@@ -511,10 +521,11 @@ function checkTask(task) {
   const keys = ['id', 'life', 'purge', 'fields', 'records'];
   if (own(task, 'pendingLife')) keys.push('pendingLife');
   exactKeys(task, keys);
-  if (!object(task.life) || typeof task.life.value !== 'boolean' || !validStamp(task.life.stamp)) fail('Invalid task in task file.');
+  checkLifeRegister(task.life);
   if (task.purge !== null && !validStamp(task.purge)) fail('Invalid task in task file.');
   if (own(task, 'pendingLife')) {
-    if (!task.purge || !object(task.pendingLife) || typeof task.pendingLife.value !== 'boolean' || !validStamp(task.pendingLife.stamp)) fail('Invalid task in task file.');
+    if (!task.purge) fail('Invalid task in task file.');
+    checkLifeRegister(task.pendingLife);
   }
   if (!object(task.fields) || !Array.isArray(task.records)) fail('Invalid task in task file.');
   const present = Object.keys(task.fields);

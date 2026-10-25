@@ -428,6 +428,19 @@ test('8. snooze presets, including next Monday on a Monday, leave the series put
   both.snooze('two', { at: { dateTime: '2026-03-11T17:00', timeZone: ZONE } }, noon, { recordId: 'move-next' });
   const day = both.remindersDue(wallToInstant('2026-03-10T00:00', ZONE), wallToInstant('2026-03-12T00:00', ZONE), ZONE);
   assert.deepEqual(day.map(row => row.at), ['2026-03-10T09:00', '2026-03-11T17:00']);
+
+  const again = engine('again', T0, 'UTC');
+  again.addTask({
+    title: 'One bell',
+    due: '2026-04-01',
+    reminders: [{ dateTime: '2026-04-01T09:00', timeZone: 'UTC', occurrence: '2026-04-01' }],
+  }, { taskId: 'bell' });
+  again.snooze('bell', { at: { dateTime: '2026-04-01T12:00', timeZone: 'UTC' } }, at('2026-04-01T08:00:00.000Z'), { recordId: 'first-snooze' });
+  again.snooze('bell', { at: { dateTime: '2026-04-01T15:00', timeZone: 'UTC' } }, at('2026-04-01T10:00:00.000Z'), { recordId: 'second-snooze' });
+  assert.deepEqual(
+    again.remindersDue(at('2026-04-01T00:00:00.000Z'), at('2026-04-02T00:00:00.000Z'), 'UTC').map(row => row.at),
+    ['2026-04-01T15:00'],
+  );
 });
 
 test('upcoming keeps only the occurrences a repeat still has', () => {
@@ -690,6 +703,17 @@ test('11. saving and loading round-trips, and bad files are refused', () => {
   const extraStamp = structuredClone(before);
   extraStamp.fields.timeZone.stamp.note = 'extra';
   assert.throws(() => deserializePerson(JSON.stringify(extraStamp)), /Invalid field or version stamp/);
+  const extraLife = structuredClone(before);
+  extraLife.tasks[0].life.extra = true;
+  assert.throws(() => deserializePerson(JSON.stringify(extraLife)), /Unknown field/);
+  const extraPending = structuredClone(before);
+  const pendingTask = extraPending.tasks[0];
+  pendingTask.purge = pendingTask.life.stamp;
+  pendingTask.life = { value: false, stamp: pendingTask.life.stamp };
+  pendingTask.pendingLife = { value: true, stamp: pendingTask.life.stamp, extra: true };
+  pendingTask.fields = {};
+  pendingTask.records = [];
+  assert.throws(() => deserializePerson(JSON.stringify(extraPending)), /Unknown field/);
   assert.throws(() => new Tasks({ deviceId: 'phone-a', id: 'maple-household', timeZone: ZONE }), /clock function is required/);
 
   const conflict = structuredClone(before);
