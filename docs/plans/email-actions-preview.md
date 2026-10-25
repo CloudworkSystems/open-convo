@@ -69,7 +69,8 @@ field per message:
 
 - `pile`: one of the six fixed piles (`people`, `work`, `alerts`,
   `receipts`, `newsletters`, `other`), as the sorting engine decided it. A
-  message without `pile` counts as `other` for the guards below.
+  message without `pile` is unsorted: sender, domain and list targets
+  leave it out (see the guards below).
 
 This package doesn't import the sorting package (packages stay independent);
 it checks the file itself, the same way. The headers it reads are
@@ -111,10 +112,12 @@ with a plain message naming the request's position.
      never matches messages in the `people` or `work` piles. Those messages
      are left out and counted in the request's `leftOut`, with the reason
      "In People (or Work): pick these messages one by one". Only a
-     `messages` target can include them. The guard relies on the `pile`
-     the sorting engine assigned: a message with no `pile` counts as
-     `other`, so input should come from the sorting engine. The preview
-     still shows every message before anything happens.
+     `messages` target can include them.
+   - **Unsorted mail is never swept up either.** A message with no `pile`
+     may be personal or work mail, so a sender, domain or list target
+     leaves it out the same way and counts it in `leftOut` with the reason
+     "Not sorted yet: pick these messages one by one". Only a `messages`
+     target can include it.
    - **A domain target can't cover a common mail provider.** The package
      ships a fixed list of large consumer mail domains (for example
      `gmail.com`, `icloud.com`, `outlook.com`, `yahoo.com`); a domain target
@@ -216,6 +219,8 @@ mail only (`.example` addresses, invented people and businesses). At least:
    right messages; `pile` narrows a sender target to one pile.
 3. People and work: a sender target that would match a `people` message
    leaves it out and counts it in `leftOut` with the reason; a `messages`
+   target can still include it. A sender target matching a message with no
+   `pile` leaves it out with the "Not sorted yet" reason; a `messages`
    target can still include it.
 4. A domain target naming `gmail.com` (and each other listed provider) is
    blocked with the plain reason.
