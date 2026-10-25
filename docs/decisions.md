@@ -6,6 +6,20 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 25:** Back end and agent hosts
+  ([docs/design-notes/back-end-and-agent-hosts.md](design-notes/back-end-and-agent-hosts.md)).
+  True Convo runs almost no server of its own: CloudKit, Apple push and
+  StoreKit cover sync, wake-ups and billing at launch. The project's only
+  servers form one public side: first the front porch for the Meta AI
+  connector and a Messenger bot, later phone callbacks and a public
+  marketplace. The public and private sides never share a store. The public
+  side is prototyped on the agent VM and runs for real on a serverless host,
+  each piece with its own plan. For the agents that build True Convo, the
+  owner approves one exe.dev VM, which he signs up for and pays himself, so
+  any model's agent can work while his Mac sleeps. Its first jobs are his
+  local Codex CLI jobs and the Gemini CLI, both as `cloudwork-bot` with a
+  fine-grained token limited to open-convo. Mac and iPhone builds stay on
+  the Mac.
 - **Oct 25:** More work per dollar, without the owner or his Mac awake.
   The PR keeper moves to the cloud, counts a Codex review as hung after 20
   minutes instead of 60 (restarting it at its next hourly run), updates a pull request from `main` only once it is
