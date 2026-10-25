@@ -6,6 +6,33 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 25:** Back end and agent hosts
+  ([docs/design-notes/back-end-and-agent-hosts.md](design-notes/back-end-and-agent-hosts.md)).
+  True Convo runs almost no server of its own: CloudKit, Apple push and
+  StoreKit cover sync, wake-ups and billing at launch. The project's only
+  servers form one public side: first the front porch for the Meta AI
+  connector and a Messenger bot, later phone callbacks and a public
+  marketplace. The public and private sides never share a store. The public
+  side is prototyped on its own VM with no credentials (never on the
+  builders' VM) and runs for real on a serverless host, each piece with its
+  own plan. For the agents that build True Convo, the owner approves one
+  exe.dev builders' VM, which he signs up for and pays himself, so any
+  model's agent can work while his Mac sleeps. Its first jobs are his local
+  Codex CLI jobs and the Gemini CLI, both as `cloudwork-bot` with their own
+  classic `repo`-only token (no `workflow` scope, as in the merge gate),
+  kept in exe.dev's Integrations so the VM never reads it, not exe.dev's
+  own GitHub bot. Only if that fails, a file readable only by the VM's user
+  is an approved exception to Keychain-only storage. Mac and iPhone builds
+  stay on the Mac.
+- **Oct 25:** More work per dollar, without the owner or his Mac awake.
+  The PR keeper moves to the cloud, counts a Codex review as hung after 20
+  minutes instead of 60 (restarting it at its next hourly run), updates a pull request from `main` only once it is
+  otherwise ready to merge, and relays Codex findings on GrokBot pull
+  requests to the builder with an `@cursor` comment. After three Codex
+  rounds, builders fix only P0 and P1 findings and leave P2 and P3 to the
+  triage judge, unless no verdict arrives within two hours; Codex keeps
+  raising a finding left for the judge until the judge rates it (AGENTS.md
+  "Review Guidelines" and "Coordinating On GitHub").
 - **Oct 24:** Next outside modules: the email actions preview (Codex builds
   through the local Codex CLI, Gemini reviews), the tasks and reminders
   engine (GrokBot team A) and the Today agenda (GrokBot team C, after #112),

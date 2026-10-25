@@ -149,6 +149,9 @@ on the protected store and under the owner's approval.
   Proactive help can come later, and only behind the approval card above.
 - **Cloud sandboxes and always-on machines.** The video runs agents on dedicated
   computers and cloud sandboxes. Open Convo stays on the owner's Mac for now.
+  This is about the product. The agents that build Open Convo may use one
+  always-on VM (owner decision, October 25, 2026;
+  [back-end-and-agent-hosts.md](back-end-and-agent-hosts.md)).
 - **Shipping without review.** The video's author argues advanced users can let
   agents deploy unreviewed. Open Convo keeps the owner as the final step.
 

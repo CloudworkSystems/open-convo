@@ -56,7 +56,8 @@ chats only). Scope:
 - **Brought over from True Convo:** clarity library, Desk, Mac app,
   Desk-to-Mac specs, Ember brand, load alarm, four module concept notes.
 - **Design notes written:** agent profiles and adapters, Convo Engine, Site
-  Engine, Visibility Agent, capabilities and primitives, Sage, durable agents.
+  Engine, Visibility Agent, capabilities and primitives, Sage, durable agents,
+  portable capability layer.
 
 ## Next
 
