@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "requests": [
+    { "action": "unsubscribe", "target": { "sender": "digest@lantern-post.example" } },
+    { "action": "delete", "target": { "listId": "weekly.lantern-post.example" } },
+    { "action": "spam", "target": { "messages": [{ "inbox": "home", "id": "alert-1" }] } }
+  ]
+}

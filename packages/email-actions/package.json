@@ -1,0 +1,13 @@
+{
+  "name": "@open-convo/email-actions",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.mjs",
+  "scripts": {
+    "test": "node --experimental-test-module-mocks --disable-warning=ExperimentalWarning --import ./tests/network-guard.mjs --test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

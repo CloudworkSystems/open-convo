@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "seal": "17b474efdec8ae1f6c6d4c29e634090ec90d9aff6202935fe2b150bf790e2925",
+  "actions": [
+    {
+      "action": "spam",
+      "count": 1,
+      "copies": 1,
+      "groups": [
+        {
+          "pile": "alerts",
+          "key": "address:alerts@copper-finch.example",
+          "label": "Copper Finch Alerts",
+          "count": 1,
+          "copies": 1,
+          "messages": [
+            {
+              "inboxes": ["home"],
+              "ids": { "home": ["alert-1"] },
+              "from": { "name": "Copper Finch Alerts", "address": "alerts@copper-finch.example" },
+              "subject": "A made-up device signed in",
+              "date": "2026-10-23T14:30:00Z",
+              "pile": "alerts",
+              "matchedBy": [3]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "action": "delete",
+      "count": 1,
+      "copies": 1,
+      "groups": [
+        {
+          "pile": "newsletters",
+          "key": "list:weekly.lantern-post.example",
+          "label": "Lantern Post",
+          "count": 1,
+          "copies": 1,
+          "messages": [
+            {
+              "inboxes": ["home"],
+              "ids": { "home": ["newsletter-1"] },
+              "from": { "name": "Lantern Post", "address": "digest@lantern-post.example" },
+              "subject": "Five quiet trails",
+              "date": "2026-10-24T09:00:00Z",
+              "pile": "newsletters",
+              "matchedBy": [2]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "action": "unsubscribe",
+      "count": 1,
+      "copies": 1,
+      "groups": [
+        {
+          "pile": "newsletters",
+          "key": "list:weekly.lantern-post.example",
+          "label": "Lantern Post",
+          "count": 1,
+          "copies": 1,
+          "messages": [
+            {
+              "inboxes": ["home"],
+              "ids": { "home": ["newsletter-1"] },
+              "from": { "name": "Lantern Post", "address": "digest@lantern-post.example" },
+              "subject": "Five quiet trails",
+              "date": "2026-10-24T09:00:00Z",
+              "pile": "newsletters",
+              "matchedBy": [1]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "unsubscribe": [
+    {
+      "key": "list:weekly.lantern-post.example",
+      "label": "Lantern Post",
+      "method": "oneClick",
+      "url": "https://lantern-post.example/unsubscribe/reader"
+    }
+  ],
+  "blocked": [],
+  "requests": [
+    { "position": 1, "action": "unsubscribe", "matched": 1, "kept": 1, "leftOut": 0, "leftOutReasons": [] },
+    { "position": 2, "action": "delete", "matched": 1, "kept": 1, "leftOut": 0, "leftOutReasons": [] },
+    { "position": 3, "action": "spam", "matched": 1, "kept": 1, "leftOut": 0, "leftOutReasons": [] }
+  ],
+  "summary": [
+    "Spam: 1 message from 1 sender",
+    "Delete: 1 message from 1 sender",
+    "Unsubscribe: 1 sender (1 one-click, 0 by email, 0 web page, 0 has no way)"
+  ]
+}

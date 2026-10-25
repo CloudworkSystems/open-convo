@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "messages": [
+    {
+      "id": "newsletter-1",
+      "inbox": "home",
+      "from": { "name": "Lantern Post", "address": "digest@lantern-post.example" },
+      "to": [{ "address": "reader@quillhome.example" }],
+      "subject": "Five quiet trails",
+      "date": "2026-10-24T09:00:00Z",
+      "snippet": "An invented weekly digest.",
+      "headers": {
+        "Message-ID": "<newsletter-1@lantern-post.example>",
+        "List-Id": "Lantern weekly <weekly.lantern-post.example>",
+        "List-Unsubscribe": "<https://lantern-post.example/unsubscribe/reader>",
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
+      },
+      "pile": "newsletters"
+    },
+    {
+      "id": "alert-1",
+      "inbox": "home",
+      "from": { "name": "Copper Finch Alerts", "address": "alerts@copper-finch.example" },
+      "to": [{ "address": "reader@quillhome.example" }],
+      "subject": "A made-up device signed in",
+      "date": "2026-10-23T14:30:00Z",
+      "snippet": "Invented alert text.",
+      "headers": { "Message-ID": "<alert-1@copper-finch.example>" },
+      "pile": "alerts"
+    }
+  ]
+}
