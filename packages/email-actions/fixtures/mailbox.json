@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "messages": [
+    {
+      "id": "newsletter-home",
+      "inbox": "home",
+      "from": { "name": "Lantern Post", "address": "digest@lantern-post.example" },
+      "to": [{ "address": "reader@quillhome.example" }],
+      "subject": "Five quiet trails",
+      "date": "2026-10-24T09:00:00Z",
+      "snippet": "An invented weekly digest.",
+      "headers": {
+        "Message-ID": "<lantern-week-43@lantern-post.example>",
+        "List-Id": "Lantern weekly <weekly.lantern-post.example>",
+        "List-Unsubscribe": "<https://lantern-post.example/unsubscribe/reader>",
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
+      },
+      "pile": "newsletters"
+    },
+    {
+      "id": "newsletter-work-copy",
+      "inbox": "studio",
+      "from": { "name": "Lantern Post", "address": "digest@lantern-post.example" },
+      "to": [{ "address": "reader@quillhome.example" }],
+      "subject": "Five quiet trails",
+      "date": "2026-10-24T09:00:00Z",
+      "snippet": "An invented weekly digest.",
+      "headers": {
+        "Message-ID": "<lantern-week-43@lantern-post.example>",
+        "List-Id": "Lantern weekly <weekly.lantern-post.example>",
+        "List-Unsubscribe": "<https://lantern-post.example/unsubscribe/reader>",
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
+      },
+      "pile": "newsletters"
+    },
+    {
+      "id": "alert-1",
+      "inbox": "home",
+      "from": { "name": "Copper Finch Alerts", "address": "alerts@copper-finch.example" },
+      "to": [{ "address": "reader@quillhome.example" }],
+      "subject": "A made-up device signed in",
+      "date": "2026-10-23T14:30:00Z",
+      "snippet": "Invented alert text.",
+      "headers": { "Message-ID": "<alert-1@copper-finch.example>" },
+      "pile": "alerts"
+    },
+    {
+      "id": "maple-news",
+      "inbox": "home",
+      "from": { "name": "Maple Lab Notes", "address": "notices@maple-lab.example" },
+      "to": [{ "address": "reader@quillhome.example" }],
+      "subject": "October field notes",
+      "date": "2026-10-22T16:00:00Z",
+      "snippet": "A fictional project newsletter.",
+      "headers": { "Message-ID": "<maple-news@maple-lab.example>" },
+      "pile": "newsletters"
+    },
+    {
+      "id": "maple-people",
+      "inbox": "home",
+      "from": { "name": "Maple Lab Notes", "address": "notices@maple-lab.example" },
+      "to": [{ "address": "reader@quillhome.example" }],
+      "subject": "Picnic details",
+      "date": "2026-10-21T12:00:00Z",
+      "snippet": "A personal note from an invented sender.",
+      "headers": { "Message-ID": "<maple-people@maple-lab.example>" },
+      "pile": "people"
+    },
+    {
+      "id": "maple-work",
+      "inbox": "studio",
+      "from": { "name": "Maple Lab Notes", "address": "notices@maple-lab.example" },
+      "to": [{ "address": "maker@quillstudio.example" }],
+      "subject": "Draft review window",
+      "date": "2026-10-20T15:15:00Z",
+      "snippet": "A fictional work update.",
+      "headers": { "Message-ID": "<maple-work@maple-lab.example>" },
+      "pile": "work"
+    },
+    {
+      "id": "maple-unsorted",
+      "inbox": "home",
+      "from": { "name": "Maple Lab Notes", "address": "notices@maple-lab.example" },
+      "to": [{ "address": "reader@quillhome.example" }],
+      "subject": "A note awaiting a pile",
+      "date": "2026-10-19T10:45:00Z",
+      "snippet": "This invented message is intentionally unsorted.",
+      "headers": { "Message-ID": "<maple-unsorted@maple-lab.example>" }
+    },
+    {
+      "id": "receipt-1",
+      "inbox": "home",
+      "from": { "name": "Pebble Cart", "address": "receipts@pebble-cart.example" },
+      "to": [{ "address": "reader@quillhome.example" }],
+      "subject": "Receipt for order Q-104",
+      "date": "2026-10-18T18:05:00Z",
+      "snippet": "An invented purchase receipt.",
+      "headers": { "Message-ID": "<receipt-1@pebble-cart.example>" },
+      "pile": "receipts"
+    },
+    {
+      "id": "shared-sender",
+      "inbox": "home",
+      "from": { "name": "Harbor Note", "address": "shared@harbor-note.example" },
+      "to": [{ "address": "reader@quillhome.example" }],
+      "subject": "Shared notebook update",
+      "date": "2026-10-17T11:20:00Z",
+      "snippet": "A fictional shared-mailbox update.",
+      "headers": { "Message-ID": "<shared-sender@harbor-note.example>" },
+      "pile": "other"
+    },
+    {
+      "id": "shared-recipient",
+      "inbox": "home",
+      "from": { "name": "Silver Kite Courier", "address": "dispatch@silver-kite.example" },
+      "to": [{ "address": "shared@harbor-note.example" }],
+      "subject": "Parcel window confirmed",
+      "date": "2026-10-16T08:40:00Z",
+      "snippet": "Invented delivery details.",
+      "headers": { "Message-ID": "<shared-recipient@silver-kite.example>" },
+      "pile": "alerts"
+    },
+    {
+      "id": "mail-unsubscribe",
+      "inbox": "home",
+      "from": { "name": "Juniper Circular", "address": "roundup@juniper-circular.example" },
+      "to": [{ "address": "reader@quillhome.example" }],
+      "subject": "Small workshop ideas",
+      "date": "2026-10-15T13:00:00Z",
+      "snippet": "An invented monthly circular.",
+      "headers": {
+        "Message-ID": "<mail-unsubscribe@juniper-circular.example>",
+        "List-Id": "Juniper circular <monthly.juniper-circular.example>",
+        "List-Unsubscribe": "<mailto:leave@juniper-circular.example?subject=unsubscribe>"
+      },
+      "pile": "newsletters"
+    },
+    {
+      "id": "people-note",
+      "inbox": "home",
+      "from": { "name": "Rin Vale", "address": "rin@vale-garden.example" },
+      "to": [{ "address": "reader@quillhome.example" }],
+      "subject": "Seed swap on Sunday",
+      "date": "2026-10-14T19:10:00Z",
+      "snippet": "A friendly note between invented people.",
+      "headers": { "Message-ID": "<people-note@vale-garden.example>" },
+      "pile": "people"
+    }
+  ]
+}
