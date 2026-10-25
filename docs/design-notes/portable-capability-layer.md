@@ -23,8 +23,8 @@ stay useful in the other direction, as models get better and need less help.
 The text format is mostly solved. Agent Skills (`SKILL.md`) became an open
 standard in December 2025 and is read by Claude Code, Codex, Cursor and others.
 `AGENTS.md` carries project instructions across tools, and MCP carries tools.
-(This updates the line in capabilities-and-primitives.md that says a skill is
-something only one AI program can read.)
+(capabilities-and-primitives.md's definition of a skill was reworded to
+match, owner, October 25.)
 
 What doesn't exist, and what True Convo adds:
 
