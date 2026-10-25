@@ -17,7 +17,7 @@ const hostile = (uid) => ev(`UID:${uid}`, 'SUMMARY:Never', 'DTSTART:00010101T090
 test('a hostile COUNT rule stops at the series budget and reports a problem', async () => {
   const result = await merge({ a: cal(hostile('h1@test.example')) }, NOV);
   assert.deepEqual(result.occurrences, []);
-  assert.deepEqual(result.problems, [`Source "a", line 4: "h1@test.example" needs too much work to expand (more than ${LIMITS.seriesSteps} repeat periods to reach the range); only its first occurrence is shown.`]);
+  assert.deepEqual(result.problems, [`Source "a", line 4: "h1@test.example" needs too much work to expand (more than ${LIMITS.seriesSteps} repeat steps to reach the range); only its first occurrence is shown.`]);
 });
 
 test('a hostile source uses up only its own share: the reviewer\'s cross-source case', async () => {
@@ -37,8 +37,8 @@ test('a hostile source uses up only its own share: the reviewer\'s cross-source 
     // 100,000); the rest find it used up, and the message says so, never
     // "more than 0".
     const fit = Math.floor(share / (LIMITS.seriesSteps + 1));
-    assert.equal(result.problems.filter((p) => p.includes(`more than ${LIMITS.seriesSteps} repeat periods`)).length, fit);
-    assert.equal(result.problems.filter((p) => p.includes(`this calendar's share of the work (${share} repeat periods) is used up`)).length, 20 - fit);
+    assert.equal(result.problems.filter((p) => p.includes(`more than ${LIMITS.seriesSteps} repeat steps`)).length, fit);
+    assert.equal(result.problems.filter((p) => p.includes(`this calendar's share of the work (${share} repeat steps) is used up`)).length, 20 - fit);
     assert.ok(!result.problems.some((p) => p.includes('more than 0')));
   }
 });
@@ -105,7 +105,7 @@ test('occurrences are capped per source share, deterministically, with a problem
 });
 
 test('a costly copy is paid for only by its own source: a hostile source can\'t drain another (review r4)', async () => {
-  // With 2 sources, each has 1,000,000 repeat periods. "hostile" fills its
+  // With 2 sources, each has 1,000,000 repeat steps. "hostile" fills its
   // share, then holds newer, costly copies of 11 UIDs it shares with
   // "victim". Those copies are charged to "hostile" only, so the victim's
   // private Gym series is untouched and no problem names the victim.

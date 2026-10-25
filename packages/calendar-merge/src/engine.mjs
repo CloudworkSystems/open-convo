@@ -16,8 +16,8 @@ const DEFAULT_LIMITS = {
   rangeDates: 400,
   seriesOccurrences: 10_000,
   // Work budgets, so a hostile or huge calendar can't stall a call.
-  seriesSteps: 100_000, // repeat periods visited for one series
-  callSteps: 2_000_000, // repeat periods visited in one call
+  seriesSteps: 100_000, // repeat steps for one series (see expandRuleDays)
+  callSteps: 2_000_000, // repeat steps in one call
   seriesValues: 50_000, // RDATE and EXDATE values in one series
   callValues: 1_000_000, // dates read through a time zone in one call
   callOccurrences: 100_000, // occurrences listed by one call
@@ -371,7 +371,7 @@ function expandFully(copy, q, single, stats, budget) {
     try {
       return expandRuleDays(...args, stats, maxSteps);
     } catch (error) {
-      if (error instanceof WorkLimit && sourceBound) throw new WorkLimit(`this calendar's share of the work (${budget.stepsShare} repeat periods) is used up`);
+      if (error instanceof WorkLimit && sourceBound) throw new WorkLimit(`this calendar's share of the work (${budget.stepsShare} repeat steps) is used up`);
       throw error;
     }
   };
@@ -656,13 +656,35 @@ function safeMergeUid(group, q, problems) {
   }
 }
 
+// Group checks made by title-and-time matching, counted so tests can check
+// the work without timing it.
+let titleTimeChecks = 0;
+export function titleTimeChecksForTests() {
+  return titleTimeChecks;
+}
+
 // Different UIDs, same title and time: grouped one to one, never two
 // occurrences from one source in a group.
 function matchTitleAndTime(occurrences) {
   const buckets = new Map();
+  // A series' occurrences share one title, so each title is normalized once
+  // and stands in the match key as a small number: a long title costs its
+  // length once, not once per occurrence.
+  const titleIds = new Map();
+  const normalizedIds = new Map();
+  const titleId = (title) => {
+    let id = titleIds.get(title);
+    if (id === undefined) {
+      const normalized = normalizeTitle(title);
+      id = normalizedIds.get(normalized);
+      if (id === undefined) { id = normalizedIds.size; normalizedIds.set(normalized, id); }
+      titleIds.set(title, id);
+    }
+    return id;
+  };
   for (const occurrence of occurrences) {
     const when = occurrence.allDay ? `D${occurrence.startDay}-${occurrence.endDay}` : `T${occurrence.startMs}-${occurrence.endMs}`;
-    const matchKey = JSON.stringify([when, normalizeTitle(occurrence.title), occurrence.status]);
+    const matchKey = `${when}|${titleId(occurrence.title)}|${occurrence.status}`;
     if (!buckets.has(matchKey)) buckets.set(matchKey, []);
     buckets.get(matchKey).push(occurrence);
   }
@@ -670,8 +692,21 @@ function matchTitleAndTime(occurrences) {
   for (const bucket of buckets.values()) {
     bucket.sort((a, b) => (a.minSource - b.minSource) || byCodeUnits(a.uid, b.uid) || byCodeUnits(a.key, b.key));
     const groups = [];
+    // Each occurrence joins the first group whose sources don't overlap its
+    // own. A group's sources only grow, so a group that overlaps one source
+    // set always will: the search for each source set resumes where the last
+    // one stopped instead of rescanning every group. Many look-alikes from
+    // one source cost linear work, not quadratic.
+    const resumeAt = new Map();
     for (const occurrence of bucket) {
-      const group = groups.find((g) => occurrence.sources.every((s) => !g.sources.has(s)));
+      const setKey = occurrence.sources.join(',');
+      let index = resumeAt.get(setKey) ?? 0;
+      for (; index < groups.length; index += 1) {
+        titleTimeChecks += 1;
+        if (occurrence.sources.every((s) => !groups[index].sources.has(s))) break;
+      }
+      const group = groups[index];
+      resumeAt.set(setKey, index + 1);
       if (group) {
         group.members.push(occurrence);
         for (const s of occurrence.sources) group.sources.add(s);

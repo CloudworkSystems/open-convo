@@ -16,15 +16,22 @@ const UNSUPPORTED_FREQ = new Set(['HOURLY', 'MINUTELY', 'SECONDLY']);
 const UNSUPPORTED_PARTS = new Set(['BYHOUR', 'BYMINUTE', 'BYSECOND', 'BYWEEKNO', 'BYYEARDAY']);
 const KNOWN_PARTS = new Set(['FREQ', 'INTERVAL', 'COUNT', 'UNTIL', 'BYDAY', 'BYMONTHDAY', 'BYMONTH', 'BYSETPOS', 'WKST', ...UNSUPPORTED_PARTS]);
 
+// Most distinct values each BYxxx list can hold. Lists are deduplicated when
+// read, so no list is longer than this whatever its written length: BYMONTHDAY
+// +-1..31, BYMONTH 1..12, BYSETPOS +-1..366, BYDAY seven plain weekdays plus
+// seven for each of +-1..53.
+export const MAX_DISTINCT = Object.freeze({ BYMONTHDAY: 62, BYMONTH: 12, BYSETPOS: 732, BYDAY: 7 + 7 * 106 });
+
+// A comma list of whole numbers, checked, deduplicated and sorted, or null.
 function intList(text, min, max, allowNegative) {
-  const out = [];
+  const seen = new Set();
   for (const piece of text.split(',')) {
     if (!/^[+-]?\d{1,3}$/.test(piece)) return null;
     const n = Number(piece);
     if (n === 0 || Math.abs(n) < min || Math.abs(n) > max || (n < 0 && !allowNegative)) return null;
-    out.push(n);
+    seen.add(n);
   }
-  return out;
+  return [...seen].sort((a, b) => a - b);
 }
 
 // { rule } or { unsupported: 'reason' }. A rule the standard doesn't allow is
@@ -63,15 +70,18 @@ export function parseRRule(text) {
   }
   if (parts.has('UNTIL')) rule.until = parts.get('UNTIL');
   if (parts.has('BYDAY')) {
-    rule.byday = [];
+    const seen = new Map();
     for (const piece of parts.get('BYDAY').toUpperCase().split(',')) {
       const match = /^([+-]?\d{1,2})?(SU|MO|TU|WE|TH|FR|SA)$/.exec(piece);
       if (!match) return { unsupported: `bad BYDAY "${piece}"` };
       const n = match[1] ? Number(match[1]) : 0;
       if (match[1] && (n === 0 || Math.abs(n) > 53)) return { unsupported: `bad BYDAY "${piece}"` };
       if (n && (freq === 'DAILY' || freq === 'WEEKLY')) return { unsupported: `numbered BYDAY with FREQ=${freq}` };
-      rule.byday.push({ n, wd: WEEKDAYS.indexOf(match[2]) });
+      const wd = WEEKDAYS.indexOf(match[2]);
+      // "1MO", "+1MO" and "01MO" are the same entry: kept once.
+      seen.set(`${n}:${wd}`, { n, wd });
     }
+    rule.byday = [...seen.values()].sort((a, b) => (a.n - b.n) || (a.wd - b.wd));
   }
   if (parts.has('BYMONTHDAY')) {
     if (freq === 'WEEKLY') return { unsupported: 'BYMONTHDAY with FREQ=WEEKLY' };
@@ -92,6 +102,14 @@ export function parseRRule(text) {
     if (wkst < 0) return { unsupported: 'bad WKST' };
     rule.wkst = wkst;
   }
+  // Lookups built once per rule, never once per period.
+  rule.sets = {
+    bymonth: rule.bymonth ? new Set(rule.bymonth) : null,
+    monthdayPos: rule.bymonthday ? new Set(rule.bymonthday.filter((n) => n > 0)) : null,
+    monthdayNeg: rule.bymonthday ? new Set(rule.bymonthday.filter((n) => n < 0)) : null,
+    weekdays: rule.byday ? [...new Set(rule.byday.map((b) => b.wd))].sort((a, b) => a - b) : null,
+    weekdaySet: rule.byday ? new Set(rule.byday.map((b) => b.wd)) : null,
+  };
   return { rule };
 }
 
@@ -110,96 +128,108 @@ function nthWeekday(firstDay, lastDay, n, wd) {
 
 // BYDAY within [firstDay, lastDay]: numbered entries pick the nth, plain
 // entries every such weekday.
-function bydaySet(byday, firstDay, lastDay) {
+// The helpers below add one to `meter.work` for every value they look at, so
+// a period is charged for the work it really takes (see expandRuleDays).
+function bydaySet(byday, firstDay, lastDay, meter) {
   const out = new Set();
   for (const { n, wd } of byday) {
+    meter.work += 1;
     if (n) {
       const day = nthWeekday(firstDay, lastDay, n, wd);
       if (day !== null) out.add(day);
     } else {
-      for (let day = firstDay + ((wd - weekdayOf(firstDay) + 7) % 7); day <= lastDay; day += 7) out.add(day);
+      for (let day = firstDay + ((wd - weekdayOf(firstDay) + 7) % 7); day <= lastDay; day += 7) { out.add(day); meter.work += 1; }
     }
   }
   return out;
 }
 
-function monthdaySet(bymonthday, y, m) {
+function monthdaySet(bymonthday, y, m, meter) {
   const out = new Set();
   const dim = daysInMonth(y, m);
   for (const n of bymonthday) {
+    meter.work += 1;
     const d = n > 0 ? n : dim + 1 + n;
     if (d >= 1 && d <= dim) out.add(daysFromCivil(y, m, d));
   }
   return out;
 }
 
-function monthCandidates(rule, y, m, start) {
+// Whether `day` matches BYMONTHDAY, in constant time.
+function matchesMonthday(rule, day) {
+  const { y, m, d } = civilFromDays(day);
+  return rule.sets.monthdayPos.has(d) || rule.sets.monthdayNeg.has(d - daysInMonth(y, m) - 1);
+}
+
+function monthCandidates(rule, y, m, start, meter) {
   const first = daysFromCivil(y, m, 1);
   const last = first + daysInMonth(y, m) - 1;
   if (rule.bymonthday || rule.byday) {
-    let days = rule.bymonthday ? monthdaySet(rule.bymonthday, y, m) : null;
+    let days = rule.bymonthday ? monthdaySet(rule.bymonthday, y, m, meter) : null;
     if (rule.byday) {
-      const byday = bydaySet(rule.byday, first, last);
+      const byday = bydaySet(rule.byday, first, last, meter);
       days = days ? new Set([...days].filter((d) => byday.has(d))) : byday;
     }
     return [...days];
   }
+  meter.work += 1;
   return start.d <= daysInMonth(y, m) ? [daysFromCivil(y, m, start.d)] : [];
 }
 
-function periodCandidates(rule, ctx, k) {
+function periodCandidates(rule, ctx, k, meter) {
   const { start, startDay } = ctx;
   let days;
   if (rule.freq === 'DAILY') {
+    meter.work += 1;
     days = [startDay + k * rule.interval];
   } else if (rule.freq === 'WEEKLY') {
     const weekStart = ctx.weekStart + 7 * rule.interval * k;
-    const wanted = rule.byday ? new Set(rule.byday.map((b) => b.wd)) : new Set([weekdayOf(startDay)]);
-    days = [];
-    for (let day = weekStart; day < weekStart + 7; day += 1) if (wanted.has(weekdayOf(day))) days.push(day);
+    const wanted = rule.byday ? rule.sets.weekdays : [weekdayOf(startDay)];
+    const offset = weekdayOf(weekStart);
+    days = wanted.map((wd) => weekStart + ((wd - offset + 7) % 7));
+    meter.work += days.length;
   } else if (rule.freq === 'MONTHLY') {
     const index = start.y * 12 + (start.m - 1) + k * rule.interval;
     const y = Math.floor(index / 12);
     const m = (index % 12) + 1;
-    days = monthCandidates(rule, y, m, start);
+    days = monthCandidates(rule, y, m, start, meter);
   } else {
     const y = start.y + k * rule.interval;
     if (rule.bymonth) {
       days = [];
-      for (const m of rule.bymonth) days.push(...monthCandidates(rule, y, m, start));
+      for (const m of rule.bymonth) days.push(...monthCandidates(rule, y, m, start, meter));
     } else if (rule.bymonthday || rule.byday) {
       const first = daysFromCivil(y, 1, 1);
       const last = daysFromCivil(y, 12, 31);
       if (rule.bymonthday) {
         days = [];
-        for (let m = 1; m <= 12; m += 1) days.push(...monthdaySet(rule.bymonthday, y, m));
+        for (let m = 1; m <= 12; m += 1) days.push(...monthdaySet(rule.bymonthday, y, m, meter));
         if (rule.byday) {
-          const byday = bydaySet(rule.byday, first, last);
+          const byday = bydaySet(rule.byday, first, last, meter);
           days = days.filter((d) => byday.has(d));
         }
       } else {
-        days = [...bydaySet(rule.byday, first, last)];
+        days = [...bydaySet(rule.byday, first, last, meter)];
       }
     } else {
+      meter.work += 1;
       days = start.m === 2 && start.d === 29 && !isLeapYear(y) ? [] : [daysFromCivil(y, start.m, start.d)];
     }
   }
   // BYxxx rule parts at a finer level than FREQ limit the set.
+  // Each check is a constant-time lookup in a set built once per rule.
   days = days.filter((day) => {
-    const { m } = civilFromDays(day);
-    if (rule.bymonth && !rule.bymonth.includes(m)) return false;
-    if (rule.freq === 'DAILY' || rule.freq === 'WEEKLY') {
-      if (rule.freq === 'DAILY' && rule.byday && !rule.byday.some((b) => b.wd === weekdayOf(day))) return false;
-      if (rule.freq === 'DAILY' && rule.bymonthday) {
-        const { y, m: mm } = civilFromDays(day);
-        if (!monthdaySet(rule.bymonthday, y, mm).has(day)) return false;
-      }
+    if (rule.sets.bymonth && !rule.sets.bymonth.has(civilFromDays(day).m)) return false;
+    if (rule.freq === 'DAILY') {
+      if (rule.byday && !rule.sets.weekdaySet.has(weekdayOf(day))) return false;
+      if (rule.bymonthday && !matchesMonthday(rule, day)) return false;
     }
     return true;
   });
   days = [...new Set(days)].sort((a, b) => a - b);
   if (rule.bysetpos) {
     const picked = new Set();
+    meter.work += rule.bysetpos.length;
     for (const pos of rule.bysetpos) {
       const day = pos > 0 ? days[pos - 1] : days[days.length + pos];
       if (day !== undefined) picked.add(day);
@@ -242,8 +272,10 @@ function firstUsefulPeriod(rule, ctx, fromDay) {
 // expansion starts at the first period that can reach fromDay; with COUNT it
 // counts from DTSTART. It stops after toDay,
 // at the count, or at the first date `pastUntil(day)` says is after UNTIL.
-// `stats.steps` counts the periods visited; past `maxSteps` it throws a
-// WorkLimit.
+// `stats.steps` counts the work done: each period visited costs one step for
+// every candidate date and BYxxx value it looks at (at least one), so a rule
+// with long lists pays for them. Past `maxSteps` it throws a WorkLimit,
+// checked before the period's dates are used.
 export function expandRuleDays(rule, startDay, window, pastUntil = () => false, stats = { steps: 0 }, maxSteps = Infinity) {
   const start = civilFromDays(startDay);
   const ctx = { start, startDay, weekStart: startDay - ((weekdayOf(startDay) - rule.wkst + 7) % 7) };
@@ -261,9 +293,11 @@ export function expandRuleDays(rule, startDay, window, pastUntil = () => false, 
   for (;; k += 1) {
     if (rule.count !== null && produced >= rule.count) break;
     if (periodFirstDay(rule, ctx, k) > window.toDay) break;
-    stats.steps += 1;
-    if (stats.steps > maxSteps) throw new WorkLimit(`more than ${maxSteps} repeat periods to reach the range`);
-    for (const day of periodCandidates(rule, ctx, k)) {
+    const meter = { work: 0 };
+    const candidates = periodCandidates(rule, ctx, k, meter);
+    stats.steps += Math.max(1, meter.work);
+    if (stats.steps > maxSteps) throw new WorkLimit(`more than ${maxSteps} repeat steps to reach the range`);
+    for (const day of candidates) {
       if (day <= startDay) continue;
       if (day > window.toDay) return out;
       if (pastUntil(day)) return out;

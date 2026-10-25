@@ -141,12 +141,25 @@ record (E29). Fetching, editing, alarms, free/busy and to-dos are out of scope.
 Calendars come from outside, so one call's work is bounded, not only its
 input size.
 
-- A series may visit at most 100,000 repeat periods, hold at most 50,000
+- Repeat work is counted in steps. Each repeat period visited costs one step
+  for every candidate date and `BYxxx` value it looks at, and at least one:
+  a plain daily, weekly, monthly or yearly rule costs one step a period,
+  `BYDAY=MO,WE,FR` weekly three, and a monthly rule with a 31-value
+  `BYMONTHDAY` 31. So a rule with long lists pays for them.
+- `BYxxx` lists are checked, deduplicated and sorted once, when the rule is
+  read, so no list is longer than its number of possible values whatever is
+  written: `BYMONTHDAY` 62 (±1 to 31), `BYMONTH` 12, `BYSETPOS` 732 (±1 to
+  366), `BYDAY` 749 (seven weekdays, plus seven for each of ±1 to 53; `1MO`,
+  `+1MO` and `01MO` are one entry). The lookups a period needs are built once
+  per rule, never once per period. `BYHOUR`, `BYMINUTE`, `BYSECOND`,
+  `BYWEEKNO` and `BYYEARDAY` are not supported, so their values are never
+  read or expanded.
+- A series may use at most 100,000 repeat steps, hold at most 50,000
   `RDATE` and `EXDATE` values, and list at most 10,000 occurrences.
-- One call may visit at most 2,000,000 repeat periods, read at most
+- One call may use at most 2,000,000 repeat steps, read at most
   1,000,000 dates through a time zone, and list at most 100,000 occurrences.
   Each source gets an equal share of all three (with 20 sources: 100,000
-  periods, 50,000 dates and 5,000 occurrences each), so a hostile calendar
+  steps, 50,000 dates and 5,000 occurrences each), so a hostile calendar
   can only use up its own share.
 - Work and occurrences are charged to the source of the copy they come
   from, and to no other: a series' expansion and its own occurrences to the
@@ -175,14 +188,21 @@ input size.
 - `RDATE` and `EXDATE` values whose written date is outside the range (with a
   day to spare) are skipped before any time zone work. Time zone offsets are
   cached per zone and hour, and time zone names are cached.
+- Title-and-time matching normalizes each title once, not once per
+  occurrence, and resumes each search for a group where the last search for
+  the same set of sources stopped, so many look-alikes from one source cost
+  linear work, not quadratic.
 
 `tests/16-work-budget.test.mjs` covers a hostile 164-byte `COUNT` rule, a
 hostile source next to a normal one, a hostile source holding costly copies
 or changed occurrences of another source's events, years of one-off history
 (in both orders and with extra sources), large out-of-range `RDATE` lists,
-and the date and occurrence shares. Tests reach the shares with small inputs through
-`setLimitsForTests` in `src/engine.mjs`, and count problems and occurrences
-rather than time.
+and the date and occurrence shares. `tests/18-rule-lists.test.mjs` covers a
+200 KB list of one repeated `BYMONTHDAY` (the same result and the same steps
+as `BYMONTHDAY=1`), the cap on every list, the steps charged for long lists,
+and title-and-time matching of 3,000 look-alikes. Tests reach the shares with
+small inputs through `setLimitsForTests` in `src/engine.mjs`, and count
+problems, occurrences, steps and group checks rather than time.
 
 ## Edge cases
 
@@ -296,7 +316,7 @@ copied as data. Unicode CLDR data is used under the Unicode License v3
 `tests/15-edge-cases.test.mjs` the edge cases above,
 `tests/16-work-budget.test.mjs` the work limits, and
 `tests/17-review-fixes.test.mjs` E28 to E31 and the series limit for changed
-occurrences. Every test file loads
+occurrences, and `tests/18-rule-lists.test.mjs` the rule-list limits. Every test file loads
 `tests/setup/guard.mjs` first, which blocks every network and process entry
 point of Node 22's built-in modules and every file write, and fails a test
 that calls one; `tests/setup/builtin-modules.json` lists Node's built-in
