@@ -13,13 +13,16 @@ full plan and history are in [PLAN.md](../PLAN.md).
   servers form one public side: first the front porch for the Meta AI
   connector and a Messenger bot, later phone callbacks and a public
   marketplace. The public and private sides never share a store. The public
-  side is prototyped on the agent VM and runs for real on a serverless host,
-  each piece with its own plan. For the agents that build True Convo, the
-  owner approves one exe.dev VM, which he signs up for and pays himself, so
-  any model's agent can work while his Mac sleeps. Its first jobs are his
-  local Codex CLI jobs and the Gemini CLI, both as `cloudwork-bot` with
-  their own classic `repo`-only token (no `workflow` scope, as in the merge
-  gate). Mac and iPhone builds stay on the Mac.
+  side is prototyped on its own VM with no credentials (never on the
+  builders' VM) and runs for real on a serverless host, each piece with its
+  own plan. For the agents that build True Convo, the owner approves one
+  exe.dev builders' VM, which he signs up for and pays himself, so any
+  model's agent can work while his Mac sleeps. Its first jobs are his local
+  Codex CLI jobs and the Gemini CLI, both as `cloudwork-bot` with their own
+  classic `repo`-only token (no `workflow` scope, as in the merge gate),
+  kept readable only by the VM's user: an approved exception to Keychain-only
+  storage, since a Linux VM has no Keychain. Mac and iPhone builds stay on
+  the Mac.
 - **Oct 25:** More work per dollar, without the owner or his Mac awake.
   The PR keeper moves to the cloud, counts a Codex review as hung after 20
   minutes instead of 60 (restarting it at its next hourly run), updates a pull request from `main` only once it is

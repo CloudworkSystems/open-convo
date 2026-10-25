@@ -60,7 +60,8 @@ Rules for the public side:
   [agent-profiles-and-adapters.md](agent-profiles-and-adapters.md)).
 - **A user's data reaches it only after that user's one-time host approval**,
   showing first what will be sent (principle 6).
-- **Hosting:** prototype on the agent VM below, which has an HTTPS address.
+- **Hosting:** prototype on a separate exe.dev VM of its own, which has an
+  HTTPS address and holds no repository token or other agent credentials.
   Run the real service on a serverless host such as Cloudflare Workers, so it
   doesn't depend on one development machine staying up. The host choice goes
   in the public side's plan.
@@ -91,13 +92,18 @@ boot in under a second, reached over SSH, each with an HTTPS address
 | Codex reviews and cloud builds | Yes, Codex's app | No change |
 | Local Codex CLI jobs | No, the Mac | Move to the VM (first job) |
 | Gemini CLI, Pi, open models | No home | Run on the VM (first job: Gemini CLI) |
-| Desk preview and front porch prototype at a public address | No | The VM's HTTPS address |
+| Desk preview at an address the owner can open | No | The VM's HTTPS address, behind exe.dev's sign-in |
+| Front porch prototype | No | A separate VM with no credentials (below) |
 | Mac and iPhone builds, Swift tests, the nightly Test build | Mac only | No change: Linux can't build them |
 
 Rules for the VM:
 
-- **One VM to start**, owned by the owner. The owner, not an agent, signs up,
-  pays and keeps the account.
+- **One builders' VM to start**, owned by the owner. The owner, not an
+  agent, signs up, pays and keeps the account.
+- **Nothing public on the builders' VM.** It serves no endpoint that takes
+  requests from the internet: anything public, such as the front porch
+  prototype, runs on a separate VM with no repository token, so a compromise
+  there can't reach write access to the repository.
 - **First jobs:** the owner's local Codex CLI jobs and the Gemini CLI, both
   working as `cloudwork-bot`, under the same review loop as every other agent.
 - **Credentials:** a separate classic `cloudwork-bot` token for the VM,
@@ -106,9 +112,13 @@ Rules for the VM:
   Fine-grained tokens can't write here, because the bot is only a
   collaborator on a personal-account repository, and the bot collaborates on
   this repository alone. A separate token lets the VM's access be revoked
-  without touching the other builders'. It is kept on the VM and never in
-  the repository or logs. A Codex or Gemini sign-in goes there only when the owner sets it up.
-  The VM never holds the `CloudworkSystems` account's credentials.
+  without touching the other builders'. A Linux VM has no Keychain, so this
+  is an owner-approved exception to "secrets belong in Keychain": the token
+  is readable only by the VM's user account (a file with mode 600, or
+  exe.dev's own secret store if it has one) and never in the repository,
+  logs or the shell history. A Codex or Gemini sign-in goes there only when
+  the owner sets it up. The VM never holds the `CloudworkSystems` account's
+  credentials.
 - **Zero trust:** an unknown foreign agent (for example Meta's Muse agent)
   never shares the VM or its token with the trusted builders.
 - **CPU only:** local models on the VM are small ones.
