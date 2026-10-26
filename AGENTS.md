@@ -297,13 +297,14 @@ nothing said so. The same rule for True Convo's own agents is in
   | Claude (cloud and Mac) | Builds, coordinates, independent reviews | Set up |
   | Codex builds (cloud and local CLI) | Builds Codex modules | Set up |
   | GrokBot teams (Cursor) | Build GrokBot modules | Set up |
-  | GrokBot review (Cursor) | Independent review, on request | Set up once its first `— GrokBot review` is posted; until then the 60-minute fallback to a fresh Claude review covers it |
+  | GrokBot review (Cursor) | Independent review, on request | Set up once its first `— GrokBot review` is posted. A deliberate exception to the rule above: it is still asked, and waited for up to 60 minutes, so it can earn "set up"; the fresh Claude fallback covers the wait |
 
 - **Every expected step has a deadline.** The PR keeper checks these at each
   hourly run and reports a miss as "<agent> silent on #N" (or on the build
   issue):
-  - Codex review: 20 minutes after a push (the restart rule in
-    "Coordinating On GitHub" still applies first).
+  - Codex review: the keeper first restarts a hung review once
+    ("Coordinating On GitHub"); Codex is reported silent only when the
+    restart has gone 20 minutes without a review.
   - GrokBot or Gemini independent review: 60 minutes after the push or the
     `@cursor` request, as in "Independent reviews" above (the coordinator's
     fresh Claude fallback still applies first).
