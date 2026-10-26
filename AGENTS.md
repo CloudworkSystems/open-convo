@@ -297,6 +297,7 @@ nothing said so. The same rule for True Convo's own agents is in
   | Claude (cloud and Mac) | Builds, coordinates, independent reviews | Set up |
   | Codex builds (cloud and local CLI) | Builds Codex modules | Set up |
   | GrokBot teams (Cursor) | Build GrokBot modules | Set up |
+  | Claude coordinator and PR keeper | Switch on auto-merge; run the hourly checks | Set up |
   | GrokBot review (Cursor) | Independent review, on request | Set up once its first `— GrokBot review` is posted. A deliberate exception to the rule above: it is still asked, and waited for up to 60 minutes, so it can earn "set up"; the fresh Claude fallback covers the wait |
 
 - **Every expected step has a deadline.** The PR keeper checks these at each
@@ -312,7 +313,14 @@ nothing said so. The same rule for True Convo's own agents is in
     on the latest commit of a pull request that still has auto-merge off and
     no independent review of that commit.
   - A builder's first sign of work (a branch, commit or draft pull request):
-    4 hours after the build issue names it.
+    4 hours after the build issue names it. After that, a builder with no
+    new commit for 24 hours and no pull request ready for review is silent.
+  - The coordinator: 2 hours after a pull request has Codex clean, a clean
+    independent review of its latest commit and any plan check passed, with
+    auto-merge still off.
+  - The PR keeper itself: its "Not working" comment says when it last
+    checked; the daily list reports "PR keeper silent" when that is more
+    than 2 hours old or the comment is missing.
   - A builder's fix after findings: 4 hours after the latest review with
     open findings on the latest commit (Codex, Gemini or the independent
     review), or after the keeper's relay for GrokBot, whichever is later,
