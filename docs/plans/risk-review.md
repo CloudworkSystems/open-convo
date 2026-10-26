@@ -112,7 +112,7 @@ permission is always `real`, never a nit.
 - `AGENTS.md`: the checklist and `risk-escalate` line, under "Gemini
   reviews", and one line in Review Guidelines pointing to this plan.
 - `.github/scripts/owner-queue.mjs`: list `needs-owner: risk` pull requests
-  under their own heading, if it doesn't already pick up the label.
+  under their own heading (it reads no labels today).
 - STATUS.md and this plan's status line.
 
 ## Risks
