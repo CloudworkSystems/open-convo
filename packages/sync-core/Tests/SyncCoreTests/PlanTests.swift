@@ -945,6 +945,38 @@ final class SyncCorePlanTests: XCTestCase {
         XCTAssertFalse(holds(text("should-not-merge"), peer: b))
     }
 
+    func testInitialConflictSaveIsCheckpointedBeforeDelivery() throws {
+        let cloud = FakeCloud()
+        let a = Peer("phone-a", cloud: cloud)
+        let b = Peer("phone-b", cloud: cloud)
+        a.boot()
+        b.boot()
+        _ = try a.edit("note", payload: text("base"))
+        try syncAll([a, b])
+        let secret = try a.edit("note", payload: text("alpha-secret"))
+        for _ in 0..<3 { _ = try b.device.nextStamp() }
+        let winner = try b.edit("note", payload: text("beta"))
+        try b.sync()
+        var captured: AppSaveRequest?
+        a.holdSaves { request in
+            if !request.conflictCopies.isEmpty { captured = request }
+            if request.replaceLocalRecord {
+                a.store.save(request.record)
+                try? a.device.confirmLocalSave(request.record)
+            }
+        }
+        try a.sync(order: .fetchThenUpload)
+        let save = try XCTUnwrap(captured)
+        XCTAssertTrue(save.conflictCopies.contains { $0.payload == secret.payload })
+        try a.adopt(save.checkpointBeforeRequest)
+        a.store.save(winner)
+        var notices: [AppSaveRequest] = []
+        a.holdSaves { notices.append($0) }
+        try a.device.reconcile(a.store.all())
+        XCTAssertTrue(notices.contains { $0.conflictCopies.contains { $0.payload == secret.payload } })
+        XCTAssertEqual(a.device.status().kind, .needsAttention)
+    }
+
     func testInFlightConflictSaveKeepsPurgeCleanup() throws {
         let cloud = FakeCloud()
         let a = Peer("phone-a", cloud: cloud)
@@ -1284,6 +1316,7 @@ extension SyncCorePlanTests {
         var captured: Data?
         var asked = false
         a.holdSaves { request in
+            guard request.replaceLocalRecord else { return }
             asked = true
             let prior = try? SyncDevice.restore(from: request.checkpointBeforeRequest)
             XCTAssertEqual(a.store.records["note"]?.payload, fromA.payload)

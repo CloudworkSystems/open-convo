@@ -750,8 +750,14 @@ public final class SyncDevice {
     }
 
     private func deliver(_ request: AppSaveRequest) {
+        var request = request
+        var added = false
         for copy in request.conflictCopies where !outstandingConflictSaves.contains(where: { key($0) == key(copy) }) {
             outstandingConflictSaves.append(copy)
+            added = true
+        }
+        if added {
+            request.checkpointBeforeRequest = saveCheckpoint()
         }
         appSaveHandler?(request)
     }
