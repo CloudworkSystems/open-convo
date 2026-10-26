@@ -897,8 +897,13 @@ final class SyncCorePlanTests: XCTestCase {
         var notices: [AppSaveRequest] = []
         a.holdSaves { notices.append($0) }
         try a.device.reconcile(a.store.all())
-        let issued = notices.flatMap(\.conflictCopies)
-        XCTAssertTrue(issued.contains { $0.payload == secret.payload })
+        let issuedRequest = try XCTUnwrap(notices.first { $0.conflictCopies.contains { $0.payload == secret.payload } })
+        let issued = issuedRequest.conflictCopies
+        try a.adopt(issuedRequest.checkpointBeforeRequest)
+        notices.removeAll()
+        try a.device.reconcile(a.store.all())
+        let issuedAgain = notices.flatMap(\.conflictCopies)
+        XCTAssertTrue(issuedAgain.contains { $0.payload == secret.payload })
         XCTAssertTrue(a.device.conflictCopies().contains { $0.payload == secret.payload })
         notices.removeAll()
         _ = try a.edit("note", payload: Data(), purged: true, confirm: false)

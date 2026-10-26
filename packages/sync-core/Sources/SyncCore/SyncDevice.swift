@@ -766,6 +766,9 @@ public final class SyncDevice {
         outstandingConflictSaves.removeAll { restoredOutstandingKeys.contains(key($0)) }
         restoredOutstandingKeys.removeAll()
         guard let first = revived.first else { return }
+        for copy in revived where !outstandingConflictSaves.contains(where: { key($0) == key(copy) }) {
+            outstandingConflictSaves.append(copy)
+        }
         let checkpoint = saveCheckpoint()
         deliver(AppSaveRequest(
             record: first,
