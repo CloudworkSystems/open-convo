@@ -152,6 +152,97 @@ keys live in Keychain, never in files or logs.
 5. **Grok through Cursor's agent**, after checking Cursor's rules and billing.
 6. **Meta Muse.**
 
+## Knowing When an Agent Isn't Working (October 26)
+
+Added at the owner's request. The repo's own review rules name Gemini Code
+Assist as a reviewer, but Gemini was never set up, and nothing said so: work
+could wait on a review that was never coming. The owner's rule (October 26):
+every agent True Convo brings in, whether or not it touches code, needs a way
+to show that it isn't set up or isn't answering, so nobody waits on it
+forever. That covers local models, cloud profiles, vendor harnesses (Claude
+Code, Cursor's agent), Jeff's providers and arms-length agents such as Cam.
+
+Requirements for every adapter (the model picker routes in step 3, agents in
+step 6):
+
+1. **Every adapter has a setup check.** Ordinary code, no model. It answers:
+   is the program installed or the host reachable, is it signed in or is its
+   key in Keychain, has the owner approved it, is it under its cap. The result
+   is one of **Ready**, **Not set up** (naming the missing step), **Blocked**
+   (waiting on the owner's approval, a cap, or rules still unchecked) or
+   **Unreachable**. It runs when a profile is added, when the Desk starts and
+   before each dispatch. It sends no private content: it uses a call that
+   costs nothing, or a fixed prompt with invented text. A check that would
+   cost money counts against the route's cap and stays off until the owner
+   approves it.
+2. **Nothing is sent to an agent that isn't Ready.** The dispatcher skips it,
+   moves to the next approved route or asks the owner, and says why. A
+   profile that names a worker or reviewer that isn't set up shows "Not set
+   up" from the start, never "waiting".
+3. **Every request has a deadline.** Each adapter declares how soon its first
+   sign of life and its answer should arrive. Harness agents report progress
+   as they work; if nothing arrives within the silence window, the agent is
+   **Silent**, and the owner sees "<agent> hasn't answered in N minutes" with
+   four choices: wait longer, retry once, send to another approved agent, or
+   stop. Progress alone never keeps a request open: each request also has an
+   answer deadline counted from when it was sent, and an agent still working
+   at that deadline is shown as **Overdue** with the same four choices, even
+   if it is still reporting progress. Nothing is resent on its own: retry is
+   always the owner's choice, as in step 3, where Retry puts the cut-off
+   message back and the owner presses Send (`docs/decisions.md`, October
+   16). Before a retry or a reroute starts, the silent or overdue run is
+   stopped, so the same work never runs twice at once. A task that may
+   already have sent, spent or deleted something offers retry only if each
+   of its tools is marked safe to run twice (`durable-agents.md`); otherwise
+   the owner sees what it did so far and decides. A request nobody picks up
+   is parked and the owner is told (the same idea as Pi Durable parking a
+   task that keeps crashing).
+   Starting windows, which the owner can change: 2 minutes for a local chat
+   model, 5 for a cloud model, 20 minutes without progress for an agent
+   doing a task, 30 after a push for a review bot. Starting answer deadlines:
+   10 minutes for a chat reply, 2 hours for an agent's task unless the owner
+   gives it longer when he starts it.
+4. **Status is visible.** The "one screen shows every agent" view (Scion idea
+   3 below) shows each agent in one of the states this section defines:
+   Ready, Working (with its last sign of life), Silent, Overdue, Not set up,
+   Blocked, Unreachable, Never answered or Stopped, plus when it last
+   finished a run.
+5. **Arms-length agents are watched from outside.** For an agent True Convo
+   doesn't run (Cam, a GitHub review app), the check is only an observation:
+   when it last answered. One that is expected but has never answered shows
+   **Never answered** after its first deadline, not "pending".
+6. **Checks only report.** Like the watchers in "Superfans" below, a health
+   check never fixes, reinstalls, signs in, changes settings or retries on
+   its own. Being alive says nothing about being trusted: a working
+   foreign agent still starts at zero trust.
+
+### The Same Rule for Our Own Build Pipeline (Adopted October 26)
+
+Before this, only Codex was covered: the PR keeper restarts a hung Codex
+review once and the 8 AM list shows "Codex silent". The owner approved
+extending it on October 26; the rule itself now lives in AGENTS.md, "Agent
+Setup And Silence", and that section wins where the two differ. In short:
+
+- **Each reviewer and builder has a stated setup status** in AGENTS.md, for
+  example "Gemini Code Assist: not set up (October 26)". While one is not set
+  up, no pull request waits on it: its stand-in (a fresh Claude review for
+  Gemini) is used from the first round.
+- **The PR keeper checks every expected reviewer, not just Codex.** If a
+  reviewer the rules expect hasn't posted on a pull request's latest commit
+  within its window (20 minutes for Codex as now, 30 for Gemini), the keeper
+  reports "<agent> silent on #N". If it has never posted on any pull request,
+  the keeper reports "<agent> not set up" once on issue #52 instead of on
+  every pull request.
+- **Builders are covered too, from the first assignment.** Every builder
+  (Claude, Codex, GrokBot teams) has a deadline for its first sign of work
+  (a branch, a commit or a draft pull request) after it is given a module,
+  and one for its first push after findings are relayed or asked for:
+  starting at four hours each. A builder that misses one is reported as
+  "<builder> silent on <issue or #N>", and the keeper doesn't relay to it
+  again until it pushes.
+- **The 8 AM list gets a "Not working" line** naming any agent that is
+  silent or not set up, so the owner learns it once, from one place.
+
 ## Borrowed From Scion (Step 6)
 
 Added October 14, 2026 by the planning session, at the owner's request.
