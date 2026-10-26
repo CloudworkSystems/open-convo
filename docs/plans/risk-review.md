@@ -67,7 +67,11 @@ across lines or hidden in an unreadable patch is still caught. The code pull
 request's tests cover both cases with invented data.
 
 The hold clears when the owner (`CloudworkSystems`) approves the pull
-request's **head commit**, or when a later commit removes every hit. An
+request's **head commit** after the hold comment last changed (it is posted,
+or edited because the hits changed), or when a later commit removes every
+hit. An approval submitted before that, for example for a protected path
+while the scan was still running, doesn't count, since he hadn't seen the
+hits yet. An
 `owner-accepts-findings` note does not clear it: that note accepts Codex
 findings, not risk. `codex-approved` doesn't run on review events (on
 purpose, see the header of `codex-approved.yml`), so after the owner
