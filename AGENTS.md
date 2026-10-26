@@ -55,7 +55,7 @@ reads from and writes to `CloudworkSystems/open-convo`.
   latest commit, and the owner approves any protected path in
   `.github/CODEOWNERS`. Claude-built and Codex-built pull requests open with
   auto-merge off. The coordinator switches it on once the independent review
-  ("Gemini reviews" below) and any plan check are clean on the latest
+  ("Independent reviews" below) and any plan check are clean on the latest
   commit; for GrokBot, after its plan check passes. Agents never merge by hand. Every agent
   signs in to GitHub as `cloudwork-bot` (three app exceptions are listed in
   Accounts And Provenance), so the owner can approve their protected-path
@@ -82,10 +82,9 @@ reads from and writes to `CloudworkSystems/open-convo`.
     never post it or ask another agent to post it. They may show the owner
     the exact line for the current commit, next to the findings it would
     accept (owner decision, October 23).
-  - *Codex-built work* gets Gemini's review as its independent review,
-    followed by the coordinator's plan check ("Gemini reviews" below). Until
-    Gemini posts reviews on the repo, a fresh Claude review (by an agent that
-    didn't build the pull request) stands in. Letting the `codex-approved`
+  - *Codex-built work* gets an independent review (GrokBot or Gemini, with a
+    fresh Claude review as the fallback; "Independent reviews" below),
+    followed by the coordinator's plan check. Letting the `codex-approved`
     check accept that independent review in place of Codex's is planned and
     needs the owner's approval before it's built. Until then, Codex's review
     still gates the merge and the independent reviewer also posts a review,
@@ -107,22 +106,38 @@ reads from and writes to `CloudworkSystems/open-convo`.
     (issue #52, which the `owner-queue` workflow rewrites every hour), and the
     8 AM message sends him that list. Claude messages him in chat only for
     urgent or blocked items (owner decision, October 21).
-- **Gemini reviews (owner decision, October 23, 2026).** Gemini Code Assist
-  (a GitHub app, installed October 23) is the impartial reviewer: no agent
-  is the independent review of its own work.
-  - GrokBot (Cursor) builds: Codex reviews, then the coordinator's plan check.
-  - Codex builds: Gemini reviews, then the coordinator's plan check. Codex
-    never counts as the independent review of its own work.
-  - Claude builds: Gemini reviews. Codex also reviews every pull request by
-    itself, as above.
-  - Gemini is advisory for now. Its critical and high findings count as P1,
-    its medium findings as P2. They are fixed or answered in the pull
-    request before auto-merge goes on, but no required check reads Gemini
-    yet. Making it a required check is a later code change and the owner's
-    call.
-  - Until Gemini actually posts reviews on the repo, a fresh Claude review
-    (by an agent that didn't build the pull request) stands in as the
-    independent review.
+- **Independent reviews (owner decisions, October 23 and 26, 2026; called
+  "Gemini reviews" in older plans).** No agent is the independent review of
+  its own work, and the reviewer should run a different model from the
+  builder where one is available.
+  - GrokBot (Cursor) builds: Codex reviews, then the coordinator's plan
+    check. GrokBot never reviews GrokBot's work.
+  - Codex builds: GrokBot or Gemini reviews, then the coordinator's plan
+    check. Codex never counts as the independent review of its own work.
+  - Claude builds: GrokBot or Gemini reviews. Codex also reviews every pull
+    request by itself, as above.
+  - The first review of the latest commit from GrokBot or Gemini counts.
+    The coordinator asks GrokBot with one `@cursor` comment from
+    `cloudwork-bot` per commit, naming the pull request, this section and
+    the Review Guidelines, and saying: post one review comment, push
+    nothing, change nothing. GrokBot's review ends with the line
+    `— GrokBot review`, so it can be told apart from GrokBot's builds, which
+    post from the same account. A GrokBot review that pushes a commit doesn't
+    count, and the push is reverted.
+  - If neither GrokBot nor Gemini has reviewed the latest commit 60 minutes
+    after it was pushed (or after the `@cursor` request, if later), the
+    coordinator asks for a fresh Claude review (by an agent that didn't build
+    the pull request), which stands in.
+    Gemini Code Assist isn't posting reviews on the repo yet (October 26),
+    so until it does, GrokBot and then fresh Claude are the ones that run.
+  - The independent review is advisory for now. Gemini's critical and high
+    findings, and GrokBot's and Claude's P1s, count as P1; Gemini's medium
+    findings and the others' P2s count as P2. They are fixed or answered in
+    the pull request before auto-merge goes on, but no required check reads
+    the independent review yet. Making it a required check is a later code
+    change and the owner's call.
+  - Each GrokBot review spends Cursor usage; the coordinator asks for one
+    per commit, never more.
   - Agents ask Gemini for a re-review (`/gemini review`) only from
     `cloudwork-bot`.
   - Still open for the owner: whether Argon (his Gemini preview model) is
@@ -195,7 +210,8 @@ builders in full; where a builder can reach the owner's Mac, the plan says
 which commands, if any, it may run there.
 
 Who reviews an outside builder's pull request: Codex reviews GrokBot's
-work, and Gemini reviews Codex's work (Review Loop, "Gemini reviews").
+work, and GrokBot or Gemini reviews Codex's work (Review Loop, "Independent
+reviews").
 
 ## Coordinating On GitHub (Owner Decision, October 19, 2026)
 
@@ -207,7 +223,8 @@ request itself, so the owner doesn't have to carry messages:
 - GrokBot watches the open-convo pull requests and tells the owner when a
   review or comment lands. It sends fixes only to its own builders, and only
   for pull requests it launched; it doesn't change other agents' pull requests
-  and never reviews its own work.
+  and never reviews its own work. It reviews another agent's pull request
+  only when the coordinator asks ("Independent reviews" above).
 - No agent merges or approves a pull request; the merge gate merges.
   Outside-builder pull requests wait for a "Ready to merge" planning check
   from the coordinator, which switches on auto-merge once the check passes.
@@ -285,9 +302,9 @@ request itself, so the owner doesn't have to carry messages:
 | The owner | `CloudworkSystems` | Decisions, approvals on protected paths, the 8 AM list |
 | Claude coordinator (thread "261012 OC Coordinator") | `cloudwork-bot` | The planning session in plans and earlier decisions: checks outside builders' pull requests against their plans, switches on auto-merge once the independent review and any plan check are clean on the latest commit, answers builders' plan questions, keeps this table current |
 | Claude building sessions | `cloudwork-bot` | Build on a named branch; open the pull request with auto-merge off (the coordinator switches it on) |
-| GrokBot teams (Cursor) | `cloudwork-bot` | Each builds one module from its plan and fixes findings on its own pull request |
+| GrokBot teams (Cursor) | `cloudwork-bot` | Each builds one module from its plan and fixes findings on its own pull request; on request, reviews Claude-built and Codex-built pull requests as the independent reviewer |
 | Codex | its own app | Reviews every pull request; builds Codex modules |
-| Gemini Code Assist | its own app | Impartial reviewer of Codex-built and Claude-built pull requests (advisory for now) |
+| Gemini Code Assist | its own app | Independent reviewer of Codex-built and Claude-built pull requests, alongside GrokBot (advisory for now; not posting yet) |
 | PR steward (scheduled, 8:41 AM and 5:41 PM) | `cloudwork-bot` | Reviews Codex-built pull requests; flags stuck ones on issue #52 |
 | PR keeper (scheduled, hourly, in the cloud) | `cloudwork-bot` | Keeps pull requests moving: updates auto-merge pull requests that fall behind `main` once they are otherwise ready, restarts a hung Codex review once per commit, and relays Codex findings to GrokBot's builders |
 | Daily list (scheduled, 7:52 AM) | `cloudwork-bot`, reading only | Sends the owner issue #52's list, plus pull requests Codex has gone silent on |
