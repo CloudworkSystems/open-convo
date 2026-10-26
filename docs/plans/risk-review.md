@@ -40,7 +40,7 @@ signals:
 
 | Signal | What counts |
 | --- | --- |
-| New outside host | An `http://` or `https://` URL, or a WebSocket URL, whose host isn't in the allowlist below. Hosts in docs (`*.md`) don't count, and neither do clearly invented hosts anywhere (`example.com`, `example.org`, `example.net`, `*.example`, `*.invalid`, `*.test`, `localhost`, `127.0.0.1`). Code comments are not exempt. |
+| New outside host | An `http://` or `https://` URL, or a WebSocket URL, whose host isn't in the allowlist below. Hosts in docs (`*.md`) don't count, and neither do clearly invented hosts anywhere (`example.com`, `example.org`, `example.net`, `*.example`, `*.invalid`, `*.test`, `localhost`, `127.0.0.1`, and any subdomain of these, such as `api.example.com`). Code comments are not exempt. |
 | New dependency | A new entry under `dependencies`, `devDependencies`, `optionalDependencies`, `peerDependencies` or `bundleDependencies` in any `package.json`; a new `.package(` in any `Package.swift`; a new pin in any `Package.resolved`. A version bump of an existing dependency doesn't count. |
 | New Mac permission | An added key in an `*.entitlements` file, or an added `NS…UsageDescription` key in an `Info.plist`. |
 | New outside model or API key | An added string that names an environment variable or secret ending in `_API_KEY`, `_TOKEN` or `_SECRET`, outside `.github/`. |
@@ -63,13 +63,16 @@ cut short. So the scan never trusts a patch as complete: for every changed
 text file it fetches the whole file at the merge base (from the compare
 API's `merge_base_commit`, not `main`'s tip, so a branch that is behind
 isn't held for lines `main` removed) and at the head commit
-through the contents API and works out the added lines itself. A file it
-can't fetch whole (too large for the contents API, or an error), or a file
+through the contents API and works out the added lines itself. A file the
+files API marks as added is empty at the merge base, a removed file is empty
+at the head, and a renamed file is read at its old path at the merge base;
+none of those is an error. A file it can't fetch whole for any other reason
+(too large for the contents API, or an error), or a file
 list that may be cut short, counts as a hit ("couldn't read the diff for
 `<file>`"), unless the file is binary by extension (images, fonts, audio,
 video). For
 `package.json`, `Package.swift` and `Package.resolved`, the dependency
-signal compares the parsed file at the base and at the head commit, fetched
+signal compares the parsed file at the merge base and at the head commit, fetched
 through the contents API, instead of reading the patch, so a new entry split
 across lines or hidden in an unreadable patch is still caught. The code pull
 request's tests cover both cases with invented data.
@@ -121,7 +124,11 @@ Every pull request already gets a second look besides Codex's: the
 independent review on Claude-built and Codex-built work, and the
 coordinator's plan check on GrokBot-built work. Both gain a fixed checklist,
 answered in one block at the end of that review or plan-check comment, so it
-adds no review round. On a GrokBot pull request the coordinator doesn't pass
+adds no review round. Plan and other docs-only pull requests, which today
+get only Codex's review, also get the checklist block from an agent that
+didn't write them (the independent reviewer, answering the checklist only,
+not a full review), and the coordinator doesn't switch on auto-merge until
+it is posted for the latest commit. On a GrokBot pull request the coordinator doesn't pass
 the plan check, or switch on auto-merge, until the block is posted for the
 latest commit:
 
