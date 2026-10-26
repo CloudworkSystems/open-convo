@@ -5,7 +5,12 @@
 cd "$(dirname "$0")" || exit 1
 echo "Getting the latest version from GitHub..."
 branch=$(git branch --show-current)
-if [ "$branch" != "main" ]; then
+if [ -z "$branch" ]; then
+  echo
+  echo "WARNING: this folder is not on any branch, so the Desk below may NOT be the latest version."
+  echo "Ask Claude to sort out this folder."
+  echo
+elif [ "$branch" != "main" ]; then
   if [ -z "$(git status --porcelain)" ]; then
     echo "This folder was on the branch \"$branch\"; switching to main (nothing is lost)."
     git checkout main || echo "Could not switch to main."
