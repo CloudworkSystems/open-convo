@@ -41,7 +41,7 @@ signals:
 | Signal | What counts |
 | --- | --- |
 | New outside host | An `http://` or `https://` URL, or a WebSocket URL, whose host isn't in the allowlist below. Hosts in docs (`*.md`) don't count, and neither do clearly invented hosts anywhere (`example.com`, `example.org`, `example.net`, `*.example`, `*.invalid`, `*.test`, `localhost`, `127.0.0.1`, and any subdomain of these, such as `api.example.com`). Code comments are not exempt. |
-| New dependency | A new entry under `dependencies`, `devDependencies`, `optionalDependencies`, `peerDependencies` or `bundleDependencies` in any `package.json`; a new `.package(` or remote `.binaryTarget(` (one with a `url:`) in any `Package.swift`; a new pin in any `Package.resolved`. A version bump of an existing dependency doesn't count. |
+| New dependency | A new entry under `dependencies`, `devDependencies`, `optionalDependencies`, `peerDependencies` or `bundleDependencies` in any `package.json`; a new `.package(` or remote `.binaryTarget(` (one with a `url:`) in any `Package.swift`; a new pin in any `Package.resolved`; a new package name anywhere in any `package-lock.json` (its `packages` entries, using each entry's real `name` when it is an alias), which catches new transitive packages a lockfile refresh pulls in; and an existing entry changed to point at a different package (an `npm:other@…` alias, a git or tarball URL). A version bump of the same package doesn't count. |
 | New Mac permission | In any `*.entitlements` file or `Info.plist`, compared parsed at the merge base and at the head commit (like the manifests below, not from added lines): a new key, a value changed from `false` to `true`, a new entry in an existing array (an app group, a path, a domain), or a new `NS…UsageDescription` key. A removed key or a value turned off doesn't count, except `com.apple.security.app-sandbox`: turning it off or removing it is a hit, since it widens what the app can reach. |
 | New outside model or API key | An added string that names an environment variable or secret ending in `_API_KEY`, `_TOKEN` or `_SECRET`, outside `.github/`. |
 
@@ -71,7 +71,7 @@ none of those is an error. A file it can't fetch whole for any other reason
 list that may be cut short, counts as a hit ("couldn't read the diff for
 `<file>`"), unless the file is binary by extension (images, fonts, audio,
 video). For
-`package.json`, `Package.swift` and `Package.resolved`, the dependency
+`package.json`, `package-lock.json`, `Package.swift` and `Package.resolved`, the dependency
 signal (and for `*.entitlements` and `Info.plist`, the permission signal)
 compares the parsed file at the merge base and at the head commit, fetched
 through the contents API, instead of reading the patch, so a new entry split
@@ -104,8 +104,8 @@ the owner has already accepted, so he is asked about each one once. It sits
 under `.github/`, a protected path, so only a pull request the owner approves
 can change it. The workflow reads it from `main`, never from the pull
 request. The code pull request seeds it with the hosts and dependencies
-already on `main` at that time, listed in the pull request for the owner to
-check.
+already on `main` at that time (including every package name already in
+the lockfiles), listed in the pull request for the owner to check.
 
 **How an approval sticks.** The hold comment tells the builder to add each
 hit to `.github/risk-allowlist.json` in the same pull request. That edit is
