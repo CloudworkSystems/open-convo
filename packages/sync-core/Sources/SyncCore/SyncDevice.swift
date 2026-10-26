@@ -756,9 +756,9 @@ public final class SyncDevice {
         appSaveHandler?(request)
     }
 
-    /// Asks the app to delete conflict copies a late save just wrote back.
     /// Asks the app again to store conflict copies whose save died with the
-    /// previous process, then stops treating that dead save as in flight.
+    /// previous process. The new request stays outstanding until that save
+    /// is confirmed, so a purge cannot forget the payload the save may write.
     private func reissueRestoredConflictSaves() {
         let revived = outstandingConflictSaves.filter { copy in
             restoredOutstandingKeys.contains(key(copy)) && conflicts.contains { key($0) == key(copy) }
@@ -773,8 +773,6 @@ public final class SyncDevice {
             conflictCopies: revived,
             checkpointBeforeRequest: checkpoint
         ))
-        let revivedKeys = Set(revived.map { key($0) })
-        outstandingConflictSaves.removeAll { revivedKeys.contains(key($0)) }
     }
 
     private func redeliverCleanup(_ copies: [SyncRecord]) {

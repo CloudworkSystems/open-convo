@@ -897,12 +897,21 @@ final class SyncCorePlanTests: XCTestCase {
         var notices: [AppSaveRequest] = []
         a.holdSaves { notices.append($0) }
         try a.device.reconcile(a.store.all())
-        XCTAssertTrue(notices.contains { $0.conflictCopies.contains { $0.payload == secret.payload } })
+        let issued = notices.flatMap(\.conflictCopies)
+        XCTAssertTrue(issued.contains { $0.payload == secret.payload })
         XCTAssertTrue(a.device.conflictCopies().contains { $0.payload == secret.payload })
-        let purge = try a.edit("note", payload: Data(), purged: true, confirm: false)
-        a.device.confirmConflictCopiesRemoved(notices.flatMap(\.conflictCopiesToRemove))
+        notices.removeAll()
+        _ = try a.edit("note", payload: Data(), purged: true, confirm: false)
+        let removals = notices.flatMap(\.conflictCopiesToRemove)
+        XCTAssertTrue(removals.contains { $0.payload == secret.payload })
+        a.device.confirmConflictCopiesRemoved(removals)
+        XCTAssertEqual(a.device.status().kind, .needsAttention)
+        notices.removeAll()
+        a.device.confirmConflictCopiesStored(issued)
+        XCTAssertTrue(notices.contains { $0.conflictCopiesToRemove.contains { $0.payload == secret.payload } })
+        XCTAssertEqual(a.device.status().kind, .needsAttention)
+        a.device.confirmConflictCopiesRemoved(issued)
         XCTAssertNotEqual(a.device.status().kind, .needsAttention)
-        _ = purge
     }
 
     func testScratchFetchOfTheQueuedBaseIsNotAConflict() throws {
