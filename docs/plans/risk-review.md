@@ -40,7 +40,7 @@ only at **added lines**, for these signals:
 | Signal | What counts |
 | --- | --- |
 | New outside host | An `http://` or `https://` URL, or a WebSocket URL, whose host isn't in the allowlist below. Hosts in docs (`*.md`) don't count, and neither do clearly invented hosts anywhere (`example.com`, `example.org`, `*.invalid`, `*.test`, `localhost`, `127.0.0.1`). Code comments are not exempt. |
-| New dependency | A new entry under `dependencies`, `devDependencies` or `optionalDependencies` in any `package.json`; a new `.package(` in any `Package.swift`; a new pin in any `Package.resolved`. A version bump of an existing dependency doesn't count. |
+| New dependency | A new entry under `dependencies`, `devDependencies`, `optionalDependencies`, `peerDependencies` or `bundleDependencies` in any `package.json`; a new `.package(` in any `Package.swift`; a new pin in any `Package.resolved`. A version bump of an existing dependency doesn't count. |
 | New Mac permission | An added key in an `*.entitlements` file, or an added `NS…UsageDescription` key in an `Info.plist`. |
 | New outside model or API key | An added string that names an environment variable or secret ending in `_API_KEY`, `_TOKEN` or `_SECRET`, outside `.github/`. |
 
@@ -125,7 +125,9 @@ latest commit:
 3. **Real personal data.** Any real names, emails, phone numbers, chats or
    records in any file the pull request adds or changes: source,
    configuration, tests, samples or docs (AGENTS.md: replace with invented
-   data)?
+   data)? Contact details the owner chose to publish (such as the business
+   address on the public site) are listed in the answer but aren't a
+   finding.
 4. **Storage.** Does anything new write private data to disk outside the
    protected store, or to a place backups or sync would pick up?
 5. **Permissions.** Does the change ask for a new Mac permission or widen
