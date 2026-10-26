@@ -25,16 +25,73 @@ The owner's idea is a local "orchestrator" that only delegates. Build it as a
 **dispatcher** in layers:
 
 1. **Rules first.** "This conversation uses my default." "Yes/no checks go to
-   Jev." "Searching my notes goes to the search model." Instant and predictable.
+   Jeff." "Searching my notes goes to the search model." Instant and predictable.
 2. **A small local model breaks ties** only when rules cannot decide. The
    dispatcher is a role; the model filling it depends on the machine.
-3. **Workers do the tasks:** the local chat model, Jev, the local search model
-   (EmbeddingGemma, from True Convo), and cloud profiles.
+3. **Workers do the tasks:** the local chat model, Jeff (the one door for
+   classifiers, with Jev or another decision model behind it; see
+   `capabilities-and-primitives.md`), the local search model (EmbeddingGemma,
+   from True Convo), and cloud profiles.
 
 The privacy line: the dispatcher may *suggest* a cloud model, but nothing is sent
 to a cloud model or host until the owner has approved that model and host once
 (strategy decision). Step 3 ships rules only (the owner's default plus a
 per-conversation choice). The model-based dispatcher arrives with step 6.
+
+### Scaling Down Once a Task Is Proven (October 25)
+
+Added at the owner's request, from an IndyDevDan video on token costs (its
+usage and price figures are the video's and were not checked). The idea: a
+strong model works a new kind of task out first, and repeat runs move to the
+cheapest model that does it well.
+
+- **The cheapest model that passed.** For a task with a capability behind it,
+  the dispatcher picks the cheapest approved model listed as passing that
+  capability's example runs (`portable-capability-layer.md`, proof per model).
+  A model that hasn't passed is never picked to save money. A new kind of task
+  with no passing model goes to the conversation's default or a model the owner
+  picks, and its runs can become the capability's first examples.
+- **Moving down is checked, not assumed.** A model is added to the passing
+  list only by the example runs, which are repeated when a model changes. If a
+  cheaper model starts failing, it drops off the list and the dispatcher moves
+  back up.
+- **Unsure means move up or ask.** When the tie-break layer can't tell, or a
+  decision model's "none of these" score is high, the dispatcher doesn't guess:
+  it moves to the next stronger approved model or asks the owner.
+- **Free models get no private data.** Free hosted models may keep and train on
+  what is sent to them. They are approved only for public or invented
+  material, never for the owner's messages, memory or files.
+- **Costs show per route.** The running total each paid route already keeps
+  (see "How Each Model Is Paid For") is shown next to the work it paid for, so
+  the owner can see what scaling down saved. Caps and approvals stay in code,
+  outside any model.
+
+### Jeff Surfaces Choices; the Owner Makes Them (October 25)
+
+Jeff has other jobs (action checks, sorting what comes in, typed yes/no
+answers; see `capabilities-and-primitives.md`). The owner's rule for all of
+them (October 25): where a choice needs his judgement, Jeff and the provider
+behind it never make the final call. They decide which options to show him,
+such as which memory to file and where, what to show interest in, or which tone
+to take with a paragraph.
+
+- **Jeff ranks; the owner picks.** Jeff orders the options and drops the
+  unlikely ones, and the owner sees a short list on an approval card. Nothing is
+  filed, sent or rewritten on Jeff's ranking alone.
+- **Low confidence shows more, not less.** When the top options score close
+  together, or "none of these" scores high, the card shows more options and an
+  open answer instead of a single suggestion.
+- **Private content stays local by default.** These choices are about the
+  owner's memory and writing, so the default provider behind Jeff for them is
+  a local one. A cloud provider such as Jev sees that text only after the owner
+  has approved it for that kind of choice, under the caps in
+  `capabilities-and-primitives.md`.
+- **Only the owner's picks are kept.** As that note already says, Jeff keeps
+  the owner's decisions, never the provider's answers.
+- **Final calls that need reasoning go elsewhere.** Where a verdict has to be
+  worked out, such as whether a code finding is a real bug, a full model
+  decides (the Codex triage judge, `docs/plans/codex-triage.md`). A decision
+  model may only screen first there.
 
 ## Two Kinds of Agent Profile
 
