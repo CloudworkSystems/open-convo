@@ -284,9 +284,11 @@ nothing said so. The same rule for True Convo's own agents is in
     of that commit.
   - A builder's first sign of work (a branch, commit or draft pull request):
     4 hours after the build issue names it.
-  - A builder's fix after findings: 4 hours after Codex's review, or after
-    the keeper's relay for GrokBot. Once a builder is silent, the keeper
-    doesn't relay to it again until it pushes.
+  - A builder's fix after findings: 4 hours after the latest review with
+    open findings on the latest commit (Codex, Gemini or the independent
+    review), or after the keeper's relay for GrokBot, whichever is later.
+    Once a builder is silent, the keeper doesn't relay to it again until it
+    pushes.
 - **Not set up is said once.** An agent marked "not set up", or one that has
   never posted on any pull request, is reported once as "<agent> not set up",
   not on every pull request.
