@@ -39,7 +39,7 @@ only at **added lines**, for these signals:
 
 | Signal | What counts |
 | --- | --- |
-| New outside host | An `http://` or `https://` URL, or a WebSocket URL, whose host isn't in the allowlist below. Hosts in comments, docs (`*.md`) and test fixtures that are clearly invented (`example.com`, `example.org`, `*.invalid`, `*.test`, `localhost`, `127.0.0.1`) don't count. |
+| New outside host | An `http://` or `https://` URL, or a WebSocket URL, whose host isn't in the allowlist below. Hosts in docs (`*.md`) don't count, and neither do clearly invented hosts anywhere (`example.com`, `example.org`, `*.invalid`, `*.test`, `localhost`, `127.0.0.1`). Code comments are not exempt. |
 | New dependency | A new entry under `dependencies`, `devDependencies` or `optionalDependencies` in any `package.json`; a new `.package(` in any `Package.swift`; a new pin in any `Package.resolved`. A version bump of an existing dependency doesn't count. |
 | New Mac permission | An added key in an `*.entitlements` file, or an added `NS…UsageDescription` key in an `Info.plist`. |
 | New outside model or API key | An added string that names an environment variable or secret ending in `_API_KEY`, `_TOKEN` or `_SECRET`, outside `.github/`. |
@@ -54,10 +54,25 @@ When any signal fires, the workflow:
 - adds the label `needs-owner: risk`, so the `owner-queue` workflow lists the
   pull request on issue #52.
 
+**Fail closed when the diff can't be read.** GitHub's pull request files
+API leaves out the patch for large and some generated files (a big
+`package-lock.json`, a bundled `.js`, a long `Package.resolved`) and stops
+listing files after 3,000. A changed file with no patch, or a file list that
+may be cut short, counts as a hit ("couldn't read the diff for `<file>`"),
+unless the file is binary by extension (images, fonts, audio, video). For
+`package.json`, `Package.swift` and `Package.resolved`, the dependency
+signal compares the parsed file at the base and at the head commit, fetched
+through the contents API, instead of reading the patch, so a new entry split
+across lines or hidden in an unreadable patch is still caught. The code pull
+request's tests cover both cases with invented data.
+
 The hold clears when the owner (`CloudworkSystems`) approves the pull
 request's **head commit**, or when a later commit removes every hit. An
 `owner-accepts-findings` note does not clear it: that note accepts Codex
-findings, not risk.
+findings, not risk. `codex-approved` doesn't run on review events (on
+purpose, see the header of `codex-approved.yml`), so after the owner
+approves, the hold lifts at the workflow's next run: the hourly run or the
+next comment, whichever comes first. The hold comment says so.
 
 **Owner-opened pull requests.** GitHub doesn't let an author approve his own
 pull request, so a held pull request opened from the owner's account can't
