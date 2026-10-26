@@ -504,7 +504,7 @@ public final class SyncDevice {
                 lastIndex[change.record.id] = index
             }
             for (index, change) in page.changes.enumerated() where lastIndex[change.record.id] == index {
-                try apply(change, zone: zone)
+                try apply(withChainAncestry(change, on: page.changes), zone: zone)
             }
             if var current = openPage {
                 current.sealed = true
@@ -519,6 +519,24 @@ public final class SyncDevice {
             if !page.more { return }
         }
         throw SyncError.syncDidNotFinish("The download did not settle.")
+    }
+
+    /// The app is asked to save only the newest revision on a page. A linear
+    /// chain still names each step's parent, so the newest revision's base is
+    /// walked back to the stamp that came before this page.
+    private func withChainAncestry(_ change: CloudChange, on page: [CloudChange]) -> CloudChange {
+        if change.record.purged { return change }
+        var stamp = change.basedOnStamp
+        var seen: Set<VersionStamp> = [change.record.stamp]
+        while let current = stamp, !seen.contains(current) {
+            seen.insert(current)
+            guard let earlier = page.last(where: {
+                $0.record.id == change.record.id && $0.record.stamp == current && !$0.record.purged
+            }) else { break }
+            stamp = earlier.basedOnStamp
+        }
+        if stamp == change.basedOnStamp { return change }
+        return CloudChange(record: change.record, changeTag: change.changeTag, basedOnStamp: stamp)
     }
 
     private func apply(_ change: CloudChange, zone: ZoneName) throws {

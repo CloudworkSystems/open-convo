@@ -945,6 +945,45 @@ final class SyncCorePlanTests: XCTestCase {
         XCTAssertFalse(holds(text("should-not-merge"), peer: b))
     }
 
+    func testLinearChainOnOnePageIsNotAConflict() throws {
+        let cloud = FakeCloud()
+        let a = Peer("phone-a", cloud: cloud)
+        let b = Peer("phone-b", cloud: cloud)
+        a.boot()
+        b.boot()
+        let base = try a.edit("note", payload: text("from-a"))
+        try syncAll([a, b])
+        let first = try b.edit("note", payload: text("b1"))
+        try b.sync()
+        let second = try b.edit("note", payload: text("b2"))
+        try b.sync()
+        XCTAssertEqual(cloud.record("note")?.basedOnStamp, first.stamp)
+        try a.sync()
+        XCTAssertTrue(a.device.conflictCopies().isEmpty)
+        XCTAssertNotEqual(a.device.status().kind, .needsAttention)
+        XCTAssertEqual(live(a, "note").payload, second.payload)
+        XCTAssertEqual(live(a, "note").stamp, second.stamp)
+        _ = base
+    }
+
+    func testForkStillConflictsWhenTheOtherChainArrivesTogether() throws {
+        let cloud = FakeCloud()
+        let a = Peer("phone-a", cloud: cloud)
+        let b = Peer("phone-b", cloud: cloud)
+        a.boot()
+        b.boot()
+        _ = try a.edit("note", payload: text("base"))
+        try syncAll([a, b])
+        let local = try a.edit("note", payload: text("from-a"))
+        _ = try b.edit("note", payload: text("b1"))
+        try b.sync()
+        _ = try b.edit("note", payload: text("b2"))
+        try b.sync()
+        try a.sync(order: .fetchThenUpload)
+        XCTAssertTrue(a.device.conflictCopies().contains { $0.payload == local.payload || $0.payload == text("b2") })
+        XCTAssertEqual(a.device.status().kind, .needsAttention)
+    }
+
     func testInitialConflictSaveIsCheckpointedBeforeDelivery() throws {
         let cloud = FakeCloud()
         let a = Peer("phone-a", cloud: cloud)
