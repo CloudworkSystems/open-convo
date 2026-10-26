@@ -88,7 +88,9 @@ hits yet. An
 findings, not risk. `codex-approved` doesn't run on review events (on
 purpose, see the header of `codex-approved.yml`), so after the owner
 approves, the hold lifts at the workflow's next run: the hourly run or the
-next comment, whichever comes first. The hold comment says so.
+next comment, whichever comes first. The hold comment says so. The run
+that clears the hold also removes the `needs-owner: risk` label, so issue
+#52 lists only pull requests that still need the owner.
 
 **Owner-opened pull requests.** GitHub doesn't let an author approve his own
 pull request, so a held pull request opened from the owner's account can't
@@ -161,7 +163,9 @@ auto-merge while that line stands on the latest commit, and puts the pull
 request on issue #52 with the label `needs-owner: risk`. Only an approval
 of the head commit that the owner submits **after** the `risk-escalate`
 comment clears it; an approval he gave before (for example, for a protected
-path) doesn't count, since he hadn't seen the escalation yet.
+path) doesn't count, since he hadn't seen the escalation yet. When it clears,
+the coordinator removes the `needs-owner: risk` label (unless the
+deterministic hold still stands).
 
 The triage judge (docs/plans/codex-triage.md) gains one rule in its prompt: a
 finding about data leaving the device, a secret, real personal data or a new
