@@ -59,6 +59,13 @@ request's **head commit**, or when a later commit removes every hit. An
 `owner-accepts-findings` note does not clear it: that note accepts Codex
 findings, not risk.
 
+**Owner-opened pull requests.** GitHub doesn't let an author approve his own
+pull request, so a held pull request opened from the owner's account can't
+be released by approval. It is handled like the existing owner-opened hold
+on protected paths (docs/plans/merge-gate.md): the hold comment says so, and
+the work is reopened from `cloudwork-bot`, where the owner can approve it.
+No other owner signal clears a risk hold.
+
 **The allowlist.** `.github/risk-allowlist.json` lists hosts and dependencies
 the owner has already accepted, so he is asked about each one once. It sits
 under `.github/`, a protected path, so only a pull request the owner approves
@@ -66,6 +73,16 @@ can change it. The workflow reads it from `main`, never from the pull
 request. The code pull request seeds it with the hosts and dependencies
 already on `main` at that time, listed in the pull request for the owner to
 check.
+
+**How an approval sticks.** The hold comment tells the builder to add each
+hit to `.github/risk-allowlist.json` in the same pull request. That edit is
+on a protected path, so the owner's approval of the head commit covers both
+the change and the new allowlist entries, and once it merges later pull
+requests using the same host or dependency aren't held. If the owner wants a
+one-off yes instead, the builder leaves the entry out and he is asked again
+next time. The risk check still reads the allowlist from `main` only, so a
+pull request's own additions never clear its own hold; only the approval
+does.
 
 **Why deterministic.** A pattern match can't be talked out of a hold by text
 in the diff, and it costs nothing per run. It will miss things (a host built
@@ -89,8 +106,10 @@ the review comment, so it adds no review round:
 5. **Permissions.** Does the change ask for a new Mac permission or widen
    what an agent may do?
 
-Each answer is "no", or "yes" with the file and line. Any "yes" that no plan
-allows is a P1 for that review. If the reviewer thinks the owner should see
+Each answer is "no", or "yes" with the file and line. A "yes" to question 2
+(a secret in code, logs, test output or files) is always a P1, whatever any
+plan says: AGENTS.md puts secrets in Keychain only. Any other "yes" that no
+plan allows is a P1 for that review. If the reviewer thinks the owner should see
 it even when a plan allows it, it ends the block with the line
 `risk-escalate: <one-line reason>`. The coordinator doesn't switch on
 auto-merge while that line stands on the latest commit, and puts the pull
