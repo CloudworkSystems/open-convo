@@ -34,8 +34,9 @@ Two ideas were new here:
 ### 1. A Risk Hold In `codex-approved` (Deterministic)
 
 A new step in the existing `codex-approved` workflow reads the pull request's
-diff through the API (it still never checks out pull request code) and looks
-only at **added lines**, for these signals:
+changes through the API (it still never checks out pull request code; see
+"Fail closed" below for how) and looks only at **added lines**, for these
+signals:
 
 | Signal | What counts |
 | --- | --- |
@@ -57,9 +58,14 @@ When any signal fires, the workflow:
 **Fail closed when the diff can't be read.** GitHub's pull request files
 API leaves out the patch for large and some generated files (a big
 `package-lock.json`, a bundled `.js`, a long `Package.resolved`) and stops
-listing files after 3,000. A changed file with no patch, or a file list that
-may be cut short, counts as a hit ("couldn't read the diff for `<file>`"),
-unless the file is binary by extension (images, fonts, audio, video). For
+listing files after 3,000. It can also return a patch that is present but
+cut short. So the scan never trusts a patch as complete: for every changed
+text file it fetches the whole file at the base and at the head commit
+through the contents API and works out the added lines itself. A file it
+can't fetch whole (too large for the contents API, or an error), or a file
+list that may be cut short, counts as a hit ("couldn't read the diff for
+`<file>`"), unless the file is binary by extension (images, fonts, audio,
+video). For
 `package.json`, `Package.swift` and `Package.resolved`, the dependency
 signal compares the parsed file at the base and at the head commit, fetched
 through the contents API, instead of reading the patch, so a new entry split
