@@ -216,12 +216,12 @@ step 6):
    logged retry. Being alive says nothing about being trusted: a working
    foreign agent still starts at zero trust.
 
-### The Same Rule for Our Own Build Pipeline (Proposal)
+### The Same Rule for Our Own Build Pipeline (Adopted October 26)
 
-Today only Codex is covered: the PR keeper restarts a hung Codex review once
-and the 8 AM list shows "Codex silent" (AGENTS.md, "Coordinating On
-GitHub"). Proposed, for the owner to approve as a change to AGENTS.md and the
-PR keeper's prompt (AGENTS.md is an owner-only path):
+Before this, only Codex was covered: the PR keeper restarts a hung Codex
+review once and the 8 AM list shows "Codex silent". The owner approved
+extending it on October 26; the rule itself now lives in AGENTS.md, "Agent
+Setup And Silence", and that section wins where the two differ. In short:
 
 - **Each reviewer and builder has a stated setup status** in AGENTS.md, for
   example "Gemini Code Assist: not set up (October 26)". While one is not set

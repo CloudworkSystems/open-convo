@@ -122,7 +122,9 @@ reads from and writes to `CloudworkSystems/open-convo`.
     call.
   - Until Gemini actually posts reviews on the repo, a fresh Claude review
     (by an agent that didn't build the pull request) stands in as the
-    independent review.
+    independent review. Gemini is marked "not set up" (Agent Setup And
+    Silence below), so the stand-in is used from the first round and no
+    pull request waits for Gemini.
   - Agents ask Gemini for a re-review (`/gemini review`) only from
     `cloudwork-bot`.
   - Still open for the owner: whether Argon (his Gemini preview model) is
@@ -249,6 +251,52 @@ request itself, so the owner doesn't have to carry messages:
   findings in its report. The keeper runs in the cloud as `cloudwork-bot`,
   not on the Mac (owner decision, October 25, 2026).
 
+## Agent Setup And Silence (Owner Decision, October 26, 2026)
+
+No pull request or task waits on an agent that isn't set up or has stopped
+answering. Gemini was named as a reviewer for days without ever posting, and
+nothing said so. The same rule for True Convo's own agents is in
+[docs/design-notes/agent-profiles-and-adapters.md](docs/design-notes/agent-profiles-and-adapters.md)
+("Knowing When an Agent Isn't Working").
+
+- **Every reviewer and builder has a setup status here.** An agent is marked
+  "set up" only after it has actually done its job on this repo (posted a
+  review, pushed a build). While one is "not set up", its stand-in is used
+  from the start and nobody waits for it. Any agent that sees the status is
+  wrong updates this table in a pull request.
+
+  | Agent | Job here | Status |
+  |---|---|---|
+  | Codex review (GitHub app) | Reviews every pull request | Set up |
+  | Gemini Code Assist (GitHub app) | Independent review | **Not set up** (no review posted as of October 26); a fresh Claude review stands in |
+  | Claude (cloud and Mac) | Builds, coordinates, independent reviews | Set up |
+  | Codex builds (cloud and local CLI) | Builds Codex modules | Set up |
+  | GrokBot teams (Cursor) | Build GrokBot modules | Set up |
+
+- **Every expected step has a deadline.** The PR keeper checks these at each
+  hourly run and reports a miss as "<agent> silent on #N" (or on the build
+  issue):
+  - Codex review: 20 minutes after a push (the restart rule in
+    "Coordinating On GitHub" still applies first).
+  - Gemini review, once set up: 30 minutes after a push.
+  - Independent review: 2 hours after Codex is clean on the latest commit of
+    a pull request that still has auto-merge off and no independent review
+    of that commit.
+  - A builder's first sign of work (a branch, commit or draft pull request):
+    4 hours after the build issue names it.
+  - A builder's fix after findings: 4 hours after Codex's review, or after
+    the keeper's relay for GrokBot. Once a builder is silent, the keeper
+    doesn't relay to it again until it pushes.
+- **Not set up is said once.** An agent marked "not set up", or one that has
+  never posted on any pull request, is reported once as "<agent> not set up",
+  not on every pull request.
+- **The owner hears it from one place.** The keeper keeps one comment of its
+  own on issue #52, "Not working", rewritten each run with every silent or
+  not-set-up agent (empty when all are working), so the 8 AM list carries it.
+- **Reporting only.** These checks never restart, reassign, switch reviewers
+  or change settings, apart from the existing one Codex restart per commit.
+  A working agent is not thereby trusted.
+
 ## Accounts And Provenance (Owner Decision, October 23, 2026)
 
 - `CloudworkSystems` is the owner's account, and only the owner uses it, in
@@ -287,10 +335,10 @@ request itself, so the owner doesn't have to carry messages:
 | Claude building sessions | `cloudwork-bot` | Build on a named branch; open the pull request with auto-merge off (the coordinator switches it on) |
 | GrokBot teams (Cursor) | `cloudwork-bot` | Each builds one module from its plan and fixes findings on its own pull request |
 | Codex | its own app | Reviews every pull request; builds Codex modules |
-| Gemini Code Assist | its own app | Impartial reviewer of Codex-built and Claude-built pull requests (advisory for now) |
+| Gemini Code Assist | its own app | Impartial reviewer of Codex-built and Claude-built pull requests (advisory for now; not set up yet, see Agent Setup And Silence) |
 | PR steward (scheduled, 8:41 AM and 5:41 PM) | `cloudwork-bot` | Reviews Codex-built pull requests; flags stuck ones on issue #52 |
-| PR keeper (scheduled, hourly, in the cloud) | `cloudwork-bot` | Keeps pull requests moving: updates auto-merge pull requests that fall behind `main` once they are otherwise ready, restarts a hung Codex review once per commit, and relays Codex findings to GrokBot's builders |
-| Daily list (scheduled, 7:52 AM) | `cloudwork-bot`, reading only | Sends the owner issue #52's list, plus pull requests Codex has gone silent on |
+| PR keeper (scheduled, hourly, in the cloud) | `cloudwork-bot` | Keeps pull requests moving: updates auto-merge pull requests that fall behind `main` once they are otherwise ready, restarts a hung Codex review once per commit, relays Codex findings to GrokBot's builders, and reports silent or not-set-up agents in its "Not working" comment on issue #52 |
+| Daily list (scheduled, 7:52 AM) | `cloudwork-bot`, reading only | Sends the owner issue #52's list, including the keeper's "Not working" comment, plus pull requests Codex has gone silent on |
 | Nightly Test build (scheduled, 2–6 AM) | none | Rebuilds True Convo Test from `main` on the owner's Mac |
 | Recycling pass (scheduled, Sundays) | `cloudwork-bot` | One pull request proposing fixes for stale docs |
 | `owner-queue` workflow | GitHub Actions | Rewrites issue #52, "Needs the owner", every hour |
