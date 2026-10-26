@@ -845,6 +845,92 @@ final class SyncCorePlanTests: XCTestCase {
         XCTAssertTrue(live(b, "note").payload.isEmpty)
     }
 
+    func testRestoredConflictSaveDoesNotBlockPurgeCleanup() throws {
+        let cloud = FakeCloud()
+        let a = Peer("phone-a", cloud: cloud)
+        let b = Peer("phone-b", cloud: cloud)
+        a.boot()
+        b.boot()
+        _ = try a.edit("note", payload: text("base"))
+        try syncAll([a, b])
+        let secret = try a.edit("note", payload: text("alpha-secret"))
+        for _ in 0..<3 { _ = try b.device.nextStamp() }
+        _ = try b.edit("note", payload: text("beta"))
+        try b.sync()
+        try a.sync(order: .fetchThenUpload)
+        XCTAssertTrue(a.device.conflictCopies().contains { $0.payload == secret.payload })
+        let checkpoint = a.device.saveCheckpoint()
+        try a.adopt(checkpoint)
+        var notices: [AppSaveRequest] = []
+        a.holdSaves { notices.append($0) }
+        let purge = try a.edit("note", payload: Data(), purged: true, confirm: false)
+        XCTAssertTrue(notices.contains { $0.conflictCopiesToRemove.contains { $0.payload == secret.payload } })
+        a.device.confirmConflictCopiesRemoved(notices.flatMap(\.conflictCopiesToRemove))
+        XCTAssertNotEqual(a.device.status().kind, .needsAttention)
+        try a.device.confirmLocalSave(purge)
+        let cleared = a.device.saveCheckpoint()
+        try a.adopt(cleared)
+        a.store.save(purge)
+        notices.removeAll()
+        a.holdSaves { notices.append($0) }
+        try a.device.reconcile(a.store.all())
+        XCTAssertFalse(notices.contains { !$0.conflictCopiesToRemove.isEmpty })
+        XCTAssertNotEqual(a.device.status().kind, .needsAttention)
+    }
+
+    func testReconcileReissuesARestoredConflictCopy() throws {
+        let cloud = FakeCloud()
+        let a = Peer("phone-a", cloud: cloud)
+        let b = Peer("phone-b", cloud: cloud)
+        a.boot()
+        b.boot()
+        _ = try a.edit("note", payload: text("base"))
+        try syncAll([a, b])
+        let secret = try a.edit("note", payload: text("alpha-secret"))
+        for _ in 0..<3 { _ = try b.device.nextStamp() }
+        let winner = try b.edit("note", payload: text("beta"))
+        try b.sync()
+        try a.sync(order: .fetchThenUpload)
+        let checkpoint = a.device.saveCheckpoint()
+        try a.adopt(checkpoint)
+        a.store.save(winner)
+        var notices: [AppSaveRequest] = []
+        a.holdSaves { notices.append($0) }
+        try a.device.reconcile(a.store.all())
+        XCTAssertTrue(notices.contains { $0.conflictCopies.contains { $0.payload == secret.payload } })
+        XCTAssertTrue(a.device.conflictCopies().contains { $0.payload == secret.payload })
+        let purge = try a.edit("note", payload: Data(), purged: true, confirm: false)
+        a.device.confirmConflictCopiesRemoved(notices.flatMap(\.conflictCopiesToRemove))
+        XCTAssertNotEqual(a.device.status().kind, .needsAttention)
+        _ = purge
+    }
+
+    func testScratchFetchOfTheQueuedBaseIsNotAConflict() throws {
+        let cloud = FakeCloud()
+        let a = Peer("phone-a", cloud: cloud)
+        let b = Peer("phone-b", cloud: cloud)
+        a.boot()
+        b.boot()
+        _ = try a.edit("note", payload: text("base"))
+        try syncAll([a, b])
+        let edited = try a.edit("note", payload: text("local-edit"))
+        let queued = try XCTUnwrap(a.device.queuedRecords().first { $0.record.id == "note" })
+        XCTAssertEqual(queued.baseChangeTag, cloud.record("note")?.changeTag)
+        cloud.expireTokensBeforeCurrentHead()
+        var merges = 0
+        a.merge { _, _ in
+            merges += 1
+            return MergeOutput(payload: text("should-not-merge"))
+        }
+        try a.sync(order: .fetchThenUpload)
+        XCTAssertEqual(merges, 0)
+        XCTAssertTrue(a.device.conflictCopies().isEmpty)
+        try b.sync()
+        XCTAssertEqual(live(b, "note").payload, edited.payload)
+        XCTAssertFalse(holds(text("should-not-merge"), peer: a))
+        XCTAssertFalse(holds(text("should-not-merge"), peer: b))
+    }
+
     func testInFlightConflictSaveKeepsPurgeCleanup() throws {
         let cloud = FakeCloud()
         let a = Peer("phone-a", cloud: cloud)

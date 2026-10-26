@@ -31,6 +31,9 @@ public final class SyncDevice {
     private var pendingCleanups: [SyncRecord] = []
     private var storedConflictCopies: [SyncRecord] = []
     private var outstandingConflictSaves: [SyncRecord] = []
+    /// Outstanding saves restored from a previous process. That process's
+    /// callback will not run, so these do not keep a purge cleanup pending.
+    private var restoredOutstandingKeys: Set<CopyKey> = []
     private var redeliveringCleanup = false
     private var local: [String: SyncRecord] = [:]
     private var openPage: OpenPage?
@@ -62,6 +65,9 @@ public final class SyncDevice {
         device.pendingCleanups = body.pendingCleanups
         device.storedConflictCopies = body.storedConflictCopies
         device.outstandingConflictSaves = body.outstandingConflictSaves
+        device.restoredOutstandingKeys = Set(body.outstandingConflictSaves.map {
+            CopyKey(id: $0.id, stamp: $0.stamp)
+        })
         device.outbox = body.outbox.map {
             Entry(
                 record: $0.record,
@@ -245,9 +251,11 @@ public final class SyncDevice {
     /// the purged payload with nothing left to delete.
     public func confirmConflictCopiesRemoved(_ copies: [SyncRecord]) {
         let named = Set(copies.map { key($0) })
-        let inFlight = Set(outstandingConflictSaves.map { key($0) })
+        let inFlight = Set(outstandingConflictSaves.map { key($0) }).subtracting(restoredOutstandingKeys)
         pendingCleanups.removeAll { named.contains(key($0)) && !inFlight.contains(key($0)) }
         storedConflictCopies.removeAll { named.contains(key($0)) && !inFlight.contains(key($0)) }
+        outstandingConflictSaves.removeAll { named.contains(key($0)) && restoredOutstandingKeys.contains(key($0)) }
+        restoredOutstandingKeys.subtract(named)
     }
 
     /// The app hands over every local record after a restart. Queues this
@@ -255,6 +263,7 @@ public final class SyncDevice {
     /// and moves the clock past every stamp it was handed.
     public func reconcile(_ records: [SyncRecord]) throws {
         guard hasCheckpoint else { throw SyncError.checkpointRequired }
+        reissueRestoredConflictSaves()
         var byID: [String: SyncRecord] = [:]
         for record in records {
             observe(record.stamp)
@@ -523,6 +532,14 @@ public final class SyncDevice {
             rememberSeen(id: id, stamp: change.record.stamp, tag: change.changeTag)
             return
         }
+        // A scratch fetch after a token expires replays the base this edit
+        // was queued against. The matching tag is not a new server edit.
+        if let entry = outbox.first(where: { $0.record.id == id }),
+           let base = entry.baseChangeTag,
+           base == change.changeTag {
+            rememberSeen(id: id, stamp: change.record.stamp, tag: change.changeTag)
+            return
+        }
         if let entry = outbox.first(where: { $0.record.id == id }),
            change.record.stamp.deviceID == deviceID,
            entry.record.stamp.deviceID == deviceID,
@@ -740,6 +757,26 @@ public final class SyncDevice {
     }
 
     /// Asks the app to delete conflict copies a late save just wrote back.
+    /// Asks the app again to store conflict copies whose save died with the
+    /// previous process, then stops treating that dead save as in flight.
+    private func reissueRestoredConflictSaves() {
+        let revived = outstandingConflictSaves.filter { copy in
+            restoredOutstandingKeys.contains(key(copy)) && conflicts.contains { key($0) == key(copy) }
+        }
+        outstandingConflictSaves.removeAll { restoredOutstandingKeys.contains(key($0)) }
+        restoredOutstandingKeys.removeAll()
+        guard let first = revived.first else { return }
+        let checkpoint = saveCheckpoint()
+        deliver(AppSaveRequest(
+            record: first,
+            replaceLocalRecord: false,
+            conflictCopies: revived,
+            checkpointBeforeRequest: checkpoint
+        ))
+        let revivedKeys = Set(revived.map { key($0) })
+        outstandingConflictSaves.removeAll { revivedKeys.contains(key($0)) }
+    }
+
     private func redeliverCleanup(_ copies: [SyncRecord]) {
         guard !redeliveringCleanup, let first = copies.first else { return }
         redeliveringCleanup = true
