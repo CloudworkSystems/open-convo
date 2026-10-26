@@ -40,7 +40,7 @@ signals:
 
 | Signal | What counts |
 | --- | --- |
-| New outside host | An `http://` or `https://` URL, or a WebSocket URL, whose host isn't in the allowlist below. Hosts in docs (`*.md`) don't count, and neither do clearly invented hosts anywhere (`example.com`, `example.org`, `*.invalid`, `*.test`, `localhost`, `127.0.0.1`). Code comments are not exempt. |
+| New outside host | An `http://` or `https://` URL, or a WebSocket URL, whose host isn't in the allowlist below. Hosts in docs (`*.md`) don't count, and neither do clearly invented hosts anywhere (`example.com`, `example.org`, `example.net`, `*.example`, `*.invalid`, `*.test`, `localhost`, `127.0.0.1`). Code comments are not exempt. |
 | New dependency | A new entry under `dependencies`, `devDependencies`, `optionalDependencies`, `peerDependencies` or `bundleDependencies` in any `package.json`; a new `.package(` in any `Package.swift`; a new pin in any `Package.resolved`. A version bump of an existing dependency doesn't count. |
 | New Mac permission | An added key in an `*.entitlements` file, or an added `NS…UsageDescription` key in an `Info.plist`. |
 | New outside model or API key | An added string that names an environment variable or secret ending in `_API_KEY`, `_TOKEN` or `_SECRET`, outside `.github/`. |
@@ -60,7 +60,9 @@ API leaves out the patch for large and some generated files (a big
 `package-lock.json`, a bundled `.js`, a long `Package.resolved`) and stops
 listing files after 3,000. It can also return a patch that is present but
 cut short. So the scan never trusts a patch as complete: for every changed
-text file it fetches the whole file at the base and at the head commit
+text file it fetches the whole file at the merge base (from the compare
+API's `merge_base_commit`, not `main`'s tip, so a branch that is behind
+isn't held for lines `main` removed) and at the head commit
 through the contents API and works out the added lines itself. A file it
 can't fetch whole (too large for the contents API, or an error), or a file
 list that may be cut short, counts as a hit ("couldn't read the diff for
