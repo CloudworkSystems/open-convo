@@ -123,7 +123,9 @@ latest commit:
 2. **Secrets.** Any key, token or credential in code, logs, test output or
    files? Anything that should be in Keychain but isn't?
 3. **Real personal data.** Any real names, emails, phone numbers, chats or
-   records in tests, samples or docs (AGENTS.md: replace with invented data)?
+   records in any file the pull request adds or changes: source,
+   configuration, tests, samples or docs (AGENTS.md: replace with invented
+   data)?
 4. **Storage.** Does anything new write private data to disk outside the
    protected store, or to a place backups or sync would pick up?
 5. **Permissions.** Does the change ask for a new Mac permission or widen
@@ -131,7 +133,7 @@ latest commit:
 
 Each answer is "no", or "yes" with the file and line. A "yes" to question 2
 (a secret in code, logs, test output or files) or question 3 (real personal
-data in tests, samples or docs) is always a P1, whatever any plan says:
+data in any file) is always a P1, whatever any plan says:
 AGENTS.md keeps secrets in Keychain only and private records and personal
 details out of every file. Any other "yes" that no plan allows is a P1 for
 that review. If the reviewer thinks the owner should see
