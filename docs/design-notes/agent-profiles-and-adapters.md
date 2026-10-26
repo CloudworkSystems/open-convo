@@ -184,15 +184,20 @@ step 6):
    as they work; if nothing arrives within the silence window, the agent is
    **Silent**, and the owner sees "<agent> hasn't answered in N minutes" with
    four choices: wait longer, retry once, send to another approved agent, or
-   stop. At most one automatic retry, logged; after that the request is
-   parked and the owner is told (the same idea as Pi Durable parking a task
-   that keeps crashing, see `durable-agents.md`). Starting windows, which the
-   owner can change: 2 minutes for a local chat model, 5 for a cloud model, 20
-   minutes without progress for an agent doing a task, 30 after a push for a
-   review bot.
+   stop. Progress alone never keeps a request open: each request also has an
+   answer deadline counted from when it was sent, and an agent still working
+   at that deadline is shown as **Overdue** with the same four choices, even
+   if it is still reporting progress. At most one automatic retry, logged;
+   after that the request is parked and the owner is told (the same idea as
+   Pi Durable parking a task that keeps crashing, see `durable-agents.md`).
+   Starting windows, which the owner can change: 2 minutes for a local chat
+   model, 5 for a cloud model, 20 minutes without progress for an agent
+   doing a task, 30 after a push for a review bot. Starting answer deadlines:
+   10 minutes for a chat reply, 2 hours for an agent's task unless the owner
+   gives it longer when he starts it.
 4. **Status is visible.** The "one screen shows every agent" view (Scion idea
    3 below) shows each agent as Ready, Working (with its last sign of life),
-   Silent, Not set up, Blocked or Stopped, plus when it last finished a run.
+   Silent, Overdue, Not set up, Blocked or Stopped, plus when it last finished a run.
 5. **Arms-length agents are watched from outside.** For an agent True Convo
    doesn't run (Cam, a GitHub review app), the check is only an observation:
    when it last answered. One that is expected but has never answered shows
