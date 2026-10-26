@@ -732,13 +732,18 @@ export class Tasks {
     const reminders = normalizeReminders(input.reminders, occurrence);
     this.#change((person, stamp) => {
       const prior = person.tasks.find(task => task.id === taskId);
-      const purge = prior?.purge ?? null;
+      // Reusing an emptied id must move the cutoff past every record this
+      // device still holds. Clearing them only locally lets an offline copy
+      // attach a post-purge completion to the new task. The new body is
+      // stamped after that cutoff so it is not emptied along with them.
+      const purge = prior ? stamp : null;
+      const contentStamp = prior ? this.#stamp() : stamp;
       if (prior) person.tasks = person.tasks.filter(task => task.id !== taskId);
       person.tasks.push({
         id: taskId,
-        life: { value: true, stamp: clone(stamp) },
+        life: { value: true, stamp: clone(contentStamp) },
         purge: clone(purge),
-        fields: stampedFields({ title, note, list, priority, state: 'open', due, repeat, reminders }, stamp, TASK_KEYS),
+        fields: stampedFields({ title, note, list, priority, state: 'open', due, repeat, reminders }, contentStamp, TASK_KEYS),
         records: [],
       });
     });

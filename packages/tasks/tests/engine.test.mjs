@@ -591,6 +591,22 @@ test('9. merge keeps both edits, both completions, and a reopened occurrence', (
   assert.throws(() => holder.task('task'), /emptied/);
   assert.throws(() => holder.restoreTask('task'), /emptied/);
 
+  const reused = engine('reuse-a', T0);
+  const staleCopy = engine('reuse-b', T0 + 1);
+  reused.addTask({ title: 'Old round', due: '2026-06-01', repeat: { kind: 'days', every: 1, mode: 'onSchedule' } }, { taskId: 'again' });
+  staleCopy.importPerson(reused.getPerson());
+  for (let i = 0; i < 8; i += 1) staleCopy.addTask({ title: `Other ${i}` }, { taskId: `other-${i}` });
+  staleCopy.complete('again', at('2026-06-01T15:00:00.000Z'), { recordId: 'old-done' });
+  reused.deleteTask('again');
+  reused.emptyTrash();
+  reused.importPerson(staleCopy.getPerson());
+  reused.addTask({ title: 'New round', due: '2026-06-01', repeat: { kind: 'days', every: 1, mode: 'onSchedule' } }, { taskId: 'again' });
+  reused.importPerson(staleCopy.getPerson());
+  assert.equal(reused.task('again').title, 'New round');
+  assert.equal(reused.task('again').status, 'open');
+  assert.equal(reused.task('again').occurrence, '2026-06-01');
+  assert.equal(reused.history('again').some(row => row.id === 'old-done'), false);
+
   const monday = engine('monday-edit', T0 + 4);
   const thursday = engine('thursday-edit', T0 + 8);
   monday.addTask({ title: 'Meet', due: '2026-03-02', repeat: { kind: 'weeks', every: 1, mode: 'onSchedule' } }, { taskId: 'meet' });
