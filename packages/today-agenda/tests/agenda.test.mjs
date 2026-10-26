@@ -661,6 +661,38 @@ describe('9. input checks', () => {
     for (const [input, pattern] of cases) assert.match(refusal(input), pattern);
   });
 
+  it('names the section and position when a required field is left out', () => {
+    const bare = timed();
+    delete bare.calendar;
+    assert.match(
+      refusal(day({ events: [timed({ key: 'first' }), bare] })),
+      /events, item 2: calendar must be text\./,
+    );
+    assert.match(
+      refusal(day({ tasks: [{ title: 'Pay the studio rent' }] })),
+      /tasks, item 1: id must be text\./,
+    );
+  });
+
+  it('refuses a malformed event start or end and a malformed task due or dueTime', () => {
+    assert.match(
+      refusal(day({ events: [timed({ start: '2026-06-15T09:00:00' })] })),
+      /events, item 1: start must be an RFC 3339 instant with an offset or Z\./,
+    );
+    assert.match(
+      refusal(day({ events: [timed({ end: '2026-02-31T10:00:00-05:00' })] })),
+      /events, item 1: end must be an RFC 3339 instant with an offset or Z\./,
+    );
+    assert.match(
+      refusal(day({ tasks: [{ id: 'a', title: 'A note', due: '2026-06-31' }] })),
+      /tasks, item 1: due must be a real YYYY-MM-DD date\./,
+    );
+    assert.match(
+      refusal(day({ tasks: [{ id: 'a', title: 'A note', due: DATE, dueTime: '2026-06-15T09:00:00' }] })),
+      /tasks, item 1: dueTime must be an RFC 3339 instant with an offset or Z\./,
+    );
+  });
+
   it('accepts an empty event title and a 5000-character event title, and refuses an empty task title', () => {
     const empty = buildAgenda(day({ events: [timed({ title: '' })] }));
     assert.equal(empty.timeline[0].title, '(No title)');
