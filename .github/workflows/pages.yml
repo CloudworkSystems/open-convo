@@ -21,6 +21,8 @@ concurrency:
 
 jobs:
   deploy:
+    # A manual run can pick any branch; only main may publish.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
