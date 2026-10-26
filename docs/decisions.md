@@ -6,6 +6,15 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 26:** GrokBot (Cursor) joins Gemini as the independent reviewer of
+  Claude-built and Codex-built pull requests, so the reviewer can run a
+  different model from the builder; the first review of the latest commit
+  from either counts. The coordinator asks GrokBot once per commit to post
+  one review comment and push nothing. If neither has reviewed 60 minutes
+  after the push or the request, a fresh Claude review stands in. GrokBot
+  never reviews GrokBot's work, and Codex still reviews it. Gemini isn't
+  posting reviews yet. Plans that name Gemini accept a GrokBot review in
+  its place (AGENTS.md "Independent reviews").
 - **Oct 25:** Back end and agent hosts
   ([docs/design-notes/back-end-and-agent-hosts.md](design-notes/back-end-and-agent-hosts.md)).
   True Convo runs almost no server of its own: CloudKit, Apple push and
