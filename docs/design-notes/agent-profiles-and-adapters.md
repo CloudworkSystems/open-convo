@@ -212,8 +212,8 @@ step 6):
    when it last answered. One that is expected but has never answered shows
    **Never answered** after its first deadline, not "pending".
 6. **Checks only report.** Like the watchers in "Superfans" below, a health
-   check never fixes, reinstalls, signs in or changes settings beyond the one
-   logged retry. Being alive says nothing about being trusted: a working
+   check never fixes, reinstalls, signs in, changes settings or retries on
+   its own. Being alive says nothing about being trusted: a working
    foreign agent still starts at zero trust.
 
 ### The Same Rule for Our Own Build Pipeline (Adopted October 26)
