@@ -160,12 +160,14 @@ that review. If the reviewer thinks the owner should see
 it even when a plan allows it, it ends the block with the line
 `risk-escalate: <one-line reason>`. The coordinator doesn't switch on
 auto-merge while that line stands on the latest commit, and puts the pull
-request on issue #52 with the label `needs-owner: risk`. Only an approval
+request on issue #52 with its own label, `needs-owner: risk-escalate`
+(separate from the hold's label, so clearing one never drops the other).
+Only an approval
 of the head commit that the owner submits **after** the `risk-escalate`
 comment clears it; an approval he gave before (for example, for a protected
 path) doesn't count, since he hadn't seen the escalation yet. When it clears,
-the coordinator removes the `needs-owner: risk` label (unless the
-deterministic hold still stands).
+the coordinator removes `needs-owner: risk-escalate`; the workflow never
+touches that label.
 
 The triage judge (docs/plans/codex-triage.md) gains one rule in its prompt: a
 finding about data leaving the device, a secret, real personal data or a new
@@ -182,8 +184,8 @@ permission is always `real`, never a nit.
 - `AGENTS.md`: the checklist and `risk-escalate` line, under "Gemini
   reviews" and in the coordinator's plan check for GrokBot work, and one
   line in Review Guidelines pointing to this plan.
-- `.github/scripts/owner-queue.mjs`: list `needs-owner: risk` pull requests
-  under their own heading (it reads no labels today).
+- `.github/scripts/owner-queue.mjs`: list pull requests labeled
+  `needs-owner: risk` or `needs-owner: risk-escalate` under one risk heading (it reads no labels today).
 - STATUS.md and this plan's status line.
 
 ## Risks
