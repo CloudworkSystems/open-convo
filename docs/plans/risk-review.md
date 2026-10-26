@@ -41,8 +41,8 @@ signals:
 | Signal | What counts |
 | --- | --- |
 | New outside host | An `http://` or `https://` URL, or a WebSocket URL, whose host isn't in the allowlist below. Hosts in docs (`*.md`) don't count, and neither do clearly invented hosts anywhere (`example.com`, `example.org`, `example.net`, `*.example`, `*.invalid`, `*.test`, `localhost`, `127.0.0.1`, and any subdomain of these, such as `api.example.com`). Code comments are not exempt. |
-| New dependency | A new entry under `dependencies`, `devDependencies`, `optionalDependencies`, `peerDependencies` or `bundleDependencies` in any `package.json`; a new `.package(` in any `Package.swift`; a new pin in any `Package.resolved`. A version bump of an existing dependency doesn't count. |
-| New Mac permission | In any `*.entitlements` file or `Info.plist`, compared parsed at the merge base and at the head commit (like the manifests below, not from added lines): a new key, a value changed from `false` to `true`, a new entry in an existing array (an app group, a path, a domain), or a new `NS…UsageDescription` key. A removed key or a value turned off doesn't count. |
+| New dependency | A new entry under `dependencies`, `devDependencies`, `optionalDependencies`, `peerDependencies` or `bundleDependencies` in any `package.json`; a new `.package(` or remote `.binaryTarget(` (one with a `url:`) in any `Package.swift`; a new pin in any `Package.resolved`. A version bump of an existing dependency doesn't count. |
+| New Mac permission | In any `*.entitlements` file or `Info.plist`, compared parsed at the merge base and at the head commit (like the manifests below, not from added lines): a new key, a value changed from `false` to `true`, a new entry in an existing array (an app group, a path, a domain), or a new `NS…UsageDescription` key. A removed key or a value turned off doesn't count, except `com.apple.security.app-sandbox`: turning it off or removing it is a hit, since it widens what the app can reach. |
 | New outside model or API key | An added string that names an environment variable or secret ending in `_API_KEY`, `_TOKEN` or `_SECRET`, outside `.github/`. |
 
 When any signal fires, the workflow:
