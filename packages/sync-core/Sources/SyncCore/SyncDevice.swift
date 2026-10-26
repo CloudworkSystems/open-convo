@@ -529,6 +529,9 @@ public final class SyncDevice {
         var stamp = change.basedOnStamp
         var seen: Set<VersionStamp> = [change.record.stamp]
         while let current = stamp, !seen.contains(current) {
+            // The chain runs through this device's own copy. That copy is the
+            // base, not a step to walk past.
+            if local[change.record.id]?.stamp == current { break }
             seen.insert(current)
             guard let earlier = page.last(where: {
                 $0.record.id == change.record.id && $0.record.stamp == current && !$0.record.purged
@@ -597,6 +600,19 @@ public final class SyncDevice {
         observe(remote.record.stamp)
         if entry.record.purged || remote.record.purged {
             try resolvePurge(remote, zone: zone)
+            return
+        }
+        // The cloud revision is the next step after the copy this device
+        // already holds, including one whose upload response was dropped.
+        if remote.basedOnStamp == entry.record.stamp {
+            let losing = entry.record.stamp
+            outbox.removeAll { $0.record.id == entry.record.id }
+            pendingReplacements[entry.record.id] = PendingReplacement(
+                losingStamp: losing,
+                winnerStamp: remote.record.stamp
+            )
+            let checkpoint = saveCheckpoint()
+            stageIncoming(remote, zone: zone, checkpointFirst: true, checkpoint: checkpoint)
             return
         }
         if let merge = merges[entry.record.type] {

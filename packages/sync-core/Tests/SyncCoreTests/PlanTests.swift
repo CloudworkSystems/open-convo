@@ -945,6 +945,37 @@ final class SyncCorePlanTests: XCTestCase {
         XCTAssertFalse(holds(text("should-not-merge"), peer: b))
     }
 
+    func testDescendantOfADroppedUploadIsNotAConflict() throws {
+        let cloud = FakeCloud()
+        let a = Peer("phone-a", cloud: cloud)
+        let b = Peer("phone-b", cloud: cloud)
+        a.boot()
+        b.boot()
+        _ = try a.edit("note", payload: text("base"))
+        try syncAll([a, b])
+        let mine = try a.edit("note", payload: text("mine"))
+        cloud.dropResponseAfterCommit = true
+        XCTAssertThrowsError(try a.sync()) { error in
+            XCTAssertEqual(error as? SyncError, .connectionDropped)
+        }
+        XCTAssertEqual(cloud.record("note")?.record.payload, mine.payload)
+        try b.sync()
+        let child = try b.edit("note", payload: text("child"))
+        try b.sync()
+        XCTAssertEqual(cloud.record("note")?.basedOnStamp, mine.stamp)
+        var merges = 0
+        a.merge { _, _ in
+            merges += 1
+            return MergeOutput(payload: text("should-not-merge"))
+        }
+        try a.sync()
+        XCTAssertEqual(merges, 0)
+        XCTAssertTrue(a.device.conflictCopies().isEmpty)
+        XCTAssertNotEqual(a.device.status().kind, .needsAttention)
+        XCTAssertEqual(live(a, "note").payload, child.payload)
+        XCTAssertEqual(live(a, "note").stamp, child.stamp)
+    }
+
     func testLinearChainOnOnePageIsNotAConflict() throws {
         let cloud = FakeCloud()
         let a = Peer("phone-a", cloud: cloud)
