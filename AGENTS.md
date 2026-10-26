@@ -120,10 +120,13 @@ reads from and writes to `CloudworkSystems/open-convo`.
     The coordinator asks GrokBot with one `@cursor` comment from
     `cloudwork-bot` per commit, naming the pull request, this section and
     the Review Guidelines, and saying: post one review comment, push
-    nothing, change nothing. GrokBot's review ends with the line
+    nothing, change nothing. On a Claude-built pull request the request
+    names a non-Claude model. GrokBot's review ends with the line
     `— GrokBot review`, so it can be told apart from GrokBot's builds, which
     post from the same account. A GrokBot review that pushes a commit doesn't
-    count, and the push is reverted.
+    count: the coordinator switches auto-merge off at once, reverts that
+    commit on the branch (or asks the pull request's builder to), and the
+    reverted head needs a new independent review.
   - If neither GrokBot nor Gemini has reviewed the latest commit 60 minutes
     after it was pushed (or after the `@cursor` request, if later), the
     coordinator asks for a fresh Claude review (by an agent that didn't build
@@ -138,6 +141,11 @@ reads from and writes to `CloudworkSystems/open-convo`.
     change and the owner's call.
   - Each GrokBot review spends Cursor usage; the coordinator asks for one
     per commit, never more.
+  - Older plans (for example `email-actions-preview.md` and
+    `email-sorting-engine.md`) name Gemini, or a fresh Claude review standing
+    in for it, as the independent review. A GrokBot review satisfies those
+    steps the same way, under the same rules as above; this section is the
+    rule they point to, so they don't need their own revisions.
   - Agents ask Gemini for a re-review (`/gemini review`) only from
     `cloudwork-bot`.
   - Still open for the owner: whether Argon (his Gemini preview model) is
