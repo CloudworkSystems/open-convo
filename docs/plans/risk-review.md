@@ -90,9 +90,13 @@ from parts at run time); the second change covers what a pattern can't see.
 
 ### 2. A Privacy And Security Checklist In The Independent Review
 
-The independent review already happens on every Claude-built and Codex-built
-pull request. It gains a fixed checklist, answered in one block at the end of
-the review comment, so it adds no review round:
+Every pull request already gets a second look besides Codex's: the
+independent review on Claude-built and Codex-built work, and the
+coordinator's plan check on GrokBot-built work. Both gain a fixed checklist,
+answered in one block at the end of that review or plan-check comment, so it
+adds no review round. On a GrokBot pull request the coordinator doesn't pass
+the plan check, or switch on auto-merge, until the block is posted for the
+latest commit:
 
 1. **Data leaving the device.** Does anything new send the owner's data, or
    data about him, to a host, model or service? If so, which, and does a plan
