@@ -187,9 +187,16 @@ step 6):
    stop. Progress alone never keeps a request open: each request also has an
    answer deadline counted from when it was sent, and an agent still working
    at that deadline is shown as **Overdue** with the same four choices, even
-   if it is still reporting progress. At most one automatic retry, logged;
-   after that the request is parked and the owner is told (the same idea as
-   Pi Durable parking a task that keeps crashing, see `durable-agents.md`).
+   if it is still reporting progress. Nothing is resent on its own: retry is
+   always the owner's choice, as in step 3, where Retry puts the cut-off
+   message back and the owner presses Send (`docs/decisions.md`, October
+   16). Before a retry or a reroute starts, the silent or overdue run is
+   stopped, so the same work never runs twice at once. A task that may
+   already have sent, spent or deleted something offers retry only if each
+   of its tools is marked safe to run twice (`durable-agents.md`); otherwise
+   the owner sees what it did so far and decides. A request nobody picks up
+   is parked and the owner is told (the same idea as Pi Durable parking a
+   task that keeps crashing).
    Starting windows, which the owner can change: 2 minutes for a local chat
    model, 5 for a cloud model, 20 minutes without progress for an agent
    doing a task, 30 after a push for a review bot. Starting answer deadlines:
@@ -226,9 +233,13 @@ PR keeper's prompt (AGENTS.md is an owner-only path):
   reports "<agent> silent on #N". If it has never posted on any pull request,
   the keeper reports "<agent> not set up" once on issue #52 instead of on
   every pull request.
-- **Builders are covered too.** When a GrokBot builder hasn't pushed within
-  four hours of a relayed fix, the keeper reports "GrokBot team X silent on
-  #N" instead of relaying again.
+- **Builders are covered too, from the first assignment.** Every builder
+  (Claude, Codex, GrokBot teams) has a deadline for its first sign of work
+  (a branch, a commit or a draft pull request) after it is given a module,
+  and one for its first push after findings are relayed or asked for:
+  starting at four hours each. A builder that misses one is reported as
+  "<builder> silent on <issue or #N>", and the keeper doesn't relay to it
+  again until it pushes.
 - **The 8 AM list gets a "Not working" line** naming any agent that is
   silent or not set up, so the owner learns it once, from one place.
 
