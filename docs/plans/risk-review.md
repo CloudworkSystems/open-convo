@@ -133,7 +133,8 @@ permission is always `real`, never a nit.
 - `.github/risk-allowlist.json`: seeded as above.
 - `.github/scripts/codex-triage.mjs`: the judge rule above.
 - `AGENTS.md`: the checklist and `risk-escalate` line, under "Gemini
-  reviews", and one line in Review Guidelines pointing to this plan.
+  reviews" and in the coordinator's plan check for GrokBot work, and one
+  line in Review Guidelines pointing to this plan.
 - `.github/scripts/owner-queue.mjs`: list `needs-owner: risk` pull requests
   under their own heading (it reads no labels today).
 - STATUS.md and this plan's status line.
@@ -147,10 +148,11 @@ permission is always `real`, never a nit.
   narrow the signals.
 - **Missed risks.** The scan sees literal text only. The checklist and the
   judge rule are the backstop, and neither is a guarantee.
-- **Gemini ignores the checklist.** Gemini reads AGENTS.md but may not answer
-  the block. Until it does reliably, the coordinator asks for the checklist
-  in a `/gemini review` comment from `cloudwork-bot`, or a fresh Claude
-  review answers it.
+- **Gemini isn't posting yet.** As of October 26 Gemini Code Assist isn't
+  set up on the repo, so the fresh Claude review that stands in for it
+  (AGENTS.md) answers the checklist. Once Gemini posts, it may still skip
+  the block; until it answers it reliably, a fresh Claude review keeps
+  answering it.
 - **Who posts the hold comment.** It posts as `github-actions[bot]`, the same
   account and the same exposure as the triage judge's verdicts.
 
