@@ -126,14 +126,18 @@ latest commit:
    what an agent may do?
 
 Each answer is "no", or "yes" with the file and line. A "yes" to question 2
-(a secret in code, logs, test output or files) is always a P1, whatever any
-plan says: AGENTS.md puts secrets in Keychain only. Any other "yes" that no
-plan allows is a P1 for that review. If the reviewer thinks the owner should see
+(a secret in code, logs, test output or files) or question 3 (real personal
+data in tests, samples or docs) is always a P1, whatever any plan says:
+AGENTS.md keeps secrets in Keychain only and private records and personal
+details out of every file. Any other "yes" that no plan allows is a P1 for
+that review. If the reviewer thinks the owner should see
 it even when a plan allows it, it ends the block with the line
 `risk-escalate: <one-line reason>`. The coordinator doesn't switch on
 auto-merge while that line stands on the latest commit, and puts the pull
-request on issue #52 with the label `needs-owner: risk`. Only the owner's
-approval of the head commit clears it.
+request on issue #52 with the label `needs-owner: risk`. Only an approval
+of the head commit that the owner submits **after** the `risk-escalate`
+comment clears it; an approval he gave before (for example, for a protected
+path) doesn't count, since he hadn't seen the escalation yet.
 
 The triage judge (docs/plans/codex-triage.md) gains one rule in its prompt: a
 finding about data leaving the device, a secret, real personal data or a new
