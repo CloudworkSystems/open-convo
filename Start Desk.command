@@ -4,7 +4,21 @@
 # Close this window (or press Control-C) to stop it.
 cd "$(dirname "$0")" || exit 1
 echo "Getting the latest version from GitHub..."
-git pull --ff-only || echo "Could not update automatically; starting the version already here."
+branch=$(git branch --show-current)
+if [ "$branch" != "main" ]; then
+  if [ -z "$(git status --porcelain)" ]; then
+    echo "This folder was on the branch \"$branch\"; switching to main (nothing is lost)."
+    git checkout main || echo "Could not switch to main."
+  else
+    echo
+    echo "WARNING: this folder is on the branch \"$branch\", not main, and has unsaved changes,"
+    echo "so the Desk below is NOT the latest version. Ask Claude to sort out this folder."
+    echo
+  fi
+fi
+if [ "$(git branch --show-current)" = "main" ]; then
+  git pull --ff-only origin main || echo "Could not update automatically; starting the version already here."
+fi
 cd apps/desk || exit 1
 if ! command -v npm >/dev/null 2>&1; then
   echo "Node.js is not installed, so the Desk cannot start."
