@@ -198,11 +198,12 @@ step 6):
 4. **Status is visible.** The "one screen shows every agent" view (Scion idea
    3 below) shows each agent in one of the states this section defines:
    Ready, Working (with its last sign of life), Silent, Overdue, Not set up,
-   Blocked, Unreachable, Never answered or Stopped, plus when it last finished a run.
+   Blocked, Unreachable, Never answered or Stopped, plus when it last
+   finished a run.
 5. **Arms-length agents are watched from outside.** For an agent True Convo
    doesn't run (Cam, a GitHub review app), the check is only an observation:
    when it last answered. One that is expected but has never answered shows
-   "never answered" after its first deadline, not "pending".
+   **Never answered** after its first deadline, not "pending".
 6. **Checks only report.** Like the watchers in "Superfans" below, a health
    check never fixes, reinstalls, signs in or changes settings beyond the one
    logged retry. Being alive says nothing about being trusted: a working
