@@ -42,7 +42,7 @@ signals:
 | --- | --- |
 | New outside host | An `http://` or `https://` URL, or a WebSocket URL, whose host isn't in the allowlist below. Hosts in docs (`*.md`) don't count, and neither do clearly invented hosts anywhere (`example.com`, `example.org`, `example.net`, `*.example`, `*.invalid`, `*.test`, `localhost`, `127.0.0.1`, and any subdomain of these, such as `api.example.com`). Code comments are not exempt. |
 | New dependency | A new entry under `dependencies`, `devDependencies`, `optionalDependencies`, `peerDependencies` or `bundleDependencies` in any `package.json`; a new `.package(` in any `Package.swift`; a new pin in any `Package.resolved`. A version bump of an existing dependency doesn't count. |
-| New Mac permission | An added key in an `*.entitlements` file, or an added `NS…UsageDescription` key in an `Info.plist`. |
+| New Mac permission | In any `*.entitlements` file or `Info.plist`, compared parsed at the merge base and at the head commit (like the manifests below, not from added lines): a new key, a value changed from `false` to `true`, a new entry in an existing array (an app group, a path, a domain), or a new `NS…UsageDescription` key. A removed key or a value turned off doesn't count. |
 | New outside model or API key | An added string that names an environment variable or secret ending in `_API_KEY`, `_TOKEN` or `_SECRET`, outside `.github/`. |
 
 When any signal fires, the workflow:
@@ -72,7 +72,8 @@ list that may be cut short, counts as a hit ("couldn't read the diff for
 `<file>`"), unless the file is binary by extension (images, fonts, audio,
 video). For
 `package.json`, `Package.swift` and `Package.resolved`, the dependency
-signal compares the parsed file at the merge base and at the head commit, fetched
+signal (and for `*.entitlements` and `Info.plist`, the permission signal)
+compares the parsed file at the merge base and at the head commit, fetched
 through the contents API, instead of reading the patch, so a new entry split
 across lines or hidden in an unreadable patch is still caught. The code pull
 request's tests cover both cases with invented data.
