@@ -196,8 +196,9 @@ step 6):
    10 minutes for a chat reply, 2 hours for an agent's task unless the owner
    gives it longer when he starts it.
 4. **Status is visible.** The "one screen shows every agent" view (Scion idea
-   3 below) shows each agent as Ready, Working (with its last sign of life),
-   Silent, Overdue, Not set up, Blocked or Stopped, plus when it last finished a run.
+   3 below) shows each agent in one of the states this section defines:
+   Ready, Working (with its last sign of life), Silent, Overdue, Not set up,
+   Blocked, Unreachable, Never answered or Stopped, plus when it last finished a run.
 5. **Arms-length agents are watched from outside.** For an agent True Convo
    doesn't run (Cam, a GitHub review app), the check is only an observation:
    when it last answered. One that is expected but has never answered shows
