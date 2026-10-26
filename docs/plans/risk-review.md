@@ -167,7 +167,9 @@ of the head commit that the owner submits **after** the `risk-escalate`
 comment clears it; an approval he gave before (for example, for a protected
 path) doesn't count, since he hadn't seen the escalation yet. When it clears,
 the coordinator removes `needs-owner: risk-escalate`; the workflow never
-touches that label.
+touches that label. On a pull request opened from the owner's account, which he can't
+approve, an escalation is handled like the owner-opened hold above: the work
+is reopened from `cloudwork-bot`, where he can approve it.
 
 The triage judge (docs/plans/codex-triage.md) gains one rule in its prompt: a
 finding about data leaving the device, a secret, real personal data or a new
