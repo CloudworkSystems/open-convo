@@ -278,6 +278,25 @@ describe('4. free time', () => {
     }));
     assert.equal(agenda.summary.find(sentence => sentence.startsWith('Your longest')), 'Your longest free stretch is 08:00 to 09:00.');
   });
+
+  it('names the later stretch when it is longer only by seconds', () => {
+    const agenda = buildAgenda(day({
+      now: at(7),
+      settings: { dayStart: '08:00', dayEnd: '10:00', minFreeMinutes: 30 },
+      events: [
+        timed({ key: 'a', start: at(8, 30), end: at(9) }),
+        timed({ key: 'b', start: at(9, 30, 30), end: at(10) }),
+      ],
+    }));
+    assert.deepEqual(agenda.freeTime.map(gap => [gap.start, gap.end, gap.minutes]), [
+      ['08:00', '08:30', 30],
+      ['09:00', '09:30:30', 30],
+    ]);
+    assert.equal(
+      agenda.summary.find(sentence => sentence.startsWith('Your longest')),
+      'Your longest free stretch is 09:00 to 09:30:30.',
+    );
+  });
 });
 
 describe('5. clock changes', () => {

@@ -122,7 +122,7 @@ Sentences, in order:
 
 1. `You have 4 events today, starting at 09:00.` The time is the earliest timed event that starts on `date`. With only all-day events, or only events that started the day before, the time is left off.
 2. `2 events overlap at 14:00.` Several overlaps: `There are 3 overlaps, the first at 10:30.`
-3. `Your longest free stretch is 11:00 to 14:00.` A tie goes to the earlier stretch.
+3. `Your longest free stretch is 11:00 to 14:00.` The greatest elapsed time wins, not the floored minute count, so a later stretch that is only seconds longer still wins. A true tie goes to the earlier stretch.
 4. `3 tasks are overdue and 2 are due today.` Either half is left out when its count is zero. One task uses `is`.
 5. `2 habits are still open.`
 6. `Groceries has 7 items and Hardware has 2 items.` Every list with open items is named, most open first.

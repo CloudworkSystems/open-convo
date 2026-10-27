@@ -1,5 +1,5 @@
 import { SCHEMA_VERSION, fail } from './errors.mjs';
-import { civilDate, formatInstant, localDateTime, startOfCivilDay, wallClock } from './time.mjs';
+import { civilDate, formatInstant, localDateTime, parseInstant, startOfCivilDay, wallClock } from './time.mjs';
 import { validateDay } from './validate.mjs';
 
 function lex(a, b) {
@@ -289,11 +289,22 @@ function clashSentence(clashes) {
   return `There are ${clashes.length} overlaps, the first at ${time}.`;
 }
 
+function gapMillis(gap) {
+  return parseInstant(gap.endInstant) - parseInstant(gap.startInstant);
+}
+
 function freeSentence(freeTime) {
   if (freeTime.length === 0) return null;
+  // `minutes` is whole minutes, rounded down. A later gap that is only
+  // seconds longer must still win. An equal elapsed time keeps the earlier gap.
   let best = freeTime[0];
+  let bestSpan = gapMillis(best);
   for (const gap of freeTime) {
-    if (gap.minutes > best.minutes) best = gap;
+    const span = gapMillis(gap);
+    if (span > bestSpan) {
+      best = gap;
+      bestSpan = span;
+    }
   }
   return `Your longest free stretch is ${best.start} to ${best.end}.`;
 }
