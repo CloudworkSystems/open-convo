@@ -145,6 +145,18 @@ review bundle and is a later slice.
 - R9. The colors stay readable in light and dark mode, with marks and notes at
   4.5:1 contrast or better against the Desk. That's the earlier trial's main
   complaint.
+- R10. Only the Desk page can trigger **Send round**. The dev server's
+  send endpoint listens on 127.0.0.1 only. It accepts only `POST` with a
+  JSON body, and only when two checks pass:
+  - the `Origin` header is exactly the review server's own origin
+    (`http://127.0.0.1:4183`);
+  - the request carries a random token, made fresh at each launch, in a
+    custom header. The server puts the token into the page it serves; it is
+    never kept in a cookie, a URL or a file.
+
+  Any other request gets a refusal before any file is written or any git or
+  GitHub command runs. That covers cross-origin pages, form posts and
+  requests with a missing or stale token.
 
 ## Out Of Scope For This Slice
 
@@ -190,6 +202,10 @@ The owner agreed to both recommendations on October 27:
   - Send round is tested against a local bare repo standing in for GitHub.
     It writes only the round's files on the round's branch, refuses an
     existing session name, and never touches the working checkout.
+  - A browser test opens a page on another origin and tries to trigger
+    Send round with a cross-origin `fetch`, a form post, and a request with
+    no token or a stale one. Every attempt is refused, and no file, branch,
+    commit or push results.
 - **Finish line:** the owner runs one real round in the Desk, presses
   **Send round**, and a docs pull request appears that passes the checker,
   with no Codex step in between.
