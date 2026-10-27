@@ -166,11 +166,12 @@ reads from and writes to `CloudworkSystems/open-convo`.
     in for it, as the independent review. A GrokBot review satisfies those
     steps the same way, under the same rules as above; this section is the
     rule they point to, so they don't need their own revisions.
-  - Gemini, Argon (the owner's Gemini preview model) included, is reached
-    through the owner's subscription sign-in where a person can sign in
-    (Google's Antigravity CLI, locally or over SSH), and through an API key
-    where nobody can, such as a GitHub workflow. A key lives in a repository
-    secret, Keychain or exe.dev Integrations, never in files.
+  - Gemini, Argon (the owner's Gemini preview model) included, runs on the
+    owner's API key for now. Where a person can sign in, Google's Antigravity
+    CLI also accepts his subscription sign-in, which is to be tried next and
+    then used there; where nobody can, such as a GitHub workflow, it stays a
+    key. A key lives in a repository secret, Keychain or exe.dev
+    Integrations, never in files.
 - *Proposed October 15, pending the owner's approval at merge:* every review,
   by any agent or the owner, asks two questions of each change. Does it break
   a rule of this system? Does it fix a problem the owner actually has?

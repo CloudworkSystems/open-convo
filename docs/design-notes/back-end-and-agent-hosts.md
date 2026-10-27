@@ -158,8 +158,12 @@ Rules for the VM:
   otherwise. Google's replacement, the Antigravity CLI, accepts the owner's
   subscription sign-in, including over SSH
   ([Antigravity docs](https://antigravity.google/docs/install)); trying it
-  on the VM is next, and if it works it replaces the key for interactive
-  use.
+  is next, and if it works it replaces the key for interactive use. That
+  sign-in stores a Google account token, a bigger credential than a
+  budget-capped key, so before it goes on the VM the owner approves where
+  the token is stored, which scopes it carries and which VM user can read
+  it; at minimum a separate VM user with the token readable only by that
+  user (mode 600), as in the token fallback above.
 - **Zero trust:** an unknown foreign agent (for example Meta's Muse agent)
   never shares the VM or its token with the trusted builders.
 - **CPU only:** local models on the VM are small ones.
