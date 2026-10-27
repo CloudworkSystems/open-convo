@@ -1099,7 +1099,9 @@ export class Tasks {
       if (statusOf(task) !== 'open') continue;
       for (const date of projectDates(task, windowStart, windowEnd, zone)) {
         const current = currentDate(task);
-        const due = date === current ? effectiveDue(task, date) : scheduledDue(task.fields.due.value, date);
+        const due = !task.fields.repeat.value || date === current
+          ? effectiveDue(task, current)
+          : scheduledDue(task.fields.due.value, date);
         const group = viewDate(due, zone);
         if (!group || group < windowStart || group > windowEnd) continue;
         const row = this.#present(task, zone, instant);
@@ -1211,7 +1213,10 @@ function projectDates(task, windowStart, windowEnd, timeZone) {
   if (!rule) {
     const due = effectiveDue(task, current);
     const group = viewDate(due, timeZone);
-    return group ? [current].filter(Boolean) : [];
+    if (!group) return [];
+    // A snooze can give an undated task its first due date. current stays
+    // null, so the projection uses that due date.
+    return [current ?? group];
   }
   if (rule.mode === 'afterDone') return current ? [current] : [];
   const closed = new Set(countingRecords(task).map(record => record.occurrence)).size;

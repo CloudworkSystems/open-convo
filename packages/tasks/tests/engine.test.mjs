@@ -367,6 +367,16 @@ test('7. reminders fire once, follow an open occurrence, and a fixed one stays b
   plain.snooze('dated', { at: { dateTime: '2026-04-02T15:00', timeZone: ZONE } }, at('2026-04-02T12:00:00.000Z'), { recordId: 'z' });
   assert.equal(plain.task('dated').occurrence, 'once');
   assert.equal(plain.history('dated').find(row => row.id === 'z').occurrence, 'once');
+  const undated = engine('moved-undated', T0, 'UTC');
+  undated.addTask({ title: 'No date yet' }, { taskId: 'later' });
+  const morning = at('2026-04-06T08:00:00.000Z');
+  undated.snooze('later', { at: { dateTime: '2026-04-08T15:00', timeZone: 'UTC' }, moveDue: true }, morning, { recordId: 'give-date' });
+  assert.equal(undated.task('later').due.dateTime, '2026-04-08T15:00');
+  assert.equal(undated.upcoming(morning, 2, 'UTC').some(group => group.tasks.some(row => row.id === 'later')), false);
+  const listed = undated.upcoming(morning, 3, 'UTC').find(group => group.tasks.some(row => row.id === 'later'));
+  assert.equal(listed.date, '2026-04-08');
+  assert.equal(listed.tasks.find(row => row.id === 'later').due.dateTime, '2026-04-08T15:00');
+  assert.equal(listed.tasks.find(row => row.id === 'later').occurrence, 'once');
 
   const done = engine('done-reminder');
   done.addTask({ title: 'One reminder', due: { dateTime: '2026-04-02T09:00', timeZone: ZONE }, reminders: [{ days: 1 }] }, { taskId: 'one' });

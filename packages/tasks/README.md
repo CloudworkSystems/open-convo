@@ -63,7 +63,7 @@ Import `Tasks`, `mergePeople`, `serializePerson`, `deserializePerson`, `compareS
 
 A due value is `'YYYY-MM-DD'`, `{ date }`, or `{ dateTime, timeZone }`. A repeat is `{ kind, every, mode, weekdays?, monthDay?, weekday?, which?, endAfter?, endOn? }`. Kinds are `days`, `weeks`, `weekdays`, `months`, `monthDay`, `monthWeekday`, and `years`. `every` is 1 to 365 for days and 1 to 99 otherwise. `mode` is `onSchedule` or `afterDone`. `which` is 1 to 5 or `'last'`. An offset reminder is `{ days, hours, minutes }`. A fixed reminder is `{ dateTime, timeZone, occurrence?, schedule? }`. Either may include `id`. The file stores `id` on every reminder. An edit that omits `id` keeps it for a reminder that is still in the list. On a one-off task the stored occurrence is `once`. `schedule` is the due identity that reminder was set for, or null.
 
-`upcoming` covers today and the following `days - 1` dates (`days` is 1 to 60). An on-schedule task is listed once per occurrence still inside its `endAfter` / `endOn` limits. An after-done task is listed only on its current date, with `repeatsAfterDone: true`. `remindersDue` uses the half-open range `[from, to)` and refuses a range longer than 31 times 24 hours.
+`upcoming` covers today and the following `days - 1` dates (`days` is 1 to 60). An on-schedule task is listed once per occurrence still inside its `endAfter` / `endOn` limits. An after-done task is listed only on its current date, with `repeatsAfterDone: true`. An undated one-off task that a snooze gives a due date is listed on that date. `remindersDue` uses the half-open range `[from, to)` and refuses a range longer than 31 times 24 hours.
 
 ## JSON schema version 1
 
