@@ -137,8 +137,20 @@ Rules for the VM:
   allow. Only if Integrations can't carry the token, the fallback is an
   owner-approved exception to "secrets belong in Keychain", since a Linux VM
   has no Keychain: a file readable only by the VM's user account (mode 600),
-  never in the repository, logs or the shell history. A Codex or Gemini sign-in goes there only when
-  the owner sets it up. The VM never holds the `CloudworkSystems` account's
+  never in the repository, logs or the shell history. A Codex sign-in goes there only when
+  the owner sets it up.
+- **Gemini (set up October 27):** Google no longer lets the Gemini CLI sign
+  in with a Gemini subscription (it stopped on June 18, 2026), so Gemini
+  runs on a pay-per-use API key from the owner's Google AI Studio account.
+  On the VM, an exe.dev Integrations HTTP proxy named `gemini`, attached to
+  the builders' VM only, adds the key to requests to
+  `generativelanguage.googleapis.com`; the VM calls
+  `https://gemini.int.exe.xyz` and never sees the key. On the owner's Mac
+  the key is in Keychain (`gemini-api-key`) and the `gemini` launcher reads
+  it from there at start. Checks use a low-cost Flash model by default,
+  and the owner keeps a monthly budget on the key. Gemini checks public
+  code and plans only, not private True Convo data, until the owner
+  decides otherwise. The VM never holds the `CloudworkSystems` account's
   credentials.
 - **Zero trust:** an unknown foreign agent (for example Meta's Muse agent)
   never shares the VM or its token with the trusted builders.
