@@ -127,7 +127,7 @@ Sentences, in order:
 5. `2 habits are still open.`
 6. `Groceries has 7 items and Hardware has 2 items.` Every list with open items is named, most open first.
 
-Wall times are 24-hour `HH:MM`, with `:SS` kept when the instant is not on a whole minute. Local date-times in the timeline are `YYYY-MM-DDTHH:MM`. A plain-text line shows the clock time when both ends fall on `date`, and the full local date-time when an end falls on another date.
+Wall times are 24-hour `HH:MM`, with `:SS` kept when the instant is not on a whole minute. A fraction of a second counts, so `09:00:00.500` is shown as `09:00:00`, not `09:00`. Local date-times in the timeline are `YYYY-MM-DDTHH:MM` or `YYYY-MM-DDTHH:MM:SS`. A plain-text line shows the clock time when both ends fall on `date`, and the full local date-time when an end falls on another date.
 
 ## Edge cases
 

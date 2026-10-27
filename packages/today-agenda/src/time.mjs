@@ -48,6 +48,10 @@ export function zonedParts(ms, timeZone) {
     bag.month = next.getUTCMonth() + 1;
     bag.day = next.getUTCDate();
   }
+  // Intl drops the fraction of a second. The instant still has it, and a
+  // zero whole second with a fraction is not a whole minute.
+  const fraction = Math.trunc(ms) % 1000;
+  bag.millis = fraction < 0 ? fraction + 1000 : fraction;
   return bag;
 }
 
@@ -131,11 +135,12 @@ export function formatCivil(parts) {
   return `${String(parts.year).padStart(4, '0')}-${pad(parts.month)}-${pad(parts.day)}`;
 }
 
-// Whole minutes drop the seconds. A non-zero second is kept so a 30-second
-// instant is not shown as the minute before it.
+// A whole minute is HH:MM. Anything else keeps :SS, including an instant
+// whose whole second is 0 but whose fraction is not, such as 09:00:00.500.
 export function formatWall(parts) {
   const clock = `${pad(parts.hour)}:${pad(parts.minute)}`;
-  return parts.second ? `${clock}:${pad(parts.second)}` : clock;
+  if (!parts.second && !parts.millis) return clock;
+  return `${clock}:${pad(parts.second)}`;
 }
 
 export function formatLocal(parts) {

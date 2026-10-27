@@ -391,6 +391,34 @@ describe('5. clock changes', () => {
     // 01:00 through 03:00 is three real hours. The two events cover 15 minutes each.
     assert.equal(agenda.freeTime.reduce((sum, gap) => sum + gap.minutes, 0), 150);
   });
+
+  it('keeps :00 when only the fraction of a second is nonzero', () => {
+    const agenda = buildAgenda({
+      schemaVersion: 1,
+      date: '2026-06-15',
+      timeZone: 'UTC',
+      now: '2026-06-15T09:00:00.500Z',
+      events: [timed({
+        key: 'half',
+        title: 'Half second',
+        start: '2026-06-15T10:00:00.500Z',
+        end: '2026-06-15T11:00:00Z',
+      })],
+      tasks: [],
+      habits: [],
+      lists: [],
+    });
+    assert.equal(agenda.timeline[0].start, '2026-06-15T10:00:00');
+    assert.equal(agenda.timeline[0].end, '2026-06-15T11:00');
+    assert.equal(agenda.timeline[0].startInstant, '2026-06-15T10:00:00.500Z');
+    assert.match(agenda.summary[0], /starting at 10:00:00\./);
+    const opening = agenda.freeTime.find(gap => gap.startInstant === '2026-06-15T09:00:00.500Z');
+    assert.equal(opening.start, '09:00:00');
+    assert.equal(opening.end, '10:00:00');
+    const plain = formatAgenda(agenda);
+    assert.match(plain, /10:00:00-11:00/);
+    assert.match(plain, /09:00:00-10:00:00/);
+  });
 });
 
 describe('6. next up', () => {
