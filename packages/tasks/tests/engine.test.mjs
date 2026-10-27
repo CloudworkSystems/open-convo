@@ -378,6 +378,27 @@ test('7. reminders fire once, follow an open occurrence, and a fixed one stays b
   assert.equal(listed.tasks.find(row => row.id === 'later').due.dateTime, '2026-04-08T15:00');
   assert.equal(listed.tasks.find(row => row.id === 'later').occurrence, 'once');
 
+  const edited = engine('due-after-snooze', T0, 'UTC');
+  edited.addTask({ title: 'Call', due: '2026-11-01' }, { taskId: 'call' });
+  edited.snooze('call', { at: { dateTime: '2026-11-05T09:00', timeZone: 'UTC' }, moveDue: true }, at('2026-11-01T15:00:00.000Z'), { recordId: 'push' });
+  assert.equal(edited.task('call').due.dateTime, '2026-11-05T09:00');
+  const snoozedDue = edited.task('call').due;
+  edited.editTask('call', { due: '2026-11-10' });
+  assert.equal(edited.task('call').due.date, '2026-11-10');
+  assert.equal(edited.overdue(at('2026-11-06T12:00:00.000Z'), 'UTC').some(row => row.id === 'call'), false);
+  assert.equal(edited.upcoming(at('2026-11-06T12:00:00.000Z'), 7, 'UTC').some(group => group.date === '2026-11-10' && group.tasks.some(row => row.id === 'call')), true);
+  edited.editTask('call', { due: null });
+  assert.equal(edited.task('call').due, null);
+  edited.undo();
+  assert.equal(edited.task('call').due.date, '2026-11-10');
+  edited.undo();
+  assert.deepEqual(edited.task('call').due, snoozedDue);
+  const other = engine('due-editor', T0 + 10, 'UTC');
+  other.importPerson(edited.getPerson());
+  other.editTask('call', { due: '2026-11-12' });
+  const movedOn = fork(mergePeople(edited.getPerson(), other.getPerson()), 'due-moved', T0 + 11);
+  assert.equal(movedOn.task('call').due.date, '2026-11-12');
+
   const done = engine('done-reminder');
   done.addTask({ title: 'One reminder', due: { dateTime: '2026-04-02T09:00', timeZone: ZONE }, reminders: [{ days: 1 }] }, { taskId: 'one' });
   done.complete('one', at('2026-04-01T12:00:00.000Z'), { recordId: 'gone' });

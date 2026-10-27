@@ -408,11 +408,23 @@ function winningSnooze(task, occurrence) {
   return best;
 }
 function effectiveDue(task, date) {
-  const template = task.fields.due.value;
+  const template = task.fields.due?.value ?? null;
   const name = taskOccurrence(task, date);
   const snooze = winningSnooze(task, name);
-  if (snooze?.fields.due.value) return canonicalDue(snooze.fields.due.value);
+  const moved = snooze?.fields.due;
+  // A later edit of the due field replaces a snooze that moved it, including
+  // an edit that clears the date. Equal stamps keep the snooze so undo of
+  // that edit can restore both together.
+  if (moved?.value && compareStamps(moved.stamp, task.fields.due?.stamp) >= 0) return canonicalDue(moved.value);
   return scheduledDue(template, date);
+}
+function retireMovedDue(task, occurrence, stamp) {
+  for (const record of task.records) {
+    if (record.type !== 'snooze' || record.fields.withdrawn.value) continue;
+    if ((record.occurrence ?? null) !== (occurrence ?? null)) continue;
+    if (!record.fields.due.value || compareStamps(record.fields.due.stamp, stamp) >= 0) continue;
+    record.fields.due = { value: null, stamp: clone(stamp) };
+  }
 }
 function isOverdue(due, now, timeZone) {
   if (!due) return false;
@@ -842,6 +854,9 @@ export class Tasks {
           const rule = normalizeRepeat(task.fields.repeat.value, nextDate, { exactStart: true });
           task.fields.repeat = { value: rule, stamp: clone(stamp) };
         }
+      }
+      if (compareStamps(task.fields.due?.stamp, stamp) === 0) {
+        retireMovedDue(task, taskOccurrence(before, currentDate(before)), stamp);
       }
       if (own(patch, 'reminders')) {
         const oneOff = !task.fields.repeat.value;
