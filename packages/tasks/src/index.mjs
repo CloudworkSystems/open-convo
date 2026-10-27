@@ -93,7 +93,10 @@ function canonicalReminder(reminder) {
   return { id: reminder.id, kind: 'fixed', dateTime: reminder.dateTime, timeZone: reminder.timeZone, occurrence: reminder.occurrence ?? null, schedule: reminder.schedule ?? null };
 }
 function canonicalWall(wall) {
-  return wall ? { dateTime: wall.dateTime, timeZone: wall.timeZone } : null;
+  if (!wall) return null;
+  const result = { dateTime: wall.dateTime, timeZone: wall.timeZone };
+  if (wall.later === true) result.later = true;
+  return result;
 }
 function canonicalValue(key, value) {
   if (key === 'repeat') return canonicalRepeat(value);
@@ -480,7 +483,8 @@ function snoozesToApply(task, occurrence) {
   return [...best.values()].sort((a, b) => compareStamps(a.stamp, b.stamp) || lex(a.id, b.id));
 }
 function applyWinningSnooze(moments, snooze, occurrence) {
-  const instant = wallToInstant(snooze.fields.reminderAt.value.dateTime, snooze.fields.reminderAt.value.timeZone);
+  const at = snooze.fields.reminderAt.value;
+  const instant = wallToInstant(at.dateTime, at.timeZone, { later: at.later === true });
   const replaces = snooze.fields.replaces?.value ?? null;
   if (replaces != null) {
     // The id, not the list position: a concurrent removal must not move the
@@ -666,7 +670,10 @@ function checkTask(task) {
     if (record.fields.replaces.value !== null && (typeof record.fields.replaces.value !== 'string' || !record.fields.replaces.value || record.fields.replaces.value.length > 200)) fail('Invalid record in task file.');
     if (record.fields.reminderAt.value != null) {
       const at = record.fields.reminderAt.value;
-      exactKeys(at, ['dateTime', 'timeZone']);
+      const keys = ['dateTime', 'timeZone'];
+      if (own(at, 'later')) keys.push('later');
+      exactKeys(at, keys);
+      if (own(at, 'later') && at.later !== true) fail('Invalid record in task file.');
       if (!validDateTime(at.dateTime)) fail('Invalid record in task file.');
       assertTimeZone(at.timeZone);
     }
@@ -1210,7 +1217,17 @@ function nextReminderClock(task, zone, dayStart, now) {
 function presetWall(task, preset, now, zone, dayStart) {
   const clock = nextReminderClock(task, zone, dayStart, now);
   const today = civilDate(now, zone);
-  if (preset === 'laterToday') return { dateTime: wallClock(now + 3 * 60 * 60 * 1000, zone), timeZone: zone };
+  if (preset === 'laterToday') {
+    const target = now + 3 * 60 * 60 * 1000;
+    const dateTime = wallClock(target, zone);
+    const earlier = wallToInstant(dateTime, zone);
+    const folded = wallToInstant(dateTime, zone, { later: true });
+    const wall = { dateTime, timeZone: zone };
+    // The second 1:30 on a fall-back morning is still three hours later.
+    // The plain wall time would be read as the first one.
+    if (folded !== earlier && Math.abs(folded - target) < Math.abs(earlier - target)) wall.later = true;
+    return wall;
+  }
   if (preset === 'tomorrow') return { dateTime: `${addDays(today, 1)}T${clock}`, timeZone: zone };
   if (preset === 'nextMonday') {
     const index = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].indexOf(

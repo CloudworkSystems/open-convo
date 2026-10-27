@@ -177,10 +177,11 @@ function forwardGap(desired, timeZone) {
 
 /**
  * Convert a wall time to an instant. A time that happens twice (fall back)
- * uses the earlier instant. A time that does not exist (spring forward) moves
- * forward by the gap: 02:30 becomes 03:30 when the clock jumps an hour.
+ * uses the earlier instant, unless `later` is set. A time that does not exist
+ * (spring forward) moves forward by the gap: 02:30 becomes 03:30 when the
+ * clock jumps an hour.
  */
-export function wallToInstant(dateTime, timeZone) {
+export function wallToInstant(dateTime, timeZone, { later = false } = {}) {
   assertTimeZone(timeZone);
   if (!validDateTime(dateTime)) fail('Time must be YYYY-MM-DDTHH:MM.');
   const year = +dateTime.slice(0, 4);
@@ -195,7 +196,7 @@ export function wallToInstant(dateTime, timeZone) {
     if (offsetMs(instant, timeZone) !== offset) continue;
     if (wallMatches(instant, timeZone, year, month, day, hour, minute)) matches.push(instant);
   }
-  if (matches.length) return Math.min(...matches);
+  if (matches.length) return later ? Math.max(...matches) : Math.min(...matches);
   const gap = forwardGap(desired, timeZone);
   if (!gap) fail('That time does not exist in this time zone.');
   const shifted = addMinutesWall(dateTime, Math.round(gap / 60000));

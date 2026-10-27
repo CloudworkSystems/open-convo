@@ -419,6 +419,22 @@ test('8. snooze presets, including next Monday on a Monday, leave the series put
   later.addTask({ title: 'Plan the week', due: { dateTime: '2026-03-02T09:00', timeZone: ZONE } }, { taskId: 'plan' });
   later.snooze('plan', { preset: 'laterToday' }, monday, { recordId: 'later' });
   assert.equal(later.history('plan')[0].reminderAt.dateTime, '2026-03-02T13:00');
+  assert.equal(later.history('plan')[0].reminderAt.later, undefined);
+  const fallback = engine('fallback', at('2026-11-01T03:30:00.000Z'), ZONE);
+  const beforeFold = at('2026-11-01T03:30:00.000Z');
+  fallback.addTask({ title: 'Night note' }, { taskId: 'night' });
+  fallback.snooze('night', { preset: 'laterToday' }, beforeFold, { recordId: 'plus3' });
+  const folded = fallback.history('night')[0].reminderAt;
+  assert.equal(folded.dateTime, '2026-11-01T01:30');
+  assert.equal(folded.later, true);
+  const fired = fallback.remindersDue(beforeFold, beforeFold + 4 * 60 * 60 * 1000, ZONE);
+  assert.equal(fired.find(row => row.taskId === 'night').instant, beforeFold + 3 * 60 * 60 * 1000);
+  const firstFold = engine('first-fold', at('2026-11-01T02:30:00.000Z'), ZONE);
+  const early = at('2026-11-01T02:30:00.000Z');
+  firstFold.addTask({ title: 'Night note' }, { taskId: 'night' });
+  firstFold.snooze('night', { preset: 'laterToday' }, early, { recordId: 'plus3' });
+  assert.equal(firstFold.history('night')[0].reminderAt.later, undefined);
+  assert.equal(firstFold.remindersDue(early, early + 4 * 60 * 60 * 1000, ZONE).find(row => row.taskId === 'night').instant, early + 3 * 60 * 60 * 1000);
 
   const tomorrow = engine('tomorrow');
   tomorrow.addTask({ title: 'Plan the week', due: { dateTime: '2026-03-02T09:00', timeZone: ZONE }, reminders: [{ hours: 0 }] }, { taskId: 'plan' });
