@@ -25,16 +25,73 @@ The owner's idea is a local "orchestrator" that only delegates. Build it as a
 **dispatcher** in layers:
 
 1. **Rules first.** "This conversation uses my default." "Yes/no checks go to
-   Jev." "Searching my notes goes to the search model." Instant and predictable.
+   Jeff." "Searching my notes goes to the search model." Instant and predictable.
 2. **A small local model breaks ties** only when rules cannot decide. The
    dispatcher is a role; the model filling it depends on the machine.
-3. **Workers do the tasks:** the local chat model, Jev, the local search model
-   (EmbeddingGemma, from True Convo), and cloud profiles.
+3. **Workers do the tasks:** the local chat model, Jeff (the one door for
+   classifiers, with Jev or another decision model behind it; see
+   `capabilities-and-primitives.md`), the local search model (EmbeddingGemma,
+   from True Convo), and cloud profiles.
 
 The privacy line: the dispatcher may *suggest* a cloud model, but nothing is sent
 to a cloud model or host until the owner has approved that model and host once
 (strategy decision). Step 3 ships rules only (the owner's default plus a
 per-conversation choice). The model-based dispatcher arrives with step 6.
+
+### Scaling Down Once a Task Is Proven (October 25)
+
+Added at the owner's request, from an IndyDevDan video on token costs (its
+usage and price figures are the video's and were not checked). The idea: a
+strong model works a new kind of task out first, and repeat runs move to the
+cheapest model that does it well.
+
+- **The cheapest model that passed.** For a task with a capability behind it,
+  the dispatcher picks the cheapest approved model listed as passing that
+  capability's example runs (`portable-capability-layer.md`, proof per model).
+  A model that hasn't passed is never picked to save money. A new kind of task
+  with no passing model goes to the conversation's default or a model the owner
+  picks, and its runs can become the capability's first examples.
+- **Moving down is checked, not assumed.** A model is added to the passing
+  list only by the example runs, which are repeated when a model changes. If a
+  cheaper model starts failing, it drops off the list and the dispatcher moves
+  back up.
+- **Unsure means move up or ask.** When the tie-break layer can't tell, or a
+  decision model's "none of these" score is high, the dispatcher doesn't guess:
+  it moves to the next stronger approved model or asks the owner.
+- **Free models get no private data.** Free hosted models may keep and train on
+  what is sent to them. They are approved only for public or invented
+  material, never for the owner's messages, memory or files.
+- **Costs show per route.** The running total each paid route already keeps
+  (see "How Each Model Is Paid For") is shown next to the work it paid for, so
+  the owner can see what scaling down saved. Caps and approvals stay in code,
+  outside any model.
+
+### Jeff Surfaces Choices; the Owner Makes Them (October 25)
+
+Jeff has other jobs (action checks, sorting what comes in, typed yes/no
+answers; see `capabilities-and-primitives.md`). The owner's rule for all of
+them (October 25): where a choice needs his judgement, Jeff and the provider
+behind it never make the final call. They decide which options to show him,
+such as which memory to file and where, what to show interest in, or which tone
+to take with a paragraph.
+
+- **Jeff ranks; the owner picks.** Jeff orders the options and drops the
+  unlikely ones, and the owner sees a short list on an approval card. Nothing is
+  filed, sent or rewritten on Jeff's ranking alone.
+- **Low confidence shows more, not less.** When the top options score close
+  together, or "none of these" scores high, the card shows more options and an
+  open answer instead of a single suggestion.
+- **Private content stays local by default.** These choices are about the
+  owner's memory and writing, so the default provider behind Jeff for them is
+  a local one. A cloud provider such as Jev sees that text only after the owner
+  has approved it for that kind of choice, under the caps in
+  `capabilities-and-primitives.md`.
+- **Only the owner's picks are kept.** As that note already says, Jeff keeps
+  the owner's decisions, never the provider's answers.
+- **Final calls that need reasoning go elsewhere.** Where a verdict has to be
+  worked out, such as whether a code finding is a real bug, a full model
+  decides (the Codex triage judge, `docs/plans/codex-triage.md`). A decision
+  model may only screen first there.
 
 ## Two Kinds of Agent Profile
 
@@ -94,6 +151,97 @@ keys live in Keychain, never in files or logs.
 4. **OpenRouter plus a model picker**, inside Pi.
 5. **Grok through Cursor's agent**, after checking Cursor's rules and billing.
 6. **Meta Muse.**
+
+## Knowing When an Agent Isn't Working (October 26)
+
+Added at the owner's request. The repo's own review rules name Gemini Code
+Assist as a reviewer, but Gemini was never set up, and nothing said so: work
+could wait on a review that was never coming. The owner's rule (October 26):
+every agent True Convo brings in, whether or not it touches code, needs a way
+to show that it isn't set up or isn't answering, so nobody waits on it
+forever. That covers local models, cloud profiles, vendor harnesses (Claude
+Code, Cursor's agent), Jeff's providers and arms-length agents such as Cam.
+
+Requirements for every adapter (the model picker routes in step 3, agents in
+step 6):
+
+1. **Every adapter has a setup check.** Ordinary code, no model. It answers:
+   is the program installed or the host reachable, is it signed in or is its
+   key in Keychain, has the owner approved it, is it under its cap. The result
+   is one of **Ready**, **Not set up** (naming the missing step), **Blocked**
+   (waiting on the owner's approval, a cap, or rules still unchecked) or
+   **Unreachable**. It runs when a profile is added, when the Desk starts and
+   before each dispatch. It sends no private content: it uses a call that
+   costs nothing, or a fixed prompt with invented text. A check that would
+   cost money counts against the route's cap and stays off until the owner
+   approves it.
+2. **Nothing is sent to an agent that isn't Ready.** The dispatcher skips it,
+   moves to the next approved route or asks the owner, and says why. A
+   profile that names a worker or reviewer that isn't set up shows "Not set
+   up" from the start, never "waiting".
+3. **Every request has a deadline.** Each adapter declares how soon its first
+   sign of life and its answer should arrive. Harness agents report progress
+   as they work; if nothing arrives within the silence window, the agent is
+   **Silent**, and the owner sees "<agent> hasn't answered in N minutes" with
+   four choices: wait longer, retry once, send to another approved agent, or
+   stop. Progress alone never keeps a request open: each request also has an
+   answer deadline counted from when it was sent, and an agent still working
+   at that deadline is shown as **Overdue** with the same four choices, even
+   if it is still reporting progress. Nothing is resent on its own: retry is
+   always the owner's choice, as in step 3, where Retry puts the cut-off
+   message back and the owner presses Send (`docs/decisions.md`, October
+   16). Before a retry or a reroute starts, the silent or overdue run is
+   stopped, so the same work never runs twice at once. A task that may
+   already have sent, spent or deleted something offers retry only if each
+   of its tools is marked safe to run twice (`durable-agents.md`); otherwise
+   the owner sees what it did so far and decides. A request nobody picks up
+   is parked and the owner is told (the same idea as Pi Durable parking a
+   task that keeps crashing).
+   Starting windows, which the owner can change: 2 minutes for a local chat
+   model, 5 for a cloud model, 20 minutes without progress for an agent
+   doing a task, 30 after a push for a review bot. Starting answer deadlines:
+   10 minutes for a chat reply, 2 hours for an agent's task unless the owner
+   gives it longer when he starts it.
+4. **Status is visible.** The "one screen shows every agent" view (Scion idea
+   3 below) shows each agent in one of the states this section defines:
+   Ready, Working (with its last sign of life), Silent, Overdue, Not set up,
+   Blocked, Unreachable, Never answered or Stopped, plus when it last
+   finished a run.
+5. **Arms-length agents are watched from outside.** For an agent True Convo
+   doesn't run (Cam, a GitHub review app), the check is only an observation:
+   when it last answered. One that is expected but has never answered shows
+   **Never answered** after its first deadline, not "pending".
+6. **Checks only report.** Like the watchers in "Superfans" below, a health
+   check never fixes, reinstalls, signs in, changes settings or retries on
+   its own. Being alive says nothing about being trusted: a working
+   foreign agent still starts at zero trust.
+
+### The Same Rule for Our Own Build Pipeline (Adopted October 26)
+
+Before this, only Codex was covered: the PR keeper restarts a hung Codex
+review once and the 8 AM list shows "Codex silent". The owner approved
+extending it on October 26; the rule itself now lives in AGENTS.md, "Agent
+Setup And Silence", and that section wins where the two differ. In short:
+
+- **Each reviewer and builder has a stated setup status** in AGENTS.md, for
+  example "Gemini Code Assist: not set up (October 26)". While one is not set
+  up, no pull request waits on it: its stand-in (a fresh Claude review for
+  Gemini) is used from the first round.
+- **The PR keeper checks every expected reviewer, not just Codex.** If a
+  reviewer the rules expect hasn't posted on a pull request's latest commit
+  within its window (20 minutes for Codex as now, 30 for Gemini), the keeper
+  reports "<agent> silent on #N". If it has never posted on any pull request,
+  the keeper reports "<agent> not set up" once on issue #52 instead of on
+  every pull request.
+- **Builders are covered too, from the first assignment.** Every builder
+  (Claude, Codex, GrokBot teams) has a deadline for its first sign of work
+  (a branch, a commit or a draft pull request) after it is given a module,
+  and one for its first push after findings are relayed or asked for:
+  starting at four hours each. A builder that misses one is reported as
+  "<builder> silent on <issue or #N>", and the keeper doesn't relay to it
+  again until it pushes.
+- **The 8 AM list gets a "Not working" line** naming any agent that is
+  silent or not set up, so the owner learns it once, from one place.
 
 ## Borrowed From Scion (Step 6)
 

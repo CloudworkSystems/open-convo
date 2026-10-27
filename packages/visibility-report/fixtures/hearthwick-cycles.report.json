@@ -1,0 +1,299 @@
+{
+  "schemaVersion": 1,
+  "business": {
+    "name": "Hearthwick Cycle Works",
+    "siteUrl": "https://hearthwick-cycles.example/"
+  },
+  "reportDate": "2026-10-21",
+  "summary": [
+    "We found 6 things to fix.",
+    "The first two affect customers right now.",
+    "One more is listed under Also found, and some checks could not be finished."
+  ],
+  "fixList": [
+    {
+      "id": "hours-map",
+      "position": 1,
+      "rank": 1,
+      "group": 1,
+      "effort": "Quick",
+      "check": "listing-details-match",
+      "stale": true,
+      "checkAgain": "Check again before acting: found 2026-09-20.",
+      "problems": [
+        {
+          "rank": 1,
+          "group": 1,
+          "effort": "Quick",
+          "position": 1,
+          "problem": "Listing hours differ from the website",
+          "sentences": [
+            "The Hearthwick Maps listing shows different hours than the website.",
+            "Customers may arrive when you are closed or miss you when you are open.",
+            "Update the listing hours so they match the website.",
+            "The listing says \"Monday to Friday, 9am to 5pm\" and the website says \"Monday to Friday, 10am to 6pm\"."
+          ],
+          "source": {
+            "label": "Hearthwick Maps",
+            "url": "https://maps.example/hearthwick-cycles"
+          },
+          "checkedOn": "2026-09-20",
+          "websiteSource": {
+            "label": "Hearthwick Cycle Works site",
+            "url": "https://hearthwick-cycles.example/"
+          },
+          "websiteCheckedOn": "2026-10-20"
+        }
+      ],
+      "source": {
+        "label": "Hearthwick Maps",
+        "url": "https://maps.example/hearthwick-cycles"
+      },
+      "checkedOn": "2026-09-20",
+      "websiteSource": {
+        "label": "Hearthwick Cycle Works site",
+        "url": "https://hearthwick-cycles.example/"
+      },
+      "websiteCheckedOn": "2026-10-20"
+    },
+    {
+      "id": "phone-list",
+      "position": 2,
+      "rank": 2,
+      "group": 1,
+      "effort": "Quick",
+      "check": "listing-details-match",
+      "stale": false,
+      "checkAgain": null,
+      "problems": [
+        {
+          "rank": 2,
+          "group": 1,
+          "effort": "Quick",
+          "position": 2,
+          "problem": "Listing phone differs from the website",
+          "sentences": [
+            "The Lampblack Listings listing shows a different phone number than the website.",
+            "Customers may call a number that does not reach the business.",
+            "Update the listing phone number so it matches the website.",
+            "The listing says \"555-0100\" and the website says \"555-0148\"."
+          ],
+          "source": {
+            "label": "Lampblack Listings",
+            "url": "https://lampblack.example/hearthwick-cycles"
+          },
+          "checkedOn": "2026-10-19",
+          "websiteSource": {
+            "label": "Hearthwick Cycle Works site",
+            "url": "https://hearthwick-cycles.example/visit"
+          },
+          "websiteCheckedOn": "2026-10-19"
+        }
+      ],
+      "source": {
+        "label": "Lampblack Listings",
+        "url": "https://lampblack.example/hearthwick-cycles"
+      },
+      "checkedOn": "2026-10-19",
+      "websiteSource": {
+        "label": "Hearthwick Cycle Works site",
+        "url": "https://hearthwick-cycles.example/visit"
+      },
+      "websiteCheckedOn": "2026-10-19"
+    },
+    {
+      "id": "listing-northglass",
+      "position": 3,
+      "rank": 5,
+      "group": 2,
+      "effort": "Medium",
+      "check": "listing-present",
+      "stale": false,
+      "checkAgain": null,
+      "problems": [
+        {
+          "rank": 5,
+          "group": 2,
+          "effort": "Medium",
+          "position": 3,
+          "problem": "No listing on a named service",
+          "sentences": [
+            "Northglass Directory has no listing for this business.",
+            "People who look there cannot find the business.",
+            "Create a listing on Northglass Directory with the same details as the website."
+          ],
+          "source": {
+            "label": "Northglass Directory",
+            "url": "https://northglass.example/hearthwick"
+          },
+          "checkedOn": "2026-10-18"
+        }
+      ],
+      "source": {
+        "label": "Northglass Directory",
+        "url": "https://northglass.example/hearthwick"
+      },
+      "checkedOn": "2026-10-18"
+    },
+    {
+      "id": "ai-missing",
+      "position": 4,
+      "rank": 8,
+      "group": 2,
+      "effort": "Slow",
+      "check": "ai-mention",
+      "stale": false,
+      "checkAgain": null,
+      "problems": [
+        {
+          "rank": 8,
+          "group": 2,
+          "effort": "Slow",
+          "position": 4,
+          "problem": "Not mentioned by an AI assistant",
+          "sentences": [
+            "Askwell did not mention this business when asked \"Who repairs bikes in Hearthwick?\".",
+            "People who ask that assistant do not hear about the business.",
+            "Publish clear public pages that answer that question."
+          ],
+          "source": {
+            "label": "Askwell",
+            "locator": "Asked Askwell on 2026-10-19: 'Who repairs bikes in Hearthwick?'"
+          },
+          "checkedOn": "2026-10-19"
+        }
+      ],
+      "source": {
+        "label": "Askwell",
+        "locator": "Asked Askwell on 2026-10-19: 'Who repairs bikes in Hearthwick?'"
+      },
+      "checkedOn": "2026-10-19"
+    },
+    {
+      "id": "reviews-unanswered",
+      "position": 5,
+      "rank": 9,
+      "group": 3,
+      "effort": "Quick",
+      "check": "reviews",
+      "stale": false,
+      "checkAgain": null,
+      "problems": [
+        {
+          "rank": 9,
+          "group": 3,
+          "effort": "Quick",
+          "position": 5,
+          "problem": "Reviews with no reply",
+          "sentences": [
+            "3 reviews on Hearthwick Maps have no reply.",
+            "A reply shows the business is listening.",
+            "Reply to the reviews that have none."
+          ],
+          "source": {
+            "label": "Hearthwick Maps reviews",
+            "url": "https://maps.example/hearthwick-cycles/reviews"
+          },
+          "checkedOn": "2026-10-17"
+        }
+      ],
+      "source": {
+        "label": "Hearthwick Maps reviews",
+        "url": "https://maps.example/hearthwick-cycles/reviews"
+      },
+      "checkedOn": "2026-10-17"
+    }
+  ],
+  "alsoFound": [
+    {
+      "id": "site-title",
+      "position": 6,
+      "rank": 13,
+      "group": 4,
+      "effort": "Quick",
+      "check": "website-basics",
+      "stale": false,
+      "checkAgain": null,
+      "problems": [
+        {
+          "rank": 13,
+          "group": 4,
+          "effort": "Quick",
+          "position": 6,
+          "problem": "Website has no page title",
+          "sentences": [
+            "The website has no page title.",
+            "A title tells people which page this is.",
+            "Add a page title with the business name."
+          ],
+          "source": {
+            "label": "Hearthwick Cycle Works site",
+            "url": "https://hearthwick-cycles.example/"
+          },
+          "checkedOn": "2026-10-20"
+        }
+      ],
+      "source": {
+        "label": "Hearthwick Cycle Works site",
+        "url": "https://hearthwick-cycles.example/"
+      },
+      "checkedOn": "2026-10-20"
+    }
+  ],
+  "couldntCheck": [
+    {
+      "id": "website-unknown",
+      "check": "website-basics",
+      "status": "unknown",
+      "sentences": [
+        "The website basics could not be checked."
+      ],
+      "source": {
+        "label": "Shop desk",
+        "locator": "The owner has not published a second page yet."
+      },
+      "checkedOn": "2026-10-16"
+    }
+  ],
+  "working": [
+    {
+      "id": "ai-mentioned",
+      "check": "ai-mention",
+      "status": "ok",
+      "sentences": [
+        "Askwell mentioned this business when asked \"Where can I get a bike repaired in Hearthwick?\"."
+      ],
+      "source": {
+        "label": "Askwell",
+        "url": "https://askwell.example/chats/hearthwick-bikes"
+      },
+      "checkedOn": "2026-10-19"
+    },
+    {
+      "id": "listing-present-maps",
+      "check": "listing-present",
+      "status": "ok",
+      "sentences": [
+        "Hearthwick Maps has a listing for this business."
+      ],
+      "source": {
+        "label": "Hearthwick Maps",
+        "url": "https://maps.example/hearthwick-cycles"
+      },
+      "checkedOn": "2026-10-20"
+    },
+    {
+      "id": "reviews-lampblack",
+      "check": "reviews",
+      "status": "ok",
+      "sentences": [
+        "Lampblack Listings shows 12 reviews, 2 of them in the last 90 days, and every review has a reply."
+      ],
+      "source": {
+        "label": "Lampblack Listings",
+        "url": "https://lampblack.example/hearthwick-cycles/reviews"
+      },
+      "checkedOn": "2026-10-18"
+    }
+  ]
+}
