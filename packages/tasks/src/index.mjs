@@ -90,7 +90,7 @@ function canonicalDue(due) {
 }
 function canonicalReminder(reminder) {
   if (reminder.kind === 'offset') return { id: reminder.id, kind: 'offset', days: reminder.days, hours: reminder.hours, minutes: reminder.minutes };
-  return { id: reminder.id, kind: 'fixed', dateTime: reminder.dateTime, timeZone: reminder.timeZone, occurrence: reminder.occurrence ?? null };
+  return { id: reminder.id, kind: 'fixed', dateTime: reminder.dateTime, timeZone: reminder.timeZone, occurrence: reminder.occurrence ?? null, schedule: reminder.schedule ?? null };
 }
 function canonicalWall(wall) {
   return wall ? { dateTime: wall.dateTime, timeZone: wall.timeZone } : null;
@@ -178,6 +178,11 @@ function occurrenceName(template, date) {
   if (!due || due.kind === 'date') return date;
   return `${due.dateTime}[${due.timeZone}]`;
 }
+/** A one-off task, dated or not, has one occurrence named `once`. */
+function taskOccurrence(task, date) {
+  if (!task?.fields?.repeat?.value) return 'once';
+  return occurrenceName(task.fields.due?.value, date);
+}
 function occurrenceDateOf(name) {
   if (!name) return null;
   return validDate(name.slice(0, 10)) ? name.slice(0, 10) : null;
@@ -237,7 +242,7 @@ function normalizeDue(input) {
 }
 function reminderContentKey(reminder) {
   if (reminder.kind === 'offset') return `offset:${reminder.days}:${reminder.hours}:${reminder.minutes}`;
-  return `fixed:${reminder.dateTime}:${reminder.timeZone}:${reminder.occurrence ?? ''}`;
+  return `fixed:${reminder.dateTime}:${reminder.timeZone}:${reminder.occurrence ?? ''}:${reminder.schedule ?? ''}`;
 }
 function assignReminderIds(reminders, previous) {
   const pools = new Map();
@@ -260,7 +265,15 @@ function assignReminderIds(reminders, previous) {
     return { ...body, id };
   });
 }
-function normalizeReminder(input, fallbackOccurrence) {
+function oneOffReminder(input, schedule) {
+  // The public name is always `once`. A date passed as occurrence is the
+  // rescheduling identity, kept on `schedule` so a later due date lapses it.
+  if (!own(input, 'occurrence')) return { occurrence: 'once', schedule: schedule ?? null };
+  if (input.occurrence == null) return { occurrence: null, schedule: null };
+  if (input.occurrence === 'once') return { occurrence: 'once', schedule: schedule ?? null };
+  return { occurrence: 'once', schedule: input.occurrence };
+}
+function normalizeReminder(input, fallbackOccurrence, { oneOff = false, schedule = null } = {}) {
   if (!object(input)) fail('Reminder must be an object.');
   const id = own(input, 'id') && input.id != null ? identity(input.id, 'Reminder ID') : null;
   const offsetLike = input.kind === 'offset' || own(input, 'days') || own(input, 'hours') || own(input, 'minutes');
@@ -275,16 +288,19 @@ function normalizeReminder(input, fallbackOccurrence) {
   }
   const dateTime = input.dateTime ?? input.at;
   if (!validDateTime(dateTime)) fail('Reminder time must be YYYY-MM-DDTHH:MM.');
-  const occurrence = own(input, 'occurrence') ? input.occurrence : fallbackOccurrence;
-  if (occurrence != null && (typeof occurrence !== 'string' || occurrence.length > 200)) fail('Reminder occurrence must be text.');
-  const fixed = { kind: 'fixed', dateTime, timeZone: assertTimeZone(input.timeZone), occurrence: occurrence ?? null };
+  const named = oneOff
+    ? oneOffReminder(input, schedule)
+    : { occurrence: own(input, 'occurrence') ? input.occurrence : fallbackOccurrence, schedule: null };
+  if (named.occurrence != null && (typeof named.occurrence !== 'string' || named.occurrence.length > 200)) fail('Reminder occurrence must be text.');
+  if (named.schedule != null && (typeof named.schedule !== 'string' || !named.schedule || named.schedule.length > 200)) fail('Reminder schedule must be text.');
+  const fixed = { kind: 'fixed', dateTime, timeZone: assertTimeZone(input.timeZone), occurrence: named.occurrence ?? null, schedule: named.schedule ?? null };
   return id ? { id, ...fixed } : fixed;
 }
-function normalizeReminders(input, fallbackOccurrence, previous = []) {
+function normalizeReminders(input, fallbackOccurrence, previous = [], options = {}) {
   if (input == null) return [];
   if (!Array.isArray(input)) fail('Reminders must be a list.');
   if (input.length > 5) fail('A task can have at most 5 reminders.');
-  return assignReminderIds(input.map(reminder => normalizeReminder(reminder, fallbackOccurrence)), previous);
+  return assignReminderIds(input.map(reminder => normalizeReminder(reminder, fallbackOccurrence, options)), previous);
 }
 function normalizeTitle(title) {
   const text = string(title, 'Title');
@@ -372,7 +388,7 @@ function currentDate(task) {
   const latest = pickLatest(counting);
   const date = rule.mode === 'afterDone'
     ? nextAfterDone(latest, rule, names, template)
-    : onScheduleNext(rule, occurrenceDateOf(latest.occurrence));
+    : onScheduleNext(rule, occurrenceDateOf(latest.occurrence) ?? latest.actionDate);
   if (!date || (rule.endOn && date > rule.endOn)) return null;
   return date;
 }
@@ -393,7 +409,7 @@ function winningSnooze(task, occurrence) {
 }
 function effectiveDue(task, date) {
   const template = task.fields.due.value;
-  const name = occurrenceName(template, date);
+  const name = taskOccurrence(task, date);
   const snooze = winningSnooze(task, name);
   if (snooze?.fields.due.value) return canonicalDue(snooze.fields.due.value);
   return scheduledDue(template, date);
@@ -414,7 +430,8 @@ function reminderMoments(task, ownerZone, dayStart) {
   if (statusOf(task) !== 'open') return [];
   const date = currentDate(task);
   const due = effectiveDue(task, date);
-  const occurrence = occurrenceName(task.fields.due.value, date);
+  const occurrence = taskOccurrence(task, date);
+  const schedule = occurrenceName(task.fields.due.value, date);
   const moments = [];
   task.fields.reminders.value.forEach((reminder, index) => {
     if (reminder.kind === 'offset') {
@@ -423,10 +440,11 @@ function reminderMoments(task, ownerZone, dayStart) {
       moments.push({ id: reminder.id, index, reminder, occurrence, instant, baseInstant: instant });
       return;
     }
-    // A named fixed reminder belongs to one occurrence, including a one-off
-    // task. Rescheduling the due date leaves the old name behind, so it lapses
-    // until an edit moves it.
+    // A named fixed reminder belongs to one occurrence. On a one-off task that
+    // name is `once`; `schedule` is the due identity, so a reschedule lapses
+    // the reminder without renaming the occurrence.
     if (reminder.occurrence != null && reminder.occurrence !== occurrence) return;
+    if (!task.fields.repeat.value && reminder.schedule != null && reminder.schedule !== schedule) return;
     const instant = wallToInstant(reminder.dateTime, reminder.timeZone);
     moments.push({ id: reminder.id, index, reminder, occurrence, instant, baseInstant: instant });
   });
@@ -580,7 +598,8 @@ function checkReminders(reminders) {
       exactKeys(reminder, ['id', 'kind', 'days', 'hours', 'minutes']);
       normalizeReminder(reminder, null);
     } else if (reminder.kind === 'fixed') {
-      exactKeys(reminder, ['id', 'kind', 'dateTime', 'timeZone', 'occurrence']);
+      exactKeys(reminder, ['id', 'kind', 'dateTime', 'timeZone', 'occurrence', 'schedule']);
+      if (reminder.schedule !== null && (typeof reminder.schedule !== 'string' || !reminder.schedule || reminder.schedule.length > 200)) fail('Invalid reminders in task file.');
       normalizeReminder(reminder, null);
     } else fail('Invalid reminders in task file.');
   }
@@ -764,8 +783,10 @@ export class Tasks {
     const due = normalizeDue(input.due);
     if (input.repeat && !due) fail('A repeating task needs a due date.');
     const repeat = input.repeat ? normalizeRepeat(input.repeat, dueCalendar(due), { exactStart: true }) : null;
-    const occurrence = occurrenceName(due, dueCalendar(due));
-    const reminders = normalizeReminders(input.reminders, occurrence);
+    const oneOff = !repeat;
+    const occurrence = oneOff ? 'once' : occurrenceName(due, dueCalendar(due));
+    const schedule = oneOff ? occurrenceName(due, dueCalendar(due)) : null;
+    const reminders = normalizeReminders(input.reminders, occurrence, [], { oneOff, schedule });
     this.#change((person, stamp) => {
       person.tasks.push({
         id: taskId,
@@ -823,8 +844,11 @@ export class Tasks {
         }
       }
       if (own(patch, 'reminders')) {
-        const occurrence = occurrenceName(task.fields.due.value, currentDate(task));
-        task.fields.reminders = { value: normalizeReminders(patch.reminders, occurrence, before.fields.reminders.value), stamp: clone(stamp) };
+        const oneOff = !task.fields.repeat.value;
+        const openDate = currentDate(task);
+        const occurrence = oneOff ? 'once' : occurrenceName(task.fields.due.value, openDate);
+        const schedule = oneOff ? occurrenceName(task.fields.due.value, openDate) : null;
+        task.fields.reminders = { value: normalizeReminders(patch.reminders, occurrence, before.fields.reminders.value, { oneOff, schedule }), stamp: clone(stamp) };
       }
       if (task.fields.repeat.value && !task.fields.due.value) fail('A repeating task needs a due date.');
     });
@@ -833,7 +857,7 @@ export class Tasks {
     const instant = requireInstant(now);
     const zone = this.#person.fields.timeZone.value;
     const date = currentDate(task);
-    const occurrence = extra.occurrence === undefined ? occurrenceName(task.fields.due.value, date) : extra.occurrence;
+    const occurrence = extra.occurrence === undefined ? taskOccurrence(task, date) : extra.occurrence;
     const id = recordId ?? randomUUID();
     if (task.records.some(record => record.id === id)) fail('Record ID already exists.');
     task.records.push(blankRecord(id, type, occurrence, instant, civilDate(instant, zone), zone, stamp, {
@@ -899,7 +923,7 @@ export class Tasks {
       const zone = person.fields.timeZone.value;
       const at = request.at ? normalizeWall(request.at) : presetWall(task, request.preset, instant, zone, person.fields.dayStart.value);
       const due = request.moveDue ? normalizeDue(request.due ?? { dateTime: at.dateTime, timeZone: at.timeZone }) : null;
-      const replaces = replacedReminder(task, occurrenceName(task.fields.due.value, currentDate(task)), instant, zone, person.fields.dayStart.value);
+      const replaces = replacedReminder(task, taskOccurrence(task, currentDate(task)), instant, zone, person.fields.dayStart.value);
       this.#record(task, 'snooze', instant, stamp, recordId, { reminderAt: at, due, replaces });
       task.life = { value: true, stamp: clone(stamp) };
     });
@@ -1017,7 +1041,7 @@ export class Tasks {
       list: task.fields.list.value,
       priority: task.fields.priority.value,
       status: statusOf(task),
-      occurrence: occurrenceName(task.fields.due.value, date),
+      occurrence: taskOccurrence(task, date),
       due: publicDue(due),
       overdue: now == null ? false : isOverdue(due, now, timeZone),
       repeatsAfterDone: task.fields.repeat.value?.mode === 'afterDone',
@@ -1079,7 +1103,7 @@ export class Tasks {
         const group = viewDate(due, zone);
         if (!group || group < windowStart || group > windowEnd) continue;
         const row = this.#present(task, zone, instant);
-        row.occurrence = occurrenceName(task.fields.due.value, date);
+        row.occurrence = taskOccurrence(task, date);
         row.due = publicDue(due);
         row.overdue = isOverdue(due, instant, zone);
         row.repeatsAfterDone = task.fields.repeat.value?.mode === 'afterDone';

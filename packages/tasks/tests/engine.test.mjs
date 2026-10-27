@@ -357,7 +357,16 @@ test('7. reminders fire once, follow an open occurrence, and a fixed one stays b
   moved.editTask('call', { due: '2026-04-08' });
   assert.deepEqual(moved.remindersDue(april[0], april[1], ZONE), []);
   moved.editTask('call', { reminders: [{ dateTime: '2026-04-08T09:00', timeZone: ZONE, occurrence: '2026-04-08' }] });
-  assert.equal(moved.remindersDue(april[0], april[1], ZONE)[0].occurrence, '2026-04-08');
+  assert.equal(moved.remindersDue(april[0], april[1], ZONE)[0].occurrence, 'once');
+  assert.equal(moved.task('call').reminders[0].schedule, '2026-04-08');
+  const plain = engine('once-name');
+  plain.addTask({ title: 'No date' }, { taskId: 'nodate' });
+  plain.complete('nodate', at('2026-04-01T12:00:00.000Z'), { recordId: 'did' });
+  assert.equal(plain.history('nodate')[0].occurrence, 'once');
+  plain.addTask({ title: 'Dated', due: '2026-04-02' }, { taskId: 'dated' });
+  plain.snooze('dated', { at: { dateTime: '2026-04-02T15:00', timeZone: ZONE } }, at('2026-04-02T12:00:00.000Z'), { recordId: 'z' });
+  assert.equal(plain.task('dated').occurrence, 'once');
+  assert.equal(plain.history('dated').find(row => row.id === 'z').occurrence, 'once');
 
   const done = engine('done-reminder');
   done.addTask({ title: 'One reminder', due: { dateTime: '2026-04-02T09:00', timeZone: ZONE }, reminders: [{ days: 1 }] }, { taskId: 'one' });
