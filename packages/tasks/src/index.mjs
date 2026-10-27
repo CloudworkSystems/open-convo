@@ -86,7 +86,9 @@ function records(a, b, purge = null) {
 function canonicalDue(due) {
   if (!due) return null;
   if (due.kind === 'date') return { kind: 'date', date: due.date };
-  return { kind: 'dateTime', dateTime: due.dateTime, timeZone: due.timeZone };
+  const result = { kind: 'dateTime', dateTime: due.dateTime, timeZone: due.timeZone };
+  if (due.later === true) result.later = true;
+  return result;
 }
 function canonicalReminder(reminder) {
   if (reminder.kind === 'offset') return { id: reminder.id, kind: 'offset', days: reminder.days, hours: reminder.hours, minutes: reminder.minutes };
@@ -199,11 +201,16 @@ function compareOccurrence(a, b) {
   const rightZone = b && b.includes('[') ? b.slice(b.indexOf('[') + 1, -1) : '';
   return lex(left ?? '', right ?? '') || lex(leftTime, rightTime) || lex(leftZone, rightZone);
 }
+function dueInstant(due) {
+  return wallToInstant(due.dateTime, due.timeZone, { later: due.later === true });
+}
 function publicDue(due) {
   if (!due) return null;
   if (due.kind === 'date') return { kind: 'date', date: due.date };
-  const instant = wallToInstant(due.dateTime, due.timeZone);
-  return { kind: 'dateTime', dateTime: due.dateTime, timeZone: due.timeZone, instant, resolved: wallClock(instant, due.timeZone) };
+  const instant = dueInstant(due);
+  const result = { kind: 'dateTime', dateTime: due.dateTime, timeZone: due.timeZone, instant, resolved: wallClock(instant, due.timeZone) };
+  if (due.later === true) result.later = true;
+  return result;
 }
 function publicRepeat(rule) {
   if (!rule) return null;
@@ -222,7 +229,7 @@ function publicRepeat(rule) {
 function viewDate(due, timeZone) {
   if (!due) return null;
   if (due.kind === 'date') return due.date;
-  return civilDate(wallToInstant(due.dateTime, due.timeZone), timeZone);
+  return civilDate(dueInstant(due), timeZone);
 }
 
 function normalizeDue(input) {
@@ -241,7 +248,10 @@ function normalizeDue(input) {
     return { kind: 'date', date: input.date };
   }
   if (!validDateTime(input.dateTime)) fail('Due time must be YYYY-MM-DDTHH:MM.');
-  return { kind: 'dateTime', dateTime: input.dateTime, timeZone: assertTimeZone(input.timeZone) };
+  if (own(input, 'later') && input.later !== true) fail('Due time must be YYYY-MM-DDTHH:MM.');
+  const due = { kind: 'dateTime', dateTime: input.dateTime, timeZone: assertTimeZone(input.timeZone) };
+  if (input.later === true) due.later = true;
+  return due;
 }
 function reminderContentKey(reminder) {
   if (reminder.kind === 'offset') return `offset:${reminder.days}:${reminder.hours}:${reminder.minutes}`;
@@ -432,14 +442,15 @@ function retireMovedDue(task, occurrence, stamp) {
 function isOverdue(due, now, timeZone) {
   if (!due) return false;
   if (due.kind === 'date') return civilDate(now, timeZone) > due.date;
-  return now >= wallToInstant(due.dateTime, due.timeZone);
+  return now >= dueInstant(due);
 }
 function offsetInstant(due, offset, dayStart, ownerZone) {
   const wall = due.kind === 'date'
     ? { dateTime: `${due.date}T${dayStart}`, timeZone: ownerZone }
     : { dateTime: due.dateTime, timeZone: due.timeZone };
   const shifted = offset.days ? `${addDays(wall.dateTime.slice(0, 10), -offset.days)}T${wall.dateTime.slice(11, 16)}` : wall.dateTime;
-  return wallToInstant(shifted, wall.timeZone) - (offset.hours * 60 + offset.minutes) * 60000;
+  const base = !offset.days && due.kind === 'dateTime' ? dueInstant(due) : wallToInstant(shifted, wall.timeZone);
+  return base - (offset.hours * 60 + offset.minutes) * 60000;
 }
 function reminderMoments(task, ownerZone, dayStart) {
   if (statusOf(task) !== 'open') return [];
@@ -456,10 +467,11 @@ function reminderMoments(task, ownerZone, dayStart) {
       return;
     }
     // A named fixed reminder belongs to one occurrence. On a one-off task that
-    // name is `once`; `schedule` is the due identity, so a reschedule lapses
-    // the reminder without renaming the occurrence.
+    // name is `once`. `schedule` is the due identity, including none, so giving
+    // an undated task a due date lapses it. A reminder with no occurrence name
+    // stays while the task is open.
     if (reminder.occurrence != null && reminder.occurrence !== occurrence) return;
-    if (!task.fields.repeat.value && reminder.schedule != null && reminder.schedule !== schedule) return;
+    if (!task.fields.repeat.value && reminder.occurrence === 'once' && (reminder.schedule ?? null) !== (schedule ?? null)) return;
     const instant = wallToInstant(reminder.dateTime, reminder.timeZone);
     moments.push({ id: reminder.id, index, reminder, occurrence, instant, baseInstant: instant });
   });
@@ -589,7 +601,10 @@ function checkDue(due, label) {
     return;
   }
   if (due.kind === 'dateTime') {
-    exactKeys(due, ['kind', 'dateTime', 'timeZone']);
+    const keys = ['kind', 'dateTime', 'timeZone'];
+    if (own(due, 'later')) keys.push('later');
+    exactKeys(due, keys);
+    if (own(due, 'later') && due.later !== true) fail('Invalid task in task file.');
     if (!validDateTime(due.dateTime)) fail('Invalid task in task file.');
     assertTimeZone(due.timeZone);
     return;
@@ -944,7 +959,7 @@ export class Tasks {
       const instant = requireInstant(now);
       const zone = person.fields.timeZone.value;
       const at = request.at ? normalizeWall(request.at) : presetWall(task, request.preset, instant, zone, person.fields.dayStart.value);
-      const due = request.moveDue ? normalizeDue(request.due ?? { dateTime: at.dateTime, timeZone: at.timeZone }) : null;
+      const due = request.moveDue ? normalizeDue(request.due ?? { dateTime: at.dateTime, timeZone: at.timeZone, ...(at.later === true ? { later: true } : {}) }) : null;
       const replaces = replacedReminder(task, taskOccurrence(task, currentDate(task)), instant, zone, person.fields.dayStart.value);
       this.#record(task, 'snooze', instant, stamp, recordId, { reminderAt: at, due, replaces });
       task.life = { value: true, stamp: clone(stamp) };
