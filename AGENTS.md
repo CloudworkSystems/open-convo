@@ -70,6 +70,18 @@ reads from and writes to `CloudworkSystems/open-convo`.
     findings are folded in, the latest commit needs a clean follow-up review
     before the gate merges it. Build-level detail belongs in the code pull
     requests.
+  - **Plans merge on the owner's yes (owner decision, October 27, 2026).**
+    `docs/plans/` is no longer a protected path, so the owner approves a plan
+    by saying yes in a Claude thread instead of on GitHub. Before auto-merge
+    goes on, the pull request's description quotes his yes with its date and
+    the thread's name. His yes covers the plan as he saw it: a later commit
+    that changes a requirement, a builder's rules, a limit or a finish line
+    needs a new yes, while folding in review findings he has already seen
+    doesn't. Auto-merge goes on only after that and the plan review above,
+    and only from the coordinator or the thread that asked him. A plan pull
+    request that also changes a protected path (for example this file, the
+    folder's `AGENTS.md`, `PLAN.md` or `docs/decisions.md`) still needs his
+    approval on GitHub.
   - *Code* is reviewed until Codex finishes with a 👍 on the pull request.
     Claude fixes every P1 and P2, or explains in the pull request why one does
     not apply, or after three Codex rounds leaves a P2 for the triage judge

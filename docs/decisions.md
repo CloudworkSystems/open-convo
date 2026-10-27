@@ -6,6 +6,12 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 27:** Plans in `docs/plans/` merge on the owner's yes in a Claude
+  thread, not a GitHub approval: `docs/plans/` leaves `.github/CODEOWNERS`,
+  and the plan's pull request quotes his yes before auto-merge goes on. A
+  later change to a requirement, builder rule, limit or finish line needs a
+  new yes. Rule files, `PLAN.md` and this file stay protected (AGENTS.md
+  "Plans merge on the owner's yes").
 - **Oct 26:** GrokBot (Cursor) joins Gemini as the independent reviewer of
   Claude-built and Codex-built pull requests, so the reviewer can run a
   different model from the builder; the first review of the latest commit

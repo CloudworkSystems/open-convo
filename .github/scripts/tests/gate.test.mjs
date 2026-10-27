@@ -103,7 +103,7 @@ test('CODEOWNERS covers the rules, decisions and key files, and not ordinary cod
   const rules = parseCodeowners(readFileSync(new URL('../../CODEOWNERS', import.meta.url), 'utf8'));
   const files = [
     'AGENTS.md', 'CLAUDE.md', '.github/CODEOWNERS', '.github/workflows/tests.yml',
-    'PLAN.md', 'docs/plans/merge-gate.md', 'docs/decisions.md',
+    'PLAN.md', 'docs/decisions.md',
     'apps/mac/Sources/ArchiveProtection/ArchiveSeal.swift',
     'apps/mac/Sources/DeskHost/StoreCipher.swift',
     'apps/mac/Tests/ParticipantProcessTests/PaidUsageGateTests.swift',
@@ -129,6 +129,8 @@ test('CODEOWNERS covers the rules, decisions and key files, and not ordinary cod
   assert.deepEqual(protectedFiles(rules, files), files);
   const open = ['STATUS.md', 'README.md', 'apps/desk/src/app/App.tsx', 'packages/clarity/src/index.mjs',
     'docs/annotations/x.md', 'apps/mac/Sources/DeskHost/DeskHost.swift', 'docs/plans-old.md', 'docs/AGENTS-notes.md',
+    // Plans merge on the owner's yes in a Claude thread (owner decision, October 27).
+    'docs/plans/merge-gate.md', 'docs/plans/desk-annotation-layer.md',
     'apps/mac/Sources/VoiceCursorCore/ElectronFocusPolicy.swift', 'apps/mac/Sources/CorrectionMemory/LocalDataBoundary.swift'];
   assert.deepEqual(protectedFiles(rules, open), []);
 });
@@ -484,7 +486,7 @@ test('a pull request the owner opened waits when it changes a protected file', (
   const reason = ownerOpenedBlock({ prAuthor: OWNER_LOGIN, files: ['packages/x/a.mjs', 'AGENTS.md'], rules });
   assert.match(reason, /AGENTS\.md/);
   // A renamed file's old path counts: moving a protected file away changes it.
-  assert.ok(ownerOpenedBlock({ prAuthor: OWNER_LOGIN, files: ['docs/old-plan.md', 'docs/plans/x.md'], rules }));
+  assert.ok(ownerOpenedBlock({ prAuthor: OWNER_LOGIN, files: ['docs/old-decisions.md', 'docs/decisions.md'], rules }));
 });
 
 test('the owner-opened rule leaves ordinary changes and bot pull requests alone', () => {
