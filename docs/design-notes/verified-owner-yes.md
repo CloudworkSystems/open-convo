@@ -45,7 +45,8 @@ yes.
    app uses Apple's own Face ID check (which reads the face with the
    front camera's depth sensor) rather than its own camera code, so the app
    never sees or stores the face. A passkey can stand in on other devices,
-   with its challenge set to a hash of the action on screen.
+   with its challenge set to a hash of the whole request: the action on
+   screen, the one-time number and the expiry.
 4. **A verifier acts.** A small, separate piece sits next to the thing that
    acts. It checks the signature, that the request matches the action, that
    it hasn't expired and hasn't been used before. Only then does it perform
