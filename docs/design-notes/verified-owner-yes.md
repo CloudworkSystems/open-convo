@@ -65,6 +65,17 @@ yes.
   rule as "Jeff surfaces choices; the owner makes them" in that note. The
   verified yes is how "the person decides" gets enforced, not just written
   down.
+- **The verifier trusts only keys the person enrolled.** It accepts
+  signatures from a public key pinned when the person set it up, in person
+  on their own device, never from a key that arrives through an assistant.
+  Adding or replacing a device needs a yes signed by a key already enrolled,
+  or a fresh in-person setup. An assistant can never add its own key.
+- **A yes is used once, even under retries and crashes.** The verifier
+  claims the yes durably and atomically before it acts, so two copies
+  arriving together can't both run. The action itself carries the yes's
+  one-time number, so a retry after a crash is recognized and not done
+  twice; where a service can't take such a number, the verifier first
+  checks whether the action already happened.
 - **No blanket yes.** One yes, one action. Standing permissions ("always let
   it file receipts under $20") may come later, each as its own signed rule
   the person can see and revoke.
