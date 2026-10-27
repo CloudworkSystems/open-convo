@@ -82,7 +82,8 @@ pushed**, so the owner always approves the final version.
 
 - The rules: `AGENTS.md`, `CLAUDE.md`, `.github/` (including the checks
   themselves and `CODEOWNERS`, so no agent can weaken a check to pass it).
-- Decisions: `PLAN.md`, `docs/plans/`, and a new `docs/decisions.md`.
+- Decisions: `PLAN.md`, `docs/plans/` (until October 27; see the revision
+  below), and a new `docs/decisions.md`.
   CODEOWNERS works on whole files, so the "Recent Owner Decisions" list moves
   out of `STATUS.md` into `docs/decisions.md` (owner decision, October 15).
   `STATUS.md` stays open so normal pull requests can update it and still merge
@@ -92,6 +93,13 @@ pushed**, so the owner always approves the final version.
 
 Everything else (module code, tests, design notes, annotations) merges
 automatically once checks 1, 2 and 4 pass.
+
+### Revision (October 27, 2026)
+
+The owner decided that plans merge on his yes in a Claude thread instead of a
+GitHub approval, so `docs/plans/` left `CODEOWNERS`. The folder's `AGENTS.md`
+and `CLAUDE.md`, `PLAN.md` and `docs/decisions.md` stay protected. The rule
+is in AGENTS.md ("Plans merge on the owner's yes").
 
 ## Status (October 20, 2026)
 
