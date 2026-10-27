@@ -32,19 +32,26 @@ yes.
 1. **The assistant asks.** It describes the action in full (what, to whom,
    the exact contents or a fingerprint of them) and sends the request to
    the person's device.
-2. **The device shows it plainly.** It shows a short summary in ordinary
-   words, with the exact details one tap away. Nothing is pre-approved.
+2. **The phone shows it plainly, from the bytes it will sign.** The app
+   draws the short summary and the exact details from the request itself,
+   never from words the assistant supplies alongside it. A fingerprint the
+   phone can't turn back into the full action is refused: the phone must be
+   able to show everything it signs. Nothing is pre-approved.
 3. **The person signs, in the True Convo iPhone app** (the owner's choice,
-   October 27). Face ID unlocks a signing key that the app keeps in the
-   iPhone's Secure Enclave, and the key signs that exact request, plus a
-   one-time number and an expiry time. The key never leaves the phone. The
+   October 27). Face ID authorizes exactly one signature, by a key the app
+   keeps in the iPhone's Secure Enclave, over the request on screen plus a
+   one-time number and an expiry time. Each signature needs its own Face ID;
+   one unlock never covers a later request. The key never leaves the phone. The
    app uses Apple's own Face ID check (which reads the face with the
    front camera's depth sensor) rather than its own camera code, so the app
-   never sees or stores the face. A passkey can stand in on other devices.
+   never sees or stores the face. A passkey can stand in on other devices,
+   with its challenge set to a hash of the action on screen.
 4. **A verifier acts.** A small, separate piece sits next to the thing that
    acts. It checks the signature, that the request matches the action, that
-   it hasn't expired and hasn't been used before. Only then does it act,
-   with a credential the assistant never sees.
+   it hasn't expired and hasn't been used before. Only then does it perform
+   the signed action itself, exactly as signed, with a credential the
+   assistant never sees. It ignores any other copy or description of the
+   action the assistant sends.
 5. **It keeps a record.** Each yes, what it covered and what happened are
    logged where the person can read them.
 
@@ -69,8 +76,14 @@ yes.
 ## A First Use, If The Owner Wants One
 
 The project's own GitHub approvals would be a first test: a Claude thread
-asks, the owner's phone signs, and a verifier in a GitHub Action, holding a
-token as a repository secret, approves that exact commit. This needs the
+asks, the owner's phone signs, and a verifier approves that exact commit.
+The verifier's token must be reachable only by the verifier. A plain
+repository secret isn't enough: any agent that can push a branch can run a
+workflow that reads one (`tests.yml` already keeps secrets away from
+pull-request code for this reason). So the verifier runs only from the
+default branch's own copy, never from pull-request code, with its token in
+a place no pull-request workflow can read (for example a GitHub environment
+limited to the default branch), or outside GitHub altogether. This needs the
 owner's approval under AGENTS.md's Limits (a credential, a service that
 outlives the session, and a rule change, since today no agent may act as the
 owner's account). On October 27 the owner chose to try fewer approvals first
