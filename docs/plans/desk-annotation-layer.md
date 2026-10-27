@@ -54,9 +54,13 @@ this slice, so there's no PLAN.md move entry.
 ## The First Slice
 
 An **Annotate** mode inside the Desk, for reviewing the Desk itself. It
-works wherever the Desk runs during review: the browser opened by
-`Start Desk.command`, Codex's inline browser, and the Mac app's Desk window
-(`DeskHostWebKit`). No new browser engine is involved.
+works wherever the Vite review server that `Start Desk.command` runs is
+open: any browser, including Codex's inline browser. No new browser engine
+is involved. The Mac app's Desk window is not part of this slice:
+`DeskHostWebKit` loads a packaged bundle (or, in debug builds, the static
+`native-dist` folder), never the review server, so Annotate can't appear
+there. Bringing it to the Mac app, with dictation, needs its own native
+review bundle and is a later slice.
 
 1. **Turn it on.** An "Annotate" button sits in the Desk header and is also
    reachable from the keyboard. It shows only in a review build (the Vite dev
@@ -75,9 +79,8 @@ works wherever the Desk runs during review: the browser opened by
    - **What should change**: optional. If it's left blank, it repeats the
      owner's words.
 
-   In the Mac app, the note's microphone button uses the existing Desk
-   dictation (`use-desk-dictation`), and the transcript lands in the same
-   editable field. In a plain browser, typing is the only input. Notes stay
+   Typing is the only input in this slice. Dictation into the same field
+   comes with the Mac app slice. Notes stay
    editable, can be deleted, and nothing is sent until the owner presses
    **Send round**.
 4. **What each mark records.** The slice fills these in by itself:
@@ -103,15 +106,24 @@ works wherever the Desk runs during review: the browser opened by
    worktree outside the owner's checkout (`~/.oc-worktrees/`, where agents on
    the Mac already keep theirs), so it never touches his checkout. It works on a branch named
    `<session-name>-annotations`, pushes as `cloudwork-bot`, and opens a pull
-   request with auto-merge off and the label `agent: claude`. That's the step
-   Codex does today. The panel shows the pull request link.
+   request with auto-merge off. That's the step Codex does today. The panel
+   shows the pull request link.
+
+   **Provenance.** No agent built these pull requests, so they carry no
+   `agent:` label. The owner wrote the round and the Desk sent it. Each one
+   instead carries the label `source: desk-review`. The description's last
+   line reads `— Sent from the Desk review build on the owner's behalf`, and
+   the commit has the trailer `Sent-By: Desk review build`. Adding
+   `source: desk-review` to AGENTS.md's label list is part of the build pull
+   request. That file is protected, so the owner approves it there.
 6. **After sending.** The marks clear. A Claude building session picks up
    the pull request as it does a Codex-saved round today.
 
 ## Requirements
 
 - R1. Marking and typing alone is a complete path (August 14 plan, R4).
-  Dictation, where it exists, writes into the same editable note (R5).
+  Dictation (R5 there) comes with the Mac app slice and writes into the same
+  editable note.
 - R2. Each item keeps its target, its marked still and the owner's words
   together (R7). Nothing is sent until **Send round** is pressed (R8).
 - R3. The round file passes `node packages/annotation-rounds/src/check.mjs`
@@ -136,7 +148,9 @@ works wherever the Desk runs during review: the browser opened by
 
 ## Out Of Scope For This Slice
 
-Annotating outside web pages, a Chromium engine or the BrowserTrial source,
+The Mac app's Desk window and dictation (a later slice with a native
+review bundle), annotating outside web pages, a Chromium engine or the
+BrowserTrial source,
 freehand outlines, video and voice recording, proposed edits and applying
 them, durable anchors across Desk changes, the design-feedback chips from
 the August 14 plan (R9 and R10 there), saved history, sign-in, and
