@@ -5,6 +5,15 @@
 
 const formatters = new Map();
 
+// Date.UTC maps years 0–99 onto 1900–1999. setUTCFullYear does not, so a
+// date such as 0099-06-15 stays in year 99.
+function utcMillis(year, monthIndex, day, hour = 0, minute = 0, second = 0, millis = 0) {
+  const date = new Date(0);
+  date.setUTCFullYear(year, monthIndex, day);
+  date.setUTCHours(hour, minute, second, millis);
+  return date.getTime();
+}
+
 function formatter(timeZone) {
   let known = formatters.get(timeZone);
   if (!known) {
@@ -43,7 +52,7 @@ export function zonedParts(ms, timeZone) {
   // A few ICU builds report midnight as hour 24 on the day that just ended.
   if (bag.hour === 24) {
     bag.hour = 0;
-    const next = new Date(Date.UTC(bag.year, bag.month - 1, bag.day) + 86_400_000);
+    const next = new Date(utcMillis(bag.year, bag.month - 1, bag.day) + 86_400_000);
     bag.year = next.getUTCFullYear();
     bag.month = next.getUTCMonth() + 1;
     bag.day = next.getUTCDate();
@@ -59,7 +68,7 @@ export function validYearMonthDay(year, month, day) {
   if (!Number.isInteger(year) || year < 1 || year > 9999) return false;
   if (!Number.isInteger(month) || month < 1 || month > 12) return false;
   if (!Number.isInteger(day) || day < 1 || day > 31) return false;
-  const utc = new Date(Date.UTC(year, month - 1, day));
+  const utc = new Date(utcMillis(year, month - 1, day));
   return utc.getUTCFullYear() === year && utc.getUTCMonth() === month - 1 && utc.getUTCDate() === day;
 }
 
@@ -75,7 +84,7 @@ export function parseCivilDate(value) {
 export function addCivilDays(iso, days) {
   const date = parseCivilDate(iso);
   if (!date) return null;
-  const utc = new Date(Date.UTC(date.year, date.month - 1, date.day + days));
+  const utc = new Date(utcMillis(date.year, date.month - 1, date.day + days));
   const year = utc.getUTCFullYear();
   const month = utc.getUTCMonth() + 1;
   const day = utc.getUTCDate();
@@ -110,7 +119,7 @@ export function parseInstant(value) {
     offsetMinutes = sign * (offsetHour * 60 + offsetMinute);
   }
   const millis = fraction.length === 0 ? 0 : Number(fraction.slice(0, 3).padEnd(3, '0'));
-  return Date.UTC(year, month - 1, day, hour, minute, second, millis) - offsetMinutes * 60_000;
+  return utcMillis(year, month - 1, day, hour, minute, second, millis) - offsetMinutes * 60_000;
 }
 
 export function formatInstant(ms) {
@@ -167,7 +176,7 @@ function matches(ms, year, month, day, hour, minute, second, timeZone) {
 
 function offsetMs(instant, timeZone) {
   const parts = zonedParts(instant, timeZone);
-  const asUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  const asUtc = utcMillis(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
   return asUtc - instant;
 }
 
@@ -184,7 +193,7 @@ function preferEarlier(instant, year, month, day, hour, minute, second, timeZone
 }
 
 function tryExact(year, month, day, hour, minute, second, timeZone) {
-  const target = Date.UTC(year, month - 1, day, hour, minute, second);
+  const target = utcMillis(year, month - 1, day, hour, minute, second);
   let instant = target;
   let previous = null;
   for (let i = 0; i < 4; i += 1) {
@@ -205,7 +214,7 @@ function tryExact(year, month, day, hour, minute, second, timeZone) {
 }
 
 function shiftMinutes(year, month, day, hour, minute, delta) {
-  const utc = new Date(Date.UTC(year, month - 1, day, hour, minute + delta));
+  const utc = new Date(utcMillis(year, month - 1, day, hour, minute + delta));
   return {
     year: utc.getUTCFullYear(),
     month: utc.getUTCMonth() + 1,
@@ -227,9 +236,9 @@ export function zonedLocalToUtc(year, month, day, hour, minute, second, timeZone
     if (!validYearMonthDay(prev.year, prev.month, prev.day)) continue;
     const found = tryExact(prev.year, prev.month, prev.day, prev.hour, prev.minute, second, timeZone);
     if (found === null) continue;
-    const prevAsUtc = Date.UTC(prev.year, prev.month - 1, prev.day, prev.hour, prev.minute, second);
+    const prevAsUtc = utcMillis(prev.year, prev.month - 1, prev.day, prev.hour, prev.minute, second);
     const offset = prevAsUtc - found;
-    return Date.UTC(year, month - 1, day, hour, minute, second) - offset;
+    return utcMillis(year, month - 1, day, hour, minute, second) - offset;
   }
   return null;
 }

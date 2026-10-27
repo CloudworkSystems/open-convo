@@ -781,6 +781,48 @@ describe('9. input checks', () => {
     buildAgenda(day({ settings: { minFreeMinutes: 240 } }));
     assert.match(refusal(day({ date: '2026-02-29' })), /day: date/);
   });
+
+  it('accepts years 0001 through 0099 for the agenda, an all-day event and a task due date', () => {
+    const agenda = buildAgenda({
+      schemaVersion: 1,
+      date: '0099-06-15',
+      timeZone: 'UTC',
+      now: '0099-06-15T12:00:00Z',
+      events: [
+        { key: 'fair', title: 'Fair', start: '0099-06-15', end: '0099-06-16', allDay: true, calendar: 'Work' },
+        {
+          key: 'bell',
+          title: 'Bell',
+          start: '0099-06-15T09:00:00Z',
+          end: '0099-06-15T09:30:00Z',
+          allDay: false,
+          calendar: 'Work',
+        },
+      ],
+      tasks: [{ id: 'note', title: 'Note', due: '0099-06-14' }],
+      habits: [],
+      lists: [],
+    });
+    assert.equal(agenda.date, '0099-06-15');
+    assert.equal(agenda.timeline.find(event => event.key === 'fair').start, '0099-06-15');
+    assert.equal(agenda.timeline.find(event => event.key === 'bell').start, '0099-06-15T09:00');
+    assert.equal(agenda.tasks[0].due, '0099-06-14');
+    assert.equal(agenda.tasks[0].group, 'overdue');
+    const first = buildAgenda({
+      schemaVersion: 1,
+      date: '0001-01-01',
+      timeZone: 'UTC',
+      now: '0001-01-01T00:00:00Z',
+      events: [],
+      tasks: [{ id: 'leap', title: 'Leap', due: '0004-02-29' }],
+      habits: [],
+      lists: [],
+    });
+    assert.equal(first.date, '0001-01-01');
+    assert.equal(first.counts.tasksOtherDates, 1);
+    assert.match(refusal(day({ date: '0000-01-01' })), /day: date/);
+    assert.match(refusal(day({ date: '0099-02-29' })), /day: date/);
+  });
 });
 
 describe('10. hostile text', () => {
