@@ -233,11 +233,13 @@ a test in `tests/edge-cases.test.mjs` under the same number.
   keyword, a work domain, the model's reason) goes through one helper:
   each run of white space or control characters (carriage return, line
   feed, tab, U+2028, U+2029 and the rest of Unicode Cc) becomes one space,
-  the text is trimmed and cut, ending in `…` when real text is cut. Work is
-  bounded before flattening: a separate leading allowance is followed by a
-  body of five times the output limit and fixed-size suffix inspection.
-  Detected text past the body bound, or any input left beyond the inspected
-  suffix, adds `…`; inspected white space or control characters alone do not.
+  the text is trimmed and cut, ending in `…` when real text is cut. Runs are
+  collapsed while the text is read, so a run counts as one character towards
+  the cut. Work is bounded: leading separators are skipped first, reading
+  stops after one character past the limit, and each run is inspected for at
+  most eight times the output limit. Real text past the cut, or input left
+  uninspected, adds `…`; inspected white space or control characters alone
+  do not.
   An empty cleaned model reason uses the model-choice fallback; a literal `…`
   is kept.
   Values inside a reason are cut to 80 characters; the whole reason to 160.
@@ -269,18 +271,20 @@ a test in `tests/edge-cases.test.mjs` under the same number.
   and every decision is checked against the six fixed piles before grouping.
 - **E25.** Every Bidi_Control character named in E13 is escaped in a
   plain-summary group label, so it cannot visually reorder the count.
-- **E26.** Reason cleanup examines at most five times its output limit before
-  flattening. After a cut it inspects at most eight times the output limit in
-  code units. Real text in that fixed-size window ends the result in `…`; white
-  space or control characters alone do not when the entire suffix fits in the
-  window. Leading padding does not create a separate absolute boundary; for
-  example, 641 spaces followed by 160 letters keeps all 160 letters.
-- **E27.** Any input beyond the fixed suffix-inspection window is treated as
-  truncated because it was not inspected, even when it is white space. Thus a
-  multi-megabyte white-space suffix after a short reason ends in `…`, as does
-  real text hidden in the middle of a long padded suffix.
+- **E26.** Reason cleanup reads at most one character past its output limit,
+  collapsing each run of separators to one space as it goes, and inspects
+  each run for at most eight times the output limit in code units. So
+  `A`, 799 spaces and `B` gives `A B`, and words with long gaps between them
+  keep every word that fits. Real text past the cut ends the result in `…`;
+  trailing white space or control characters alone do not. Leading padding
+  does not create a separate absolute boundary; for example, 641 spaces
+  followed by 160 letters keeps all 160 letters.
+- **E27.** A run longer than the per-run inspection limit, and anything after
+  it, is treated as truncated because it was not inspected, even when it is
+  white space. Thus a multi-megabyte white-space suffix after a short reason
+  ends in `…`, as does real text hidden behind a long padded run.
 - **E28.** Leading white space and control characters are skipped up to the
-  first real character, do not consume the five-times body bound, and are not
+  first real character, do not count towards the output limit, and are not
   capped.
 - **E29.** The reason-cleanup `oneLine` helper returns `""` only when the
   flattened value is empty (all separators). A literal `…` is preserved. For

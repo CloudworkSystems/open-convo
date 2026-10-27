@@ -95,45 +95,47 @@ export function own(object, key) {
 // domains, the model's reason): leading white space and control characters
 // are skipped in one linear pass to the first real character, then every
 // remaining run of them (CR, LF, tab, U+2028, U+2029 and the rest of Unicode
-// Cc) becomes one space. The result is trimmed and cut to `max` characters,
-// the last being "…" when bounded suffix inspection finds real text that was
-// cut or leaves any input uninspected. The body and suffix scans are bounded
-// by multiples of `max`. An empty flattened value returns "".
+// Cc) becomes one space while the text is read, so a run counts as one
+// character towards the cut. The result is cut to `max` characters, the last
+// being "…" when real text is cut or input is left uninspected. Reading stops
+// after `max + 1` output characters, and each separator run is inspected for
+// at most eight times `max` code units: a longer run, and anything after it,
+// counts as uninspected. An empty flattened value returns "".
 export function oneLine(text, max) {
   const source = String(text);
   const whiteOrControl = /[\s\u0000-\u001F\u007F-\u009F]/u;
+  const runLimit = max * 8;
 
-  // Skip all leading separators in one linear pass so padding does not consume
-  // the bounded body scan.
-  let start = 0;
-  while (start < source.length && whiteOrControl.test(source[start])) start += 1;
+  // Skip all leading separators in one linear pass so padding does not use
+  // up the output.
+  let index = 0;
+  while (index < source.length && whiteOrControl.test(source[index])) index += 1;
 
-  // Take at most five output lengths without slicing or walking the rest.
-  let bounded = '';
-  let end = start;
-  for (let count = 0; end < source.length && count < max * 5; count += 1) {
-    const codePoint = source.codePointAt(end);
-    const character = String.fromCodePoint(codePoint);
-    bounded += character;
-    end += character.length;
+  let out = '';
+  let count = 0;
+  let truncated = false;
+  while (index < source.length) {
+    const character = String.fromCodePoint(source.codePointAt(index));
+    if (whiteOrControl.test(character)) {
+      // Collapse this run to one space, inspecting at most `runLimit` units.
+      const runEnd = Math.min(source.length, index + runLimit);
+      while (index < runEnd && whiteOrControl.test(source[index])) index += 1;
+      if (index === source.length) break; // trailing separators only
+      if (whiteOrControl.test(source[index])) { truncated = true; break; } // run not fully inspected
+      if (count === max) { truncated = true; break; }
+      out += ' ';
+      count += 1;
+      continue;
+    }
+    if (count === max) { truncated = true; break; }
+    out += character;
+    count += 1;
+    index += character.length;
   }
 
-  // Inspect a fixed number of code units after a cut. Real text in that window
-  // means content was cut; so does input beyond the window, because it was not
-  // inspected and therefore cannot safely be treated as padding.
-  const suffixWasTruncated = (from) => {
-    const inspectionEnd = Math.min(source.length, from + max * 8);
-    for (let index = from; index < inspectionEnd; index += 1) {
-      if (!whiteOrControl.test(source[index])) return true;
-    }
-    return inspectionEnd < source.length;
-  };
-  const truncatedPastBound = suffixWasTruncated(end);
-
-  const flat = bounded.replace(/[\s\u0000-\u001F\u007F-\u009F]+/g, ' ').trim();
-  if (flat === '') return '';
-  if (!truncatedPastBound && cutChars(flat, max) === flat) return flat;
-  return `${cutChars(flat, max - 1).trimEnd()}…`;
+  if (out === '') return '';
+  if (!truncated) return out;
+  return `${cutChars(out, max - 1).trimEnd()}…`;
 }
 
 export function quote(text) {

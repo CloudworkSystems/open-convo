@@ -243,7 +243,7 @@ function ruleReason(rule) {
     const { match } = rule;
     // Rule matching already ignores surrounding white space. Give the reason
     // that same matched value so display-only padding is not reported as lost
-    // rule text by oneLine's conservative suffix rule.
+    // rule text by oneLine's per-run inspection limit.
     const trimmed = match.startsWith('@') ? match.slice(1).trim() : match.trim();
     shownMatches.set(rule, match.startsWith('@') ? `@${shownValue(trimmed)}` : shownValue(trimmed));
   }

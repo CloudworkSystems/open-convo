@@ -357,9 +357,17 @@ test('E26. reason cleanup bounds huge input and marks cut or uninspected suffixe
   assert.equal(cleanReason(justOver, 'people'), 'b'.repeat(160));
   assert.equal(cleanReason(padded, 'people'), 'Short reason');
   assert.equal(cleanReason(` a${' '.repeat(798)}b`, 'people'), 'a b');
+
+  // Separators are collapsed while reading, so a run inside the body counts
+  // as one character however long it is, up to the per-run inspection limit.
+  assert.equal(cleanReason(`A${' '.repeat(799)}B`, 'people'), 'A B');
+  assert.equal(cleanReason(`A${' \t'.repeat(640)}B`, 'people'), 'A B');
+  assert.equal(cleanReason(`A${' '.repeat(1281)}B`, 'people'), 'A…');
+  const spaced = Array.from({ length: 200 }, () => 'w').join(' '.repeat(50));
+  assert.equal(cleanReason(spaced, 'people'), `${'w '.repeat(79)}w…`);
 });
 
-test('E27. bounded suffix inspection marks uninspected input and hidden real text as truncated', () => {
+test('E27. a separator run past the inspection limit marks the rest as truncated', () => {
   const padding = ' '.repeat(4 * 1024 * 1024);
   assert.equal(cleanReason(`Brief reason${padding}`, 'people'), 'Brief reason…');
   assert.equal(cleanReason(`Brief reason${padding}z`, 'people'), 'Brief reason…');
