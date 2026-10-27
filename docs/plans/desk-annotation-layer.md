@@ -173,9 +173,12 @@ The owner agreed to both recommendations on October 27:
 
 - **Builder:** a Claude building session. This is Desk code, so it's not an
   outside module. Branch `OC-261027-desk-annotation-layer`.
-- **Review:** Codex reviews every push. Gemini, or a fresh Claude until
-  Gemini posts, is the independent review. The coordinator switches on
-  auto-merge when both are clean.
+- **Review:** Codex reviews every push. The independent review follows
+  AGENTS.md's path for Claude builds at the time: today that's GrokBot,
+  asked by the coordinator with a request naming a non-Claude model, or
+  Gemini once it posts. A fresh Claude review stands in only if neither has
+  reviewed the latest commit within 60 minutes. The coordinator switches on
+  auto-merge when Codex and the independent review are clean.
 - **Tests (one command, `npm run check` in `apps/desk`):**
   - A browser test drives a full round on the sample workspace: an element
     click, a box drag, a text selection, typed notes, and an edited and a
