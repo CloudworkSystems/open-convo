@@ -500,6 +500,27 @@ test('8. snooze presets, including next Monday on a Monday, leave the series put
     raced.remindersDue(at('2026-04-02T00:00:00.000Z'), at('2026-04-03T00:00:00.000Z'), 'UTC').map(row => row.at),
     ['2026-04-02T10:00', '2026-04-02T12:00'],
   );
+
+  const home = engine('snooze-home', T0 + 6, 'UTC');
+  const away = engine('snooze-away', T0 + 2, 'UTC');
+  home.addTask({
+    title: 'Two bells',
+    due: '2026-04-02',
+    reminders: [
+      { dateTime: '2026-04-02T09:00', timeZone: 'UTC', occurrence: '2026-04-02' },
+      { dateTime: '2026-04-02T10:00', timeZone: 'UTC', occurrence: '2026-04-02' },
+    ],
+  }, { taskId: 'shift' });
+  away.importPerson(home.getPerson());
+  home.snooze('shift', { at: { dateTime: '2026-04-02T12:00', timeZone: 'UTC' } }, morning, { recordId: 'move-nine' });
+  away.editTask('shift', { reminders: [{ dateTime: '2026-04-02T10:00', timeZone: 'UTC', occurrence: '2026-04-02' }] });
+  for (const [left, right] of [[home, away], [away, home]]) {
+    const copy = fork(mergePeople(left.getPerson(), right.getPerson()), `shift-${left.deviceId}`, T0 + 8);
+    assert.deepEqual(
+      copy.remindersDue(at('2026-04-02T00:00:00.000Z'), at('2026-04-03T00:00:00.000Z'), 'UTC').map(row => row.at),
+      ['2026-04-02T10:00'],
+    );
+  }
 });
 
 test('upcoming keeps only the occurrences a repeat still has', () => {
@@ -600,12 +621,55 @@ test('9. merge keeps both edits, both completions, and a reopened occurrence', (
   reused.deleteTask('again');
   reused.emptyTrash();
   reused.importPerson(staleCopy.getPerson());
-  reused.addTask({ title: 'New round', due: '2026-06-01', repeat: { kind: 'days', every: 1, mode: 'onSchedule' } }, { taskId: 'again' });
+  assert.throws(
+    () => reused.addTask({ title: 'New round', due: '2026-06-01', repeat: { kind: 'days', every: 1, mode: 'onSchedule' } }, { taskId: 'again' }),
+    /emptied/,
+  );
+  reused.addTask({ title: 'New round', due: '2026-06-01', repeat: { kind: 'days', every: 1, mode: 'onSchedule' } }, { taskId: 'fresh' });
   reused.importPerson(staleCopy.getPerson());
-  assert.equal(reused.task('again').title, 'New round');
-  assert.equal(reused.task('again').status, 'open');
-  assert.equal(reused.task('again').occurrence, '2026-06-01');
-  assert.equal(reused.history('again').some(row => row.id === 'old-done'), false);
+  assert.equal(reused.task('fresh').title, 'New round');
+  assert.equal(reused.task('fresh').status, 'open');
+  assert.equal(reused.task('fresh').occurrence, '2026-06-01');
+  assert.equal(reused.history('fresh').some(row => row.id === 'old-done'), false);
+  assert.throws(() => reused.task('again'), /emptied/);
+
+  const editor = new Tasks({ deviceId: 'editor', id: 'household-repeat', timeZone: 'UTC', now: () => T0 });
+  editor.addTask({ title: 'Sweep', due: '2026-06-01', repeat: { kind: 'days', every: 1, mode: 'onSchedule' } }, { taskId: 'sweep' });
+  editor.editTask('sweep', { repeat: { kind: 'days', every: 2, mode: 'onSchedule' } });
+  editor.undo();
+  const revised = editor.getPerson();
+  const dueStamp = revised.tasks[0].fields.due.stamp;
+  const repeatStamp = revised.tasks[0].fields.repeat.stamp;
+  assert.equal(compareStamps(repeatStamp, dueStamp) > 0, true);
+  const cutoff = { counter: dueStamp.counter + 1, time: dueStamp.time, device: 'purger' };
+  assert.equal(compareStamps(cutoff, dueStamp) > 0, true);
+  assert.equal(compareStamps(repeatStamp, cutoff) > 0, true);
+  const emptied = structuredClone(revised);
+  const marker = emptied.tasks[0];
+  marker.life = { value: false, stamp: cutoff };
+  marker.purge = cutoff;
+  marker.fields = {};
+  marker.records = [];
+  delete marker.pendingLife;
+  const repeatMerge = mergePeople(revised, emptied);
+  assert.deepEqual(repeatMerge, mergePeople(emptied, revised));
+  const sweep = repeatMerge.tasks.find(item => item.id === 'sweep');
+  assert.equal(sweep.fields.repeat.value.every, 1);
+  assert.equal(sweep.fields.due, undefined);
+  assert.equal(sweep.life.value, false);
+  const reader = new Tasks({ deviceId: 'reader', id: 'household-repeat', timeZone: 'UTC', now: () => T0 });
+  reader.importPerson(repeatMerge);
+  assert.throws(() => reader.task('sweep'), /emptied/);
+  const titled = structuredClone(revised);
+  titled.tasks[0].fields.title = { value: 'Sweep', stamp: { counter: repeatStamp.counter + 2, time: T0, device: 'editor' } };
+  titled.tasks[0].life = { value: true, stamp: { counter: repeatStamp.counter + 3, time: T0, device: 'editor' } };
+  const heldRepeat = mergePeople(emptied, titled);
+  assert.deepEqual(heldRepeat, mergePeople(titled, emptied));
+  assert.equal(heldRepeat.tasks[0].fields.title.value, 'Sweep');
+  assert.equal(heldRepeat.tasks[0].fields.repeat.value.every, 1);
+  assert.equal(heldRepeat.tasks[0].fields.due, undefined);
+  assert.equal(heldRepeat.tasks[0].life.value, false);
+  assert.equal(heldRepeat.tasks[0].pendingLife.value, true);
 
   const monday = engine('monday-edit', T0 + 4);
   const thursday = engine('thursday-edit', T0 + 8);

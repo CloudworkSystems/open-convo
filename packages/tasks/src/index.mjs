@@ -89,8 +89,8 @@ function canonicalDue(due) {
   return { kind: 'dateTime', dateTime: due.dateTime, timeZone: due.timeZone };
 }
 function canonicalReminder(reminder) {
-  if (reminder.kind === 'offset') return { kind: 'offset', days: reminder.days, hours: reminder.hours, minutes: reminder.minutes };
-  return { kind: 'fixed', dateTime: reminder.dateTime, timeZone: reminder.timeZone, occurrence: reminder.occurrence ?? null };
+  if (reminder.kind === 'offset') return { id: reminder.id, kind: 'offset', days: reminder.days, hours: reminder.hours, minutes: reminder.minutes };
+  return { id: reminder.id, kind: 'fixed', dateTime: reminder.dateTime, timeZone: reminder.timeZone, occurrence: reminder.occurrence ?? null };
 }
 function canonicalWall(wall) {
   return wall ? { dateTime: wall.dateTime, timeZone: wall.timeZone } : null;
@@ -235,8 +235,34 @@ function normalizeDue(input) {
   if (!validDateTime(input.dateTime)) fail('Due time must be YYYY-MM-DDTHH:MM.');
   return { kind: 'dateTime', dateTime: input.dateTime, timeZone: assertTimeZone(input.timeZone) };
 }
+function reminderContentKey(reminder) {
+  if (reminder.kind === 'offset') return `offset:${reminder.days}:${reminder.hours}:${reminder.minutes}`;
+  return `fixed:${reminder.dateTime}:${reminder.timeZone}:${reminder.occurrence ?? ''}`;
+}
+function assignReminderIds(reminders, previous) {
+  const pools = new Map();
+  for (const reminder of previous) {
+    const key = reminderContentKey(reminder);
+    if (!pools.has(key)) pools.set(key, []);
+    pools.get(key).push(reminder.id);
+  }
+  const used = new Set();
+  return reminders.map(reminder => {
+    let id = reminder.id ?? null;
+    if (id && used.has(id)) id = null;
+    if (!id) {
+      const pool = pools.get(reminderContentKey(reminder)) ?? [];
+      id = pool.find(candidate => !used.has(candidate)) ?? randomUUID();
+    }
+    used.add(id);
+    const body = { ...reminder };
+    delete body.id;
+    return { ...body, id };
+  });
+}
 function normalizeReminder(input, fallbackOccurrence) {
   if (!object(input)) fail('Reminder must be an object.');
+  const id = own(input, 'id') && input.id != null ? identity(input.id, 'Reminder ID') : null;
   const offsetLike = input.kind === 'offset' || own(input, 'days') || own(input, 'hours') || own(input, 'minutes');
   if (offsetLike) {
     if (input.kind && input.kind !== 'offset') fail('Unknown reminder.');
@@ -245,19 +271,20 @@ function normalizeReminder(input, fallbackOccurrence) {
     const minutes = input.minutes ?? 0;
     if (![days, hours, minutes].every(Number.isSafeInteger)) fail('Reminder offset must be a whole number.');
     if (days < 0 || days > 365 || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) fail('Reminder offset is out of range.');
-    return { kind: 'offset', days, hours, minutes };
+    return id ? { id, kind: 'offset', days, hours, minutes } : { kind: 'offset', days, hours, minutes };
   }
   const dateTime = input.dateTime ?? input.at;
   if (!validDateTime(dateTime)) fail('Reminder time must be YYYY-MM-DDTHH:MM.');
   const occurrence = own(input, 'occurrence') ? input.occurrence : fallbackOccurrence;
   if (occurrence != null && (typeof occurrence !== 'string' || occurrence.length > 200)) fail('Reminder occurrence must be text.');
-  return { kind: 'fixed', dateTime, timeZone: assertTimeZone(input.timeZone), occurrence: occurrence ?? null };
+  const fixed = { kind: 'fixed', dateTime, timeZone: assertTimeZone(input.timeZone), occurrence: occurrence ?? null };
+  return id ? { id, ...fixed } : fixed;
 }
-function normalizeReminders(input, fallbackOccurrence) {
+function normalizeReminders(input, fallbackOccurrence, previous = []) {
   if (input == null) return [];
   if (!Array.isArray(input)) fail('Reminders must be a list.');
   if (input.length > 5) fail('A task can have at most 5 reminders.');
-  return input.map(reminder => normalizeReminder(reminder, fallbackOccurrence));
+  return assignReminderIds(input.map(reminder => normalizeReminder(reminder, fallbackOccurrence)), previous);
 }
 function normalizeTitle(title) {
   const text = string(title, 'Title');
@@ -393,7 +420,7 @@ function reminderMoments(task, ownerZone, dayStart) {
     if (reminder.kind === 'offset') {
       if (!due) return;
       const instant = offsetInstant(due, reminder, dayStart, ownerZone);
-      moments.push({ index, reminder, occurrence, instant, baseInstant: instant });
+      moments.push({ id: reminder.id, index, reminder, occurrence, instant, baseInstant: instant });
       return;
     }
     // A named fixed reminder belongs to one occurrence, including a one-off
@@ -401,7 +428,7 @@ function reminderMoments(task, ownerZone, dayStart) {
     // until an edit moves it.
     if (reminder.occurrence != null && reminder.occurrence !== occurrence) return;
     const instant = wallToInstant(reminder.dateTime, reminder.timeZone);
-    moments.push({ index, reminder, occurrence, instant, baseInstant: instant });
+    moments.push({ id: reminder.id, index, reminder, occurrence, instant, baseInstant: instant });
   });
   // One winner per reminder that was moved. A later snooze of a different
   // reminder keeps the earlier replacement. Two concurrent snoozes of the same
@@ -426,9 +453,11 @@ function applyWinningSnooze(moments, snooze, occurrence) {
   const instant = wallToInstant(snooze.fields.reminderAt.value.dateTime, snooze.fields.reminderAt.value.timeZone);
   const replaces = snooze.fields.replaces?.value ?? null;
   if (replaces != null) {
-    const index = moments.findIndex(moment => moment.index === replaces);
+    // The id, not the list position: a concurrent removal must not move the
+    // reminder that shifted into the old index. A missing id is a removed
+    // reminder, so the snooze does not fire.
+    const index = moments.findIndex(moment => moment.id === replaces);
     if (index >= 0) moments[index] = { ...moments[index], instant, snoozed: true };
-    else moments.push({ index: -1, reminder: { kind: 'snooze' }, occurrence, instant, baseInstant: instant, snoozed: true });
     return;
   }
   const action = snooze.instant;
@@ -443,8 +472,8 @@ function applyWinningSnooze(moments, snooze, occurrence) {
 function replacedReminder(task, occurrence, now, zone, dayStart) {
   const moments = reminderMoments(task, zone, dayStart).filter(moment => moment.instant >= now && moment.index >= 0)
     .sort((a, b) => a.instant - b.instant || a.index - b.index);
-  // Index, not the instant: two reminders can share a time and must stay distinct.
-  return moments.length ? moments[0].index : null;
+  // Id, not the instant: two reminders can share a time and must stay distinct.
+  return moments.length ? moments[0].id : null;
 }
 
 function blankRecord(id, type, occurrence, instant, actionDate, actionZone, stamp, fields) {
@@ -471,6 +500,9 @@ function fillTaskFields(fields, purge) {
   }
   return filled;
 }
+function repeatWithoutDue(fields) {
+  return Boolean(fields.repeat?.value) && !fields.due?.value;
+}
 function mergeTask(a, b) {
   if (!a) return clone(b);
   if (!b) return clone(a);
@@ -487,7 +519,10 @@ function mergeTask(a, b) {
   if (purge && compareStamps(life.stamp, purge) <= 0) {
     return { id: a.id, life: { value: false, stamp: clone(purge) }, purge: clone(purge), fields, records: mergedRecords };
   }
-  if (!fields.title) {
+  // A repeat can outlive its due date: undo restamps the rule and leaves the
+  // due stamp behind, then a purge falls between them. That marker is not a
+  // task until a due date newer than the cutoff arrives.
+  if (!fields.title || (purge && repeatWithoutDue(fields))) {
     return {
       id: a.id,
       life: { value: false, stamp: clone(purge ?? life.stamp) },
@@ -541,13 +576,16 @@ function checkRepeat(rule) {
 }
 function checkReminders(reminders) {
   if (!Array.isArray(reminders) || reminders.length > 5) fail('Invalid reminders in task file.');
+  const seen = new Set();
   for (const reminder of reminders) {
     if (!object(reminder)) fail('Invalid reminders in task file.');
+    if (typeof reminder.id !== 'string' || !reminder.id || reminder.id.length > 200 || seen.has(reminder.id)) fail('Invalid reminders in task file.');
+    seen.add(reminder.id);
     if (reminder.kind === 'offset') {
-      exactKeys(reminder, ['kind', 'days', 'hours', 'minutes']);
+      exactKeys(reminder, ['id', 'kind', 'days', 'hours', 'minutes']);
       normalizeReminder(reminder, null);
     } else if (reminder.kind === 'fixed') {
-      exactKeys(reminder, ['kind', 'dateTime', 'timeZone', 'occurrence']);
+      exactKeys(reminder, ['id', 'kind', 'dateTime', 'timeZone', 'occurrence']);
       normalizeReminder(reminder, null);
     } else fail('Invalid reminders in task file.');
   }
@@ -581,7 +619,7 @@ function checkTask(task) {
     if (own(task.fields, 'state') && !['open', 'done', 'dropped'].includes(value('state'))) fail('Invalid task in task file.');
     if (own(task.fields, 'due')) checkDue(value('due'), 'due');
     if (own(task.fields, 'repeat')) checkRepeat(value('repeat'));
-    if (value('repeat') && !value('due')) fail('A repeating task needs a due date.');
+    if (live && value('repeat') && !value('due')) fail('A repeating task needs a due date.');
     if (own(task.fields, 'reminders')) checkReminders(value('reminders'));
   }
   const seen = new Set();
@@ -599,7 +637,7 @@ function checkTask(task) {
     if (typeof record.fields.withdrawn.value !== 'boolean') fail('Invalid record in task file.');
     if (!Array.isArray(record.fields.seen.value) || record.fields.seen.value.some(id => typeof id !== 'string')) fail('Invalid record in task file.');
     checkDue(record.fields.due.value, 'due');
-    if (record.fields.replaces.value !== null && (!Number.isSafeInteger(record.fields.replaces.value) || record.fields.replaces.value < 0)) fail('Invalid record in task file.');
+    if (record.fields.replaces.value !== null && (typeof record.fields.replaces.value !== 'string' || !record.fields.replaces.value || record.fields.replaces.value.length > 200)) fail('Invalid record in task file.');
     if (record.fields.reminderAt.value != null) {
       const at = record.fields.reminderAt.value;
       exactKeys(at, ['dateTime', 'timeZone']);
@@ -720,7 +758,10 @@ export class Tasks {
     if (!object(input)) fail('Task must be an object.');
     identity(taskId, 'Task ID');
     const existing = this.#locate(taskId);
-    if (existing && hasTitle(existing)) fail('Task ID already exists.');
+    // An emptied id stays retired. A new cutoff only fences stamps this device
+    // has seen, so an offline replica with a higher counter could still attach
+    // the old task's completion to a replacement.
+    if (existing) fail(usableTask(existing) ? 'Task ID already exists.' : 'Task ID was emptied from Trash.');
     const title = normalizeTitle(input.title);
     const note = normalizeNote(input.note);
     const list = normalizeList(input.list);
@@ -731,19 +772,11 @@ export class Tasks {
     const occurrence = occurrenceName(due, dueCalendar(due));
     const reminders = normalizeReminders(input.reminders, occurrence);
     this.#change((person, stamp) => {
-      const prior = person.tasks.find(task => task.id === taskId);
-      // Reusing an emptied id must move the cutoff past every record this
-      // device still holds. Clearing them only locally lets an offline copy
-      // attach a post-purge completion to the new task. The new body is
-      // stamped after that cutoff so it is not emptied along with them.
-      const purge = prior ? stamp : null;
-      const contentStamp = prior ? this.#stamp() : stamp;
-      if (prior) person.tasks = person.tasks.filter(task => task.id !== taskId);
       person.tasks.push({
         id: taskId,
-        life: { value: true, stamp: clone(contentStamp) },
-        purge: clone(purge),
-        fields: stampedFields({ title, note, list, priority, state: 'open', due, repeat, reminders }, contentStamp, TASK_KEYS),
+        life: { value: true, stamp: clone(stamp) },
+        purge: null,
+        fields: stampedFields({ title, note, list, priority, state: 'open', due, repeat, reminders }, stamp, TASK_KEYS),
         records: [],
       });
     });
@@ -796,7 +829,7 @@ export class Tasks {
       }
       if (own(patch, 'reminders')) {
         const occurrence = occurrenceName(task.fields.due.value, currentDate(task));
-        task.fields.reminders = { value: normalizeReminders(patch.reminders, occurrence), stamp: clone(stamp) };
+        task.fields.reminders = { value: normalizeReminders(patch.reminders, occurrence, before.fields.reminders.value), stamp: clone(stamp) };
       }
       if (task.fields.repeat.value && !task.fields.due.value) fail('A repeating task needs a due date.');
     });
