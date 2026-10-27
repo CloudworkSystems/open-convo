@@ -138,20 +138,28 @@ Rules for the VM:
   owner-approved exception to "secrets belong in Keychain", since a Linux VM
   has no Keychain: a file readable only by the VM's user account (mode 600),
   never in the repository, logs or the shell history. A Codex sign-in goes there only when
-  the owner sets it up.
-- **Gemini (set up October 27):** Google no longer lets the Gemini CLI sign
-  in with a Gemini subscription (it stopped on June 18, 2026), so Gemini
-  runs on a pay-per-use API key from the owner's Google AI Studio account.
-  On the VM, an exe.dev Integrations HTTP proxy named `gemini`, attached to
-  the builders' VM only, adds the key to requests to
-  `generativelanguage.googleapis.com`; the VM calls
-  `https://gemini.int.exe.xyz` and never sees the key. On the owner's Mac
-  the key is in Keychain (`gemini-api-key`) and the `gemini` launcher reads
-  it from there at start. Checks use a low-cost Flash model by default,
-  and the owner keeps a monthly budget on the key. Gemini checks public
-  code and plans only, not private True Convo data, until the owner
-  decides otherwise. The VM never holds the `CloudworkSystems` account's
+  the owner sets it up. The VM never holds the `CloudworkSystems` account's
   credentials.
+- **Gemini CLI (set up October 27; this is the command-line tool on the VM
+  and the Mac, not a Gemini review on GitHub, which isn't set up):** Google
+  stopped accepting Gemini subscription sign-in in the old Gemini CLI for
+  individual and Google AI Pro and Ultra accounts on June 18, 2026
+  ([Google's notice](https://developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals)),
+  so it runs on a pay-per-use API key from the owner's Google AI Studio
+  account. On the VM, an exe.dev Integrations HTTP proxy named `gemini`,
+  attached to the builders' VM only, adds the key to requests to
+  `generativelanguage.googleapis.com`. The VM calls
+  `https://gemini.int.exe.xyz`, which answers only VMs the integration is
+  attached to, and never sees the key. On the owner's Mac the key is in
+  Keychain (`gemini-api-key`), and the `gemini` launcher reads it from
+  there at start. Checks use a low-cost Flash model by default, and the
+  owner keeps a monthly budget on the key. Gemini checks public code and
+  plans only, not private True Convo data, until the owner decides
+  otherwise. Google's replacement, the Antigravity CLI, accepts the owner's
+  subscription sign-in, including over SSH
+  ([Antigravity docs](https://antigravity.google/docs/install)); trying it
+  on the VM is next, and if it works it replaces the key for interactive
+  use.
 - **Zero trust:** an unknown foreign agent (for example Meta's Muse agent)
   never shares the VM or its token with the trusted builders.
 - **CPU only:** local models on the VM are small ones.

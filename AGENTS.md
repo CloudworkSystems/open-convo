@@ -144,11 +144,12 @@ reads from and writes to `CloudworkSystems/open-convo`.
     coordinator asks for a fresh Claude review (by an agent that didn't build
     the pull request), which stands in.
     Gemini Code Assist can't be installed on this repo: Google stopped
-    serving its GitHub app, and the Gemini CLI's Google sign-in, for
-    individual and Google AI Pro and Ultra accounts on June 18, 2026.
-    Gemini now runs only through a pay-per-use API key (owner, October 27).
-    A GitHub workflow that asks Gemini for the review, with its own key kept
-    as a repository secret, needs its own plan and the owner's approval,
+    serving its GitHub app, and the old Gemini CLI's Google sign-in, for
+    individual and Google AI Pro and Ultra accounts on June 18, 2026
+    ([Google's notice](https://developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals)).
+    A GitHub workflow can't do an interactive sign-in, so a Gemini review
+    here would call Gemini with a pay-per-use API key kept as a repository
+    secret. That workflow needs its own plan and the owner's approval,
     since it spends money. Until it is merged, GrokBot and then fresh Claude
     are the ones that run. Gemini is marked "not set up" (Agent Setup And
     Silence below), so nobody asks it or waits for it until that changes.
@@ -166,8 +167,10 @@ reads from and writes to `CloudworkSystems/open-convo`.
     steps the same way, under the same rules as above; this section is the
     rule they point to, so they don't need their own revisions.
   - Gemini, Argon (the owner's Gemini preview model) included, is reached
-    through an API key, never a sign-in. On GitHub the key is a repository
-    secret, never in files.
+    through the owner's subscription sign-in where a person can sign in
+    (Google's Antigravity CLI, locally or over SSH), and through an API key
+    where nobody can, such as a GitHub workflow. A key lives in a repository
+    secret, Keychain or exe.dev Integrations, never in files.
 - *Proposed October 15, pending the owner's approval at merge:* every review,
   by any agent or the owner, asks two questions of each change. Does it break
   a rule of this system? Does it fix a problem the owner actually has?
