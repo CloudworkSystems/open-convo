@@ -521,6 +521,21 @@ test('8. snooze presets, including next Monday on a Monday, leave the series put
       ['2026-04-02T10:00'],
     );
   }
+
+  const quiet = engine('quiet-snooze', T0 + 4, 'UTC');
+  const added = engine('added-bell', T0 + 3, 'UTC');
+  quiet.addTask({ title: 'Bare', due: '2026-04-06' }, { taskId: 'bare' });
+  added.importPerson(quiet.getPerson());
+  quiet.snooze('bare', { at: { dateTime: '2026-04-06T12:00', timeZone: 'UTC' } }, at('2026-04-06T08:00:00.000Z'), { recordId: 'loose' });
+  added.editTask('bare', { reminders: [{ dateTime: '2026-04-06T10:00', timeZone: 'UTC', occurrence: '2026-04-06' }] });
+  assert.equal(quiet.getPerson().tasks.find(task => task.id === 'bare').records[0].fields.replaces.value, null);
+  for (const [left, right] of [[quiet, added], [added, quiet]]) {
+    const copy = fork(mergePeople(left.getPerson(), right.getPerson()), `loose-${left.deviceId}`, T0 + 8);
+    assert.deepEqual(
+      copy.remindersDue(at('2026-04-06T00:00:00.000Z'), at('2026-04-07T00:00:00.000Z'), 'UTC').map(row => row.at),
+      ['2026-04-06T10:00', '2026-04-06T12:00'],
+    );
+  }
 });
 
 test('upcoming keeps only the occurrences a repeat still has', () => {

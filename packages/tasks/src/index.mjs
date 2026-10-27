@@ -460,14 +460,9 @@ function applyWinningSnooze(moments, snooze, occurrence) {
     if (index >= 0) moments[index] = { ...moments[index], instant, snoozed: true };
     return;
   }
-  const action = snooze.instant;
-  let target = -1;
-  for (let i = 0; i < moments.length; i += 1) {
-    if (moments[i].instant < action) continue;
-    if (target < 0 || moments[i].instant < moments[target].instant || (moments[i].instant === moments[target].instant && moments[i].index < moments[target].index)) target = i;
-  }
-  if (target < 0) moments.push({ index: -1, reminder: { kind: 'snooze' }, occurrence, instant, baseInstant: instant, snoozed: true });
-  else moments[target] = { ...moments[target], instant, snoozed: true };
+  // Nothing was targeted. This is its own reminder. Searching the list again
+  // would move a reminder another replica added after the snooze.
+  moments.push({ index: -1, reminder: { kind: 'snooze' }, occurrence, instant, baseInstant: instant, snoozed: true });
 }
 function replacedReminder(task, occurrence, now, zone, dayStart) {
   const moments = reminderMoments(task, zone, dayStart).filter(moment => moment.instant >= now && moment.index >= 0)
