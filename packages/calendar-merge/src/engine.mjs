@@ -523,13 +523,17 @@ function compareOccurrenceRank(a, b) {
   return (b.rank.sequence - a.rank.sequence)
     || ((b.rank.lastModified ?? -Infinity) - (a.rank.lastModified ?? -Infinity) || 0)
     || ((b.rank.dtstamp ?? -Infinity) - (a.rank.dtstamp ?? -Infinity) || 0)
-    || (a.minSource - b.minSource)
+    || (a.rankSource - b.rankSource)
     || byCodeUnits(a.uid, b.uid)
     || byCodeUnits(a.key, b.key);
 }
 
 function makeOccurrence(copy, instance, extra) {
   const sources = [...extra.sources].sort((a, b) => a - b);
+  // The copy that won this occurrence ranks it in title-and-time matching:
+  // the copy whose fields are shown, or the cancellation record that won
+  // over it. Its own source breaks a full tie, not the earliest contributor.
+  const rankCopy = extra.rankCopy ?? copy;
   return {
     uid: copy.uid,
     key: `${copy.uid}/${extra.origLabel ?? instance.origLabel}`,
@@ -545,11 +549,14 @@ function makeOccurrence(copy, instance, extra) {
     status: extra.cancelled ? 'cancelled' : copy.status,
     sources,
     minSource: sources[0],
-    matchedBy: sources.length > 1 ? 'uid' : null,
+    // Several copies of this UID and RECURRENCE-ID were merged, from one
+    // source (E16) or more (E23).
+    matchedBy: sources.length > 1 || extra.participants > 1 ? 'uid' : null,
     isRepeat: extra.isRepeat,
     isChanged: extra.isChanged,
     repeatNotSupported: extra.repeatNotSupported,
-    rank: { sequence: copy.sequence, lastModified: copy.lastModified, dtstamp: copy.dtstamp },
+    rank: { sequence: rankCopy.sequence, lastModified: rankCopy.lastModified, dtstamp: rankCopy.dtstamp },
+    rankSource: rankCopy.sourceIndex,
   };
 }
 
@@ -565,6 +572,14 @@ function mergeUid(group, q, problems) {
   const masterSources = new Set(masterAll.map((c) => c.sourceIndex));
   const hasOverrideCopies = [...group.overrides.values()].some((o) => o.copies.length);
   const seriesCancelled = (masterAll[0] && masterAll[0].kind === 'record') || display?.status === 'cancelled';
+  // The copy that ranks an occurrence: its shown copy, unless a cancellation
+  // record (of the series, or of this occurrence) won over it.
+  const rankCopyFor = (shown, change) => {
+    const contenders = [shown];
+    if (seriesCancelled && masterAll[0].kind === 'record') contenders.push(masterAll[0]);
+    if (change?.cancelled && change.winner.kind === 'record') contenders.push(change.winner);
+    return contenders.sort(compareCopies)[0];
+  };
 
   if (!display && !hasOverrideCopies) {
     for (const record of group.records) problems.push({ sourceIndex: record.sourceIndex, line: record.line, text: `cancellation for "${record.uid}" matches no event in any source` });
@@ -589,17 +604,20 @@ function mergeUid(group, q, problems) {
     contenders.sort(compareCopies);
     const winner = contenders[0];
     const sources = new Set([...masterSources, ...copies.map((c) => c.sourceIndex), ...entry.records.map((r) => r.sourceIndex)]);
+    // Copies of this exact RECURRENCE-ID (changed copies and cancellation
+    // records); the series itself is not a copy of a changed occurrence.
+    const participants = copies.length + entry.records.length;
     if (winner.virtualMaster) {
       // The series copy is newer, so the occurrence is unchanged, but it still
       // lists the sources of the cancellations it outranks (E23).
-      changed.set(ridKey, { override: null, cancelled: false, sources, rid: null, range: false, winner });
+      changed.set(ridKey, { override: null, cancelled: false, sources, participants, rid: null, range: false, winner });
       continue;
     }
     // Only the winning copy's RANGE counts: a stale RANGE override that loses
     // to a newer cancellation changes nothing beyond its own occurrence.
     // The label comes from the winning copy, so equal RECURRENCE-IDs written
     // differently give the same key whatever order the copies come in.
-    changed.set(ridKey, { override: copies[0] ?? null, cancelled: winner.kind === 'record' || winner.status === 'cancelled', sources, rid: winner.rid, range: Boolean(winner.ridRange), winner });
+    changed.set(ridKey, { override: copies[0] ?? null, cancelled: winner.kind === 'record' || winner.status === 'cancelled', sources, rid: winner.rid, range: Boolean(winner.ridRange), winner, participants });
   }
 
   const items = [];
@@ -629,6 +647,10 @@ function mergeUid(group, q, problems) {
       if (change && change.override && !degraded) continue; // replaced by the changed copy below
       items.push({ copy: display, instance, extra: {
         sources: change ? change.sources : masterSources,
+        // Copies of the series itself (E16); its changed occurrences and
+        // their cancellations are not copies of the series.
+        participants: masterAll.length,
+        rankCopy: rankCopyFor(display, change),
         cancelled: seriesCancelled || Boolean(change?.cancelled),
         isRepeat: display.isRepeat,
         isChanged: false,
@@ -645,6 +667,8 @@ function mergeUid(group, q, problems) {
       items.push({ copy: change.override, instance, extra: {
         origLabel: labelOf(change.rid),
         sources: change.sources,
+        participants: change.participants,
+        rankCopy: rankCopyFor(change.override, change),
         cancelled: seriesCancelled || change.cancelled,
         isRepeat: true,
         isChanged: true,

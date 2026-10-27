@@ -358,3 +358,40 @@ test('a cancellation that loses to a newer series still lists its source on the 
     }
   }
 });
+
+// Round on 700e52a: title-and-time ranking uses the copy that won each
+// occurrence, and same-source UID collapses are reported as UID matches.
+const at = (stamp) => `DTSTART;TZID=America/New_York:${stamp}`;
+
+test('a title-and-time tie goes to the earlier source of the winning copy, not of a losing copy (review 700e52a)', async () => {
+  const aOld = cal(ev('UID:a@test.example', 'SUMMARY:Sync', at('20261110T100000'), 'DURATION:PT1H', 'LOCATION:Room A old', 'SEQUENCE:0'));
+  const bWin = cal(ev('UID:b@test.example', 'SUMMARY:Sync', at('20261110T100000'), 'DURATION:PT1H', 'LOCATION:Room B', 'SEQUENCE:1'));
+  const aWin = cal(ev('UID:a@test.example', 'SUMMARY:Sync', at('20261110T100000'), 'DURATION:PT1H', 'LOCATION:Room A', 'SEQUENCE:1'));
+  const result = await merge({ s0: aOld, s1: bWin, s2: aWin }, NOV);
+  assert.deepEqual(result.occurrences.map((o) => [o.uid, o.location, o.matchedBy, o.sources.map((s) => s.id).join(',')]), [
+    ['b@test.example', 'Room B', 'title-and-time', 's0,s1,s2'],
+  ]);
+});
+
+test('cancelled title-and-time look-alikes are ranked by the winning cancellation record (review 700e52a)', async () => {
+  const x = cal(ev('UID:x@test.example', 'SUMMARY:Talk', at('20261110T100000'), 'DURATION:PT1H', 'LOCATION:Hall X', 'SEQUENCE:0'));
+  const xRecord = cal(ev('UID:x@test.example', 'STATUS:CANCELLED', 'SEQUENCE:10'));
+  const y = cal(ev('UID:y@test.example', 'SUMMARY:Talk', at('20261110T100000'), 'DURATION:PT1H', 'LOCATION:Hall Y', 'SEQUENCE:5'));
+  const yRecord = cal(ev('UID:y@test.example', 'STATUS:CANCELLED', 'SEQUENCE:6'));
+  const result = await merge({ a: x, b: xRecord, c: y, d: yRecord }, { ...NOV, includeCancelled: true });
+  assert.deepEqual(result.occurrences.map((o) => [o.uid, o.location, o.status, o.matchedBy]), [
+    ['x@test.example', 'Hall X', 'cancelled', 'title-and-time'],
+  ]);
+});
+
+test('two copies of one UID in one source are reported as a UID match (review 700e52a, E16)', async () => {
+  const one = ev('UID:d@test.example', 'SUMMARY:Dup', at('20261110T100000'), 'DURATION:PT1H', 'SEQUENCE:1');
+  const two = ev('UID:d@test.example', 'SUMMARY:Dup (old)', at('20261110T100000'), 'DURATION:PT1H', 'SEQUENCE:0');
+  const result = await merge({ a: cal(one, two) }, NOV);
+  assert.deepEqual(result.occurrences.map((o) => [o.title, o.matchedBy]), [['Dup', 'uid']]);
+  const moved = ev('UID:d@test.example', 'SUMMARY:Moved', 'RECURRENCE-ID;TZID=America/New_York:20261110T100000', at('20261110T120000'), 'DURATION:PT1H', 'SEQUENCE:2');
+  const movedOld = ev('UID:d@test.example', 'SUMMARY:Moved (old)', 'RECURRENCE-ID;TZID=America/New_York:20261110T100000', at('20261110T130000'), 'DURATION:PT1H', 'SEQUENCE:1');
+  const series = ev('UID:d@test.example', 'SUMMARY:Daily', at('20261109T100000'), 'DURATION:PT1H', 'RRULE:FREQ=DAILY;COUNT=2');
+  const changed = await merge({ a: cal(series, moved, movedOld) }, NOV);
+  assert.deepEqual(changed.occurrences.map((o) => [o.title, o.matchedBy]), [['Daily', null], ['Moved', 'uid']]);
+});

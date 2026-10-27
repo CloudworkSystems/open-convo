@@ -98,7 +98,10 @@ console.log(formatAgenda(result));
   and each joins the first group whose sources don't overlap its own and
   that holds no occurrence of its `UID` (E32). All
   fields come from one winning copy, including the `RECURRENCE-ID` label in
-  the `key`, so the order copies come in never changes the output.
+  the `key`, so the order copies come in never changes the output. Each
+  look-alike is ranked by the copy that won it (or by the cancellation record
+  that won over that copy), and a full tie goes to that copy's source, not to
+  the earliest source that held a losing copy.
 
 ## Not supported in this slice
 
@@ -264,7 +267,8 @@ Each has a test under the same number, in `tests/15-edge-cases.test.mjs`
   read as `:59` (RFC 5545 3.3.12).
 - **E16.** Two copies of the same `UID` (and `RECURRENCE-ID`) in one source
   follow the usual order; a full tie is decided by their content, never by
-  their place in the file.
+  their place in the file. The result is `matchedBy: "uid"`. A series and its
+  own changed occurrences are not copies of each other.
 - **E17.** A cancellation record with a `RECURRENCE-ID` matches when the
   series exists in any source, even if the series has no occurrence at that
   time; it is not listed as a problem. When the `UID` belongs only to an event
