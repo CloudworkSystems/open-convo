@@ -46,7 +46,12 @@ yes.
    front camera's depth sensor) rather than its own camera code, so the app
    never sees or stores the face. A passkey can stand in on other devices,
    with its challenge set to a hash of the whole request: the action on
-   screen, the one-time number and the expiry.
+   screen, the one-time number and the expiry. The passkey must require
+   user verification (Face ID, fingerprint or PIN), and the verifier
+   rejects any assertion without that flag, so a mere touch never counts.
+   The signed request also names the verifier it's meant for and the
+   account that will act, so a yes for one verifier can't be replayed at
+   another.
 4. **A verifier acts.** A small, separate piece sits next to the thing that
    acts. It checks the signature, that the request matches the action, that
    it hasn't expired and hasn't been used before. Only then does it perform
@@ -101,6 +106,13 @@ outlives the session, and a rule change, since today no agent may act as the
 owner's account). On October 27 the owner chose to try fewer approvals first
 (plans now merge on his yes in a thread), so this waits until the remaining
 approvals prove to be a real burden.
+
+## Before Anything Is Built
+
+This note sets direction only. A build gets its own plan in `docs/plans/`,
+written with a full security review of the signing format and the verifier,
+and that plan, not this note, is where the remaining protocol detail
+belongs.
 
 ## Open Questions
 
