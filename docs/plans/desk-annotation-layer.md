@@ -142,22 +142,18 @@ them, durable anchors across Desk changes, the design-feedback chips from
 the August 14 plan (R9 and R10 there), saved history, sign-in, and
 annotating anything outside the Desk.
 
-## Decisions For The Owner (Before The Build)
+## Owner Decisions (October 27, 2026)
 
-1. **Sending from the Desk.** May the review build push the round branch as
-   `cloudwork-bot` and open its pull request when you press **Send round**?
-   *Recommended: yes.* That's the step you asked to drop. Without it, the
-   round is saved on the Mac and someone still has to send it.
-2. **How the marked still is made.**
-   - **(a) In the page, with one small open-source library** such as
-     `html-to-image` (MIT). It works in every browser, with no permission
-     prompt.
-   - **(b) Native screenshots only** (the Mac app's web view). That adds no
-     dependency, but it doesn't work in the browser opened by
-     `Start Desk.command`.
+The owner agreed to both recommendations on October 27:
 
-   *Recommended: (a).* The dependency is listed with its license in the
-   pull request.
+1. **Sending from the Desk: yes.** Pressing **Send round** in the review
+   build pushes the round branch as `cloudwork-bot` and opens its pull
+   request, under R6's limits.
+2. **Marked stills are made in the page** with one small open-source
+   library such as `html-to-image` (MIT), so they work in every browser
+   with no permission prompt. The build pull request names the library
+   and its license. Native screenshots in the Mac app's web view are not
+   part of this slice.
 
 ## Builder, Review And Finish Line
 
