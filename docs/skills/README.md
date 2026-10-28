@@ -21,8 +21,8 @@ Rules for this folder:
   code").
 - **Draft until tested.** A skill stays `draft` with an empty
   `models_passed` until its example runs pass on the local default model.
-- **Public repo.** No private facts, sources files from real decisions or
-  personal data here; examples use invented situations.
+- **Public repo.** No private facts, no sources files from real decisions,
+  and no personal data here; examples use invented situations.
 
 | Skill | Status | What it's for |
 |---|---|---|
