@@ -140,7 +140,11 @@ company's model. A checker reports; it never decides.
   checker run gets a tool allowlist or deny list that leaves only reading
   (or no tools at all, with the material passed in the request), checked
   before its first use, the same way `docs/plans/security.md` limits its
-  report-only agents. Where a harness can't be narrowed that way, the check
+  report-only agents. Reading is limited too, so the public-material rule
+  holds: a checker that has tools runs in a scratch folder holding only the
+  material it was given, never in a repository checkout, the owner's home
+  folder or anywhere with ignored private files, with reads outside that
+  folder denied. Where a harness can't be narrowed that way, the check
   calls the Gemini API directly with no tools instead.
 - **Watched like any agent.** It gets a setup status and deadlines under
   "Knowing When an Agent Isn't Working" below, and a silent or failing
@@ -210,8 +214,8 @@ keys live in Keychain, never in files or logs.
    boundary is in place. It needs the code-side spending cap before its
    first paid call. The owner's own Claude sessions can use it before
    then, on public material, through the CLI setup in
-   `back-end-and-agent-hosts.md`, with the CLI's file-writing and shell
-   tools excluded in its settings.
+   `back-end-and-agent-hosts.md`, run from such a scratch folder with the
+   CLI's file-writing and shell tools excluded in its settings.
 7. **Meta Muse.**
 
 ## Knowing When an Agent Isn't Working (October 26)
