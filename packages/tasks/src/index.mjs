@@ -194,7 +194,7 @@ function occurrenceBody(name) {
 }
 /** A one-off task, dated or not, has one occurrence named `once`. */
 function taskOccurrence(task, date) {
-  if (!task?.fields?.repeat?.value) return 'once';
+  if (!ruleOf(task)) return 'once';
   return occurrenceName(task.fields.due?.value, date);
 }
 function occurrenceDateOf(name) {
@@ -403,12 +403,14 @@ function nextAfterDone(latest, rule, names, template) {
 }
 function ruleOf(task) {
   const rule = task.fields.repeat?.value ?? null;
-  if (!rule || countingRecords(task).length) return rule;
+  if (!rule) return null;
   const dueDate = dueCalendar(task.fields.due?.value);
-  // A due edit and a new repeat can win different fields. The next date follows
-  // the due date whether it moved earlier or later, and a plain weekly repeat
+  // A due edit and a new repeat can win different fields. With no due date
+  // there is nothing to schedule, so the repeat waits. Otherwise the next
+  // date follows the due date, earlier or later, and a plain weekly repeat
   // keeps that date as its start.
-  if (!dueDate || dueDate === rule.start) return rule;
+  if (!dueDate) return null;
+  if (countingRecords(task).length || dueDate === rule.start) return rule;
   try {
     return normalizeRepeat(rule, dueDate, { exactStart: false });
   } catch {
@@ -433,7 +435,7 @@ function currentDate(task) {
 function statusOf(task) {
   if (!task.life.value || task.pendingLife || !hasTitle(task)) return 'deleted';
   if (task.fields.state.value === 'dropped') return 'dropped';
-  if (!task.fields.repeat.value) return task.fields.state.value === 'done' ? 'done' : 'open';
+  if (!ruleOf(task)) return task.fields.state.value === 'done' ? 'done' : 'open';
   return currentDate(task) ? 'open' : 'done';
 }
 function movedDue(task, occurrence) {
@@ -494,7 +496,7 @@ function reminderMoments(task, ownerZone, dayStart) {
     // an undated task a due date lapses it. A reminder with no occurrence name
     // stays while the task is open.
     if (reminder.occurrence != null && reminder.occurrence !== occurrence) return;
-    if (!task.fields.repeat.value && reminder.occurrence === 'once' && (reminder.schedule ?? null) !== (schedule ?? null)) return;
+    if (!ruleOf(task) && reminder.occurrence === 'once' && (reminder.schedule ?? null) !== (schedule ?? null)) return;
     const instant = wallToInstant(reminder.dateTime, reminder.timeZone);
     moments.push({ id: reminder.id, index, reminder, occurrence, instant, baseInstant: instant });
   });
@@ -687,7 +689,9 @@ function checkTask(task) {
     if (own(task.fields, 'state') && !['open', 'done', 'dropped'].includes(value('state'))) fail('Invalid task in task file.');
     if (own(task.fields, 'due')) checkDue(value('due'), 'due');
     if (own(task.fields, 'repeat')) checkRepeat(value('repeat'));
-    if (live && value('repeat') && !value('due')) fail('A repeating task needs a due date.');
+    // A cleared due and a repeat added on another device are both kept. The
+    // repeat does not apply until a due date is present again. Creating that
+    // pair in one edit is still refused.
     if (own(task.fields, 'reminders')) checkReminders(value('reminders'));
   }
   const seen = new Set();
@@ -892,25 +896,27 @@ export class Tasks {
         task.fields.due = { value: scheduledDue(task.fields.due.value, rule.start), stamp: clone(stamp) };
         if (task.fields.state.value === 'done') task.fields.state = { value: 'open', stamp: clone(stamp) };
       } else if (own(patch, 'due') && task.fields.repeat.value) {
-        if (!task.fields.due.value) fail('A repeating task needs a due date.');
-        const previousDate = dueCalendar(before.fields.due.value);
-        const nextDate = dueCalendar(task.fields.due.value);
-        if (previousDate !== nextDate) {
-          const rule = normalizeRepeat(task.fields.repeat.value, nextDate, { exactStart: true });
-          task.fields.repeat = { value: rule, stamp: clone(stamp) };
+        if (!task.fields.due.value) {
+          if (before.fields.due.value) fail('A repeating task needs a due date.');
+        } else {
+          const previousDate = dueCalendar(before.fields.due.value);
+          const nextDate = dueCalendar(task.fields.due.value);
+          if (previousDate !== nextDate) {
+            const rule = normalizeRepeat(task.fields.repeat.value, nextDate, { exactStart: true });
+            task.fields.repeat = { value: rule, stamp: clone(stamp) };
+          }
         }
       }
       if (compareStamps(task.fields.due?.stamp, stamp) === 0) {
         retireMovedDue(task, taskOccurrence(before, currentDate(before)), stamp);
       }
       if (own(patch, 'reminders')) {
-        const oneOff = !task.fields.repeat.value;
+        const oneOff = !ruleOf(task);
         const openDate = currentDate(task);
         const occurrence = oneOff ? 'once' : occurrenceName(task.fields.due.value, openDate);
         const schedule = oneOff ? occurrenceName(task.fields.due.value, openDate) : null;
         task.fields.reminders = { value: normalizeReminders(patch.reminders, occurrence, before.fields.reminders.value, { oneOff, schedule }), stamp: clone(stamp) };
       }
-      if (task.fields.repeat.value && !task.fields.due.value) fail('A repeating task needs a due date.');
     });
   }
   #record(task, type, now, stamp, recordId, extra) {
@@ -932,7 +938,7 @@ export class Tasks {
   complete(id, now, { recordId } = {}) {
     return this.#change((person, stamp) => {
       const task = this.#requireOpen(person, id);
-      if (!task.fields.repeat.value) task.fields.state = { value: 'done', stamp: clone(stamp) };
+      if (!ruleOf(task)) task.fields.state = { value: 'done', stamp: clone(stamp) };
       this.#record(task, 'completion', now, stamp, recordId, {});
       task.life = { value: true, stamp: clone(stamp) };
     });
@@ -940,7 +946,7 @@ export class Tasks {
   skip(id, now, { recordId } = {}) {
     return this.#change((person, stamp) => {
       const task = this.#requireOpen(person, id);
-      if (!task.fields.repeat.value) fail('Only a repeating task can be skipped.');
+      if (!ruleOf(task)) fail('Only a repeating task can be skipped.');
       this.#record(task, 'skip', now, stamp, recordId, {});
       task.life = { value: true, stamp: clone(stamp) };
     });
@@ -950,7 +956,7 @@ export class Tasks {
       const task = person.tasks.find(item => item.id === id) ?? fail('Task not found.');
       if (!usableTask(task)) fail('Task was emptied from Trash.');
       if (!task.life.value || task.pendingLife) fail('Task is in Trash.');
-      if (!task.fields.repeat.value) {
+      if (!ruleOf(task)) {
         if (task.fields.state.value === 'open') fail('Task is open.');
         task.fields.state = { value: 'open', stamp: clone(stamp) };
         task.life = { value: true, stamp: clone(stamp) };
@@ -1108,7 +1114,7 @@ export class Tasks {
       occurrence: taskOccurrence(task, date),
       due: publicDue(due),
       overdue: now == null ? false : isOverdue(due, now, timeZone),
-      repeatsAfterDone: task.fields.repeat.value?.mode === 'afterDone',
+      repeatsAfterDone: ruleOf(task)?.mode === 'afterDone',
       repeat: publicRepeat(ruleOf(task)),
     };
   }
@@ -1163,7 +1169,7 @@ export class Tasks {
       if (statusOf(task) !== 'open') continue;
       for (const date of projectDates(task, windowStart, windowEnd, zone)) {
         const current = currentDate(task);
-        const due = !task.fields.repeat.value || date === current
+        const due = !ruleOf(task) || date === current
           ? effectiveDue(task, current)
           : scheduledDue(task.fields.due.value, date);
         const group = viewDate(due, zone);
@@ -1172,7 +1178,7 @@ export class Tasks {
         row.occurrence = taskOccurrence(task, date);
         row.due = publicDue(due);
         row.overdue = isOverdue(due, instant, zone);
-        row.repeatsAfterDone = task.fields.repeat.value?.mode === 'afterDone';
+        row.repeatsAfterDone = ruleOf(task)?.mode === 'afterDone';
         if (!grouped.has(group)) grouped.set(group, []);
         grouped.get(group).push(row);
       }

@@ -925,6 +925,37 @@ test('9. merge keeps both edits, both completions, and a reopened occurrence', (
     assert.equal(copy.task('early-call').due.date, '2026-11-01');
     assert.equal(copy.task('early-call').occurrence, '2026-11-01');
   }
+  const clearBase = engine('clear-base', T0, 'UTC');
+  clearBase.addTask({ title: 'Call', due: '2026-11-10' }, { taskId: 'cleared' });
+  const clearedDue = engine('clear-due', T0 + 5, 'UTC');
+  const addedRepeat = engine('clear-repeat', T0 + 1, 'UTC');
+  clearedDue.importPerson(clearBase.getPerson());
+  addedRepeat.importPerson(clearBase.getPerson());
+  clearedDue.editTask('cleared', { due: null });
+  addedRepeat.editTask('cleared', { repeat: { kind: 'weeks', every: 1, mode: 'onSchedule' } });
+  for (const [left, right] of [[clearedDue, addedRepeat], [addedRepeat, clearedDue]]) {
+    const copy = fork(mergePeople(left.getPerson(), right.getPerson()), `clear-${left.deviceId}`);
+    assert.equal(copy.task('cleared').due, null);
+    assert.equal(copy.task('cleared').repeat, null);
+    assert.equal(copy.task('cleared').occurrence, 'once');
+    assert.equal(copy.task('cleared').status, 'open');
+    copy.editTask('cleared', { title: 'Call back' });
+    assert.equal(copy.task('cleared').title, 'Call back');
+    assert.equal(copy.task('cleared').due, null);
+  }
+  const newerDue = engine('clear-newer', T0 + 9, 'UTC');
+  newerDue.importPerson(clearBase.getPerson());
+  newerDue.editTask('cleared', { due: '2026-11-17' });
+  const withRepeat = mergePeople(clearedDue.getPerson(), addedRepeat.getPerson());
+  const withDue = mergePeople(withRepeat, newerDue.getPerson());
+  assert.deepEqual(withDue, mergePeople(newerDue.getPerson(), withRepeat));
+  const dated = fork(withDue, 'clear-dated');
+  assert.equal(dated.task('cleared').due.date, '2026-11-17');
+  assert.equal(dated.task('cleared').occurrence, '2026-11-17');
+  assert.equal(dated.task('cleared').repeat.kind, 'weeks');
+  const repeating = engine('still-repeating', T0, 'UTC');
+  repeating.addTask({ title: 'Call', due: '2026-11-10', repeat: { kind: 'weeks', every: 1, mode: 'onSchedule' } }, { taskId: 'weekly' });
+  assert.match(message(() => repeating.editTask('weekly', { due: null })), /needs a due date/);
 });
 
 test('merge is commutative, associative and idempotent on 500 invented histories', () => {
