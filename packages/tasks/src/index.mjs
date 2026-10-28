@@ -406,8 +406,9 @@ function ruleOf(task) {
   if (!rule || countingRecords(task).length) return rule;
   const dueDate = dueCalendar(task.fields.due?.value);
   // A due edit and a new repeat can win different fields. The next date follows
-  // the due date, and a plain weekly repeat keeps that date as its start.
-  if (!dueDate || dueDate <= rule.start) return rule;
+  // the due date whether it moved earlier or later, and a plain weekly repeat
+  // keeps that date as its start.
+  if (!dueDate || dueDate === rule.start) return rule;
   try {
     return normalizeRepeat(rule, dueDate, { exactStart: false });
   } catch {

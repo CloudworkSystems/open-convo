@@ -912,6 +912,19 @@ test('9. merge keeps both edits, both completions, and a reopened occurrence', (
     assert.equal(copy.task('call').occurrence, '2026-11-10');
     assert.equal(copy.task('call').repeat.kind, 'weeks');
   }
+  const laterBase = engine('early-base', T0, 'UTC');
+  laterBase.addTask({ title: 'Call', due: '2026-11-10' }, { taskId: 'early-call' });
+  const earlierDue = engine('early-due', T0 + 5, 'UTC');
+  const laterRepeat = engine('early-repeat', T0 + 1, 'UTC');
+  earlierDue.importPerson(laterBase.getPerson());
+  laterRepeat.importPerson(laterBase.getPerson());
+  earlierDue.editTask('early-call', { due: '2026-11-01' });
+  laterRepeat.editTask('early-call', { repeat: { kind: 'weeks', every: 1, mode: 'onSchedule' } });
+  for (const [left, right] of [[earlierDue, laterRepeat], [laterRepeat, earlierDue]]) {
+    const copy = fork(mergePeople(left.getPerson(), right.getPerson()), `early-${left.deviceId}`);
+    assert.equal(copy.task('early-call').due.date, '2026-11-01');
+    assert.equal(copy.task('early-call').occurrence, '2026-11-01');
+  }
 });
 
 test('merge is commutative, associative and idempotent on 500 invented histories', () => {
