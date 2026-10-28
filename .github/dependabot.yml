@@ -1,0 +1,23 @@
+# Dependency updates. Security fixes for known advisories come from
+# Dependabot alerts as soon as they're published; these monthly checks keep
+# everything else from drifting. Each update is an ordinary pull request:
+# Codex reviews it and the merge gate decides. Folders without dependencies
+# aren't listed; a new folder with a lockfile needs a line here.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directories:
+      - /apps/desk
+      - /packages/site-engine
+      - /packages/visibility-report
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
