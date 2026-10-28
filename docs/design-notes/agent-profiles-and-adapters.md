@@ -144,7 +144,11 @@ company's model. A checker reports; it never decides.
   holds: a checker that has tools runs in a scratch folder holding only the
   material it was given, never in a repository checkout, the owner's home
   folder or anywhere with ignored private files, with reads outside that
-  folder denied. Where a harness can't be narrowed that way, the check
+  folder denied. Context a harness loads by itself counts too: the Gemini
+  CLI adds `~/.gemini/GEMINI.md` and other memory files to every request,
+  so a checker run points the CLI's home and settings at an empty folder
+  (for example `GEMINI_CLI_HOME`) and the boundary check confirms that no
+  memory or context files were loaded. Where a harness can't be narrowed that way, the check
   calls the Gemini API directly with no tools instead.
 - **Watched like any agent.** It gets a setup status and deadlines under
   "Knowing When an Agent Isn't Working" below, and a silent or failing
