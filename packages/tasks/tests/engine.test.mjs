@@ -636,6 +636,23 @@ test('8. snooze presets, including next Monday on a Monday, leave the series put
       ['2026-04-06T10:00', '2026-04-06T12:00'],
     );
   }
+
+  const kept = engine('keep-due', T0, 'UTC');
+  kept.addTask({
+    title: 'Bells',
+    due: { dateTime: '2026-04-02T09:00', timeZone: 'UTC' },
+    reminders: [
+      { dateTime: '2026-04-02T08:00', timeZone: 'UTC' },
+      { dateTime: '2026-04-02T10:00', timeZone: 'UTC' },
+    ],
+  }, { taskId: 'bells' });
+  kept.snooze('bells', { at: { dateTime: '2026-04-02T12:00', timeZone: 'UTC' }, moveDue: true }, at('2026-04-02T07:00:00.000Z'), { recordId: 'move-first' });
+  kept.snooze('bells', { at: { dateTime: '2026-04-02T13:00', timeZone: 'UTC' } }, at('2026-04-02T09:00:00.000Z'), { recordId: 'move-second' });
+  assert.equal(kept.task('bells').due.dateTime, '2026-04-02T12:00');
+  assert.deepEqual(
+    kept.remindersDue(at('2026-04-02T00:00:00.000Z'), at('2026-04-03T00:00:00.000Z'), 'UTC').map(row => row.at),
+    ['2026-04-02T12:00', '2026-04-02T13:00'],
+  );
 });
 
 test('upcoming keeps only the occurrences a repeat still has', () => {
@@ -869,6 +886,21 @@ test('9. merge keeps both edits, both completions, and a reopened occurrence', (
   assert.equal(beat.history('again').find(row => row.id === 'first').undone, true);
   assert.equal(beat.history('again').find(row => row.id === 'second').undone, false);
   assert.equal(beat.task('again').occurrence, '2026-07-08');
+
+  const started = engine('anchor-base', T0, 'UTC');
+  started.addTask({ title: 'Call', due: '2026-11-01' }, { taskId: 'call' });
+  const dueOnly = engine('anchor-due', T0 + 5, 'UTC');
+  const repeatOnly = engine('anchor-repeat', T0 + 1, 'UTC');
+  dueOnly.importPerson(started.getPerson());
+  repeatOnly.importPerson(started.getPerson());
+  dueOnly.editTask('call', { due: '2026-11-10' });
+  repeatOnly.editTask('call', { repeat: { kind: 'weeks', every: 1, mode: 'onSchedule' } });
+  for (const [left, right] of [[dueOnly, repeatOnly], [repeatOnly, dueOnly]]) {
+    const copy = fork(mergePeople(left.getPerson(), right.getPerson()), `anchor-${left.deviceId}`);
+    assert.equal(copy.task('call').due.date, '2026-11-10');
+    assert.equal(copy.task('call').occurrence, '2026-11-10');
+    assert.equal(copy.task('call').repeat.kind, 'weeks');
+  }
 });
 
 test('merge is commutative, associative and idempotent on 500 invented histories', () => {
