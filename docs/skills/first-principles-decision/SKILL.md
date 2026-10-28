@@ -104,7 +104,9 @@ For each option, write:
 
 Go through every number in Steps 2 to 5 and mark it against the sources file:
 
-- **PASS**: the source says this, and the date is recent enough to trust.
+- **PASS**: the source's excerpt says this, and the date is recent enough to
+  trust. Until the separate reviewer has confirmed it in the source itself,
+  it is a provisional PASS.
 - **FAIL**: the source says something else, or the working is wrong. Fix it
   or drop it.
 - **BLOCKED**: no source could be found or reached. Keep it only as a guess.
@@ -115,10 +117,13 @@ The facts and the reasoning are checked by different reviewers:
 
 1. Any model may gather facts. Each one goes into the sources file.
 2. A **separate reviewer** (a fresh session that didn't do the analysis, on a
-   different model where one is available) reads only the sources file and
-   the draft verdict. It checks that every PASS is backed by the file, that
-   no estimate hides a guess, and that the options follow from the gaps. It
-   adds nothing from its own knowledge as fact.
+   different model where one is available) gets the sources file and the
+   draft verdict. It checks every fact against its source, not just against
+   the file: it opens each cited link or document where it can and confirms
+   the quoted excerpt is there and supports the value. A fact it can't open
+   and confirm is downgraded from PASS to BLOCKED. It also checks that no
+   estimate hides a guess and that the options follow from the gaps. It adds
+   nothing from its own knowledge as fact.
 3. Fold in its findings, and note any it raised that you didn't fix and why.
 
 If no separate reviewer is available, say so plainly at the top of the
@@ -128,15 +133,17 @@ verdict: "Not independently reviewed."
 
 Keep one sources file per decision, named
 `first-principles-<short-topic>-sources.md`, in the person's working folder
-(never in a public repository if it holds private facts). One row per fact:
+(never in a public repository if it holds private facts). One row per fact,
+with the exact words from the source that back it, so anyone can check the
+value against the source itself rather than against the gatherer's summary:
 
 ```markdown
-| # | Fact | Value | Source (link or document) | Checked on | Gathered by |
-|---|------|-------|---------------------------|------------|-------------|
-| 1 | Example: monthly price of the basic plan | $20 | https://example.com/pricing | 2026-10-28 | model or person |
+| # | Fact | Value | Source (link or document) | Excerpt (exact words) | Checked on | Gathered by |
+|---|------|-------|---------------------------|-----------------------|------------|-------------|
+| 1 | Example: monthly price of the basic plan | $20 | https://example.com/pricing | "Basic: $20 per month" | 2026-10-28 | model or person |
 ```
 
-A fact without a source and a date doesn't go in the file. Put it under a
+A fact without a source, an excerpt and a date doesn't go in the file. Put it under a
 `Guesses` heading at the bottom instead.
 
 ## What To Return
