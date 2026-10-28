@@ -18,3 +18,5 @@ let someone do. We'll reply as soon as we can and say what happens next.
 
 The code in this repository: the Mac app, the Desk, the packages, the
 GitHub workflows and their scripts, and the public site in `site/`.
+How the project approaches security is in
+[docs/plans/security.md](docs/plans/security.md).
