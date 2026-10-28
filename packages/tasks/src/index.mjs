@@ -175,13 +175,22 @@ function dueCalendar(due) {
 function scheduledDue(template, date) {
   if (!template || !date) return null;
   if (template.kind === 'date') return { kind: 'date', date };
-  return { kind: 'dateTime', dateTime: `${date}T${template.dateTime.slice(11, 16)}`, timeZone: template.timeZone };
+  const due = { kind: 'dateTime', dateTime: `${date}T${template.dateTime.slice(11, 16)}`, timeZone: template.timeZone };
+  // The fold belongs to the template's own morning, not to later days that
+  // show the same clock time only once.
+  if (template.later === true && date === template.dateTime.slice(0, 10)) due.later = true;
+  return due;
 }
 function occurrenceName(template, date) {
   if (!date) return null;
   const due = scheduledDue(template, date);
   if (!due || due.kind === 'date') return date;
-  return `${due.dateTime}[${due.timeZone}]`;
+  const name = `${due.dateTime}[${due.timeZone}]`;
+  return due.later === true ? `${name}#later` : name;
+}
+function occurrenceBody(name) {
+  if (!name) return name;
+  return name.endsWith('#later') ? name.slice(0, -'#later'.length) : name;
 }
 /** A one-off task, dated or not, has one occurrence named `once`. */
 function taskOccurrence(task, date) {
@@ -193,13 +202,15 @@ function occurrenceDateOf(name) {
   return validDate(name.slice(0, 10)) ? name.slice(0, 10) : null;
 }
 function compareOccurrence(a, b) {
-  const left = occurrenceDateOf(a);
-  const right = occurrenceDateOf(b);
-  const leftTime = a && a.includes('T') ? a.slice(11, 16) : '';
-  const rightTime = b && b.includes('T') ? b.slice(11, 16) : '';
-  const leftZone = a && a.includes('[') ? a.slice(a.indexOf('[') + 1, -1) : '';
-  const rightZone = b && b.includes('[') ? b.slice(b.indexOf('[') + 1, -1) : '';
-  return lex(left ?? '', right ?? '') || lex(leftTime, rightTime) || lex(leftZone, rightZone);
+  const leftName = occurrenceBody(a);
+  const rightName = occurrenceBody(b);
+  const left = occurrenceDateOf(leftName);
+  const right = occurrenceDateOf(rightName);
+  const leftTime = leftName && leftName.includes('T') ? leftName.slice(11, 16) : '';
+  const rightTime = rightName && rightName.includes('T') ? rightName.slice(11, 16) : '';
+  const leftZone = leftName && leftName.includes('[') ? leftName.slice(leftName.indexOf('[') + 1, -1) : '';
+  const rightZone = rightName && rightName.includes('[') ? rightName.slice(rightName.indexOf('[') + 1, -1) : '';
+  return lex(left ?? '', right ?? '') || lex(leftTime, rightTime) || lex(leftZone, rightZone) || lex(a ?? '', b ?? '');
 }
 function dueInstant(due) {
   return wallToInstant(due.dateTime, due.timeZone, { later: due.later === true });

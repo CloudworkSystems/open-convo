@@ -447,6 +447,32 @@ test('8. snooze presets, including next Monday on a Monday, leave the series put
   assert.equal(movedFold.task('night').due.dateTime, '2026-11-01T01:30');
   assert.equal(movedFold.task('night').due.later, true);
   assert.equal(movedFold.task('night').due.instant, beforeFold + 3 * 60 * 60 * 1000);
+  const second = wallToInstant('2026-11-01T01:30', ZONE, { later: true });
+  const foldSeries = engine('fold-series', T0, ZONE);
+  foldSeries.addTask({
+    title: 'Nightly',
+    due: { dateTime: '2026-11-01T01:30', timeZone: ZONE, later: true },
+    repeat: { kind: 'days', every: 1, mode: 'onSchedule' },
+    reminders: [{ hours: 0 }],
+  }, { taskId: 'nightly' });
+  assert.equal(foldSeries.task('nightly').due.later, true);
+  assert.equal(foldSeries.task('nightly').due.instant, second);
+  assert.equal(foldSeries.task('nightly').occurrence, '2026-11-01T01:30[America/New_York]#later');
+  assert.equal(foldSeries.remindersDue(second, second + 60 * 1000, ZONE)[0].instant, second);
+  foldSeries.editTask('nightly', { repeat: null });
+  assert.equal(foldSeries.task('nightly').due.later, true);
+  assert.equal(foldSeries.task('nightly').due.instant, second);
+  const foldOnce = engine('fold-once', T0, ZONE);
+  foldOnce.addTask({
+    title: 'Once',
+    due: { dateTime: '2026-11-01T01:30', timeZone: ZONE },
+    reminders: [{ dateTime: '2026-11-01T01:30', timeZone: ZONE }],
+  }, { taskId: 'once' });
+  const foldWindow = [wallToInstant('2026-11-01T00:00', ZONE), wallToInstant('2026-11-01T12:00', ZONE)];
+  assert.equal(foldOnce.remindersDue(foldWindow[0], foldWindow[1], ZONE).length, 1);
+  foldOnce.editTask('once', { due: { dateTime: '2026-11-01T01:30', timeZone: ZONE, later: true } });
+  assert.deepEqual(foldOnce.remindersDue(foldWindow[0], foldWindow[1], ZONE), []);
+  assert.equal(foldOnce.task('once').due.instant, second);
   const firstFold = engine('first-fold', at('2026-11-01T02:30:00.000Z'), ZONE);
   const early = at('2026-11-01T02:30:00.000Z');
   firstFold.addTask({ title: 'Night note' }, { taskId: 'night' });
