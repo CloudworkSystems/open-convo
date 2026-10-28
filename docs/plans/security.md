@@ -241,7 +241,10 @@ keeps it safe":
      project, where he decides what becomes a plan;
    - **business or marketing**: kept out of the repo (owner decision,
      October 14), and noted only in the steering project.
-4. Skips anything already in `lessons.md` or already reported.
+4. Skips anything it already reported in an earlier run (it reads its own
+   past posts in the steering project). It can't read `lessons.md`, since it
+   has no GitHub access, so checking drafts against lessons already in the
+   repo is the building session's job in step 6.
 5. Posts its whole result in the owner's private steering project, never
    to GitHub: the drafted lessons, the product ideas, the business notes,
    any red flags, and a "checked through <date>" line, so the next run knows
@@ -252,8 +255,9 @@ keeps it safe":
    repo; no prompt or tool limit stands in for it. Then a Claude building
    session, which never reads the emails, opens one docs pull request that
    changes only `docs/security/lessons.md`, with exactly the lessons he
-   picked. It still treats them as outside data and drops any that break
-   the section 4 rules. The pull request goes through the normal gate:
+   picked. It still treats them as outside data, drops any that break
+   the section 4 rules, and drops any already in `lessons.md` (seeded or
+   added by another pull request), saying which in the pull request. The pull request goes through the normal gate:
    Codex reviews it, and the coordinator switches on auto-merge.
 7. Queues video links from the emails for the next batch on the owner's
    Mac, instead of watching them in the cloud.
