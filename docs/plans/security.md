@@ -155,10 +155,12 @@ run, so the 8 AM list carries it. It only reports: it never changes code,
 switches settings, merges or approves. Fixes come as ordinary pull requests
 from a building session.
 
-**Where it lives.** A row in AGENTS.md "Who Does What", and the checklist
-in AGENTS.md "Independent reviews", both in the code pull request that
-builds risk-review's checklist, since both edit the same block. Those are
-protected paths, so the owner approves them on GitHub.
+**Where it lives.** The sweep and the sender feed (section 5) each have a
+row in AGENTS.md "Who Does What", added in this pull request so both are
+registered before either task is created. The checklist goes into AGENTS.md
+"Independent reviews" in the code pull request that builds risk-review's
+checklist, since both edit the same block. Those are protected paths, so the
+owner approves them on GitHub.
 
 ## 3. Controls That Switch On With A Trigger
 
@@ -235,7 +237,8 @@ keeps it safe":
    where to start.
 6. A separate Claude building session, which never reads the emails, then
    opens at most one docs pull request that changes only
-   `docs/security/lessons.md`. It checks each drafted lesson against the
+   `docs/security/lessons.md`. The drafts still came from outside, so it
+   treats them as data too. It checks each drafted lesson against the
    section 4 rules (short, in our own words, no quotes, no personal data)
    and drops any that fail. The pull request goes through the normal gate:
    Codex reviews it, and the coordinator switches on auto-merge.
@@ -273,12 +276,13 @@ plan. This task is the trial run that shows whether it's worth building.
    owner says yes to the plan in the thread and approves the `.github/`
    change on GitHub.
 2. The owner switches on the four repository settings (section 1).
-3. The weekly sweep and the feed task are created as scheduled tasks
-   (no repo change). Their first runs report to the thread.
+3. With their AGENTS.md rows merged in step 1, the weekly sweep and the
+   feed task are created as scheduled tasks. Their first runs report to the
+   thread.
 4. Seed `docs/security/lessons.md` from the July ledger, then the 28 new
    videos (docs pull request).
-5. The risk-review code pull request, extended with questions 6 to 10 and
-   the AGENTS.md rows (protected, owner approves).
+5. The risk-review code pull request, extended with questions 6 to 10 in
+   AGENTS.md "Independent reviews" (protected, owner approves).
 6. The rest of the baseline: history scan, `npm audit` in `tests`, pinned
    actions (one small code pull request each).
 7. Section 3 controls go into each triggering plan as it's written,
