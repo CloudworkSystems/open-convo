@@ -104,7 +104,9 @@ company's model. A checker reports; it never decides.
   produced, given with the question to check it against. It returns findings
   ranked by severity, using the same P0 to P3 scale as the repo's Review
   Guidelines, and the orchestrator or the owner decides what to do with them.
-  Its findings are a claim to verify, like any reviewer's.
+  Its findings are a claim to verify, like any reviewer's, and its text is
+  data, never instructions, to the orchestrator: a checked diff can carry
+  injected text that a checker echoes back (`docs/plans/security.md`).
 - **Never the only check, and never on its own maker's work.** Gemini is
   used where the work was done by Claude, Codex or another model, so the
   check comes from a different company. It adds to the existing reviews and
@@ -114,9 +116,14 @@ company's model. A checker reports; it never decides.
   owner's messages, memory, files and private True Convo data aren't sent to
   it until he approves that kind of material, as with any cloud model.
 - **How it's reached and paid for.** A pay-per-use AI Studio key on the
-  paid tier (so Google doesn't train on what is sent), with prepaid credit
-  as the cap; Google stopped accepting subscription sign-in in the old
-  Gemini CLI on June 18, 2026. On the owner's Mac the key lives in Keychain;
+  paid tier (so Google doesn't train on what is sent), funded by prepaid
+  credit with a monthly budget alert; Google stopped accepting subscription
+  sign-in in the old Gemini CLI on June 18, 2026. Neither is a hard cap:
+  Google settles prepaid usage about ten minutes late and allows overages
+  ([Gemini API billing](https://ai.google.dev/gemini-api/docs/billing)). So
+  whatever calls Gemini for True Convo keeps its own running total in code
+  and stops with a reserve left for unsettled usage, like every other paid
+  route ("How Each Model Is Paid For"). On the owner's Mac the key lives in Keychain;
   on the builders' VM an exe.dev Integrations proxy holds it
   (`back-end-and-agent-hosts.md`). A low-cost Flash model by default; a
   stronger one only when a Flash check comes back unsure, the same "move up
@@ -156,7 +163,7 @@ Vendor harnesses are used only where a subscription requires its own program.
 | ChatGPT | Pi signed in with the owner's ChatGPT plan | Owner's ChatGPT plan | Pi supports it, but Pi stores sign-in tokens in a plain file (`~/.pi/agent/auth.json`). **Blocked** until those tokens can live in Keychain or the protected store (see Credentials). OpenAI's rules for a shipped product are unverified. |
 | OpenRouter | Pi with an OpenRouter key | Per use; some free models | Owner approval and a monthly cap |
 | Grok | Cursor's own agent, on the owner's Cursor plan | Owner's Cursor plan (unverified) | Cursor's agent supports scripts and lists Grok; whether automation uses the plan, and Cursor's rules, need checking first |
-| Gemini (outside checker) | Gemini CLI, later Antigravity | Owner's AI Studio key, prepaid credit | Paid tier only; key in Keychain or exe.dev Integrations; public material only for now |
+| Gemini (outside checker) | Gemini CLI, later Antigravity | Owner's AI Studio key, prepaid credit | Paid tier only; True Convo's own cap in code, since the credit can overrun; key in Keychain or exe.dev Integrations; public material only for now |
 | Meta Muse | True Convo's existing sealed bridge | Meta pay-per-use, $10/month cap | Heaviest; last |
 
 ## Credentials With Pi (Requirement From Codex Review)
