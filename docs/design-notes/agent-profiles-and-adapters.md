@@ -132,6 +132,16 @@ company's model. A checker reports; it never decides.
   owner's Gemini subscription where a person can sign in. If it works, it
   replaces the key for interactive checks; automated checks keep the key.
   Its account token needs the owner's approval of where it is stored first.
+- **Read-only, enforced by tools.** A checker reads what it's given and
+  returns text; it never changes files, runs commands or pushes. Both the
+  Gemini CLI and Antigravity can write files and run shell commands, and
+  Antigravity allows workspace writes by default, so a prompt saying "only
+  report" isn't enough when the checked diff can carry injected text. Each
+  checker run gets a tool allowlist or deny list that leaves only reading
+  (or no tools at all, with the material passed in the request), checked
+  before its first use, the same way `docs/plans/security.md` limits its
+  report-only agents. Where a harness can't be narrowed that way, the check
+  calls the Gemini API directly with no tools instead.
 - **Watched like any agent.** It gets a setup status and deadlines under
   "Knowing When an Agent Isn't Working" below, and a silent or failing
   Gemini never holds up work: the check is skipped and the report says so.
@@ -194,7 +204,15 @@ keys live in Keychain, never in files or logs.
    safely (see Credentials).
 4. **OpenRouter plus a model picker**, inside Pi.
 5. **Grok through Cursor's agent**, after checking Cursor's rules and billing.
-6. **Meta Muse.**
+6. **Gemini as an outside checker** (above), alongside Pi in step 6: a
+   direct API call with no tools first, since a checker only reads and
+   reports, then the Gemini CLI or Antigravity only once its read-only tool
+   boundary is in place. It needs the code-side spending cap before its
+   first paid call. The owner's own Claude sessions can use it before
+   then, on public material, through the CLI setup in
+   `back-end-and-agent-hosts.md`, with the CLI's file-writing and shell
+   tools excluded in its settings.
+7. **Meta Muse.**
 
 ## Knowing When an Agent Isn't Working (October 26)
 
