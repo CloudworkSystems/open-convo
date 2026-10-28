@@ -401,7 +401,7 @@ nothing said so. The same rule for True Convo's own agents is in
 | Nightly Test build (scheduled, 2–6 AM) | none | Rebuilds True Convo Test from `main` on the owner's Mac |
 | Recycling pass (scheduled, Sundays) | `cloudwork-bot` | One pull request proposing fixes for stale docs |
 | Security sweep (scheduled, Mondays, in the cloud) | `cloudwork-bot`, reporting only | Runs the weekly self-audit in [docs/plans/security.md](docs/plans/security.md) and rewrites its "Security" comment on issue #52; never changes code, settings or merges |
-| Sender feed (scheduled, weekly) | the owner's Gmail, read and search only; no GitHub access | Reads only the followed senders' emails and posts drafted lessons and ideas in the owner's private steering project; a building session opens the lessons pull request ([docs/plans/security.md](docs/plans/security.md) section 5) |
+| Sender feed (scheduled, weekly) | the owner's Gmail, read and search only; no GitHub access | Reads only the followed senders' emails and posts drafted lessons and ideas in the owner's private steering project; after the owner picks, a building session opens the lessons pull request ([docs/plans/security.md](docs/plans/security.md) section 5) |
 | `owner-queue` workflow | GitHub Actions | Rewrites issue #52, "Needs the owner", every hour |
 
 Work that belongs to another row is forwarded there once, and the owner is
