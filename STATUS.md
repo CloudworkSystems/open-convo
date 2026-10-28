@@ -108,7 +108,7 @@ decision October 22): GrokBot team B builds, Codex reviews. Plan approved
 **Public website (trueconvo.com)**, Claude builds, Codex reviews; a home page (with two Desk preview screenshots) and a plain-language privacy policy in `site/`, published by `.github/workflows/pages.yml` from `main` (#153, October 25). For Meta's developer early-access application and regular visitors. The owner turned on Pages and set the custom domain; the domain's DNS records are still to do.
 
 **Security** (all work; owner asked October 28): plan
-[docs/plans/security.md](docs/plans/security.md), draft for the owner's yes.
+[docs/plans/security.md](docs/plans/security.md), in progress.
 Baseline in #166: the Desk's Vite patched, Dependabot, `SECURITY.md`, and the
 triage judge closed to outside pull requests. A security checklist on every
 review, a weekly sweep, controls tied to triggers (sync core first), and a

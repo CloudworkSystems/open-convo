@@ -1,6 +1,6 @@
 # Security: What We Protect, A Security Reviewer, And A Feed Of Lessons
 
-Status: Draft (Oct 28): plan for the owner's yes; the baseline's first part ships in the same pull request. Revised the same day after the independent review (feed tool allowlist; Actions and token steps).
+Status: In progress (Oct 28): approved by the owner's yes; the baseline's first part ships in the same pull request. Revised the same day after the independent review and Codex (feed tool allowlist with no GitHub access; Actions and token steps).
 
 Written October 28, 2026 at the owner's request (thread "Revisit The Faction
 security ideas": "we haven't really talked anywhere in the repo, anywhere in
@@ -222,27 +222,34 @@ keeps it safe":
    prompt, not in this public repo.
 2. Reads each message as plain text, and nothing else in the inbox.
 3. Sorts each idea into one of three kinds:
-   - **security lesson**: added to `docs/security/lessons.md` under the
+   - **security lesson**: drafted for `docs/security/lessons.md` under the
      section 4 rules;
    - **product idea**: posted as a short list in the owner's steering
      project, where he decides what becomes a plan;
    - **business or marketing**: kept out of the repo (owner decision,
      October 14), and noted only in the steering project.
 4. Skips anything already in `lessons.md` or already reported.
-5. Opens at most one docs pull request per run, with all the new lessons
-   and a "checked through <date>" line, so the next run knows where to start.
-   It goes through the normal gate: Codex reviews it, and the coordinator
-   switches on auto-merge.
-6. Queues video links from the emails for the next batch on the owner's
+5. Posts its whole result in the owner's private steering project, never
+   to GitHub: the drafted lessons, the product ideas, the business notes,
+   any red flags, and a "checked through <date>" line, so the next run knows
+   where to start.
+6. A separate Claude building session, which never reads the emails, then
+   opens at most one docs pull request that changes only
+   `docs/security/lessons.md`. It checks each drafted lesson against the
+   section 4 rules (short, in our own words, no quotes, no personal data)
+   and drops any that fail. The pull request goes through the normal gate:
+   Codex reviews it, and the coordinator switches on auto-merge.
+7. Queues video links from the emails for the next batch on the owner's
    Mac, instead of watching them in the cloud.
 
 **What keeps it safe.** The emails are outside input (section 2, question 6),
 and a prompt alone is not a wall (rule 2 above). So:
 
 - **A tool allowlist, checked before the first run.** The task runs with
-  only Gmail's search and read tools, plus what it needs to open its one
-  docs pull request. No send, draft, label, trash or forward tool is
-  available to it. The allowlist is checked in the task's settings before
+  only Gmail's search and read tools and the tool that posts in the steering
+  project. No send, draft, label, trash or forward tool is available to it,
+  and it has no GitHub access at all, so an injected email can't publish
+  anything or change the repo. The allowlist is checked in the task's settings before
   the first run and recorded in this plan. If the Gmail connector can't be
   limited that way, the "no sending" rule is only a habit, and the feed
   stays manual until it can be: the owner forwards an email, or pastes its
@@ -289,8 +296,9 @@ plan. This task is the trial run that shows whether it's worth building.
   `npm audit` only find known problems in known places. Questions 6 and 7,
   and tests that prove the checks, are what catch the rest.
 - **The feed brings in junk or manipulation.** That's why the feed reads
-  only one sender, can write only one pull request, and every lesson goes
-  through review.
+  only the followed senders, can only post in the owner's private project,
+  and every lesson passes a separate session and the normal review before it
+  reaches the repo.
 - **Video copyright.** We keep short lessons in our own words, never the
   videos or transcripts.
 
@@ -309,8 +317,8 @@ plan. This task is the trial run that shows whether it's worth building.
 - `docs/security/lessons.md` holds the July ledger's lessons and the 28 new
   videos'.
 - The feed task's tool allowlist is recorded here, and the task has run
-  once and opened its first lessons pull request (or reported that there
-  was nothing new). If the allowlist can't be set, the feed runs manually
+  once and posted its result, followed by the first lessons pull request
+  (or a report that there was nothing new). If the allowlist can't be set, the feed runs manually
   and this line is met by one manual pass.
 - The risk-review checklist, with questions 6 to 10, is posted on a real
   pull request.
