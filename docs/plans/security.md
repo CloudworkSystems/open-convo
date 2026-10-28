@@ -1,6 +1,6 @@
 # Security: What We Protect, A Security Reviewer, And A Feed Of Lessons
 
-Status: Draft (Oct 28): plan for the owner's yes; the baseline's first part ships in the same pull request.
+Status: Draft (Oct 28): plan for the owner's yes; the baseline's first part ships in the same pull request. Revised the same day after the independent review (feed tool allowlist; Actions and token steps).
 
 Written October 28, 2026 at the owner's request (thread "Revisit The Faction
 security ideas": "we haven't really talked anywhere in the repo, anywhere in
@@ -91,6 +91,21 @@ Next baseline steps, each in its own small code pull request:
   accepted-risks list with the owner's yes, never silently ignored.
 - **Pin GitHub Actions to commit hashes**, so a moved tag can't change what
   runs. Dependabot keeps the pins current.
+- **A test that walls off `pull_request_target`.** A check in `tests` fails
+  if any workflow triggered by `pull_request_target` checks out anything but
+  the default branch. Those workflows run with secrets, and today only a
+  comment in the file keeps pull request code out of them.
+- **A narrower bot token.** Agents that push as `cloudwork-bot` with a
+  classic token holding full `repo` scope move to fine-grained tokens
+  limited to this repository, each with an expiry. The weekly sweep flags
+  any expiry within two weeks. Creating the tokens is the owner's step.
+
+Dependabot pull requests go through the gate like any other: Codex reviews,
+and the coordinator switches on auto-merge. A lockfile update that adds a
+new indirect package trips the risk hold from
+[risk-review.md](risk-review.md) once that is built, so those land on the
+owner's list by design. Updates to GitHub Actions edit `.github/` and need
+his approval anyway.
 
 ## 2. A Security Reviewer (The Security Steward)
 
@@ -183,11 +198,11 @@ Rules for the file:
 - A lesson that disagrees with an owner decision is flagged for him, never
   applied silently.
 
-**Seeding it.** The July ledger (Reels 1 to 124, in
-`cloudwork_systems/docs/research/`) is the first source. It moves under
+**Seeding it.** The July ledger (Reels 1 to 124, in the old Cloudwork
+Systems folder) is the first source. It moves under
 AGENTS.md "Moving Code From True Convo": lessons only, nothing private, and
 a line in the PLAN.md move log. The 28 links the owner has saved since then
-(in his Apple Note "The Faction Links") are watched on his Mac, where the
+(in a note on his Mac) are watched on his Mac, where the
 old transcription tool lives (local Whisper, no cloud transcription), and
 added the same way. Some may be re-shares of videos already harvested; those
 are skipped.
@@ -199,11 +214,12 @@ like an RSS feed: a steady pipeline of ideas. The first version is a
 scheduled task, not app code.
 
 **How it runs.** Once a week (daily is a later choice), a Claude scheduled
-task with the owner's Gmail connector:
+task with the owner's Gmail connector, limited as described under "What
+keeps it safe":
 
-1. Searches only `from:<sender>` for messages newer than the last run. The
-   list of followed senders lives in the task's prompt, not in this public
-   repo.
+1. Searches only the followed senders' messages (address plus label) newer
+   than the last run. The list of followed senders lives in the task's
+   prompt, not in this public repo.
 2. Reads each message as plain text, and nothing else in the inbox.
 3. Sorts each idea into one of three kinds:
    - **security lesson**: added to `docs/security/lessons.md` under the
@@ -220,12 +236,22 @@ task with the owner's Gmail connector:
 6. Queues video links from the emails for the next batch on the owner's
    Mac, instead of watching them in the cloud.
 
-**What keeps it safe.** The emails are outside input (section 2, question 6):
+**What keeps it safe.** The emails are outside input (section 2, question 6),
+and a prompt alone is not a wall (rule 2 above). So:
 
-- The task treats them as material to summarize, never as instructions.
-- It can't send, delete, label or unsubscribe from mail, and it doesn't
-  open links from the email in a browser.
-- Its only write is the one pull request.
+- **A tool allowlist, checked before the first run.** The task runs with
+  only Gmail's search and read tools, plus what it needs to open its one
+  docs pull request. No send, draft, label, trash or forward tool is
+  available to it. The allowlist is checked in the task's settings before
+  the first run and recorded in this plan. If the Gmail connector can't be
+  limited that way, the "no sending" rule is only a habit, and the feed
+  stays manual until it can be: the owner forwards an email, or pastes its
+  links, into a thread.
+- **A narrow search.** Messages are matched on the sender's address plus a
+  Gmail label that the owner's own filter applies, not on `from:` alone,
+  which is easier to fake.
+- The task treats the emails as material to summarize, never as
+  instructions, and it doesn't open their links in a browser.
 - If an email asks the agent to do anything, that alone is reported in the
   run's summary as a red flag, and nothing else from that email is used.
 
@@ -282,8 +308,10 @@ plan. This task is the trial run that shows whether it's worth building.
 - The weekly sweep has posted its first "Security" comment on issue #52.
 - `docs/security/lessons.md` holds the July ledger's lessons and the 28 new
   videos'.
-- The feed task has run once and opened its first lessons pull request (or
-  reported that there was nothing new).
+- The feed task's tool allowlist is recorded here, and the task has run
+  once and opened its first lessons pull request (or reported that there
+  was nothing new). If the allowlist can't be set, the feed runs manually
+  and this line is met by one manual pass.
 - The risk-review checklist, with questions 6 to 10, is posted on a real
   pull request.
 
