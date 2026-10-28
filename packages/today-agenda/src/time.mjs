@@ -180,16 +180,22 @@ function offsetMs(instant, timeZone) {
   return asUtc - instant;
 }
 
-// A fall-back hour happens twice, a DST delta apart. Keep the earlier instant.
+// A fall-back clock time happens twice, one offset apart. The gap can be
+// more than two hours (Antarctica/Casey rolled back three). Sample the
+// offsets in force over the previous day and keep the earliest match.
 function preferEarlier(instant, year, month, day, hour, minute, second, timeZone) {
-  let best = instant;
-  for (const minutes of [30, 45, 60, 90, 120]) {
-    const candidate = instant - minutes * 60_000;
-    if (candidate < best && matches(candidate, year, month, day, hour, minute, second, timeZone)) {
-      best = candidate;
-    }
+  const target = utcMillis(year, month - 1, day, hour, minute, second);
+  const offsets = new Set();
+  for (let hours = 0; hours <= 26; hours += 1) {
+    offsets.add(offsetMs(instant - hours * 3_600_000, timeZone));
   }
-  return best;
+  let best = null;
+  for (const offset of offsets) {
+    const candidate = target - offset;
+    if (!matches(candidate, year, month, day, hour, minute, second, timeZone)) continue;
+    if (best === null || candidate < best) best = candidate;
+  }
+  return best === null ? instant : best;
 }
 
 function tryExact(year, month, day, hour, minute, second, timeZone) {

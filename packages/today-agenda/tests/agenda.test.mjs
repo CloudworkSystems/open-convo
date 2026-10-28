@@ -411,6 +411,26 @@ describe('5. clock changes', () => {
     assert.equal(agenda.freeTime.reduce((sum, gap) => sum + gap.minutes, 0), 150);
   });
 
+  it('uses the earlier instant when Antarctica/Casey rolls back three hours', () => {
+    const agenda = buildAgenda({
+      schemaVersion: 1,
+      date: '2020-03-08',
+      timeZone: 'Antarctica/Casey',
+      now: '2020-03-07T12:00:00Z',
+      settings: { dayStart: '00:30', dayEnd: '04:00', minFreeMinutes: 30 },
+      events: [],
+      tasks: [],
+      habits: [],
+      lists: [],
+    });
+    assert.equal(agenda.freeTime.length, 1);
+    assert.equal(agenda.freeTime[0].start, '00:30');
+    assert.equal(agenda.freeTime[0].end, '04:00');
+    assert.equal(agenda.freeTime[0].startInstant, '2020-03-07T13:30:00Z');
+    assert.equal(agenda.freeTime[0].endInstant, '2020-03-07T20:00:00Z');
+    assert.equal(agenda.freeTime[0].minutes, 390);
+  });
+
   it('keeps :00 when only the fraction of a second is nonzero', () => {
     const agenda = buildAgenda({
       schemaVersion: 1,
