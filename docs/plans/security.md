@@ -266,8 +266,9 @@ keeps it safe":
 and a prompt alone is not a wall (rule 2 above). So:
 
 - **A tool allowlist, checked before the first run.** The task runs with
-  only Gmail's search and read tools and the tool that posts in the steering
-  project. No send, draft, label, trash or forward tool is available to it,
+  only Gmail's search and read tools, the tool that posts in the steering
+  project, and a tool that reads that project's messages, so it can find its
+  own past posts and the last "checked through" line. No send, draft, label, trash or forward tool is available to it,
   and it has no GitHub access at all, so an injected email can't publish
   anything or change the repo. The allowlist is checked in the task's settings before
   the first run and recorded in this plan. If the Gmail connector can't be
