@@ -144,7 +144,8 @@ in the review for the builder to answer.
 as `cloudwork-bot`, does a 30-minute self-audit of the whole repo:
 
 - open Dependabot, secret-scanning and CodeQL alerts;
-- `npm audit` for each folder that has dependencies;
+- `npm audit` for each folder that has dependencies, read from the
+  lockfile without installing anything (installing runs packages' scripts);
 - workflow permissions and triggers compared with last week's, flagging any
   new secret, write permission or `pull_request_target`;
 - the accepted-risks list, flagging entries older than 90 days;
@@ -154,6 +155,16 @@ It keeps one comment of its own on issue #52, "Security", rewritten each
 run, so the 8 AM list carries it. It only reports: it never changes code,
 switches settings, merges or approves. Fixes come as ordinary pull requests
 from a building session.
+
+What it reads (advisories, package data, repository files) can carry text
+written by strangers, so "only reports" is backed by a tool allowlist, not
+just its prompt, the same way as the feed in section 5. It gets read-only
+GitHub tools plus the single tool that edits an issue comment, and no tool
+that pushes, opens pull requests, merges, approves or changes settings. The
+allowlist is checked in the task's settings before the first run and
+recorded here. If GitHub access can't be narrowed that way, the sweep gets
+no GitHub write at all and posts its report in the owner's steering project
+instead, and the coordinator copies it to issue #52.
 
 **Where it lives.** The sweep and the sender feed (section 5) each have a
 row in AGENTS.md "Who Does What", added in this pull request so both are
@@ -319,7 +330,8 @@ plan. This task is the trial run that shows whether it's worth building.
 ## Done When
 
 - This pull request is merged and the four repository settings are on.
-- The weekly sweep has posted its first "Security" comment on issue #52.
+- The weekly sweep's tool allowlist is recorded here, and it has posted its
+  first "Security" report.
 - `docs/security/lessons.md` holds the July ledger's lessons and the 28 new
   videos'.
 - The feed task's tool allowlist is recorded here, and the task has run
