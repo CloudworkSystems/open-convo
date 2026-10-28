@@ -103,7 +103,7 @@ test('CODEOWNERS covers the rules, decisions and key files, and not ordinary cod
   const rules = parseCodeowners(readFileSync(new URL('../../CODEOWNERS', import.meta.url), 'utf8'));
   const files = [
     'AGENTS.md', 'CLAUDE.md', '.github/CODEOWNERS', '.github/workflows/tests.yml',
-    'PLAN.md', 'docs/plans/merge-gate.md', 'docs/decisions.md',
+    'PLAN.md', 'docs/decisions.md',
     'apps/mac/Sources/ArchiveProtection/ArchiveSeal.swift',
     'apps/mac/Sources/DeskHost/StoreCipher.swift',
     'apps/mac/Tests/ParticipantProcessTests/PaidUsageGateTests.swift',
@@ -129,6 +129,8 @@ test('CODEOWNERS covers the rules, decisions and key files, and not ordinary cod
   assert.deepEqual(protectedFiles(rules, files), files);
   const open = ['STATUS.md', 'README.md', 'apps/desk/src/app/App.tsx', 'packages/clarity/src/index.mjs',
     'docs/annotations/x.md', 'apps/mac/Sources/DeskHost/DeskHost.swift', 'docs/plans-old.md', 'docs/AGENTS-notes.md',
+    // Plans merge on the owner's yes in a Claude thread (owner decision, October 27).
+    'docs/plans/merge-gate.md', 'docs/plans/desk-annotation-layer.md',
     'apps/mac/Sources/VoiceCursorCore/ElectronFocusPolicy.swift', 'apps/mac/Sources/CorrectionMemory/LocalDataBoundary.swift'];
   assert.deepEqual(protectedFiles(rules, open), []);
 });
@@ -484,7 +486,7 @@ test('a pull request the owner opened waits when it changes a protected file', (
   const reason = ownerOpenedBlock({ prAuthor: OWNER_LOGIN, files: ['packages/x/a.mjs', 'AGENTS.md'], rules });
   assert.match(reason, /AGENTS\.md/);
   // A renamed file's old path counts: moving a protected file away changes it.
-  assert.ok(ownerOpenedBlock({ prAuthor: OWNER_LOGIN, files: ['docs/old-plan.md', 'docs/plans/x.md'], rules }));
+  assert.ok(ownerOpenedBlock({ prAuthor: OWNER_LOGIN, files: ['docs/old-decisions.md', 'docs/decisions.md'], rules }));
 });
 
 test('the owner-opened rule leaves ordinary changes and bot pull requests alone', () => {
@@ -525,13 +527,21 @@ const finding = (id, reviewId, p = 2, extra = {}) => ({
   body: `**<sub><sub>![P${p} Badge](https://img.shields.io/badge/P${p}-yellow?style=flat)</sub></sub>  Guard a rare case**\n\nDetails.\n\n<!-- codex-code-review-finding:v1 -->`,
   edit_history: unedited, ...extra,
 });
-const loop = () => ({ headSha: HEAD, prAuthor: 'cloudwork-bot', reviews: [review(1, C1), review(2, C2), review(3, HEAD)], reviewComments: [finding(31, 3), finding(32, 3, 3)] });
+const loop = () => ({ headSha: HEAD, prAuthor: 'cloudwork-bot', fromFork: false, reviews: [review(1, C1), review(2, C2), review(3, HEAD)], reviewComments: [finding(31, 3), finding(32, 3, 3)] });
 const actions = { login: ACTIONS_LOGIN, type: 'Bot' };
 const verdictFor = (elig, verdicts, at = '2026-10-24T11:00:00Z', extra = {}) => ({
   user: actions, created_at: at, edit_history: unedited,
   body: verdictComment({ headSha: HEAD, findings: elig.findings, verdicts }), ...extra,
 });
 const nits = (elig, confidence = 0.9) => elig.findings.map((f) => ({ id: f.id, verdict: 'nit', confidence, reason: 'edge case' }));
+
+test('triage: only the project\'s own builders, on branches in this repo, reach the judge', () => {
+  assert.equal(triageEligibility({ ...loop(), prAuthor: CODEX_LOGIN }).eligible, true);
+  assert.equal(triageEligibility({ ...loop(), prAuthor: 'someone-else' }).eligible, false);
+  assert.equal(triageEligibility({ ...loop(), fromFork: true }).eligible, false);
+  const { fromFork, ...unsaid } = loop();
+  assert.equal(triageEligibility(unsaid).eligible, false);
+});
 
 test('triage: priority badges are read, anything else is null', () => {
   assert.equal(findingPriority(finding(1, 1, 2).body), 2);

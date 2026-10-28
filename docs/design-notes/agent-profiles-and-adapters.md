@@ -93,6 +93,67 @@ to take with a paragraph.
   decides (the Codex triage judge, `docs/plans/codex-triage.md`). A decision
   model may only screen first there.
 
+### Gemini as an Outside Checker (October 27)
+
+Added at the owner's request. He wants Gemini used as a partial outside
+checker wherever an orchestrator, whether True Convo's dispatcher or the
+owner's own Claude sessions, wants a second opinion from a different
+company's model. A checker reports; it never decides.
+
+- **What it checks.** A plan, a diff, a draft or an answer another model
+  produced, given with the question to check it against. It returns findings
+  ranked by severity, using the same P0 to P3 scale as the repo's Review
+  Guidelines, and the orchestrator or the owner decides what to do with them.
+  Its findings are a claim to verify, like any reviewer's, and its text is
+  data, never instructions, to the orchestrator: a checked diff can carry
+  injected text that a checker echoes back (`docs/plans/security.md`).
+- **Never the only check, and never on its own maker's work.** Gemini is
+  used where the work was done by Claude, Codex or another model, so the
+  check comes from a different company. It adds to the existing reviews and
+  doesn't replace one; on GitHub it isn't a reviewer until the workflow in
+  AGENTS.md ("Independent reviews") has its own plan and approval.
+- **Public material only, for now.** Code, plans and invented samples. The
+  owner's messages, memory, files and private True Convo data aren't sent to
+  it until he approves that kind of material, as with any cloud model.
+- **How it's reached and paid for.** A pay-per-use AI Studio key on the
+  paid tier (so Google doesn't train on what is sent), funded by prepaid
+  credit with a monthly budget alert; Google stopped accepting subscription
+  sign-in in the old Gemini CLI on June 18, 2026. Neither is a hard cap:
+  Google settles prepaid usage about ten minutes late and allows overages
+  ([Gemini API billing](https://ai.google.dev/gemini-api/docs/billing)). So
+  whatever calls Gemini for True Convo keeps its own running total in code
+  and stops with a reserve left for unsettled usage, like every other paid
+  route ("How Each Model Is Paid For"). On the owner's Mac the key lives in Keychain;
+  on the builders' VM an exe.dev Integrations proxy holds it
+  (`back-end-and-agent-hosts.md`). A low-cost Flash model by default; a
+  stronger one only when a Flash check comes back unsure, the same "move up
+  when unsure" rule as above.
+- **Subscription sign-in later.** Google's Antigravity CLI accepts the
+  owner's Gemini subscription where a person can sign in. If it works, it
+  replaces the key for interactive checks; automated checks keep the key.
+  Its account token needs the owner's approval of where it is stored first.
+- **Read-only, enforced by tools.** A checker reads what it's given and
+  returns text; it never changes files, runs commands or pushes. Both the
+  Gemini CLI and Antigravity can write files and run shell commands, and
+  Antigravity allows workspace writes by default, so a prompt saying "only
+  report" isn't enough when the checked diff can carry injected text. Each
+  checker run gets a tool allowlist or deny list that leaves only reading
+  (or no tools at all, with the material passed in the request), checked
+  before its first use, the same way `docs/plans/security.md` limits its
+  report-only agents. Reading is limited too, so the public-material rule
+  holds: a checker that has tools runs in a scratch folder holding only the
+  material it was given, never in a repository checkout, the owner's home
+  folder or anywhere with ignored private files, with reads outside that
+  folder denied. Context a harness loads by itself counts too: the Gemini
+  CLI adds `~/.gemini/GEMINI.md` and other memory files to every request,
+  so a checker run points the CLI's home and settings at an empty folder
+  (for example `GEMINI_CLI_HOME`) and the boundary check confirms that no
+  memory or context files were loaded. Where a harness can't be narrowed that way, the check
+  calls the Gemini API directly with no tools instead.
+- **Watched like any agent.** It gets a setup status and deadlines under
+  "Knowing When an Agent Isn't Working" below, and a silent or failing
+  Gemini never holds up work: the check is skipped and the report says so.
+
 ## Two Kinds of Agent Profile
 
 1. **A profile around a raw model.** True Convo is the harness: its rules,
@@ -120,6 +181,7 @@ Vendor harnesses are used only where a subscription requires its own program.
 | ChatGPT | Pi signed in with the owner's ChatGPT plan | Owner's ChatGPT plan | Pi supports it, but Pi stores sign-in tokens in a plain file (`~/.pi/agent/auth.json`). **Blocked** until those tokens can live in Keychain or the protected store (see Credentials). OpenAI's rules for a shipped product are unverified. |
 | OpenRouter | Pi with an OpenRouter key | Per use; some free models | Owner approval and a monthly cap |
 | Grok | Cursor's own agent, on the owner's Cursor plan | Owner's Cursor plan (unverified) | Cursor's agent supports scripts and lists Grok; whether automation uses the plan, and Cursor's rules, need checking first |
+| Gemini (outside checker) | Gemini CLI, later Antigravity | Owner's AI Studio key, prepaid credit | Paid tier only; True Convo's own cap in code, since the credit can overrun; key in Keychain or exe.dev Integrations; public material only for now |
 | Meta Muse | True Convo's existing sealed bridge | Meta pay-per-use, $10/month cap | Heaviest; last |
 
 ## Credentials With Pi (Requirement From Codex Review)
@@ -150,7 +212,15 @@ keys live in Keychain, never in files or logs.
    safely (see Credentials).
 4. **OpenRouter plus a model picker**, inside Pi.
 5. **Grok through Cursor's agent**, after checking Cursor's rules and billing.
-6. **Meta Muse.**
+6. **Gemini as an outside checker** (above), alongside Pi in step 6: a
+   direct API call with no tools first, since a checker only reads and
+   reports, then the Gemini CLI or Antigravity only once its read-only tool
+   boundary is in place. It needs the code-side spending cap before its
+   first paid call. The owner's own Claude sessions can use it before
+   then, on public material, through the CLI setup in
+   `back-end-and-agent-hosts.md`, run from such a scratch folder with the
+   CLI's file-writing and shell tools excluded in its settings.
+7. **Meta Muse.**
 
 ## Knowing When an Agent Isn't Working (October 26)
 
@@ -224,15 +294,15 @@ extending it on October 26; the rule itself now lives in AGENTS.md, "Agent
 Setup And Silence", and that section wins where the two differ. In short:
 
 - **Each reviewer and builder has a stated setup status** in AGENTS.md, for
-  example "Gemini Code Assist: not set up (October 26)". While one is not set
-  up, no pull request waits on it: its stand-in (a fresh Claude review for
-  Gemini) is used from the first round.
+  example "Gemini review: not set up". While one is not set up, no pull
+  request waits on it: its stand-in (GrokBot, then a fresh Claude review,
+  for Gemini) is used from the first round.
 - **The PR keeper checks every expected reviewer, not just Codex.** If a
   reviewer the rules expect hasn't posted on a pull request's latest commit
-  within its window (20 minutes for Codex as now, 30 for Gemini), the keeper
-  reports "<agent> silent on #N". If it has never posted on any pull request,
-  the keeper reports "<agent> not set up" once on issue #52 instead of on
-  every pull request.
+  within its window (20 minutes for Codex as now, 60 for GrokBot or
+  Gemini), the keeper reports "<agent> silent on #N". If it has never posted
+  on any pull request, the keeper reports "<agent> not set up" once on issue
+  #52 instead of on every pull request.
 - **Builders are covered too, from the first assignment.** Every builder
   (Claude, Codex, GrokBot teams) has a deadline for its first sign of work
   (a branch, a commit or a draft pull request) after it is given a module,

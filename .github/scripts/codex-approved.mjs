@@ -89,7 +89,7 @@ async function triage({ number, pr, comments, reviews, dismissals, reason, mayJu
   const onHead = reviews.some((r) => r.user?.login === CODEX_LOGIN && r.commit_id === headSha && r.state !== 'APPROVED');
   if (!onHead) return { approved: false, reason };
   const reviewComments = await withEditHistory(await gh.all(`${base}/pulls/${number}/comments`));
-  const eligibility = triageEligibility({ headSha, prAuthor: pr.user?.login, reviews, reviewComments, dismissals });
+  const eligibility = triageEligibility({ headSha, prAuthor: pr.user?.login, fromFork: pr.head?.repo?.full_name !== pr.base?.repo?.full_name, reviews, reviewComments, dismissals });
   if (!eligibility.eligible) {
     console.log(`#${number}: no triage (${eligibility.reason})`);
     return { approved: false, reason };

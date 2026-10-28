@@ -40,6 +40,11 @@ Working name: the **TCA Format**. It is built on top of `SKILL.md` rather than
 as a rival to it: True Convo reads the skills people already write, then
 adapts and tests them.
 
+Skills written for Open Convo live in [docs/skills/](../skills/README.md),
+one folder each: `SKILL.md`, a `capability.json` record (actions needing
+approval, install gate, models passed, what it doesn't prove) and its example
+runs. The first is `first-principles-decision` (October 28, draft).
+
 ## Rules
 
 - **Tested on the local default.** A capability counts as portable only once

@@ -6,6 +6,22 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 27:** Gemini runs on the owner's own Google AI Studio API key, with
+  billing on, under a monthly budget he sets: Google ended Gemini
+  subscription sign-in for the old Gemini CLI and the Gemini Code Assist
+  GitHub app for individual and Google AI Pro and Ultra accounts on June 18,
+  2026. On the builders' VM the key sits in exe.dev's Integrations, and on
+  his Mac in Keychain. Google's subscription-backed replacement, the
+  Antigravity CLI, is to be tried next for interactive use. This replaces
+  the Oct 23 entry's Gemini Code Assist reviewer and `/gemini review`: until
+  a Gemini review workflow is planned and approved, GrokBot and a fresh
+  Claude are the independent reviewers (AGENTS.md "Independent reviews").
+- **Oct 27:** Plans in `docs/plans/` merge on the owner's yes in a Claude
+  thread, not a GitHub approval: `docs/plans/` leaves `.github/CODEOWNERS`,
+  and the plan's pull request quotes his yes before auto-merge goes on. A
+  later change to a requirement, builder rule, limit or finish line needs a
+  new yes. Rule files, `PLAN.md` and this file stay protected (AGENTS.md
+  "Plans merge on the owner's yes").
 - **Oct 26:** GrokBot (Cursor) joins Gemini as the independent reviewer of
   Claude-built and Codex-built pull requests, so the reviewer can run a
   different model from the builder; the first review of the latest commit
