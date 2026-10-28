@@ -55,7 +55,7 @@ Import `Tasks`, `mergePeople`, `serializePerson`, `deserializePerson`, `compareS
 - `editTask(id, fields)` changes only the supplied fields. Editing a trashed task restores it. A repeat on a task with no due date is refused. A patterned repeat whose start is not one of its dates is refused. `afterDone` is refused for `weekdays`, `monthDay`, and `monthWeekday`.
 - `complete(id, now, { recordId }?)` finishes a one-off task, or records a repeating occurrence and moves to the next one.
 - `skip(id, now, { recordId }?)` moves a repeating occurrence on without a completion.
-- `reopen(id, { occurrence, now, recordId }?)` opens a one-off task again, or reopens one repeating occurrence.
+- `reopen(id, { occurrence, now, recordId }?)` opens a one-off task again, or reopens the latest repeating occurrence. An older one is refused, because a later completion still decides the current date.
 - `drop(id, now?, { recordId }?)` keeps the task in history as dropped. `deleteTask` / `restoreTask` / `emptyTrash` use Trash. Emptying Trash clears that person's undo history.
 - `snooze(id, request, now, { recordId }?)` moves the next reminder. `request` is `{ preset }` or `{ at: { dateTime, timeZone } }`, with optional `moveDue: true`. Presets are `laterToday` (+3 hours), `tomorrow` (tomorrow at the reminder's clock time), and `nextMonday`. A later `editTask` of `due`, including clearing it, replaces a snooze that moved the due date. Snoozing a different reminder without moving the due leaves that earlier due in place. When a due-date edit and a new repeat merge, the next date follows the due date.
 - `today(now, timeZone)`, `upcoming(now, days, timeZone)`, `overdue(now, timeZone)`, `remindersDue(from, to, timeZone)`, `history(id)`, and `task(id)` return plain copies.
@@ -129,7 +129,7 @@ Undo keeps up to 20 before/after snapshots in memory, not in the file. It writes
 - On-schedule months and years keep the start date's day and clamp a short month to its last day, then return to the original day. After-done months and years count from the completion or skip's action date, so they do not drift back to the original day. February 29 in a yearly rule falls on February 28 in other years.
 - The next due date is never before the winning rule's `start`. Editing a rule sets `start` to the new rule's first date on or after the current due date, in the same stamped change. If an after-done result lands on an occurrence that is already closed, whole intervals are added until the date is open.
 - Reminder text, titles, and errors do not grade the person. There are no scores or streaks.
-- One-off reopen is a stamped change of `state`. Repeating reopen is a record. Skip is only for a repeating task.
+- One-off reopen is a stamped change of `state`. Repeating reopen is a record for the latest closed occurrence only. Skip is only for a repeating task.
 
 ## Out of scope
 

@@ -956,8 +956,12 @@ export class Tasks {
         return;
       }
       const counting = countingRecords(task);
-      const target = occurrence ?? pickLatest(counting)?.occurrence;
+      const latest = pickLatest(counting)?.occurrence;
+      const target = occurrence ?? latest;
       if (!target || !counting.some(record => record.occurrence === target)) fail(counting.length ? 'That occurrence is open.' : 'Nothing to reopen.');
+      // A later completion still decides the current date, so reopening an
+      // older one would not make it the one you can complete.
+      if (target !== latest) fail('Only the latest occurrence can be reopened.');
       const seen = task.records.filter(record => (record.type === 'completion' || record.type === 'skip') && record.occurrence === target).map(record => record.id);
       this.#record(task, 'reopen', now, stamp, recordId, { occurrence: target, seen });
       task.life = { value: true, stamp: clone(stamp) };

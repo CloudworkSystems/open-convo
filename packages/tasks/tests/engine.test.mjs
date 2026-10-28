@@ -843,6 +843,17 @@ test('9. merge keeps both edits, both completions, and a reopened occurrence', (
   skipped.addTask({ title: 'Skip me', due: '2026-05-11', repeat: { kind: 'weeks', every: 1, mode: 'onSchedule' } }, { taskId: 'skip-me' });
   skipped.skip('skip-me', at('2026-05-11T15:00:00.000Z'), { recordId: 'skipped' });
   skipped.reopen('skip-me', { recordId: 'reopen-skip', now: at('2026-05-11T18:00:00.000Z') });
+  const older = engine('reopen-older', T0, 'UTC');
+  older.addTask({ title: 'Daily', due: '2026-11-01', repeat: { kind: 'days', every: 1, mode: 'onSchedule' } }, { taskId: 'daily' });
+  older.complete('daily', at('2026-11-01T15:00:00.000Z'), { recordId: 'nov1' });
+  older.complete('daily', at('2026-11-02T15:00:00.000Z'), { recordId: 'nov2' });
+  assert.equal(older.task('daily').occurrence, '2026-11-03');
+  assert.throws(() => older.reopen('daily', { occurrence: '2026-11-01', recordId: 'old' }), /latest/);
+  assert.equal(older.task('daily').occurrence, '2026-11-03');
+  older.reopen('daily', { occurrence: '2026-11-02', recordId: 'back' });
+  assert.equal(older.task('daily').occurrence, '2026-11-02');
+  older.complete('daily', at('2026-11-02T18:00:00.000Z'), { recordId: 'nov2-again' });
+  assert.equal(older.task('daily').occurrence, '2026-11-03');
   assert.equal(skipped.history('skip-me').find(row => row.id === 'skipped').undone, true);
 
   const partialA = engine('partial-a', T0 + 13);
