@@ -66,7 +66,7 @@ export function readHosts(line) {
   const hosts = [];
   const unreadable = [];
   // JSON strings and regex literals may escape the punctuation
-  // (`https:\/\/host\.dev`), and code or HTML may spell a character as a
+  // (`https:\/\/host\.example`), and code or HTML may spell a character as a
   // code (`\x2f`, `\u002f`, `\u{2f}`, `&#47;`, `&#x2f;`, `&sol;`); read the
   // line with those undone too, so such a URL still counts.
   const unescaped = decodeCharacterCodes(line).replace(/\\([^A-Za-z0-9\s(])/g, '$1');
