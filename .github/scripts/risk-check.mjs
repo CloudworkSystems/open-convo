@@ -691,10 +691,16 @@ export async function applyRiskHold({ gh, repoBase, pr, comments, reviews, allow
   // Write the comment only when the hits change (or someone else edited it):
   // every edit voids earlier approvals, so the hourly run must not touch it.
   if (hits && (fp !== 'none' || comment) && shown !== fp) {
+    // A comment someone else edited stays untrusted however often the gate
+    // rewrites it, and each rewrite would void the owner's approval again, so
+    // replace it with a fresh one instead.
+    if (comment && !editedOnlyBy(comment, isActionsEditor)) {
+      try { await gh.delete(`${repoBase}/issues/comments/${comment.id}`); } catch (error) { if (!/failed: 404/.test(error.message)) throw error; }
+      comment = null;
+    }
     const body = holdCommentBody({ hits, headSha, prAuthor: pr.user?.login });
-    comment = comment
-      ? await gh.patch(`${repoBase}/issues/comments/${comment.id}`, { body })
-      : await gh.post(`${repoBase}/issues/${pr.number}/comments`, { body });
+    if (comment) comment = await gh.patch(`${repoBase}/issues/comments/${comment.id}`, { body });
+    else if (fp !== 'none') comment = await gh.post(`${repoBase}/issues/${pr.number}/comments`, { body });
   }
   if (hits) {
     await gh.post(`${repoBase}/statuses/${headSha}`, {

@@ -437,6 +437,22 @@ test('hold: a commit that removes every hit lifts it and says so in the same com
   assert.equal(gh.calls.filter((c) => c[0] === 'DELETE').length, 1);
 });
 
+test('hold: a comment someone else edited is replaced, not patched, so a later approval can release', async () => {
+  const gh = fakeGitHub({ files: risky });
+  const foreign = { edit_history: { lastEditedAt: '2026-10-29T10:05:00Z', editor: { __typename: 'User', login: 'cloudwork-bot' }, userContentEdits: { totalCount: 1, nodes: [{ editor: { __typename: 'User', login: 'cloudwork-bot' } }] } } };
+  const tampered = holdComment([], undefined, foreign);
+  tampered.body = holdCommentBody({ hits: [{ path: 'src/a.js', line: 2, kind: 'host', detail: 'new outside host `collector.invented-tracker.dev`' }], headSha: HEAD, prAuthor: 'cloudwork-bot' });
+  assert.equal(await applyRiskHold({ gh, repoBase: '/r', pr: pr([RISK_LABEL]), comments: [tampered], reviews: [], allowlist: list }), HOLD_REASON);
+  assert.equal(gh.calls.some((c) => c[0] === 'PATCH'), false);
+  assert.ok(gh.calls.some((c) => c[0] === 'DELETE' && c[1] === '/r/issues/comments/7'));
+  const posted = gh.calls.find((c) => c[0] === 'POST' && c[1] === '/r/issues/5/comments')[2].body;
+  // The next run trusts the fresh comment, leaves it alone, and the owner's approval releases.
+  gh.calls.length = 0;
+  const fresh = { ...holdComment([]), id: 8, body: posted, updated_at: '2026-10-29T10:01:00Z' };
+  assert.equal(await applyRiskHold({ gh, repoBase: '/r', pr: pr([RISK_LABEL]), comments: [fresh], reviews: [approval('2026-10-29T11:00:00Z')], allowlist: list }), null);
+  assert.equal(gh.calls.some((c) => c[0] === 'PATCH' || (c[0] === 'POST' && c[1].endsWith('/comments'))), false);
+});
+
 test('hold: a clean pull request gets no comment and no label', async () => {
   const gh = fakeGitHub({ files: [{ path: 'src/a.js', before: 'x\n', after: 'y\n' }] });
   assert.equal(await applyRiskHold({ gh, repoBase: '/r', pr: pr(), comments: [], reviews: [], allowlist: list }), null);
