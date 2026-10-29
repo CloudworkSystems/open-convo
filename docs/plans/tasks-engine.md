@@ -1,0 +1,443 @@
+# Tasks And Reminders Engine (PRD)
+
+Status: In progress (Oct 29): merged in #138; GrokBot team A building (#141, #146);
+scope narrowed October 29 ("Revision: Narrowed Scope" at the end).
+
+Written October 24, 2026 by a Claude session (project "261024 OC Steering")
+from the owner's choice that day. Session name: `OC-261024-tasks-engine`.
+Umbrella: Personal. Part of the day-one proof (PLAN.md, "Day One And Public
+Launch": "**tasks and productivity** as the first real job it does"). Built
+by an outside builder under AGENTS.md "Outside Builders": **GrokBot team A**
+builds, working through Cursor and signed in as `cloudwork-bot`; **Codex**
+reviews; the coordinator checks the result against this plan. It takes one
+of the outside-builder places.
+
+## Why
+
+The household lists engine keeps checklists (groceries, house to-dos) that
+stay on the list and get checked and unchecked. What it doesn't do is time:
+"renew the car registration by November 30", "water the plants every three
+days", "call the dentist on Monday, remind me at 9". Those are tasks. A new
+user's first session should show an agent helping with them: "what's due
+today", "what did I miss", "snooze this to tomorrow". The hard, testable part
+is the dates: repeats that land on the right day across month ends, leap
+years and clock changes, a repeat that counts from when it was done versus
+from when it was due, and which reminders are due at a given moment. That
+can be built and tested now on invented tasks.
+
+## Plan Of Record
+
+1. **Now (this slice):** the engine on its own, tested on invented data. No
+   app code, no storage code, no notifications, no AI, no network.
+2. **Next (building lanes):** a Tasks view in the Desk and on the iPhone,
+   reminders shown by the apps, tasks added in conversation ("remind me to
+   ..."), and sync through the sync core
+   ([sync-core.md](sync-core.md)).
+3. **Later:** shared family tasks (Family umbrella, step 11).
+
+## What It Does
+
+A small library in `packages/tasks/`, in the style of the household lists
+and habit grid engines (an in-memory collection with permanent IDs, saved to
+and loaded from one JSON file per person):
+
+- **Tasks** have a title (1 to 500 characters), an optional note (up to
+  5,000), an optional list name for grouping (`Home`, `Work`, `Errands`), an
+  optional priority (`high` or none; no other levels), and a state: `open`,
+  `done` or `dropped`.
+- **Due** is optional and is one of:
+  - a **date** (`2026-11-30`): due that day, wherever the owner is;
+  - a **date and time in a time zone** (`2026-11-02T09:00`,
+    `America/New_York`): due at that wall time in that zone.
+- **Reminders**: zero to five per task, each either a fixed moment (a date,
+  time and time zone) or an offset before the due time (for example 1 day,
+  2 hours). A date-only task's offset counts from 09:00 on its due day in the
+  owner's zone (a setting, default 09:00). Every reminder belongs to an
+  occurrence: a fixed reminder stores the name of the occurrence it was set
+  for (a one-off task, dated or not, has a single occurrence named `once`),
+  and an offset reminder follows whichever occurrence is current. A fixed
+  reminder fires only while the occurrence it names is the task's current
+  open occurrence. When the series moves on, or a rule edit means its
+  occurrence is no longer the current one, it lapses unless the owner moves
+  it to the new current occurrence.
+- **Repeats** (optional). A task with a repeat must have a due date: its
+  first due date is the repeat's start, and a repeat without one is refused.
+  For the patterned kinds (`weekdays`, `monthDay`, `monthWeekday`) the start
+  must itself be a date of the pattern (a Tuesday start with `weekdays` set
+  to Monday is refused with a plain message), so the first occurrence is
+  always the start. The repeat stores its `start`. Editing the rule sets
+  `start` again, in the same stamped change: to the new rule's first date
+  on or after the current due date (weekly on Monday, due Monday the 6th,
+  changed to Thursdays: start Thursday the 9th). Earlier records keep their
+  occurrence names, as "Built For Sync Later" says.
+  A repeat is `{ kind, every, mode, ... }`, with `every` (N) from 1 to 365
+  for days and 1 to 99 otherwise, `mode` `onSchedule` or `afterDone`, and
+  one of these kinds:
+  - `days`: every N days.
+  - `weeks`: every N weeks, plain. No weekdays are stored; on schedule each
+    due date is N weeks after the previous one, so it keeps the first due
+    date's weekday.
+  - `weekdays`: every N weeks on chosen weekdays (at least one; an empty
+    set is refused).
+  - `months`: every N months, plain. On schedule each due date keeps the
+    first due date's day of the month, and a month without that day uses
+    its last day (the 31st falls on November 30, then back to December 31).
+  - `monthDay`: every N months on a chosen day of the month (1 to 31,
+    clamped the same way).
+  - `monthWeekday`: every N months on a numbered weekday ("the second
+    Tuesday", "the last Friday").
+  - `years`: every N years, plain, keeping the first due date's month and
+    day (February 29 falls on February 28 in other years).
+  **On schedule** means the next due date follows the pattern from the
+  previous due date, whenever it was done. **After done** means the next
+  due date counts from the day it was done ("water every three days" after
+  you actually water), and is allowed only for the plain kinds (`days`,
+  `weeks`, `months`, `years`); asking for it with `weekdays`, `monthDay` or
+  `monthWeekday` is refused with a plain message. A repeat may end after a
+  count (`endAfter`, 1 to 999 occurrences) or on a date (`endOn`, inclusive),
+  stored on the repeat and stamped with it. The count is of distinct closed
+  occurrences: each occurrence name with at least one counting completion or
+  skip counts once, however many records it has. When the next due date
+  would be past `endOn`, or the count has reached `endAfter`, there is no
+  next occurrence and the task is done.
+- **Completing a repeating task** records the completion and moves the task
+  to its next due date, keeping one task with a history, not a pile of
+  copies. Completing it early, late or twice in a day follows the rules
+  under Dates. Skipping an occurrence moves it on without recording a
+  completion.
+- **Snooze** moves a task's next reminder (and, if asked, its due date) to a
+  chosen moment, or by a preset: later today (+3 hours), tomorrow at the
+  reminder time, next Monday (on a Monday, the Monday 7 days later, never
+  today). Snoozing a repeating task changes only the
+  current occurrence. A snooze is its own record naming the occurrence it
+  snoozes and the new reminder moment (and new due moment, if moved). It
+  never moves a series on: only completion and skip records do. For the
+  current occurrence, the snooze with the highest version stamp applies;
+  snoozes naming any other occurrence stay in history and change nothing.
+  If a snooze moves the due date, the occurrence keeps its original name.
+- **Drop** (the task won't be done) and **delete** are different: a dropped
+  task stays in history; a delete goes to Trash, reversible until Trash is
+  emptied.
+- **Undo** for the last few changes, as in the household lists engine.
+
+### Views
+
+The engine answers questions for a given moment. The caller always passes
+`now` (an instant) and the owner's `timeZone`; the engine never reads the
+clock and never uses the machine's time zone.
+
+- `today(now)`: open tasks due on today's date in the owner's zone, plus
+  overdue tasks, plus tasks with a reminder already due today. Overdue first
+  (oldest first), then by due time (date-only tasks after timed ones), then
+  high priority first, then title, then ID.
+- `upcoming(now, days)`: open tasks due in the next 1 to 60 days, grouped by
+  date. An on-schedule repeating task is shown once per occurrence in the
+  window, and the projection respects the repeat's end: projected
+  occurrences use up what remains of `endAfter`, and none fall after
+  `endOn`. An after-done task is shown only at its current due date, because
+  its later dates depend on when it is next done; the entry is marked
+  `repeatsAfterDone` so a view can say "then every 3 days after you do it".
+- `overdue(now)`: open tasks whose due moment has passed. A date-only task is
+  overdue from the start of the next day in the owner's zone.
+- `remindersDue(from, to)`: every reminder of an open occurrence whose
+  moment falls in the half-open range `[from, to)`, at most 31 days, each
+  with its task and occurrence. An open occurrence is an open one-off task,
+  or an occurrence of a repeating task that no counting completion or skip
+  has closed; reminders of done, dropped, deleted or skipped work are never
+  returned. A
+  caller that checks every minute passes the last check and now, so no
+  reminder is shown twice or missed.
+- `history(taskId)`: completions, skips, snoozes and drops, newest first.
+
+Output is plain data. Words are plain and never grade: no "failed", "late
+again", streaks or scores (the same rule as the habit grid).
+
+## Dates
+
+- Date arithmetic works on calendar dates and never adds 24 hours, so a
+  daylight-saving change can't skip or repeat a day.
+- A timed due in a zone stays at that wall time across clock changes (9:00 in
+  New York is 9:00 before and after the change). A wall time that doesn't
+  exist on a spring-forward day moves forward by the gap (02:30 becomes
+  03:30); one that happens twice on a fall-back day uses the first.
+- Viewing from another zone converts the instant; date-only tasks stay on
+  their date.
+- **On schedule** repeats: completing an occurrence late moves to the next
+  pattern date after the completed occurrence, and if that is also past, the
+  task shows as overdue on the oldest missed occurrence only once (missed
+  occurrences are not piled up). Completing early moves to the next
+  occurrence after the one completed.
+- **After done** repeats: the next due date is N days, weeks, months or
+  years after the completion date in the owner's zone, keeping the task's
+  time of day. Months and years keep the completion's day of the month, and
+  a month without that day uses its last day (completed January 31, every
+  month: due February 28 or 29); the next step counts again from the next
+  completion, so it doesn't drift back.
+- Time zones are IANA names, checked with Node's built-in `Intl`. No time
+  zone data is bundled.
+
+## Built For Sync Later
+
+The same rules as the household lists engine
+([household-lists-engine.md](household-lists-engine.md), "Built For Sync
+Later"): permanent IDs, version stamps (a logical counter that moves past any
+stamp seen, then wall time, then device ID), field-level merge with the higher
+stamp winning, permanent deletion markers, and merging A into B equals B into
+A. Two rules specific to tasks:
+
+- **Completions are records, not a field.** Each completion, skip and snooze
+  is its own record with an ID and the occurrence it belongs to, merged as a
+  set, so two devices completing different occurrences both count and the
+  same record arriving twice counts once. The next due date is computed from
+  the merged records, never stored as the winner of a field race.
+- **Records are never deleted; they are withdrawn or reopened.** Undoing
+  one completion, skip or snooze sets that record's `withdrawn` field, a
+  stamped field like any other (the higher version stamp wins). A withdrawn
+  record stays in the file so a device that still has the original can't
+  bring it back, shows in history as undone, and is ignored everywhere
+  else: it never moves a series on and never applies as a snooze.
+- **Reopening works on the occurrence, not on one record.** Reopening a
+  repeating occurrence adds a reopen record naming that occurrence, with its
+  own ID, and listing the IDs of every completion and skip record for that
+  occurrence that the reopening device has at that moment (its causal
+  context; version stamps are not compared). Those listed records are set
+  aside. Any record for that occurrence that the reopen doesn't list counts:
+  a re-complete made afterwards, or a completion made concurrently on a
+  device the reopen hadn't heard from (the add wins, as in an
+  observed-remove set). Set-aside records stay in history as undone and
+  never move the series on. Reopen records are merged as a set like the
+  others and carry the same stamped `withdrawn` field: undoing a reopen
+  withdraws it, and a withdrawn reopen sets nothing aside, so the records it
+  listed count again. Reopening a one-off task is an ordinary stamped change to its
+  `state`.
+- **A repeating task's occurrence is named by its scheduled due date**
+  (the date, or the date and wall time with its zone) as it was when the
+  record was made; a one-off task's only occurrence is named `once`.
+  Each completion and skip record stores that name, the instant it was made,
+  and its **action date**: the calendar date in the owner's zone at that
+  instant, with that zone's name. The action date is fixed when the record
+  is made, so travel or a later change to the owner's zone never moves it.
+  Records never change when the rule changes.
+- **The next due date always comes from the winning rule and the merged
+  completion and skip records that aren't withdrawn or set aside by a
+  reopen** (snoozes never count here), whichever
+  device's edit won. The latest record is the one with
+  the latest occurrence name, then the latest action date, then the latest
+  instant, then the highest record ID. On schedule, the next due date is
+  the winning rule's first date after the latest record's occurrence date.
+  After done, it is N units after the latest record's action date, and a
+  skip counts the same as a completion here: skipping "water every three
+  days" today makes it due three days from today, with no completion
+  recorded. A record whose occurrence isn't a date of the winning rule stays
+  in history and still moves the series on; it is never dropped. With no
+  records, the next due date is the rule's first date on or after its start
+  date. The repeat's end (`endAfter` or `endOn`) is checked last: if it
+  has been reached, there is no next due date and the task is done. In
+  every case the next due date is never before the winning
+  rule's `start`: a result earlier than `start` becomes `start` (a yearly
+  task last done 2025-12-31 and due 2026-12-31, changed to daily, is next
+  due 2026-12-31, not 2026-01-01). So a completion made under the old rule,
+  merged with a rule edit from another device, gives the same next due
+  date on every device.
+- **Completing the same occurrence on two devices** keeps both records and
+  counts the occurrence once.
+
+The merge must also pass the sync core's merge-law check (commutative,
+associative, idempotent; [sync-core.md](sync-core.md), test 16) so it can be
+registered later. No network code in this slice.
+
+## Data Format
+
+One JSON file per person, with a `schemaVersion`, documented in the package
+README so the Mac app, the iPhone app and a later Today view read the same
+thing. Plain text only.
+
+## Tests (Must Pass, Run By One Command)
+
+`npm test` in `packages/tasks`, Node's built-in test runner, invented people
+and tasks only. At least:
+
+1. Add, edit, complete, reopen, drop, delete, restore and empty Trash; undo
+   restores the previous state exactly.
+2. Each repeat kind produces the right dates for two years from a start,
+   including "the 31st" in short months, "the last Friday", "the second
+   Tuesday", every 2 weeks on Monday and Thursday, and February 29 in leap
+   and other years.
+3. On schedule versus after done: completing late, early and twice on one
+   day each give the next due date the rules above say; after done on a
+   patterned repeat (chosen weekdays, a month day, a numbered weekday) is
+   refused; skipping an after-done task that was never completed moves it N
+   units past the skip's action date; a completion at 23:30 in New York
+   keeps its New York action date after the owner's zone changes to Tokyo; after done every month from January 31 gives the last day of
+   February; missed on-schedule
+   occurrences show once as overdue, not piled up.
+4. Repeat ends: after a count and on a date; the last completion leaves the
+   task done, with skips counting toward `endAfter` and two records for one
+   occurrence counting once. A repeat on a task with no due date is refused, and so is a
+   patterned repeat whose start isn't one of its dates.
+5. Time zones: a 9:00 New York task stays at 9:00 across both clock changes;
+   a nonexistent and a repeated wall time resolve as above; viewing from
+   London and Tokyo converts timed tasks and leaves date-only tasks on their
+   dates.
+6. Views: `today`, `upcoming`, `overdue` and their ordering, on a fixed
+   invented set, match a saved expected file exactly.
+7. Reminders: fixed and offset reminders, a date-only task's 09:00 base, and
+   `remindersDue` over back-to-back ranges returns each reminder exactly once,
+   including across a daylight-saving change and a month end; a task
+   completed, or an occurrence skipped, before its reminder's moment returns
+   no reminder, while the next open occurrence's reminders still come; a
+   weekly task with a fixed Sunday reminder, completed on Saturday, returns
+   no Sunday reminder, and neither does one whose Monday repeat was
+   changed to Thursday before Sunday; `upcoming` for an untouched daily task with
+   `endAfter: 2` shows exactly two dates in a 30-day window.
+8. Snooze: each preset, including "next Monday" asked on a Monday; snoozing one occurrence of a repeating task leaves
+   the next occurrence alone; a snooze never moves an on-schedule or
+   after-done series on; two devices snoozing the same occurrence end with
+   the higher-stamped snooze; a snooze naming an old occurrence changes
+   nothing. `upcoming` over 30 days shows every occurrence of an on-schedule
+   task and only the current one, marked `repeatsAfterDone`, for an
+   after-done task.
+9. Merge: the household lists engine's cases (different tasks, same field,
+   delete versus edit, equal timestamps, clock skew, an offline copy after
+   Trash is emptied), plus two devices completing different occurrences, the
+   same occurrence, and a completion on one device while the other edits the
+   repeat rule; one device reopens an occurrence while the other, which
+   already has the completion, merges later (the occurrence stays reopened,
+   and the series is back on it on both devices); two devices complete the
+   same occurrence, then one reopens it after seeing only its own record
+   (its own record is set aside, the other device's unseen completion still
+   counts, so the occurrence is done on both devices, whichever order they
+   merge in, even when the unseen completion has the lower version stamp);
+   reopening after seeing both records reopens it; a re-complete after a
+   reopen counts again; undoing a reopen on one device restores the
+   completion on both after merging; and a later re-complete beats an earlier withdrawal; and the rule edit case (weekly on Monday changed
+   to weekly on Thursday: the Monday
+   completion stays in history and the next due date is the first Thursday
+   after it, on both devices, whichever order they merge in; a yearly task
+   changed to daily is next due on its new `start`, not the day after its
+   last completion). Merging is commutative, associative and idempotent on random
+   invented histories (a fixed seed, at least 500 cases).
+10. No grading words in any text the engine produces (as in the habit grid,
+    test 7).
+11. Saving and loading round-trips exactly; an unknown `schemaVersion`, an
+    unknown field and a bad time zone are each refused with a plain message.
+12. Hostile but valid text (quotes, `<script>`, emoji, right-to-left text,
+    very long titles) is stored and returned unchanged.
+13. No clock: every operation runs with `Date.now`, an argument-less `Date`
+    and the local-time `Date` methods stubbed to throw (`now` always comes
+    from the caller or the collection's injected clock). No network and
+    nothing written: the test setup makes Node's network built-ins throw if
+    called, and the library writes no files.
+
+## Out Of Scope For This Slice
+
+App or Desk screens, notifications, the iPhone, voice or conversation input,
+AI, network or iCloud, storage or encryption code, calendars (the calendar
+merge engine is separate), shared tasks, attachments, subtasks, real personal
+data.
+
+## Rules For The Builder (GrokBot Team A)
+
+These are rules the builder must follow; the setup does not enforce them, so
+breaking one is a stop-and-report event.
+
+- Work only in a checkout of this repo, through Cursor, on the branch
+  `OC-261024-tasks-engine`, signed in as `cloudwork-bot`. Open a pull request
+  into `main` with auto-merge off and the label `agent: grokbot`. Never push
+  to `main` directly, and never switch on auto-merge.
+- Mark the work as AGENTS.md "Accounts And Provenance" says: `Cursor Agent`
+  as commit author, and `— GrokBot team A` as the last line of the pull
+  request description and every comment.
+- Run **no commands on the owner's Mac** for this job.
+- Touch no keys, tokens, passwords, accounts, Keychain, iCloud or private
+  files. Invented data only.
+- Change files only under `packages/tasks/`. Nothing else, not even
+  `STATUS.md`: the coordinator updates STATUS.md. Import nothing from
+  `apps/` or another package.
+- JavaScript modules (`.mjs`), Node 22 or later, `"type": "module"`,
+  `"private": true`, tests with `node --test`.
+- No network calls, no AI, no paid services, in the code or the tests.
+- No new dependencies. Add no license file and no `license` field.
+- Keep the first slice small: the engine, the tests and a short README with
+  the data format, the API and a try-it snippet. Finishable in one to two
+  days.
+- The pull request says what was built, how to run the tests, what was not
+  done, and anything unsure.
+- Supported setups are macOS and the Linux CI runners on Node 22 (AGENTS.md
+  "Review Guidelines"); don't add Windows-specific code.
+- Edge cases this plan doesn't name: follow RFC 5545's recurrence defaults
+  where one applies. Write each choice in the README's "Edge cases" section
+  with a test.
+
+## Review And Finish Line
+
+Codex reviews it as code until it gives a 👍 (AGENTS.md "Gemini reviews":
+GrokBot builds, Codex reviews). GrokBot fixes every P1 and P2 or explains in
+the pull request why one doesn't apply. The coordinator checks it against
+this plan, posts the check as a comment, gives the owner a short try-it note,
+and switches on auto-merge once the plan check passes. Done when the tests
+pass with one command, Codex has no open P1 or P2 on the latest commit (or
+the Codex triage judge passes it, [codex-triage.md](codex-triage.md)), and
+the plan check finds nothing missing.
+
+## Revision: Narrowed Scope (October 29, 2026)
+
+Written by a Claude session (project "261024 OC Steering", thread "Unstick
+tasks engine scope check") at the owner's request. Pull request #146 went
+through more than 20 Codex rounds, and almost every finding after the first
+few was a combination this plan never named: a due-date edit merged with a
+repeat added on another device, a snooze that moved the due date followed by
+a second snooze, the second 1:30 of a fall-back night carried through a
+repeat. Each was raised as P1 because the plan seemed to promise an answer.
+This revision says which promises this slice makes, so the rest wait for
+the sync slice. It changes nothing above that it doesn't name, and it adds
+no work for the builder.
+
+**What this slice still promises, unchanged:** everything under "What It
+Does", "Views" and "Dates", the "Built For Sync Later" rules as written, and
+every case in Tests 1 to 13.
+
+**What it no longer promises** (any result is acceptable as long as it is
+deterministic, passes the merge-law check in test 9, never throws on a merge
+of two valid files, and leaves every task valid):
+
+1. **Concurrent edits to fields that interact.** When two devices change
+   different fields of one task that depend on each other, and the case
+   isn't named in test 9, this slice doesn't decide which outcome is right.
+   That covers a due-date edit (moved, cleared or set) merged with a repeat
+   added, changed or removed elsewhere; a due-moving snooze merged with a
+   due-date edit elsewhere; and a reminder edit merged with a due-date or
+   repeat edit elsewhere. Field-level merge (the higher stamp wins each
+   field) is enough. The sync slice ([sync-core.md](sync-core.md)) writes
+   those rules, with tests, before the engine is registered.
+2. **The second occurrence of a repeated wall time.** "Dates" says a wall
+   time that happens twice on a fall-back day uses the first. That is the
+   only promise. Carrying the second occurrence (for example 1:30 the
+   second time) through repeats, occurrence names, schedule names, fixed
+   reminders or snoozes is not required. `laterToday` is still "+3 hours"
+   from the instant passed in.
+3. **Stacked snoozes.** The snooze promises are the ones in "What It Does"
+   and test 8: the highest-stamped snooze for the current occurrence
+   applies, and no snooze moves a series on. How several snoozes on
+   different reminders of one occurrence combine, or how a due-moving
+   snooze combines with a later edit, only needs a deterministic result.
+4. **Reopening an older occurrence.** Only the latest closed occurrence of a
+   repeating task has to be reopenable. Reopening an older one may be
+   refused with a plain message.
+
+**For reviewers.** A finding that falls only under items 1 to 4 is not a
+broken promise of this plan, so it is P3 at most (AGENTS.md "Review
+Guidelines"). A finding in one of these areas still counts as P1 when it
+shows a crash or an exception on valid input, a merge-law failure
+(commutative, associative, idempotent), an invalid task left behind, lost
+records or data, or a break in one of the promises above.
+
+**For the builder (GrokBot team A).** Nothing to remove: what is already
+built for items 1 to 4 can stay while the tests pass. Don't add more code
+for them. Answer a new finding that falls only under items 1 to 4 in one
+line on its review thread, naming this section, instead of changing code.
+The rule "edge cases this plan doesn't name: follow RFC 5545" doesn't
+reopen items 1 to 4.
+
+**Plan Of Record.** Step 2 (sync through the sync core) now also owns the
+rules for items 1 to 3.
