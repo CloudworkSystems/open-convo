@@ -59,8 +59,23 @@ and app names never reach the Mac through this tool at all.
 
 ## What It Does
 
-A small package, `packages/time-mirror/`: Node 22 ESM, no dependencies, plus
-one command the owner runs on his Mac.
+Two parts, both Node 22 ESM with no dependencies, so the package follows
+[packages/AGENTS.md](../../packages/AGENTS.md) (no package reads the
+Keychain or real personal data, or writes to disk):
+
+- **`packages/time-mirror/`, a pure library.** It builds the request
+  parameters (never the key), turns RescueTime rows into habit-grid trackers,
+  and returns the HTML page as a string. It takes an injected `fetchRows`
+  function and never touches the network, the Keychain or the disk. All of
+  its tests use invented rows.
+- **`scripts/time-mirror.mjs`, the command the owner runs on his Mac.** It is
+  the only part that reads the Keychain, calls RescueTime and writes the page.
+  It stays small, so nearly all of the logic is tested in the library. Its own
+  tests (`scripts/time-mirror.test.mjs`) cover the key and error handling
+  with an invented key and a fake fetch.
+
+Steps 1, 2, 5 and 6 below are the command's. Steps 3 and 4, and building the
+page in step 5, are the library's.
 
 1. **Fetch.** `GET https://www.rescuetime.com/anapi/data` with
    `perspective=interval`, `resolution_time=day`, `format=json`, a date
@@ -69,18 +84,23 @@ one command the owner runs on his Mac.
    month at a time. This is the only network call, to that one host.
 2. **Key.** The API key is read from the macOS Keychain (generic password,
    service `rescuetime-api-key`) with `security find-generic-password -w`
-   and sent only in the `Authorization: Bearer` header. It is never taken
-   from a command-line argument, an environment variable or a file, and
-   never printed, logged or written. If Gate 0 shows RescueTime refuses the
-   header, the code pull request may put the key in the query string instead
-   (RescueTime's older form), still sent only to that host, never logged,
-   and with error messages that show the request without its query string.
+   and sent only to that host. It is never taken from a command-line
+   argument, an environment variable or a file, and never printed, logged or
+   written. RescueTime documents the Analytic Data API with the key in the
+   `key=` query parameter (its `Authorization: Bearer` form is for OAuth
+   apps), so the code pull request uses the query parameter unless Gate 0
+   shows the header works. Either way, an error shows only the HTTP status
+   and a fixed message: never the request URL with its query string, and
+   never RescueTime's response body.
 3. **Turn into tags.** Productivity levels map to three tags: **productive**
    (RescueTime's +1 and +2), **neutral** (0) and **distracting** (-1 and
    -2), plus **total**. An optional local file, `tags.json`, kept next to
    the output and never in the repo, maps RescueTime categories to the
    owner's own tags (for example "Software Development" to "coding").
-   Categories he hasn't mapped are left out of the page.
+   Categories he hasn't mapped are left out of the page. That matters
+   because custom categories can carry names he chose (a client's name, for
+   example): only the category names he maps ever get written, and only as
+   his tag names.
 4. **Draw.** Each tag becomes an **amount** tracker in the habit grid engine
    (`packages/habit-grid/`, imported by relative path, not copied), in
    minutes per day, with check-ins marked `source: 'automatic'`, a value the
@@ -94,7 +114,11 @@ one command the owner runs on his Mac.
    `~/Library/Application Support/OpenConvo/time-mirror/time.html` (folder
    mode 0700, file 0600), first to a temporary file and then renamed, so a
    failed run keeps the last good page. The page holds daily minutes per tag
-   only. Raw API rows are kept in memory and never written anywhere.
+   only. Raw API rows are kept in memory and never written anywhere. The
+   file is protected only by its permissions: anything running as the owner
+   on his Mac, local agents included, could read it. No agent is pointed at
+   it, but that is a rule, not a wall, until slice 3 moves the history into
+   the protected store.
 6. **Forget.** `--forget` deletes that folder. Revoking the key on
    RescueTime's site and deleting the Keychain item stops all access.
 
@@ -127,7 +151,8 @@ the grids and page stay the same).
 4. **Storage:** one page of daily per-tag minutes in Application Support,
    readable only by him. It is outside the protected Desk store, which this
    plan allows because it holds daily totals only, never site, app or window
-   names. Time Machine backs that folder up like the rest of his Library.
+   names. Time Machine backs that folder up like the rest of his Library,
+   and any program running as him could read it (step 5 above).
    Moving it into the protected store is slice 3.
 5. **Permissions:** no new Mac permission, no entitlement, no agent access.
    RescueTime keeps the permissions he already gave it.
@@ -175,7 +200,10 @@ before anything ships.
   (each keeps the last good page and says plainly what failed).
 - A test that the only requests made are the two allowed kinds, to that one
   host, and that no request asks for per-site or per-app rows.
-- A test that the key never appears in output, errors or the page.
+- A test (in the command's tests) that the key never appears in output,
+  errors or the page, and that an error shows no response body.
+- A test that the library itself never imports `fs`, `child_process` or a
+  network module, so the package rule holds.
 - A test that the written page contains no URL, no outside resource, and
   only daily per-tag numbers.
 - A README with the Gate 0 steps, written for someone new to Terminal.
