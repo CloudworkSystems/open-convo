@@ -27,6 +27,10 @@ or Gemini Code Assist as the reviewer, this section wins:
   "Rules For The Builder" applies to Claude unchanged (only
   `packages/calendar-merge/`, no commands on the owner's Mac, invented data
   only, no network, AI, paid services or new dependencies).
+  One reported exception: #130's description says its tests were also run
+  once on a temporary worktree of the owner's Mac checkout. That run is
+  recorded here, not allowed going forward; further Mac commands for this
+  job need the owner's yes.
 - **Reviews.** It takes the code path in AGENTS.md's Review Loop: Codex
   reviews every commit by itself, and the independent review is GrokBot or a
   fresh Claude review by an agent that didn't build it ("Independent
@@ -447,7 +451,8 @@ nothing missing from this document.
 The owner hasn't answered these yet. Builders use the recommended answer
 unless the owner changes it before the code pull request merges.
 
-1. **Gemini Code Assist on the repo.** The same question as in
+1. **Gemini Code Assist on the repo.** (Superseded, see "Revision, October
+   29: Claude Builds".) The same question as in
    [email-sorting-engine.md](email-sorting-engine.md): its GitHub app needs
    installing by the owner. Until it reviews, the PR steward's Claude review
    stands in.
