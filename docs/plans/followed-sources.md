@@ -76,7 +76,7 @@ node src/followed.mjs --sources fixtures/sources.json --items fixtures/items.jso
   problem line.
 - **State file (optional):** what earlier runs already handled:
   `{ schemaVersion: 1, checkpoints: { <sourceId>: <date> }, reported:
-  [{ source, itemId, fingerprint }], failures: [{ source, itemId, runs,
+  [{ source, itemId }], failures: [{ source, itemId, runs,
   gaveUp }] }`.
 - **Known file (optional):** lessons and ideas the owner already keeps,
   `{ schemaVersion: 1, known: [{ text }] }`, so the engine doesn't draft them
@@ -125,7 +125,9 @@ the new state, and the command prints it only with `--json`.
    flag doesn't mean an item is safe.
 8. Each kept card gets a `fingerprint` (SHA-256 of kind plus normalized
    title and body, from `node:crypto`). The new state adds each processed
-   item to `reported`. A source's checkpoint moves forward only to its
+   item to `reported` by its source and id, whether or not it produced any
+   cards (an empty answer, or every card dropped, still counts as
+   processed). A source's checkpoint moves forward only to its
    newest item dated before the oldest item from that source that failed
    this run, so a failed item is always read again next run. With no
    failures, it moves to the newest processed item. It never moves
