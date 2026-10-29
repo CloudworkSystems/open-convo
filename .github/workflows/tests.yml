@@ -112,8 +112,17 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - run: xcodebuild -version && swift --version
+      # TEMPORARY (PR 3a check run; reverted before the pull request): build
+      # the Desk page so the real-page proofs run.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci && npm run build:native-proof
+        working-directory: apps/desk
       - run: swift test
         working-directory: apps/mac
+        env:
+          TRUECONVO_DESK_BUNDLE: ${{ github.workspace }}/apps/desk/native-dist
       # Packaging checks (stand-ins only: never builds, signs or installs).
       # The byte-identity comparison needs a True Convo commit this repo
       # doesn't have, so it is skipped here until the baseline is brought over.
