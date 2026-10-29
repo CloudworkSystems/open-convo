@@ -318,6 +318,7 @@ function nativeAvailabilityMessage(reason: string | null, hasConfirmation: boole
     case 'provider-override': return 'The Claude configuration does not match the approved subscription route.';
     case 'signed-out': return 'Claude is signed out on this Mac.';
     case 'not-subscription': return 'Claude is not using the approved subscription login.';
+    case 'host-not-approved': return 'Sending to Anthropic has not been approved. Approve it in the Mac app before sending. Nothing has been sent; your draft is kept.';
     default: return 'The Mac app could not confirm participant availability. Your draft is kept.';
   }
 }

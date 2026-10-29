@@ -3,6 +3,10 @@
 // latest commit, and those held for risk (labels `needs-owner: risk` and
 // `needs-owner: risk-escalate`, docs/plans/risk-review.md). The owner pins
 // the issue once.
+//
+// It also keeps one hidden line in the issue, listing the open pull requests
+// with auto-merge on. The PR keeper reads that line to decide which pull
+// requests to update from main: its GitHub tools can't see auto-merge.
 
 import { client, repoFromEnv } from './github.mjs';
 import { parseCodeowners, protectedFiles } from './codeowners.mjs';
@@ -22,8 +26,10 @@ const RISK_LABELS = ['needs-owner: risk', 'needs-owner: risk-escalate'];
 
 const rows = [];
 const riskRows = [];
+const autoMerge = [];
 for (const pr of await gh.all(`${base}/pulls?state=open`)) {
   if (pr.draft) continue;
+  if (pr.auto_merge) autoMerge.push(pr.number);
   const risk = (pr.labels ?? []).map((l) => l.name).filter((name) => RISK_LABELS.includes(name));
   if (risk.length) riskRows.push(`| [#${pr.number}](${pr.html_url}) ${pr.title.replace(/\|/g, '/')} | ${risk.map((name) => `\`${name}\``).join(', ')} |`);
   const files = (await gh.all(`${base}/pulls/${pr.number}/files`)).flatMap((f) => [f.filename, f.previous_filename].filter(Boolean));
@@ -54,6 +60,8 @@ const body = [
   riskRows.length
     ? ['| Pull request | Why |', '| --- | --- |', ...riskRows].join('\n')
     : 'None.',
+  '',
+  `<!-- auto-merge-on: ${autoMerge.sort((a, b) => a - b).join(',')} -->`,
 ].join('\n');
 
 const issues = await gh.all(`${base}/issues?state=open&creator=${encodeURIComponent('github-actions[bot]')}`);

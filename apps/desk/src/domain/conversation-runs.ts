@@ -10,6 +10,19 @@ export const MAX_PARTICIPANT_FIELD_BYTES = 256;
 /** Contract section 20: the local route's participant id and context bound. */
 export const LOCAL_PARTICIPANT_ID = 'ollama-local';
 export const MAX_CONTEXT_RUNS = 256;
+/** Contract section 21.1: the Claude Code entry and its off-Mac pin's `executionHost`. */
+export const CLAUDE_PARTICIPANT_ID = 'claude-code';
+export const ANTHROPIC_EXECUTION_HOST = 'anthropic';
+
+/**
+ * Runs that carry `contextRunIds`: a local model's (section 20.3) and a
+ * revision-5 Claude Code pin's, whose `executionHost` is `anthropic`
+ * (section 21.2). A revision-3 Claude Code pin never carries it.
+ */
+export function carriesContext(identity: Readonly<ParticipantIdentity>): boolean {
+  return identity.id === LOCAL_PARTICIPANT_ID
+    || identity.id === CLAUDE_PARTICIPANT_ID && identity.executionHost === ANTHROPIC_EXECUTION_HOST;
+}
 
 export type ConversationRunRefusal = 'invalid-arguments' | 'invalid-run' | 'invalid-event' | 'invalid-text'
   | 'text-limit' | 'run-size-limit' | 'target-mismatch' | 'sequence-mismatch' | 'invalid-transition' | 'invalid-closure';
@@ -26,7 +39,7 @@ export interface CreateConversationRunArgs {
   participant: ParticipantIdentity;
   input: string;
   createdAt: string;
-  /** Required exactly for a local participant (contract section 20.3). */
+  /** Required exactly when the participant carries context (contract sections 20.3 and 21.2). */
   contextRunIds?: string[];
 }
 
@@ -36,12 +49,12 @@ const runKeys = ['version', 'runId', 'sessionId', 'userMessageId', 'assistantMes
   'inputChunks', 'outputChunks', 'lastSequence', 'phase', 'createdAt', 'updatedAt'];
 const eventKeys = ['runId', 'sessionId', 'sequence', 'at', 'type'];
 const createKeys = ['runId', 'sessionId', 'userMessageId', 'assistantMessageId', 'participant', 'input', 'createdAt'];
-/** Exactly when the participant is local; never an id twice or the run's own id. */
+/** Exactly when the participant carries context; never an id twice or the run's own id. */
 function contextRunIds(value: Record<string, unknown>): boolean {
-  const local = (value.participant as ParticipantIdentity).id === LOCAL_PARTICIPANT_ID;
-  if (!Object.hasOwn(value, 'contextRunIds')) return !local;
+  const required = carriesContext(value.participant as ParticipantIdentity);
+  if (!Object.hasOwn(value, 'contextRunIds')) return !required;
   const ids = value.contextRunIds;
-  if (!local || !Array.isArray(ids) || Object.getPrototypeOf(ids) !== Array.prototype || ids.length > MAX_CONTEXT_RUNS
+  if (!required || !Array.isArray(ids) || Object.getPrototypeOf(ids) !== Array.prototype || ids.length > MAX_CONTEXT_RUNS
     || Reflect.ownKeys(ids).length !== ids.length + 1) return false;
   const seen = new Set<string>([String(value.runId).toLowerCase()]);
   for (let index = 0; index < ids.length; index++) {
