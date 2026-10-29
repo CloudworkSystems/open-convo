@@ -46,9 +46,18 @@ test('outside reviews: GrokBot and fresh Claude, latest decides clean', () => {
     { user: { login: 'cloudwork-bot' }, created_at: '2026-10-20T01:00:00Z', body: '@cursor Please do an independent review' },
     { user: { login: 'cursor[bot]' }, created_at: '2026-10-20T02:00:00Z', body: 'Independent review of `abc`. Two P1 findings.\n\n— GrokBot review' },
     { user: { login: 'cursor[bot]' }, created_at: '2026-10-20T02:30:00Z', body: 'Pushed a fix for the build.' },
-    { user: { login: 'cloudwork-bot' }, created_at: '2026-10-20T03:00:00Z', body: '**Independent review (fresh Claude) of def: clean, no P0 or P1.**' },
+    { user: { login: 'cloudwork-bot' }, created_at: '2026-10-20T03:00:00Z', body: '**Independent review (fresh Claude) of def4567: clean, no P0 or P1.**' },
   ];
-  assert.deepEqual(outsideSummary({ reviews: [], comments }), { outsideReviewer: 'Claude + GrokBot', outsideRounds: 2, outsideLatest: 'clean' });
+  assert.deepEqual(outsideSummary({ reviews: [], comments }, 'def4567'.padEnd(40, '0')), { outsideReviewer: 'Claude + GrokBot', outsideRounds: 2, outsideLatest: 'clean', outsideCommit: 'def4567', outsideOnHead: 'yes' });
+});
+
+test('a clean outside review holds only for the commit it reviewed', () => {
+  const head = '1234567890'.padEnd(40, 'f');
+  const on = (body, extra = {}) => outsideSummary({ reviews: [{ user: { login: 'cloudwork-bot' }, submitted_at: '2026-10-20T01:00:00Z', body, ...extra }], comments: [] }, head);
+  assert.equal(on('**Independent review of 1234567: clean.**').outsideOnHead, 'yes');
+  assert.equal(on('**Independent review of abcdef0: clean.**').outsideOnHead, 'no');
+  assert.equal(on('Independent review: clean, nothing new.', { commit_id: head }).outsideOnHead, 'yes');
+  assert.equal(outsideSummary({ reviews: [], comments: [] }, head).outsideOnHead, '');
 });
 
 test('an outside review with an open P2 is not clean, but one with fixed findings is', () => {

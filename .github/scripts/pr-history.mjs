@@ -30,7 +30,7 @@ export const COLUMNS = [
   'number', 'title', 'agent', 'state', 'draft', 'branch', 'createdAt', 'endedAt', 'daysOpen',
   'commits', 'filesChanged', 'additions', 'deletions', 'areas', 'labels',
   'codexRounds', 'codexLatest', 'codexP0', 'codexP1', 'codexP2', 'codexP3',
-  'outsideReviewer', 'outsideRounds', 'outsideLatest', 'ownerApproved', 'headHash', 'updatedAt', 'link',
+  'outsideReviewer', 'outsideRounds', 'outsideLatest', 'outsideCommit', 'outsideOnHead', 'ownerApproved', 'headHash', 'updatedAt', 'link',
 ];
 
 // apps/desk, packages/<name>, docs/plans; otherwise the top folder or file.
@@ -86,7 +86,9 @@ export function codexSummary({ reviews, comments, reviewComments }) {
 
 // Independent reviews: comments or reviews that start "Independent review",
 // or GrokBot's, which end "— GrokBot review". Clean or not is a text match.
-export function outsideSummary({ reviews, comments }) {
+// A review counts only for the commit it reviewed: the one its text names,
+// else the commit a GitHub review was left on.
+export function outsideSummary({ reviews, comments }, headSha = '') {
   const found = [];
   for (const item of [...comments, ...reviews]) {
     const body = (item.body ?? '').trim();
@@ -95,13 +97,16 @@ export function outsideSummary({ reviews, comments }) {
     if (!OUTSIDE.test(body) && !body.includes('GrokBot review')) continue;
     const head = body.slice(0, 400);
     const clean = OUTSIDE_CLEAN.test(head) && !OUTSIDE_COUNTED.test(head);
-    found.push([item.submitted_at ?? item.created_at, grok ? 'GrokBot' : 'Claude', clean ? 'clean' : 'findings']);
+    const commit = (/\b[0-9a-f]{7,40}\b/.exec(head)?.[0] ?? item.commit_id ?? '').slice(0, 10);
+    found.push([item.submitted_at ?? item.created_at, grok ? 'GrokBot' : 'Claude', clean ? 'clean' : 'findings', commit]);
   }
   found.sort((a, b) => a[0].localeCompare(b[0]));
   return {
     outsideReviewer: [...new Set(found.map((f) => f[1]))].sort().join(' + '),
     outsideRounds: found.length,
     outsideLatest: found.length ? found.at(-1)[2] : '',
+    outsideCommit: found.length ? found.at(-1)[3] : '',
+    outsideOnHead: !found.length ? '' : found.at(-1)[3] && headSha.startsWith(found.at(-1)[3]) ? 'yes' : 'no',
   };
 }
 
@@ -118,7 +123,7 @@ export function buildRow(pull, { files, reviews, comments, reviewComments, commi
     areas: [...new Set(files.map((f) => area(f.filename)))].sort().join('; '),
     labels: pull.labels.map((l) => l.name).join('; '),
     ...codexSummary({ reviews, comments, reviewComments }),
-    ...outsideSummary({ reviews, comments }),
+    ...outsideSummary({ reviews, comments }, pull.head.sha),
     ownerApproved: reviews.some((r) => r.user?.login === OWNER && r.state === 'APPROVED') ? 'yes' : '',
     headHash: pull.head.sha, updatedAt: pull.updated_at, link: pull.html_url,
   };
@@ -159,6 +164,10 @@ Worked-out columns:
   match on the latest one: \`clean\` needs "clean", "no findings" or "nothing
   new" and no P0, P1 or P2 counted as still open. Check the pull request when
   it matters.
+- \`outsideCommit\`, \`outsideOnHead\`: the commit that latest review names (or
+  was left on), and whether it is the pull request's head. A \`clean\` review
+  holds only for that commit; \`no\` also covers a later update from \`main\`
+  alone, which needs no new review.
 - \`areas\`: top folders touched (\`apps/desk\`, \`packages/<name>\`, \`docs/plans\`,
   or a top-level file).
 `;
