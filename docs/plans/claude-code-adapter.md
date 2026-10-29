@@ -1,6 +1,8 @@
 # Claude Code Adapter Scope: Claude Joins The Conversation
 
-Status: Approved (Oct 23): scope merged (#75); building starts after step 3 (see STATUS.md).
+Status: Approved (Oct 23): scope merged (#75); building was to start after
+step 3. On October 28 the owner said PR 2 may start now, on invented chats
+only, before his step 3 trial (see STATUS.md).
 
 Written October 19, 2026 by a building session. A proposal: the owner and
 the planning session can change it. PLAN.md is the authority. It comes

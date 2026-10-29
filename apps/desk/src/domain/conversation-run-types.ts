@@ -20,9 +20,10 @@ export interface ConversationRun {
   lastSequence: number;
   phase: ConversationRunPhase;
   /**
-   * Local-model runs only (contract section 20.3): the earlier completed runs of
-   * this session sent as context, oldest first. Present exactly when
-   * `participant.id` is `ollama-local`, possibly empty.
+   * The earlier completed runs of this session sent as context, oldest first.
+   * Present exactly when `participant.id` is `ollama-local` (contract section
+   * 20.3), or `claude-code` with `executionHost` `anthropic` (section 21.2),
+   * possibly empty.
    */
   contextRunIds?: string[];
   createdAt: string;

@@ -1,6 +1,6 @@
 # Status
 
-Updated October 24, 2026. The short version of where the build is. The full
+Updated October 29, 2026. The short version of where the build is. The full
 plan is in [PLAN.md](PLAN.md).
 
 ## Now
@@ -46,6 +46,7 @@ chats only). Scope:
 | Part | State |
 | --- | --- |
 | PR 1: Scope | Merged (#75) |
+| PR 2: Contract revision 5 and the page codec (invented chats only; started on the owner's yes, October 28) | In review |
 
 ## Done
 
