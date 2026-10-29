@@ -117,6 +117,11 @@ test('npm: overrides and resolutions that repoint a package are hits; a version 
   assert.deepEqual(signals(scan('package.json', before, withKey('overrides', { 'parent-invented': { '.': '1', 'left-pad-invented': 'npm:other-pad-invented@1' } }))).sort(), ['dependency:`left-pad-invented` installs the package `other-pad-invented`', 'dependency:new package `parent-invented`']);
   assert.equal(scan('package.json', before, withKey('resolutions', { '**/left-pad-invented': 'git+ssh://git@git.invented-forge.dev/pad.git' })).filter((h) => h.signal === 'dependency').length, 1);
   assert.deepEqual(scan('package.json', before, withKey('overrides', { 'left-pad-invented': '1.0.5' })), []);
+  assert.equal(scan('package.json', before, withKey('resolutions', { 'parent-invented/@scope-invented/pad@1': 'npm:other-pad-invented@1' })).length, 1);
+  // Built to finish quickly on keys meant to slow a regular expression down.
+  const started = Date.now();
+  scan('package.json', before, withKey('overrides', { [`@./${'.../@./'.repeat(5000)}x`]: '1' }));
+  assert.ok(Date.now() - started < 1000);
 });
 
 test('npm: bundleDependencies and bundledDependencies are lists of names', () => {

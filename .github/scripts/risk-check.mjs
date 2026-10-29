@@ -128,6 +128,16 @@ export function npmTarget(name, spec) {
   return name;
 }
 
+// The package an overrides or resolutions key names: its last path part
+// (with its scope), without a version range ("**/a", "b/@s/c@1" -> "a", "@s/c").
+function overrideName(key) {
+  const glob = key.lastIndexOf('**/');
+  const parts = (glob >= 0 ? key.slice(glob + 3) : key).split('/');
+  const last = parts.length > 1 && parts[parts.length - 2].startsWith('@') ? parts.slice(-2).join('/') : parts[parts.length - 1];
+  const at = last.indexOf('@', 1);
+  return at > 0 ? last.slice(0, at) : last;
+}
+
 function npmEntries(manifest) {
   const pairs = new Set();
   for (const section of NPM_SECTIONS) {
@@ -139,7 +149,7 @@ function npmEntries(manifest) {
   // the tree, so their entries count like dependencies.
   const walk = (entries) => {
     for (const [key, spec] of Object.entries(entries ?? {})) {
-      const name = key === '.' ? null : key.replace(/^.*\*\*\//, '').replace(/^(@[^/]+\/[^/@]+|[^/@]+\/)*?((?:@[^/@]+\/)?[^/@]+)(?:@.*)?$/, '$2');
+      const name = key === '.' ? null : overrideName(key);
       if (typeof spec === 'string') { if (name) pairs.add(`${name}\u0000${npmTarget(name, spec)}`); }
       else if (spec && typeof spec === 'object') {
         if (name && typeof spec['.'] === 'string') pairs.add(`${name}\u0000${npmTarget(name, spec['.'])}`);
