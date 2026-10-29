@@ -483,17 +483,38 @@ final class ParticipantDeskEndToEndTests: CoordinatorDeskTestCase {
         XCTAssertGreaterThanOrEqual(replied("participant.status", on: fresh), 1, "the fresh document read the run's status")
 
         // 4. One explicit Start, from the page: the prepared run, once.
-        let beforeClick = exchanges.count
-        try await clickButton(session, labelled: "Start prepared message")
-        try await eventually("the coordinator to launch the run", timeout: 20, detail: {
-            "exchanges since the click: \(self.exchanges[beforeClick...]); launch requests: \(launcher.requests.count); page: \(await self.shown(session))"
-        }) {
+        // The page may decline a click without sending a start (seen on CI:
+        // its restored controller reads status, replays and asks for
+        // availability, then sends nothing). Each such click dispatches
+        // nothing, which this counts; the first one that sends a start must
+        // be the only start, and it must launch once.
+        var clicks = 0
+        // Every start the fresh document sent, whatever its answer.
+        func sentStarts() -> Int {
+            exchanges.filter {
+                if case .replied("participant.start", fresh.id, fresh.generation, _, _) = $0 { return true } else { return false }
+            }.count
+        }
+        while sentStarts() == 0, clicks < 3 {
+            let beforeClick = exchanges.count
+            try await clickButton(session, labelled: "Start prepared message")
+            clicks += 1
+            let deadline = Date().addingTimeInterval(8)
+            while Date() < deadline, sentStarts() == 0 { try await Task.sleep(nanoseconds: 100_000_000) }
+            if sentStarts() == 0 {
+                print("PR3a combined proof: click \(clicks) sent no start; exchanges since it: \(exchanges[beforeClick...]); page: \(await shown(session))")
+                XCTAssertTrue(launcher.requests.isEmpty, "a click that sent no start launched nothing")
+            }
+        }
+        print("PR3a combined proof: the explicit Start took \(clicks) click(s)")
+        try await eventually("the coordinator to launch the run", timeout: 20, detail: { "\(self.exchanges); page: \(await self.shown(session))" }) {
             launcher.runs.count == 1
         }
         let run = launcher.runs[0]
         XCTAssertEqual(run.identity.runId, prepared.runId, "the retained prepared run")
         XCTAssertEqual(run.identity.sessionId, prepared.sessionId)
         try await eventually("the start's reply") { replied("participant.start", on: fresh) == 1 }
+        XCTAssertEqual(sentStarts(), 1, "one start sent, answered ok")
         let started = try XCTUnwrap(store.publishedRuns.runs.first { $0.runId == prepared.runId })
         XCTAssertNotNil(started.start, "its start record is durable")
         XCTAssertEqual(started.prepareRequestId, prepared.prepareRequestId, "the same preparation")
