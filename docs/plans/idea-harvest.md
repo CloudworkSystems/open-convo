@@ -72,12 +72,23 @@ A kept idea becomes fresh work in Open Convo, never a copy:
 
 ## Run Review
 
-Before any card reaches the owner, the reviewer reads the run's draft cards
-and its draft ledger entry, nothing from the old repo itself, and checks
-them against "Rules" below: no quotes from the old material; no names of
-people, clients or family members; no secret values; nothing written
-anywhere except the ledger and the harvesting thread. It answers in one
-line, **pass** or **fail** with the card or line that failed. On a fail,
+Each draft card lists, in the ledger only, the old-repo files it drew on.
+Before any card reaches the owner, two checks run:
+
+1. **An overlap check.** A short script compares each card's words with
+   the files that card lists and reports any run of eight or more words
+   in a row that appears in both. Any overlap fails that card. The run
+   keeps the script's output for the reviewer.
+2. **The run review.** The reviewer reads the draft cards, the draft
+   ledger entry, the overlap output and the listed source files (read in
+   the same session, never copied out), and checks the cards against
+   "Rules" below: nothing quoted or closely paraphrased from the old
+   material; no names of people, clients or family members; no secret
+   values; nothing written anywhere except the ledger and the harvesting
+   thread.
+
+The reviewer answers in one line, **pass** or **fail** with the card or
+line that failed. On a fail,
 the run fixes or drops that card and asks for the check again; no card is
 shown until the run passes. The ledger records each run's result.
 
