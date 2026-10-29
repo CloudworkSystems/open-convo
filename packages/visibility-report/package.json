@@ -12,6 +12,6 @@
     "test": "node --experimental-test-module-mocks --disable-warning=ExperimentalWarning --import ./tests/network-guard.mjs --test"
   },
   "devDependencies": {
-    "markdown-it": "^14.1.0"
+    "markdown-it": "^15.0.3"
   }
 }

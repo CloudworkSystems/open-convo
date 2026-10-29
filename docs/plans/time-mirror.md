@@ -1,6 +1,6 @@
 # Time Mirror: Observability Layer, Slice 1 (PRD)
 
-Status: Draft (Oct 29): plan only; the code follows in a separate pull request.
+Status: Approved (Oct 29): the owner said yes in the thread "Plan the observability layer"; the code follows in a separate pull request.
 
 Written October 29, 2026 by a Claude session (project "261024 OC Steering",
 thread "Plan the observability layer") at the owner's request: he wants to

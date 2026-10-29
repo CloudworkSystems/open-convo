@@ -11,6 +11,11 @@ Revision 4 (October 15, proposed) adds local models through Ollama in
 section 20; it changes nothing for the Claude Code entry or the existing
 vectors.
 
+Revision 5 (October 29, proposed) prepares the Claude Code adapter in
+section 21: the off-Mac pin, context for Claude runs, the stdin layout, the
+`host-not-approved` reason and a new vectors file. It changes no existing
+vector, and nothing in it is turned on.
+
 Status: Claude's proposed wire, revision 2 (October 10). It applies Codex's
 review of a4165ef: four corrections and its answers to the twelve decisions
 (section 18). Revision 3 (October 10, later) rewrites section 17 for
@@ -3085,3 +3090,151 @@ with a local route:
   carries no conversation text; and a bind that fails its check deletes the
   alias, after which the start's own cleanup asks once more (Ollama answers
   404).
+
+## 21. Revision 5: the Claude Code adapter (proposed, October 29)
+
+In plain words: the Claude Code entry gets its real name and says plainly
+that a conversation sent to it leaves the Mac for Anthropic. Like a local
+model, it continues a conversation by sending earlier turns as context, and
+availability says when the owner has not yet approved sending to Anthropic.
+Scope and order: [docs/plans/claude-code-adapter.md](plans/claude-code-adapter.md)
+(this is its PR 2). Sections 1-20 stay in force; this section only adds. A
+host that pins the revision-3 entry (below) is revision 4 exactly, and every
+existing vector, in `native-participant-v1.json` and
+`native-participant-local-v1.json`, stays byte-identical. Nothing here is
+turned on: the Mac host follows in the adapter's PR 3 and the Desk wiring in
+PR 4, and until both trials have passed only invented text goes to Claude
+(the plan's safety model, item 7).
+
+### 21.1 The off-Mac pin
+
+- A revision-5 host pins the Claude Code entry as `{id: "claude-code",
+  label: "Claude", model: <the pinned model>, executionHost: "anthropic"}`.
+  `executionHost` `anthropic` says where the conversation is processed: the
+  CLI runs on this Mac, but what it is sent leaves the Mac. The pinned model
+  is chosen by the owner at the adapter's PR 3c (the plan's question 7);
+  the vectors use `invented-pinned-model`.
+- The revision-3 pin (`label` `Claude Code`, `executionHost` `this-mac`, as
+  in section 19's vectors) stays a valid entry for a revision-4 host, and
+  saved runs prepared under it keep their identity (section 15). It never
+  carries context (21.2) or `host-not-approved` (21.4). No host pins both.
+- The page never words a `claude-code` entry or run as staying on this
+  Mac, whatever its `executionHost`. Its picker line is "Claude · <model> ·
+  Anthropic (not on this Mac)" and, above the composer, "Sends this message
+  and N earlier turns to Anthropic." (wired in the adapter's PR 4a). None of
+  that text goes in the pin, which is compared exactly at preparation and
+  start; section 17's wording rule still holds.
+
+### 21.2 Context for Claude runs
+
+- Section 20.3 applies to a run whose participant is the off-Mac pin,
+  unchanged: the prepared run has section 6's twelve keys plus
+  `contextRunIds` (possibly empty, at most 256 distinct lowercase v4 ids,
+  oldest first); native resolves each id in the same request's record
+  (same `sessionId`, phase `completed`, earlier in `conversationRuns`, else
+  `run-mismatch`); the runs entry stores `contextRunIds`, `contextBytes`
+  and `contextHash`, never context text; and at start native resolves them
+  again from the committed record and recomputes the hash, sending nothing
+  on any difference (`run-mismatch`).
+- Section 6 step 5 for such a run is unchanged: `run.participant` and
+  `participantId` must equal native's current Claude Code pin. Step 3
+  allows the thirteenth key exactly when the participant is the off-Mac
+  pin or a local entry. A run under the revision-3 pin with
+  `contextRunIds`, or an off-Mac run without it, is `run-not-prepared` at
+  step 3 (the page refuses both before preparing).
+- A context run may have been answered by any participant of the same
+  session: a local model or Claude. The wire carries either answer to the
+  plan's question 4 (may one conversation mix local and Claude turns?); the
+  page decides which earlier runs to name, and the line above the composer
+  counts them, so a turn that stayed on the Mac is never sent without the
+  owner seeing that it will be.
+- Load invariants (section 20.5) widen to match: the three context keys
+  appear together, exactly on entries whose `participant` is a local entry
+  or the off-Mac pin.
+
+### 21.3 Stdin layout
+
+Section 11's argv and environment are unchanged (`-p`, plain-text stdin,
+no tools). What native writes to stdin, in UTF-8, before closing it:
+
+- With no context runs: exactly the new message, `join(inputChunks)`, as in
+  revision 3.
+- Otherwise, in this one fixed layout, with `\n` line endings:
+
+  ```
+  <preamble>\n\n
+  [earlier user turn, <n> bytes]\n<text>\n\n
+  [earlier assistant turn, <n> bytes]\n<text>\n\n
+  ... (two parts per context run, oldest first) ...
+  [new message, <n> bytes]\n<join(inputChunks)>
+  ```
+
+  `<preamble>` is exactly: "The earlier turns of this conversation follow,
+  oldest first, then the new message. Each part starts with a line in
+  square brackets naming it and the exact length of its text in UTF-8
+  bytes. Reply only to the new message." `<n>` is the decimal UTF-8 byte
+  count of the text that follows the header's newline, not counting the
+  newlines after it. The turns are exactly the ones native just hashed
+  (20.3), user then assistant for each run.
+- Limit, stated plainly: the model reads this as text. A turn whose text
+  contains a line that looks like a header can mislead the model about
+  where a turn ends; the byte counts are authoritative for any program, not
+  for the model. With no tools there is nothing such a line can make the
+  CLI do; at worst the reply misreads the conversation. The text is the
+  owner's own earlier messages and replies from the same session.
+- The vectors' `stdinLayouts` give the exact bytes for invented turns; the
+  launcher in PR 3c must produce them byte for byte.
+
+### 21.4 Bounds and approval
+
+- **Input bound.** Section 17's first-trial bound (4,096 UTF-8 bytes) and
+  section 6 step 6's 262,144 count the resolved turns' text plus the new
+  message, as 20.3 does, at preparation and again at start (section 7 step
+  11): `text-too-large`, nothing sent. The layout's own header lines are not
+  counted. The page (wired in PR 4a) counts the same way before preparing
+  and leaves out the oldest whole runs until it fits; it never cuts a turn. Raising the bound
+  to 32,768 is the plan's question 3, for the owner, after the fake-CLI
+  proofs pass. Section 8's `reply-too-long` counts `contextBytes +
+  inputBytes + output` against 262,144, as 20.4 does for a local run.
+- **`host-not-approved`.** A new availability reason, for the off-Mac pin
+  only: the owner has not approved sending to Anthropic (the plan's
+  "Approve Anthropic once" screen, in the app's own window, saved in the
+  protected store and revocable). Display only: the approval is never a
+  page input, never part of the pin, the saved choice or any identity, and
+  the page can neither give nor withdraw it. It is checked after every
+  local check passes and before section 17's confirmation, so its place in
+  section 5's order is just before `overflow-unverified`; an earlier
+  failing check wins, and `check-failed` keeps its meaning at any point. A
+  confirmation may still be reported as `active` beside it (the approval
+  was withdrawn after confirming); `available` stays false. At start, step
+  13's availability recheck refuses a run without the approval as
+  `participant-unavailable` before anything is spawned, so no new refusal
+  reason is added. A revoked approval stops the next spawn, never a run
+  already under way (Stop does that).
+- Preparing a run (section 6) never needs the approval: nothing leaves the
+  Mac until a start passes step 13.
+
+### 21.5 Section 5 step 4 (the D1 choice)
+
+Unchanged by this revision. Production still refuses `claude auth status`
+(`check-failed`, `source=remote-settings detail=unguarded`) until the
+owner makes the D1 choice (the plan's question 2; recommended: option 1,
+with option 2 as its backup). That choice, and the narrower promise it
+accepts, are written into this section in the adapter's PR 3b, which builds
+it, and reviewed there. Until then the off-Mac pin is never available, which
+is what the page shows.
+
+### 21.6 Vectors
+
+A separate file, `native-participant-claude-v1.json`, beside sections 19 and
+20's files and in their format: page-level availability and start cases for
+the off-Mac pin, replies the page codec must refuse, prepared runs that
+carry context (and the revision-3 and mismatched shapes it must refuse), and
+`stdinLayouts` (`{name, turns, message, stdin, contextBytes, inputBytes,
+countedBytes, firstTrialBound, withinFirstTrialBound}`), with the preamble
+in `context.stdinPreamble`. The page codec runs all of them now. The
+fake-CLI host cases (overflow held and released, overflow signal, tools in
+init, a provider override, an oversize reply, Stop before and after the
+first piece, lock, supervisor loss) and the tools refusal join this file
+with the Mac host in PR 3c, in section 19's seeded form; the Swift harness
+runs them there.
