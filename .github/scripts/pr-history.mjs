@@ -21,7 +21,10 @@ const OWNER = 'CloudworkSystems';
 const KNOWN_AGENTS = { 58: 'codex', 71: 'codex' };
 
 const OUTSIDE = /^\W*(independent (re-)?review|independent review and plan check)/i;
-const OUTSIDE_CLEAN = /clean|no (new )?findings|nothing new|no p0 or p1|no open p1/i;
+// "No P0 or P1" alone isn't clean: an open P2 still blocks auto-merge, so a
+// review that counts a P0, P1 or P2 (other than as fixed) is "findings".
+const OUTSIDE_CLEAN = /clean|no (new )?findings|nothing new|no open p1 or p2/i;
+const OUTSIDE_COUNTED = /\b(\d+|one|two|three|four|five|six|an?)\s+(open\s+|new\s+)?p[0-2]s?\b(?![^.\n]*\bfixed\b)/i;
 
 export const COLUMNS = [
   'number', 'title', 'agent', 'state', 'draft', 'branch', 'createdAt', 'endedAt', 'daysOpen',
@@ -90,7 +93,9 @@ export function outsideSummary({ reviews, comments }) {
     if (!body || body.startsWith('@cursor')) continue;
     const grok = item.user?.login === 'cursor[bot]' || body.includes('GrokBot review');
     if (!OUTSIDE.test(body) && !body.includes('GrokBot review')) continue;
-    found.push([item.submitted_at ?? item.created_at, grok ? 'GrokBot' : 'Claude', OUTSIDE_CLEAN.test(body.slice(0, 400)) ? 'clean' : 'findings']);
+    const head = body.slice(0, 400);
+    const clean = OUTSIDE_CLEAN.test(head) && !OUTSIDE_COUNTED.test(head);
+    found.push([item.submitted_at ?? item.created_at, grok ? 'GrokBot' : 'Claude', clean ? 'clean' : 'findings']);
   }
   found.sort((a, b) => a[0].localeCompare(b[0]));
   return {
@@ -122,7 +127,10 @@ export function buildRow(pull, { files, reviews, comments, reviewComments, commi
 export function toCsv(rows) {
   const cell = (v) => {
     const s = String(v ?? '');
-    return /[",\n\r]/.test(s) || /^[=+\-@]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    // A leading ' keeps a title like "=HYPERLINK(...)" from running as a
+    // formula when the file is opened directly in a spreadsheet.
+    const safe = /^[=+\-@]/.test(s) ? `'${s}` : s;
+    return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
   };
   return [COLUMNS.join(','), ...rows.map((row) => COLUMNS.map((c) => cell(row[c])).join(','))].join('\n') + '\n';
 }
@@ -148,7 +156,9 @@ Worked-out columns:
   usually means findings left for the triage judge or accepted by the owner.
 - \`outsideReviewer\`, \`outsideRounds\`, \`outsideLatest\`: comments that start
   "Independent review" or end "— GrokBot review". \`outsideLatest\` is a text
-  match on the latest one, so check the pull request when it matters.
+  match on the latest one: \`clean\` needs "clean", "no findings" or "nothing
+  new" and no P0, P1 or P2 counted as still open. Check the pull request when
+  it matters.
 - \`areas\`: top folders touched (\`apps/desk\`, \`packages/<name>\`, \`docs/plans\`,
   or a top-level file).
 `;

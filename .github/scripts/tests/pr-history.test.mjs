@@ -51,7 +51,16 @@ test('outside reviews: GrokBot and fresh Claude, latest decides clean', () => {
   assert.deepEqual(outsideSummary({ reviews: [], comments }), { outsideReviewer: 'Claude + GrokBot', outsideRounds: 2, outsideLatest: 'clean' });
 });
 
-test('a row has every column, and the CSV quotes commas and formulas', () => {
+test('an outside review with an open P2 is not clean, but one with fixed findings is', () => {
+  const review = (body) => outsideSummary({ reviews: [], comments: [{ user: { login: 'cloudwork-bot' }, created_at: '2026-10-20T01:00:00Z', body }] }).outsideLatest;
+  assert.equal(review('**Independent review of abc: no P0 or P1.** One P2: the retry never stops.'), 'findings');
+  assert.equal(review('Independent review of abc: clean, no P0 or P1, but two P2s remain.'), 'findings');
+  assert.equal(review('Independent review of abc: no P0 or P1.'), 'findings');
+  assert.equal(review('Independent re-review of abc: clean. Both P1s are fixed. No new findings.'), 'clean');
+  assert.equal(review('Independent review of abc: clean, no open P1 or P2.'), 'clean');
+});
+
+test('a row has every column, and the CSV quotes commas and defuses formulas', () => {
   const row = buildRow(pull({ title: 'One, two' }), {
     files: [{ filename: 'STATUS.md', additions: 2, deletions: 1 }], reviews: [{ user: { login: 'CloudworkSystems' }, state: 'APPROVED' }],
     comments: [], reviewComments: [], commits: [commit('x')],
@@ -62,5 +71,5 @@ test('a row has every column, and the CSV quotes commas and formulas', () => {
   assert.equal(row.ownerApproved, 'yes');
   const csv = toCsv([row, { ...row, title: '=HYPERLINK("x")' }]).split('\n');
   assert.match(csv[1], /^900,"One, two",/);
-  assert.match(csv[2], /^900,"=HYPERLINK\(""x""\)",/);
+  assert.match(csv[2], /^900,"'=HYPERLINK\(""x""\)",/);
 });
