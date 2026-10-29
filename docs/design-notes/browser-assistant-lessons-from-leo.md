@@ -82,8 +82,8 @@ session. Leo changes often, so recheck a detail before a plan relies on it.
   rest on design the person can see: on-device by default, and a named
   destination for anything that leaves.
 - **Keep asking separate from watching.** Leo reads a page only when asked.
-  The observability layer (the time mirror plan, PR #179) collects daily
-  totals in the background. Keep the two apart: what the browser assistant
+  The observability layer (the time mirror plan, PR #179) reads daily
+  totals that a tracker collected in the background. Keep the two apart: what the browser assistant
   reads to answer a question is never written into the time history, and the
   observability layer never keeps page text, URLs or titles without their own
   separate consent, the same rule the time mirror sets for its slice 2.
