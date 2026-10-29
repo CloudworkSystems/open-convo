@@ -143,10 +143,16 @@ reads from and writes to `CloudworkSystems/open-convo`.
     after it was pushed (or after the `@cursor` request, if later), the
     coordinator asks for a fresh Claude review (by an agent that didn't build
     the pull request), which stands in.
-    Gemini Code Assist isn't posting reviews on the repo yet (October 26),
-    so until it does, GrokBot and then fresh Claude are the ones that run.
-    Gemini is marked "not set up" (Agent Setup And Silence below), so
-    nobody asks it or waits for it until that changes.
+    Gemini Code Assist can't be installed on this repo: Google stopped
+    serving its GitHub app, and the old Gemini CLI's Google sign-in, for
+    individual and Google AI Pro and Ultra accounts on June 18, 2026
+    ([Google's notice](https://developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals)).
+    A GitHub workflow can't do an interactive sign-in, so a Gemini review
+    here would call Gemini with a pay-per-use API key kept as a repository
+    secret. That workflow needs its own plan and the owner's approval,
+    since it spends money. Until it is merged, GrokBot and then fresh Claude
+    are the ones that run. Gemini is marked "not set up" (Agent Setup And
+    Silence below), so nobody asks it or waits for it until that changes.
   - The independent review is advisory for now. Gemini's critical and high
     findings, and GrokBot's and Claude's P1s, count as P1; Gemini's medium
     findings and the others' P2s count as P2. They are fixed or answered in
@@ -160,11 +166,12 @@ reads from and writes to `CloudworkSystems/open-convo`.
     in for it, as the independent review. A GrokBot review satisfies those
     steps the same way, under the same rules as above; this section is the
     rule they point to, so they don't need their own revisions.
-  - Agents ask Gemini for a re-review (`/gemini review`) only from
-    `cloudwork-bot`.
-  - Still open for the owner: whether Argon (his Gemini preview model) is
-    reached later through the Gemini CLI or an API key, kept as a repository
-    secret and never in files.
+  - Gemini, Argon (the owner's Gemini preview model) included, runs on the
+    owner's API key for now. Where a person can sign in, Google's Antigravity
+    CLI also accepts his subscription sign-in, which is to be tried next and
+    then used there; where nobody can, such as a GitHub workflow, it stays a
+    key. A key lives in a repository secret, Keychain or exe.dev
+    Integrations, never in files.
 - *Proposed October 15, pending the owner's approval at merge:* every review,
   by any agent or the owner, asks two questions of each change. Does it break
   a rule of this system? Does it fix a problem the owner actually has?
@@ -305,7 +312,7 @@ nothing said so. The same rule for True Convo's own agents is in
   | Agent | Job here | Status |
   |---|---|---|
   | Codex review (GitHub app) | Reviews every pull request | Set up |
-  | Gemini Code Assist (GitHub app) | Independent review | **Not set up** (no review posted as of October 26); GrokBot, then a fresh Claude review, run instead |
+  | Gemini review | Independent review | **Not set up**: Google ended the Gemini Code Assist GitHub app for individual accounts on June 18, 2026, and the replacement workflow isn't built yet; GrokBot, then a fresh Claude review, run instead |
   | Claude (cloud and Mac) | Builds, coordinates, independent reviews | Set up |
   | Codex builds (cloud and local CLI) | Builds Codex modules | Set up |
   | GrokBot teams (Cursor) | Build GrokBot modules | Set up |
@@ -359,11 +366,11 @@ nothing said so. The same rule for True Convo's own agents is in
   therefore means the owner did it.
 - Every agent that writes to GitHub signs in as `cloudwork-bot`: Claude in
   the cloud and on the Mac, local Codex on the Mac, GrokBot's builders and the
-  Claude scheduled tasks. Three apps keep their own identities: Codex's GitHub
+  Claude scheduled tasks. Two apps keep their own identities: Codex's GitHub
   app (`chatgpt-codex-connector[bot]`), which posts its reviews and its cloud
-  builds; Gemini Code Assist (`gemini-code-assist[bot]`), which posts its
-  reviews; and the repo's GitHub Actions workflows (such as `owner-queue`),
-  which post as `github-actions[bot]`. Codex doesn't
+  builds; and the repo's GitHub Actions workflows (such as `owner-queue`,
+  and a Gemini review workflow once one is built), which post as
+  `github-actions[bot]`. Codex doesn't
   answer `cloudwork-bot`'s requests yet, so asking Codex to fix its own pull
   request waits for the owner until the bot has its own Codex access.
 - An agent that finds itself signed in as `CloudworkSystems` stops and tells
@@ -387,12 +394,14 @@ nothing said so. The same rule for True Convo's own agents is in
 | Claude building sessions | `cloudwork-bot` | Build on a named branch; open the pull request with auto-merge off (the coordinator switches it on) |
 | GrokBot teams (Cursor) | `cloudwork-bot` | Each builds one module from its plan and fixes findings on its own pull request; on request, reviews Claude-built and Codex-built pull requests as the independent reviewer |
 | Codex | its own app | Reviews every pull request; builds Codex modules |
-| Gemini Code Assist | its own app | Independent reviewer of Codex-built and Claude-built pull requests, alongside GrokBot (advisory for now; not set up yet, see Agent Setup And Silence) |
+| Gemini review | GitHub Actions, once built | Independent reviewer of Codex-built and Claude-built pull requests, alongside GrokBot (advisory for now; not set up yet: the Gemini Code Assist app is gone for individual accounts, see Agent Setup And Silence) |
 | PR steward (scheduled, 8:41 AM and 5:41 PM) | `cloudwork-bot` | Reviews Codex-built pull requests; flags stuck ones on issue #52 |
 | PR keeper (scheduled, hourly, in the cloud) | `cloudwork-bot` | Keeps pull requests moving: updates auto-merge pull requests that fall behind `main` once they are otherwise ready, restarts a hung Codex review once per commit, relays Codex findings to GrokBot's builders, and reports silent or not-set-up agents in its "Not working" comment on issue #52 |
 | Daily list (scheduled, 7:52 AM) | `cloudwork-bot`, reading only | Sends the owner issue #52's list, including the keeper's "Not working" comment, plus pull requests Codex has gone silent on |
 | Nightly Test build (scheduled, 2–6 AM) | none | Rebuilds True Convo Test from `main` on the owner's Mac |
 | Recycling pass (scheduled, Sundays) | `cloudwork-bot` | One pull request proposing fixes for stale docs |
+| Security sweep (scheduled, Mondays, in the cloud) | `cloudwork-bot`, read-only tools plus one issue-comment tool | Runs the weekly self-audit in [docs/plans/security.md](docs/plans/security.md) and rewrites its "Security" comment on issue #52; never changes code, settings or merges |
+| Sender feed (scheduled, weekly) | the owner's Gmail, read and search only; no GitHub access | Reads only the followed senders' emails and posts drafted lessons and ideas in the owner's private steering project; after the owner picks, a building session opens the lessons pull request ([docs/plans/security.md](docs/plans/security.md) section 5) |
 | `owner-queue` workflow | GitHub Actions | Rewrites issue #52, "Needs the owner", every hour |
 
 Work that belongs to another row is forwarded there once, and the owner is

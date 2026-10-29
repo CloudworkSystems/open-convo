@@ -91,21 +91,28 @@ Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 decision October 22): GrokBot team B builds, Codex reviews. Plan approved
 (`docs/plans/sync-core.md`, #127); build started October 24 (#137).
 
-**Email actions preview** (Personal, right after launch), Codex builds through the local Codex CLI, Gemini Code Assist reviews; plan merged in #138, build handed to the Codex CLI job (#142) (`docs/plans/email-actions-preview.md`).
+**Email actions preview** (Personal, right after launch), Codex builds through the local Codex CLI, GrokBot or a fresh Claude reviews; plan merged in #138, build handed to the Codex CLI job (#142) (`docs/plans/email-actions-preview.md`).
 
 **Tasks and reminders engine** (Personal, day one), GrokBot team A builds, Codex reviews; plan merged in #138, build started Oct 25 (#141) (`docs/plans/tasks-engine.md`).
 
 **Today agenda** (Personal, day one), GrokBot team C is building it (#145), Codex reviews; plan merged in #138 (`docs/plans/today-agenda.md`).
 
-**Email sorting engine** (Personal, launch set), Claude builds (the owner's choice on October 24, in place of Codex), Gemini Code Assist reviews; plan `docs/plans/email-sorting-engine.md`; merged as #128 on October 24 (`packages/email-sorting/`).
+**Email sorting engine** (Personal, launch set), Claude builds (the owner's choice on October 24, in place of Codex), GrokBot or a fresh Claude reviews; plan `docs/plans/email-sorting-engine.md`; merged as #128 on October 24 (`packages/email-sorting/`).
 
-**Calendar merge engine** (Personal, launch set), Codex builds, Gemini Code Assist reviews; plan approved (`docs/plans/calendar-merge-engine.md`); Codex can start when a builder place is free.
+**Calendar merge engine** (Personal, launch set), Codex builds, GrokBot or a fresh Claude reviews; plan approved (`docs/plans/calendar-merge-engine.md`); Codex can start when a builder place is free.
 
 **Cloudwork Rail Map** (Desk, Cloudwork Nexus), Claude builds; a fifth Nexus view showing this repository's branches, commits and pull requests from a saved snapshot (`apps/desk/scripts/rail-map-snapshot.mjs`); merged October 24 (#132).
 
-**Skin check** (Personal, new Health module), Claude builds, Gemini Code Assist reviews; plan approved (`docs/plans/skin-check.md`). Slice 1, the standalone engine in `packages/skin-check/`, is built; the iPhone source joins the iPhone app on the parallel sync line, and the Desk view follows.
+**Skin check** (Personal, new Health module), Claude builds, GrokBot or a fresh Claude reviews; plan approved (`docs/plans/skin-check.md`). Slice 1, the standalone engine in `packages/skin-check/`, is built; the iPhone source joins the iPhone app on the parallel sync line, and the Desk view follows.
 
 **Public website (trueconvo.com)**, Claude builds, Codex reviews; a home page (with two Desk preview screenshots) and a plain-language privacy policy in `site/`, published by `.github/workflows/pages.yml` from `main` (#153, October 25). For Meta's developer early-access application and regular visitors. The owner turned on Pages and set the custom domain; the domain's DNS records are still to do.
+
+**Security** (all work; owner asked October 28): plan
+[docs/plans/security.md](docs/plans/security.md), in progress.
+Baseline in #166: the Desk's Vite patched, Dependabot, `SECURITY.md`, and the
+triage judge closed to outside pull requests. A security checklist on every
+review, a weekly sweep, controls tied to triggers (sync core first), and a
+weekly feed of lessons from followed senders follow.
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:
