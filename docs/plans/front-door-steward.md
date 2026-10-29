@@ -216,6 +216,16 @@ scripts and starts nothing by itself: in a host that can start sessions
 (Claude's projects, Claude Code), the host does the hand-off; in a plain
 chat, a hand-off produces the brief for the person to pass on.
 
+**The skill is never the approval gate.** Approvals and memory permissions
+stay outside every model (capabilities-and-primitives.md,
+portable-capability-layer.md). So this slice may be used only in a host
+with no tools that act on the outside world, or in one whose own approval
+boundary stops each outside action until the person says yes (for
+example, a Claude session whose permission settings ask before sending,
+posting, deleting or changing anything). The skill adds the habit of
+asking; the host enforces it. In True Convo, slice 3 puts the gate in
+code, as those notes require.
+
 The repo is public: no real conversations, names, businesses or memory go
 into the examples. Every example is invented.
 
