@@ -22,6 +22,9 @@ const signals = (hits) => hits.map((h) => `${h.signal}:${h.detail}`);
 test('hosts: URLs of every scheme are read, without user, port or case', () => {
   assert.deepEqual(hostsIn('fetch("https://User@Data.Invented-Tracker.dev:8443/x"); ws = "wss://feed.invented-tracker.dev"'), ['data.invented-tracker.dev', 'feed.invented-tracker.dev']);
   assert.deepEqual(hostsIn('const u = `https://${host}/v1`'), []);
+  assert.deepEqual(hostsIn('fetch("https://[2001:DB8::1]/x"); new WebSocket("wss://[2606:4700::1111]:8443/feed")'), ['[2001:db8::1]', '[2606:4700::1111]']);
+  assert.deepEqual(signals(scan('src/a.js', '', 'fetch("http://[2001:db8::1]:80/")\n')), ['host:new outside host `[2001:db8::1]`']);
+  assert.deepEqual(hostsIn('see [https://Docs.Invented-Tracker.dev] here'), ['docs.invented-tracker.dev']);
 });
 
 test('hosts: invented names and their subdomains never count', () => {

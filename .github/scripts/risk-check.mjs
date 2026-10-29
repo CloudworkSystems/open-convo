@@ -36,7 +36,8 @@ export function isReservedHost(host) {
   return RESERVED.some((name) => host === name || host.endsWith(`.${name}`));
 }
 
-const URL_PATTERN = /\b(?:https?|wss?):\/\/([^\s/?#"'`<>()[\]{}\\|^,;]+)/gi;
+// The authority: optional user, then a bracketed IPv6 address or a name, then an optional port.
+const URL_PATTERN = /\b(?:https?|wss?):\/\/((?:[^\s/?#"'`<>()[\]{}\\|^,;@]*@)?(?:\[[0-9a-f:.]+\]|[^\s/?#"'`<>()[\]{}\\|^,;]+)(?::\d*)?)/gi;
 const HOST_SHAPE = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$|^\[[0-9a-f:.]+\]$/;
 
 /** Hosts named by http(s) and ws(s) URLs in one line, lowercased, without user or port. */
