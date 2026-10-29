@@ -1,0 +1,35 @@
+You have 7 events today, starting at 09:00.
+There are 2 overlaps, the first at 14:00.
+Your longest free stretch is 11:00 to 14:00.
+3 tasks are overdue and 2 are due today.
+2 habits are still open.
+Groceries has 7 items and Hardware has 2 items.
+
+Timeline
+All day  Town fair  (Family)  @ River park
+2026-10-25T23:00-2026-10-26T00:30  Overnight bake  (Family)  [started earlier]
+09:00-09:30  Morning briefing  (Work)
+12:00  Noon bell  (Work)  [no length]
+14:00-14:45  Supplier call  (Work)  [tentative, clash]
+14:00-15:30  Design review  (Work)  @ Studio  [clash]
+15:15-15:45  School pickup  (Family)  @ North gate  [clash]
+
+Free time
+11:00-14:00  (180 min)
+15:45-18:00  (135 min)
+
+Tasks
+Overdue  Pay the studio rent  (Bills)  due 2026-10-20  [high]
+Overdue  Order oat milk  due 2026-10-25
+Overdue  Send the draft  due 2026-10-26 09:00
+Today  Outline the walkthrough  due 2026-10-26 16:00  [high]
+Today  File the notes  due 2026-10-26
+
+Habits
+Read a chapter
+Stretch
+
+Lists
+Groceries  7 open
+Hardware  2 open
+

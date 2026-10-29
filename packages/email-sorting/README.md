@@ -142,7 +142,8 @@ fixed list, confidence a number from 0 to 1, reason text), and the owner's
 rules always win. The reason is cleaned (line breaks, tabs and control
 characters become spaces, spaces collapse, cut to 160 characters ending in
 `…`; edge case E19); an
-empty one becomes "The model chose *Pile*". An answer that takes longer than
+empty cleaned result becomes "The model chose *Pile*". A literal `…` is kept.
+An answer that takes longer than
 `timeoutMs` is ignored.
 
 Two classifiers ship, both deterministic and offline:
@@ -212,7 +213,9 @@ a test in `tests/edge-cases.test.mjs` under the same number.
   same limit applies to the settings file.
 - **E13.** In the plain summary, mail text is one line: `\` is written as
   `\\`, and line feed, tab, carriage return, U+2028 and U+2029 as `\n`,
-  `\t`, `\r`, `\u2028` and `\u2029`.
+  `\t`, `\r`, `\u2028` and `\u2029`. Every Unicode Bidi_Control character—
+  U+061C, U+200E, U+200F, U+202A to U+202E and U+2066 to U+2069—is also
+  written as a lower-case, four-digit `\u` escape.
 - **E14.** A blank sender name counts as no name for group labels.
 - **E15.** A classifier answer (or failure) that arrives after the timeout is
   ignored and never surfaces as an error.
@@ -230,8 +233,16 @@ a test in `tests/edge-cases.test.mjs` under the same number.
   keyword, a work domain, the model's reason) goes through one helper:
   each run of white space or control characters (carriage return, line
   feed, tab, U+2028, U+2029 and the rest of Unicode Cc) becomes one space,
-  the text is trimmed and cut, ending in `…` when cut. Values inside a
-  reason are cut to 80 characters; the whole reason to 160.
+  the text is trimmed and cut, ending in `…` when real text is cut. Runs are
+  collapsed while the text is read, so a run counts as one character towards
+  the cut. Work is bounded: leading separators are skipped first, reading
+  stops after one character past the limit, and each run is inspected for at
+  most eight times the output limit. Real text past the cut, or input left
+  uninspected, adds `…`; inspected white space or control characters alone
+  do not.
+  An empty cleaned model reason uses the model-choice fallback; a literal `…`
+  is kept.
+  Values inside a reason are cut to 80 characters; the whole reason to 160.
 - **E20.** Headers are looked up in one place, the same way everywhere: a
   key matches a header name exactly apart from the case of ASCII letters.
   Keys are never trimmed, so `" List-Id "` or `"Precedence\t"` is an
@@ -255,6 +266,30 @@ a test in `tests/edge-cases.test.mjs` under the same number.
   case or spacing) never applies; an exact rule beats a domain rule wherever
   it sits in the file. The owner's addresses and work domains are
   indexed the same way.
+- **E24.** A classifier answer's `category`, `confidence` and `reason` are
+  each read once into plain values. Only those values are checked and used,
+  and every decision is checked against the six fixed piles before grouping.
+- **E25.** Every Bidi_Control character named in E13 is escaped in a
+  plain-summary group label, so it cannot visually reorder the count.
+- **E26.** Reason cleanup reads at most one character past its output limit,
+  collapsing each run of separators to one space as it goes, and inspects
+  each run for at most eight times the output limit in code units. So
+  `A`, 799 spaces and `B` gives `A B`, and words with long gaps between them
+  keep every word that fits. Real text past the cut ends the result in `…`;
+  trailing white space or control characters alone do not. Leading padding
+  does not create a separate absolute boundary; for example, 641 spaces
+  followed by 160 letters keeps all 160 letters.
+- **E27.** A run longer than the per-run inspection limit, and anything after
+  it, is treated as truncated because it was not inspected, even when it is
+  white space. Thus a multi-megabyte white-space suffix after a short reason
+  ends in `…`, as does real text hidden behind a long padded run.
+- **E28.** Leading white space and control characters are skipped up to the
+  first real character, do not count towards the output limit, and are not
+  capped.
+- **E29.** The reason-cleanup `oneLine` helper returns `""` only when the
+  flattened value is empty (all separators). A literal `…` is preserved. For
+  model reasons, `cleanReason` returns `The model chose <Pile>` only when the
+  cleaned result is empty.
 
 ## What this slice does not do
 
