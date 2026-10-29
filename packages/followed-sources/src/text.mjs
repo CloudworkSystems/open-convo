@@ -28,6 +28,17 @@ function trimClosers(token) {
   return token.slice(0, end);
 }
 
+function isIPv4(host) {
+  const parts = host.split('.');
+  return parts.length === 4 && parts.every(part => /^\d{1,3}$/.test(part) && Number(part) <= 255);
+}
+
+// A host before a path, port, query or anchor may also be an IP address or
+// localhost, which bare words can't be (so "and/or" stays).
+function isAddress(host) {
+  return isHost(host) || isIPv4(host) || host.toLowerCase() === 'localhost';
+}
+
 function isHost(host) {
   if (!/^[a-z0-9.-]+$/i.test(host)) return false;
   const labels = host.split('.');
@@ -40,17 +51,17 @@ function isHost(host) {
 // and ideographic dots and fullwidth slashes count.
 function isLink(word) {
   const token = word.normalize('NFKC').replace(/\u3002/g, '.').replace(OPENERS, '');
-  if (token.startsWith('//') || /:[/\\]/.test(token)) return true;
+  if (/^[/\\]{2}/.test(token) || /:[/\\]/.test(token)) return true;
   if (BARE_SCHEME.test(token) || /^www\./i.test(token)) return true;
   // An email address, or a host name with a port.
   const at = token.lastIndexOf('@');
   if (at > 0 && isHost(trimClosers(token.slice(at + 1)))) return true;
   const port = /^([^:]+):\d+/.exec(token);
-  if (port && isHost(port[1])) return true;
+  if (port && isAddress(port[1])) return true;
   const cutAt = token.search(/[/\\?#]/);
-  if (cutAt > 0 && isHost(token.slice(0, cutAt))) return true;
+  if (cutAt > 0 && isAddress(token.slice(0, cutAt))) return true;
   const bare = trimClosers(token);
-  return isHost(bare) && !KEEP_ENDINGS.has(bare.split('.').at(-1).toLowerCase());
+  return isIPv4(bare) || (isHost(bare) && !KEEP_ENDINGS.has(bare.split('.').at(-1).toLowerCase()));
 }
 
 /** Removes every link from the text, then cleans it again. */

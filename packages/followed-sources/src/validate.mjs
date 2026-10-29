@@ -14,8 +14,17 @@ const isObject = value => value !== null && typeof value === 'object' && !Array.
 const text = (value, label) => typeof value === 'string' ? value : fail(`${label} must be text`);
 const id = (value, label) => text(value, label).trim() ? value : fail(`${label} must not be empty`);
 
+// The calendar parts must be real: Date.parse would roll 2026-02-30 into
+// March and accept 24:00 as the next day.
 export function isDate(value) {
-  return typeof value === 'string' && ISO.test(value) && !Number.isNaN(Date.parse(value));
+  if (typeof value !== 'string' || !ISO.test(value) || Number.isNaN(Date.parse(value))) return false;
+  const [year, month, day] = value.slice(0, 10).split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return false;
+  const time = /T(\d{2}):(\d{2})(?::(\d{2}))?/.exec(value);
+  const zone = /([+-])(\d{2}):(\d{2})$/.exec(value);
+  if (time && (Number(time[1]) > 23 || Number(time[2]) > 59 || Number(time[3] ?? 0) > 59)) return false;
+  return !zone || (Number(zone[2]) <= 23 && Number(zone[3]) <= 59);
 }
 
 function envelope(value, key) {

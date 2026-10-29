@@ -85,6 +85,7 @@ test('links are found in their other common forms, and ordinary words stay', asy
   assert.equal(stripUrls('Visit evil.com, or https:\\\\evil.com\\x, or evil．example／path today.'), 'Visit or or today.');
   assert.equal(stripUrls('Try evil.example or evil.shop or evil.example?x=1 or evil.example#top now.'), 'Try or or or now.');
   assert.equal(stripUrls('See //evil.com/a, evil。com, evil.com:8080 and someone@evil.example now.'), 'See and now.');
+  assert.equal(stripUrls('Open 127.0.0.1:3000/path, localhost:8080/x, 10.0.0.1/admin, 192.168.1.1 and \\\\evil.com\\x and/or later.'), 'Open and and/or later.');
   assert.equal(stripUrls('Upgrade Node.js, e.g. today; the data: it shows a 3.5 ratio.'), 'Upgrade Node.js, e.g. today; the data: it shows a 3.5 ratio.');
 });
 
@@ -108,4 +109,12 @@ test('a datetime with no time zone refuses the items file', async () => {
 test('an instruction phrase split across the title and text is not flagged', async () => {
   const { result } = await go([item('a', '2026-10-12T00:00:00Z', { title: 'What we chose to ignore', text: 'Previous results were mixed.' })], { 'news/a': ok() });
   assert.deepEqual(result.cards, []);
+});
+
+test('a date that does not exist refuses the items file', async () => {
+  const { validateItems } = await import('../src/index.mjs');
+  for (const date of ['2026-02-30', '2026-02-29T10:00:00Z', '2026-04-31', '2026-10-12T24:00:00Z', '2026-10-12T10:60:00Z', '2026-10-12T10:00:00+25:00']) {
+    assert.throws(() => validateItems(items(item('a', date))), /ISO 8601 date/, date);
+  }
+  assert.doesNotThrow(() => validateItems(items(item('a', '2028-02-29'), item('b', '2026-12-31T23:59:59.5-05:00'))));
 });

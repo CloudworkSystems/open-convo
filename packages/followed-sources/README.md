@@ -124,8 +124,9 @@ Each has a test in `tests/edge-cases.test.mjs` unless noted.
   control characters, since they can hide or reorder what the owner reads
   (`tests/engine.test.mjs`).
 - **What counts as a link.** Any word with `://` or `:\`, or starting
-  with `//`, `www.` or a link scheme (`mailto:`, `javascript:`, `data:` and
-  so on); a host name followed by a path, query, anchor or port; an email
+  with `//`, `\\`, `www.` or a link scheme (`mailto:`, `javascript:`,
+  `data:` and so on); a host name, IP address or `localhost` followed by a
+  path, query, anchor or port; a bare IPv4 address; an email
   address; and a bare host name such as `evil.com`, unless its ending is a
   common file or tool name (so "Node.js" and "README.md" stay). Fullwidth
   and ideographic dots and fullwidth slashes count. Links are found one word
@@ -133,7 +134,8 @@ Each has a test in `tests/edge-cases.test.mjs` unless noted.
   slow.
 - **A datetime with no time zone** (`2026-10-12T09:00`) refuses the items
   or state file, since it would be read in the machine's own time zone. A
-  date alone is fine.
+  date alone is fine. So does a date or time that doesn't exist
+  (`2026-02-30`, `24:00`), which `Date.parse` would otherwise roll forward.
 - **Instruction phrases are matched in the title and the text separately**,
   so a phrase can't form across the two.
 - **Files over 5 MB** are refused before they are read (not tested; the
