@@ -262,9 +262,36 @@ function calls(text, marker) {
   }
 }
 
+/** Swift source with its comments blanked out (strings kept), so a commented-out declaration doesn't count. */
+export function stripSwiftComments(text) {
+  let out = '';
+  let depth = 0;
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    const next = text[i + 1];
+    if (depth > 0) {
+      if (c === '/' && next === '*') { depth++; i++; } else if (c === '*' && next === '/') { depth--; i++; }
+      else if (c === '\n') out += c;
+      continue;
+    }
+    if (inString) {
+      out += c;
+      if (c === '\\') { out += next ?? ''; i++; } else if (c === '"' || c === '\n') inString = false;
+      continue;
+    }
+    if (c === '/' && next === '/') { while (i < text.length && text[i] !== '\n') i++; out += '\n'; continue; }
+    if (c === '/' && next === '*') { depth = 1; i++; continue; }
+    if (c === '"') inString = true;
+    out += c;
+  }
+  return out;
+}
+
 /** The packages and remote binaries a Package.swift declares (read as text; no Swift runs). */
 export function swiftDependencies(text) {
   const deps = new Set();
+  text = stripSwiftComments(text);
   for (const body of calls(text, '.package(')) {
     const url = body.match(/\burl:\s*"([^"]+)"/);
     const path = body.match(/\bpath:\s*"([^"]+)"/);

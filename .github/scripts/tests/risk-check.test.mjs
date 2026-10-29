@@ -206,6 +206,15 @@ test('Swift: a URL that differs only in path case is a different package', () =>
   assert.deepEqual(signals(scan('Package.swift', at('https://git.invented-forge.dev/Team/Kit.git'), at('https://git.invented-forge.dev/team/kit.git'), list)), ['dependency:new Swift package `https://git.invented-forge.dev/team/kit`']);
 });
 
+test('Swift: uncommenting a package is a new package; URLs inside strings survive', () => {
+  const list = allow({ hosts: ['git.invented-forge.dev'] });
+  const pkgLine = '.package(url: "https://git.invented-forge.dev/kit.git", from: "1.0.0")';
+  for (const commented of [`// ${pkgLine}`, `/* ${pkgLine} */`, `/* outer /* inner */ ${pkgLine} */`]) {
+    assert.deepEqual(signals(scan('Package.swift', swift(commented), swift(pkgLine), list)), ['dependency:new Swift package `https://git.invented-forge.dev/kit`'], commented);
+  }
+  assert.deepEqual([...swiftDependencies(swift(`${pkgLine} // trailing note`))], ['swift:https://git.invented-forge.dev/kit']);
+});
+
 test('Swift: a remote binary target is a dependency; a local one is not', () => {
   assert.deepEqual([...swiftDependencies(swift('', '.binaryTarget(name: "Blob", url: "https://files.invented-forge.dev/b.zip", checksum: "00")'))], ['swift-binary:https://files.invented-forge.dev/b.zip']);
   assert.deepEqual([...swiftDependencies(swift('', '.binaryTarget(name: "Blob", path: "Blob.xcframework")'))], []);
