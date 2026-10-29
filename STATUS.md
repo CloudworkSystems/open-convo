@@ -131,6 +131,12 @@ October 21 (OC-261021-owner-accepts-findings): the owner can accept the
 remaining Codex findings on one exact head commit: post a comment containing
 only this line, `owner-accepts-findings <full head sha>`. Any other text in
 the comment makes it not count. It satisfies only `codex-approved`.
+October 29 (risk review, [docs/plans/risk-review.md](docs/plans/risk-review.md)):
+`codex-approved` also holds a pull request that adds an outside host, a
+dependency, a Mac permission or a key name until the owner approves it
+(`.github/risk-allowlist.json` lists what he has already accepted), and every
+independent review ends with the privacy and security checklist. Code pull
+request in review; Built once the first real hold and checklist have run.
 
 **Building faster** (more outside modules, parallel lanes, a dogfooding
 cadence): approved by the owner October 21. The limit of three outside

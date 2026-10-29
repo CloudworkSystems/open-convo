@@ -58,6 +58,7 @@ export function client(token = process.env.GITHUB_TOKEN) {
     get: (path) => request('GET', path).then((r) => r.data),
     post: (path, body) => request('POST', path, body).then((r) => r.data),
     patch: (path, body) => request('PATCH', path, body).then((r) => r.data),
+    delete: (path) => request('DELETE', path).then((r) => r.data),
     all,
     graphql,
   };
