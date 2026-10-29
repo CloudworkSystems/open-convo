@@ -5,9 +5,10 @@ Status: Draft (Oct 29): written for the owner's yes; no run has happened yet.
 Written October 29, 2026 by Claude (thread "Fix failing PR steward and
 recycling tasks") from the owner's ask that day. Session name:
 `OC-261029-idea-harvest`. **Claude** runs it (a thread the owner or the
-coordinator starts). It changes no code, so it has no reviewer of its own;
-anything it leads to goes through the normal review path for its kind
-(AGENTS.md "Review Loop").
+coordinator starts). **A fresh Claude reviews each run** (see "Run Review"):
+one with no part in that run, either a subagent started with only the run's
+outputs and this plan, or another thread. Anything a kept idea leads to
+goes through the normal review path for its kind (AGENTS.md "Review Loop").
 
 ## Why
 
@@ -31,9 +32,9 @@ building; most of it is already here, outdated, or private.
    never to the project's repository list, so routine threads and scheduled
    tasks don't download its private material and can't fail when its access
    changes.
-2. **Later: the frozen `cloudwork_systems` folder on the owner's Mac**,
-   through folder access (it is already a pre-approved folder). Needs a
-   revision of this plan before the first run on it.
+2. **Not this plan: the frozen `cloudwork_systems` folder on the owner's
+   Mac.** Harvesting it, through folder access, needs a plan of its own and
+   the owner's yes before the first run on it.
 
 ## How A Run Works
 
@@ -69,6 +70,17 @@ A kept idea becomes fresh work in Open Convo, never a copy:
 - **A business or marketing idea** stays out of this repo (decision of
   October 14) and goes to the owner's private notes instead.
 
+## Run Review
+
+Before any card reaches the owner, the reviewer reads the run's draft cards
+and its draft ledger entry, nothing from the old repo itself, and checks
+them against "Rules" below: no quotes from the old material; no names of
+people, clients or family members; no secret values; nothing written
+anywhere except the ledger and the harvesting thread. It answers in one
+line, **pass** or **fail** with the card or line that failed. On a fail,
+the run fixes or drops that card and asks for the check again; no card is
+shown until the run passes. The ledger records each run's result.
+
 ## Rules
 
 - Never write to, push to or change the old repo, and never add it to the
@@ -85,7 +97,8 @@ A kept idea becomes fresh work in Open Convo, never a copy:
 
 ## Finish Line
 
-Every area of the old repo is marked covered in the ledger, and every
-kept idea has a home: an open or merged pull request in this repo, or an
-entry in the owner's private notes. Then this plan is marked **Built**,
-and the `cloudwork_systems` revision (Sources, item 2) can follow.
+Every area of the old repo is marked covered in the ledger, every run has
+a passing run review, and every kept idea has a home: an open or merged
+pull request in this repo, or an entry in the owner's private notes. Then
+this plan is marked **Built**. Any harvest of the `cloudwork_systems`
+folder runs under its own new plan, never under this one.
