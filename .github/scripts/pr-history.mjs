@@ -27,12 +27,14 @@ const OUTSIDE = /^\W*(independent (re-)?review|independent review and plan check
 // it was fixed or resolved, or when it says "not clean".
 const OUTSIDE_CLEAN = /clean|no (new )?findings|nothing new|no open p1 or p2/i;
 const OUTSIDE_OPEN = new RegExp([
-  String.raw`\b(\d+|one|two|three|four|five|six|an?)\s+(open\s+|new\s+)?p[0-2]s?\b`,
+  String.raw`\b(\d+|one|two|three|four|five|six)\s+(open\s+|new\s+)?p[0-2]s?\b`,
+  // "a P1" alone is often prose ("until a P1 is fixed"), so it needs "open" or "new".
+  String.raw`\ban?\s+(open|new)\s+p[0-2]\b`,
   String.raw`\[p[0-2]\]`,
   String.raw`^[#*\s]*p[0-2][.:]`,
 ].join('|'), 'im');
 const FIXED = /\b(fixed|fixes|resolved|resolves)\b/i;
-const NOT_CLEAN = /\bnot\s+(yet\s+)?clean\b/i;
+const NOT_CLEAN = /\bnot\s+(yet\s+)?clean\b|\bchanges\s+(are\s+)?(needed|required|requested)\b|\bneeds\s+changes\b/i;
 
 export function outsideIsClean(text) {
   // Each clause on its own: "Fixed one P1" and "one P1, fixed" are both
@@ -118,8 +120,8 @@ export function outsideSummary({ reviews, comments }, headSha = '') {
     if (!body || body.startsWith('@cursor')) continue;
     const grok = item.user?.login === 'cursor[bot]' || body.includes('GrokBot review');
     if (!OUTSIDE.test(body) && !body.includes('GrokBot review')) continue;
-    const head = body.slice(0, 400);
-    const clean = outsideIsClean(head);
+    const head = body.slice(0, 400); // the commit it names comes first
+    const clean = outsideIsClean(body);
     const commit = (/\b[0-9a-f]{7,40}\b/.exec(head)?.[0] ?? item.commit_id ?? '').slice(0, 10);
     found.push([item.submitted_at ?? item.created_at, grok ? 'GrokBot' : 'Claude', clean ? 'clean' : 'findings', commit]);
   }

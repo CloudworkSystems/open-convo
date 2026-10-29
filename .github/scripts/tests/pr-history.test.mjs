@@ -87,6 +87,11 @@ test('an outside review with an open P2 is not clean, but one with fixed finding
   assert.equal(review('Independent re-review of abc: clean. Fixed one P1 and two P2 findings; no new findings.'), 'clean');
   assert.equal(review('Independent re-review of abc. No new findings. One P1 was fixed, but one P2 remains open.'), 'findings');
   assert.equal(review('Independent re-review of abc: clean. One P1 fixed; one P2 still open.'), 'findings');
+  const long = 'Independent review of abc: no new findings.\n\n' + 'Checked the retry path and its tests in detail. '.repeat(12);
+  assert.equal(review(long + '\n\n[P2] The timer never clears'), 'findings');
+  assert.equal(review(long + '\n\nIt also covers the case where a P1 is still on the latest commit.'), 'clean');
+  assert.equal(review('Independent review of abc: clean, except for a new P2: the retry never stops.'), 'findings');
+  assert.equal(review('## Independent review of abc: changes needed before merge\n\nThe rule itself looks clean.'), 'findings');
 });
 
 test('a row has every column, and the CSV quotes commas and defuses formulas', () => {
