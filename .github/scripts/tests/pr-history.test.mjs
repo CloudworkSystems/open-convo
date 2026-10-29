@@ -39,6 +39,8 @@ test('Codex rounds count distinct reviewed commits; the summary comment sets the
   const open = { user: codex, created_at: '2026-10-20T03:00:00Z', body: '<!-- codex-review-state:v1 {"code_review":{"has_any_findings":true,"has_unresolved_findings":true,"status":"completed"}} -->' };
   assert.equal(codexSummary({ reviews, comments: [...comments, open], reviewComments: [] }).codexLatest, 'open findings');
   assert.equal(codexSummary({ reviews: [], comments: [], reviewComments: [] }).codexLatest, 'none');
+  const running = { user: codex, created_at: '2026-10-20T03:30:00Z', body: '<!-- codex-review-state:v1 {"code_review":{"has_any_findings":false,"has_unresolved_findings":false,"status":"in_progress"}} -->' };
+  assert.equal(codexSummary({ reviews, comments: [...comments, running], reviewComments: [] }).codexLatest, 'review running');
   const broken = { user: codex, created_at: '2026-10-20T04:00:00Z', body: '<!-- codex-review-state:v1 {"code_review":{oops} -->' };
   assert.equal(codexSummary({ reviews, comments: [...comments, broken], reviewComments: [] }).codexLatest, 'clean');
 });

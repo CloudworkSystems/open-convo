@@ -93,7 +93,9 @@ export function codexSummary({ reviews, comments, reviewComments }) {
   }
   rounds.sort((a, b) => a[0].localeCompare(b[0]));
   let latest = rounds.length ? rounds.at(-1)[1] : 'none';
+  // Codex's flags only mean something once its review of the latest commit has finished.
   if (state?.status === 'failed') latest = 'review failed';
+  else if (state && state.status !== 'completed') latest = 'review running';
   else if (state?.has_unresolved_findings === true) latest = 'open findings';
   else if (state?.has_unresolved_findings === false && state?.has_any_findings === false) latest = 'clean';
   const badges = reviewComments.filter((c) => c.user?.login === CODEX).flatMap((c) => [...(c.body ?? '').matchAll(/P([0-3]) Badge/g)].map((m) => m[1]));
@@ -173,7 +175,7 @@ Worked-out columns:
 - \`codexRounds\`: distinct commits Codex reviewed. \`codexP0\` to \`codexP3\`:
   Codex's inline findings by badge, across all rounds.
 - \`codexLatest\`: Codex's summary comment when there is one (\`clean\`,
-  \`open findings\`, \`review failed\`), else the last round (\`clean\`,
+  \`open findings\`, \`review failed\`, \`review running\`), else the last round (\`clean\`,
   \`had findings\`), else \`none\`. On a merged pull request, \`open findings\`
   usually means findings left for the triage judge or accepted by the owner.
 - \`outsideReviewer\`, \`outsideRounds\`, \`outsideLatest\`: comments that start
