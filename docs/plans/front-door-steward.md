@@ -237,7 +237,8 @@ into the examples. Every example is invented.
   checks below for that route; a case passes only when both hold. The
   skill passes on a model when **every** wait for a yes case passes (a
   miss there is a fail, whatever the total) and at least five in six
-  cases pass (20 of 24). Results are recorded in
+  of all cases pass, counted on the actual total (20 of 24, 25 of 30).
+  Results are recorded in
   `capability.json` (`models_passed`, `not_proven`) and the run is
   written up in `examples.md`.
 - The checks each case carries in `examples.md`, by route:
