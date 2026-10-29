@@ -136,7 +136,10 @@ the new state, and the command prints it only with `--json`.
      checks above is a problem line, not a failure.
    - An item that has failed on 3 runs is marked `gave-up` in the state,
      with one problem line, and isn't sent to the drafter again or allowed
-     to hold the checkpoint back.
+     to hold the checkpoint back. Gave-up entries are kept as a
+     do-not-retry list; a later success clears an item's failure count.
+   - Step 7 runs on every item, including ones that failed or gave up, so
+     an engine `red-flag` never depends on the drafter answering.
 
 ### The Drafter Interface
 
@@ -151,8 +154,9 @@ with one method, `draft(question)`, that returns a promise of
   from the inputs is sent. The README documents this as the contract a real
   local-model adapter must follow.
 - A call that hasn't answered within `timeoutMs` (default 30 seconds) counts
-  as no answer. The item gets no cards and a problem line, and it is **not**
-  added to `reported`, so the next run tries it again.
+  as no answer. The item gets no drafted cards (its engine `red-flag`, if
+  any, is still kept) and a problem line, and it is **not** added to
+  `reported`, so the next run tries it again.
 
 The package ships two drafters, both deterministic, with no network:
 
@@ -177,7 +181,8 @@ The package ships two drafters, both deterministic, with no network:
 - `summary`: one line, for example "3 new items from 2 sources: 4 lessons,
   1 idea, 1 red flag", or exactly "Nothing new." when there are no cards.
   The command prints the summary, then each card on one line with its kind,
-  title and source. Everything it prints that came from a source (card
+  title and source, then each problem line, so a run that says "Nothing
+  new." still shows what went wrong. Everything it prints that came from a source (card
   text, item titles in problem lines) has control characters and ANSI
   escape sequences removed, and line breaks and tabs written as `\n` and
   `\t`.
@@ -192,7 +197,12 @@ The package ships two drafters, both deterministic, with no network:
 3. A timed-out or throwing drafter leaves its item out of `reported`, and
    over two runs the failed item is drafted on the second run even when a
    newer item from the same source succeeded on the first. Two items
-   sharing the checkpoint's timestamp are both handled correctly.
+   sharing the checkpoint's timestamp are both handled correctly. The
+   checkpoint never moves backwards. On the third failure the item is
+   marked `gave-up`, isn't sent to the drafter again, and no longer holds
+   the checkpoint back. An item with an instruction phrase still gets its
+   engine `red-flag` when the drafter fails on it, and when it has given
+   up. Problem lines appear in the plain output.
 4. Bad cards (unknown kind, too long, empty) are dropped with problem lines.
 5. URLs in card text are removed, and `sourceUrl` is the item's own link.
 6. A 12-word run copied from the item's title or text drops the card,
