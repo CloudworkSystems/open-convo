@@ -395,3 +395,11 @@ final class InventedListener {
         if !path.isEmpty { unlink(path) }
     }
 }
+
+extension ClaudeLocalCheckResult {
+    /// Whatever the snapshot, whether the checks passed.
+    var didPass: Bool {
+        if case .passed = self { return true }
+        return false
+    }
+}

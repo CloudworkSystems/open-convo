@@ -844,7 +844,7 @@ extension ProcessSuites {
             let tree = try InventedClaudeTree()
             defer { tree.clean() }
             let blocked = tree.checks(authStatus: .production)
-            #expect(await blocked.evaluateFresh() == .passed)
+            #expect(await blocked.evaluateFresh().didPass)
             #expect(tree.log.last?.line == "check=fresh result=passed")
             #expect(tree.probes("version") == 1 && tree.probes("auth-status") == 1)
             let tool = ClaudeNetworkBlock.system.toolPath
@@ -874,14 +874,14 @@ extension ProcessSuites {
             defer { local.close() }
             try tree.setScenario(["authStatus": "subscription", "networkPort": tcp.port, "networkSocket": local.path])
 
-            #expect(await tree.checks(authStatus: .production).evaluateFresh() == .passed)
+            #expect(await tree.checks(authStatus: .production).evaluateFresh().didPass)
             let denied = tree.record("network.json")
             #expect(denied?["tcpConnected"] as? Bool == false && denied?["localConnected"] as? Bool == false, "\(denied ?? [:])")
             #expect((denied?["tcpErrno"] as? Int ?? 0) != 0 && (denied?["localErrno"] as? Int ?? 0) != 0)
             #expect(!tcp.hasConnection && !local.hasConnection, "neither listener saw a connection")
 
             tree.remove(tree.records.appendingPathComponent("network.json").path)
-            #expect(await tree.checks(authStatus: .runForTests).evaluateFresh() == .passed)
+            #expect(await tree.checks(authStatus: .runForTests).evaluateFresh().didPass)
             let reached = tree.record("network.json")
             #expect(reached?["tcpConnected"] as? Bool == true && reached?["localConnected"] as? Bool == true, "\(reached ?? [:])")
             #expect(tcp.hasConnection && local.hasConnection)
@@ -894,7 +894,7 @@ extension ProcessSuites {
             for gate in [ClaudeAuthStatusGate.production, .runForTests] {
                 for plan in ["pro", "subscription"] {
                     try tree.setScenario(["authStatus": plan])
-                    #expect(await tree.checks(authStatus: gate).evaluateFresh() == .passed, "\(plan)")
+                    #expect(await tree.checks(authStatus: gate).evaluateFresh().didPass, "\(plan)")
                 }
                 for plan in ["team", "enterprise"] {
                     try tree.setScenario(["authStatus": plan])
