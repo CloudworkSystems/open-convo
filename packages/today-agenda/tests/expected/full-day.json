@@ -1,0 +1,262 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-26",
+  "timeZone": "America/New_York",
+  "summary": [
+    "You have 7 events today, starting at 09:00.",
+    "There are 2 overlaps, the first at 14:00.",
+    "Your longest free stretch is 11:00 to 14:00.",
+    "3 tasks are overdue and 2 are due today.",
+    "2 habits are still open.",
+    "Groceries has 7 items and Hardware has 2 items."
+  ],
+  "nextUp": {
+    "inProgress": [],
+    "next": {
+      "key": "bell",
+      "title": "Noon bell",
+      "allDay": false,
+      "calendar": "Work",
+      "location": null,
+      "status": "confirmed",
+      "start": "2026-10-26T12:00",
+      "end": "2026-10-26T12:00",
+      "startInstant": "2026-10-26T12:00:00-04:00",
+      "endInstant": "2026-10-26T12:00:00-04:00",
+      "startsBefore": false,
+      "endsAfter": false,
+      "noLength": true,
+      "minutesUntil": 60
+    }
+  },
+  "timeline": [
+    {
+      "key": "fair",
+      "title": "Town fair",
+      "allDay": true,
+      "calendar": "Family",
+      "location": "River park",
+      "status": "confirmed",
+      "start": "2026-10-26",
+      "end": "2026-10-27",
+      "startInstant": null,
+      "endInstant": null,
+      "startsBefore": false,
+      "endsAfter": false,
+      "noLength": false
+    },
+    {
+      "key": "bake",
+      "title": "Overnight bake",
+      "allDay": false,
+      "calendar": "Family",
+      "location": null,
+      "status": "confirmed",
+      "start": "2026-10-25T23:00",
+      "end": "2026-10-26T00:30",
+      "startInstant": "2026-10-25T23:00:00-04:00",
+      "endInstant": "2026-10-26T00:30:00-04:00",
+      "startsBefore": true,
+      "endsAfter": false,
+      "noLength": false
+    },
+    {
+      "key": "brief",
+      "title": "Morning briefing",
+      "allDay": false,
+      "calendar": "Work",
+      "location": null,
+      "status": "confirmed",
+      "start": "2026-10-26T09:00",
+      "end": "2026-10-26T09:30",
+      "startInstant": "2026-10-26T09:00:00-04:00",
+      "endInstant": "2026-10-26T09:30:00-04:00",
+      "startsBefore": false,
+      "endsAfter": false,
+      "noLength": false
+    },
+    {
+      "key": "bell",
+      "title": "Noon bell",
+      "allDay": false,
+      "calendar": "Work",
+      "location": null,
+      "status": "confirmed",
+      "start": "2026-10-26T12:00",
+      "end": "2026-10-26T12:00",
+      "startInstant": "2026-10-26T12:00:00-04:00",
+      "endInstant": "2026-10-26T12:00:00-04:00",
+      "startsBefore": false,
+      "endsAfter": false,
+      "noLength": true
+    },
+    {
+      "key": "supplier",
+      "title": "Supplier call",
+      "allDay": false,
+      "calendar": "Work",
+      "location": null,
+      "status": "tentative",
+      "start": "2026-10-26T14:00",
+      "end": "2026-10-26T14:45",
+      "startInstant": "2026-10-26T14:00:00-04:00",
+      "endInstant": "2026-10-26T14:45:00-04:00",
+      "startsBefore": false,
+      "endsAfter": false,
+      "noLength": false
+    },
+    {
+      "key": "review",
+      "title": "Design review",
+      "allDay": false,
+      "calendar": "Work",
+      "location": "Studio",
+      "status": "confirmed",
+      "start": "2026-10-26T14:00",
+      "end": "2026-10-26T15:30",
+      "startInstant": "2026-10-26T14:00:00-04:00",
+      "endInstant": "2026-10-26T15:30:00-04:00",
+      "startsBefore": false,
+      "endsAfter": false,
+      "noLength": false
+    },
+    {
+      "key": "pickup",
+      "title": "School pickup",
+      "allDay": false,
+      "calendar": "Family",
+      "location": "North gate",
+      "status": "confirmed",
+      "start": "2026-10-26T15:15",
+      "end": "2026-10-26T15:45",
+      "startInstant": "2026-10-26T15:15:00-04:00",
+      "endInstant": "2026-10-26T15:45:00-04:00",
+      "startsBefore": false,
+      "endsAfter": false,
+      "noLength": false
+    }
+  ],
+  "clashes": [
+    {
+      "keys": [
+        "supplier",
+        "review"
+      ],
+      "start": "2026-10-26T14:00",
+      "end": "2026-10-26T14:45",
+      "startInstant": "2026-10-26T18:00:00Z",
+      "endInstant": "2026-10-26T18:45:00Z",
+      "minutes": 45,
+      "tentative": true
+    },
+    {
+      "keys": [
+        "review",
+        "pickup"
+      ],
+      "start": "2026-10-26T15:15",
+      "end": "2026-10-26T15:30",
+      "startInstant": "2026-10-26T19:15:00Z",
+      "endInstant": "2026-10-26T19:30:00Z",
+      "minutes": 15,
+      "tentative": false
+    }
+  ],
+  "freeTime": [
+    {
+      "start": "11:00",
+      "end": "14:00",
+      "startInstant": "2026-10-26T15:00:00Z",
+      "endInstant": "2026-10-26T18:00:00Z",
+      "minutes": 180
+    },
+    {
+      "start": "15:45",
+      "end": "18:00",
+      "startInstant": "2026-10-26T19:45:00Z",
+      "endInstant": "2026-10-26T22:00:00Z",
+      "minutes": 135
+    }
+  ],
+  "tasks": [
+    {
+      "id": "rent",
+      "title": "Pay the studio rent",
+      "due": "2026-10-20",
+      "dueTime": null,
+      "dueTimeLocal": null,
+      "priority": "high",
+      "list": "Bills",
+      "group": "overdue"
+    },
+    {
+      "id": "milk",
+      "title": "Order oat milk",
+      "due": "2026-10-25",
+      "dueTime": null,
+      "dueTimeLocal": null,
+      "priority": null,
+      "list": null,
+      "group": "overdue"
+    },
+    {
+      "id": "draft",
+      "title": "Send the draft",
+      "due": "2026-10-26",
+      "dueTime": "2026-10-26T09:00:00-04:00",
+      "dueTimeLocal": "09:00",
+      "priority": null,
+      "list": null,
+      "group": "overdue"
+    },
+    {
+      "id": "walk",
+      "title": "Outline the walkthrough",
+      "due": "2026-10-26",
+      "dueTime": "2026-10-26T16:00:00-04:00",
+      "dueTimeLocal": "16:00",
+      "priority": "high",
+      "list": null,
+      "group": "today"
+    },
+    {
+      "id": "notes",
+      "title": "File the notes",
+      "due": "2026-10-26",
+      "dueTime": null,
+      "dueTimeLocal": null,
+      "priority": null,
+      "list": null,
+      "group": "today"
+    }
+  ],
+  "habits": [
+    {
+      "id": "read",
+      "name": "Read a chapter"
+    },
+    {
+      "id": "stretch",
+      "name": "Stretch"
+    }
+  ],
+  "lists": [
+    {
+      "id": "groceries",
+      "name": "Groceries",
+      "open": 7
+    },
+    {
+      "id": "hardware",
+      "name": "Hardware",
+      "open": 2
+    }
+  ],
+  "counts": {
+    "cancelledEvents": 1,
+    "tasksNoDue": 1,
+    "tasksOtherDates": 1,
+    "habitsDone": 1,
+    "habitsRest": 1
+  }
+}

@@ -1,6 +1,6 @@
 # Building Faster (Scale-Up Plan)
 
-Status: In progress (Oct 23): approved Oct 21; Site Engine diff merged (#119), annotation rounds (#111) and visibility report (#112) in review.
+Status: In progress (Oct 29): approved Oct 21; Site Engine diff (#119), annotation rounds (#111) and visibility report (#112) merged.
 
 Written October 21, 2026 by a building session. Session name:
 `OC-261021-scale-up-plan`. Status: approved. The owner agreed to the

@@ -25,6 +25,10 @@ export const MAX_FINDINGS = 8;
 // The judge must be at least this sure that each finding is trivial.
 export const MIN_CONFIDENCE = 0.8;
 export const JUDGE_MODEL = 'claude-opus-5-5';
+// The repo is public, so anyone can open a pull request. Only the project's
+// own builders' pull requests may spend the judge's key or put text in front
+// of it: the bot every agent signs in as, and Codex's cloud builds.
+export const JUDGE_AUTHORS = ['cloudwork-bot', CODEX_LOGIN];
 
 const FINDING_MARKER = 'codex-code-review-finding:v1';
 // Codex's priority badge at the top of each finding: ![P2 Badge](...)
@@ -48,17 +52,21 @@ export function findingPriority(body) {
  * @param {object} input
  * @param {string} input.headSha full head commit
  * @param {string} input.prAuthor login that opened the pull request
+ * @param {boolean} input.fromFork whether the head branch lives in another repository
  * @param {Array} input.reviews pull request reviews
  * @param {Array} input.reviewComments pull request review (inline) comments,
  *   each with `edit_history` (see editedOnlyByCodex)
  * @param {Array} input.dismissals `review_dismissed` issue events
  * @returns {{eligible: boolean, reason: string, findings: Array, rounds: number, lastFinding: number}}
  */
-export function triageEligibility({ headSha, prAuthor, reviews = [], reviewComments = [], dismissals = [] } = {}) {
+export function triageEligibility({ headSha, prAuthor, fromFork = true, reviews = [], reviewComments = [], dismissals = [] } = {}) {
   const no = (reason, extra = {}) => ({ eligible: false, reason, findings: [], rounds: 0, lastFinding: 0, ...extra });
   if (!/^[0-9a-f]{40}$/i.test(headSha ?? '')) return no('No head commit.');
   // The owner's own pull requests never pass on a judge's word.
   if (!prAuthor || prAuthor === OWNER_LOGIN) return no('Opened by the owner.');
+  // Fails closed: a caller that doesn't say where the branch lives gets no judge.
+  if (fromFork !== false) return no('Opened from a fork.');
+  if (!JUDGE_AUTHORS.includes(prAuthor)) return no('Not opened by one of the project\'s builders.');
 
   const findingReviews = reviews.filter((r) => isCodex(r.user) && r.state !== 'APPROVED')
     .filter((r) => r.state !== 'DISMISSED' || !dismissedByOwner(r, dismissals));
@@ -145,7 +153,7 @@ export function verdictComment({ headSha, findings, verdicts }) {
   ].join('\n');
 }
 
-const SYSTEM = `You triage findings that an automated code reviewer (Codex) left on a pull request in a small private repository: a Mac app plus Node 22 packages and docs. Codex has already gone several rounds on this pull request, and each fix tends to draw new edge-case findings. Your job is to say, for each remaining finding, whether it is a real problem the builder must fix before merging, or a nit that can safely wait.
+const SYSTEM = `You triage findings that an automated code reviewer (Codex) left on a pull request in a small public repository: a Mac app plus Node 22 packages and docs. Codex has already gone several rounds on this pull request, and each fix tends to draw new edge-case findings. Your job is to say, for each remaining finding, whether it is a real problem the builder must fix before merging, or a nit that can safely wait.
 
 Rate a finding "real" if it describes any of these on a setup the project supports (macOS, Linux CI, Node 22, the app as shipped): wrong results, a crash, data loss, a security or privacy hole, money spent without consent, a broken promise the code or its plan makes, or a test that would pass while the code is broken.
 Rate it "nit" if it is style or wording, an edge case that needs a platform or runtime the project doesn't support, a scenario that needs deliberate misuse by the person running the tool, a further hardening of a guard that already covers the realistic cases, or a docs or plan detail that doesn't change what gets built.
