@@ -72,7 +72,8 @@ export const hostsIn = (line) => readHosts(line).hosts;
 
 // ---------------------------------------------------------------- key names
 
-const SECRET_NAME = /\b[A-Z][A-Z0-9_]*_(?:API_KEY|TOKEN|SECRET)\b/g;
+// The prefix may be any case (`vendor_API_KEY`, `xAI_API_KEY`); the suffix is the upper-case convention.
+const SECRET_NAME = /\b[A-Za-z][A-Za-z0-9_]*_(?:API_KEY|TOKEN|SECRET)\b/g;
 
 /** Names of environment variables or secrets ending in _API_KEY, _TOKEN or _SECRET. */
 export function secretNamesIn(line) {
@@ -244,22 +245,21 @@ function normalizeSwiftUrl(url) {
   return normalized.replace(/\/+$/, '').replace(/\.git$/, '');
 }
 
-// The text inside each `<marker>(...)` call, matching parentheses.
-function calls(text, marker) {
+// The text inside each `.<member>(...)` call, matching parentheses. Swift
+// allows whitespace, newlines included, around the dot and before the `(`.
+function calls(text, member) {
   const found = [];
-  let from = 0;
-  for (;;) {
-    const start = text.indexOf(marker, from);
-    if (start < 0) return found;
+  for (const match of text.matchAll(new RegExp(`\\.\\s*${member}\\s*\\(`, 'g'))) {
+    const open = match.index + match[0].length - 1;
     let depth = 0;
-    let i = start + marker.length - 1;
+    let i = open;
     for (; i < text.length; i++) {
       if (text[i] === '(') depth++;
       else if (text[i] === ')' && --depth === 0) break;
     }
-    found.push(text.slice(start + marker.length, i));
-    from = start + marker.length;
+    found.push(text.slice(open + 1, i));
   }
+  return found;
 }
 
 /** Swift source with its comments blanked out (strings kept), so a commented-out declaration doesn't count. */
@@ -292,13 +292,13 @@ export function stripSwiftComments(text) {
 export function swiftDependencies(text, { stripComments = true } = {}) {
   const deps = new Set();
   if (stripComments) text = stripSwiftComments(text);
-  for (const body of calls(text, '.package(')) {
+  for (const body of calls(text, 'package')) {
     const url = body.match(/\burl:\s*"([^"]+)"/);
     const path = body.match(/\bpath:\s*"([^"]+)"/);
     const id = body.match(/\bid:\s*"([^"]+)"/);
     deps.add(url ? `swift:${normalizeSwiftUrl(url[1])}` : path ? `swift-path:${path[1]}` : id ? `swift-id:${id[1].toLowerCase()}` : `swift-other:${body.replace(/\s+/g, ' ').trim()}`);
   }
-  for (const body of calls(text, '.binaryTarget(')) {
+  for (const body of calls(text, 'binaryTarget')) {
     const url = body.match(/\burl:\s*"([^"]+)"/);
     if (url) deps.add(`swift-binary:${url[1].trim()}`);
   }

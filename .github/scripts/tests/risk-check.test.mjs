@@ -75,6 +75,7 @@ test('hosts: a line that only moved is not added', () => {
 
 test('key names: a new _API_KEY, _TOKEN or _SECRET name is a hit outside .github/', () => {
   assert.deepEqual(secretNamesIn('process.env.INVENTED_API_KEY ?? env.DEMO_TOKEN; NOT_A_KEY'), ['INVENTED_API_KEY', 'DEMO_TOKEN']);
+  assert.deepEqual(secretNamesIn('env.vendor_API_KEY || env.xInvented_TOKEN; const access_token = 1'), ['vendor_API_KEY', 'xInvented_TOKEN']);
   assert.deepEqual(signals(scan('packages/demo/src/model.js', '', 'const key = process.env.INVENTED_API_KEY;\n')), ['secret:names the key or secret `INVENTED_API_KEY`']);
   assert.deepEqual(scan('.github/workflows/demo.yml', '', 'INVENTED_API_KEY: ${{ secrets.INVENTED_API_KEY }}\n'), []);
   assert.deepEqual(scan('src/a.js', '', 'env.INVENTED_API_KEY\n', allow({ secrets: ['INVENTED_API_KEY'] })), []);
@@ -229,6 +230,10 @@ test('Swift: a string that fools the comment stripper cannot hide a new package'
 test('Swift: a remote binary target is a dependency; a local one is not', () => {
   assert.deepEqual([...swiftDependencies(swift('', '.binaryTarget(name: "Blob", url: "https://files.invented-forge.dev/b.zip", checksum: "00")'))], ['swift-binary:https://files.invented-forge.dev/b.zip']);
   assert.deepEqual([...swiftDependencies(swift('', '.binaryTarget(name: "Blob", path: "Blob.xcframework")'))], []);
+  // Swift allows whitespace, newlines included, around the dot and before the `(`.
+  assert.deepEqual([...swiftDependencies(swift('.package (url: "https://git.invented-forge.dev/kit", from: "1.0.0")'))], ['swift:https://git.invented-forge.dev/kit']);
+  assert.deepEqual([...swiftDependencies(swift('.package\n      (url: "https://git.invented-forge.dev/kit", from: "1.0.0")'))], ['swift:https://git.invented-forge.dev/kit']);
+  assert.deepEqual([...swiftDependencies(swift('', '.\n  binaryTarget (name: "Blob", url: "https://files.invented-forge.dev/b.zip", checksum: "00")'))], ['swift-binary:https://files.invented-forge.dev/b.zip']);
 });
 
 test('Swift: a new pin in Package.resolved is a hit, in either format', () => {
