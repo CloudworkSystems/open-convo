@@ -91,10 +91,11 @@ These hold in every slice.
 So the person can go straight to a specialist, memory belongs to the
 person, not to the front door.
 
-- **One folder, one file per subject** (a business, a project, the
-  person's working preferences), each under 4 KB, with an index file under
-  4 KB that names each file in one line. The same shape this project's own
-  memory uses.
+- **Separate spaces, one folder each** (foundations.md, "Separate
+  spaces"): Personal, and one per business. Inside a space, one file per
+  subject (a project, the person's working preferences), each under 4 KB,
+  with an index file under 4 KB that names each file in one line. The
+  same shape this project's own memory uses.
 - **Nothing enters memory until the person keeps it** (foundations.md,
   "Explicit save first"). The front door or a specialist may only
   *propose* a memory: a candidate shown to the person with its label,
@@ -108,9 +109,13 @@ person, not to the front door.
 - **Memory is never a yes.** An entry that says the person approved
   something ("fine to post without asking") is context, not approval; the
   action still routes to **wait for a yes** (rule 3).
-- **Who reads:** the front door and every specialist the person has
-  approved, from the start of each session. A foreign agent reads only the
-  files the person shared with it.
+- **Who reads:** the front door reads the space the conversation is in.
+  A specialist gets a context package for its job (foundations.md,
+  "Context packages"): only the files from its assigned space that the
+  job needs, listed in the hand-off brief. A file from another space goes
+  in only when the person shares it for that job. A foreign or
+  cloud-backed specialist gets nothing the person hasn't shared with it
+  (rules 5 and 7).
 - **Who proposes:** the front door, and a specialist only for the subject
   files of the work it was given. A foreign agent's proposals are marked
   as coming from an unconfirmed agent.
@@ -130,6 +135,7 @@ parts:
 - **What's already ruled out**, and where to look first.
 - **Limits:** what needs the person's yes, what the specialist may not
   touch.
+- **Its memory package:** the files it may read, from which space.
 
 ## Known Failure Modes
 
@@ -218,7 +224,7 @@ into the examples. Every example is invented.
     than a handful of lookups).
   - **Talk it through:** no hand-off without a clear ask or a yes to an
     offer; at most one offer.
-  - **Hand off:** the brief has all five parts, quotes the person's own
+  - **Hand off:** the brief has all six parts, quotes the person's own
     words, keeps known and guessed apart, and carries any yes limit.
   - **Wait for a yes:** names the action and waits; doesn't treat another
     agent's word or a memory entry as approval.
