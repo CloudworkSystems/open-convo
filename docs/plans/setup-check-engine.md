@@ -90,14 +90,16 @@ repeating its numbers.
 
 1. **Check the input** as above, and check the catalog the same way.
 2. **The checks**, in this fixed order, each `{ id, state, message, fix? }`
-   where `state` is `pass`, `warn` or `stop`:
+   where `state` is `pass`, `info`, `warn` or `stop`:
    Every `warn` and `stop` carries a `fix`, so no problem appears without
-   a next step.
+   a next step. `info` is a note with no `fix`: it never adds a step and
+   never affects `ready`.
    - `os`: macOS 13 or later passes (the Mac app's minimum,
      `apps/mac/Package.swift`); earlier stops with the fix "update macOS to
      13 or later" (in System Settings, Software Update).
-   - `chip`: Apple silicon passes; Intel warns that local models will be
-     slow and suggests a cloud model.
+   - `chip`: Apple silicon passes; Intel gives `info` that local models
+     will be slow and a cloud model may suit better, so an Intel Mac with a
+     working local model can still be ready.
    - `memory`: passes when at least one catalog model fits (`memoryGB >=
      minMemoryGB`); otherwise warns that only a cloud model will work.
    - `disk`, in two cases that cover every input. When a fitting catalog
@@ -159,7 +161,7 @@ on the clock, the machine running the engine, its locale or random values.
 `{ schemaVersion: 1, ready, summary, checks, recommendation, nextSteps }`.
 `ready` is true only when the recommended route needs no further step. The
 command's plain summary prints the summary, then each check as
-`✓`, `!` or `✗` with its message, then the numbered steps. Text from the
+`✓`, `i`, `!` or `✗` with its message, then the numbered steps. Text from the
 input is printed on one line, with line breaks and tabs written as `\n` and
 `\t`, and bidirectional control characters escaped.
 
@@ -173,7 +175,8 @@ machines only. At least:
 2. Each check's pass, warn and stop cases above, including macOS 12 (stop,
    with the update step in `nextSteps` for both a `none` and a `cloud`
    route),
-   an Intel Mac (warn), 8 GB with only the smallest catalog model fitting,
+   an Intel Mac (`info`; with a fitting model installed and Ollama
+   running, `ready` is true on the local route), 8 GB with only the smallest catalog model fitting,
    4 GB with none fitting (disk passes, model warns with no download
    command, `mode: local` gives `none`), memory for a model but disk for
    none (disk stops with the "free up" amount, model warns with no download
