@@ -82,27 +82,30 @@ refusal, it goes to `refused` (below).
    other scheme (`javascript:`, `file:`, `data:` and the rest) is refused.
    A link with a user name or password in it is refused, never stored.
 3. **Cleaning a link:** lowercase scheme and host, drop the default port
-   and the fragment, and remove tracking parameters from a fixed list in
+   and an empty `#`, and remove tracking parameters from a fixed list in
    the README (at least every `utm_*`, `fbclid`, `gclid`, `igsh`, `igshid`,
    `mc_eid`, and `si` on YouTube links). Other parameters keep their order.
    `youtu.be/<id>`, `youtube.com/shorts/<id>` and `m.youtube.com` links
    become `https://www.youtube.com/watch?v=<id>`; `twitter.com` becomes
-   `x.com`; `www.` is dropped from Instagram and TikTok links. The cleaned
-   link is the `sourceKey`.
+   `x.com`; `www.` is dropped from Instagram and TikTok links. A non-empty
+   fragment is kept (on hash-routed sites it names the page), except where
+   a YouTube rewrite builds the link afresh, which keeps only `v` and `t`.
+   The cleaned link is the `sourceKey`.
 4. **Site label:** `youtube`, `instagram`, `tiktok`, `x`, `facebook` or
    `web`, from a fixed host table in the code (subdomains of those hosts
    included).
-5. **Notes.** A `text` item with no link is a note. Its `sourceKey` is
-   `note:` plus the SHA-256 (Node's built-in `crypto`) of the text after
-   Unicode NFC, trimming and collapsing runs of white space. Text with a
-   link and other words is a link, and the other words are kept as its
-   `note`.
+5. **No notes in this slice.** The owner's iCloud Drive approval covers
+   links and video clips only (PLAN.md, iPhone capture app), so a `text`
+   item with no link is refused ("Only links and video clips go in the
+   capture folder"). In text with a link and other words, only the link is
+   kept; the other words are dropped and counted, never stored. Notes can
+   come later, once an owner decision widens that approval.
 6. **Clips.** A `file` item of type `public.mpeg-4` or
    `com.apple.quicktime-movie`, up to 8 GB, is a clip. Its `sourceKey` is
    `clip:` plus its `sha256`, so two different clips that share a name and
    size are never taken for each other; a clip without `sha256` is refused.
    Every other file type is refused,
-   images included, with the message "Only links, notes and video clips go
+   images included, with the message "Only links and video clips go
    in the capture folder"; health photos never travel this way
    ([skin-check.md](skin-check.md)).
 7. **Duplicates.** An item whose `sourceKey` is in `known`, or repeats an
@@ -111,8 +114,7 @@ refusal, it goes to `refused` (below).
    reported: the later watcher never deletes or moves a file because this
    library called it a duplicate; it leaves it for the owner.
 8. **Titles.** No page is fetched, so a link's title is its site label and
-   a shortened host and path (at most 80 characters); a note's title is its
-   first line (at most 80 characters); a clip's title is its file name
+   a shortened host and path (at most 80 characters); a clip's title is its file name
    without the extension.
 
 **Same input, same result.** The same file gives byte-identical JSON, and
@@ -122,7 +124,7 @@ clock, the machine's time zone, locale or random values.
 ## Output
 
 `{ schemaVersion: 1, sources, duplicates, refused, counts }`. Each source is
-`{ id, kind (link, note or clip), sourceKey, site?, url?, title, note?,
+`{ id, kind (link or clip), sourceKey, site?, url?, title,
 addedAt, file? }`, ordered by `addedAt`, then `id`. Each refusal is `{ id,
 reason }` in plain words. The command's plain summary prints the counts,
 then each source on one line, then duplicates and refusals. Text from the
@@ -135,26 +137,28 @@ input is printed on one line, with line breaks and tabs written as `\n` and
 invented data only (made-up links on `example.com` and invented video ids).
 At least:
 
-1. A mixed invented drop (`.webloc`, `.url`, plain text, a note, two clips,
-   one image, one duplicate) gives a result whose JSON matches a saved
+1. A mixed invented drop (`.webloc`, `.url`, plain text, a no-link note,
+   two clips, one image, one duplicate) gives a result whose JSON matches a saved
    expected file exactly.
 2. Each link format is read; a `.webloc` with no `URL` and a `.url` with no
-   `URL=` line become notes or refusals as the README says.
+   `URL=` line are refused; text with a link and other words keeps only
+   the link and counts the dropped words.
 3. Cleaning: each tracking parameter on the list is removed and others kept
    in order; the YouTube, X, Instagram and TikTok rewrites; upper-case hosts,
-   default ports and fragments.
+   default ports; an empty `#` dropped; `https://example.com/#/post/1` and
+   `#/post/2` kept as two sources; the YouTube rewrite keeping `t`.
 4. Refusals: each scheme other than `http` and `https`, a link with a user
    name or password, each bad name above, an image, an unknown file type and
    an over-size clip.
 5. Duplicates: two clips with the same name and size but different
    `sha256` are both sources; the same `sha256` under two names is a
    duplicate; the same reel shared twice with different tracking tags, a
-   key already in `known`, two identical notes with different spacing, and
-   the earliest item winning.
+   key already in `known`, and the earliest item winning.
 6. Input checks: each file refusal above names the item's position; a
    repeated `id` is refused.
 7. Hostile but valid text (quotes, `<script>`, emoji, right-to-left text,
-   bidirectional controls, a 64 KB note) is returned unchanged in the JSON
+   bidirectional controls) in link paths and clip names, and a 64 KB text
+   item, is returned unchanged in the JSON
    and safe on one line in the summary.
 8. Determinism and no clock: shuffled `items` and `known` give
    byte-identical JSON; the engine runs with `Date.now` and an

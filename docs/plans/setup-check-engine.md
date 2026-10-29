@@ -109,6 +109,11 @@ repeating its numbers.
      when `preferences.mode` is `cloud`.
    - `model`: passes when a fitting catalog model is already installed;
      otherwise warns with the download step for the recommended model.
+   - **When no catalog model fits memory**, there is nothing to download:
+     `disk` passes with the message "no local model to download", and
+     `model` warns "no local model fits this Mac's memory" with the fix
+     "use a cloud model" and no download command. A local route is then
+     impossible, so `mode: local` gives `none`.
    - `cloud`: only when `mode` is `cloud`, or `either` and the local route
      can't work: passes only when `choice` is set and that exact model and
      host pair is in `approved`. An approval of another model or host never
@@ -126,7 +131,8 @@ repeating its numbers.
    is one plain sentence built only from the checks.
 4. **Next steps:** the `fix` of every `warn` and `stop` check that applies
    to the recommended route (for a `cloud` route, only `os` and `cloud`;
-   for `none`, all of them), in check order, numbered. Command text in a step (for example
+   for `none`, all of them), in check order, numbered, each distinct fix
+   text once. Command text in a step (for example
    `ollama pull qwen3:8b`) is shown for the person to run; the engine never
    runs it.
 5. **The summary:** one to three short sentences from a fixed template, for
@@ -156,7 +162,8 @@ machines only. At least:
    matches a saved expected file exactly.
 2. Each check's pass, warn and stop cases above, including macOS 12 (stop),
    an Intel Mac (warn), 8 GB with only the smallest catalog model fitting,
-   4 GB with none fitting, disk with room for the model but not the
+   4 GB with none fitting (disk passes, model warns with no download
+   command, `mode: local` gives `none`), disk with room for the model but not the
    extra 5 GB, and an installed fitting model with 2 GB free (warn, the
    route stays `local`).
 3. Recommendation: an installed fitting model beats a better one not yet
