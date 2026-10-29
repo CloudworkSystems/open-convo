@@ -142,9 +142,14 @@ repeating its numbers.
    installed; failing that, the first that fits memory and disk. The reason
    is one plain sentence built only from the checks.
 4. **Next steps:** the `fix` of every `warn` and `stop` check that applies
-   to the recommended route (for a `cloud` route, only `os` and `cloud`;
-   for `none`, all of them), in check order, numbered, each distinct fix
-   text once. Command text in a step (for example
+   to the recommended route, in check order, numbered, each distinct fix
+   text once. For a `local` route: every check except `cloud`. For a
+   `cloud` route: only `os` and `cloud`. For `none`: only the fixes that
+   could open a route, that is the `os` fix and whichever of `memory` or
+   `disk` blocks the local route, then one last step, "or switch to a
+   cloud model in settings" (unless `mode` is already `cloud`). Ollama and
+   download steps are left out of `none`, because they can't help until
+   the block is cleared. Command text in a step (for example
    `ollama pull qwen3:8b`) is shown for the person to run; the engine never
    runs it.
 5. **The summary:** one to three short sentences from a fixed template, for
@@ -178,7 +183,8 @@ machines only. At least:
    an Intel Mac (`info`; with a fitting model installed and Ollama
    running, `ready` is true on the local route), 8 GB with only the smallest catalog model fitting,
    4 GB with none fitting (disk passes, model warns with no download
-   command, `mode: local` gives `none`), memory for a model but disk for
+   command, `mode: local` gives `none` whose steps are the memory note and
+   the switch-to-cloud step, with no Ollama step), memory for a model but disk for
    none (disk stops with the "free up" amount, model warns with no download
    command), disk with room for the model but not the
    extra 5 GB, and an installed fitting model with 2 GB free (warn, the
