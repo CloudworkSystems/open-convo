@@ -76,7 +76,8 @@ node src/followed.mjs --sources fixtures/sources.json --items fixtures/items.jso
   problem line.
 - **State file (optional):** what earlier runs already handled:
   `{ schemaVersion: 1, checkpoints: { <sourceId>: <date> }, reported:
-  [{ source, itemId, fingerprint }] }`.
+  [{ source, itemId, fingerprint }], failures: [{ source, itemId, runs,
+  gaveUp }] }`.
 - **Known file (optional):** lessons and ideas the owner already keeps,
   `{ schemaVersion: 1, known: [{ text }] }`, so the engine doesn't draft them
   again.
@@ -106,14 +107,14 @@ the new state, and the command prints it only with `--json`.
    problem line.
 4. **Strip links the source didn't give.** Any URL in a card's title or body
    is removed. A card links only to its item's own `url`, as `sourceUrl`.
-5. **Drop quotes.** A card whose body shares a run of 12 or more words with
-   the item's text (case and punctuation ignored) is dropped as a quote,
+5. **Drop quotes.** A card whose title or body shares a run of 12 or more
+   words with the item's title or text (case and punctuation ignored) is dropped as a quote,
    with a problem line.
 6. **Skip what's already kept.** A card whose normalized text matches a
    known entry is skipped as `already-known`. Normalized means lower case,
    punctuation removed, and spaces collapsed. "Matches" means the texts are
    equal, or share at least 80% of their words (Jaccard over word sets).
-7. **Flag instructions.** An item whose text contains instruction-like
+7. **Flag instructions.** An item whose title or text contains instruction-like
    phrases gets one `red-flag` card from the engine itself, whatever the
    drafter says. Examples are "ignore previous", "ignore your", "forward
    this", "reply with", "send me", "run this", "paste this", "your password"
@@ -126,9 +127,16 @@ the new state, and the command prints it only with `--json`.
    title and body, from `node:crypto`). The new state adds each processed
    item to `reported`. A source's checkpoint moves forward only to its
    newest item dated before the oldest item from that source that failed
-   this run (no answer, threw, or bad answer), so a failed item is always
-   read again next run. With no failures, it moves to the newest processed
-   item.
+   this run, so a failed item is always read again next run. With no
+   failures, it moves to the newest processed item. It never moves
+   backwards: when no item comes before the oldest failure, it stays where
+   it was.
+   - An item **failed** when the drafter gave no answer, threw, or returned
+     something that isn't `{ cards: [...] }`. A single card dropped by the
+     checks above is a problem line, not a failure.
+   - An item that has failed on 3 runs is marked `gave-up` in the state,
+     with one problem line, and isn't sent to the drafter again or allowed
+     to hold the checkpoint back.
 
 ### The Drafter Interface
 
@@ -187,12 +195,13 @@ The package ships two drafters, both deterministic, with no network:
    sharing the checkpoint's timestamp are both handled correctly.
 4. Bad cards (unknown kind, too long, empty) are dropped with problem lines.
 5. URLs in card text are removed, and `sourceUrl` is the item's own link.
-6. A 12-word run copied from the item drops the card. An 11-word run
-   doesn't.
+6. A 12-word run copied from the item's title or text drops the card,
+   whether the run is in the card's title or body. An 11-word run doesn't.
 7. `already-known` matching at exactly 80% word overlap skips the card, and
    at 79% it doesn't.
 8. Every phrase in the instruction table adds one engine `red-flag`,
-   whatever the drafter answers. An item with no such phrase gets none.
+   whatever the drafter answers, whether it appears in the item's title or
+   its text. An item with no such phrase gets none.
 9. An item asking the drafter to change its rules changes nothing else in
    the output.
 10. "Nothing new." when every item is skipped.
