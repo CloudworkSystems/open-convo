@@ -868,7 +868,7 @@ extension ProcessSuites {
             #expect(tree.checks().authStatusGate == .runForTests)
         }
 
-        @Test("Under the block, what auth status starts reaches no listener, over TCP or a local socket, and finds none of the resolver and fetch services; without it, the same fake does both and finds every one (not vacuous, and no name on the list is a typo)")
+        @Test("Under the block, what auth status starts reaches no listener, over TCP or a local socket, finds none of the resolver and fetch services and cannot connect to the DNS resolver; without it, the same fake does all of these and finds every service (not vacuous, and no name on the list is a typo)")
         func authStatusNetworkDenied() async throws {
             let tree = try InventedClaudeTree()
             defer { tree.clean() }
@@ -877,7 +877,7 @@ extension ProcessSuites {
             let local = try InventedListener.local()
             defer { local.close() }
             try tree.setScenario(["authStatus": "subscription", "networkPort": tcp.port, "networkSocket": local.path,
-                                  "networkServices": ClaudeNetworkBlock.deniedServices])
+                                  "networkServices": ClaudeNetworkBlock.deniedServices, "networkResolver": true])
 
             #expect(await tree.checks(authStatus: .production).evaluateFresh().didPass)
             let denied = tree.record("network.json")
@@ -887,6 +887,7 @@ extension ProcessSuites {
             let deniedLookups = denied?["services"] as? [String: Int] ?? [:]
             #expect(Set(deniedLookups.keys) == Set(ClaudeNetworkBlock.deniedServices), "\(deniedLookups)")
             #expect(deniedLookups.values.allSatisfy { $0 != 0 }, "no denied service was found: \(deniedLookups)")
+            #expect((denied?["resolver"] as? Int).map { $0 != 0 } == true, "the DNS resolver was unreachable: \(denied ?? [:])")
 
             tree.remove(tree.records.appendingPathComponent("network.json").path)
             #expect(await tree.checks(authStatus: .runForTests).evaluateFresh().didPass)
@@ -896,6 +897,7 @@ extension ProcessSuites {
             let reachedLookups = reached?["services"] as? [String: Int] ?? [:]
             #expect(Set(reachedLookups.keys) == Set(ClaudeNetworkBlock.deniedServices)
                         && reachedLookups.values.allSatisfy { $0 == 0 }, "every denied service exists: \(reachedLookups)")
+            #expect(reached?["resolver"] as? Int == 0, "the DNS resolver was reachable: \(reached ?? [:])")
         }
 
         @Test("Only Pro and Max pass: a Team or Enterprise login is not-subscription (plan-not-accepted), under the block or not")

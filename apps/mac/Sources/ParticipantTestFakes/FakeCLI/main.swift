@@ -38,9 +38,10 @@ import Foundation
 //   "data", "open" or "closed"), append their record name to `checks.log`,
 //   and never write `cli.pid` or `cli.json`.
 // - `auth status` with `networkPort` or `networkSocket` in the scenario
-//   first tries to connect to that listener (the test's own), and with
-//   `networkServices` looks those system services up over Mach, recording
-//   each outcome in `network.json`: the stand-ins for the settings fetch the real one may
+//   first tries to connect to that listener (the test's own), with
+//   `networkServices` looks those system services up over Mach, and with
+//   `networkResolver` connects to the system's DNS resolver, recording each
+//   outcome in `network.json`: the stand-ins for the settings fetch the real one may
 //   start, which step 4 runs with the network blocked.
 // - For section 5's checks (F3), more invented variants: `authStatus`
 //   "console-login", "api-key-helper", "oauth-token", "gateway",
@@ -274,6 +275,7 @@ func tryNetwork(_ scenario: [String: Any], records: String) {
         for name in names { results[name] = Int(lookUpService(name)) }
         outcome["services"] = results
     }
+    if scenario["networkResolver"] as? Bool == true { outcome["resolver"] = Int(connectToResolver()) }
     guard !outcome.isEmpty, let data = try? JSONSerialization.data(withJSONObject: outcome) else { return }
     writeAtomically(String(decoding: data, as: UTF8.self), to: records + "/network.json")
 }
@@ -288,6 +290,22 @@ func lookUpService(_ name: String) -> Int32 {
     var port: mach_port_t = 0
     let result = unsafeBitCast(lookUp, to: LookUp.self)(bootstrap.load(as: mach_port_t.self), name, &port)
     if result == KERN_SUCCESS { _ = mach_port_deallocate(mach_task_self_, port) }
+    return result
+}
+
+/// Opens a connection to the system's DNS resolver, as every host-name
+/// lookup outside the hosts file does: 0 (`kDNSServiceErr_NoError`) when it
+/// connected (closed again at once), otherwise the error. Through `dlsym`,
+/// like `lookUpService`.
+func connectToResolver() -> Int32 {
+    typealias Create = @convention(c) (UnsafeMutablePointer<OpaquePointer?>) -> Int32
+    typealias Release = @convention(c) (OpaquePointer?) -> Void
+    let handle = UnsafeMutableRawPointer(bitPattern: -2)  // RTLD_DEFAULT
+    guard let create = dlsym(handle, "DNSServiceCreateConnection"),
+          let release = dlsym(handle, "DNSServiceRefDeallocate") else { return -1 }
+    var connection: OpaquePointer?
+    let result = unsafeBitCast(create, to: Create.self)(&connection)
+    if result == 0 { unsafeBitCast(release, to: Release.self)(connection) }
     return result
 }
 

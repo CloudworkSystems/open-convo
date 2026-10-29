@@ -567,13 +567,14 @@ probe's own count of paths outside its folder (Codex F4-1, F34-2). In order:
    settings fetch cannot open a connection and no new payload arrives. A
    host name lookup would leave the Mac through a system service rather
    than a socket, so the profile also denies looking up the DNS service
-   and its resolver (`com.apple.dnssd.service`, `com.apple.mDNSResponder`,
-   `com.apple.mDNSResponderHelper`) and the services that fetch or open a
-   URL on a process's behalf (`com.apple.nsurlsessiond`,
-   `com.apple.coreservices.launchservicesd`). The tests show, on the Mac
-   runner, that under the block the fake CLI finds none of those services,
-   and that without it the same fake finds every one (so no name on the
-   list is a typo). Names the Mac answers from its own hosts file, such as
+   (`com.apple.dnssd.service`; the resolver's other route, the
+   `/var/run/mDNSResponder` socket, is already denied) and the services
+   that fetch or open a URL on a process's behalf
+   (`com.apple.nsurlsessiond`, `com.apple.coreservices.launchservicesd`).
+   The tests show, on the Mac runner, that under the block the fake CLI
+   finds none of those services and cannot open a connection to the DNS
+   resolver, and that without it the same fake connects and finds every
+   one (so no name on the list is a typo). Names the Mac answers from its own hosts file, such as
    `localhost`, still resolve under the block (the tests saw it), without
    anything leaving the Mac. Other system services stay allowed, so the CLI
    still reads its own login from the Keychain. One that fetches on request

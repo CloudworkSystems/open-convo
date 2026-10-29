@@ -42,10 +42,10 @@ struct ClaudeProbeResult: Equatable, Sendable {
 /// probe never runs (`network-block`).
 package struct ClaudeNetworkBlock: Sendable, Equatable {
     /// The system services a process reaches over Mach to resolve a host
-    /// name (the DNS service and its resolver) or to have a URL fetched or
-    /// opened for it (Codex F34-D1, review of PR 3b).
-    static let deniedServices = ["com.apple.dnssd.service", "com.apple.mDNSResponder", "com.apple.mDNSResponderHelper",
-                                 "com.apple.nsurlsessiond", "com.apple.coreservices.launchservicesd"]
+    /// name (the DNS service) or to have a URL fetched or opened for it
+    /// (Codex F34-D1, review of PR 3b). The resolver's other socket,
+    /// `/var/run/mDNSResponder`, is a local socket, already denied.
+    static let deniedServices = ["com.apple.dnssd.service", "com.apple.nsurlsessiond", "com.apple.coreservices.launchservicesd"]
 
     /// The profile: allow everything, then deny every network operation
     /// (outbound, inbound and bind, IP and local sockets alike) and the
