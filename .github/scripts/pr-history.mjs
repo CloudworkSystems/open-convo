@@ -71,7 +71,7 @@ export function agentOf(pull, commits) {
 // Rounds are the distinct commits Codex reviewed: reviews with findings and
 // "Didn't find any major issues" comments. The latest result comes from
 // Codex's summary comment when it has one, else from the last round.
-export function codexSummary({ reviews, comments, reviewComments }) {
+export function codexSummary({ reviews, comments, reviewComments }, headSha = '') {
   const commits = new Set();
   const rounds = [];
   for (const r of reviews) {
@@ -94,7 +94,9 @@ export function codexSummary({ reviews, comments, reviewComments }) {
   rounds.sort((a, b) => a[0].localeCompare(b[0]));
   let latest = rounds.length ? rounds.at(-1)[1] : 'none';
   // Codex's flags only mean something once its review of the latest commit has finished.
-  if (state?.status === 'failed') latest = 'review failed';
+  // And only for the commit they name: after a push, the old state describes the old head.
+  if (state && headSha && state.commit_sha && state.commit_sha !== headSha) latest = 'earlier commit';
+  else if (state?.status === 'failed') latest = 'review failed';
   else if (state && state.status !== 'completed') latest = 'review running';
   else if (state?.has_unresolved_findings === true) latest = 'open findings';
   else if (state?.has_unresolved_findings === false && state?.has_any_findings === false) latest = 'clean';
@@ -141,7 +143,7 @@ export function buildRow(pull, { files, reviews, comments, reviewComments, commi
     additions: files.reduce((n, f) => n + f.additions, 0), deletions: files.reduce((n, f) => n + f.deletions, 0),
     areas: [...new Set(files.map((f) => area(f.filename)))].sort().join('; '),
     labels: pull.labels.map((l) => l.name).join('; '),
-    ...codexSummary({ reviews, comments, reviewComments }),
+    ...codexSummary({ reviews, comments, reviewComments }, pull.head.sha),
     ...outsideSummary({ reviews, comments }, pull.head.sha),
     ownerApproved: reviews.some((r) => r.user?.login === OWNER && r.state === 'APPROVED') ? 'yes' : '',
     headHash: pull.head.sha, updatedAt: pull.updated_at, link: pull.html_url,
@@ -175,7 +177,8 @@ Worked-out columns:
 - \`codexRounds\`: distinct commits Codex reviewed. \`codexP0\` to \`codexP3\`:
   Codex's inline findings by badge, across all rounds.
 - \`codexLatest\`: Codex's summary comment when there is one (\`clean\`,
-  \`open findings\`, \`review failed\`, \`review running\`), else the last round (\`clean\`,
+  \`open findings\`, \`review failed\`, \`review running\`, or \`earlier commit\` when it
+  describes a commit before the head), else the last round (\`clean\`,
   \`had findings\`), else \`none\`. On a merged pull request, \`open findings\`
   usually means findings left for the triage judge or accepted by the owner.
 - \`outsideReviewer\`, \`outsideRounds\`, \`outsideLatest\`: comments that start
