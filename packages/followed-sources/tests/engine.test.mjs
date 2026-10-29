@@ -37,7 +37,7 @@ test('a failed item is retried even when a newer item from its source succeeded'
   assert.deepEqual(first.result.state.reported, [{ source: 'news', itemId: 'b' }]);
   assert.equal(first.result.state.checkpoints.news, undefined);
   assert.match(first.result.problems[0], /news\/a .*gave no answer within 50 ms/);
-  assert.deepEqual(first.result.state.failures, [{ source: 'news', itemId: 'a', runs: 1, gaveUp: false }]);
+  assert.deepEqual(first.result.state.failures, [{ source: 'news', itemId: 'a', date: '2026-10-12T00:00:00Z', runs: 1, gaveUp: false }]);
 
   const second = await go(list, { 'news/a': ok(lesson('First item')) }, { state: first.result.state });
   assert.deepEqual(second.drafter.calls.map(call => call.ref.itemId), ['a']);
@@ -101,7 +101,7 @@ test('an item gives up on its third failure, with its final warning, and the fou
 });
 
 test('a gave-up item no longer holds the checkpoint back', async () => {
-  const state = { schemaVersion: 1, checkpoints: {}, reported: [], failures: [{ source: 'news', itemId: 'a', runs: 2, gaveUp: false }] };
+  const state = { schemaVersion: 1, checkpoints: {}, reported: [], failures: [{ source: 'news', itemId: 'a', date: '2026-10-12T00:00:00Z', runs: 2, gaveUp: false }] };
   const { result } = await go(
     [item('a', '2026-10-12T00:00:00Z'), item('b', '2026-10-13T00:00:00Z')],
     { 'news/a': { throws: 'busy' }, 'news/b': ok(lesson('Later item')) },
@@ -112,7 +112,7 @@ test('a gave-up item no longer holds the checkpoint back', async () => {
 });
 
 test('a success before the third failure clears the failure count', async () => {
-  const state = { schemaVersion: 1, checkpoints: {}, reported: [], failures: [{ source: 'news', itemId: 'a', runs: 2, gaveUp: false }] };
+  const state = { schemaVersion: 1, checkpoints: {}, reported: [], failures: [{ source: 'news', itemId: 'a', date: '2026-10-12T00:00:00Z', runs: 2, gaveUp: false }] };
   const { result } = await go([item('a', '2026-10-12T00:00:00Z')], { 'news/a': ok() }, { state });
   assert.deepEqual(result.state.failures, []);
 });

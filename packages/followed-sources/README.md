@@ -57,7 +57,10 @@ what an item says.
 The drafter fails on an item when it gives no answer within `timeoutMs`
 (30 seconds by default), throws, or returns something that isn't
 `{ cards: [...] }`. A failed item stays out of `reported` and holds its
-source's checkpoint back, so the next run tries it again. On its third
+source's checkpoint back, so the next run tries it again. Each failure
+entry in the state keeps the item's `date` (one field beyond the plan's
+shape), so it holds the checkpoint back even on a run whose batch leaves the
+item out. On its third
 failed run it is marked `gaveUp` in the state, with a final problem line
 (and its red flag, if it has one); from then on it is skipped silently as
 `gave-up`. A success before the third failure clears the count. One bad

@@ -87,13 +87,14 @@ export function validateState(value) {
     if (!isObject(entry)) fail(`${at} must be an object`);
     id(entry.source, `${at}.source`);
     id(entry.itemId, `${at}.itemId`);
+    if (!isDate(entry.date)) fail(`${at}.date must be an ISO 8601 date (a time needs Z or an offset)`);
     if (!Number.isInteger(entry.runs) || entry.runs < 1) fail(`${at}.runs must be a whole number of at least 1`);
     if (typeof entry.gaveUp !== 'boolean') fail(`${at}.gaveUp must be true or false`);
   });
   return {
     checkpoints: { ...checkpoints },
     reported: reported.map(({ source, itemId }) => ({ source, itemId })),
-    failures: failures.map(({ source, itemId, runs, gaveUp }) => ({ source, itemId, runs, gaveUp })),
+    failures: failures.map(({ source, itemId, date, runs, gaveUp }) => ({ source, itemId, date, runs, gaveUp })),
   };
 }
 

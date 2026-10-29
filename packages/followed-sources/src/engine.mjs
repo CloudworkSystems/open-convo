@@ -176,10 +176,8 @@ export async function run({ sources, items, state, known, drafter, timeoutMs = L
   const cards = [];
   const drafted = [];
   const seenThisRun = new Set();
-  // Per source this run: dates of handled items (processed now or reported
-  // earlier), and of failed items still being retried.
+  // Per source this run: dates of handled items (processed now or reported earlier).
   const processedDates = new Map();
-  const failedDates = new Map();
   const push = (map, source, date) => map.set(source, [...(map.get(source) ?? []), date]);
 
   const ordered = itemList
@@ -216,13 +214,12 @@ export async function run({ sources, items, state, known, drafter, timeoutMs = L
 
     if (answer.failed) {
       problems.push(`${describe(item)}: the drafter ${answer.failed}.`);
-      const failure = failures.get(itemKey) ?? { source: item.source, itemId: item.id, runs: 0, gaveUp: false };
+      const failure = failures.get(itemKey) ?? { source: item.source, itemId: item.id, date: item.date, runs: 0, gaveUp: false };
       failure.runs += 1;
+      failure.date = item.date;
       if (failure.runs >= LIMITS.failedRuns) {
         failure.gaveUp = true;
         problems.push(`${describe(item)}: failed on ${failure.runs} runs, so it won't be tried again.`);
-      } else {
-        push(failedDates, item.source, item.date);
       }
       failures.set(itemKey, failure);
     } else {
@@ -263,8 +260,11 @@ export async function run({ sources, items, state, known, drafter, timeoutMs = L
     }
   }
 
-  // Checkpoints move up to the newest processed item dated before the oldest
-  // item still being retried, and never backwards.
+  // Checkpoints move up to the newest handled item dated before the oldest
+  // item still being retried, and never backwards. Retried items come from
+  // the state too, so one missing from this run's batch still holds it back.
+  const failedDates = new Map();
+  for (const failure of failures.values()) if (!failure.gaveUp) push(failedDates, failure.source, failure.date);
   for (const [source, dates] of processedDates) {
     const failed = failedDates.get(source) ?? [];
     const limit = failed.length ? Math.min(...failed.map(time)) : Infinity;

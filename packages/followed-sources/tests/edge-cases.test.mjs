@@ -47,7 +47,7 @@ test('state entries for items not in this run are kept', async () => {
     schemaVersion: 1,
     checkpoints: { links: '2026-09-01T00:00:00Z' },
     reported: [{ source: 'links', itemId: 'old' }],
-    failures: [{ source: 'links', itemId: 'stuck', runs: 3, gaveUp: true }],
+    failures: [{ source: 'links', itemId: 'stuck', date: '2026-08-01T00:00:00Z', runs: 3, gaveUp: true }],
   };
   const { result } = await go([], {}, { state });
   assert.deepEqual(result.state, { schemaVersion: 1, ...state });
@@ -121,10 +121,19 @@ test('a date that does not exist refuses the items file', async () => {
 });
 
 test('a gave-up item stays silent even after its source is removed', async () => {
-  const state = { schemaVersion: 1, checkpoints: {}, reported: [], failures: [{ source: 'ghost', itemId: 'a', runs: 3, gaveUp: true }] };
+  const state = { schemaVersion: 1, checkpoints: {}, reported: [], failures: [{ source: 'ghost', itemId: 'a', date: '2026-10-12T00:00:00Z', runs: 3, gaveUp: true }] };
   const { result, drafter } = await go([item('a', '2026-10-12T00:00:00Z', { source: 'ghost' })], {}, { state });
   assert.equal(drafter.calls.length, 0);
   assert.deepEqual(result.problems, []);
   assert.equal(result.skipped['gave-up'], 1);
   assert.equal(result.skipped['unknown-source'], 0);
+});
+
+test('a failed item missing from the next batch still holds the checkpoint back', async () => {
+  const first = await go([item('a', '2026-10-12T00:00:00Z')], { 'news/a': { throws: 'busy' } });
+  const second = await go([item('b', '2026-10-13T00:00:00Z')], { 'news/b': ok(lesson('Newer item')) }, { state: first.result.state });
+  assert.equal(second.result.state.checkpoints.news, undefined);
+  const third = await go([item('a', '2026-10-12T00:00:00Z'), item('b', '2026-10-13T00:00:00Z')], { 'news/a': ok(lesson('Back again')) }, { state: second.result.state });
+  assert.deepEqual(third.drafter.calls.map(call => call.ref.itemId), ['a']);
+  assert.equal(third.result.state.checkpoints.news, '2026-10-13T00:00:00Z');
 });
