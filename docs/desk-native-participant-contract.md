@@ -16,6 +16,14 @@ section 21: the off-Mac pin, context for Claude runs, the stdin layout, the
 `host-not-approved` reason and a new vectors file. It changes no existing
 vector, and nothing in it is turned on.
 
+The adapter build's PR 3a (October 29, proposed) closes four of section
+18's pre-activation items in native code and tests, invented data only:
+reply-time stale suppression on the path with no lane (section 3), the
+combined renderer proof (section 7), the named conformance of the nine
+required `pageCases` (section 19) and the shared opaque-handle rule. No wire
+or vector changed. The combined proof needs a built Desk page
+(`TRUECONVO_DESK_BUNDLE`) to run; section 18 item 2 says where it ran.
+
 Status: Claude's proposed wire, revision 2 (October 10). It applies Codex's
 review of a4165ef: four corrections and its answers to the twelve decisions
 (section 18). Revision 3 (October 10, later) rewrites section 17 for
@@ -273,18 +281,26 @@ a lane, native itself drops what has gone stale, whatever the page would do.
   later check, and comes after the lane's or the host's hop), which echoes
   only that old request's own identifiers and a reason. The coordinator
   keeps no availability answer, so nothing there can be reused either.
-- Open item (the path with no lane, which is the app as
-  shipped; unchanged here): every reply goes back to the promise that asked
-  with no native check, and by the observation above WebKit does not
-  reliably drop it once the document is gone. A v1 answer computed across a
-  reload, a `workspace.read` with workspace content included, can therefore
-  reach the old document's callback running against the new document's
-  `window`. The current page's transport discards answers after it is
-  disposed, the old realm's state is not the new page's, and it is the same
-  origin and the same person, so the risk is low. Codex's S11 review ruled
-  (ruling (a)) that this path gets native reply-time stale suppression, as
-  a scoped follow-up; WebKit's disposal is not its safety argument. It is
-  still open (section 18).
+- The path with no lane (the app as shipped; Codex's S11 ruling (a), built
+  in the adapter's PR 3a). Before PR 3a every reply went back to the
+  promise that asked with no native check, so a v1 answer computed across a
+  reload, a `workspace.read` with workspace content included, could reach
+  the old document's callback running against the new document's `window`.
+  Now the same reply-time check runs on every v1 reply: a request admitted
+  while its connection is valid gets its answer only if, when the answer is
+  ready (on the main thread, in the same turn as the reply), that
+  connection is still valid and the host is neither locked nor closed;
+  otherwise the promise gets only the content-free
+  `host-transport-failure`. There is no lane epoch on this path: a lock or
+  close marks the host on the main thread before its step revokes
+  anything, so the host's flags carry it. Correct replies to the live
+  document are unchanged, and a request that named a connection already
+  gone still gets v1's identifier-only preflight refusal. The safety
+  argument is this check, not WebKit's disposal. Tests
+  (`ParticipantLaneWiringTests`, "Without a lane") hold a computed
+  `workspace.read` answer, invented record included, across a reload and
+  across a lock and a window close whose steps are held before they revoke
+  anything.
 - Pushes. A `participant.event` is delivered only if, on the main thread at
   delivery, its connection and generation are the live document's own valid
   connection (the host's current connection, the one its committed document
@@ -2551,14 +2567,13 @@ which named the supervisor helper, the recovery-only port and the nine
 Still open, by name:
 
 1. Reply-time stale suppression on the path with no lane (Codex's S11
-   ruling (a); section 3). Native adds a reply-time stale check to the v1
-   path as a scoped follow-up, whose safety argument is not WebKit's
-   disposal. It keeps correct replies and identifier-only refusals, and
-   its tests hold v1 content across reload, lock and close. Codex's ruling
-   is that it is tracked explicitly before that path is extended to private
-   persistent work. Native's own proposal, a question for Codex (native's
-   pre-activation questions, 27(a)), is stricter: until it lands, that
-   path is not extended to private persistent work.
+   ruling (a); section 3). Built in the adapter's PR 3a, awaiting its
+   review: the v1 path runs the same reply-time check as the lane's, with
+   the host's lock and close flags and no lane epoch. It keeps correct
+   replies and identifier-only refusals, and its tests hold v1 content (a
+   `workspace.read` record) across reload, lock and close. Until that
+   review passes, native's stricter proposal (27(a)) still holds: the path
+   is not extended to private persistent work.
 2. The combined renderer proof (Codex's S10 ruling 1 and S11 ruling (c);
    section 7), required before participant activation. With the real page,
    the real coordinator and invented data: hold a Start before step 14,
@@ -2568,7 +2583,17 @@ Still open, by name:
    explicit Start succeeds once with the retained prepared identity. It
    runs on the combined page, including main's NF-1 and the reviewed
    NF-2/NF-3 changes when they are available. The existing streaming-lock
-   proof (section 14, S11 reading 9) does not exercise it.
+   proof (section 14, S11 reading 9) does not exercise it. Written in the
+   adapter's PR 3a as the second test in `ParticipantDeskEndToEndTests`:
+   the start is held at step 13's availability recheck, the menu lock
+   lands, the start is refused `store-locked` with nothing written and its
+   answer dropped by native, the fresh document after the unlock restores
+   the run and nothing launches or records a start through 20 seconds (more
+   than the page's 15-second quiet poll), and then the page's own "Start
+   prepared message" launches the same prepared run once, with its
+   preparation unchanged. Like the first proof it needs
+   `TRUECONVO_DESK_BUNDLE`; the pull request records the page commit it
+   ran against.
 3. The activation work still ahead. None of it is done, and these source
    reviews grant no permission for installation, Keychain creation,
    signing, provider calls or extra usage:
@@ -2621,18 +2646,28 @@ Still open, by name:
    the port directly without a controller or a final expected-state check.
    The harness uses an in-memory NativeHostTransport and EventTarget, not
    WKHostTransport, WKWebView or DeskHost. Swift counts and walks pageCases;
-   that walk does not execute the page controller.
+   that walk does not execute the page controller. Named conformance
+   (the adapter's PR 3a): the page-cases test now lists each of the nine by
+   name with the tests that execute it (the matrix test of the same name;
+   cases 13 and 15 also their adapter checks) and fails if that list and
+   the fixture's `requires` cases ever differ. These tests run in the
+   `tests` check on main, which is the combined candidate F9 was to
+   consume; the `requires` text stays as the record of the renderer change
+   each case first needed. Closed once PR 3a's review passes.
 5. One shared opaque-handle rule (Codex's S7 review, inbox 68524fc3, report
    8032ddb, open item 1; kept, not waived, by the S8 review, inbox
    59dfb711, report 6e003da): byte equality, as a small separate reviewed
    change with ASCII-compatibility tests and canonically equivalent,
    different-byte examples, and no silent normalization of stored handles.
-   Not done: v1's workspace-handle checks still compare with Swift's `==`,
-   which treats canonically equivalent text as equal, while the
-   participant path compares exact bytes. Today's `ws-<uuid>` handles are
-   ASCII, so nothing differs now. Whether it ships with the protected store
-   or must come first is a question for Codex (native's pre-activation
-   questions, 27(b)).
+   Built in the adapter's PR 3a, ahead of the protected store (27(b)):
+   `OpaqueHandle.same` (UTF-8 byte equality) is now the one comparison for
+   `workspaceHandle` in v1's checks, the binding check, the store's load
+   check and the coordinator. `OpaqueHandleTests` covers ASCII handles,
+   canonically equivalent pairs with different bytes (composed and
+   decomposed "é", the Kelvin sign and "K", the Angstrom sign and "Å") on
+   every v1 operation and the byte path, and a store reopen that keeps the
+   stored bytes. Today's `ws-<uuid>` handles are ASCII, so nothing changes
+   for them.
 
 ## 19. Vectors file
 

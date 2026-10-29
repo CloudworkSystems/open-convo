@@ -30,6 +30,12 @@ import XCTest
 /// `ParticipantLaneWiringTests` and `CoordinatorAppWiringTests` hold that),
 /// and the quit inside `NSApp.terminate`'s own nested loop (the reply is
 /// driven from this test, on the main actor).
+///
+/// The second proof is section 18's combined renderer proof (Codex's S10
+/// ruling 1 and S11 ruling (c)), on the same real page and coordinator: a
+/// Start held before step 14, a lock, the refused start settled, an unlock
+/// into a fresh document, no launch and no start record through a bounded
+/// interval, then one explicit Start that launches the prepared run once.
 final class ParticipantDeskEndToEndTests: CoordinatorDeskTestCase {
     private var exchanges: [HostExchange] = []
     /// `exchanges.count` just before the last Send was clicked.
@@ -153,6 +159,30 @@ final class ParticipantDeskEndToEndTests: CoordinatorDeskTestCase {
             let unresolved = await coordinator.hasUnresolvedWrites
             return run.isFinished && !unresolved
         }
+    }
+
+    /// Clicks the last enabled button whose text is exactly `label`.
+    private func clickButton(_ session: DeskSession, labelled label: String) async throws {
+        try await eventually("a \"\(label)\" button to be clickable", timeout: 30, detail: { await self.shown(session) }) {
+            let result = try await call(try XCTUnwrap(session.host).webView, """
+            const found = Array.from(document.querySelectorAll('button')).filter(function (b) { return !b.disabled && b.textContent.trim() === label; });
+            if (!found.length) return 'missing';
+            found[found.length - 1].click();
+            return 'clicked';
+            """, ["label": label]) as? String
+            return result == "clicked"
+        }
+    }
+
+    /// Waits `seconds` of real time, failing at once if `broken` turns true
+    /// on any 100 ms check; returns the last check's answer otherwise.
+    private func holdsThrough(_ seconds: TimeInterval, _ what: String, broken: () async -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline {
+            if await broken() { return XCTFail("\(what) within the \(Int(seconds)) s interval") }
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        if await broken() { XCTFail("\(what) at the end of the \(Int(seconds)) s interval") }
     }
 
     // MARK: The proof
@@ -357,5 +387,162 @@ final class ParticipantDeskEndToEndTests: CoordinatorDeskTestCase {
         XCTAssertEqual(made, 1, "one coordinator for the whole run of the app")
         XCTAssertEqual(launcher.runs.count, 4)
         XCTAssertEqual(pump.failures, [])
+    }
+
+    // MARK: The combined renderer proof (section 18, item 2)
+
+    /// Section 7 under lock, through the real page: a Start held at step
+    /// 13's availability recheck (before step 14's start record), then a
+    /// lock. The start is refused `store-locked` and writes nothing, and its
+    /// answer, ready after the lock began, is dropped by native. After the
+    /// unlock the fresh document restores the prepared run, and nothing
+    /// starts it by itself: no launch and no start record through an
+    /// interval longer than the page's quiet poll. Then one explicit Start,
+    /// from the page's own button, launches that same prepared run once.
+    func testAStartHeldBeforeStep14AcrossALockNeverStartsByItselfAndStartsOnceWhenAsked() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard let path = environment[DeskBundleLocation.environmentKey], !path.isEmpty else {
+            throw XCTSkip("Set TRUECONVO_DESK_BUNDLE to a built Desk native-dist copy to run the combined renderer proof.")
+        }
+        let bundle = try XCTUnwrap(DeskBundleLocation.developmentFolder(URL(fileURLWithPath: path, isDirectory: true)),
+                                   "TRUECONVO_DESK_BUNDLE is set but does not name a built Desk folder")
+        let folder = try InventedDeskFolder()
+        defer { folder.clean() }
+        let world = CoordinatorDesk.world()
+        let launcher = ScriptedLauncher(world: world, script: [ScriptStep(atMs: 0, .initClean), ScriptStep(atMs: 0, .rateLimitOK)])
+        let availability = RecheckHold()
+        let coordinator = CoordinatorDesk.coordinator(world: world, launcher: launcher, availability: availability)
+        let pump = RealTimePump(world: world)
+        pump.start()
+        defer { pump.stop() }
+        let lines = DeskLines()
+        let session = DeskSession(paths: folder.paths, bundle: bundle, info: CoordinatorDesk.info, log: lines.log,
+                                  makeParticipantLane: { coordinator })
+        session.onPageStarted = { [unowned session, unowned self] in
+            session.host?.messageHandler.observer = { [unowned self] exchange in self.exchanges.append(exchange) }
+        }
+        session.confirmLeavingUnsavedWork = { _, _ in true }
+
+        try await bounded("the first unlock") { await session.unlock(verifier: StubUnlockVerifier(.verified)) }
+        let first = try await waitForDesk(session, after: nil)
+        try await eventually("the page's own availability call", detail: { "\(self.exchanges)" }) {
+            replied("participant.availability", on: first) >= 1
+        }
+        let store = try XCTUnwrap(session.store)
+        try await click(session, "button[aria-label=\"New session\"]", "New session")
+        try await click(session, "button[aria-label^=\"Model and participant: \"]", "the participant picker")
+        try await click(session, "button[aria-label=\"Choose participant: Claude Code, invented-pinned-model\"]", "the participant choice")
+        try await click(session, "button.participant-picker-done", "Done")
+        try await eventually("the choice to be saved", detail: { await self.shown(session) }) {
+            await self.pageBool(session, "document.querySelector('button[aria-label=\"Model and participant: Claude Code, invented-pinned-model\"]') !== null")
+        }
+
+        // 1. Send: the page prepares the run, then starts it; the start is
+        // held at its availability recheck, before step 14.
+        let gate = availability.arm()
+        try await type(session, "Invented question held at the lock.")
+        try await eventually("Send to be enabled", detail: { await self.shown(session) }) {
+            await self.pageBool(session, "(function () { var b = document.querySelector('button[aria-label=\"Send message\"]'); return !!b && !b.disabled; })()")
+        }
+        try await click(session, "button[aria-label=\"Send message\"]", "Send")
+        try await eventually("the start to reach its recheck", timeout: 20, detail: { await self.shown(session) }) { gate.arrived == 1 }
+        let prepared = try XCTUnwrap(store.publishedRuns.runs.first, "prepared through workspace.commitProof")
+        XCTAssertNil(prepared.start, "held before step 14: no start record")
+        let phase = await coordinator.phase(of: prepared.runId)
+        XCTAssertEqual(phase, "starting")
+        XCTAssertTrue(launcher.requests.isEmpty)
+
+        // 2. Lock while it is held, then let the refused start settle.
+        session.lockNow(reason: .menu)
+        XCTAssertEqual(session.state, .locked)
+        gate.open()
+        try await eventually("the held start's answer to be dropped", timeout: 15, detail: { "\(self.exchanges)" }) {
+            self.exchanges.contains(.transportFailure(.staleReply))
+        }
+        try await eventually("the start to let go of the run") { await coordinator.phase(of: prepared.runId) == nil }
+        XCTAssertFalse(exchanges.contains { if case .replied("participant.start", _, _, _, _) = $0 { return true } else { return false } },
+                       "the refused start's answer never reached the page: \(exchanges)")
+        try await eventually("the page to close its workspace", detail: { await self.shown(session) }) {
+            await self.pageBool(session, "document.querySelector('main.recovery-page h1')?.textContent === 'Workspace connection closed'")
+        }
+        XCTAssertTrue(launcher.requests.isEmpty, "nothing launched")
+        XCTAssertNil(store.publishedRuns.runs.first { $0.runId == prepared.runId }?.start, "nothing written, not even a terminal")
+        XCTAssertNil(store.publishedRuns.runs.first { $0.runId == prepared.runId }?.terminal)
+
+        // 3. Unlock into a fresh document: it restores the prepared run and
+        // never starts it by itself, through more than one quiet poll.
+        try await bounded("the unlock") { await session.unlock(verifier: StubUnlockVerifier(.verified)) }
+        XCTAssertEqual(session.state, .open)
+        let fresh = try await waitForDesk(session, after: first)
+        let freshStartsBefore = exchanges.count
+        try await holdsThrough(20, "a launch or a start record appeared") {
+            !launcher.requests.isEmpty || store.publishedRuns.runs.first { $0.runId == prepared.runId }?.start != nil
+        }
+        XCTAssertFalse(exchanges[freshStartsBefore...].contains { if case .replied("participant.start", _, _, _, _) = $0 { return true } else { return false } },
+                       "the fresh document sent no start by itself: \(exchanges[freshStartsBefore...])")
+        XCTAssertGreaterThanOrEqual(replied("participant.status", on: fresh), 1, "the fresh document read the run's status")
+
+        // 4. One explicit Start, from the page: the prepared run, once.
+        try await clickButton(session, labelled: "Start prepared message")
+        try await eventually("the coordinator to launch the run", timeout: 20, detail: { await self.shown(session) }) {
+            launcher.runs.count == 1
+        }
+        let run = launcher.runs[0]
+        XCTAssertEqual(run.identity.runId, prepared.runId, "the retained prepared run")
+        XCTAssertEqual(run.identity.sessionId, prepared.sessionId)
+        try await eventually("the start's reply") { replied("participant.start", on: fresh) == 1 }
+        let started = try XCTUnwrap(store.publishedRuns.runs.first { $0.runId == prepared.runId })
+        XCTAssertNotNil(started.start, "its start record is durable")
+        XCTAssertEqual(started.prepareRequestId, prepared.prepareRequestId, "the same preparation")
+        XCTAssertEqual(started.inputHash, prepared.inputHash)
+        XCTAssertEqual(started.participant, prepared.participant)
+        try await holdsThrough(5, "a second launch appeared") { launcher.requests.count != 1 }
+        XCTAssertEqual(replied("participant.start", on: fresh), 1, "started once")
+
+        try await click(session, ".run-stop", "Stop")
+        try await settled(run, coordinator)
+        try await bounded("the window close") { await session.close() }
+        XCTAssertEqual(session.state, .closed)
+        XCTAssertEqual(launcher.runs.count, 1)
+        XCTAssertEqual(availability.gateTimeouts, 0, "the held recheck was opened by the test")
+        XCTAssertEqual(pump.failures, [])
+    }
+}
+
+/// Available, with no confirmation (as `CoordinatorDesk.available`), and a
+/// start's recheck (section 7 step 13) held at a gate once armed. The
+/// page's own availability calls never wait.
+final class RecheckHold: AvailabilityReporting, @unchecked Sendable {
+    private let inner = CoordinatorDesk.available
+    private let lock = NSLock()
+    private var armed: AsyncGate?
+    private var gates: [AsyncGate] = []
+
+    /// The next recheck waits at the returned gate until it opens.
+    func arm() -> AsyncGate {
+        lock.lock(); defer { lock.unlock() }
+        let gate = AsyncGate()
+        armed = gate
+        gates.append(gate)
+        return gate
+    }
+
+    /// Times a gate opened itself because nothing opened it.
+    var gateTimeouts: Int {
+        lock.lock(); defer { lock.unlock() }
+        return gates.reduce(0) { $0 + $1.timedOut }
+    }
+
+    func report() async -> ParticipantAvailabilityReport {
+        await inner.report()
+    }
+
+    func recheck() async -> ParticipantAvailabilityReport {
+        lock.lock()
+        let gate = armed
+        armed = nil
+        lock.unlock()
+        if let gate { await gate.pass() }
+        return await inner.recheck()
     }
 }

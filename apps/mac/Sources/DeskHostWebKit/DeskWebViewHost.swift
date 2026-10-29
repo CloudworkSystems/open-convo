@@ -309,12 +309,13 @@ public final class DeskWebViewHost: NSObject {
     /// `finishShutdown(quitting:)` and the host's `closeStore()`. Without a
     /// lane, lock, unlock and close are exactly as before.
     ///
-    /// With a lane the transport also drops what has gone stale (Codex's
-    /// S10 carried requirement 3): the message handler drops an answer whose
-    /// asking connection is gone by the time it is ready, or whose request
-    /// came before a lock, window close or quit began (the lane's
-    /// `lifecycleEpoch` moved, or this host is locked or closed), and the
-    /// event sink delivers a participant event only to the live document's
+    /// The transport drops what has gone stale: with a lane or without
+    /// (Codex's S10 carried requirement 3 and S11 ruling (a)), the message
+    /// handler drops an answer whose asking connection is gone by the time
+    /// it is ready, or that is ready once this host is locked or closed;
+    /// with a lane also one whose request came before a lock, window close
+    /// or quit began at the lane (its `lifecycleEpoch` moved). With a lane
+    /// the event sink delivers a participant event only to the live document's
     /// own valid connection while this host is neither locked nor closed
     /// (`deliversParticipantEvent(connectionId:generation:)`).
     public let participantLane: (any ParticipantLane)?
@@ -466,6 +467,7 @@ public final class DeskWebViewHost: NSObject {
         case lockStepStarted, lockStepLocked
         case unlockStepStarted, unlockStepRevoked, unlockStepReopened
         case documentStepRevoked
+        case closeStepStarted
     }
     var lifecycleCheckpoint: ((LifecycleCheckpoint) async -> Void)?
     /// Test seam: what a recovery does instead of reloading the view. Nil
@@ -521,13 +523,15 @@ public final class DeskWebViewHost: NSObject {
         webView.navigationDelegate = self
         webView.uiDelegate = self
         messageHandler.attach(to: webView)
+        // Every answer, with a lane or without, is checked against this
+        // host's state when it is ready (S11 ruling (a); `HostMessageHandler`).
+        messageHandler.deliversAnswers = { [weak self] in
+            guard let self else { return false }
+            return !self.isClosed && !self.isLocked
+        }
         if participantLane == nil {
             eventSink.attach(to: webView)
         } else {
-            messageHandler.deliversAnswers = { [weak self] in
-                guard let self else { return false }
-                return !self.isClosed && !self.isLocked
-            }
             eventSink.attach(to: webView) { [weak self] connectionId, generation in
                 self?.deliversParticipantEvent(connectionId: connectionId, generation: generation) ?? false
             }
@@ -689,6 +693,7 @@ public final class DeskWebViewHost: NSObject {
         webView.stopLoading()
         let participantLane = self.participantLane
         await serialized { [self] in
+            await checkpoint(.closeStepStarted)
             guard let participantLane else {
                 await hostProtocol.close()
                 return

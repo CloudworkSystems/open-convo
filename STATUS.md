@@ -46,7 +46,8 @@ chats only). Scope:
 | Part | State |
 | --- | --- |
 | PR 1: Scope | Merged (#75) |
-| PR 2: Contract revision 5 and the page codec (invented chats only; started on the owner's yes, October 28) | In review |
+| PR 2: Contract revision 5 and the page codec (invented chats only; started on the owner's yes, October 28) | Merged (#181) |
+| PR 3a: Close the contract's pre-activation items (stale replies without a lane, the combined renderer proof, the shared handle rule, the nine page cases; inactive) | In review |
 
 ## Done
 

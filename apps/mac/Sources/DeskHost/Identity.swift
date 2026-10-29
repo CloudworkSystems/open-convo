@@ -30,6 +30,20 @@ public extension UUID {
     var isRFC4122Variant: Bool { uuid.8 & 0xC0 == 0x80 }
 }
 
+/// The one rule for comparing an opaque host-issued handle, such as
+/// `workspaceHandle`, with the one the host holds (participant contract
+/// section 18, item 5): the same UTF-8 bytes. Swift's own `String ==` is
+/// canonical equivalence, which calls "\u{00E9}" and "e\u{0301}", or "K" and
+/// the Kelvin sign U+212A, equal; a handle that is only canonically
+/// equivalent is another handle. Handles are never normalized, on the way in
+/// or in storage. Today's `ws-<uuid>` handles are ASCII, where the two
+/// comparisons agree.
+public enum OpaqueHandle {
+    public static func same(_ lhs: String, _ rhs: String) -> Bool {
+        lhs.utf8.elementsEqual(rhs.utf8)
+    }
+}
+
 /// A selection inside a draft, in UTF-16 code units (what the page's
 /// `String.length` and `selectionStart` count). Byte limits elsewhere count
 /// UTF-8; the two never mix.

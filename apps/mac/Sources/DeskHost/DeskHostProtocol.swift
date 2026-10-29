@@ -816,7 +816,7 @@ public actor DeskHostProtocol {
         guard let pending = drafts.pendingDelivery(deliveryId), pending.connectionId == request.connectionId,
               pending.generation == request.generation, let binding = drafts.binding(pending.bindingId),
               binding.deliveryId == deliveryId, binding.target.expectedRevision == expectedRevision,
-              binding.target.workspaceHandle == store.workspaceHandle else { return .bindingStale }
+              OpaqueHandle.same(binding.target.workspaceHandle, store.workspaceHandle) else { return .bindingStale }
         return nil
     }
 
@@ -954,7 +954,7 @@ public actor DeskHostProtocol {
 
     private func checkHandle(_ fields: PayloadFields) -> HostRefusal? {
         guard let handle = fields.opaque("workspaceHandle") else { return .invalidIdentity }
-        return handle == store.workspaceHandle ? nil : .unknownHandle
+        return OpaqueHandle.same(handle, store.workspaceHandle) ? nil : .unknownHandle
     }
 
     /// A bind or unbind id that a durable terminal result already holds is a

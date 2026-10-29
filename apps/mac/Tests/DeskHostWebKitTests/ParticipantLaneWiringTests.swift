@@ -528,11 +528,11 @@ final class ParticipantLaneWiringTests: XCTestCase {
     /// the page records it in `window.__staleProbe` (`pending`, then the
     /// reply as JSON or `rejected:<message>`).
     private func postWithoutWaiting(_ host: DeskWebViewHost, on connection: HostConnection, operation: String,
-                                    requestId: String) async throws {
+                                    requestId: String, payload: String = "{}") async throws {
         let body = """
         window.__staleProbe = "pending";
         const envelope = { v: 1, requestId: "\(requestId)", connectionId: "\(connection.id)", generation: \(connection.generation),
-                           operation: "\(operation)", payload: {} };
+                           operation: "\(operation)", payload: \(payload) };
         window.webkit.messageHandlers.trueConvoHost.postMessage(envelope).then(
           function (reply) { window.__staleProbe = JSON.stringify(reply); },
           function (error) { window.__staleProbe = "rejected:" + String(error && error.message ? error.message : error); });
@@ -877,6 +877,119 @@ final class ParticipantLaneWiringTests: XCTestCase {
             if step == "lock" {
                 let seen = try await pagePushes(host)
                 XCTAssertEqual(seen, [], "lock: nothing reached the page")
+            }
+        }
+    }
+
+    // MARK: Without a lane (Codex's S11 ruling (a); contract section 18, item 1)
+
+    /// A `workspace.read` payload naming this stack's handle.
+    private static func readPayload(_ stack: Stack) -> String {
+        "{ workspaceHandle: \"\(stack.store.workspaceHandle)\" }"
+    }
+
+    /// Holds the handler's next computed `workspace.read` answer, before it
+    /// is checked, until `latch` opens; `reached` turns true once it holds.
+    private static func holdNextReadAnswer(_ host: DeskWebViewHost, until latch: WiringLatch, reached: Locked<Bool>) {
+        host.messageHandler.answerWillBeChecked = { request in
+            guard request.operation == .workspaceRead, !reached.value else { return }
+            reached.mutate { $0 = true }
+            _ = await latch.wait(upTo: 10)
+        }
+    }
+
+    /// The v1 host as shipped: a `workspace.read` answer, holding the
+    /// invented record, computed for a document a reload then replaced is
+    /// dropped by native. The old call gets only the content-free transport
+    /// failure (the old document's callback may run with the new document's
+    /// `window`), the observer sees `staleReply`, and a read from the new
+    /// document is answered with the record as usual. (Before this change
+    /// the answer was handed to WebKit.)
+    func testWithoutALaneAReadAnswerWhoseDocumentWasReloadedMeanwhileIsDropped() async throws {
+        let stack = try makeStack(withLane: false, label: "v1-stale-reload")
+        let host = stack.host
+        var exchanges: [HostExchange] = []
+        host.messageHandler.observer = { exchanges.append($0) }
+        let first = try await loadPage(host)
+        let held = WiringLatch()
+        defer { held.open() }
+        let reached = Locked(false)
+        Self.holdNextReadAnswer(host, until: held, reached: reached)
+        try await postWithoutWaiting(host, on: first, operation: "workspace.read", requestId: UUID().uuidString.lowercased(),
+                                     payload: Self.readPayload(stack))
+        try await waitUntil("the read's answer to be held") { reached.value }
+        let second = try await reloadPage(host, after: first)
+        XCTAssertNotEqual(second.id, first.id)
+        held.open()
+        try await waitUntil("the held answer to be dropped") { exchanges.contains(.transportFailure(.staleReply)) }
+        XCTAssertFalse(exchanges.contains { Self.isReply($0, to: "workspace.read") }, "no answer was handed to WebKit: \(exchanges)")
+        let probe = try await settledProbe(host)
+        XCTAssertTrue(["none", "rejected:\(HostMessageHandler.transportError)"].contains(probe ?? "missing"),
+                      "the new document never saw the old call's record: \(probe ?? "missing")")
+
+        host.messageHandler.answerWillBeChecked = nil
+        let fresh = try await post(host, on: second, operation: "workspace.read", requestId: UUID().uuidString.lowercased(),
+                                   payload: Self.readPayload(stack))
+        XCTAssertEqual(fresh["outcome"] as? String, "ok", "a read from the live document is answered: \(fresh)")
+        XCTAssertEqual(fresh["connectionId"] as? String, second.id)
+        XCTAssertNotNil(fresh["record"], "with its record")
+    }
+
+    /// The v1 host as shipped: a read answer ready while the host's lock or
+    /// close step is held before it revokes anything (the connection still
+    /// valid) is dropped because the host is locked or closed; the asking
+    /// page gets only the fixed failure, never the record. Once the lock
+    /// step has revoked the connection, a request naming it still gets v1's
+    /// identifier-only preflight refusal, delivered as before.
+    func testWithoutALaneAReadAnswerReadyOnceALockOrCloseBeganIsDropped() async throws {
+        for step in ["lock", "close"] {
+            let stack = try makeStack(withLane: false, label: "v1-stale-\(step)")
+            let host = stack.host
+            var exchanges: [HostExchange] = []
+            host.messageHandler.observer = { exchanges.append($0) }
+            let connection = try await loadPage(host)
+            let held = WiringLatch()
+            defer { held.open() }
+            let reached = Locked(false)
+            Self.holdNextReadAnswer(host, until: held, reached: reached)
+            try await postWithoutWaiting(host, on: connection, operation: "workspace.read", requestId: UUID().uuidString.lowercased(),
+                                         payload: Self.readPayload(stack))
+            try await waitUntil("\(step): the read's answer to be held") { reached.value }
+
+            let stepHeld = WiringLatch()
+            defer { stepHeld.open() }
+            var reachedStep = false
+            host.lifecycleCheckpoint = { point in
+                guard point == (step == "lock" ? .lockStepStarted : .closeStepStarted), !reachedStep else { return }
+                reachedStep = true
+                _ = await stepHeld.wait(upTo: 10)
+            }
+            let stepDone = Locked(false)
+            Task {
+                if step == "lock" { await host.lock() } else { await host.close() }
+                stepDone.mutate { $0 = true }
+            }
+            try await waitUntil("\(step): the host's step to be held") { reachedStep }
+            XCTAssertTrue(step == "lock" ? host.isLocked : host.isClosed, step)
+            XCTAssertEqual(stack.registry.check(connection.id, generation: connection.generation), .valid, "\(step): nothing revoked yet")
+
+            held.open()
+            try await waitUntil("\(step): the held answer to be dropped") { exchanges.contains(.transportFailure(.staleReply)) }
+            XCTAssertFalse(exchanges.contains { Self.isReply($0, to: "workspace.read") }, "\(step): no answer was handed to WebKit: \(exchanges)")
+            let probe = try await settledProbe(host)
+            XCTAssertEqual(probe, "rejected:\(HostMessageHandler.transportError)", "\(step): the asking page got the fixed failure only")
+
+            host.messageHandler.answerWillBeChecked = nil
+            stepHeld.open()
+            try await waitUntil("\(step): the host's step to finish") { stepDone.value }
+            host.lifecycleCheckpoint = nil
+            if step == "lock" {
+                let refused = try await post(host, on: connection, operation: "workspace.read", requestId: UUID().uuidString.lowercased(),
+                                             payload: Self.readPayload(stack))
+                XCTAssertEqual(refused["outcome"] as? String, "refused", "lock: \(refused)")
+                XCTAssertEqual(refused["reason"] as? String, "unknown-connection", "lock: v1's preflight refusal is delivered")
+                XCTAssertEqual(refused["connectionId"] as? String, connection.id, "lock: it echoes only the request's own identifiers")
+                XCTAssertNil(refused["record"], "lock: and carries no record")
             }
         }
     }
