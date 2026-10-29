@@ -289,9 +289,9 @@ export function stripSwiftComments(text) {
 }
 
 /** The packages and remote binaries a Package.swift declares (read as text; no Swift runs). */
-export function swiftDependencies(text) {
+export function swiftDependencies(text, { stripComments = true } = {}) {
   const deps = new Set();
-  text = stripSwiftComments(text);
+  if (stripComments) text = stripSwiftComments(text);
   for (const body of calls(text, '.package(')) {
     const url = body.match(/\burl:\s*"([^"]+)"/);
     const path = body.match(/\bpath:\s*"([^"]+)"/);
@@ -470,7 +470,16 @@ export function scanFile({ path, before = '', after = '', error, allow }) {
   try {
     if (isNpmManifest(path)) hits.push(...npmManifestHits(path, parsed(before), parsed(after), allow));
     if (isNpmLock(path)) hits.push(...npmLockHits(path, parsed(before), parsed(after), allow));
-    if (isSwiftManifest(path)) hits.push(...newEntries(path, swiftDependencies(before), swiftDependencies(after), allow, 'new Swift package'));
+    if (isSwiftManifest(path)) {
+      // Compared with comments stripped (so uncommenting a package counts) and
+      // as raw text (so a string that fools the comment stripper can't hide a
+      // newly added package): new on either reading is a hit.
+      const found = [
+        ...newEntries(path, swiftDependencies(before), swiftDependencies(after), allow, 'new Swift package'),
+        ...newEntries(path, swiftDependencies(before, { stripComments: false }), swiftDependencies(after, { stripComments: false }), allow, 'new Swift package'),
+      ];
+      hits.push(...new Map(found.map((h) => [h.detail, h])).values());
+    }
     if (isSwiftResolved(path)) hits.push(...newEntries(path, swiftPins(parsed(before)), swiftPins(parsed(after)), allow, 'new Swift package'));
     if (isEntitlements(path) || isInfoPlist(path)) {
       for (const detail of permissionChanges(parsePlist(before), parsePlist(after), { entitlements: isEntitlements(path) })) hits.push({ signal: 'permission', file: path, detail });

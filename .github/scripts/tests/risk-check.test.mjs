@@ -215,6 +215,17 @@ test('Swift: uncommenting a package is a new package; URLs inside strings surviv
   assert.deepEqual([...swiftDependencies(swift(`${pkgLine} // trailing note`))], ['swift:https://git.invented-forge.dev/kit']);
 });
 
+test('Swift: a string that fools the comment stripper cannot hide a new package', () => {
+  const list = allow({ hosts: ['git.invented-forge.dev'] });
+  const added = '.package(url: "https://git.invented-forge.dev/evil-invented", from: "1.0.0")';
+  const withOpener = (opener, deps) => `${opener}\n${swift(deps)}\nlet z = "*/"`;
+  for (const opener of ['let a = #" "/*" "#', 'let s = """\n/*\n"""', 'let b = #"\\"#; let c = "/*"']) {
+    assert.deepEqual(signals(scan('Package.swift', withOpener(opener, ''), withOpener(opener, added), list)), ['dependency:new Swift package `https://git.invented-forge.dev/evil-invented`'], opener);
+  }
+  // Commenting a package out is not a hit.
+  assert.deepEqual(scan('Package.swift', swift(added), swift(`// ${added}`), list), []);
+});
+
 test('Swift: a remote binary target is a dependency; a local one is not', () => {
   assert.deepEqual([...swiftDependencies(swift('', '.binaryTarget(name: "Blob", url: "https://files.invented-forge.dev/b.zip", checksum: "00")'))], ['swift-binary:https://files.invented-forge.dev/b.zip']);
   assert.deepEqual([...swiftDependencies(swift('', '.binaryTarget(name: "Blob", path: "Blob.xcframework")'))], []);
