@@ -252,7 +252,9 @@ function newEntries(path, before, after, allow, label) {
 export function parsePlist(text) {
   if (!text.trim()) return {};
   if (text.startsWith('bplist')) throw new Error('binary property list');
-  const tokens = [...text.replace(/<\?[\s\S]*?\?>|<!--[\s\S]*?-->|<!DOCTYPE[^>]*>/g, '').matchAll(/<(\/?)([A-Za-z]+)[^>]*?(\/?)>|([^<]+)/g)];
+  // Declarations, comments and the doctype match as their own tokens and are dropped.
+  const tokens = [...text.matchAll(/<\?[\s\S]*?\?>|<!--[\s\S]*?-->|<!DOCTYPE[^>]*>|<(\/?)([A-Za-z]+)[^>]*?(\/?)>|([^<]+)/g)]
+    .filter((t) => t[2] !== undefined || t[4] !== undefined);
   let i = 0;
   const skipSpace = () => { while (i < tokens.length && tokens[i][4] !== undefined && !tokens[i][4].trim()) i++; };
   const textUntil = (name) => {

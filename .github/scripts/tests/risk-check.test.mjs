@@ -194,6 +194,7 @@ const perms = (path, before, after) => scan(path, before, after, noDtd).map((h) 
 
 test('plists: parsed into values', () => {
   assert.deepEqual(parsePlist(plist('<key>a</key><string>x &amp; y</string><key>b</key><array><integer>2</integer><true/></array><key>c</key><dict/>')), { a: 'x & y', b: [2, true], c: {} });
+  assert.deepEqual(parsePlist(plist('<!-- a <key>hidden</key> note --><key>a</key><true/>')), { a: true });
   assert.throws(() => parsePlist('bplist00...'));
   assert.throws(() => parsePlist('<plist><dict><key>a</key></dict></plist>'));
 });
