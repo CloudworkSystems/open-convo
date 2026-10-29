@@ -96,8 +96,9 @@ the new state, and the command prints it only with `--json`.
 
 ### Steps
 
-1. Skip items older than their source's checkpoint, and items already in
-   `reported`. Each skip is counted with its reason.
+1. Skip items dated before their source's checkpoint (an item dated exactly
+   at it is read again, and `reported` catches it if it was handled), and
+   items already in `reported`. Each skip is counted with its reason.
 2. For each remaining item, ask the drafter (below) for up to three cards.
 3. **Check every card** against the contract: a known kind, a title of up
    to 80 characters, a body of up to 280 characters. Clean both: control
@@ -117,11 +118,17 @@ the new state, and the command prints it only with `--json`.
    drafter says. Examples are "ignore previous", "ignore your", "forward
    this", "reply with", "send me", "run this", "paste this", "your password"
    and "verification code". The list lives in one exported table with
-   tests. The item's other cards are kept, so the owner sees both.
+   tests. The item's other cards are kept, so the owner sees both. The list
+   is a tripwire, not a wall: rewording gets around it. The wall is that
+   the engine never acts on item text, and the README says a missing red
+   flag doesn't mean an item is safe.
 8. Each kept card gets a `fingerprint` (SHA-256 of kind plus normalized
    title and body, from `node:crypto`). The new state adds each processed
-   item to `reported` and moves each source's checkpoint to its newest
-   processed item.
+   item to `reported`. A source's checkpoint moves forward only to its
+   newest item dated before the oldest item from that source that failed
+   this run (no answer, threw, or bad answer), so a failed item is always
+   read again next run. With no failures, it moves to the newest processed
+   item.
 
 ### The Drafter Interface
 
@@ -162,8 +169,10 @@ The package ships two drafters, both deterministic, with no network:
 - `summary`: one line, for example "3 new items from 2 sources: 4 lessons,
   1 idea, 1 red flag", or exactly "Nothing new." when there are no cards.
   The command prints the summary, then each card on one line with its kind,
-  title and source. Text from items is printed with line breaks and tabs
-  written as `\n` and `\t`.
+  title and source. Everything it prints that came from a source (card
+  text, item titles in problem lines) has control characters and ANSI
+  escape sequences removed, and line breaks and tabs written as `\n` and
+  `\t`.
 
 ## Tests (Must Pass, Run By One Command)
 
@@ -172,7 +181,10 @@ The package ships two drafters, both deterministic, with no network:
 1. The sample run on `fixtures/` gives the expected cards and summary.
 2. Checkpoints and `reported` skip old and handled items, and the new state
    moves forward only for processed items.
-3. A timed-out or throwing drafter leaves its item out of `reported`.
+3. A timed-out or throwing drafter leaves its item out of `reported`, and
+   over two runs the failed item is drafted on the second run even when a
+   newer item from the same source succeeded on the first. Two items
+   sharing the checkpoint's timestamp are both handled correctly.
 4. Bad cards (unknown kind, too long, empty) are dropped with problem lines.
 5. URLs in card text are removed, and `sourceUrl` is the item's own link.
 6. A 12-word run copied from the item drops the card. An 11-word run
