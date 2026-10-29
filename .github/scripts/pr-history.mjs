@@ -172,9 +172,9 @@ One row per pull request in this repository, rebuilt every morning by
 \`.github/workflows/pr-history.yml\` on \`main\`. \`pr-history.csv\` is for the
 owner's Google Sheet (\`=IMPORTDATA\` of its raw link); \`pr-history.json\` holds
 the same rows for the Desk, Canvas and Atlas. No authors or emails are kept.
-Each run rereads only the pull requests that changed, at most 120 of them, so
-a full rebuild (the first run, or a new column) fills in over two or three
-mornings, newest pull requests first.
+Each run rereads the open pull requests and any closed one that changed, at
+most 120 of them, so a full rebuild (the first run, or a new column) fills in
+over two or three mornings, newest pull requests first.
 
 Worked-out columns:
 
@@ -220,8 +220,11 @@ async function main(folder) {
   // Newest first, as GitHub lists them.
   for (const pull of await gh.all(`${base}/pulls?state=all`)) {
     const old = kept.get(pull.number);
-    // A row is reused only when nothing changed and it has today's columns.
-    if (old && old.updatedAt === pull.updated_at && Object.keys(old).join() === COLUMNS.join()) { rows.push(old); continue; }
+    // A row is reused only when nothing changed and it has today's columns. Open pull
+    // requests are always reread: an edited comment (Codex finishing its review, a
+    // corrected outside review) doesn't reliably change the pull request's updated_at.
+    const unchanged = pull.state === 'closed' && old?.updatedAt === pull.updated_at;
+    if (unchanged && Object.keys(old).join() === COLUMNS.join()) { rows.push(old); continue; }
     // The workflow token allows 1,000 requests an hour. A full rebuild (first run,
     // a new schema) reads at most MAX_READS pull requests a run and finishes on later
     // days; until then a deferred pull request keeps its old row, or is left out.
