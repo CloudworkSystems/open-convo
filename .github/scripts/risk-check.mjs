@@ -67,9 +67,15 @@ export function readHosts(line) {
     let host = null;
     const after = line.slice(match.index + match[0].length, match.index + match[0].length + 2);
     if (after[0] === '\\' && after !== '\\(') { unreadable.push(match[0]); continue; }
-    // Sentence punctuation right after a URL in prose ("see https://a.com!")
-    // isn't part of it.
-    const url = match[0].replace(/[!.,:;*~]+$/, '');
+    // Sentence punctuation right after a URL in prose ("see https://example.com!")
+    // isn't part of it, but only where the URL ends there: in
+    // `example.com!/path` the `!` is still in the host, so it stays unreadable.
+    // The pattern stops at `,` and `;`, which the URL parser keeps in the
+    // host (`example.com,b/` has host `example.com,b`), so read past them first.
+    const rest = line.slice(match.index + match[0].length);
+    const tail = /^[,;]*/.exec(rest)[0];
+    const ends = rest.length === tail.length || /^[\s"'`<>)\]}]/.test(rest[tail.length]);
+    const url = ends ? match[0].replace(/[!.,:;*~]+$/, '') : match[0] + tail;
     try {
       host = new URL(url).hostname.replace(/\.$/, '');
     } catch { /* unreadable */ }
