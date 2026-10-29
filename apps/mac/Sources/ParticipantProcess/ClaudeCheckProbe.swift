@@ -45,8 +45,7 @@ package struct ClaudeNetworkBlock: Sendable, Equatable {
     /// name (the DNS service and its resolver) or to have a URL fetched or
     /// opened for it (Codex F34-D1, review of PR 3b).
     static let deniedServices = ["com.apple.dnssd.service", "com.apple.mDNSResponder", "com.apple.mDNSResponderHelper",
-                                 "com.apple.nsurlsessiond", "com.apple.nsurlsessiond.NSURLSessionProxyService",
-                                 "com.apple.coreservices.launchservicesd"]
+                                 "com.apple.nsurlsessiond", "com.apple.coreservices.launchservicesd"]
 
     /// The profile: allow everything, then deny every network operation
     /// (outbound, inbound and bind, IP and local sockets alike) and the

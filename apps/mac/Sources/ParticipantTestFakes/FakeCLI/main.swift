@@ -38,10 +38,9 @@ import Foundation
 //   "data", "open" or "closed"), append their record name to `checks.log`,
 //   and never write `cli.pid` or `cli.json`.
 // - `auth status` with `networkPort` or `networkSocket` in the scenario
-//   first tries to connect to that listener (the test's own), with
-//   `networkServices` looks those system services up over Mach, and with
-//   `networkHost` resolves that name, recording each outcome in
-//   `network.json`: the stand-ins for the settings fetch the real one may
+//   first tries to connect to that listener (the test's own), and with
+//   `networkServices` looks those system services up over Mach, recording
+//   each outcome in `network.json`: the stand-ins for the settings fetch the real one may
 //   start, which step 4 runs with the network blocked.
 // - For section 5's checks (F3), more invented variants: `authStatus`
 //   "console-login", "api-key-helper", "oauth-token", "gateway",
@@ -274,14 +273,6 @@ func tryNetwork(_ scenario: [String: Any], records: String) {
         var results: [String: Int] = [:]
         for name in names { results[name] = Int(lookUpService(name)) }
         outcome["services"] = results
-    }
-    if let host = scenario["networkHost"] as? String {
-        var hints = addrinfo()
-        hints.ai_socktype = SOCK_STREAM
-        var found: UnsafeMutablePointer<addrinfo>?
-        let result = getaddrinfo(host, nil, &hints, &found)
-        if let found { freeaddrinfo(found) }
-        outcome["resolve"] = Int(result)
     }
     guard !outcome.isEmpty, let data = try? JSONSerialization.data(withJSONObject: outcome) else { return }
     writeAtomically(String(decoding: data, as: UTF8.self), to: records + "/network.json")

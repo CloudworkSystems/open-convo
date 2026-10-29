@@ -569,16 +569,23 @@ probe's own count of paths outside its folder (Codex F4-1, F34-2). In order:
    than a socket, so the profile also denies looking up the DNS service
    and its resolver (`com.apple.dnssd.service`, `com.apple.mDNSResponder`,
    `com.apple.mDNSResponderHelper`) and the services that fetch or open a
-   URL on a process's behalf (`com.apple.nsurlsessiond` and its proxy
-   service, `com.apple.coreservices.launchservicesd`). The tests show,
-   on the Mac runner, that under the block the fake CLI finds none of those
-   services and cannot resolve even `localhost`, and that without it the
-   same fake does both. Other system services stay allowed, so the CLI
-   still reads its own login from the Keychain; one of them that fetches on
-   request and is not on that list would be a gap, which the narrower
-   promise below accepts (the CLI uses none for `auth status` by the same
-   reading, and a helper that might comes only from a payload, which can
-   no longer arrive; a cached one is step 3's). Before
+   URL on a process's behalf (`com.apple.nsurlsessiond`,
+   `com.apple.coreservices.launchservicesd`). The tests show, on the Mac
+   runner, that under the block the fake CLI finds none of those services,
+   and that without it the same fake finds every one (so no name on the
+   list is a typo). Names the Mac answers from its own hosts file, such as
+   `localhost`, still resolve under the block (the tests saw it), without
+   anything leaving the Mac. Other system services stay allowed, so the CLI
+   still reads its own login from the Keychain. One that fetches on request
+   and is not on that list would be a gap the narrower promise below
+   accepts: the certificate service (`trustd`, which can fetch revocation
+   and issuer URLs named in a certificate it is handed; denying it could
+   break the Keychain and code signing, so it is not denied without a test
+   against the real CLI), WebKit's networking service, and Apple Events to
+   a browser (which macOS asks the user about first). The CLI uses none of
+   them for `auth status` by the same reading, and a helper that might
+   comes only from a payload, which can no longer arrive (a cached one is
+   step 3's). Before
    it is used, the tool must be what the pinned file must be (section 5
    step 1), owned by root: not a link, a regular executable file with no
    group or other write and no setuid or setgid bit, in a root-owned folder
