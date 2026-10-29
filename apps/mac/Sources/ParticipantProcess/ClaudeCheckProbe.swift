@@ -29,9 +29,12 @@ struct ClaudeProbeResult: Equatable, Sendable {
 }
 
 /// The owner's D1 decision (October 29, 2026, option 1): `auth status` runs
-/// under macOS's sandbox with every network operation denied, so a
-/// server-managed settings fetch it starts cannot reach Anthropic (Codex
-/// F34-D1). Everything else is allowed, so the CLI still reads its own
+/// under macOS's sandbox with its own sockets denied, so a
+/// server-managed settings fetch it starts cannot open a connection to
+/// Anthropic (Codex F34-D1). Only the process's own sockets are denied:
+/// Mach lookups stay allowed, so host-name resolution through the system's
+/// resolver and requests to system services still work (contract section 5
+/// step 4). Everything else is allowed, so the CLI still reads its own
 /// login. The block applies to the probe and to anything it starts, and is
 /// applied by the system's `sandbox-exec`, which Apple marks deprecated: it
 /// is retested on each macOS version (the tests here run on the Mac CI

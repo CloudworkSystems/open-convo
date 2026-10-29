@@ -563,14 +563,23 @@ probe's own count of paths outside its folder (Codex F4-1, F34-2). In order:
    itself with the pinned file (same process, same group, section 11's
    environment and folder), and the block covers everything the probe
    starts: IP and local sockets alike, outbound, inbound and bind, so the
-   fetch, and any helper a cached payload would arm, reaches nothing. Before
+   settings fetch cannot open a connection and no new payload arrives. The
+   block denies the process's own sockets only. It still allows Mach
+   lookups, so a process under it can resolve a host name through the
+   system's resolver (the query leaves the Mac) or ask a system service
+   outside the sandbox to fetch for it; the CLI does neither for
+   `auth status` by the same reading, and a helper that might comes only
+   from a payload, which can no longer arrive (a cached one is step 3's).
+   Before
    it is used, the tool must be what the pinned file must be (section 5
    step 1), owned by root: not a link, a regular executable file with no
    group or other write and no setuid or setgid bit, in a root-owned folder
    (not a link) no one else can write. Otherwise, after every earlier check
    passes, step 4 is `check-failed` (log `source=auth-status
    detail=network-block`) and the command never runs; earlier failures
-   still win. Apple marks the tool deprecated, so the tests run it on the
+   still win. If a macOS update removes the tool, the checks fail closed
+   this way and the participant reads as unavailable (`check-failed`), not
+   as a bug. Apple marks the tool deprecated, so the tests run it on the
    Mac CI runner each time: under the block the fake CLI's connects to a
    TCP listener on loopback and to a local socket both fail, and without it
    they succeed. Only Pro and Max plans pass (below), which the reading says
