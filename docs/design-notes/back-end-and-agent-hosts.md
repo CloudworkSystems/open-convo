@@ -137,9 +137,33 @@ Rules for the VM:
   allow. Only if Integrations can't carry the token, the fallback is an
   owner-approved exception to "secrets belong in Keychain", since a Linux VM
   has no Keychain: a file readable only by the VM's user account (mode 600),
-  never in the repository, logs or the shell history. A Codex or Gemini sign-in goes there only when
+  never in the repository, logs or the shell history. A Codex sign-in goes there only when
   the owner sets it up. The VM never holds the `CloudworkSystems` account's
   credentials.
+- **Gemini CLI (set up October 27; this is the command-line tool on the VM
+  and the Mac, not a Gemini review on GitHub, which isn't set up):** Google
+  stopped accepting Gemini subscription sign-in in the old Gemini CLI for
+  individual and Google AI Pro and Ultra accounts on June 18, 2026
+  ([Google's notice](https://developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals)),
+  so it runs on a pay-per-use API key from the owner's Google AI Studio
+  account. On the VM, an exe.dev Integrations HTTP proxy named `gemini`,
+  attached to the builders' VM only, adds the key to requests to
+  `generativelanguage.googleapis.com`. The VM calls
+  `https://gemini.int.exe.xyz`, which answers only VMs the integration is
+  attached to, and never sees the key. On the owner's Mac the key is in
+  Keychain (`gemini-api-key`), and the `gemini` launcher reads it from
+  there at start. Checks use a low-cost Flash model by default, and the
+  owner keeps a monthly budget on the key. Gemini checks public code and
+  plans only, not private True Convo data, until the owner decides
+  otherwise. Google's replacement, the Antigravity CLI, accepts the owner's
+  subscription sign-in, including over SSH
+  ([Antigravity docs](https://antigravity.google/docs/install)); trying it
+  is next, and if it works it replaces the key for interactive use. That
+  sign-in stores a Google account token, a bigger credential than a
+  budget-capped key, so before it goes on the VM the owner approves where
+  the token is stored, which scopes it carries and which VM user can read
+  it; at minimum a separate VM user with the token readable only by that
+  user (mode 600), as in the token fallback above.
 - **Zero trust:** an unknown foreign agent (for example Meta's Muse agent)
   never shares the VM or its token with the trusted builders.
 - **CPU only:** local models on the VM are small ones.

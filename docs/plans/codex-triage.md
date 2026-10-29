@@ -1,6 +1,6 @@
 # Codex Triage: Ending Review Loops On Minor Findings
 
-Status: In progress (Oct 24): built in this pull request, judge off until the owner adds the API key.
+Status: In progress (Oct 29): merged as #135 (Oct 24); no pull request has reached the judge yet, so the finish line's first verdict is still to come.
 
 Written October 24, 2026 at the owner's request ("do the changes"). Session:
 thread "Stop Codex review loops on nits". **Builder:** Claude (cloud,
@@ -129,3 +129,14 @@ before. Expected cost is a few cents per judged commit.
 - Count how often the judge passes a pull request, and whether any judged
   nit later turned out to be a bug, after two weeks.
 - Try JEV as a first pass if the owner wants to cut cost further.
+
+## Revision, October 28, 2026: Only The Project's Own Builders
+
+The repo is public, so anyone can open a pull request, and a judged pull
+request puts its diff in front of the judge and spends the API key. Rule 5
+now also requires that the pull request was opened by `cloudwork-bot` (every
+agent's account) or by Codex's cloud builds (`chatgpt-codex-connector[bot]`),
+from a branch in this repository rather than a fork. Anyone else's pull
+request never reaches the judge; the normal Codex signals and the owner's
+note still apply to it. The judge's prompt also stops calling the repository
+private.
