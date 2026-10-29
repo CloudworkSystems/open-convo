@@ -53,11 +53,14 @@ session. Leo changes often, so recheck a detail before a plan relies on it.
    attachment on the message that they can remove before sending. That fits
    the annotation flow, where the person already chooses the text or region
    they mean.
-3. **Agents that act get their own browser profile.** When an agent drives
-   the inline browser, it gets a fresh profile with no owner cookies,
-   sign-ins or history. This adds to the site permissions in
-   [computer-use.md](computer-use.md), it doesn't replace them. Signing in
-   stays a step the person does themselves.
+3. **Agents never act in the person's own browsing.** When an agent drives
+   the inline browser, it uses the one persistent "Agent" profile from
+   [computer-use.md](computer-use.md), never the profile the person browses
+   in day to day. That keeps the person's cookies, history and other
+   sign-ins out of reach. The only logins there are ones the person
+   added to that profile by hand, and those are kept so they sign in once.
+   This confirms that note's direction and changes nothing in it. The site
+   permissions there still decide what the agent may do.
 4. **A second model checks the first.** Before an agent's browser action
    runs, a separate check asks whether it matches the task the person
    approved. A local model can do this cheaply. It doesn't replace the
