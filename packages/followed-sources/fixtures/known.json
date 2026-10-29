@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "known": [
+    { "text": "Pin the versions of the tools an agent may run." }
+  ]
+}

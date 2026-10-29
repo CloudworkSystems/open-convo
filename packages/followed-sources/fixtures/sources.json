@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "example-faction",
+      "name": "The Example Faction (daily email)",
+      "kind": "email",
+      "topics": ["security", "ai-led development"]
+    },
+    {
+      "id": "saved-links",
+      "name": "Saved build links",
+      "kind": "links",
+      "topics": ["ai-led development"]
+    }
+  ]
+}
