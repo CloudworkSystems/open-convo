@@ -91,8 +91,12 @@ refusal, it goes to `refused` (below).
    and an empty `#`, and remove tracking parameters from a fixed list in
    the README (at least every `utm_*`, `fbclid`, `gclid`, `igsh`, `igshid`,
    `mc_eid`, and `si` on YouTube links). Other parameters keep their order.
-   `youtu.be/<id>`, `youtube.com/shorts/<id>` and `m.youtube.com` links
-   become `https://www.youtube.com/watch?v=<id>`; `twitter.com` becomes
+   Only YouTube links that carry a video id are rewritten: `youtu.be/<id>`,
+   `youtube.com/shorts/<id>` and `/watch?v=<id>` on `m.youtube.com` or
+   `youtube.com` become `https://www.youtube.com/watch?v=<id>`; any other
+   YouTube link (a playlist, a channel) is only cleaned, never rewritten.
+   The same holds for every rewrite: a link it doesn't fit is kept as
+   cleaned, never refused; `twitter.com` becomes
    `x.com`; `www.` is dropped from Instagram and TikTok links. A non-empty
    fragment is kept (on hash-routed sites it names the page), except where
    a YouTube rewrite builds the link afresh, which keeps only `v` and `t`.
@@ -152,7 +156,8 @@ At least:
    the link and counts the dropped words.
 3. Cleaning: each tracking parameter on the list is removed and others kept
    in order; the YouTube, X, Instagram and TikTok rewrites; upper-case hosts,
-   default ports; an empty `#` dropped; `https://example.com/#/post/1` and
+   default ports; an empty `#` dropped; an `m.youtube.com` playlist and a
+   channel link kept as cleaned, not rewritten; `https://example.com/#/post/1` and
    `#/post/2` kept as two sources; the YouTube rewrite keeping `t`.
 4. Refusals: each scheme other than `http` and `https`, a link with a user
    name or password, each bad name above, an image, an unknown file type and
