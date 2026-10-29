@@ -159,6 +159,36 @@ reads from and writes to `CloudworkSystems/open-convo`.
     the pull request before auto-merge goes on, but no required check reads
     the independent review yet. Making it a required check is a later code
     change and the owner's call.
+  - **Privacy and security checklist (owner decision, October 26, 2026;
+    [docs/plans/risk-review.md](docs/plans/risk-review.md) and
+    [docs/plans/security.md](docs/plans/security.md) section 2).** Every
+    independent review, and the coordinator's plan check on GrokBot work,
+    ends with one block answering these, each "no" or "yes" with the file
+    and line: (1) data leaving the device, and which plan allows it;
+    (2) secrets in code, logs, test output or files; (3) real personal data
+    in any added or changed file (contact details the owner chose to
+    publish are listed, not a finding); (4) private data written outside
+    the protected store or where backups or sync pick it up; (5) a new Mac
+    permission or wider agent powers; (6) outside input, and whether it is
+    validated and kept from becoming instructions or commands; (7) who may
+    read or change what, checked per item; (8) new code from elsewhere:
+    needed, pinned, trusted; (9) failure output leaking traces, keys or
+    personal data; (10) money spent, with a cap, a stop and consent.
+    A "yes" on 2 or 3 is always a P1; any other "yes" no plan allows is a
+    P1; a "yes" on 6 or 7 the tests don't cover, or on 10 without a cap, is
+    a P1. Docs-only pull requests get the block too, from an agent that
+    didn't write them (checklist only, not a full review). The coordinator
+    doesn't switch on auto-merge, or pass a GrokBot plan check, until the
+    block is posted for the latest commit.
+  - **`risk-escalate`.** A reviewer who thinks the owner should see a risk
+    even when a plan allows it ends the block with
+    `risk-escalate: <one-line reason>`. The coordinator then keeps
+    auto-merge off and adds the label `needs-owner: risk-escalate`, which
+    lists the pull request on issue #52, until the owner approves the head
+    commit after that comment; then the coordinator removes the label (the
+    workflow never touches it). On a pull request opened from the owner's
+    account, the work is reopened from `cloudwork-bot`, carrying the
+    escalation over.
   - Each GrokBot review spends Cursor usage; the coordinator asks for one
     per commit, never more.
   - Older plans (for example `email-actions-preview.md` and
@@ -207,6 +237,10 @@ looping for 8 to 17 rounds on ever-narrower edge cases, so:
   raise that finding again on every round until the judge rates it or the
   code fixes it, so the judge sees it on the latest commit.
 - Give all findings for a commit in one round, most severe first.
+- A pull request that adds an outside host, a dependency, a Mac permission
+  or a key name is held for the owner by `codex-approved` (the risk hold),
+  and the triage judge always rates findings about privacy, secrets or
+  permissions as real ([docs/plans/risk-review.md](docs/plans/risk-review.md)).
 - End each finding with one line that starts `For the owner:`, written to
   the owner in your own words. He reads reviews as the product's owner, not
   as a programmer: say in at most two plain sentences what would go wrong

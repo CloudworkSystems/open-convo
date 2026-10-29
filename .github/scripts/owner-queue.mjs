@@ -1,6 +1,8 @@
 // Keeps one issue, "Needs the owner", listing open pull requests that touch
 // owner-protected paths and don't yet have the owner's approval on their
-// latest commit. The owner pins the issue once.
+// latest commit, and those held for risk (labels `needs-owner: risk` and
+// `needs-owner: risk-escalate`, docs/plans/risk-review.md). The owner pins
+// the issue once.
 //
 // It also keeps one hidden line in the issue, listing the open pull requests
 // with auto-merge on. The PR keeper reads that line to decide which pull
@@ -20,11 +22,16 @@ const ownerLogin = repoInfo.owner.login;
 const codeowners = await gh.get(`${base}/contents/.github/CODEOWNERS?ref=${repoInfo.default_branch}`);
 const rules = parseCodeowners(Buffer.from(codeowners.content, 'base64').toString('utf8'));
 
+const RISK_LABELS = ['needs-owner: risk', 'needs-owner: risk-escalate'];
+
 const rows = [];
+const riskRows = [];
 const autoMerge = [];
 for (const pr of await gh.all(`${base}/pulls?state=open`)) {
   if (pr.draft) continue;
   if (pr.auto_merge) autoMerge.push(pr.number);
+  const risk = (pr.labels ?? []).map((l) => l.name).filter((name) => RISK_LABELS.includes(name));
+  if (risk.length) riskRows.push(`| [#${pr.number}](${pr.html_url}) ${pr.title.replace(/\|/g, '/')} | ${risk.map((name) => `\`${name}\``).join(', ')} |`);
   const files = (await gh.all(`${base}/pulls/${pr.number}/files`)).flatMap((f) => [f.filename, f.previous_filename].filter(Boolean));
   const hits = protectedFiles(rules, files);
   if (hits.length === 0) continue;
@@ -46,6 +53,14 @@ const body = [
     ? ['| Pull request | Codex clean | Protected files |', '| --- | --- | --- |', ...rows].join('\n')
     : 'Nothing is waiting on you.',
   '',
+  '### Risk holds',
+  '',
+  'Pull requests held because they add an outside host, a dependency, a Mac permission or a key name, or because a reviewer escalated a privacy risk. Read the risk comment on each, then approve its latest commit.',
+  '',
+  riskRows.length
+    ? ['| Pull request | Why |', '| --- | --- |', ...riskRows].join('\n')
+    : 'None.',
+  '',
   `<!-- auto-merge-on: ${autoMerge.sort((a, b) => a - b).join(',')} -->`,
 ].join('\n');
 
@@ -56,5 +71,5 @@ if (!existing) {
   console.log(`Created #${created.number}`);
 } else if (existing.body !== body) {
   await gh.patch(`${base}/issues/${existing.number}`, { body });
-  console.log(`Updated #${existing.number}: ${rows.length} waiting`);
+  console.log(`Updated #${existing.number}: ${rows.length} waiting, ${riskRows.length} risk`);
 }
