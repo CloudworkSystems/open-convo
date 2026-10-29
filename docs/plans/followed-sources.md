@@ -139,12 +139,16 @@ the new state, and the command prints it only with `--json`.
    - An item **failed** when the drafter gave no answer, threw, or returned
      something that isn't `{ cards: [...] }`. A single card dropped by the
      checks above is a problem line, not a failure.
-   - An item that has failed on 3 runs is marked `gave-up` in the state,
-     with one problem line, and isn't sent to the drafter again or allowed
-     to hold the checkpoint back. Gave-up entries are kept as a
-     do-not-retry list; a later success clears an item's failure count.
-   - Step 7 runs on every item, including ones that failed or gave up, so
-     an engine `red-flag` never depends on the drafter answering.
+   - An item that fails on its third run is marked `gave-up` in the state.
+     That run is its final warning: one problem line, plus its engine
+     `red-flag` if step 7 applies. From the next run on, a gave-up item is
+     skipped as `gave-up` before any other step: it isn't sent to the
+     drafter, gets no red flag and holds no checkpoint back, so a quiet run
+     stays quiet. Gave-up entries are kept as a do-not-retry list; a
+     success before the third failure clears an item's failure count.
+   - Step 7 runs on every item that reaches it, including one whose drafter
+     failed, so an engine `red-flag` never depends on the drafter
+     answering.
 
 ### The Drafter Interface
 
@@ -204,10 +208,12 @@ The package ships two drafters, both deterministic, with no network:
    newer item from the same source succeeded on the first. Two items
    sharing the checkpoint's timestamp are both handled correctly. The
    checkpoint never moves backwards. On the third failure the item is
-   marked `gave-up`, isn't sent to the drafter again, and no longer holds
-   the checkpoint back. An item with an instruction phrase still gets its
-   engine `red-flag` when the drafter fails on it, and when it has given
-   up. Problem lines appear in the plain output.
+   marked `gave-up`, and no longer holds the checkpoint back. An item with
+   an instruction phrase still gets its engine `red-flag` when the drafter
+   fails on it, including on the third failure. A fourth run with no newer
+   item skips the gave-up item: no drafter call, no red flag, no problem
+   line, and the summary says nothing new. Problem lines appear in the
+   plain output.
 4. Bad cards (unknown kind, too long, empty) are dropped with problem lines,
    and an answer with four or more cards keeps only the first three.
 5. URLs in card text are removed, and `sourceUrl` is the item's own link.
