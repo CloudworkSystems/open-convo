@@ -91,8 +91,11 @@ repeating its numbers.
 1. **Check the input** as above, and check the catalog the same way.
 2. **The checks**, in this fixed order, each `{ id, state, message, fix? }`
    where `state` is `pass`, `warn` or `stop`:
+   Every `warn` and `stop` carries a `fix`, so no problem appears without
+   a next step.
    - `os`: macOS 13 or later passes (the Mac app's minimum,
-     `apps/mac/Package.swift`); earlier stops.
+     `apps/mac/Package.swift`); earlier stops with the fix "update macOS to
+     13 or later" (in System Settings, Software Update).
    - `chip`: Apple silicon passes; Intel warns that local models will be
      slow and suggests a cloud model.
    - `memory`: passes when at least one catalog model fits (`memoryGB >=
@@ -167,7 +170,9 @@ machines only. At least:
 
 1. A new 16 GB Apple-silicon Mac with no Ollama gives a result whose JSON
    matches a saved expected file exactly.
-2. Each check's pass, warn and stop cases above, including macOS 12 (stop),
+2. Each check's pass, warn and stop cases above, including macOS 12 (stop,
+   with the update step in `nextSteps` for both a `none` and a `cloud`
+   route),
    an Intel Mac (warn), 8 GB with only the smallest catalog model fitting,
    4 GB with none fitting (disk passes, model warns with no download
    command, `mode: local` gives `none`), memory for a model but disk for
