@@ -46,10 +46,13 @@ const NAMED_ENTITIES = { sol: '/', colon: ':', period: '.', commat: '@', amp: '&
 const CHARACTER_CODE = /\\x([0-9a-f]{2})|\\u\{([0-9a-f]+)\}|\\u(d[89ab][0-9a-f]{2})\\u(d[c-f][0-9a-f]{2})|\\u([0-9a-f]{4})|&#x([0-9a-f]+);?|&#([0-9]+);?|&([a-z]+);/gi;
 // A code left as written right where a host starts can't be read, and
 // neither can a backslash after the scheme (the URL parser reads
-// `https:\\host` and `https:/\host` like `https://host`).
+// `https:\\a.example` and `https:/\a.example` like `https://a.example`).
 const UNDECODED_HOST = /\b(?:https?|wss?):(?:\/\/[\\&]|[\\/]*\\)/i;
 // A control character spelled as an escape or a code (`\n`, `\x00`, `&#10;`).
 const CONTROL_CODE = /\\[nrtfvb0]|\\x[01][0-9a-f]|\\u00[01][0-9a-f]|\\u\{0*[01]?[0-9a-f]\}|&#x0*[01]?[0-9a-f];?|&#0*(?:[12]?[0-9]|3[01]);?/gi;
+// Tabs and line breaks, which the URL parser drops anywhere in a URL, spelled
+// as an escape or a code (`\t`, `\u0009`, `&#10;`).
+const DROPPED_CONTROL = /\\[nrt]|\\x0[9ad]|\\u000[9ad]|\\u\{0*[9ad]\}|&#x0*[9ad](?![0-9a-f]);?|&#0*(?:9|10|13)(?![0-9]);?|[\t\n\r]/gi;
 // Each pass undoes one layer (`&amp;#47;` takes two); past this many, fail closed.
 const MAX_DECODE_PASSES = 32;
 
@@ -88,7 +91,7 @@ export function readHosts(line) {
   // line as written and after each layer of those is undone, so such a URL
   // still counts.
   // The parser also drops tabs and line breaks anywhere and trims other
-  // control characters from the ends (`"\nhttps://host"` reaches that host),
+  // control characters from the ends (`"\nhttps://a.example"` reaches that host),
   // so each layer is read with those as spaces too, and the next layer drops
   // tabs and line breaks the way the parser does.
   let text = line;
@@ -97,7 +100,7 @@ export function readHosts(line) {
     const spaced = text.replace(CONTROL_CODE, ' ');
     if (spaced !== text) readHostsAsWritten(spaced, hosts, unreadable);
     const next = decodeCharacterCodes(text)
-      .replace(/\\[nrt]|[\t\n\r]/g, '')
+      .replace(DROPPED_CONTROL, '')
       .replace(/\\([^A-Za-z0-9\s(])/g, '$1');
     if (next === text) break;
     if (pass === MAX_DECODE_PASSES) { unreadable.push(line.slice(0, 200)); break; }

@@ -100,13 +100,16 @@ test('hosts: a URL whose host cannot be read is a hit, not skipped', () => {
   // Tabs, line breaks or other control characters around the URL don't hide
   // the host from the URL parser.
   for (const line of [
-    'fetch("\nhttps://collector.invented-tracker.dev")',
-    'fetch("\thttps://collector.invented-tracker.dev")',
-    'fetch("\x00https://collector.invented-tracker.dev")',
-    'fetch("\u000ahttps://collector.invented-tracker.dev")',
+    'fetch("\\nhttps://collector.invented-tracker.dev")',
+    'fetch("\\thttps://collector.invented-tracker.dev")',
+    'fetch("\\x00https://collector.invented-tracker.dev")',
+    'fetch("\\u000ahttps://collector.invented-tracker.dev")',
     '<a href="&#10;https://collector.invented-tracker.dev">',
-    'fetch("https://\tcollector.invented-tracker.dev")',
-    'fetch("https://coll\nector.invented-tracker.dev")',
+    'fetch("https://\\tcollector.invented-tracker.dev")',
+    'fetch("https://coll\\nector.invented-tracker.dev")',
+    'fetch("https:\\u0009//collector.invented-tracker.dev/x")',
+    'fetch("https:/\\x0d/collector.invented-tracker.dev/x")',
+    '<a href="https:&#x9;//collector.invented-tracker.dev/">',
   ]) {
     assert.ok(readHosts(line).hosts.includes('collector.invented-tracker.dev'), line);
   }
