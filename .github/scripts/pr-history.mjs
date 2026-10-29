@@ -21,10 +21,22 @@ const OWNER = 'CloudworkSystems';
 const KNOWN_AGENTS = { 58: 'codex', 71: 'codex' };
 
 const OUTSIDE = /^\W*(independent (re-)?review|independent review and plan check)/i;
-// "No P0 or P1" alone isn't clean: an open P2 still blocks auto-merge, so a
-// review that counts a P0, P1 or P2 (other than as fixed) is "findings".
+// "No P0 or P1" alone isn't clean: an open P2 still blocks auto-merge. A
+// review counts as "findings" when it lists a P0, P1 or P2 (a count such as
+// "one P2", a "[P2]" tag or a "P1." heading) in a sentence that doesn't say
+// it was fixed, or says "not clean".
 const OUTSIDE_CLEAN = /clean|no (new )?findings|nothing new|no open p1 or p2/i;
-const OUTSIDE_COUNTED = /\b(\d+|one|two|three|four|five|six|an?)\s+(open\s+|new\s+)?p[0-2]s?\b(?![^.\n]*\bfixed\b)/i;
+const NOT_FIXED = String.raw`(?![^.\n]*\b(fixed|resolved)\b)`;
+const OUTSIDE_OPEN = new RegExp([
+  String.raw`\b(\d+|one|two|three|four|five|six|an?)\s+(open\s+|new\s+)?p[0-2]s?\b`,
+  String.raw`\[p[0-2]\]`,
+  String.raw`^[#*\s]*p[0-2][.:]`,
+].map((form) => `(${form})${NOT_FIXED}`).join('|'), 'im');
+const NOT_CLEAN = /\bnot\s+(yet\s+)?clean\b/i;
+
+export function outsideIsClean(text) {
+  return OUTSIDE_CLEAN.test(text) && !NOT_CLEAN.test(text) && !OUTSIDE_OPEN.test(text);
+}
 
 export const COLUMNS = [
   'number', 'title', 'agent', 'state', 'draft', 'branch', 'createdAt', 'endedAt', 'daysOpen',
@@ -96,7 +108,7 @@ export function outsideSummary({ reviews, comments }, headSha = '') {
     const grok = item.user?.login === 'cursor[bot]' || body.includes('GrokBot review');
     if (!OUTSIDE.test(body) && !body.includes('GrokBot review')) continue;
     const head = body.slice(0, 400);
-    const clean = OUTSIDE_CLEAN.test(head) && !OUTSIDE_COUNTED.test(head);
+    const clean = outsideIsClean(head);
     const commit = (/\b[0-9a-f]{7,40}\b/.exec(head)?.[0] ?? item.commit_id ?? '').slice(0, 10);
     found.push([item.submitted_at ?? item.created_at, grok ? 'GrokBot' : 'Claude', clean ? 'clean' : 'findings', commit]);
   }
@@ -185,7 +197,8 @@ async function main(folder) {
   let fetched = 0;
   for (const pull of await gh.all(`${base}/pulls?state=all`)) {
     const old = kept.get(pull.number);
-    if (old && old.updatedAt === pull.updated_at) { rows.push(old); continue; }
+    // A row is reused only when nothing changed and it has today's columns.
+    if (old && old.updatedAt === pull.updated_at && Object.keys(old).join() === COLUMNS.join()) { rows.push(old); continue; }
     const n = pull.number;
     const [files, reviews, comments, reviewComments, commits] = await Promise.all([
       gh.all(`${base}/pulls/${n}/files`), gh.all(`${base}/pulls/${n}/reviews`), gh.all(`${base}/issues/${n}/comments`),

@@ -67,6 +67,12 @@ test('an outside review with an open P2 is not clean, but one with fixed finding
   assert.equal(review('Independent review of abc: no P0 or P1.'), 'findings');
   assert.equal(review('Independent re-review of abc: clean. Both P1s are fixed. No new findings.'), 'clean');
   assert.equal(review('Independent review of abc: clean, no open P1 or P2.'), 'clean');
+  assert.equal(review('Independent re-review: no new findings. [P2] Previous retry issue remains open'), 'findings');
+  assert.equal(review('Independent review of abc: not clean yet.'), 'findings');
+  assert.equal(review('**Independent review of abc: clean, no P0, P1 or P2.**'), 'clean');
+  assert.equal(review('Independent review of abc: clean. Codex P1s, fixed. Earlier P3s, fixed.'), 'clean');
+  assert.equal(review('Independent review of abc. Docs only, so only P0 and P1 block. Clean. It resolves the Codex P1.'), 'clean');
+  assert.equal(review('## Independent review of abc\n\nNo new findings.\n\n### P1. The token is readable'), 'findings');
 });
 
 test('a row has every column, and the CSV quotes commas and defuses formulas', () => {
