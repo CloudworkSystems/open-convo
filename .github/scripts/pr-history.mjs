@@ -24,18 +24,20 @@ const OUTSIDE = /^\W*(independent (re-)?review|independent review and plan check
 // "No P0 or P1" alone isn't clean: an open P2 still blocks auto-merge. A
 // review counts as "findings" when it lists a P0, P1 or P2 (a count such as
 // "one P2", a "[P2]" tag or a "P1." heading) in a sentence that doesn't say
-// it was fixed, or says "not clean".
+// it was fixed or resolved, or when it says "not clean".
 const OUTSIDE_CLEAN = /clean|no (new )?findings|nothing new|no open p1 or p2/i;
-const NOT_FIXED = String.raw`(?![^.\n]*\b(fixed|resolved)\b)`;
 const OUTSIDE_OPEN = new RegExp([
   String.raw`\b(\d+|one|two|three|four|five|six|an?)\s+(open\s+|new\s+)?p[0-2]s?\b`,
   String.raw`\[p[0-2]\]`,
   String.raw`^[#*\s]*p[0-2][.:]`,
-].map((form) => `(${form})${NOT_FIXED}`).join('|'), 'im');
+].join('|'), 'im');
+const FIXED = /\b(fixed|fixes|resolved|resolves)\b/i;
 const NOT_CLEAN = /\bnot\s+(yet\s+)?clean\b/i;
 
 export function outsideIsClean(text) {
-  return OUTSIDE_CLEAN.test(text) && !NOT_CLEAN.test(text) && !OUTSIDE_OPEN.test(text);
+  // Each sentence on its own: "Fixed one P1" and "one P1, fixed" are both fixed.
+  const open = text.split(/(?<=\.)\s+|\n+/).some((sentence) => OUTSIDE_OPEN.test(sentence) && !FIXED.test(sentence));
+  return OUTSIDE_CLEAN.test(text) && !NOT_CLEAN.test(text) && !open;
 }
 
 export const COLUMNS = [
@@ -84,7 +86,8 @@ export function codexSummary({ reviews, comments, reviewComments }) {
       rounds.push([c.created_at, 'clean']);
     }
     const json = /codex-review-state:v1 (\{.*?\}) -->/s.exec(c.body)?.[1];
-    if (json) state = JSON.parse(json).code_review ?? state;
+    // A malformed state is skipped, as the gate does, rather than stopping the run.
+    if (json) { try { state = JSON.parse(json).code_review ?? state; } catch { /* unusable */ } }
   }
   rounds.sort((a, b) => a[0].localeCompare(b[0]));
   let latest = rounds.length ? rounds.at(-1)[1] : 'none';

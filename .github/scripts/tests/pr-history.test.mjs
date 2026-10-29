@@ -39,6 +39,8 @@ test('Codex rounds count distinct reviewed commits; the summary comment sets the
   const open = { user: codex, created_at: '2026-10-20T03:00:00Z', body: '<!-- codex-review-state:v1 {"code_review":{"has_any_findings":true,"has_unresolved_findings":true,"status":"completed"}} -->' };
   assert.equal(codexSummary({ reviews, comments: [...comments, open], reviewComments: [] }).codexLatest, 'open findings');
   assert.equal(codexSummary({ reviews: [], comments: [], reviewComments: [] }).codexLatest, 'none');
+  const broken = { user: codex, created_at: '2026-10-20T04:00:00Z', body: '<!-- codex-review-state:v1 {"code_review":{oops} -->' };
+  assert.equal(codexSummary({ reviews, comments: [...comments, broken], reviewComments: [] }).codexLatest, 'clean');
 });
 
 test('outside reviews: GrokBot and fresh Claude, latest decides clean', () => {
@@ -73,6 +75,7 @@ test('an outside review with an open P2 is not clean, but one with fixed finding
   assert.equal(review('Independent review of abc: clean. Codex P1s, fixed. Earlier P3s, fixed.'), 'clean');
   assert.equal(review('Independent review of abc. Docs only, so only P0 and P1 block. Clean. It resolves the Codex P1.'), 'clean');
   assert.equal(review('## Independent review of abc\n\nNo new findings.\n\n### P1. The token is readable'), 'findings');
+  assert.equal(review('Independent re-review of abc: clean. Fixed one P1 and two P2 findings; no new findings.'), 'clean');
 });
 
 test('a row has every column, and the CSV quotes commas and defuses formulas', () => {
