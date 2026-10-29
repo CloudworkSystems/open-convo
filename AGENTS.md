@@ -366,8 +366,11 @@ they win.
   lacks, once per commit:
   - No independent review: it asks GrokBot (the `@cursor` request in
     "Independent reviews"). If GrokBot hasn't answered 60 minutes later, the
-    keeper does the fresh Claude review itself (it built none of these pull
-    requests; at most one per run) and posts it on the pull request.
+    keeper does the fresh Claude review itself (at most one per run) and
+    posts it on the pull request, unless the keeper pushed any commit the
+    review would cover ("Claude-built findings at night" below). Then it
+    lists the pull request on issue #52 for a fresh Claude review from a
+    separate agent, which the coordinator asks for.
   - An outside module with no plan check: the keeper does the coordinator's
     plan check and posts it.
   - A plan pull request without the owner's quoted yes: the keeper lists it
@@ -397,7 +400,7 @@ they win.
   commit of a Claude-built pull request have had no push and no reply from
   its builder for 2 hours, the keeper fixes them on that pull request's
   branch (one pull request per run) under the code path. Its fix then needs
-  an independent review by another agent, like any other commit.
+  an independent review by another agent, never by the keeper itself.
 - **A hung Codex review doesn't block the owner's override.** The
   `owner-accepts-findings` line counts once Codex's summary has shown the
   pull request's exact head as running for 30 minutes or more, as well as
