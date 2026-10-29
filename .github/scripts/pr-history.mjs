@@ -23,7 +23,7 @@ const KNOWN_AGENTS = { 58: 'codex', 71: 'codex' };
 const OUTSIDE = /^\W*(independent (re-)?review|independent review and plan check)/i;
 // "No P0 or P1" alone isn't clean: an open P2 still blocks auto-merge. A
 // review counts as "findings" when it lists a P0, P1 or P2 (a count such as
-// "one P2", a "[P2]" tag or a "P1." heading) in a sentence that doesn't say
+// "one P2", a "[P2]" tag or a "P1." heading) in a clause that doesn't say
 // it was fixed or resolved, or when it says "not clean".
 const OUTSIDE_CLEAN = /clean|no (new )?findings|nothing new|no open p1 or p2/i;
 const OUTSIDE_OPEN = new RegExp([
@@ -35,8 +35,10 @@ const FIXED = /\b(fixed|fixes|resolved|resolves)\b/i;
 const NOT_CLEAN = /\bnot\s+(yet\s+)?clean\b/i;
 
 export function outsideIsClean(text) {
-  // Each sentence on its own: "Fixed one P1" and "one P1, fixed" are both fixed.
-  const open = text.split(/(?<=\.)\s+|\n+/).some((sentence) => OUTSIDE_OPEN.test(sentence) && !FIXED.test(sentence));
+  // Each clause on its own: "Fixed one P1" and "one P1, fixed" are both
+  // fixed, while "one P1 was fixed, but one P2 remains open" is open.
+  const clauses = text.split(/(?<=\.)\s+|\n+|[;,]\s*|\s+but\s+/i);
+  const open = clauses.some((clause) => OUTSIDE_OPEN.test(clause) && !FIXED.test(clause));
   return OUTSIDE_CLEAN.test(text) && !NOT_CLEAN.test(text) && !open;
 }
 
