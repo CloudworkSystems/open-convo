@@ -845,7 +845,7 @@ extension ProcessSuites {
             defer { tree.clean() }
             let blocked = tree.checks(authStatus: .production)
             #expect(await blocked.evaluateFresh().didPass)
-            #expect(tree.log.last?.line == "check=fresh result=passed")
+            #expect(tree.log.last?.line == "check=fresh result=passed step=finished")
             #expect(tree.probes("version") == 1 && tree.probes("auth-status") == 1)
             let tool = ClaudeNetworkBlock.system.toolPath
             #expect(tree.accesses.executed == [tree.binaryPath, tool, tree.binaryPath],
