@@ -40,20 +40,30 @@ export function isReservedHost(host) {
 const URL_PATTERN = /\b(?:https?|wss?):\/\/((?:[^\s/?#"'`<>()[\]{}\\|^,;@]*@)?(?:\[[0-9a-f:.]+\]|[^\s/?#"'`<>()[\]{}\\|^,;]+)(?::\d*)?)/gi;
 const HOST_SHAPE = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$|^\[[0-9a-f:.]+\]$/;
 
-/** Hosts named by http(s) and ws(s) URLs in one line, lowercased, without user or port. */
-export function hostsIn(line) {
+/**
+ * Hosts named by http(s) and ws(s) URLs in one line, as the URL parser (and
+ * so fetch) reads them: lowercased, percent-decoded, in punycode, without
+ * user or port. `unreadable` lists URLs whose host can't be read that way;
+ * they count as hits, so an odd spelling never slips through.
+ */
+export function readHosts(line) {
   const hosts = [];
+  const unreadable = [];
   for (const match of line.matchAll(URL_PATTERN)) {
-    let host = match[1].toLowerCase();
-    host = host.slice(host.lastIndexOf('@') + 1);
-    host = host.startsWith('[') ? host.replace(/(\])(?::\d*)?$/, '$1') : host.replace(/:\d*$/, '');
-    host = host.replace(/\.$/, '');
     // A host built at run time (`https://${host}`) can't be read; the
     // checklist in the independent review covers what a pattern can't see.
-    if (HOST_SHAPE.test(host)) hosts.push(host);
+    if (/^\$\{/.test(line.slice(match.index + match[0].length - match[1].length))) continue;
+    let host = null;
+    try {
+      host = new URL(match[0]).hostname.replace(/\.$/, '');
+    } catch { /* unreadable */ }
+    if (host && HOST_SHAPE.test(host)) hosts.push(host);
+    else unreadable.push(match[0]);
   }
-  return hosts;
+  return { hosts, unreadable };
 }
+
+export const hostsIn = (line) => readHosts(line).hosts;
 
 // ---------------------------------------------------------------- key names
 
@@ -124,6 +134,21 @@ function npmEntries(manifest) {
     const deps = manifest?.[section];
     if (!deps || typeof deps !== 'object') continue;
     for (const [name, spec] of Object.entries(deps)) pairs.add(`${name}\u0000${npmTarget(name, spec)}`);
+  }
+  // overrides (npm) and resolutions (yarn) can repoint a package anywhere in
+  // the tree, so their entries count like dependencies.
+  const walk = (entries) => {
+    for (const [key, spec] of Object.entries(entries ?? {})) {
+      const name = key === '.' ? null : key.replace(/^.*\*\*\//, '').replace(/^(@[^/]+\/[^/@]+|[^/@]+\/)*?((?:@[^/@]+\/)?[^/@]+)(?:@.*)?$/, '$2');
+      if (typeof spec === 'string') { if (name) pairs.add(`${name}\u0000${npmTarget(name, spec)}`); }
+      else if (spec && typeof spec === 'object') {
+        if (name && typeof spec['.'] === 'string') pairs.add(`${name}\u0000${npmTarget(name, spec['.'])}`);
+        walk(spec);
+      }
+    }
+  };
+  for (const key of ['overrides', 'resolutions']) {
+    if (manifest?.[key] && typeof manifest[key] === 'object') walk(manifest[key]);
   }
   const bundled = new Set();
   for (const key of ['bundleDependencies', 'bundledDependencies']) {
@@ -409,7 +434,13 @@ export function scanFile({ path, before = '', after = '', error, allow }) {
   const seen = new Set();
   for (const { line, text } of lineScan ? addedLines(before, after) : []) {
     if (!isMarkdown(path)) {
-      for (const host of hostsIn(text)) {
+      const { hosts, unreadable } = readHosts(text);
+      for (const url of unreadable) {
+        if (seen.has(`u:${url}`)) continue;
+        seen.add(`u:${url}`);
+        hits.push({ signal: 'host', file: path, line, detail: `couldn't read the host in \`${url.replace(/`/g, "'")}\`` });
+      }
+      for (const host of hosts) {
         if (isReservedHost(host) || allowsHost(allow, host) || seen.has(`h:${host}`)) continue;
         seen.add(`h:${host}`);
         hits.push({ signal: 'host', file: path, line, detail: `new outside host \`${host}\`` });

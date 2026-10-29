@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  hostsIn, isReservedHost, secretNamesIn, addedLines, npmTarget, npmLockEntries, swiftDependencies, swiftPins,
+  hostsIn, readHosts, isReservedHost, secretNamesIn, addedLines, npmTarget, npmLockEntries, swiftDependencies, swiftPins,
   parsePlist, permissionChanges, parseAllowlist, scanFile, scanChanges, fingerprint, holdCommentBody,
   findHoldComment, commentFingerprint, ownerReleased, cachedScan, scanStatusDescription, applyRiskHold, withRiskHold,
   RISK_LABEL, HOLD_REASON, SCAN_CONTEXT,
@@ -25,6 +25,18 @@ test('hosts: URLs of every scheme are read, without user, port or case', () => {
   assert.deepEqual(hostsIn('fetch("https://[2001:DB8::1]/x"); new WebSocket("wss://[2606:4700::1111]:8443/feed")'), ['[2001:db8::1]', '[2606:4700::1111]']);
   assert.deepEqual(signals(scan('src/a.js', '', 'fetch("http://[2001:db8::1]:80/")\n')), ['host:new outside host `[2001:db8::1]`']);
   assert.deepEqual(hostsIn('see [https://Docs.Invented-Tracker.dev] here'), ['docs.invented-tracker.dev']);
+});
+
+test('hosts: odd spellings are read the way fetch reads them', () => {
+  assert.deepEqual(hostsIn('fetch("https://collector\u3002invented-tracker.dev/x")'), ['collector.invented-tracker.dev']);
+  assert.deepEqual(hostsIn('fetch("https://%63ollector.invented-tracker.dev/x")'), ['collector.invented-tracker.dev']);
+  assert.deepEqual(hostsIn('fetch("https://\u0435xample.com/x")'), ['xn--xample-2of.com']);
+  assert.deepEqual(signals(scan('src/a.js', '', 'fetch("https://\u0435xample.com/x")\n')), ['host:new outside host `xn--xample-2of.com`']);
+});
+
+test('hosts: a URL whose host cannot be read is a hit, not skipped', () => {
+  assert.deepEqual(readHosts('fetch("https://bad%host.invented-tracker.dev/")').unreadable.length, 1);
+  assert.deepEqual(scan('src/a.js', '', 'fetch("https://bad%host.invented-tracker.dev/")\n').map((h) => h.signal), ['host']);
 });
 
 test('hosts: invented names and their subdomains never count', () => {
@@ -96,6 +108,15 @@ test('npm: pointing an entry at another package or a git or tarball source is a 
 test('npm: a new git commit of the same source is like a version bump', () => {
   const at = (ref) => pkg({ dependencies: { pad: `github:someone-invented/pad#${ref}` } });
   assert.deepEqual(scan('package.json', at('aaa'), at('bbb')), []);
+});
+
+test('npm: overrides and resolutions that repoint a package are hits; a version pin is not', () => {
+  const before = pkg({ dependencies: { 'left-pad-invented': '^1.0.0' } });
+  const withKey = (key, value) => pkg({ dependencies: { 'left-pad-invented': '^1.0.0' } }, { [key]: value });
+  assert.deepEqual(signals(scan('package.json', before, withKey('overrides', { 'left-pad-invented': 'github:someone-invented/pad' }))), ['dependency:`left-pad-invented` installs from `github:someone-invented/pad`']);
+  assert.deepEqual(signals(scan('package.json', before, withKey('overrides', { 'parent-invented': { '.': '1', 'left-pad-invented': 'npm:other-pad-invented@1' } }))).sort(), ['dependency:`left-pad-invented` installs the package `other-pad-invented`', 'dependency:new package `parent-invented`']);
+  assert.equal(scan('package.json', before, withKey('resolutions', { '**/left-pad-invented': 'git+ssh://git@git.invented-forge.dev/pad.git' })).filter((h) => h.signal === 'dependency').length, 1);
+  assert.deepEqual(scan('package.json', before, withKey('overrides', { 'left-pad-invented': '1.0.5' })), []);
 });
 
 test('npm: bundleDependencies and bundledDependencies are lists of names', () => {
