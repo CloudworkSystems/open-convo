@@ -699,7 +699,7 @@ public final class ProofStore: @unchecked Sendable {
         // cannot represent, a foreign workspace, or a record that disagrees
         // with its own revision.
         guard loaded.formatVersion == formatVersion, loaded.workspace.workspaceId == marker.workspaceId,
-              loaded.workspace.workspaceHandle == marker.workspaceHandle, isSafeRevision(loaded.workspace.revision),
+              OpaqueHandle.same(loaded.workspace.workspaceHandle, marker.workspaceHandle), isSafeRevision(loaded.workspace.revision),
               loaded.workspace.record["revision"]?.safeIntegerValue == loaded.workspace.revision,
               loaded.ledger.allSatisfy({ $0.revision.map(isSafeRevision) ?? true }),
               loaded.identities.allSatisfy({ isSafeRevision($0.revision) && ($0.outcome == .ok || $0.outcome == .conflict) }) else { return nil }

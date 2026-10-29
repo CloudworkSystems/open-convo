@@ -200,6 +200,33 @@ test('pageCases inventory retains all fifteen distinct cases, including the nine
   ]);
 });
 
+// Contract section 18, item 4: the named conformance of the nine cases
+// marked `requires`. Each runs by its own name in the matrix below through
+// the production controller; cases 13 and 15 also run through the
+// production port in the adapter checks at the end of this file. The
+// `requires` text stays in the fixture as the record of the renderer change
+// each case first needed.
+const ADAPTER_13 = 'pageCases adapter: historical-pin recovery uses the production port and never dispatches the current pin';
+const ADAPTER_15 = 'pageCases adapter: more pages preserve progress with fresh request ids and the accepted cursor';
+const REQUIRED_CONFORMANCE: Record<string, readonly string[]> = {
+  'replay-lost: a validated lost range plus a recorded terminal closes as interrupted, keeping the prefix': ['matrix'],
+  'recoverable delivery gap: an out-of-order terminal is buffered, then replay fills the gap': ['matrix'],
+  'stop-incomplete records the terminal but keeps cleanup open': ['matrix'],
+  'stop-incomplete cleanup ends only when native reports the group cleared': ['matrix'],
+  'restored prepared run: status not-dispatched allows an explicit Start only': ['matrix'],
+  'a native end with an uncleared group: the status read after the terminal keeps cleanup pending': ['matrix'],
+  'restored run under an earlier pin: a recovery-only port with the run identity reads and Stops, never Starts': ['matrix', ADAPTER_13],
+  'same launch: after an unknown start, status not-dispatched allows an explicit re-Start only': ['matrix'],
+  'an events result with more:true keeps its events and the controller continues from the new lastSequence': ['matrix', ADAPTER_15],
+};
+
+test('each of the nine required pageCases names the tests that execute it', () => {
+  const required = fixture.pageCases.filter((entry) => entry.requires).map((entry) => entry.name);
+  assert.equal(required.length, 9);
+  assert.deepEqual(Object.keys(REQUIRED_CONFORMANCE), required, 'one named entry per required case, in fixture order');
+  for (const name of required) assert.ok(REQUIRED_CONFORMANCE[name]!.includes('matrix'), name);
+});
+
 for (const source of fixture.pageCases) test(source.name, async () => {
   const original = structuredClone(source);
   const scenario = structuredClone(source);
@@ -368,7 +395,7 @@ function adapter(scenario: PageCase, handler: (request: WireRequest) => Record<s
     dispose() { connection.dispose(); client.revoke(); codec.revoke(); } };
 }
 
-test('pageCases adapter: historical-pin recovery uses the production port and never dispatches the current pin', async () => {
+test(ADAPTER_13, async () => {
   const scenario = fixture.pageCases.find((entry) => entry.currentPin)!;
   assert.ok(scenario);
   const status = scenario.received.find((step) => 'status' in step) as { status: Reply<'participant.status'> };
@@ -424,7 +451,7 @@ test('pageCases adapter: historical-pin recovery uses the production port and ne
   } finally { controller?.dispose(); h.dispose(); assert.equal(clock.timers.size, 0); }
 });
 
-test('pageCases adapter: more pages preserve progress with fresh request ids and the accepted cursor', async () => {
+test(ADAPTER_15, async () => {
   const scenario = fixture.pageCases.find((entry) => entry.received.some((step) => 'events' in step && step.events.more))!;
   const pages = scenario.received.filter((step): step is { events: Reply<'participant.events'> } => 'events' in step);
   let nextPage = 0;

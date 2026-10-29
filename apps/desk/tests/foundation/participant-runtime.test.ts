@@ -1891,6 +1891,41 @@ test('native restore reads status and events, grants no automatic start, and rec
   controller.dispose();
 });
 
+test('an explicit restored Start that meets a status read already in flight waits for it, reads again and starts once', async () => {
+  for (const second of ['not-dispatched', 'unknown'] as const) {
+    const port = new InventedPort();
+    const reads: Array<ReturnType<typeof deferred<ParticipantStatusResult>>> = [];
+    let immediate = true;
+    port.reconcileResult = async () => ({ kind: 'events', events: [], more: false });
+    const { controller } = setup(undefined, prepared(), 'restored', { port: Object.assign(port, {
+      status: () => {
+        if (immediate) return Promise.resolve(notDispatched());
+        const read = deferred<ParticipantStatusResult>(); reads.push(read); return read.promise;
+      } }) });
+    await tick();
+    assert.equal(controller.snapshot.canStart, true);
+    immediate = false;
+    // The quiet poll's status read is still waiting for its answer when
+    // the person presses Start.
+    const background = controller.reconcile();
+    await tick();
+    assert.equal(reads.length, 1);
+    const starting = controller.start();
+    await tick();
+    assert.equal(port.starts.length, 0, 'the older read cannot authorize this Start');
+    reads[0]!.resolve(notDispatched());
+    await background;
+    await tick();
+    assert.equal(reads.length, 2, 'Start asks again once the older read settles');
+    assert.equal(port.starts.length, 0);
+    reads[1]!.resolve(second === 'not-dispatched' ? notDispatched()
+      : { kind: 'status', state: 'unknown', lastSequence: null, terminal: null, groupCleared: null, unknownReason: 'start-uncertain' });
+    await starting;
+    assert.equal(port.starts.length, second === 'not-dispatched' ? 1 : 0);
+    controller.dispose();
+  }
+});
+
 test('an unknown start needs fresh not-dispatched evidence and another explicit Start, while recovery-only availability never dispatches', async () => {
   const port = new InventedPort();
   let available = true;
