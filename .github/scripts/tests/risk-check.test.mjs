@@ -230,6 +230,11 @@ test('Swift: a string that fools the comment stripper cannot hide a new package'
 test('Swift: a remote binary target is a dependency; a local one is not', () => {
   assert.deepEqual([...swiftDependencies(swift('', '.binaryTarget(name: "Blob", url: "https://files.invented-forge.dev/b.zip", checksum: "00")'))], ['swift-binary:https://files.invented-forge.dev/b.zip']);
   assert.deepEqual([...swiftDependencies(swift('', '.binaryTarget(name: "Blob", path: "Blob.xcframework")'))], []);
+  // A raw-string URL is read; one written any other way holds the whole call.
+  assert.deepEqual([...swiftDependencies(swift('', '.binaryTarget(name: "Blob", url: #"https://files.invented-forge.dev/b.zip"#, checksum: "00")'))], ['swift-binary:https://files.invented-forge.dev/b.zip']);
+  assert.match([...swiftDependencies(swift('', '.binaryTarget(name: "Blob", url: blobURL, checksum: "00")'))][0], /^swift-binary:.*blobURL/);
+  assert.match([...swiftDependencies(swift('.package(url: kitURL, from: "1.0.0")'))][0], /^swift-other:.*kitURL/);
+  assert.deepEqual([...swiftDependencies(swift('.package(url : "https://git.invented-forge.dev/kit", from: "1.0.0")'))], ['swift:https://git.invented-forge.dev/kit']);
   // Swift allows whitespace, newlines included, around the dot and before the `(`.
   assert.deepEqual([...swiftDependencies(swift('.package (url: "https://git.invented-forge.dev/kit", from: "1.0.0")'))], ['swift:https://git.invented-forge.dev/kit']);
   assert.deepEqual([...swiftDependencies(swift('.package\n      (url: "https://git.invented-forge.dev/kit", from: "1.0.0")'))], ['swift:https://git.invented-forge.dev/kit']);
@@ -357,6 +362,15 @@ test('a hold comment edited by anyone but the gate is not trusted', () => {
   assert.equal(commentFingerprint(holdComment([hostHit])), fingerprint([hostHit]));
   assert.equal(commentFingerprint(edited), null);
   assert.equal(findHoldComment([{ user: { login: 'cloudwork-bot' }, body: holdComment([hostHit]).body }]), null);
+});
+
+test('a rename that changes how a file is read counts its text as new', () => {
+  const allow = { hosts: new Set(), dependencies: new Set(), secrets: new Set() };
+  const deps = '{"dependencies":{"invented-lib":"1.0.0"}}';
+  assert.equal(scanFile({ path: 'apps/x/package.json', previous: 'apps/x/deps.json', before: deps, after: deps, allow })[0].detail, 'new package `invented-lib`');
+  const link = 'see https://collector.invented-tracker.dev\n';
+  assert.equal(scanFile({ path: 'src/notes.js', previous: 'docs/notes.md', before: link, after: link, allow })[0].signal, 'host');
+  assert.deepEqual(scanFile({ path: 'src/b.js', previous: 'src/a.js', before: link, after: link, allow }), []);
 });
 
 test('a recorded scan counts only from the gate and for the same allowlist', () => {

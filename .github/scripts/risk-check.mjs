@@ -116,6 +116,10 @@ const isEntitlements = (path) => /\.entitlements$/i.test(path);
 const isInfoPlist = (path) => base(path) === 'Info.plist';
 // Lockfiles this check can't parse: any change to them is a hit.
 const isOtherLock = (path) => ['yarn.lock', 'pnpm-lock.yaml', 'bun.lock', 'bun.lockb'].includes(base(path));
+// How a file is read. A rename that changes this reads the old text as new,
+// since a file renamed into `package.json` (or out of a `.md`) starts to count.
+const kindOf = (path) => [isMarkdown, isNpmManifest, isNpmLock, isSwiftManifest, isSwiftResolved, isEntitlements, isInfoPlist, isOtherLock, isBinaryPath]
+  .map((is) => (is(path) ? 1 : 0)).join('') + (path.startsWith('.github/') ? 'g' : '');
 
 // ---------------------------------------------------------------- npm
 
@@ -262,6 +266,16 @@ function calls(text, member) {
   return found;
 }
 
+// A string argument's value: plain (`"…"`) or raw (`#"…"#`). Undefined when
+// the argument is absent, null when it is there but written some other way
+// (a multi-line string, a variable), so the caller can hold the whole call.
+function swiftArgument(body, name) {
+  const at = body.search(new RegExp(`\\b${name}\\s*:`));
+  if (at < 0) return undefined;
+  const value = body.slice(at).match(new RegExp(`^${name}\\s*:\\s*(#*)"([^"\\n]+)"\\1(?!")`));
+  return value ? value[2] : null;
+}
+
 /** Swift source with its comments blanked out (strings kept), so a commented-out declaration doesn't count. */
 export function stripSwiftComments(text) {
   let out = '';
@@ -292,15 +306,18 @@ export function stripSwiftComments(text) {
 export function swiftDependencies(text, { stripComments = true } = {}) {
   const deps = new Set();
   if (stripComments) text = stripSwiftComments(text);
+  const other = (kind, body) => `${kind}:${body.replace(/\s+/g, ' ').trim()}`;
   for (const body of calls(text, 'package')) {
-    const url = body.match(/\burl:\s*"([^"]+)"/);
-    const path = body.match(/\bpath:\s*"([^"]+)"/);
-    const id = body.match(/\bid:\s*"([^"]+)"/);
-    deps.add(url ? `swift:${normalizeSwiftUrl(url[1])}` : path ? `swift-path:${path[1]}` : id ? `swift-id:${id[1].toLowerCase()}` : `swift-other:${body.replace(/\s+/g, ' ').trim()}`);
+    const url = swiftArgument(body, 'url');
+    const path = swiftArgument(body, 'path');
+    const id = swiftArgument(body, 'id');
+    deps.add(url ? `swift:${normalizeSwiftUrl(url)}` : url === null || (!path && !id) ? other('swift-other', body)
+      : path ? `swift-path:${path}` : `swift-id:${id.toLowerCase()}`);
   }
   for (const body of calls(text, 'binaryTarget')) {
-    const url = body.match(/\burl:\s*"([^"]+)"/);
-    if (url) deps.add(`swift-binary:${url[1].trim()}`);
+    const url = swiftArgument(body, 'url');
+    if (url) deps.add(`swift-binary:${url.trim()}`);
+    else if (url === null) deps.add(other('swift-binary', body));
   }
   return deps;
 }
@@ -460,7 +477,8 @@ const allowsHost = (allow, host) => allow.hosts.has(host) || [...allow.hosts].so
  * `after` at the head ('' when the file doesn't exist there); `error` says
  * why one of them couldn't be read.
  */
-export function scanFile({ path, before = '', after = '', error, allow }) {
+export function scanFile({ path, previous, before = '', after = '', error, allow }) {
+  if (previous && previous !== path && kindOf(previous) !== kindOf(path)) before = '';
   if (isBinaryPath(path) && !isOtherLock(path)) return [];
   if (error) return [{ signal: 'unreadable', file: path, detail: `couldn't read the diff for \`${path}\` (${error})` }];
   if (before === after) return [];
@@ -648,7 +666,7 @@ export async function readPullRequestFiles({ gh, repoBase, pr }) {
     const before = f.status === 'added' ? { text: '' } : await readFile(gh, repoBase, old, mergeBase);
     const after = f.status === 'removed' ? { text: '' } : await readFile(gh, repoBase, path, pr.head.sha);
     const error = before.error ? `at the merge base: ${before.error}` : after.error ? `at the head: ${after.error}` : undefined;
-    files.push({ path, before: before.text ?? '', after: after.text ?? '', error });
+    files.push({ path, previous: old, before: before.text ?? '', after: after.text ?? '', error });
   }
   return { files, complete };
 }
