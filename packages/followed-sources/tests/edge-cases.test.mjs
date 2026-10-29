@@ -70,3 +70,29 @@ test('run refuses a missing drafter or a bad timeout', async () => {
   await assert.rejects(run({ sources: SOURCES, items: items() }), /drafter/);
   await assert.rejects(run({ sources: SOURCES, items: items(), drafter: createScriptedDrafter(), timeoutMs: 0 }), /timeoutMs/);
 });
+
+test('the keyword drafter stays fast on long runs of punctuation', async () => {
+  const drafter = createKeywordDrafter();
+  const text = `Always check this${'!'.repeat(200000)} and never${'?'.repeat(200000)}`;
+  const started = Date.now();
+  const answer = await drafter.draft({ ref: { source: 'news', itemId: 'a' }, source: { name: 'Example', kind: 'email', topics: [] }, item: { title: 'T', date: '2026-10-12', text }, kinds: {} });
+  assert.ok(Date.now() - started < 1000);
+  assert.equal(answer.cards.length, 2);
+});
+
+test('links are found in their other common forms, and ordinary words stay', async () => {
+  const { stripUrls } = await import('../src/text.mjs');
+  assert.equal(stripUrls('Visit evil.com, or https:\\\\evil.com\\x, or evil．example／path today.'), 'Visit or or today.');
+  assert.equal(stripUrls('Upgrade Node.js, e.g. today; the data: it shows a 3.5 ratio.'), 'Upgrade Node.js, e.g. today; the data: it shows a 3.5 ratio.');
+});
+
+test('link and text cleaning stay fast on long hostile input', async () => {
+  const { stripUrls, clean, safeText } = await import('../src/text.mjs');
+  for (const text of ['a.'.repeat(50000), `${'a'.repeat(30)}.`.repeat(3000), '('.repeat(100000), `x${'.,'.repeat(50000)}y`, `\u001b]${'a'.repeat(100000)}`]) {
+    const started = Date.now();
+    stripUrls(text);
+    clean(text);
+    safeText(text);
+    assert.ok(Date.now() - started < 1000, text.slice(0, 10));
+  }
+});

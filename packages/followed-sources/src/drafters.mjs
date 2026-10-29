@@ -32,7 +32,8 @@ export function createScriptedDrafter(answers = {}) {
 }
 
 const KEYWORDS = ['always', 'never', 'check', 'make sure', 'avoid', 'don t'];
-const SENTENCE = /[^.!?]+[.!?]*/g;
+// A sentence's words, then its end marks (kept out of the capture).
+const SENTENCE = /([^.!?]+)[.!?]*/g;
 
 /**
  * A stand-in so the command runs without a model, not a product feature:
@@ -43,10 +44,10 @@ export function createKeywordDrafter() {
   return {
     async draft(question) {
       const cards = [];
-      for (const sentence of question.item.text.match(SENTENCE) ?? []) {
+      for (const [, sentence] of question.item.text.matchAll(SENTENCE)) {
         const normalized = ` ${normalize(sentence)} `;
         if (!KEYWORDS.some(word => normalized.includes(` ${word} `))) continue;
-        const list = sentence.trim().replace(/[.!?]+$/, '').split(/\s+/);
+        const list = sentence.trim().split(/\s+/);
         cards.push({
           kind: 'lesson',
           title: cut(`Lesson: ${list.slice(0, 6).join(' ')}${list.length > 6 ? ' …' : ''}`, 80),

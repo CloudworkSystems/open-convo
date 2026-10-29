@@ -6,25 +6,54 @@
 const CONTROL = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁠-⁤⁦-⁩﻿]/g;
 // ANSI escape sequences: CSI, OSC (ended by BEL or ESC \) and two-byte escapes.
 const ANSI = /\u001b\[[0-?]*[ -/]*[@-~]|\u009b[0-?]*[ -/]*[@-~]|\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)?|\u001b[@-_]/g;
-// Links with a scheme, links starting with www., and bare host names with a path.
-const URL = /\b[a-z][a-z0-9+.-]*:\/\/\S*|\b(?:mailto|javascript|data|file|tel):\S*|\bwww\.\S+|\b(?:[a-z0-9-]+\.)+[a-z]{2,}\/\S*/gi;
+// Links are found one word at a time with anchored patterns, so a long
+// run of dots or letters can't make the check slow.
+const BARE_SCHEME = /^(?:mailto|javascript|data|file|tel|vbscript):\S/i;
+const OPENERS = /^[("'<[{]+/;
 
 /** Removes ANSI escapes and control characters, and collapses whitespace. */
 export function clean(text) {
   return text.replace(ANSI, '').replace(/\s+/g, ' ').replace(CONTROL, '').replace(/ {2,}/g, ' ').trim();
 }
 
+// Common endings for a bare host name with no path ("evil.com"), so words
+// like "Node.js" stay.
+const BARE_HOST_ENDINGS = new Set(['com', 'net', 'org', 'io', 'ai', 'co', 'dev', 'app', 'xyz', 'info', 'biz', 'me', 'us', 'uk', 'ru', 'cn', 'example']);
+const CLOSERS = new Set(')"\'>]}.,;:!?');
+
+function trimClosers(token) {
+  let end = token.length;
+  while (end > 0 && CLOSERS.has(token[end - 1])) end -= 1;
+  return token.slice(0, end);
+}
+
+function isHost(host) {
+  if (!/^[a-z0-9.-]+$/i.test(host)) return false;
+  const labels = host.split('.');
+  return labels.length > 1 && labels.every(Boolean) && /^[a-z]{2,}$/i.test(labels.at(-1));
+}
+
+// A word that is a link: it has "://" (or a backslash form), starts with a
+// link scheme or www., is a host name followed by a path, or is a bare host
+// name with a common ending. Fullwidth dots and slashes count (NFKC).
+function isLink(word) {
+  const token = word.normalize('NFKC').replace(OPENERS, '');
+  if (/:[/\\]/.test(token)) return true;
+  if (BARE_SCHEME.test(token) || /^www\./i.test(token)) return true;
+  const slash = token.search(/[/\\]/);
+  if (slash > 0) return isHost(token.slice(0, slash));
+  const bare = trimClosers(token);
+  return isHost(bare) && BARE_HOST_ENDINGS.has(bare.split('.').at(-1).toLowerCase());
+}
+
 /** Removes every link from the text, then cleans it again. */
 export function stripUrls(text) {
-  return clean(text.replace(URL, ' '));
+  return clean(text.split(/\s+/).filter(word => !isLink(word)).join(' '));
 }
 
 /** True when the text contains a link stripUrls would remove. */
 export function hasUrl(text) {
-  URL.lastIndex = 0;
-  const found = URL.test(text);
-  URL.lastIndex = 0;
-  return found;
+  return text.split(/\s+/).some(isLink);
 }
 
 /**

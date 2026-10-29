@@ -123,6 +123,12 @@ Each has a test in `tests/edge-cases.test.mjs` unless noted.
 - **Zero-width and bidi control characters** are removed along with other
   control characters, since they can hide or reorder what the owner reads
   (`tests/engine.test.mjs`).
+- **What counts as a link.** Any word with `://` or `:\`, a word starting
+  with a link scheme (`mailto:`, `javascript:`, `data:` and so on) or
+  `www.`, a host name followed by a path, and a bare host name with a common
+  ending such as `.com` or `.io` (so "Node.js" stays). Fullwidth dots and
+  slashes count. Links are found one word at a time with anchored checks,
+  so long hostile input can't make the check slow.
 - **Files over 5 MB** are refused before they are read (not tested; the
   limit is a constant, `MAX_FILE_BYTES`).
 - **`reported` grows with every handled item.** Pruning it waits for real
