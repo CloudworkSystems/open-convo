@@ -104,6 +104,8 @@ reviews. Plan approved (merged as #127 on October 24):
 
 **Cloudwork Rail Map** (Desk, Cloudwork Nexus), Claude builds; a fifth Nexus view showing this repository's branches, commits and pull requests from a saved snapshot (`apps/desk/scripts/rail-map-snapshot.mjs`); merged October 24 (#132).
 
+**PR history spreadsheet** (all work; owner asked October 29), Claude builds; one row per pull request (builder, dates, areas, Codex rounds and findings, outside review), rebuilt each morning by `.github/workflows/pr-history.yml` onto its own branch, `pr-history-data`, never `main`. The owner's Google Sheet reads its CSV with `IMPORTDATA`; the JSON copy shares the Rail Map's pull fields for Canvas and Atlas. In review.
+
 **Skin check** (Personal, new Health module), Claude builds, GrokBot or a fresh Claude reviews; plan approved (`docs/plans/skin-check.md`). Slice 1, the standalone engine in `packages/skin-check/`, is built; the iPhone source joins the iPhone app on the parallel sync line, and the Desk view follows.
 
 **Public website (trueconvo.com)**, Claude builds, Codex reviews; a home page (with two Desk preview screenshots) and a plain-language privacy policy in `site/`, published by `.github/workflows/pages.yml` from `main` (#153, October 25). For Meta's developer early-access application and regular visitors. The owner turned on Pages and set the custom domain, and the site is published at trueconvo.com (latest deploy October 26).
