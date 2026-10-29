@@ -254,7 +254,10 @@ into the examples. Every example is invented.
   in a Claude thread. Cases he changes are rewritten first.
 - The install gate runs first (portable-capability-layer.md): each model
   runs the examples both without the skill and with it, and the outcome
-  (native, partial or needed) is recorded in `capability.json`. Where the
+  (native, partial or needed) is recorded in `capability.json`. A model
+  counts as native only when its run without the skill meets the same
+  pass rule below (every must-pass case and five in six overall);
+  otherwise it is partial or needed. Where the
   model is partly native, the skill keeps only the steps that close the
   gap.
 - The examples are run by hand on the local default model (`qwen3:8b`,
