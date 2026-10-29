@@ -199,7 +199,8 @@ name), in the format of `docs/skills/README.md`:
   step at a time.
 - **`capability.json`**: status `draft`, no scripts, the actions that need
   approval (sending, publishing, spending, deleting, changing an account or
-  setting, sharing private data), `models_passed` empty.
+  setting, sharing private data), and `models_passed` starting empty,
+  filled in only from the finish-line runs below.
 - **`examples.md`**: at least 24 invented messages, each with its expected
   route and a one-line reason, covering every route and every failure mode
   above. At least 6 are **wait for a yes** cases, at least 4 are ideas that
