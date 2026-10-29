@@ -199,6 +199,13 @@ test('Swift: a new package is a hit; a new version of the same one is not', () =
   assert.deepEqual(signals(scan('apps/demo/Package.swift', old, added, allow({ hosts: ['git.invented-forge.dev'] }))), ['dependency:new Swift package `https://git.invented-forge.dev/other`']);
 });
 
+test('Swift: a URL that differs only in path case is a different package', () => {
+  const at = (url) => swift(`.package(url: "${url}", from: "1.0.0")`);
+  const list = allow({ hosts: ['git.invented-forge.dev'] });
+  assert.deepEqual(scan('Package.swift', at('https://git.invented-forge.dev/Team/Kit.git'), at('https://GIT.Invented-Forge.dev/Team/Kit'), list), []);
+  assert.deepEqual(signals(scan('Package.swift', at('https://git.invented-forge.dev/Team/Kit.git'), at('https://git.invented-forge.dev/team/kit.git'), list)), ['dependency:new Swift package `https://git.invented-forge.dev/team/kit`']);
+});
+
 test('Swift: a remote binary target is a dependency; a local one is not', () => {
   assert.deepEqual([...swiftDependencies(swift('', '.binaryTarget(name: "Blob", url: "https://files.invented-forge.dev/b.zip", checksum: "00")'))], ['swift-binary:https://files.invented-forge.dev/b.zip']);
   assert.deepEqual([...swiftDependencies(swift('', '.binaryTarget(name: "Blob", path: "Blob.xcframework")'))], []);

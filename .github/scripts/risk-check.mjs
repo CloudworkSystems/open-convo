@@ -235,7 +235,14 @@ function npmLockHits(path, before, after, allow) {
 
 // ---------------------------------------------------------------- Swift
 
-const normalizeSwiftUrl = (url) => url.trim().toLowerCase().replace(/\/+$/, '').replace(/\.git$/, '');
+// Scheme and host are case-insensitive; the path isn't (case-sensitive Git
+// servers can host different repositories at paths that differ only in case).
+function normalizeSwiftUrl(url) {
+  const value = url.trim();
+  const parts = value.match(/^([a-z][a-z0-9+.-]*:\/\/[^/]*)(.*)$/i);
+  const normalized = parts ? parts[1].toLowerCase() + parts[2] : value;
+  return normalized.replace(/\/+$/, '').replace(/\.git$/, '');
+}
 
 // The text inside each `<marker>(...)` call, matching parentheses.
 function calls(text, marker) {
