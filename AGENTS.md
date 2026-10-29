@@ -207,6 +207,14 @@ looping for 8 to 17 rounds on ever-narrower edge cases, so:
   raise that finding again on every round until the judge rates it or the
   code fixes it, so the judge sees it on the latest commit.
 - Give all findings for a commit in one round, most severe first.
+- End each finding with one line that starts `For the owner:`, written to
+  the owner in your own words. He reads reviews as the product's owner, not
+  as a programmer: say in at most two plain sentences what would go wrong
+  for him if this merged as is, and whether he needs to do anything (usually
+  not, since the builder fixes it). No file names, code names or jargon.
+  Keep the priority badge and the rest of the finding as they are. Claude
+  quotes this line to him word for word, credited to you
+  ([docs/design-notes/agents-speak-for-themselves.md](docs/design-notes/agents-speak-for-themselves.md)).
 
 When a pull request still has only P2 and P3 findings after three Codex
 rounds, an independent judge rates each remaining finding, and the
