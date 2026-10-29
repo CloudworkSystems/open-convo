@@ -483,8 +483,11 @@ final class ParticipantDeskEndToEndTests: CoordinatorDeskTestCase {
         XCTAssertGreaterThanOrEqual(replied("participant.status", on: fresh), 1, "the fresh document read the run's status")
 
         // 4. One explicit Start, from the page: the prepared run, once.
+        let beforeClick = exchanges.count
         try await clickButton(session, labelled: "Start prepared message")
-        try await eventually("the coordinator to launch the run", timeout: 20, detail: { await self.shown(session) }) {
+        try await eventually("the coordinator to launch the run", timeout: 20, detail: {
+            "exchanges since the click: \(self.exchanges[beforeClick...]); launch requests: \(launcher.requests.count); page: \(await self.shown(session))"
+        }) {
             launcher.runs.count == 1
         }
         let run = launcher.runs[0]
