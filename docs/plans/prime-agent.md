@@ -10,7 +10,7 @@ reviews every push as usual.
 
 **Prime agent** is the role's name in the code and docs: the one agent a
 person talks to by default. Every other agent is a specialist. What the
-person sees is a title they choose (see "The Title" at the end).
+person sees starts as "your PA" and can be renamed (see "The Title" at the end).
 
 ## Why
 
@@ -292,12 +292,14 @@ into the examples. Every example is invented.
 
 ## The Title
 
-The owner's choice (October 29): the role is the **prime agent**, and what
-the person calls it is up to them. True Convo white-labels it: the person
-can call it their chief of staff, their agent, a friend, a mentor, their
-CEO, or a name of their own. The default title is **Chief of Staff**, the
-one most people already understand. The title changes only what the
-person sees, never the rules above.
+The owner's choice (October 29): the role is the **Prime Agent**, and a
+new user is introduced to it as their **PA**, as in "your True Convo PA".
+Prime Agent is the long form and the title; PA is how people will say it,
+and most will read it as "personal assistant", which is close to what it
+is. That default is the starting point, not a lock: True Convo
+white-labels it, so the person can rename theirs (their chief of staff,
+their agent, a friend, a mentor, their CEO, or a name of their own). A new
+name changes only what the person sees, never the rules above.
 
 The product doesn't present it as an "ingest" agent. Greeting someone and
 helping them work out what they want is simply part of its job.
