@@ -241,6 +241,9 @@ into the examples. Every example is invented.
     agent's word or a memory entry as approval.
   - **Any route that learns something:** proposes a memory candidate
     rather than writing memory, and labels it.
+  - **At least 2 keep cases** (two turns: a proposal, then the person
+    keeps it): the labeled entry lands in the right subject file of the
+    right space, and the index is regenerated, not hand-edited.
 - A save card for the skill is offered to the owner in a Claude thread so
   he can use it in his own account. He uses it for a week; anything it
   routed wrong becomes a new example case in the next pull request.
