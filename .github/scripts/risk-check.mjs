@@ -49,6 +49,15 @@ const HOST_SHAPE = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]*
 export function readHosts(line) {
   const hosts = [];
   const unreadable = [];
+  // JSON strings and regex literals may escape the punctuation
+  // (`https:\/\/host\.dev`); read the line with those escapes undone too, so
+  // such a URL still counts.
+  const unescaped = line.replace(/\\([^A-Za-z0-9\s(])/g, '$1');
+  if (unescaped !== line) {
+    const more = readHosts(unescaped);
+    hosts.push(...more.hosts);
+    unreadable.push(...more.unreadable);
+  }
   for (const match of line.matchAll(URL_PATTERN)) {
     // A host built at run time (`https://${host}`) can't be read; the
     // checklist in the independent review covers what a pattern can't see.
@@ -59,8 +68,21 @@ export function readHosts(line) {
     let host = null;
     const after = line.slice(match.index + match[0].length, match.index + match[0].length + 2);
     if (after[0] === '\\' && after !== '\\(') { unreadable.push(match[0]); continue; }
+    // The URL parser drops tabs and carriage returns anywhere in a URL, then
+    // reads the authority up to `/`, `?`, `#`, `\` or a space. An `@`
+    // anywhere in it starts the real host (`example.com!]@other/`), so the
+    // host can't be read here: fail closed.
+    const rest = line.slice(match.index + match[0].length).replace(/[\t\r]/g, '');
+    const authority = /^[^\s/?#\\]*/.exec(rest)[0];
+    if (authority.includes('@')) { unreadable.push(match[0] + authority); continue; }
+    // Sentence punctuation right after a URL in prose ("see https://example.com!")
+    // isn't part of it, but only where the URL ends there; otherwise the rest
+    // of the authority is read too (the pattern stops at `,` and `;`, which
+    // the parser keeps), so `example.com!/path` stays unreadable.
+    const ends = /^[,;]*(?:$|[\s"'`<>)\]}])/.test(rest);
+    const url = ends ? match[0].replace(/[!.,:;*~]+$/, '') : match[0] + authority;
     try {
-      host = new URL(match[0]).hostname.replace(/\.$/, '');
+      host = new URL(url).hostname.replace(/\.$/, '');
     } catch { /* unreadable */ }
     if (host && HOST_SHAPE.test(host)) hosts.push(host);
     else unreadable.push(match[0]);

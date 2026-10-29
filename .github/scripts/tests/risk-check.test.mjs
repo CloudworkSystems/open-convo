@@ -36,9 +36,32 @@ test('hosts: odd spellings are read the way fetch reads them', () => {
 
 test('hosts: a URL whose host cannot be read is a hit, not skipped', () => {
   assert.deepEqual(readHosts('fetch("https://bad%host.invented-tracker.dev/")').unreadable.length, 1);
+  // JSON-escaped slashes are read too, and an escape after the host still fails closed.
+  assert.deepEqual(readHosts('{"url": "https:\\/\\/collector.invented-tracker.dev\\/v1"}').hosts, ['collector.invented-tracker.dev']);
+  assert.equal(readHosts('"https://github.com\\/@collector.invented-tracker.dev"').unreadable.length, 1);
+  // Sentence punctuation after a URL in prose isn't part of the host.
+  assert.deepEqual(readHosts('// See https://github.com! Or https://github.com.'), { hosts: ['github.com', 'github.com'], unreadable: [] });
+  assert.equal(readHosts('https://github.com!collector.invented-tracker.dev/').unreadable.length, 1);
+  // ...but only where the URL ends: here the punctuation is still in the host.
+  for (const line of ['https://github.com!/path', 'https://github.com.!?q=1', 'https://github.com,#top', 'https://github.com;x/']) {
+    assert.equal(readHosts(line).hosts.length, 0, line);
+    assert.equal(readHosts(line).unreadable.length, 1, line);
+  }
+  for (const line of ['https://github.com!]@collector.invented-tracker.dev/path', '"https://github.com"@collector.invented-tracker.dev', 'https://github.com)x@collector.invented-tracker.dev?q']) {
+    assert.deepEqual(readHosts(line).hosts, [], line);
+    assert.equal(readHosts(line).unreadable.length, 1, line);
+  }
+  assert.deepEqual(readHosts('https://github.com) or mail@invented.example'), { hosts: ['github.com'], unreadable: [] });
+  // The URL parser drops tabs and carriage returns, so they don't end the host.
+  assert.equal(readHosts('https://github.com!\t@collector.invented-tracker.dev/path').unreadable.length, 1);
+  assert.equal(readHosts('https://github.com!\r@collector.invented-tracker.dev/path').unreadable.length, 1);
+  assert.deepEqual(readHosts('https://github.com\t.collector.invented-tracker.dev/path').hosts, ['github.com.collector.invented-tracker.dev']);
+  assert.deepEqual(readHosts('("https://github.com.") and https://github.com, then https://github.com;'), { hosts: ['github.com', 'github.com', 'github.com'], unreadable: [] });
   assert.deepEqual(scan('src/a.js', '', 'fetch("https://bad%host.invented-tracker.dev/")\n').map((h) => h.signal), ['host']);
   const list = allow({ hosts: ['github.com'] });
-  assert.deepEqual(scan('src/a.js', '', 'fetch("https://github.com\\@collector.invented-tracker.dev/")\n', list).map((h) => h.detail), ["couldn't read the host in `https://github.com`"]);
+  assert.deepEqual(scan('src/a.js', '', 'fetch("https://github.com\\@collector.invented-tracker.dev/")\n', list).map((h) => h.detail), ["couldn't read the host in `https://github.com`", 'new outside host `collector.invented-tracker.dev`']);
+  // Regex literals escape the dots too; the host still reads.
+  assert.deepEqual(readHosts('assert.match(html, /href="https:\\/\\/collector\\.invented-tracker\\.dev\\/">/);').hosts, ['collector.invented-tracker.dev']);
   assert.deepEqual(scan('src/a.js', '', 'fetch("https://github.com\\x40collector.invented-tracker.dev/")\n', list).length, 1);
   assert.deepEqual(scan('Sources/A.swift', '', 'URL(string: "http://127.0.0.1:\\(port)")\n'), []);
 });
