@@ -135,7 +135,11 @@ parts:
 - **What's already ruled out**, and where to look first.
 - **Limits:** what needs the person's yes, what the specialist may not
   touch.
-- **Its memory package:** the files it may read, from which space.
+- **Its memory package** (the full contract in foundations.md, "Context
+  packages"): the files it may read and from which space, why it gets
+  them, for which specialist, how fresh they are and what it may do with
+  them. The package is discarded when the job ends; nothing from it
+  stays with the specialist, and a later job gets a new package.
 
 ## Known Failure Modes
 
