@@ -1,6 +1,10 @@
 // Keeps one issue, "Needs the owner", listing open pull requests that touch
 // owner-protected paths and don't yet have the owner's approval on their
 // latest commit. The owner pins the issue once.
+//
+// It also keeps one hidden line in the issue, listing the open pull requests
+// with auto-merge on. The PR keeper reads that line to decide which pull
+// requests to update from main: its GitHub tools can't see auto-merge.
 
 import { client, repoFromEnv } from './github.mjs';
 import { parseCodeowners, protectedFiles } from './codeowners.mjs';
@@ -17,8 +21,10 @@ const codeowners = await gh.get(`${base}/contents/.github/CODEOWNERS?ref=${repoI
 const rules = parseCodeowners(Buffer.from(codeowners.content, 'base64').toString('utf8'));
 
 const rows = [];
+const autoMerge = [];
 for (const pr of await gh.all(`${base}/pulls?state=open`)) {
   if (pr.draft) continue;
+  if (pr.auto_merge) autoMerge.push(pr.number);
   const files = (await gh.all(`${base}/pulls/${pr.number}/files`)).flatMap((f) => [f.filename, f.previous_filename].filter(Boolean));
   const hits = protectedFiles(rules, files);
   if (hits.length === 0) continue;
@@ -39,6 +45,8 @@ const body = [
   rows.length
     ? ['| Pull request | Codex clean | Protected files |', '| --- | --- | --- |', ...rows].join('\n')
     : 'Nothing is waiting on you.',
+  '',
+  `<!-- auto-merge-on: ${autoMerge.sort((a, b) => a - b).join(',')} -->`,
 ].join('\n');
 
 const issues = await gh.all(`${base}/issues?state=open&creator=${encodeURIComponent('github-actions[bot]')}`);
