@@ -37,9 +37,13 @@ import Foundation
 //   `stdinState`, which peeks at stdin without consuming text: "eof",
 //   "data", "open" or "closed"), append their record name to `checks.log`,
 //   and never write `cli.pid` or `cli.json`.
+// - `auth status` with `networkPort` or `networkSocket` in the scenario
+//   first tries to connect to that listener (the test's own) and records
+//   whether it could in `network.json`: the stand-in for the settings fetch
+//   the real one may start, which step 4 runs with the network blocked.
 // - For section 5's checks (F3), more invented variants: `authStatus`
 //   "console-login", "api-key-helper", "oauth-token", "gateway",
-//   "unknown-plan", "unknown-method", "no-account", "logged-in-exit-1",
+//   "pro", "team", "enterprise" (a plan login on that plan), "unknown-plan", "unknown-method", "no-account", "logged-in-exit-1",
 //   "logged-in-number", "empty" and "oversized", with the scenario's
 //   `configDirectory` if it has one; `versionMode` "garbled",
 //   "empty", "oversized", "exit-2" or "slow" (after `versionSlowMs`, default
@@ -218,12 +222,54 @@ func runCheck(_ check: PredictedCheck, folder: String, records: String, descript
             exit(70)
         }
         if name == "slow" { sleepMillis(scenario["slowMs"] as? Int ?? 6_000) }
+        tryNetwork(scenario, records: records)
         writeAll(1, answer.output)
         exit(answer.exit)
     case .unsupported:
         writeAll(2, "invented fake: this auth command is not modelled\n")
         exit(64)
     }
+}
+
+/// Stands in for the fetch the real `auth status` may start: with
+/// `networkPort` (a TCP port on 127.0.0.1) or `networkSocket` (a local
+/// socket path) in the scenario, tries to connect to each and records in
+/// `network.json` whether it did, and the error if not. Both are listeners
+/// the test itself opened; nothing else is reached.
+func tryNetwork(_ scenario: [String: Any], records: String) {
+    var outcome: [String: Any] = [:]
+    func errorCode(_ result: Int32) -> Int { result == 0 ? 0 : Int(errno) }
+    if let port = scenario["networkPort"] as? Int {
+        let socket = Darwin.socket(AF_INET, SOCK_STREAM, 0)
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = in_port_t(UInt16(port).bigEndian)
+        address.sin_addr.s_addr = inet_addr("127.0.0.1")
+        let result = socket < 0 ? -1 : withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(socket, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
+        }
+        outcome["tcpConnected"] = result == 0
+        outcome["tcpErrno"] = socket < 0 ? Int(errno) : errorCode(result)
+        if socket >= 0 { _ = close(socket) }
+    }
+    if let path = scenario["networkSocket"] as? String {
+        let socket = Darwin.socket(AF_UNIX, SOCK_STREAM, 0)
+        var address = sockaddr_un()
+        address.sun_family = sa_family_t(AF_UNIX)
+        _ = withUnsafeMutableBytes(of: &address.sun_path) { buffer in
+            path.utf8CString.withUnsafeBytes { buffer.copyMemory(from: UnsafeRawBufferPointer(rebasing: $0.prefix(buffer.count - 1))) }
+        }
+        address.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
+        let result = socket < 0 ? -1 : withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(socket, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
+        }
+        outcome["localConnected"] = result == 0
+        outcome["localErrno"] = socket < 0 ? Int(errno) : errorCode(result)
+        if socket >= 0 { _ = close(socket) }
+    }
+    guard !outcome.isEmpty, let data = try? JSONSerialization.data(withJSONObject: outcome) else { return }
+    writeAtomically(String(decoding: data, as: UTF8.self), to: records + "/network.json")
 }
 
 /// The value after `--model`, as the real CLI would echo it in init.

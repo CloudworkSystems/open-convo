@@ -390,16 +390,18 @@ omits the key.
 
 Checks are local: the pinned file, `claude --version` and the settings
 sources below; the design adds `claude auth status` (account fields dropped
-in memory), which production does not run until the D1 decision (step 4,
-below). No model
+in memory), which production runs only with its network blocked (the
+owner's D1 choice; step 4, below). No model
 request, billing read or provider probe; no configured key, refresh, proxy,
 headers or policy helper is ever run; the app never reads the CLI's own
-Keychain item. That guarantee holds as built only because production never
-runs `claude auth status` until the D1 decision (Codex F34-D1, below): for an
-account the CLI treats as eligible for server-managed settings, that command
-can fetch new settings and run a policy helper they name before any
-inspection can see it. Nothing in 2.1.283 skips that fetch for an eligible
-account, and no check beforehand can tell whether the account is eligible.
+Keychain item. That guarantee holds as built only because production runs
+`claude auth status` with every network operation denied (Codex F34-D1, the
+owner's D1 choice, below): for an account the CLI treats as eligible for
+server-managed settings, that command could otherwise fetch new settings and
+run a policy helper they name before any inspection can see it. Nothing in
+2.1.283 skips that fetch for an eligible account, and no check beforehand
+can tell whether the account is eligible; so the block stops the fetch, and
+only Pro and Max plans, which the reading says are not eligible, pass.
 By the same byte reading, a proxy address given to that probe alone and
 held closed by the app would make the fetch fail; that is one of the D1
 options, not built. Each subprocess runs under section 11's environment rule (the
@@ -541,7 +543,8 @@ probe's own count of paths outside its folder (Codex F4-1, F34-2). In order:
    An unresolved source stops the checks before `auth status` (no auth
    command runs while a startup override cannot be ruled out), so it can
    hide a later `signed-out` or `not-subscription`.
-4. **Not run in production until the D1 decision (Codex F34-D1;
+4. **Run in production only with its network blocked (the owner's D1
+   choice, October 29, 2026, option 1; Codex F34-D1;
    `docs/reviews/2026-10-12-claude-f34-d1-decision.md`, a True Convo review record, not moved).** A byte reading of
    2.1.283 (never run) shows that `auth status` starts a background fetch of
    server-managed settings for an eligible account (a Team, Enterprise or
@@ -552,23 +555,40 @@ probe's own count of paths outside its folder (Codex F4-1, F34-2). In order:
    Nothing in that build skips the fetch for an eligible account (the
    essential-traffic switch is not consulted; the settings-path and mock
    overrides are compiled out), and eligibility depends on the plan in the
-   CLI's Keychain login, which the app never reads. Making the fetch fail is
-   another matter: by the same reading, a proxy address set for this probe
-   only (`HTTPS_PROXY` and `HTTP_PROXY`), on a loopback port the app holds
-   and refuses, takes every route the fetch can travel, with no direct
-   fallback, while `auth status --json` still answers from local data. It
-   covers the probe, not the run, and is not built: it is option 2 of the
-   decision. So production (`ClaudeLocalChecks`'s
-   public initializer) stops here: after every earlier check passes, step 4
-   is `check-failed` (log `source=remote-settings detail=unguarded`) and the
-   command never runs; earlier failures still win. Only the test target and
-   the test-only probe can run it, over invented trees and the fake CLI (a
-   source scan holds that), and what follows describes that path, kept for
-   whichever option is decided. The same reading says the run itself, for an
-   eligible account, can fetch and run such a helper too; the decision
-   covers it.
+   CLI's Keychain login, which the app never reads. So production
+   (`ClaudeLocalChecks`'s public initializer) runs the probe under macOS's
+   sandbox with every network operation denied: it spawns the system's
+   `/usr/bin/sandbox-exec -p "(version 1)(allow default)(deny network*)"`
+   followed by the pinned file and `auth status --json`. The tool replaces
+   itself with the pinned file (same process, same group, section 11's
+   environment and folder), and the block covers everything the probe
+   starts: IP and local sockets alike, outbound, inbound and bind, so the
+   fetch, and any helper a cached payload would arm, reaches nothing. Before
+   it is used, the tool must be what the pinned file must be (section 5
+   step 1), owned by root: not a link, a regular executable file with no
+   group or other write and no setuid or setgid bit, in a root-owned folder
+   (not a link) no one else can write. Otherwise, after every earlier check
+   passes, step 4 is `check-failed` (log `source=auth-status
+   detail=network-block`) and the command never runs; earlier failures
+   still win. Apple marks the tool deprecated, so the tests run it on the
+   Mac CI runner each time: under the block the fake CLI's connects to a
+   TCP listener on loopback and to a local socket both fail, and without it
+   they succeed. Only Pro and Max plans pass (below), which the reading says
+   never fetch, so the block is a second wall for them, not the only one.
 
-   `auth status --json` (tests and the test-only probe only): exit 0 or 1 and one JSON object whose read fields
+   **The narrower promise this choice accepts.** The checks see the Mac as
+   it is when they run. A Team or Enterprise login, a profile login or a
+   stored key signed in after the check and before a run, or a settings
+   helper added in that gap, is not caught by the check; the run itself is
+   not network-blocked (it needs Anthropic), so for that run the fetch and
+   the helper the reading describes could happen. Section 17's recheck at
+   start narrows the gap to the moments between that recheck and the spawn;
+   it does not close it. Production code and this contract claim nothing
+   more.
+
+   `auth status --json` (network-blocked in production; run directly only
+   by the tests and the test-only probe, over invented trees and the fake
+   CLI, which a source scan holds): exit 0 or 1 and one JSON object whose read fields
    have their types (`configDirectory` included: the reading says it is
    always present), `loggedIn` true exactly when exit 0. Then, in order:
    `provider-override` for any `apiKeySource` (so a stored Console key,
@@ -579,9 +599,10 @@ probe's own count of paths outside its folder (Codex F4-1, F34-2). In order:
    config folder the checks did not inspect, which catches a
    `CLAUDE_CONFIG_DIR` or `HOME` redirect the sources did not show (Codex
    F3-1); `signed-out` when logged out; `not-subscription` for a claude.ai
-   login with no `subscriptionType`; an unknown method or plan (known:
-   `pro`, `max`, `team`, `enterprise`), no account, or any other shape is
-   `check-failed`. Only the plan and the comparator are kept; email,
+   login with no `subscriptionType`, and for a `team` or `enterprise` plan
+   (detail `plan-not-accepted`, the owner's D1 choice: only Pro and Max
+   pass); an unknown method or plan (known: `pro`, `max`, `team`,
+   `enterprise`), no account, or any other shape is `check-failed`. Only the plan and the comparator are kept; email,
    organization and the output are dropped in memory.
 
 Each probe (answer 10) runs the pinned file directly, not through the
@@ -638,11 +659,12 @@ the shapes are F1's predictions, unconfirmed by a run, so the first real
 check may answer `check-failed`; the run itself, for an account the CLI
 treats as eligible, may still fetch server-managed settings at its own start,
 after the check, and run a policy helper they name (the D1 reading); and
-`auth status`, were it run, could do the same inside the probe, applying a
-new payload that needs consent in memory only, so the second inspection
-could not even see it (Codex F34-9 and F34-D1: why production does not run
-it, and the options, are in the D1 decision); were `auth status` or the run
-started, the CLI would also run, at its start, a policy helper named in a
+`auth status`, run without its network blocked, could do the same inside
+the probe, applying a new payload that needs consent in memory only, so the
+second inspection could not even see it (Codex F34-9 and F34-D1: why
+production blocks its network, and the options, are in the D1 decision);
+the block depends on Apple's deprecated `sandbox-exec`, retested on each
+macOS version; were `auth status` or the run started, the CLI would also run, at its start, a policy helper named in a
 local managed source that another program (the user's own Claude Code
 session writing newly fetched server-managed settings, say) changed after
 the inspection: the second inspection detects that, it does not prevent it,
@@ -662,8 +684,9 @@ module, and F2's packaged evidence, stay byte-identical.
 
 **The report with section 17's owner, as built (plan F4, October 11;
 inactive; the R4 fix of October 12 awaiting Codex's re-review of the combined
-F3+F4 candidate).** Over the public `ClaudeLocalChecks` it can never answer
-`available` until the D1 decision, since those checks stop at step 4.
+F3+F4 candidate).** Over the public `ClaudeLocalChecks` (step 4
+network-blocked since the D1 choice) it answers `available` only as below,
+and a new launch never does: it starts `unconfirmed`.
 `PaidUsageConfirmationOwner` (`ParticipantProcess`) is the reporter a host
 with section 17 built uses; nothing in the app constructs it, and the release
 app keeps `ShippingAvailability` and links neither module. `report()` asks the
@@ -3257,13 +3280,13 @@ no tools). What native writes to stdin, in UTF-8, before closing it:
 
 ### 21.5 Section 5 step 4 (the D1 choice)
 
-Unchanged by this revision. Production still refuses `claude auth status`
-(`check-failed`, `source=remote-settings detail=unguarded`) until the
-owner makes the D1 choice (the plan's question 2; recommended: option 1,
-with option 2 as its backup). That choice, and the narrower promise it
-accepts, are written into this section in the adapter's PR 3b, which builds
-it, and reviewed there. Until then the off-Mac pin is never available, which
-is what the page shows.
+The owner chose option 1 on October 29, 2026: `claude auth status` runs
+with macOS blocking all its network use, and only Pro and Max plans pass.
+Section 5 step 4 says how (built in the adapter's PR 3b, still inactive:
+nothing constructs the checks outside the tests and the test-only probe)
+and states the narrower promise the choice accepts. The off-Mac pin is
+still never available, since `overflow-unverified` comes after every local
+check, which is what the page shows.
 
 ### 21.6 Vectors
 

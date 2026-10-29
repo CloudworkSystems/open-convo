@@ -84,7 +84,7 @@ struct ClaudeCheckRun: Sendable {
     let environment: [String: String]?
     let accountKey: [UInt8]
     let observer: ClaudeCheckObserver?
-    /// Whether step 4 runs `auth status` (Codex F34-D1).
+    /// How step 4 runs `auth status` (Codex F34-D1).
     let authStatus: ClaudeAuthStatusGate
 
     var binary: ClaudePinnedBinary {
@@ -121,7 +121,7 @@ struct ClaudeCheckRun: Sendable {
         let probeEnvironment = ParticipantEnvironment.build(from: environment ?? ProcessInfo.processInfo.environment)
         let runner = ClaudeProbeRunner(binaryPath: pinned.path, workParent: roots.probeParent, environment: probeEnvironment,
                                        outputBytes: limits.outputBytes, observer: observer)
-        func probe(_ arguments: [String]) -> (ClaudeProbeResult, timeout: ClaudeCheckDetail) {
+        func probe(_ arguments: [String], through runner: ClaudeProbeRunner) -> (ClaudeProbeResult, timeout: ClaudeCheckDetail) {
             let now = Self.nowMillis()
             let own = now + limits.perProcessMillis
             guard now < deadline, !progress.isAbandoned else {
@@ -135,7 +135,7 @@ struct ClaudeCheckRun: Sendable {
         // 2. `--version`, which the CLI answers before any settings, auth or
         // network work.
         progress.at(.version)
-        let (versionProbe, versionTimeout) = probe(["--version"])
+        let (versionProbe, versionTimeout) = probe(["--version"], through: runner)
         switch ClaudeCheckAnswers.version(versionProbe, timeout: versionTimeout) {
         case .unreadable(let detail):
             return end(.checkFailed, .version, nil, detail)
@@ -161,10 +161,15 @@ struct ClaudeCheckRun: Sendable {
 
         // 4. `auth status`, which 2.1.283 lets fetch server-managed settings
         // (and arm a helper they carry) before any inspection can see them:
-        // never run in production until the D1 decision (Codex F34-D1).
+        // in production only with its network blocked (the owner's D1
+        // decision, Codex F34-D1).
         progress.at(.authStatus, .authStatus)
-        guard authStatus == .runForTests else { return end(.checkFailed, .authStatus, .remoteSettings, .unguarded) }
-        let (authProbe, authTimeout) = probe(["auth", "status", "--json"])
+        var authRunner = runner
+        if case .runWithNetworkBlocked(let block) = authStatus {
+            if let detail = block.refusal(observer: observer) { return end(.checkFailed, .authStatus, .authStatus, detail) }
+            authRunner.networkBlock = block
+        }
+        let (authProbe, authTimeout) = probe(["auth", "status", "--json"], through: authRunner)
         let answer = ClaudeCheckAnswers.authStatus(authProbe, timeout: authTimeout, configFolder: roots.configFolder)
         // Past the deadline nothing more is done: the check is over.
         if case .failure(let failure, let detail) = answer, Self.nowMillis() >= deadline {
@@ -181,6 +186,11 @@ struct ClaudeCheckRun: Sendable {
             return end(failure, .authStatus, .authStatus, detail)
         case .subscription(let plan, let email, let organization):
             login = (plan, email, organization)
+        }
+        // Only Pro and Max (the owner's D1 decision): a Team or Enterprise
+        // plan can carry server-managed settings.
+        guard ClaudeSubscriptionPlan.accepted.contains(login.plan) else {
+            return end(.notSubscription, .authStatus, .authStatus, .planNotAccepted)
         }
         if case .unresolved(let source, let detail) = after { return end(.checkFailed, .sources, source, detail) }
         progress.at(.binary)

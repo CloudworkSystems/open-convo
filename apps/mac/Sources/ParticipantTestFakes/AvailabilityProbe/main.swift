@@ -23,7 +23,7 @@ import ParticipantProcess
 // outside=<count>`: even when every local check passes, the answer is not
 // available. `local` runs `auth status` (the fake's; the tests' gate);
 // `production` is the public initializer's checks over the same tree, which
-// never run it until the D1 decision. `outside` counts the paths the first
+// run it with its network blocked (the D1 decision). `outside` counts the paths the first
 // checks touched outside the working folder (each is also written to
 // stderr), which the test requires to be 0. The checks' log lines go nowhere
 // (never the Mac's unified log).
@@ -70,8 +70,8 @@ let inventedRoots = ClaudeCheckRoots(home: root + "/home", userName: "invented-u
                                      probeParent: URL(fileURLWithPath: root + "/work", isDirectory: true), gitSearchTop: root)
 
 /// Section 5's real local checks over the invented tree, running the fake's
-/// `auth status` (the tests' gate; production never runs it until the D1
-/// decision).
+/// `auth status` with nothing around it (the tests' gate; production runs
+/// it with its network blocked).
 func inventedLocalChecks() -> ClaudeLocalChecks {
     ClaudeLocalChecks(roots: inventedRoots, log: DroppedCheckLog(), observer: { outside.record($0) }, authStatus: .runForTests)
 }
