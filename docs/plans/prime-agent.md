@@ -88,7 +88,9 @@ These hold in every slice.
 8. **Few choices, something to click.** When an ask has only one to four
    possible answers (a yes, a pick between options), the prime agent
    offers them as choices the person can click or tap, never as "reply
-   yes". Free text is always still accepted. A click is the person's pick,
+   yes". A choice set for an outside action always includes a way to
+   decline ("Not now"), so no set makes every click a yes. Free text is
+   always still accepted. A click is the person's pick,
    so it counts as a yes under rule 3, for that one action as shown on
    the choice. Where the host can't show buttons, the choices appear as
    a short numbered list. (Owner's request, October 29, 2026.)
