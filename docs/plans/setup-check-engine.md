@@ -61,8 +61,11 @@ package's own `catalog.json`.
   `running` are booleans; `running` true needs `installed` true. `models`
   is up to 200 `{ name, sizeGB }` entries, names as Ollama gives them
   (`qwen3:8b`), each name once.
-- `cloud`: `{ approvedHosts }`, up to 20 host names the owner has already
-  approved for cloud models (an empty list is normal on a new Mac).
+- `cloud`: `{ choice?, approved }`. `choice` is the cloud model the person
+  picked, `{ model, host }` (absent on a new Mac). `approved` is up to 20
+  `{ model, host }` pairs the owner has already approved once (foundations
+  principle 6: each cloud model and its host need their own approval); an
+  empty list is normal. Each pair appears once.
 - `preferences` (optional): `{ mode }`, `local` (the default), `cloud` or
   `either`.
 
@@ -103,17 +106,24 @@ repeating its numbers.
      when `preferences.mode` is `cloud`.
    - `model`: passes when a fitting catalog model is already installed;
      otherwise warns with the download step for the recommended model.
-   - `cloud`: only when the local route can't work or `mode` isn't `local`:
-     passes when a cloud host is already approved; otherwise warns that a
-     cloud model needs the owner's one-time approval of its host first.
-3. **The recommendation:** `{ route, model?, reason }`. `route` is `local`
-   when the local checks have no `stop` and a catalog model fits, else
-   `cloud` when `mode` allows it, else `none`. The local model is the first
-   catalog entry that fits memory and is installed; failing that, the first
-   that fits memory and disk. The reason is one plain sentence built only from
-   the checks.
-4. **Next steps:** the `fix` of every `warn` and `stop` check, in check
-   order, numbered. Command text in a step (for example
+   - `cloud`: only when `mode` is `cloud`, or `either` and the local route
+     can't work: passes only when `choice` is set and that exact model and
+     host pair is in `approved`. An approval of another model or host never
+     counts. With no `choice` it warns "pick a cloud model"; with a
+     `choice` not yet approved it warns that this model and its host need
+     the owner's one-time approval first.
+3. **The recommendation:** `{ route, model?, host?, reason }`, by `mode`:
+   `local` gives `local` when the local checks have no `stop` and a catalog
+   model fits, else `none` (a cloud model is never recommended unasked);
+   `cloud` gives `cloud` and never `local`, whatever the Mac could run;
+   `either` gives `local` when it can work, else `cloud`. A `cloud` route
+   names the `choice` when one is set; local checks never block it. The
+   local model is the first catalog entry that fits memory and is
+   installed; failing that, the first that fits memory and disk. The reason
+   is one plain sentence built only from the checks.
+4. **Next steps:** the `fix` of every `warn` and `stop` check that applies
+   to the recommended route (for a `cloud` route, only `os` and `cloud`;
+   for `none`, all of them), in check order, numbered. Command text in a step (for example
    `ollama pull qwen3:8b`) is shown for the person to run; the engine never
    runs it.
 5. **The summary:** one to three short sentences from a fixed template, for
@@ -122,7 +132,7 @@ repeating its numbers.
    promises speed or quality beyond what the checks say.
 
 **Same input, same result.** The same files give byte-identical JSON, and
-shuffling `models` or `approvedHosts` gives the same result. Nothing depends
+shuffling `models` or `approved` gives the same result. Nothing depends
 on the clock, the machine running the engine, its locale or random values.
 
 ## Output
@@ -147,7 +157,12 @@ machines only. At least:
    extra 5 GB.
 3. Recommendation: an installed fitting model beats a better one not yet
    downloaded; a model installed but too big for memory is not recommended;
-   `mode: cloud` skips the Ollama checks; no route gives `none` with steps.
+   `mode: cloud` on a Mac that could run a local model gives `cloud`, never
+   `local`, and skips the Ollama checks; `mode: local` on a Mac that can't
+   gives `none`, never `cloud`; `mode: either` falls back to `cloud`.
+   The `cloud` check passes only for an approved pair matching `choice`:
+   an approved pair with the same host but another model, or the same
+   model on another host, warns; `ready` is false until it passes.
 4. A test catalog with different entries changes the recommendation without
    code changes.
 5. Input checks: each refusal above names the field; `running: true` with

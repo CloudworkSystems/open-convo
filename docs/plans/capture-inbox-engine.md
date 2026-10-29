@@ -58,8 +58,10 @@ reads the clock and never calls `process.exit`.
   `Z`. `kind` is `text` (the adapter read the file's text: `.webloc`,
   `.url`, `.txt`, or text shared directly; `text` is required, at most
   64 KB) or `file` (the adapter did not read it; `file` is required:
-  `{ sizeBytes, type }`, `type` being the Apple uniform type identifier,
-  for example `public.mpeg-4`).
+  `{ sizeBytes, type, sha256? }`, `type` being the Apple uniform type
+  identifier, for example `public.mpeg-4`; `sha256` is the adapter's
+  SHA-256 of the file's bytes as 64 lowercase hex characters, required for
+  a clip).
 - `known`: up to 50,000 `sourceKey` strings already in the inbox, so a
   re-shared item is caught as a duplicate.
 
@@ -97,13 +99,17 @@ refusal, it goes to `refused` (below).
    `note`.
 6. **Clips.** A `file` item of type `public.mpeg-4` or
    `com.apple.quicktime-movie`, up to 8 GB, is a clip. Its `sourceKey` is
-   `clip:` plus its name and size. Every other file type is refused,
+   `clip:` plus its `sha256`, so two different clips that share a name and
+   size are never taken for each other; a clip without `sha256` is refused.
+   Every other file type is refused,
    images included, with the message "Only links, notes and video clips go
    in the capture folder"; health photos never travel this way
    ([skin-check.md](skin-check.md)).
 7. **Duplicates.** An item whose `sourceKey` is in `known`, or repeats an
    earlier item in this drop (earliest `addedAt`, then `id`, wins), goes to
-   `duplicates` with the key and the item it repeats.
+   `duplicates` with the key and the item it repeats. A duplicate is only
+   reported: the later watcher never deletes or moves a file because this
+   library called it a duplicate; it leaves it for the owner.
 8. **Titles.** No page is fetched, so a link's title is its site label and
    a shortened host and path (at most 80 characters); a note's title is its
    first line (at most 80 characters); a clip's title is its file name
@@ -140,7 +146,9 @@ At least:
 4. Refusals: each scheme other than `http` and `https`, a link with a user
    name or password, each bad name above, an image, an unknown file type and
    an over-size clip.
-5. Duplicates: the same reel shared twice with different tracking tags, a
+5. Duplicates: two clips with the same name and size but different
+   `sha256` are both sources; the same `sha256` under two names is a
+   duplicate; the same reel shared twice with different tracking tags, a
    key already in `known`, two identical notes with different spacing, and
    the earliest item winning.
 6. Input checks: each file refusal above names the item's position; a
