@@ -49,6 +49,14 @@ const HOST_SHAPE = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]*
 export function readHosts(line) {
   const hosts = [];
   const unreadable = [];
+  // JSON and JS strings may escape the slashes (`https:\/\/host`); read the
+  // line with those escapes undone too, so such a URL still counts.
+  const unescaped = line.replace(/\\\//g, '/');
+  if (unescaped !== line) {
+    const more = readHosts(unescaped);
+    hosts.push(...more.hosts);
+    unreadable.push(...more.unreadable);
+  }
   for (const match of line.matchAll(URL_PATTERN)) {
     // A host built at run time (`https://${host}`) can't be read; the
     // checklist in the independent review covers what a pattern can't see.
@@ -59,8 +67,11 @@ export function readHosts(line) {
     let host = null;
     const after = line.slice(match.index + match[0].length, match.index + match[0].length + 2);
     if (after[0] === '\\' && after !== '\\(') { unreadable.push(match[0]); continue; }
+    // Sentence punctuation right after a URL in prose ("see https://a.com!")
+    // isn't part of it.
+    const url = match[0].replace(/[!.,:;*~]+$/, '');
     try {
-      host = new URL(match[0]).hostname.replace(/\.$/, '');
+      host = new URL(url).hostname.replace(/\.$/, '');
     } catch { /* unreadable */ }
     if (host && HOST_SHAPE.test(host)) hosts.push(host);
     else unreadable.push(match[0]);

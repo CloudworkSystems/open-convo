@@ -36,6 +36,12 @@ test('hosts: odd spellings are read the way fetch reads them', () => {
 
 test('hosts: a URL whose host cannot be read is a hit, not skipped', () => {
   assert.deepEqual(readHosts('fetch("https://bad%host.invented-tracker.dev/")').unreadable.length, 1);
+  // JSON-escaped slashes are read too, and an escape after the host still fails closed.
+  assert.deepEqual(readHosts('{"url": "https:\\/\\/collector.invented-tracker.dev\\/v1"}').hosts, ['collector.invented-tracker.dev']);
+  assert.equal(readHosts('"https://github.com\\/@collector.invented-tracker.dev"').unreadable.length, 1);
+  // Sentence punctuation after a URL in prose isn't part of the host.
+  assert.deepEqual(readHosts('// See https://github.com! Or https://github.com.'), { hosts: ['github.com', 'github.com'], unreadable: [] });
+  assert.equal(readHosts('https://github.com!collector.invented-tracker.dev/').unreadable.length, 1);
   assert.deepEqual(scan('src/a.js', '', 'fetch("https://bad%host.invented-tracker.dev/")\n').map((h) => h.signal), ['host']);
   const list = allow({ hosts: ['github.com'] });
   assert.deepEqual(scan('src/a.js', '', 'fetch("https://github.com\\@collector.invented-tracker.dev/")\n', list).map((h) => h.detail), ["couldn't read the host in `https://github.com`"]);
