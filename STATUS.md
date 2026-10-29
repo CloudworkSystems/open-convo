@@ -88,8 +88,9 @@ Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 **Visibility report** (Business), GrokBot (team C) builds, Codex reviews; plan approved (`docs/plans/visibility-report.md`); built and merged in #112 (Oct 25).
 
 **Sync core** (Personal; first slice of the iPhone and sync line, owner
-decision October 22): GrokBot team B builds, Codex reviews. Plan approved
-(`docs/plans/sync-core.md`, #127); build started October 24 (#137).
+decision October 22): GrokBot team B builds it as its next module, Codex
+reviews. Plan approved (merged as #127 on October 24):
+[docs/plans/sync-core.md](docs/plans/sync-core.md). Build in review (#139).
 
 **Email actions preview** (Personal, right after launch), Codex builds through the local Codex CLI, GrokBot or a fresh Claude reviews; plan merged in #138, build handed to the Codex CLI job (#142) (`docs/plans/email-actions-preview.md`).
 
@@ -106,6 +107,19 @@ decision October 22): GrokBot team B builds, Codex reviews. Plan approved
 **Skin check** (Personal, new Health module), Claude builds, GrokBot or a fresh Claude reviews; plan approved (`docs/plans/skin-check.md`). Slice 1, the standalone engine in `packages/skin-check/`, is built; the iPhone source joins the iPhone app on the parallel sync line, and the Desk view follows.
 
 **Public website (trueconvo.com)**, Claude builds, Codex reviews; a home page (with two Desk preview screenshots) and a plain-language privacy policy in `site/`, published by `.github/workflows/pages.yml` from `main` (#153, October 25). For Meta's developer early-access application and regular visitors. The owner turned on Pages and set the custom domain; the domain's DNS records are still to do.
+
+**Security** (all work; owner asked October 28): plan
+[docs/plans/security.md](docs/plans/security.md), in progress.
+Baseline in #166: the Desk's Vite patched, Dependabot, `SECURITY.md`, and the
+triage judge closed to outside pull requests. A security checklist on every
+review, a weekly sweep, controls tied to triggers (sync core first), and a
+weekly feed of lessons from followed senders follow.
+
+**Followed sources** (Personal; owner asked October 29), Claude builds, GrokBot or a fresh Claude reviews: plan
+[docs/plans/followed-sources.md](docs/plans/followed-sources.md), approved by the owner October 29. True Convo's own version of the
+security feed: follow a sender, a links list or videos, get drafted lessons and ideas, and keep only what the
+owner picks. Slice 1, the standalone engine in `packages/followed-sources/`, is built; real sources and the
+Desk "Followed" view each need a plan revision.
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:

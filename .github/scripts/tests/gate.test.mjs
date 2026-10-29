@@ -527,13 +527,21 @@ const finding = (id, reviewId, p = 2, extra = {}) => ({
   body: `**<sub><sub>![P${p} Badge](https://img.shields.io/badge/P${p}-yellow?style=flat)</sub></sub>  Guard a rare case**\n\nDetails.\n\n<!-- codex-code-review-finding:v1 -->`,
   edit_history: unedited, ...extra,
 });
-const loop = () => ({ headSha: HEAD, prAuthor: 'cloudwork-bot', reviews: [review(1, C1), review(2, C2), review(3, HEAD)], reviewComments: [finding(31, 3), finding(32, 3, 3)] });
+const loop = () => ({ headSha: HEAD, prAuthor: 'cloudwork-bot', fromFork: false, reviews: [review(1, C1), review(2, C2), review(3, HEAD)], reviewComments: [finding(31, 3), finding(32, 3, 3)] });
 const actions = { login: ACTIONS_LOGIN, type: 'Bot' };
 const verdictFor = (elig, verdicts, at = '2026-10-24T11:00:00Z', extra = {}) => ({
   user: actions, created_at: at, edit_history: unedited,
   body: verdictComment({ headSha: HEAD, findings: elig.findings, verdicts }), ...extra,
 });
 const nits = (elig, confidence = 0.9) => elig.findings.map((f) => ({ id: f.id, verdict: 'nit', confidence, reason: 'edge case' }));
+
+test('triage: only the project\'s own builders, on branches in this repo, reach the judge', () => {
+  assert.equal(triageEligibility({ ...loop(), prAuthor: CODEX_LOGIN }).eligible, true);
+  assert.equal(triageEligibility({ ...loop(), prAuthor: 'someone-else' }).eligible, false);
+  assert.equal(triageEligibility({ ...loop(), fromFork: true }).eligible, false);
+  const { fromFork, ...unsaid } = loop();
+  assert.equal(triageEligibility(unsaid).eligible, false);
+});
 
 test('triage: priority badges are read, anything else is null', () => {
   assert.equal(findingPriority(finding(1, 1, 2).body), 2);
