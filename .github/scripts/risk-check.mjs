@@ -42,18 +42,30 @@ const HOST_SHAPE = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]*
 
 const NAMED_ENTITIES = { sol: '/', colon: ':', period: '.', commat: '@', amp: '&', bsol: '\\', quest: '?', num: '#' };
 // Any number of digits: `\u{0000002f}` and `&#x00002f;` are still a slash.
-const CHARACTER_CODE = /\\x([0-9a-f]{2})|\\u\{([0-9a-f]+)\}|\\u([0-9a-f]{4})|&#x([0-9a-f]+);?|&#([0-9]+);?|&([a-z]+);/gi;
+// A UTF-16 pair (`\uD835\uDC1E`) is read as the one character it spells.
+const CHARACTER_CODE = /\\x([0-9a-f]{2})|\\u\{([0-9a-f]+)\}|\\u(d[89ab][0-9a-f]{2})\\u(d[c-f][0-9a-f]{2})|\\u([0-9a-f]{4})|&#x([0-9a-f]+);?|&#([0-9]+);?|&([a-z]+);/gi;
+// A code left as written right where a host starts can't be read.
+const UNDECODED_HOST = /\b(?:https?|wss?):\/\/[\\&]/i;
+// Each pass undoes one layer (`&amp;#47;` takes two); past this many, fail closed.
+const MAX_DECODE_PASSES = 32;
+
+const isPrintable = (point) => point >= 0x20 && point <= 0x10ffff && point !== 0x7f
+  && !(point >= 0x80 && point < 0xa0) && !(point >= 0xd800 && point <= 0xdfff);
 
 /**
  * The line with character codes (`\x2f`, `\u002f`, `\u{2f}`, `&#47;`,
- * `&#x2f;` and a few named entities) turned into the printable ASCII
- * characters they stand for. Codes for anything else stay as written.
+ * `&#x2f;` and a few named entities) turned into the characters they stand
+ * for. Non-ASCII ones count too: the URL parser folds a fullwidth or circled
+ * letter to plain ASCII. Codes for control characters, lone surrogates and
+ * anything out of range stay as written.
  */
 export function decodeCharacterCodes(line) {
-  return line.replace(CHARACTER_CODE, (code, x, braced, u, hex, dec, name) => {
+  return line.replace(CHARACTER_CODE, (code, x, braced, high, low, u, hex, dec, name) => {
     if (name !== undefined) return NAMED_ENTITIES[name] ?? code;
-    const point = parseInt(x ?? braced ?? u ?? hex ?? dec, x ?? braced ?? u ?? hex ? 16 : 10);
-    return point >= 0x20 && point <= 0x7e ? String.fromCharCode(point) : code;
+    const point = high !== undefined
+      ? 0x10000 + ((parseInt(high, 16) - 0xd800) << 10) + (parseInt(low, 16) - 0xdc00)
+      : parseInt(x ?? braced ?? u ?? hex ?? dec, dec !== undefined ? 10 : 16);
+    return isPrintable(point) ? String.fromCodePoint(point) : code;
   });
 }
 
@@ -69,13 +81,22 @@ export function readHosts(line) {
   // JSON strings and regex literals may escape the punctuation
   // (`https:\/\/host\.example`), and code or HTML may spell a character as a
   // code (`\x2f`, `\u002f`, `\u{2f}`, `&#47;`, `&#x2f;`, `&sol;`); read the
-  // line with those undone too, so such a URL still counts.
-  const unescaped = decodeCharacterCodes(line).replace(/\\([^A-Za-z0-9\s(])/g, '$1');
-  if (unescaped !== line) {
-    const more = readHosts(unescaped);
-    hosts.push(...more.hosts);
-    unreadable.push(...more.unreadable);
+  // line as written and after each layer of those is undone, so such a URL
+  // still counts.
+  let text = line;
+  for (let pass = 0; ; pass++) {
+    readHostsAsWritten(text, hosts, unreadable);
+    const next = decodeCharacterCodes(text).replace(/\\([^A-Za-z0-9\s(])/g, '$1');
+    if (next === text) break;
+    if (pass === MAX_DECODE_PASSES) { unreadable.push(line.slice(0, 200)); break; }
+    text = next;
   }
+  const undecoded = UNDECODED_HOST.exec(text);
+  if (undecoded) unreadable.push(text.slice(undecoded.index, undecoded.index + 40));
+  return { hosts, unreadable };
+}
+
+function readHostsAsWritten(line, hosts, unreadable) {
   for (const match of line.matchAll(URL_PATTERN)) {
     // A host built at run time (`https://${host}`) can't be read; the
     // checklist in the independent review covers what a pattern can't see.
@@ -105,7 +126,6 @@ export function readHosts(line) {
     if (host && HOST_SHAPE.test(host)) hosts.push(host);
     else unreadable.push(match[0]);
   }
-  return { hosts, unreadable };
 }
 
 export const hostsIn = (line) => readHosts(line).hosts;

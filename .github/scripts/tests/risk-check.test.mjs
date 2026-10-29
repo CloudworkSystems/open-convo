@@ -79,8 +79,24 @@ test('hosts: a URL whose host cannot be read is a hit, not skipped', () => {
     assert.deepEqual(scan('src/a.js', '', `${line}\n`, list).map((h) => h.detail), ['new outside host `collector.invented-tracker.dev`'], line);
   }
   assert.deepEqual(scan('src/a.js', '', 'fetch("https://github.com\\u0040collector.invented-tracker.dev/")\n', list).map((h) => h.detail), ["couldn't read the host in `https://github.com`", 'new outside host `collector.invented-tracker.dev`']);
-  // A code for something that isn't printable ASCII is left as written.
-  assert.equal(decodeCharacterCodes('a\\x00b &#8212; &nbsp; \\u{1F600}'), 'a\\x00b &#8212; &nbsp; \\u{1F600}');
+  // A code for a non-ASCII letter the URL parser folds to ASCII still reads as that host.
+  for (const line of [
+    'fetch("https://\\uFF45vil.invented-tracker.dev")',
+    'fetch("https://\\u24D4vil.invented-tracker.dev")',
+    'fetch("https://\\uD835\\uDC1Evil.invented-tracker.dev")',
+    '<a href="https://&#65349;vil.invented-tracker.dev">',
+  ]) {
+    assert.deepEqual(readHosts(line).hosts, ['evil.invented-tracker.dev'], line);
+  }
+  // A code still left as written where the host starts can't be read.
+  assert.deepEqual(readHosts('fetch("https://\\u0000evil.invented-tracker.dev")').unreadable.length, 1);
+  assert.deepEqual(readHosts('<a href="https://&bogus;evil.invented-tracker.dev">').unreadable.length > 0, true);
+  // Deep nesting stops after a fixed number of passes and fails closed.
+  const nested = `https:&${'amp;'.repeat(40)}#47;//evil.invented-tracker.dev`;
+  assert.ok(readHosts(nested).unreadable.length >= 1);
+  assert.doesNotThrow(() => readHosts(`https:&${'amp;'.repeat(20000)}#47;`));
+  // A code for a control character or a lone surrogate is left as written.
+  assert.equal(decodeCharacterCodes('a\\x00b &#127; &nbsp; \\uD800 \\u{110000}'), 'a\\x00b &#127; &nbsp; \\uD800 \\u{110000}');
   assert.deepEqual(scan('Sources/A.swift', '', 'URL(string: "http://127.0.0.1:\\(port)")\n'), []);
 });
 
