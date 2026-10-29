@@ -1,6 +1,6 @@
 # Codex Triage: Ending Review Loops On Minor Findings
 
-Status: In progress (Oct 24): built in this pull request, judge off until the owner adds the API key.
+Status: In progress (Oct 29): merged as #135 (Oct 24); no pull request has reached the judge yet, so the finish line's first verdict is still to come.
 
 Written October 24, 2026 at the owner's request ("do the changes"). Session:
 thread "Stop Codex review loops on nits". **Builder:** Claude (cloud,
