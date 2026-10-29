@@ -115,6 +115,11 @@ triage judge closed to outside pull requests. A security checklist on every
 review, a weekly sweep, controls tied to triggers (sync core first), and a
 weekly feed of lessons from followed senders follow.
 
+**Followed sources** (Personal; owner asked October 29), Claude builds, GrokBot or a fresh Claude reviews: plan
+[docs/plans/followed-sources.md](docs/plans/followed-sources.md), draft. True Convo's own version of the
+security feed: follow a sender, a links list or videos, get drafted lessons and ideas, and keep only what the
+owner picks. Slice 1 is a standalone engine in `packages/followed-sources/`.
+
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:
 [docs/plans/merge-gate.md](docs/plans/merge-gate.md). Switched on for `main`
