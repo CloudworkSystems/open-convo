@@ -49,9 +49,10 @@ const HOST_SHAPE = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]*
 export function readHosts(line) {
   const hosts = [];
   const unreadable = [];
-  // JSON and JS strings may escape the slashes (`https:\/\/host`); read the
-  // line with those escapes undone too, so such a URL still counts.
-  const unescaped = line.replace(/\\\//g, '/');
+  // JSON strings and regex literals may escape the punctuation
+  // (`https:\/\/host\.dev`); read the line with those escapes undone too, so
+  // such a URL still counts.
+  const unescaped = line.replace(/\\([^A-Za-z0-9\s])/g, '$1');
   if (unescaped !== line) {
     const more = readHosts(unescaped);
     hosts.push(...more.hosts);
@@ -73,6 +74,11 @@ export function readHosts(line) {
     // The pattern stops at `,` and `;`, which the URL parser keeps in the
     // host (`example.com,b/` has host `example.com,b`), so read past them first.
     const rest = line.slice(match.index + match[0].length);
+    // The URL parser reads the authority up to `/`, `?`, `#` or `\`, and an
+    // `@` anywhere in it starts the real host (`example.com!]@other/`): when
+    // one follows, the host can't be read here, so fail closed.
+    const authority = /^[^\s/?#\\]*/.exec(rest)[0];
+    if (authority.includes('@')) { unreadable.push(match[0] + authority); continue; }
     const tail = /^[,;]*/.exec(rest)[0];
     const ends = rest.length === tail.length || /^[\s"'`<>)\]}]/.test(rest[tail.length]);
     const url = ends ? match[0].replace(/[!.,:;*~]+$/, '') : match[0] + tail;
