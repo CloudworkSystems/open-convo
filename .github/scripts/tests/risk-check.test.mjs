@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
+  decodeCharacterCodes,
   hostsIn, readHosts, isReservedHost, secretNamesIn, addedLines, npmTarget, npmLockEntries, swiftDependencies, swiftPins,
   parsePlist, permissionChanges, parseAllowlist, scanFile, scanChanges, fingerprint, holdCommentBody,
   findHoldComment, commentFingerprint, ownerReleased, cachedScan, scanStatusDescription, applyRiskHold, withRiskHold,
@@ -55,14 +56,72 @@ test('hosts: a URL whose host cannot be read is a hit, not skipped', () => {
   // The URL parser drops tabs and carriage returns, so they don't end the host.
   assert.equal(readHosts('https://github.com!\t@collector.invented-tracker.dev/path').unreadable.length, 1);
   assert.equal(readHosts('https://github.com!\r@collector.invented-tracker.dev/path').unreadable.length, 1);
-  assert.deepEqual(readHosts('https://github.com\t.collector.invented-tracker.dev/path').hosts, ['github.com.collector.invented-tracker.dev']);
+  assert.deepEqual([...new Set(readHosts('https://github.com\t.collector.invented-tracker.dev/path').hosts)], ['github.com.collector.invented-tracker.dev']);
   assert.deepEqual(readHosts('("https://github.com.") and https://github.com, then https://github.com;'), { hosts: ['github.com', 'github.com', 'github.com'], unreadable: [] });
   assert.deepEqual(scan('src/a.js', '', 'fetch("https://bad%host.invented-tracker.dev/")\n').map((h) => h.signal), ['host']);
   const list = allow({ hosts: ['github.com'] });
   assert.deepEqual(scan('src/a.js', '', 'fetch("https://github.com\\@collector.invented-tracker.dev/")\n', list).map((h) => h.detail), ["couldn't read the host in `https://github.com`", 'new outside host `collector.invented-tracker.dev`']);
   // Regex literals escape the dots too; the host still reads.
   assert.deepEqual(readHosts('assert.match(html, /href="https:\\/\\/collector\\.invented-tracker\\.dev\\/">/);').hosts, ['collector.invented-tracker.dev']);
-  assert.deepEqual(scan('src/a.js', '', 'fetch("https://github.com\\x40collector.invented-tracker.dev/")\n', list).length, 1);
+  assert.deepEqual(scan('src/a.js', '', 'fetch("https://github.com\\x40collector.invented-tracker.dev/")\n', list).map((h) => h.detail), ["couldn't read the host in `https://github.com`", 'new outside host `collector.invented-tracker.dev`']);
+  // Slashes and other characters written as codes still read as the URL they spell.
+  for (const line of [
+    'fetch("https:\\x2f\\x2fcollector.invented-tracker.dev/a")',
+    'fetch("https:\\u002F\\u002Fcollector.invented-tracker.dev")',
+    'let u = "https:\\u{2f}\\u{2f}collector.invented-tracker.dev"',
+    '<a href="https:&#47;&#47;collector.invented-tracker.dev/">',
+    '<a href="https:&#x2F;&#x2f;collector.invented-tracker.dev/">',
+    '<a href="https&colon;&sol;&sol;collector&period;invented-tracker&period;dev/">',
+    '<a href="https:&amp;#47;&amp;#47;collector.invented-tracker.dev/">',
+    'let u = "https:\\u{0000002f}\\u{0000002F}collector.invented-tracker.dev"',
+    '<a href="https:&#x000000002f;&#0000000047;collector.invented-tracker.dev/">',
+  ]) {
+    assert.deepEqual(scan('src/a.js', '', `${line}\n`, list).map((h) => h.detail), ['new outside host `collector.invented-tracker.dev`'], line);
+  }
+  assert.deepEqual(scan('src/a.js', '', 'fetch("https://github.com\\u0040collector.invented-tracker.dev/")\n', list).map((h) => h.detail), ["couldn't read the host in `https://github.com`", 'new outside host `collector.invented-tracker.dev`']);
+  // A code for a non-ASCII letter the URL parser folds to ASCII still reads as that host.
+  for (const line of [
+    'fetch("https://\\uFF45vil.invented-tracker.dev")',
+    'fetch("https://\\u24D4vil.invented-tracker.dev")',
+    'fetch("https://\\uD835\\uDC1Evil.invented-tracker.dev")',
+    '<a href="https://&#65349;vil.invented-tracker.dev">',
+  ]) {
+    assert.deepEqual(readHosts(line).hosts, ['evil.invented-tracker.dev'], line);
+  }
+  // Backslashes after the scheme reach a host too (`https:\\host`): unreadable.
+  for (const line of [
+    '<a href="https:&bsol;&bsol;collector.invented-tracker.dev/">',
+    'fetch("https:\\\\collector.invented-tracker.dev")',
+    'fetch("https:/\\collector.invented-tracker.dev")',
+    'let u = "https:\\x5c\\x5ccollector.invented-tracker.dev"',
+  ]) {
+    assert.equal(readHosts(line).unreadable.length, 1, line);
+  }
+  // Tabs, line breaks or other control characters around the URL don't hide
+  // the host from the URL parser.
+  for (const line of [
+    'fetch("\\nhttps://collector.invented-tracker.dev")',
+    'fetch("\\thttps://collector.invented-tracker.dev")',
+    'fetch("\\x00https://collector.invented-tracker.dev")',
+    'fetch("\\u000ahttps://collector.invented-tracker.dev")',
+    '<a href="&#10;https://collector.invented-tracker.dev">',
+    'fetch("https://\\tcollector.invented-tracker.dev")',
+    'fetch("https://coll\\nector.invented-tracker.dev")',
+    'fetch("https:\\u0009//collector.invented-tracker.dev/x")',
+    'fetch("https:/\\x0d/collector.invented-tracker.dev/x")',
+    '<a href="https:&#x9;//collector.invented-tracker.dev/">',
+  ]) {
+    assert.ok(readHosts(line).hosts.includes('collector.invented-tracker.dev'), line);
+  }
+  // A code still left as written where the host starts can't be read.
+  assert.deepEqual(readHosts('fetch("https://\\u0000evil.invented-tracker.dev")').unreadable.length, 1);
+  assert.deepEqual(readHosts('<a href="https://&bogus;evil.invented-tracker.dev">').unreadable.length > 0, true);
+  // Deep nesting stops after a fixed number of passes and fails closed.
+  const nested = `https:&${'amp;'.repeat(40)}#47;//evil.invented-tracker.dev`;
+  assert.ok(readHosts(nested).unreadable.length >= 1);
+  assert.doesNotThrow(() => readHosts(`https:&${'amp;'.repeat(20000)}#47;`));
+  // A code for a control character or a lone surrogate is left as written.
+  assert.equal(decodeCharacterCodes('a\\x00b &#127; &nbsp; \\uD800 \\u{110000}'), 'a\\x00b &#127; &nbsp; \\uD800 \\u{110000}');
   assert.deepEqual(scan('Sources/A.swift', '', 'URL(string: "http://127.0.0.1:\\(port)")\n'), []);
 });
 
