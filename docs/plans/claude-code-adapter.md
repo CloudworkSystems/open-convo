@@ -1,8 +1,12 @@
 # Claude Code Adapter Scope: Claude Joins The Conversation
 
-Status: Approved (Oct 23): scope merged (#75); building was to start after
-step 3. On October 28 the owner said PR 2 may start now, on invented chats
-only, before his step 3 trial (see STATUS.md).
+Status: In progress (Oct 29): scope merged (#75, approved Oct 23); PR 2 in
+review, started early on invented chats only (see "Revision, October 28").
+
+Builder: Claude building sessions. Reviewers: Codex on every pull request,
+plus an independent review (GrokBot with a non-Claude model, or a fresh
+Claude review standing in), as AGENTS.md "Independent reviews" sets out.
+The finish line is "Finish Line" below.
 
 Written October 19, 2026 by a building session. A proposal: the owner and
 the planning session can change it. PLAN.md is the authority. It comes
@@ -275,3 +279,16 @@ What counts as "works" is the owner's call (question 1).
    way. Trade-off: real use waits for both trials.
 7. **Which Claude model?** *Recommend:* one pinned model per app build,
    chosen by the owner at PR 3c; no model menu inside Claude yet.
+
+## Revision, October 28: PR 2 Starts Before Step 3's Trial
+
+The approved order above says building starts after step 3. On October 28
+(Eastern; 2026-10-29 03:20 UTC), in the Claude thread "Build the Claude
+Code adapter", the owner answered the coordinator's question "may the
+Claude Code adapter build start now on invented chats only, before your
+owner trial?" with: "Yes, the Claude Code adapter build start on invented
+chats. [...] Yeah, we can totally start to build that. Yes."
+
+So building may start now, on invented chats only. Nothing else changes:
+real conversations still wait for both trials (safety model, item 7), and
+PR 4b still waits for every safety proof.
