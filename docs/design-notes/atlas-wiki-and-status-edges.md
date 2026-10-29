@@ -58,9 +58,14 @@ request it produced, colored by **who owes the next move**:
 |---|---|
 | Waiting on you | Only the owner can make the next move: a protected-path approval, or a decision he was asked for. Open review findings are the builder's move ("Being fixed"), even though an `owner-accepts-findings` line could clear them; that line is his option, never a task the status hands him |
 | In review | Codex, the independent reviewer or the triage judge has it |
-| Being fixed | A builder owes a push for open findings |
+| Being fixed | The builder owes a push: open review findings, a failing check such as `tests`, or a merge conflict |
 | Ready to merge | Every gate prerequisite passes on the latest commit: `tests`, `codex-approved`, the owner's approval of any protected path and, where a rule needs them, a clean independent review and plan check. Auto-merge being on is one more input, never enough on its own |
 | Stuck | An agent missed its deadline (AGENTS.md "Agent Setup And Silence") |
+
+Every open pull request gets exactly one state. When more than one fits, the
+first in this order wins: Stuck, Being fixed, Waiting on you, In review,
+Ready to merge. A pull request no row fits shows as "Unknown", never as
+missing, so a gap in the rules is visible instead of hidden.
 
 - **One data feed, shown twice.** A complete per-PR status feed, built from
   GitHub's own data for every open pull request (checks, reviews, the
