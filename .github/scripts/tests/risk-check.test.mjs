@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
+  decodeCharacterCodes,
   hostsIn, readHosts, isReservedHost, secretNamesIn, addedLines, npmTarget, npmLockEntries, swiftDependencies, swiftPins,
   parsePlist, permissionChanges, parseAllowlist, scanFile, scanChanges, fingerprint, holdCommentBody,
   findHoldComment, commentFingerprint, ownerReleased, cachedScan, scanStatusDescription, applyRiskHold, withRiskHold,
@@ -62,7 +63,22 @@ test('hosts: a URL whose host cannot be read is a hit, not skipped', () => {
   assert.deepEqual(scan('src/a.js', '', 'fetch("https://github.com\\@collector.invented-tracker.dev/")\n', list).map((h) => h.detail), ["couldn't read the host in `https://github.com`", 'new outside host `collector.invented-tracker.dev`']);
   // Regex literals escape the dots too; the host still reads.
   assert.deepEqual(readHosts('assert.match(html, /href="https:\\/\\/collector\\.invented-tracker\\.dev\\/">/);').hosts, ['collector.invented-tracker.dev']);
-  assert.deepEqual(scan('src/a.js', '', 'fetch("https://github.com\\x40collector.invented-tracker.dev/")\n', list).length, 1);
+  assert.deepEqual(scan('src/a.js', '', 'fetch("https://github.com\\x40collector.invented-tracker.dev/")\n', list).map((h) => h.detail), ["couldn't read the host in `https://github.com`", 'new outside host `collector.invented-tracker.dev`']);
+  // Slashes and other characters written as codes still read as the URL they spell.
+  for (const line of [
+    'fetch("https:\\x2f\\x2fcollector.invented-tracker.dev/a")',
+    'fetch("https:\\u002F\\u002Fcollector.invented-tracker.dev")',
+    'let u = "https:\\u{2f}\\u{2f}collector.invented-tracker.dev"',
+    '<a href="https:&#47;&#47;collector.invented-tracker.dev/">',
+    '<a href="https:&#x2F;&#x2f;collector.invented-tracker.dev/">',
+    '<a href="https&colon;&sol;&sol;collector&period;invented-tracker&period;dev/">',
+    '<a href="https:&amp;#47;&amp;#47;collector.invented-tracker.dev/">',
+  ]) {
+    assert.deepEqual(scan('src/a.js', '', `${line}\n`, list).map((h) => h.detail), ['new outside host `collector.invented-tracker.dev`'], line);
+  }
+  assert.deepEqual(scan('src/a.js', '', 'fetch("https://github.com\\u0040collector.invented-tracker.dev/")\n', list).map((h) => h.detail), ["couldn't read the host in `https://github.com`", 'new outside host `collector.invented-tracker.dev`']);
+  // A code for something that isn't printable ASCII is left as written.
+  assert.equal(decodeCharacterCodes('a\\x00b &#8212; &nbsp; \\u{1F600}'), 'a\\x00b &#8212; &nbsp; \\u{1F600}');
   assert.deepEqual(scan('Sources/A.swift', '', 'URL(string: "http://127.0.0.1:\\(port)")\n'), []);
 });
 

@@ -40,6 +40,22 @@ export function isReservedHost(host) {
 const URL_PATTERN = /\b(?:https?|wss?):\/\/((?:[^\s/?#"'`<>()[\]{}\\|^,;@]*@)?(?:\[[0-9a-f:.]+\]|[^\s/?#"'`<>()[\]{}\\|^,;]+)(?::\d*)?)/gi;
 const HOST_SHAPE = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$|^\[[0-9a-f:.]+\]$/;
 
+const NAMED_ENTITIES = { sol: '/', colon: ':', period: '.', commat: '@', amp: '&', bsol: '\\', quest: '?', num: '#' };
+const CHARACTER_CODE = /\\x([0-9a-f]{2})|\\u\{([0-9a-f]{1,6})\}|\\u([0-9a-f]{4})|&#x([0-9a-f]{1,6});?|&#([0-9]{1,7});?|&([a-z]+);/gi;
+
+/**
+ * The line with character codes (`\x2f`, `\u002f`, `\u{2f}`, `&#47;`,
+ * `&#x2f;` and a few named entities) turned into the printable ASCII
+ * characters they stand for. Codes for anything else stay as written.
+ */
+export function decodeCharacterCodes(line) {
+  return line.replace(CHARACTER_CODE, (code, x, braced, u, hex, dec, name) => {
+    if (name !== undefined) return NAMED_ENTITIES[name] ?? code;
+    const point = parseInt(x ?? braced ?? u ?? hex ?? dec, x ?? braced ?? u ?? hex ? 16 : 10);
+    return point >= 0x20 && point <= 0x7e ? String.fromCharCode(point) : code;
+  });
+}
+
 /**
  * Hosts named by http(s) and ws(s) URLs in one line, as the URL parser (and
  * so fetch) reads them: lowercased, percent-decoded, in punycode, without
@@ -50,9 +66,10 @@ export function readHosts(line) {
   const hosts = [];
   const unreadable = [];
   // JSON strings and regex literals may escape the punctuation
-  // (`https:\/\/host\.dev`); read the line with those escapes undone too, so
-  // such a URL still counts.
-  const unescaped = line.replace(/\\([^A-Za-z0-9\s(])/g, '$1');
+  // (`https:\/\/host\.dev`), and code or HTML may spell a character as a
+  // code (`\x2f`, `\u002f`, `\u{2f}`, `&#47;`, `&#x2f;`, `&sol;`); read the
+  // line with those undone too, so such a URL still counts.
+  const unescaped = decodeCharacterCodes(line).replace(/\\([^A-Za-z0-9\s(])/g, '$1');
   if (unescaped !== line) {
     const more = readHosts(unescaped);
     hosts.push(...more.hosts);
