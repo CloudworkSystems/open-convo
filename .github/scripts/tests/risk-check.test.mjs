@@ -73,6 +73,8 @@ test('hosts: a URL whose host cannot be read is a hit, not skipped', () => {
     '<a href="https:&#x2F;&#x2f;collector.invented-tracker.dev/">',
     '<a href="https&colon;&sol;&sol;collector&period;invented-tracker&period;dev/">',
     '<a href="https:&amp;#47;&amp;#47;collector.invented-tracker.dev/">',
+    'let u = "https:\\u{0000002f}\\u{0000002F}collector.invented-tracker.dev"',
+    '<a href="https:&#x000000002f;&#0000000047;collector.invented-tracker.dev/">',
   ]) {
     assert.deepEqual(scan('src/a.js', '', `${line}\n`, list).map((h) => h.detail), ['new outside host `collector.invented-tracker.dev`'], line);
   }

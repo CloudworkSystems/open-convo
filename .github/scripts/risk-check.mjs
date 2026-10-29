@@ -41,7 +41,8 @@ const URL_PATTERN = /\b(?:https?|wss?):\/\/((?:[^\s/?#"'`<>()[\]{}\\|^,;@]*@)?(?
 const HOST_SHAPE = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$|^\[[0-9a-f:.]+\]$/;
 
 const NAMED_ENTITIES = { sol: '/', colon: ':', period: '.', commat: '@', amp: '&', bsol: '\\', quest: '?', num: '#' };
-const CHARACTER_CODE = /\\x([0-9a-f]{2})|\\u\{([0-9a-f]{1,6})\}|\\u([0-9a-f]{4})|&#x([0-9a-f]{1,6});?|&#([0-9]{1,7});?|&([a-z]+);/gi;
+// Any number of digits: `\u{0000002f}` and `&#x00002f;` are still a slash.
+const CHARACTER_CODE = /\\x([0-9a-f]{2})|\\u\{([0-9a-f]+)\}|\\u([0-9a-f]{4})|&#x([0-9a-f]+);?|&#([0-9]+);?|&([a-z]+);/gi;
 
 /**
  * The line with character codes (`\x2f`, `\u002f`, `\u{2f}`, `&#47;`,
