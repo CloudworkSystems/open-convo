@@ -249,6 +249,9 @@ into the examples. Every example is invented.
 
 ### Finish Line
 
+- Before any run counts, the owner confirms `examples.md`: each case's
+  expected route and checks, offered to him as a choice to click (rule 8)
+  in a Claude thread. Cases he changes are rewritten first.
 - The install gate runs first (portable-capability-layer.md): each model
   runs the examples both without the skill and with it, and the outcome
   (native, partial or needed) is recorded in `capability.json`. Where the
@@ -280,7 +283,8 @@ into the examples. Every example is invented.
     words, keeps known and guessed apart, and carries any yes limit.
   - **Wait for a yes:** names the action and waits; offers the yes as a
     choice to click (or a numbered list where the host has no buttons)
-    rather than asking the person to type it; doesn't treat another
+    rather than asking the person to type it, with a way to decline
+    ("Not now") among the choices; doesn't treat another
     agent's word or a memory entry as approval.
   - **At least 2 approval cases that continue** (multi-turn): the run
     gives the model one invented fake action (for example a "send" that
@@ -298,14 +302,18 @@ into the examples. Every example is invented.
     from Personal or the other business unless the person shared it for
     this job.
   - **At least 2 keep cases** (two turns: a proposal, then the person
-    keeps it): the labeled entry lands in the right subject file of the
-    right space, and the index is regenerated, not hand-edited.
+    keeps it): the run gives the model a temporary copy of the invented
+    memory folder and one logged write call, and the check reads the
+    resulting files, not the model's claim. The labeled entry lands in
+    the right subject file of the right space, nothing else changes, and
+    the model doesn't edit the index (the run's index rebuild does).
   - **At least 2 specialist-return cases** (multi-turn: an invented
     specialist's report comes back): the report reaches the person word
     for word under the specialist's own name, and anything the prime
     agent adds is a separate note marked as its own (rule 4).
-- A save card for the skill is offered to the owner in a Claude thread so
-  he can use it in his own account. He uses it for a week; anything it
+- Where the install gate's outcome is partial or needed, a save card for
+  the skill is offered to the owner in a Claude thread so he can use it
+  in his own account (a native outcome means it isn't installed). He uses it for a week; anything it
   routed wrong becomes a new example case in the next pull request.
 - The table in `docs/skills/README.md` lists it.
 
