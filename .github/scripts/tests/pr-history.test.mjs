@@ -44,6 +44,10 @@ test('Codex rounds count distinct reviewed commits; the summary comment sets the
   const done = { user: codex, created_at: '2026-10-20T03:40:00Z', body: '<!-- codex-review-state:v1 {"code_review":{"commit_sha":"' + 'c'.repeat(40) + '","has_any_findings":false,"has_unresolved_findings":false,"status":"completed"}} -->' };
   assert.equal(codexSummary({ reviews, comments: [...comments, done], reviewComments: [] }, 'c'.repeat(40)).codexLatest, 'clean');
   assert.equal(codexSummary({ reviews, comments: [...comments, done], reviewComments: [] }, 'd'.repeat(40)).codexLatest, 'earlier commit');
+  assert.equal(codexSummary({ reviews, comments, reviewComments: [] }, '2222222222'.padEnd(40, '0')).codexLatest, 'clean');
+  assert.equal(codexSummary({ reviews, comments, reviewComments: [] }, 'e'.repeat(40)).codexLatest, 'clean, earlier commit');
+  const noSha = { ...done, body: done.body.replace(/"commit_sha":"c+",/, '') };
+  assert.equal(codexSummary({ reviews, comments: [...comments, noSha], reviewComments: [] }, 'c'.repeat(40)).codexLatest, 'earlier commit');
   const broken = { user: codex, created_at: '2026-10-20T04:00:00Z', body: '<!-- codex-review-state:v1 {"code_review":{oops} -->' };
   assert.equal(codexSummary({ reviews, comments: [...comments, broken], reviewComments: [] }).codexLatest, 'clean');
 });

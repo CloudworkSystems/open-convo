@@ -77,7 +77,7 @@ export function codexSummary({ reviews, comments, reviewComments }, headSha = ''
   for (const r of reviews) {
     if (r.user?.login !== CODEX) continue;
     if (r.commit_id) commits.add(r.commit_id.slice(0, 10));
-    if ((r.body ?? '').includes('Codex Review')) rounds.push([r.submitted_at, 'had findings']);
+    if ((r.body ?? '').includes('Codex Review')) rounds.push([r.submitted_at, 'had findings', r.commit_id]);
   }
   let state = null;
   for (const c of comments) {
@@ -85,17 +85,19 @@ export function codexSummary({ reviews, comments, reviewComments }, headSha = ''
     if (c.body.startsWith("Codex Review: Didn't find any major issues")) {
       const sha = /Reviewed commit:\*\*\s*`([0-9a-f]+)`/.exec(c.body)?.[1];
       commits.add(sha ? sha.slice(0, 10) : `comment-${c.id}`);
-      rounds.push([c.created_at, 'clean']);
+      rounds.push([c.created_at, 'clean', sha]);
     }
     const json = /codex-review-state:v1 (\{.*?\}) -->/s.exec(c.body)?.[1];
     // A malformed state is skipped, as the gate does, rather than stopping the run.
     if (json) { try { state = JSON.parse(json).code_review ?? state; } catch { /* unusable */ } }
   }
   rounds.sort((a, b) => a[0].localeCompare(b[0]));
-  let latest = rounds.length ? rounds.at(-1)[1] : 'none';
-  // Codex's flags only mean something once its review of the latest commit has finished.
-  // And only for the commit they name: after a push, the old state describes the old head.
-  if (state && headSha && state.commit_sha && state.commit_sha !== headSha) latest = 'earlier commit';
+  // A result counts only for the commit it names: after a push, it describes the old head.
+  const earlier = (sha) => Boolean(headSha) && !headSha.startsWith(sha ?? '-');
+  const last = rounds.at(-1);
+  let latest = !last ? 'none' : last[2] && earlier(last[2]) ? `${last[1]}, earlier commit` : last[1];
+  // Codex's flags only mean something once its review of that commit has finished.
+  if (state && earlier(state.commit_sha)) latest = 'earlier commit';
   else if (state?.status === 'failed') latest = 'review failed';
   else if (state && state.status !== 'completed') latest = 'review running';
   else if (state?.has_unresolved_findings === true) latest = 'open findings';
@@ -179,7 +181,8 @@ Worked-out columns:
 - \`codexLatest\`: Codex's summary comment when there is one (\`clean\`,
   \`open findings\`, \`review failed\`, \`review running\`, or \`earlier commit\` when it
   describes a commit before the head), else the last round (\`clean\`,
-  \`had findings\`), else \`none\`. On a merged pull request, \`open findings\`
+  \`had findings\`, with \`, earlier commit\` added when that round was
+  on a commit before the head), else \`none\`. On a merged pull request, \`open findings\`
   usually means findings left for the triage judge or accepted by the owner.
 - \`outsideReviewer\`, \`outsideRounds\`, \`outsideLatest\`: comments that start
   "Independent review" or end "— GrokBot review". \`outsideLatest\` is a text
