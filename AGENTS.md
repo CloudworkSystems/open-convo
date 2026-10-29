@@ -381,15 +381,18 @@ they win.
   yes. The coordinator may still do it first.
 - **The one hand merge.** When GitHub refuses to switch on auto-merge because
   the pull request is already mergeable, the coordinator or the keeper merges
-  it as `cloudwork-bot`, under the same conditions. The branch rules still
+  it as `cloudwork-bot`, under the same conditions, with a plain merge
+  through GitHub's merge API (never an admin bypass). The branch rules still
   require `tests`, `codex-approved` and the owner's approval on protected
   paths, so this merge passes the same gate auto-merge would have. Nothing
   else is merged by hand.
 - **Plans stop after two Codex rounds.** From the third Codex round on a plan
   or docs pull request, the builder copies each new P1 into the plan's
   requirements for the code pull requests, in one line linking its thread,
-  and replies "carried to the build" on the thread. That counts as answered
-  (Review Guidelines) and needs no new yes from the owner. A P1 showing that
+  and replies "carried to the build" on the thread in the same push. That
+  counts as answered (Review Guidelines), so Codex's next round on the new
+  head should come back clean; if it raises the carried P1 again, the owner's
+  accept line is the way through. Carrying needs no new yes from the owner. A P1 showing that
   the plan's goal or limits are wrong is still fixed in the plan itself.
 - **Dependabot updates.** A Dependabot patch or minor update that touches no
   protected path needs no independent review, since no agent wrote it. Once
