@@ -121,7 +121,10 @@ refusal, it goes to `refused` (below).
    ([skin-check.md](skin-check.md)).
 7. **Duplicates.** An item whose `sourceKey` is in `known`, or repeats an
    earlier item in this drop (earliest `addedAt`, then `id`, wins), goes to
-   `duplicates` with the key and the item it repeats. A duplicate is only
+   `duplicates` as `{ id, sourceKey, repeats }`: `repeats` is the earlier
+   item's `id` for a repeat within this drop, or `"known"` for a key
+   already in the inbox (the inbox, not this library, knows which source
+   that is). A duplicate is only
    reported: the later watcher never deletes or moves a file because this
    library called it a duplicate; it leaves it for the owner.
 8. **Titles.** No page is fetched, so a link's title is its site label and
