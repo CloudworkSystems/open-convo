@@ -89,7 +89,7 @@ test('bad shapes and missing files are refused, naming the file', async () => {
   const badItem = tempFile('items.json', { schemaVersion: 1, items: [{ source: 'a', id: 'b', date: 'yesterday', title: '', text: '' }] });
   const result = await capture(['--sources', fixture('sources.json'), '--items', badItem]);
   assert.equal(result.code, 1);
-  assert.equal(result.err, `Refused ${badItem}: items[0].date must be an ISO 8601 date.\n`);
+  assert.equal(result.err, `Refused ${badItem}: items[0].date must be an ISO 8601 date (a time needs Z or an offset).\n`);
   const missing = join(tmpdir(), 'followed-does-not-exist.json');
   const gone = await capture(['--sources', missing, '--items', fixture('items.json')]);
   assert.equal(gone.code, 1);

@@ -123,12 +123,19 @@ Each has a test in `tests/edge-cases.test.mjs` unless noted.
 - **Zero-width and bidi control characters** are removed along with other
   control characters, since they can hide or reorder what the owner reads
   (`tests/engine.test.mjs`).
-- **What counts as a link.** Any word with `://` or `:\`, a word starting
-  with a link scheme (`mailto:`, `javascript:`, `data:` and so on) or
-  `www.`, a host name followed by a path, and a bare host name with a common
-  ending such as `.com` or `.io` (so "Node.js" stays). Fullwidth dots and
-  slashes count. Links are found one word at a time with anchored checks,
-  so long hostile input can't make the check slow.
+- **What counts as a link.** Any word with `://` or `:\`, or starting
+  with `//`, `www.` or a link scheme (`mailto:`, `javascript:`, `data:` and
+  so on); a host name followed by a path, query, anchor or port; an email
+  address; and a bare host name such as `evil.com`, unless its ending is a
+  common file or tool name (so "Node.js" and "README.md" stay). Fullwidth
+  and ideographic dots and fullwidth slashes count. Links are found one word
+  at a time with anchored checks, so long hostile input can't make the check
+  slow.
+- **A datetime with no time zone** (`2026-10-12T09:00`) refuses the items
+  or state file, since it would be read in the machine's own time zone. A
+  date alone is fine.
+- **Instruction phrases are matched in the title and the text separately**,
+  so a phrase can't form across the two.
 - **Files over 5 MB** are refused before they are read (not tested; the
   limit is a constant, `MAX_FILE_BYTES`).
 - **`reported` grows with every handled item.** Pruning it waits for real

@@ -6,7 +6,9 @@ export const SOURCE_KINDS = Object.freeze(['email', 'links', 'video']);
 
 export class InputError extends Error {}
 
-const ISO = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?)?$/;
+// A date alone, or a date and time with Z or an offset: a time with no
+// zone would be read in the machine's own time zone.
+const ISO = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2}))?$/;
 const fail = message => { throw new InputError(message); };
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const text = (value, label) => typeof value === 'string' ? value : fail(`${label} must be text`);
@@ -45,7 +47,7 @@ export function validateItems(value) {
     if (!isObject(item)) fail(`${at} must be an object`);
     id(item.source, `${at}.source`);
     id(item.id, `${at}.id`);
-    if (!isDate(item.date)) fail(`${at}.date must be an ISO 8601 date`);
+    if (!isDate(item.date)) fail(`${at}.date must be an ISO 8601 date (a time needs Z or an offset)`);
     text(item.title, `${at}.title`);
     text(item.text, `${at}.text`);
     if (item.url !== undefined && item.url !== null) text(item.url, `${at}.url`);
@@ -60,7 +62,7 @@ export function validateState(value) {
   const checkpoints = value.checkpoints ?? {};
   if (!isObject(checkpoints)) fail('checkpoints must be an object');
   for (const [source, date] of Object.entries(checkpoints)) {
-    if (!isDate(date)) fail(`checkpoints.${source} must be an ISO 8601 date`);
+    if (!isDate(date)) fail(`checkpoints.${source} must be an ISO 8601 date (a time needs Z or an offset)`);
   }
   const reported = value.reported ?? [];
   if (!Array.isArray(reported)) fail('reported must be a list');

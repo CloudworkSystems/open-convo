@@ -53,8 +53,9 @@ const isObject = value => value !== null && typeof value === 'object' && !Array.
 
 /** The instruction phrases found in the item's title or text. */
 export function findInstructions(item) {
-  const haystack = ` ${normalize(item.title)} ${normalize(item.text)} `;
-  return INSTRUCTION_PHRASES.filter(phrase => haystack.includes(` ${phrase} `));
+  // Each field on its own, so a phrase can't form across the boundary.
+  const fields = [` ${normalize(item.title)} `, ` ${normalize(item.text)} `];
+  return INSTRUCTION_PHRASES.filter(phrase => fields.some(field => field.includes(` ${phrase} `)));
 }
 
 export function fingerprint(card) {

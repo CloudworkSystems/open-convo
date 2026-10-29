@@ -83,6 +83,8 @@ test('the keyword drafter stays fast on long runs of punctuation', async () => {
 test('links are found in their other common forms, and ordinary words stay', async () => {
   const { stripUrls } = await import('../src/text.mjs');
   assert.equal(stripUrls('Visit evil.com, or https:\\\\evil.com\\x, or evil．example／path today.'), 'Visit or or today.');
+  assert.equal(stripUrls('Try evil.example or evil.shop or evil.example?x=1 or evil.example#top now.'), 'Try or or or now.');
+  assert.equal(stripUrls('See //evil.com/a, evil。com, evil.com:8080 and someone@evil.example now.'), 'See and now.');
   assert.equal(stripUrls('Upgrade Node.js, e.g. today; the data: it shows a 3.5 ratio.'), 'Upgrade Node.js, e.g. today; the data: it shows a 3.5 ratio.');
 });
 
@@ -95,4 +97,15 @@ test('link and text cleaning stay fast on long hostile input', async () => {
     safeText(text);
     assert.ok(Date.now() - started < 1000, text.slice(0, 10));
   }
+});
+
+test('a datetime with no time zone refuses the items file', async () => {
+  const { validateItems } = await import('../src/index.mjs');
+  assert.throws(() => validateItems(items(item('a', '2026-10-12T00:00'))), /a time needs Z or an offset/);
+  assert.doesNotThrow(() => validateItems(items(item('a', '2026-10-12'), item('b', '2026-10-12T00:00-04:00'))));
+});
+
+test('an instruction phrase split across the title and text is not flagged', async () => {
+  const { result } = await go([item('a', '2026-10-12T00:00:00Z', { title: 'What we chose to ignore', text: 'Previous results were mixed.' })], { 'news/a': ok() });
+  assert.deepEqual(result.cards, []);
 });

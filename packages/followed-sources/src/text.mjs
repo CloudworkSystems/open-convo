@@ -16,9 +16,10 @@ export function clean(text) {
   return text.replace(ANSI, '').replace(/\s+/g, ' ').replace(CONTROL, '').replace(/ {2,}/g, ' ').trim();
 }
 
-// Common endings for a bare host name with no path ("evil.com"), so words
-// like "Node.js" stay.
-const BARE_HOST_ENDINGS = new Set(['com', 'net', 'org', 'io', 'ai', 'co', 'dev', 'app', 'xyz', 'info', 'biz', 'me', 'us', 'uk', 'ru', 'cn', 'example']);
+// A bare host name with no path ("evil.com") counts as a link unless its
+// ending is a common file or tool name, so words like "Node.js" and
+// "README.md" stay.
+const KEEP_ENDINGS = new Set(['js', 'ts', 'jsx', 'tsx', 'mjs', 'cjs', 'py', 'rb', 'md', 'json', 'txt', 'yml', 'yaml', 'toml', 'html', 'css', 'sh', 'swift']);
 const CLOSERS = new Set(')"\'>]}.,;:!?');
 
 function trimClosers(token) {
@@ -34,16 +35,22 @@ function isHost(host) {
 }
 
 // A word that is a link: it has "://" (or a backslash form), starts with a
-// link scheme or www., is a host name followed by a path, or is a bare host
-// name with a common ending. Fullwidth dots and slashes count (NFKC).
+// link scheme, www. or //, is a host name followed by a path, query,
+// anchor or port, is an email address, or is a bare host name. Fullwidth
+// and ideographic dots and fullwidth slashes count.
 function isLink(word) {
-  const token = word.normalize('NFKC').replace(OPENERS, '');
-  if (/:[/\\]/.test(token)) return true;
+  const token = word.normalize('NFKC').replace(/\u3002/g, '.').replace(OPENERS, '');
+  if (token.startsWith('//') || /:[/\\]/.test(token)) return true;
   if (BARE_SCHEME.test(token) || /^www\./i.test(token)) return true;
-  const slash = token.search(/[/\\]/);
-  if (slash > 0) return isHost(token.slice(0, slash));
+  // An email address, or a host name with a port.
+  const at = token.lastIndexOf('@');
+  if (at > 0 && isHost(trimClosers(token.slice(at + 1)))) return true;
+  const port = /^([^:]+):\d+/.exec(token);
+  if (port && isHost(port[1])) return true;
+  const cutAt = token.search(/[/\\?#]/);
+  if (cutAt > 0 && isHost(token.slice(0, cutAt))) return true;
   const bare = trimClosers(token);
-  return isHost(bare) && BARE_HOST_ENDINGS.has(bare.split('.').at(-1).toLowerCase());
+  return isHost(bare) && !KEEP_ENDINGS.has(bare.split('.').at(-1).toLowerCase());
 }
 
 /** Removes every link from the text, then cleans it again. */
