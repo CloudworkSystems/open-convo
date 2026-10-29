@@ -105,6 +105,8 @@ decision October 22): GrokBot team B builds, Codex reviews. Plan approved
 
 **Skin check** (Personal, new Health module), Claude builds, GrokBot or a fresh Claude reviews; plan approved (`docs/plans/skin-check.md`). Slice 1, the standalone engine in `packages/skin-check/`, is built; the iPhone source joins the iPhone app on the parallel sync line, and the Desk view follows.
 
+**Time mirror** (Personal, the observability layer's first slice; owner asked October 29 to start it ahead of the core order), Claude builds, GrokBot or a fresh Claude reviews; plan in review (`docs/plans/time-mirror.md`): RescueTime daily totals drawn as habit-grid heat maps on the Mac, nothing new leaving the device.
+
 **Public website (trueconvo.com)**, Claude builds, Codex reviews; a home page (with two Desk preview screenshots) and a plain-language privacy policy in `site/`, published by `.github/workflows/pages.yml` from `main` (#153, October 25). For Meta's developer early-access application and regular visitors. The owner turned on Pages and set the custom domain; the domain's DNS records are still to do.
 
 **Security** (all work; owner asked October 28): plan
