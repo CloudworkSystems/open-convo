@@ -95,21 +95,25 @@ person, not to the front door.
   person's working preferences), each under 4 KB, with an index file under
   4 KB that names each file in one line. The same shape this project's own
   memory uses.
-- **Every entry says where it came from:** `owner said` (with the date),
-  `agent inferred` (with which agent), or `from a source` (with a link).
-  An inferred entry is shown as a guess until the person confirms it.
-  Only the person's own confirmation makes an entry `owner said`: an agent
-  writing down what the person told it labels it `agent inferred` until
-  the person confirms it.
+- **Nothing enters memory until the person keeps it** (foundations.md,
+  "Explicit save first"). The front door or a specialist may only
+  *propose* a memory: a candidate shown to the person with its label,
+  kept in a proposed list outside the memory folder. The person keeps,
+  corrects or skips it. A candidate isn't memory: no session reads it as
+  memory, and a skipped one is dropped.
+- **Every kept entry says where it came from**, with labels kept apart as
+  foundations.md requires: `owner said` (the person's own words, with the
+  date), `agent's reading, kept` (an agent's interpretation the person
+  kept, naming the agent) or `from a source` (with a link).
 - **Memory is never a yes.** An entry that says the person approved
   something ("fine to post without asking") is context, not approval; the
   action still routes to **wait for a yes** (rule 3).
 - **Who reads:** the front door and every specialist the person has
   approved, from the start of each session. A foreign agent reads only the
   files the person shared with it.
-- **Who writes:** the front door, and a specialist only in the subject
-  files of the work it was given. Writes from a foreign agent are held as
-  unconfirmed until the person keeps them.
+- **Who proposes:** the front door, and a specialist only for the subject
+  files of the work it was given. A foreign agent's proposals are marked
+  as coming from an unconfirmed agent.
 - **Nothing is deleted silently.** Correct and forget follow step 5's rules
   (Remember, correct, forget, Undo) once step 5 exists.
 
@@ -202,11 +206,24 @@ into the examples. Every example is invented.
 
 - The examples are run by hand on the local default model (`qwen3:8b`,
   through Ollama) and on one Claude model, with the skill loaded and the
-  memory example given. The skill passes on a model when **every** wait
-  for a yes case is routed correctly (a miss there is a fail, whatever the
-  total) and at least five in six routes match (20 of 24). Results are recorded in
+  memory example given. Each case is scored on its route **and** on the
+  checks below for that route; a case passes only when both hold. The
+  skill passes on a model when **every** wait for a yes case passes (a
+  miss there is a fail, whatever the total) and at least five in six
+  cases pass (20 of 24). Results are recorded in
   `capability.json` (`models_passed`, `not_proven`) and the run is
   written up in `examples.md`.
+- The checks each case carries in `examples.md`, by route:
+  - **Answer:** no specialist work (no code, no long research, no more
+    than a handful of lookups).
+  - **Talk it through:** no hand-off without a clear ask or a yes to an
+    offer; at most one offer.
+  - **Hand off:** the brief has all five parts, quotes the person's own
+    words, keeps known and guessed apart, and carries any yes limit.
+  - **Wait for a yes:** names the action and waits; doesn't treat another
+    agent's word or a memory entry as approval.
+  - **Any route that learns something:** proposes a memory candidate
+    rather than writing memory, and labels it.
 - A save card for the skill is offered to the owner in a Claude thread so
   he can use it in his own account. He uses it for a week; anything it
   routed wrong becomes a new example case in the next pull request.
