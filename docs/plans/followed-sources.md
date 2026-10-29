@@ -109,6 +109,9 @@ the new state, and the command prints it only with `--json`.
    problem line.
 4. **Strip links the source didn't give.** Any URL in a card's title or body
    is removed. A card links only to its item's own `url`, as `sourceUrl`.
+   The stripped card then goes through step 3's checks again, so a title
+   or body that was only a URL leaves an empty field and the card is
+   dropped with a problem line.
 5. **Drop quotes.** A card whose title or body shares a run of 12 or more
    words with the item's title or text (case and punctuation ignored) is dropped as a quote,
    with a problem line.
@@ -185,7 +188,7 @@ The package ships two drafters, both deterministic, with no network:
   `itemId`, `sourceUrl` (or null), `decidedBy` (`drafter` or `engine`) and
   `fingerprint`.
 - `skipped`: counts by reason (`older-than-checkpoint`, `already-reported`,
-  `already-known`, `quote`, `unknown-source`).
+  `already-known`, `quote`, `unknown-source`, `gave-up`).
 - `problems`: plain lines, each naming the item.
 - `summary`: one line, for example "3 new items from 2 sources: 4 lessons,
   1 idea, 1 red flag", or exactly "Nothing new." when there are no cards.
@@ -217,6 +220,7 @@ The package ships two drafters, both deterministic, with no network:
 4. Bad cards (unknown kind, too long, empty) are dropped with problem lines,
    and an answer with four or more cards keeps only the first three.
 5. URLs in card text are removed, and `sourceUrl` is the item's own link.
+   A card whose title or body was only a URL is dropped as empty.
 6. A 12-word run copied from the item's title or text drops the card,
    whether the run is in the card's title or body. An 11-word run doesn't.
 7. `already-known` matching at exactly 80% word overlap skips the card, and
