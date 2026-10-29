@@ -189,13 +189,14 @@ export async function run({ sources, items, state, known, drafter, timeoutMs = L
 
   for (const item of ordered) {
     const itemKey = key(item.source, item.id);
+    // A gave-up item is skipped before any other step, even if its source is gone.
+    if (failures.get(itemKey)?.gaveUp) { skipped['gave-up'] += 1; continue; }
     const source = sourcesById.get(item.source);
     if (!source) {
       skipped['unknown-source'] += 1;
       problems.push(`${describe(item)}: its source isn't in the sources file, so it was skipped.`);
       continue;
     }
-    if (failures.get(itemKey)?.gaveUp) { skipped['gave-up'] += 1; continue; }
     // The same item listed twice in one run is handled once.
     if (seenThisRun.has(itemKey)) { skipped['already-reported'] += 1; continue; }
     seenThisRun.add(itemKey);

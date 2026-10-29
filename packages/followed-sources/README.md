@@ -111,6 +111,8 @@ Each has a test in `tests/edge-cases.test.mjs` unless noted.
 - **A malformed item** (missing field, date that isn't ISO 8601) refuses
   the items file, naming the item (`tests/cli.test.mjs`). Items come from
   our own adapters, so a bad one means a bug to fix, not a source to skip.
+- **A gave-up item whose source was removed** stays silent: the gave-up
+  check comes before the source check.
 - **A card repeating an earlier card in the same answer** (same
   fingerprint) is dropped with a problem line.
 - **An item already in `reported`** still carries its source's checkpoint
@@ -129,7 +131,9 @@ Each has a test in `tests/edge-cases.test.mjs` unless noted.
   path, query, anchor or port; a bare IPv4 address; an email
   address; and a bare host name such as `evil.com`, unless its ending is a
   common file or tool name (so "Node.js" and "README.md" stay). Fullwidth
-  and ideographic dots and fullwidth slashes count. Links are found one word
+  and ideographic dots and fullwidth slashes count. A word is also a link
+  when any part of it between brackets, parentheses or quotes is one, so
+  Markdown links like `[label](//host/x)` and `<host>` are removed whole. Links are found one word
   at a time with anchored checks, so long hostile input can't make the check
   slow.
 - **A datetime with no time zone** (`2026-10-12T09:00`) refuses the items

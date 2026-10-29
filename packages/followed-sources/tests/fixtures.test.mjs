@@ -13,7 +13,7 @@ test('fixtures and tests use only invented addresses and links on .example domai
     for (const [address, domain] of text.matchAll(/[\w.+-]+@((?:[\w-]+\.)+[\w-]+)/g)) {
       assert.ok(domain.toLowerCase().endsWith('.example'), `${file}: ${address}`);
     }
-    for (const [, host] of text.matchAll(/https?:\/\/([^/\s"'`]+)/g)) {
+    for (const [, host] of text.matchAll(/https?:\/\/([^/\s"'`),\]>]+)/g)) {
       assert.ok(host.toLowerCase().endsWith('.example'), `${file}: ${host}`);
     }
   }

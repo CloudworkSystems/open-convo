@@ -86,6 +86,7 @@ test('links are found in their other common forms, and ordinary words stay', asy
   assert.equal(stripUrls('Try evil.example or evil.shop or evil.example?x=1 or evil.example#top now.'), 'Try or or or now.');
   assert.equal(stripUrls('See //evil.com/a, evil。com, evil.com:8080 and someone@evil.example now.'), 'See and now.');
   assert.equal(stripUrls('Open 127.0.0.1:3000/path, localhost:8080/x, 10.0.0.1/admin, 192.168.1.1 and \\\\evil.com\\x and/or later.'), 'Open and and/or later.');
+  assert.equal(stripUrls('Read [this](//evil.example/path), [a link](https://evil.example), <evil.example> and "evil.example/x" now. Keep (this) and snake_case.'), 'Read [a and now. Keep (this) and snake_case.');
   assert.equal(stripUrls('Upgrade Node.js, e.g. today; the data: it shows a 3.5 ratio.'), 'Upgrade Node.js, e.g. today; the data: it shows a 3.5 ratio.');
 });
 
@@ -117,4 +118,13 @@ test('a date that does not exist refuses the items file', async () => {
     assert.throws(() => validateItems(items(item('a', date))), /ISO 8601 date/, date);
   }
   assert.doesNotThrow(() => validateItems(items(item('a', '2028-02-29'), item('b', '2026-12-31T23:59:59.5-05:00'))));
+});
+
+test('a gave-up item stays silent even after its source is removed', async () => {
+  const state = { schemaVersion: 1, checkpoints: {}, reported: [], failures: [{ source: 'ghost', itemId: 'a', runs: 3, gaveUp: true }] };
+  const { result, drafter } = await go([item('a', '2026-10-12T00:00:00Z', { source: 'ghost' })], {}, { state });
+  assert.equal(drafter.calls.length, 0);
+  assert.deepEqual(result.problems, []);
+  assert.equal(result.skipped['gave-up'], 1);
+  assert.equal(result.skipped['unknown-source'], 0);
 });

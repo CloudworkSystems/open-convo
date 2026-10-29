@@ -49,7 +49,7 @@ function isHost(host) {
 // link scheme, www. or //, is a host name followed by a path, query,
 // anchor or port, is an email address, or is a bare host name. Fullwidth
 // and ideographic dots and fullwidth slashes count.
-function isLink(word) {
+function isLinkPart(word) {
   const token = word.normalize('NFKC').replace(/\u3002/g, '.').replace(OPENERS, '');
   if (/^[/\\]{2}/.test(token) || /:[/\\]/.test(token)) return true;
   if (BARE_SCHEME.test(token) || /^www\./i.test(token)) return true;
@@ -62,6 +62,12 @@ function isLink(word) {
   if (cutAt > 0 && isAddress(token.slice(0, cutAt))) return true;
   const bare = trimClosers(token);
   return isIPv4(bare) || (isHost(bare) && !KEEP_ENDINGS.has(bare.split('.').at(-1).toLowerCase()));
+}
+
+// A word is a link when any part of it between brackets, parentheses or
+// quotes is one, so Markdown like [label](//host/x) is caught too.
+function isLink(word) {
+  return word.split(/[()[\]<>{}"'`*_|]+/).some(part => part && isLinkPart(part));
 }
 
 /** Removes every link from the text, then cleans it again. */
