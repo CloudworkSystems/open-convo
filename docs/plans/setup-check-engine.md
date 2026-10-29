@@ -97,9 +97,12 @@ repeating its numbers.
      slow and suggests a cloud model.
    - `memory`: passes when at least one catalog model fits (`memoryGB >=
      minMemoryGB`); otherwise warns that only a cloud model will work.
-   - `disk`: passes with room for the recommended model plus 5 GB; warns
-     when only the model fits; stops when it doesn't fit and no fitting
-     model is already installed.
+   - `disk`, in two cases that cover every input. When a fitting catalog
+     model is already installed, nothing needs downloading: it passes with
+     at least 5 GB free and warns "disk almost full" below that, and never
+     stops. Otherwise, against the size of the model it would download: it
+     passes with room for that model plus 5 GB, warns when only the model
+     fits, and stops when the model doesn't fit.
    - `ollama`: passes when installed and running; warns "installed but not
      running" with the fix "Open the Ollama app"; when not installed, the fix
      names ollama.com/download. Skipped (state `pass`, message says why)
@@ -153,8 +156,9 @@ machines only. At least:
    matches a saved expected file exactly.
 2. Each check's pass, warn and stop cases above, including macOS 12 (stop),
    an Intel Mac (warn), 8 GB with only the smallest catalog model fitting,
-   4 GB with none fitting, and disk with room for the model but not the
-   extra 5 GB.
+   4 GB with none fitting, disk with room for the model but not the
+   extra 5 GB, and an installed fitting model with 2 GB free (warn, the
+   route stays `local`).
 3. Recommendation: an installed fitting model beats a better one not yet
    downloaded; a model installed but too big for memory is not recommended;
    `mode: cloud` on a Mac that could run a local model gives `cloud`, never
