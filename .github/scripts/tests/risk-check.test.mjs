@@ -37,6 +37,10 @@ test('hosts: odd spellings are read the way fetch reads them', () => {
 test('hosts: a URL whose host cannot be read is a hit, not skipped', () => {
   assert.deepEqual(readHosts('fetch("https://bad%host.invented-tracker.dev/")').unreadable.length, 1);
   assert.deepEqual(scan('src/a.js', '', 'fetch("https://bad%host.invented-tracker.dev/")\n').map((h) => h.signal), ['host']);
+  const list = allow({ hosts: ['github.com'] });
+  assert.deepEqual(scan('src/a.js', '', 'fetch("https://github.com\\@collector.invented-tracker.dev/")\n', list).map((h) => h.detail), ["couldn't read the host in `https://github.com`"]);
+  assert.deepEqual(scan('src/a.js', '', 'fetch("https://github.com\\x40collector.invented-tracker.dev/")\n', list).length, 1);
+  assert.deepEqual(scan('Sources/A.swift', '', 'URL(string: "http://127.0.0.1:\\(port)")\n'), []);
 });
 
 test('hosts: invented names and their subdomains never count', () => {

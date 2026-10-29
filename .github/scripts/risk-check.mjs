@@ -53,7 +53,12 @@ export function readHosts(line) {
     // A host built at run time (`https://${host}`) can't be read; the
     // checklist in the independent review covers what a pattern can't see.
     if (/^\$\{/.test(line.slice(match.index + match[0].length - match[1].length))) continue;
+    // A backslash right after the host (as in a.com\@b.com) is a source
+    // escape that can put a different host in the real string: fail closed.
+    // Swift's "\(port)" only fills in the port, so the host still reads.
     let host = null;
+    const after = line.slice(match.index + match[0].length, match.index + match[0].length + 2);
+    if (after[0] === '\\' && after !== '\\(') { unreadable.push(match[0]); continue; }
     try {
       host = new URL(match[0]).hostname.replace(/\.$/, '');
     } catch { /* unreadable */ }
