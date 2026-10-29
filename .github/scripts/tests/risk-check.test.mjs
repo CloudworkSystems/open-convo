@@ -56,7 +56,7 @@ test('hosts: a URL whose host cannot be read is a hit, not skipped', () => {
   // The URL parser drops tabs and carriage returns, so they don't end the host.
   assert.equal(readHosts('https://github.com!\t@collector.invented-tracker.dev/path').unreadable.length, 1);
   assert.equal(readHosts('https://github.com!\r@collector.invented-tracker.dev/path').unreadable.length, 1);
-  assert.deepEqual(readHosts('https://github.com\t.collector.invented-tracker.dev/path').hosts, ['github.com.collector.invented-tracker.dev']);
+  assert.deepEqual([...new Set(readHosts('https://github.com\t.collector.invented-tracker.dev/path').hosts)], ['github.com.collector.invented-tracker.dev']);
   assert.deepEqual(readHosts('("https://github.com.") and https://github.com, then https://github.com;'), { hosts: ['github.com', 'github.com', 'github.com'], unreadable: [] });
   assert.deepEqual(scan('src/a.js', '', 'fetch("https://bad%host.invented-tracker.dev/")\n').map((h) => h.signal), ['host']);
   const list = allow({ hosts: ['github.com'] });
@@ -87,6 +87,28 @@ test('hosts: a URL whose host cannot be read is a hit, not skipped', () => {
     '<a href="https://&#65349;vil.invented-tracker.dev">',
   ]) {
     assert.deepEqual(readHosts(line).hosts, ['evil.invented-tracker.dev'], line);
+  }
+  // Backslashes after the scheme reach a host too (`https:\\host`): unreadable.
+  for (const line of [
+    '<a href="https:&bsol;&bsol;collector.invented-tracker.dev/">',
+    'fetch("https:\\\\collector.invented-tracker.dev")',
+    'fetch("https:/\\collector.invented-tracker.dev")',
+    'let u = "https:\\x5c\\x5ccollector.invented-tracker.dev"',
+  ]) {
+    assert.equal(readHosts(line).unreadable.length, 1, line);
+  }
+  // Tabs, line breaks or other control characters around the URL don't hide
+  // the host from the URL parser.
+  for (const line of [
+    'fetch("\nhttps://collector.invented-tracker.dev")',
+    'fetch("\thttps://collector.invented-tracker.dev")',
+    'fetch("\x00https://collector.invented-tracker.dev")',
+    'fetch("\u000ahttps://collector.invented-tracker.dev")',
+    '<a href="&#10;https://collector.invented-tracker.dev">',
+    'fetch("https://\tcollector.invented-tracker.dev")',
+    'fetch("https://coll\nector.invented-tracker.dev")',
+  ]) {
+    assert.ok(readHosts(line).hosts.includes('collector.invented-tracker.dev'), line);
   }
   // A code still left as written where the host starts can't be read.
   assert.deepEqual(readHosts('fetch("https://\\u0000evil.invented-tracker.dev")').unreadable.length, 1);
