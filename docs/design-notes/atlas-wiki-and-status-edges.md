@@ -59,17 +59,26 @@ request it produced, colored by **who owes the next move**:
 | Waiting on you | Needs the owner: an approval, a decision, an accept line |
 | In review | Codex, the independent reviewer or the triage judge has it |
 | Being fixed | A builder owes a push for open findings |
-| Ready to merge | Auto-merge is on, or every check has passed |
+| Ready to merge | Every gate prerequisite passes on the latest commit: `tests`, `codex-approved`, the owner's approval of any protected path and, where a rule needs them, a clean independent review and plan check. Auto-merge being on is one more input, never enough on its own |
 | Stuck | An agent missed its deadline (AGENTS.md "Agent Setup And Silence") |
 
-- **One data feed, shown twice.** The same per-PR status (checks, reviewer,
-  judge, relay, whose turn) feeds a "Pending" list on the Rail Map and the
-  lines on Canvas. The list is the same one issue #52 carries today.
+- **One data feed, shown twice.** A complete per-PR status feed, built from
+  GitHub's own data for every open pull request (checks, reviews, the
+  reviewer, judge and relay state, whose turn), feeds a "Pending" list on the
+  Rail Map and the lines on Canvas. Issue #52 is not that feed: it lists only
+  pull requests waiting on the owner, plus the keeper's "Not working" report.
+  It becomes one filtered view of the feed (the "Waiting on you" rows).
 - **What it depends on.** A line needs to know which session produced which
-  pull request. That link comes from the durable session records
-  (foundations, principle 17), which the Claude Code adapter work provides.
-  Until then, the Rail Map list can come first from a scheduled snapshot, the
-  way `apps/desk/scripts/rail-map-snapshot.mjs` works now.
+  pull request, and nothing records that yet. The Claude Code adapter
+  (`docs/plans/claude-code-adapter.md`) is plain text with no tools, so its
+  durable session records hold no pull-request identity. The link needs its
+  own saved record (session, repository, pull request number), written by the
+  builder integration that opens the pull request, at the moment it opens
+  it, never guessed afterwards from branch names or titles. So the Canvas
+  lines wait until a builder integration writes that record; that is its own
+  plan. The Rail Map list needs no such link and can come first from a
+  scheduled snapshot, the way `apps/desk/scripts/rail-map-snapshot.mjs`
+  works now.
 - **Status is computed in code**, from GitHub's own data and the rules in
   AGENTS.md. No model decides whose turn it is.
 
@@ -86,6 +95,13 @@ the Syntactic Index (the owner's glossary of short codes, terms and commands).
   2. finds broken links, duplicates and notes nothing links to;
   3. flags notes that contradict each other, and files that are too long;
   4. writes a short health report with a score.
+- **One owner per index.** Every index file in a memory space is generated
+  by the Steward's plain-code rebuild, and nobody edits one by hand. Other
+  agents, such as a front door or a specialist, write only kept entries to
+  subject files (an agent proposes, the owner keeps: foundations, "explicit
+  save first") and trigger that rebuild after each kept write, so an index
+  never waits for the weekly run. The front-door plan (#186) uses the same
+  split.
 - **Mostly code, with a small model.** Steps 1 and 2 are plain code. Steps 3
   and 4 need a model only to compare and phrase, so they should work on the
   local default model (`qwen3:8b`). This matches the agent profiles design
