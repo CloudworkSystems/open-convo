@@ -114,6 +114,13 @@ repeating its numbers.
      `model` warns "no local model fits this Mac's memory" with the fix
      "use a cloud model" and no download command. A local route is then
      impossible, so `mode: local` gives `none`.
+   - **When a model fits memory but none fits the free disk** and no
+     fitting model is installed: `disk` stops with the fix "free up at
+     least N GB", N being the smallest memory-fitting catalog model's size
+     plus 5 minus `freeDiskGB`, rounded up; `model` warns "no local model
+     fits the free disk space" with no download command. A local route is
+     impossible, so `mode: local` gives `none` and `either` gives
+     `cloud`.
    - `cloud`: only when `mode` is `cloud`, or `either` and the local route
      can't work: passes only when `choice` is set and that exact model and
      host pair is in `approved`. An approval of another model or host never
@@ -163,7 +170,9 @@ machines only. At least:
 2. Each check's pass, warn and stop cases above, including macOS 12 (stop),
    an Intel Mac (warn), 8 GB with only the smallest catalog model fitting,
    4 GB with none fitting (disk passes, model warns with no download
-   command, `mode: local` gives `none`), disk with room for the model but not the
+   command, `mode: local` gives `none`), memory for a model but disk for
+   none (disk stops with the "free up" amount, model warns with no download
+   command), disk with room for the model but not the
    extra 5 GB, and an installed fitting model with 2 GB free (warn, the
    route stays `local`).
 3. Recommendation: an installed fitting model beats a better one not yet

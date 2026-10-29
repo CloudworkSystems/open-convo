@@ -33,6 +33,12 @@ that both the Mac's folder watcher and, later, the iPhone share button use.
    Drive folder (after the owner's one-time approval of iCloud Drive as a
    host, foundations principle 6), hands this library each item's text or
    file details, and stores the sources in the inbox; the Desk inbox view.
+   The same slice writes the Apple Shortcut, which must keep the iCloud
+   Drive folder within the approval: on the phone, before anything is
+   saved, it pulls out only the link (Shortcuts' "Get URLs from Input") or
+   the video clip, and never writes a caption, message or other shared
+   text. This library's dropping of extra words (step 5) is a second guard
+   for files that arrive anyway, not the first.
 3. **Later:** the iPhone share button on the parallel sync line calls the
    same library before sending a source through the sync core.
 
@@ -98,7 +104,8 @@ refusal, it goes to `refused` (below).
    links and video clips only (PLAN.md, iPhone capture app), so a `text`
    item with no link is refused ("Only links and video clips go in the
    capture folder"). In text with a link and other words, only the link is
-   kept; the other words are dropped and counted, never stored. Notes can
+   kept; the other words are dropped and counted, never stored (the
+   Shortcut is meant to have dropped them already; see Plan Of Record). Notes can
    come later, once an owner decision widens that approval.
 6. **Clips.** A `file` item of type `public.mpeg-4` or
    `com.apple.quicktime-movie`, up to 8 GB, is a clip. Its `sourceKey` is
