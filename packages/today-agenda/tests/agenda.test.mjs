@@ -843,6 +843,31 @@ describe('9. input checks', () => {
     assert.match(refusal(day({ date: '0000-01-01' })), /day: date/);
     assert.match(refusal(day({ date: '0099-02-29' })), /day: date/);
   });
+
+  it('does not use year 1 BCE as the year 0001 clock in New York', () => {
+    const agenda = buildAgenda({
+      schemaVersion: 1,
+      date: '0001-01-01',
+      timeZone: 'America/New_York',
+      now: '0001-01-01T00:00:00Z',
+      settings: { dayStart: '00:00', dayEnd: '04:00', minFreeMinutes: 30 },
+      events: [{
+        key: 'bell',
+        title: 'Bell',
+        start: '0001-01-01T06:00:00Z',
+        end: '0001-01-01T07:00:00Z',
+        allDay: false,
+        calendar: 'Work',
+      }],
+      tasks: [],
+      habits: [],
+      lists: [],
+    });
+    assert.deepEqual(agenda.freeTime.map(gap => [gap.start, gap.end, gap.startInstant, gap.endInstant, gap.minutes]), [
+      ['00:00', '01:03:58', '0001-01-01T04:56:02Z', '0001-01-01T06:00:00Z', 63],
+      ['02:03:58', '04:00', '0001-01-01T07:00:00Z', '0001-01-01T08:56:02Z', 116],
+    ]);
+  });
 });
 
 describe('10. hostile text', () => {

@@ -28,6 +28,7 @@ function formatter(timeZone) {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
+      era: 'short',
     });
     formatters.set(timeZone, known);
   }
@@ -44,16 +45,34 @@ export function isIanaTimeZone(timeZone) {
   }
 }
 
+function isCommonEra(era) {
+  const token = String(era).toUpperCase();
+  return token === 'AD' || token === 'CE' || token === 'A';
+}
+
+// 1 BC is astronomical year 0. The year number alone is the same as 0001 CE.
+function civilYear(parts) {
+  return isCommonEra(parts.era) ? parts.year : 1 - parts.year;
+}
+
 export function zonedParts(ms, timeZone) {
-  const bag = { year: 0, month: 0, day: 0, hour: 0, minute: 0, second: 0 };
+  const bag = { year: 0, month: 0, day: 0, hour: 0, minute: 0, second: 0, era: '' };
   for (const part of formatter(timeZone).formatToParts(ms)) {
-    if (Object.hasOwn(bag, part.type)) bag[part.type] = Number(part.value);
+    if (part.type === 'era') bag.era = part.value;
+    else if (Object.hasOwn(bag, part.type) && part.type !== 'era') bag[part.type] = Number(part.value);
   }
   // A few ICU builds report midnight as hour 24 on the day that just ended.
   if (bag.hour === 24) {
     bag.hour = 0;
-    const next = new Date(utcMillis(bag.year, bag.month - 1, bag.day) + 86_400_000);
-    bag.year = next.getUTCFullYear();
+    const next = new Date(utcMillis(civilYear(bag), bag.month - 1, bag.day) + 86_400_000);
+    const fullYear = next.getUTCFullYear();
+    if (fullYear >= 1) {
+      bag.era = 'AD';
+      bag.year = fullYear;
+    } else {
+      bag.era = 'BC';
+      bag.year = 1 - fullYear;
+    }
     bag.month = next.getUTCMonth() + 1;
     bag.day = next.getUTCDate();
   }
@@ -157,7 +176,10 @@ export function formatLocal(parts) {
 }
 
 export function civilDate(ms, timeZone) {
-  return formatCivil(zonedParts(ms, timeZone));
+  const parts = zonedParts(ms, timeZone);
+  // Agenda dates are 0001–9999 CE. A BCE wall date must not compare equal to one.
+  if (!isCommonEra(parts.era)) return '';
+  return formatCivil(parts);
 }
 
 export function wallClock(ms, timeZone) {
@@ -170,13 +192,15 @@ export function localDateTime(ms, timeZone) {
 
 function matches(ms, year, month, day, hour, minute, second, timeZone) {
   const parts = zonedParts(ms, timeZone);
+  // Year 1 BC is also written "1". Only a common-era wall clock can match 0001 CE.
+  if (!isCommonEra(parts.era)) return false;
   return parts.year === year && parts.month === month && parts.day === day
     && parts.hour === hour && parts.minute === minute && parts.second === second;
 }
 
 function offsetMs(instant, timeZone) {
   const parts = zonedParts(instant, timeZone);
-  const asUtc = utcMillis(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  const asUtc = utcMillis(civilYear(parts), parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
   return asUtc - instant;
 }
 
