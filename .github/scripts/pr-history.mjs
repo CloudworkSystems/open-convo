@@ -172,6 +172,9 @@ One row per pull request in this repository, rebuilt every morning by
 \`.github/workflows/pr-history.yml\` on \`main\`. \`pr-history.csv\` is for the
 owner's Google Sheet (\`=IMPORTDATA\` of its raw link); \`pr-history.json\` holds
 the same rows for the Desk, Canvas and Atlas. No authors or emails are kept.
+Each run rereads only the pull requests that changed, at most 120 of them, so
+a full rebuild (the first run, or a new column) fills in over two or three
+mornings, newest pull requests first.
 
 Worked-out columns:
 
@@ -199,6 +202,9 @@ Worked-out columns:
   or a top-level file).
 `;
 
+// About five requests each, plus paging: well under the hourly limit.
+const MAX_READS = 120;
+
 async function main(folder) {
   const { client, repoFromEnv } = await import('./github.mjs');
   const gh = client();
@@ -210,10 +216,16 @@ async function main(folder) {
 
   const rows = [];
   let fetched = 0;
+  let deferred = 0;
+  // Newest first, as GitHub lists them.
   for (const pull of await gh.all(`${base}/pulls?state=all`)) {
     const old = kept.get(pull.number);
     // A row is reused only when nothing changed and it has today's columns.
     if (old && old.updatedAt === pull.updated_at && Object.keys(old).join() === COLUMNS.join()) { rows.push(old); continue; }
+    // The workflow token allows 1,000 requests an hour. A full rebuild (first run,
+    // a new schema) reads at most MAX_READS pull requests a run and finishes on later
+    // days; until then a deferred pull request keeps its old row, or is left out.
+    if (fetched >= MAX_READS) { deferred += 1; if (old) rows.push(old); continue; }
     const n = pull.number;
     const [files, reviews, comments, reviewComments, commits] = await Promise.all([
       gh.all(`${base}/pulls/${n}/files`), gh.all(`${base}/pulls/${n}/reviews`), gh.all(`${base}/issues/${n}/comments`),
@@ -226,7 +238,7 @@ async function main(folder) {
   writeFileSync(join(folder, 'pr-history.csv'), toCsv(rows));
   writeFileSync(join(folder, 'README.md'), README);
   writeFileSync(previousFile, `${JSON.stringify({ schemaVersion: SCHEMA_VERSION, repository: `${owner}/${repo}`, takenAt: new Date().toISOString(), pulls: rows }, null, 1)}\n`);
-  console.log(`PR history: ${rows.length} pull requests, ${fetched} read again.`);
+  console.log(`PR history: ${rows.length} pull requests, ${fetched} read again, ${deferred} left for the next run.`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
