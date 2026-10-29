@@ -854,7 +854,11 @@ extension ProcessSuites {
             let argv = tree.record("auth-status.json")?["argv"] as? [String]
             #expect(argv.map { Array($0.suffix(3)) } == ["auth", "status", "--json"], "\(argv ?? [])")
             #expect(ClaudeNetworkBlock.system.arguments(running: tree.binaryPath, ["auth", "status", "--json"])
-                        == [tool, "-p", "(version 1)(allow default)(deny network*)", tree.binaryPath, "auth", "status", "--json"])
+                        == [tool, "-p", ClaudeNetworkBlock.profile, tree.binaryPath, "auth", "status", "--json"])
+            #expect(ClaudeNetworkBlock.profile.hasPrefix("(version 1)(allow default)(deny network*)(deny mach-lookup "))
+            for service in ClaudeNetworkBlock.deniedServices {
+                #expect(ClaudeNetworkBlock.profile.contains("(global-name \"\(service)\")"), "\(service)")
+            }
             #expect(await blocked.recheck() == .unavailable(.overflowUnverified))
 
             // The public initializer (what F7 would compose) blocks the
@@ -864,7 +868,7 @@ extension ProcessSuites {
             #expect(tree.checks().authStatusGate == .runForTests)
         }
 
-        @Test("Under the block, what auth status starts reaches no listener, over TCP or a local socket; without it, the same fake reaches both (not vacuous)")
+        @Test("Under the block, what auth status starts reaches no listener, over TCP or a local socket, looks up no resolver or fetch service and resolves no host name; without it, the same fake does all of these (not vacuous)")
         func authStatusNetworkDenied() async throws {
             let tree = try InventedClaudeTree()
             defer { tree.clean() }
@@ -872,19 +876,26 @@ extension ProcessSuites {
             defer { tcp.close() }
             let local = try InventedListener.local()
             defer { local.close() }
-            try tree.setScenario(["authStatus": "subscription", "networkPort": tcp.port, "networkSocket": local.path])
+            try tree.setScenario(["authStatus": "subscription", "networkPort": tcp.port, "networkSocket": local.path,
+                                  "networkServices": ClaudeNetworkBlock.deniedServices, "networkHost": "localhost"])
 
             #expect(await tree.checks(authStatus: .production).evaluateFresh().didPass)
             let denied = tree.record("network.json")
             #expect(denied?["tcpConnected"] as? Bool == false && denied?["localConnected"] as? Bool == false, "\(denied ?? [:])")
             #expect((denied?["tcpErrno"] as? Int ?? 0) != 0 && (denied?["localErrno"] as? Int ?? 0) != 0)
             #expect(!tcp.hasConnection && !local.hasConnection, "neither listener saw a connection")
+            let deniedLookups = denied?["services"] as? [String: Int] ?? [:]
+            #expect(Set(deniedLookups.keys) == Set(ClaudeNetworkBlock.deniedServices), "\(deniedLookups)")
+            #expect(deniedLookups.values.allSatisfy { $0 != 0 }, "no denied service was found: \(deniedLookups)")
+            #expect((denied?["resolve"] as? Int).map { $0 != 0 } == true, "no host name resolved: \(denied ?? [:])")
 
             tree.remove(tree.records.appendingPathComponent("network.json").path)
             #expect(await tree.checks(authStatus: .runForTests).evaluateFresh().didPass)
             let reached = tree.record("network.json")
             #expect(reached?["tcpConnected"] as? Bool == true && reached?["localConnected"] as? Bool == true, "\(reached ?? [:])")
             #expect(tcp.hasConnection && local.hasConnection)
+            #expect((reached?["services"] as? [String: Int])?["com.apple.dnssd.service"] == 0, "\(reached ?? [:])")
+            #expect(reached?["resolve"] as? Int == 0, "\(reached ?? [:])")
         }
 
         @Test("Only Pro and Max pass: a Team or Enterprise login is not-subscription (plan-not-accepted), under the block or not")

@@ -29,22 +29,30 @@ struct ClaudeProbeResult: Equatable, Sendable {
 }
 
 /// The owner's D1 decision (October 29, 2026, option 1): `auth status` runs
-/// under macOS's sandbox with its own sockets denied, so a
-/// server-managed settings fetch it starts cannot open a connection to
-/// Anthropic (Codex F34-D1). Only the process's own sockets are denied:
-/// Mach lookups stay allowed, so host-name resolution through the system's
-/// resolver and requests to system services still work (contract section 5
-/// step 4). Everything else is allowed, so the CLI still reads its own
-/// login. The block applies to the probe and to anything it starts, and is
-/// applied by the system's `sandbox-exec`, which Apple marks deprecated: it
-/// is retested on each macOS version (the tests here run on the Mac CI
-/// runner). Only that tool is used: a root-owned regular file that only
-/// root can change, on the system volume. Anything else and the probe never
-/// runs (`network-block`).
+/// under macOS's sandbox with its network use denied, so a server-managed
+/// settings fetch it starts cannot reach Anthropic (Codex F34-D1). Its own
+/// sockets are denied, and so are the system services that would resolve a
+/// host name or fetch for it (`deniedServices`); everything else is
+/// allowed, so the CLI still reads its own login (the Keychain's services
+/// stay reachable). The block applies to the probe and to anything it
+/// starts, and is applied by the system's `sandbox-exec`, which Apple marks
+/// deprecated: it is retested on each macOS version (the tests here run on
+/// the Mac CI runner). Only that tool is used: a root-owned regular file
+/// that only root can change, on the system volume. Anything else and the
+/// probe never runs (`network-block`).
 package struct ClaudeNetworkBlock: Sendable, Equatable {
+    /// The system services a process reaches over Mach to resolve a host
+    /// name (the DNS service and its resolver) or to have a URL fetched or
+    /// opened for it (Codex F34-D1, review of PR 3b).
+    static let deniedServices = ["com.apple.dnssd.service", "com.apple.mDNSResponder", "com.apple.mDNSResponderHelper",
+                                 "com.apple.nsurlsessiond", "com.apple.nsurlsessiond.NSURLSessionProxyService",
+                                 "com.apple.coreservices.launchservicesd"]
+
     /// The profile: allow everything, then deny every network operation
-    /// (outbound, inbound and bind, IP and local sockets alike).
-    static let profile = "(version 1)(allow default)(deny network*)"
+    /// (outbound, inbound and bind, IP and local sockets alike) and the
+    /// lookup of each denied service.
+    static let profile = "(version 1)(allow default)(deny network*)(deny mach-lookup "
+        + deniedServices.map { "(global-name \"\($0)\")" }.joined(separator: " ") + ")"
 
     let toolPath: String
 

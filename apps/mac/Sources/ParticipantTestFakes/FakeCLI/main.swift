@@ -38,9 +38,11 @@ import Foundation
 //   "data", "open" or "closed"), append their record name to `checks.log`,
 //   and never write `cli.pid` or `cli.json`.
 // - `auth status` with `networkPort` or `networkSocket` in the scenario
-//   first tries to connect to that listener (the test's own) and records
-//   whether it could in `network.json`: the stand-in for the settings fetch
-//   the real one may start, which step 4 runs with the network blocked.
+//   first tries to connect to that listener (the test's own), with
+//   `networkServices` looks those system services up over Mach, and with
+//   `networkHost` resolves that name, recording each outcome in
+//   `network.json`: the stand-ins for the settings fetch the real one may
+//   start, which step 4 runs with the network blocked.
 // - For section 5's checks (F3), more invented variants: `authStatus`
 //   "console-login", "api-key-helper", "oauth-token", "gateway",
 //   "pro", "team", "enterprise" (a plan login on that plan), "unknown-plan", "unknown-method", "no-account", "logged-in-exit-1",
@@ -268,8 +270,34 @@ func tryNetwork(_ scenario: [String: Any], records: String) {
         outcome["localErrno"] = socket < 0 ? Int(errno) : errorCode(result)
         if socket >= 0 { _ = close(socket) }
     }
+    if let names = scenario["networkServices"] as? [String] {
+        var results: [String: Int] = [:]
+        for name in names { results[name] = Int(lookUpService(name)) }
+        outcome["services"] = results
+    }
+    if let host = scenario["networkHost"] as? String {
+        var hints = addrinfo()
+        hints.ai_socktype = SOCK_STREAM
+        var found: UnsafeMutablePointer<addrinfo>?
+        let result = getaddrinfo(host, nil, &hints, &found)
+        if let found { freeaddrinfo(found) }
+        outcome["resolve"] = Int(result)
+    }
     guard !outcome.isEmpty, let data = try? JSONSerialization.data(withJSONObject: outcome) else { return }
     writeAtomically(String(decoding: data, as: UTF8.self), to: records + "/network.json")
+}
+
+/// Looks up a system service over Mach, as a resolver or URL-fetch client
+/// would: 0 when it was found (the port is released), otherwise the error.
+/// Reached through `dlsym`, since the bootstrap calls have no Swift overlay.
+func lookUpService(_ name: String) -> Int32 {
+    typealias LookUp = @convention(c) (mach_port_t, UnsafePointer<CChar>, UnsafeMutablePointer<mach_port_t>) -> kern_return_t
+    let handle = UnsafeMutableRawPointer(bitPattern: -2)  // RTLD_DEFAULT
+    guard let lookUp = dlsym(handle, "bootstrap_look_up"), let bootstrap = dlsym(handle, "bootstrap_port") else { return -1 }
+    var port: mach_port_t = 0
+    let result = unsafeBitCast(lookUp, to: LookUp.self)(bootstrap.load(as: mach_port_t.self), name, &port)
+    if result == KERN_SUCCESS { _ = mach_port_deallocate(mach_task_self_, port) }
+    return result
 }
 
 /// The value after `--model`, as the real CLI would echo it in init.

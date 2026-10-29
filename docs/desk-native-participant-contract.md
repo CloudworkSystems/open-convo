@@ -557,20 +557,28 @@ probe's own count of paths outside its folder (Codex F4-1, F34-2). In order:
    overrides are compiled out), and eligibility depends on the plan in the
    CLI's Keychain login, which the app never reads. So production
    (`ClaudeLocalChecks`'s public initializer) runs the probe under macOS's
-   sandbox with every network operation denied: it spawns the system's
-   `/usr/bin/sandbox-exec -p "(version 1)(allow default)(deny network*)"`
-   followed by the pinned file and `auth status --json`. The tool replaces
+   sandbox with its network use denied: it spawns the system's
+   `/usr/bin/sandbox-exec -p "(version 1)(allow default)(deny network*)
+   (deny mach-lookup …)"` followed by the pinned file and
+   `auth status --json`. The tool replaces
    itself with the pinned file (same process, same group, section 11's
    environment and folder), and the block covers everything the probe
    starts: IP and local sockets alike, outbound, inbound and bind, so the
-   settings fetch cannot open a connection and no new payload arrives. The
-   block denies the process's own sockets only. It still allows Mach
-   lookups, so a process under it can resolve a host name through the
-   system's resolver (the query leaves the Mac) or ask a system service
-   outside the sandbox to fetch for it; the CLI does neither for
-   `auth status` by the same reading, and a helper that might comes only
-   from a payload, which can no longer arrive (a cached one is step 3's).
-   Before
+   settings fetch cannot open a connection and no new payload arrives. A
+   host name lookup would leave the Mac through a system service rather
+   than a socket, so the profile also denies looking up the DNS service
+   and its resolver (`com.apple.dnssd.service`, `com.apple.mDNSResponder`,
+   `com.apple.mDNSResponderHelper`) and the services that fetch or open a
+   URL on a process's behalf (`com.apple.nsurlsessiond` and its proxy
+   service, `com.apple.coreservices.launchservicesd`). The tests show,
+   on the Mac runner, that under the block the fake CLI finds none of those
+   services and cannot resolve even `localhost`, and that without it the
+   same fake does both. Other system services stay allowed, so the CLI
+   still reads its own login from the Keychain; one of them that fetches on
+   request and is not on that list would be a gap, which the narrower
+   promise below accepts (the CLI uses none for `auth status` by the same
+   reading, and a helper that might comes only from a payload, which can
+   no longer arrive; a cached one is step 3's). Before
    it is used, the tool must be what the pinned file must be (section 5
    step 1), owned by root: not a link, a regular executable file with no
    group or other write and no setuid or setgid bit, in a root-owned folder
