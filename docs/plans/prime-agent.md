@@ -225,6 +225,13 @@ posting, deleting or changing anything). The skill adds the habit of
 asking; the host enforces it. In True Convo, slice 3 puts the gate in
 code, as those notes require.
 
+The same goes for memory. A host with its own memory (for example
+Claude's Memory, and a project's "Use account memory") would save
+proposals before the person keeps them and mix spaces. So for this use
+the host's own memory is switched off, and checked off, before the first
+run; where it can't be switched off, the memory rules above don't hold
+there and the skill isn't used with real memory.
+
 The repo is public: no real conversations, names, businesses or memory go
 into the examples. Every example is invented.
 
