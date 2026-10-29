@@ -52,6 +52,10 @@ test('hosts: a URL whose host cannot be read is a hit, not skipped', () => {
     assert.equal(readHosts(line).unreadable.length, 1, line);
   }
   assert.deepEqual(readHosts('https://github.com) or mail@invented.example'), { hosts: ['github.com'], unreadable: [] });
+  // The URL parser drops tabs and carriage returns, so they don't end the host.
+  assert.equal(readHosts('https://github.com!\t@collector.invented-tracker.dev/path').unreadable.length, 1);
+  assert.equal(readHosts('https://github.com!\r@collector.invented-tracker.dev/path').unreadable.length, 1);
+  assert.deepEqual(readHosts('https://github.com\t.collector.invented-tracker.dev/path').hosts, ['github.com.collector.invented-tracker.dev']);
   assert.deepEqual(readHosts('("https://github.com.") and https://github.com, then https://github.com;'), { hosts: ['github.com', 'github.com', 'github.com'], unreadable: [] });
   assert.deepEqual(scan('src/a.js', '', 'fetch("https://bad%host.invented-tracker.dev/")\n').map((h) => h.signal), ['host']);
   const list = allow({ hosts: ['github.com'] });

@@ -52,7 +52,7 @@ export function readHosts(line) {
   // JSON strings and regex literals may escape the punctuation
   // (`https:\/\/host\.dev`); read the line with those escapes undone too, so
   // such a URL still counts.
-  const unescaped = line.replace(/\\([^A-Za-z0-9\s])/g, '$1');
+  const unescaped = line.replace(/\\([^A-Za-z0-9\s(])/g, '$1');
   if (unescaped !== line) {
     const more = readHosts(unescaped);
     hosts.push(...more.hosts);
@@ -68,20 +68,19 @@ export function readHosts(line) {
     let host = null;
     const after = line.slice(match.index + match[0].length, match.index + match[0].length + 2);
     if (after[0] === '\\' && after !== '\\(') { unreadable.push(match[0]); continue; }
-    // Sentence punctuation right after a URL in prose ("see https://example.com!")
-    // isn't part of it, but only where the URL ends there: in
-    // `example.com!/path` the `!` is still in the host, so it stays unreadable.
-    // The pattern stops at `,` and `;`, which the URL parser keeps in the
-    // host (`example.com,b/` has host `example.com,b`), so read past them first.
-    const rest = line.slice(match.index + match[0].length);
-    // The URL parser reads the authority up to `/`, `?`, `#` or `\`, and an
-    // `@` anywhere in it starts the real host (`example.com!]@other/`): when
-    // one follows, the host can't be read here, so fail closed.
+    // The URL parser drops tabs and carriage returns anywhere in a URL, then
+    // reads the authority up to `/`, `?`, `#`, `\` or a space. An `@`
+    // anywhere in it starts the real host (`example.com!]@other/`), so the
+    // host can't be read here: fail closed.
+    const rest = line.slice(match.index + match[0].length).replace(/[\t\r]/g, '');
     const authority = /^[^\s/?#\\]*/.exec(rest)[0];
     if (authority.includes('@')) { unreadable.push(match[0] + authority); continue; }
-    const tail = /^[,;]*/.exec(rest)[0];
-    const ends = rest.length === tail.length || /^[\s"'`<>)\]}]/.test(rest[tail.length]);
-    const url = ends ? match[0].replace(/[!.,:;*~]+$/, '') : match[0] + tail;
+    // Sentence punctuation right after a URL in prose ("see https://example.com!")
+    // isn't part of it, but only where the URL ends there; otherwise the rest
+    // of the authority is read too (the pattern stops at `,` and `;`, which
+    // the parser keeps), so `example.com!/path` stays unreadable.
+    const ends = /^[,;]*(?:$|[\s"'`<>)\]}])/.test(rest);
+    const url = ends ? match[0].replace(/[!.,:;*~]+$/, '') : match[0] + authority;
     try {
       host = new URL(url).hostname.replace(/\.$/, '');
     } catch { /* unreadable */ }
