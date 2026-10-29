@@ -56,7 +56,7 @@ request it produced, colored by **who owes the next move**:
 
 | Line | Meaning |
 |---|---|
-| Waiting on you | Needs the owner: an approval, a decision, an accept line |
+| Waiting on you | Only the owner can make the next move: a protected-path approval, or a decision he was asked for. Open review findings are the builder's move ("Being fixed"), even though an `owner-accepts-findings` line could clear them; that line is his option, never a task the status hands him |
 | In review | Codex, the independent reviewer or the triage judge has it |
 | Being fixed | A builder owes a push for open findings |
 | Ready to merge | Every gate prerequisite passes on the latest commit: `tests`, `codex-approved`, the owner's approval of any protected path and, where a rule needs them, a clean independent review and plan check. Auto-merge being on is one more input, never enough on its own |
