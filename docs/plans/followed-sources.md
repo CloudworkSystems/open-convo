@@ -101,6 +101,8 @@ the new state, and the command prints it only with `--json`.
    at it is read again, and `reported` catches it if it was handled), and
    items already in `reported`. Each skip is counted with its reason.
 2. For each remaining item, ask the drafter (below) for up to three cards.
+   The engine keeps at most the first three cards of any answer and drops
+   the rest with one problem line, whatever the drafter returns.
 3. **Check every card** against the contract: a known kind, a title of up
    to 80 characters, a body of up to 280 characters. Clean both: control
    characters removed, spaces collapsed. A card that fails is dropped with a
@@ -110,8 +112,9 @@ the new state, and the command prints it only with `--json`.
 5. **Drop quotes.** A card whose title or body shares a run of 12 or more
    words with the item's title or text (case and punctuation ignored) is dropped as a quote,
    with a problem line.
-6. **Skip what's already kept.** A card whose normalized text matches a
-   known entry is skipped as `already-known`. Normalized means lower case,
+6. **Skip what's already kept.** A card is skipped as `already-known` when
+   its normalized title, or its normalized body, matches a known entry's
+   normalized text (each field is compared on its own). Normalized means lower case,
    punctuation removed, and spaces collapsed. "Matches" means the texts are
    equal, or share at least 80% of their words (Jaccard over word sets).
 7. **Flag instructions.** An item whose title or text contains instruction-like
@@ -205,12 +208,13 @@ The package ships two drafters, both deterministic, with no network:
    the checkpoint back. An item with an instruction phrase still gets its
    engine `red-flag` when the drafter fails on it, and when it has given
    up. Problem lines appear in the plain output.
-4. Bad cards (unknown kind, too long, empty) are dropped with problem lines.
+4. Bad cards (unknown kind, too long, empty) are dropped with problem lines,
+   and an answer with four or more cards keeps only the first three.
 5. URLs in card text are removed, and `sourceUrl` is the item's own link.
 6. A 12-word run copied from the item's title or text drops the card,
    whether the run is in the card's title or body. An 11-word run doesn't.
 7. `already-known` matching at exactly 80% word overlap skips the card, and
-   at 79% it doesn't.
+   at 79% it doesn't, whether the match is in the card's title or its body.
 8. Every phrase in the instruction table adds one engine `red-flag`,
    whatever the drafter answers, whether it appears in the item's title or
    its text. An item with no such phrase gets none.
