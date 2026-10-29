@@ -144,6 +144,7 @@ export class ConversationRunController {
   private evidenceClock = 0;
   private cleanupState: ParticipantCleanupState = 'none';
   private cleanupStatusInFlight = false;
+  private cleanupStatusSettled: Promise<void> | null = null;
   private cleanupStatusCancel: (() => void) | null = null;
   private cleanupEvidenceAttempt = 0;
   private stopAttempt = 0;
@@ -274,6 +275,10 @@ export class ConversationRunController {
       // A prior read enables the control, but only a fresh read in this explicit
       // action may authorize a restored/uncertain run's dispatch.
       if (this.startRequiresStatus) {
+        // A background read (the quiet poll, Check status) began before this
+        // action, so it cannot be this action's fresh read: let it settle,
+        // then ask again instead of skipping the check and doing nothing.
+        while (this.cleanupStatusSettled && !this.disposed) await this.cleanupStatusSettled;
         this.freshNotDispatched = false;
         await this.readCleanupStatus();
       }
@@ -733,15 +738,23 @@ export class ConversationRunController {
       && recorded.type === event.type && ('reason' in recorded ? recorded.reason : undefined) === ('reason' in event ? event.reason : undefined)
       && event.at <= this.run.updatedAt;
   }
-  private async readCleanupStatus(): Promise<void> {
-    if (!this.statusPort || this.cleanupStatusInFlight || this.disposed) return;
+  private readCleanupStatus(): Promise<void> {
+    if (!this.statusPort || this.cleanupStatusInFlight || this.disposed) return Promise.resolve();
     this.cleanupStatusInFlight = true;
+    const settled = this.readCleanupStatusOnce().finally(() => {
+      if (this.cleanupStatusSettled === settled) this.cleanupStatusSettled = null;
+    });
+    this.cleanupStatusSettled = settled;
+    return settled;
+  }
+  private async readCleanupStatusOnce(): Promise<void> {
+    const statusPort = this.statusPort!;
     const attempt = ++this.evidenceClock;
     const startEpoch = this.startEvidenceEpoch;
     const duringStart = this.startPortOutstanding;
     let timer: unknown;
     try {
-      const read = this.statusPort(this.target()).then((result) => {
+      const read = statusPort(this.target()).then((result) => {
         // A read concurrent with the adapter's availability/start await may
         // honestly see the old not-dispatched state. It cannot authorize a
         // retry or contradict the Start, even if it resolves after Start does.

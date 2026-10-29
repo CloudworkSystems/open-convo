@@ -2593,7 +2593,13 @@ Still open, by name:
    prepared message" launches the same prepared run once, with its
    preparation unchanged. Like the first proof it needs
    `TRUECONVO_DESK_BUNDLE`; the pull request records the page commit it
-   ran against.
+   ran against. Its first run on CI found a page fault: when the quiet
+   poll's status read was still out as the person pressed Start, the
+   restored controller skipped Start's own fresh read and did nothing, so
+   the first click was lost (nothing launched; a second click started the
+   run once). PR 3a fixes the controller: Start lets the earlier read
+   settle, then reads again, and only that read can authorize it. A page
+   test covers the race, and the proof now takes exactly one click.
 3. The activation work still ahead. None of it is done, and these source
    reviews grant no permission for installation, Keychain creation,
    signing, provider calls or extra usage:

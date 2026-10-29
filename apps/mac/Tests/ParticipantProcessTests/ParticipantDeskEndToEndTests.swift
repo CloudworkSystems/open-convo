@@ -483,30 +483,15 @@ final class ParticipantDeskEndToEndTests: CoordinatorDeskTestCase {
         XCTAssertGreaterThanOrEqual(replied("participant.status", on: fresh), 1, "the fresh document read the run's status")
 
         // 4. One explicit Start, from the page: the prepared run, once.
-        // The page may decline a click without sending a start (seen on CI:
-        // its restored controller reads status, replays and asks for
-        // availability, then sends nothing). Each such click dispatches
-        // nothing, which this counts; the first one that sends a start must
-        // be the only start, and it must launch once.
-        var clicks = 0
         // Every start the fresh document sent, whatever its answer.
         func sentStarts() -> Int {
             exchanges.filter {
                 if case .replied("participant.start", fresh.id, fresh.generation, _, _) = $0 { return true } else { return false }
             }.count
         }
-        while sentStarts() == 0, clicks < 3 {
-            let beforeClick = exchanges.count
-            try await clickButton(session, labelled: "Start prepared message")
-            clicks += 1
-            let deadline = Date().addingTimeInterval(8)
-            while Date() < deadline, sentStarts() == 0 { try await Task.sleep(nanoseconds: 100_000_000) }
-            if sentStarts() == 0 {
-                print("PR3a combined proof: click \(clicks) sent no start; exchanges since it: \(exchanges[beforeClick...]); page: \(await shown(session))")
-                XCTAssertTrue(launcher.requests.isEmpty, "a click that sent no start launched nothing")
-            }
-        }
-        print("PR3a combined proof: the explicit Start took \(clicks) click(s)")
+        // One click is enough even when the quiet poll's status read is
+        // still out when it lands: Start waits for that read, then reads again.
+        try await clickButton(session, labelled: "Start prepared message")
         try await eventually("the coordinator to launch the run", timeout: 20, detail: { "\(self.exchanges); page: \(await self.shown(session))" }) {
             launcher.runs.count == 1
         }
