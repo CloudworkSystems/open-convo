@@ -1,6 +1,6 @@
 # Calendar Merge Engine (PRD)
 
-Status: Approved (Oct 23): owner said yes in the coordinator thread; Codex starts once this plan merges and a builder place is free.
+Status: In progress (Oct 29): owner said yes in the coordinator thread (Oct 23); Claude is building it (the owner's choice on Oct 24, in place of Codex), in review as #130.
 
 Written October 23, 2026 by the coordinator (Claude, thread "261012 OC
 Coordinator") from the owner's decision that day. Session name:
