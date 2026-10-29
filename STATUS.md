@@ -88,8 +88,9 @@ Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 **Visibility report** (Business), GrokBot (team C) builds, Codex reviews; plan approved (`docs/plans/visibility-report.md`); built and merged in #112 (Oct 25).
 
 **Sync core** (Personal; first slice of the iPhone and sync line, owner
-decision October 22): GrokBot team B builds, Codex reviews. Plan approved
-(`docs/plans/sync-core.md`, #127); build started October 24 (#137).
+decision October 22): GrokBot team B builds it as its next module, Codex
+reviews. Plan approved (merged as #127 on October 24):
+[docs/plans/sync-core.md](docs/plans/sync-core.md). Build in review (#139).
 
 **Email actions preview** (Personal, right after launch), Codex builds through the local Codex CLI, GrokBot or a fresh Claude reviews; plan merged in #138, build handed to the Codex CLI job (#142) (`docs/plans/email-actions-preview.md`).
 
