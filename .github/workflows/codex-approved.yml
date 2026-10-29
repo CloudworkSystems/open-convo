@@ -24,9 +24,11 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read
-  # write: the triage judge records its verdict as a pull request comment
-  # (docs/plans/codex-triage.md). This workflow never runs pull request code.
+  # write: the risk hold's comment and label, and the triage judge's verdict
+  # (docs/plans/risk-review.md, docs/plans/codex-triage.md). GitHub refuses a
+  # comment or label on a pull request without it, even with `issues: write`.
+  # This workflow never runs pull request code.
+  pull-requests: write
   issues: write
   statuses: write
 
