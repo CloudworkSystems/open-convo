@@ -247,14 +247,18 @@ request itself, so the owner doesn't have to carry messages:
   session or the PR steward", the coordinator does it.
 - Codex reviews each new commit by itself, usually within five minutes.
   When its review of a pull request's latest commit hangs (still "running"
-  after 20 minutes, or not started 20 minutes after the push), the PR keeper
-  restarts it once at its next hourly run by pushing
-  an empty commit, "Restart Codex review (no changes)", as the bot. An empty
-  commit leaves the pull request's changes the same, so it needs no new
-  Claude review. A restart commit is never restarted itself: when the latest
-  commit is already a restart, the keeper leaves it, and if Codex is still
-  silent an hour later, the 8 AM list shows it as "Codex silent". Nobody
-  asks from the owner's account.
+  after 20 minutes, not started 20 minutes after the push, or shown as
+  "Failed"), the PR keeper restarts it once at its next hourly run by
+  posting an `@codex review` comment on the pull request as the bot. That
+  is one comment per commit: when one already follows the latest commit, the
+  keeper leaves it, and if Codex is still silent an hour later, the 8 AM
+  list shows it as "Codex silent". Nobody asks from the owner's account.
+  The keeper no longer pushes empty "Restart Codex review" commits: Codex
+  stopped answering them by October 27 (#147, #178, #179), and after a
+  failed review it skipped even real commits until someone asked, while the
+  bot's `@codex review` on #179 started a review within two minutes on
+  October 30. A comment also leaves the head, the checks and the owner's
+  approval as they were.
 - Every update from `main` is a new commit that Codex reviews again, so the
   PR keeper updates a pull request that has fallen behind `main` only when
   auto-merge is on and its latest commit already passes `tests` and
