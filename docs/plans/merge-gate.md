@@ -113,10 +113,14 @@ is in AGENTS.md ("Plans merge on the owner's yes").
   Codex's open-convo setting reviews all pull requests on every push,
   including those opened by `cloudwork-bot` (first seen on #120), so nobody
   asks for reviews, and nobody posts from the owner's account (AGENTS.md
-  "Accounts And Provenance"). Codex still ignores `@codex` requests from the
-  bot, because the bot has no Codex account; giving it one may involve
-  spending. Until October 23, the session that opened a pull request posted
-  `@codex review` from the owner's account after each push.
+  "Accounts And Provenance"). Until October 23, the session that opened a
+  pull request posted `@codex review` from the owner's account after each
+  push.
+- **Revision (October 30): the bot's `@codex review` now works.** On
+  October 20 Codex answered the bot's request with "create a Codex account"
+  (#78, #80). On October 30 the bot's `@codex review` on #179 started a
+  review of the head within two minutes, so the PR keeper restarts hung
+  reviews that way (docs/agent-process.md, "Coordinating On GitHub").
 - **Designated reviewer (planned).** For Codex-built modules, Claude is the
   plan's designated reviewer. Letting `codex-approved` accept that reviewer
   in place of Codex is planned and needs the owner's approval before it's
