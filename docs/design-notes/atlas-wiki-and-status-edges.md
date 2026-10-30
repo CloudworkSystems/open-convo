@@ -107,11 +107,11 @@ the Syntactic Index (the owner's glossary of short codes, terms and commands).
   4. writes a short health report with a score.
 - **One owner per index.** Every index file in a memory space is generated
   by the Steward's plain-code rebuild, and nobody edits one by hand. Other
-  agents, such as a front door or a specialist, write only kept entries to
+  agents, such as the prime agent or a specialist, write only kept entries to
   subject files (an agent proposes, the owner keeps: foundations, "explicit
   save first") and trigger that rebuild after each kept write, so an index
-  never waits for the weekly run. The front-door plan (#186) uses the same
-  split.
+  never waits for the weekly run. The prime-agent plan
+  ([docs/plans/prime-agent.md](../plans/prime-agent.md)) uses the same split.
 - **Mostly code, with a small model.** Steps 1 and 2 are plain code. Steps 3
   and 4 need a model only to compare and phrase, so they should work on the
   local default model (`qwen3:8b`). This matches the agent profiles design
