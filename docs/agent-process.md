@@ -40,7 +40,7 @@ reads from and writes to `CloudworkSystems/open-convo`.
 - Claude pulls from GitHub, builds the changes on a branch named after the
   session and opens a pull request. Codex reviews that pull request on GitHub.
 - **Merge gate (on since October 20, 2026; plan:
-  [docs/plans/merge-gate.md](docs/plans/merge-gate.md)).** GitHub merges a
+  [docs/plans/merge-gate.md](plans/merge-gate.md)).** GitHub merges a
   pull request when the gate passes: `tests` and `codex-approved` pass on the
   latest commit, and the owner approves any protected path in
   `.github/CODEOWNERS`. Claude-built and Codex-built pull requests open with
@@ -152,8 +152,8 @@ reads from and writes to `CloudworkSystems/open-convo`.
     the independent review yet. Making it a required check is a later code
     change and the owner's call.
   - **Privacy and security checklist (owner decision, October 26, 2026;
-    [docs/plans/risk-review.md](docs/plans/risk-review.md) and
-    [docs/plans/security.md](docs/plans/security.md) section 2).** Every
+    [docs/plans/risk-review.md](plans/risk-review.md) and
+    [docs/plans/security.md](plans/security.md) section 2).** Every
     independent review, and the coordinator's plan check on GrokBot work,
     ends with one block answering these, each "no" or "yes" with the file
     and line: (1) data leaving the device, and which plan allows it;
@@ -348,7 +348,7 @@ they win.
 No pull request or task waits on an agent that isn't set up or has stopped
 answering. Gemini was named as a reviewer for days without ever posting, and
 nothing said so. The same rule for True Convo's own agents is in
-[docs/design-notes/agent-profiles-and-adapters.md](docs/design-notes/agent-profiles-and-adapters.md)
+[docs/design-notes/agent-profiles-and-adapters.md](design-notes/agent-profiles-and-adapters.md)
 ("Knowing When an Agent Isn't Working").
 
 - **Every reviewer and builder has a setup status here.** An agent is marked
