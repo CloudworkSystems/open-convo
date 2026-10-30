@@ -32,9 +32,24 @@ enum OccurrenceGrouping {
             byIdentifier[key, default: []].append(occurrence)
         }
         for key in order {
-            units.append(Unit(members: byIdentifier[key] ?? []))
+            units.append(contentsOf: oneCopyPerCalendar(byIdentifier[key] ?? []).map(Unit.init(members:)))
         }
         return units
+    }
+
+    /// Two copies from the same calendar never merge, even with the same
+    /// identifier (a calendar can hold an imported duplicate). In list order,
+    /// each copy joins the first unit so far with no copy from its calendar.
+    private static func oneCopyPerCalendar(_ copies: [MappedOccurrence]) -> [[MappedOccurrence]] {
+        var split: [[MappedOccurrence]] = []
+        for copy in copies.sorted(by: listOrder) {
+            if let index = split.firstIndex(where: { !$0.contains { $0.calendarIndex == copy.calendarIndex } }) {
+                split[index].append(copy)
+            } else {
+                split.append([copy])
+            }
+        }
+        return split
     }
 
     // MARK: - Different identifiers, the same title and time

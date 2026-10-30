@@ -37,6 +37,19 @@ struct SameMeetingTests {
         #expect(groups[0].key == "A|trip-a + B|trip-b")
     }
 
+    @Test("Two copies in one calendar never merge, even with the same identifier")
+    func sameIdentifierSameCalendar() throws {
+        let groups = try read([
+            event("d2", in: "A", "Imported twice", externalID: "dup@test.example"),
+            event("d3", in: "B", "Imported twice", externalID: "dup@test.example"),
+            event("d1", in: "A", "Imported twice", externalID: "dup@test.example"),
+        ])
+        #expect(groupsOf(groups) == ["d1|d3", "d2"])
+        for group in groups {
+            #expect(Set(group.calendarIDs).count == group.calendarIDs.count)
+        }
+    }
+
     @Test("A repeating meeting in two calendars with one occurrence moved: each occurrence shows once, matched by its original start")
     func repeatingWithOneMoved() throws {
         func series(_ id: String, in calendarID: String, movedStart: String) -> [StoreOccurrence] {
