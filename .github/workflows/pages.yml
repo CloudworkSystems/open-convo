@@ -35,6 +35,8 @@ jobs:
         run: |
           mkdir -p _site/brand
           cp -R site/. _site/
+          # Agent rules files live beside the site but are not part of it.
+          rm -f _site/AGENTS.md _site/CLAUDE.md
           cp brand/tokens.css _site/brand/
           cp -R brand/fonts _site/brand/fonts
       - uses: actions/configure-pages@v5
