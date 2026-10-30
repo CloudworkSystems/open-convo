@@ -42,10 +42,16 @@ plain link. Nothing is billed per use.
 ### Reading the calendars (PR 1)
 
 - A new module, `apps/mac/Sources/CalendarReader/`, asks for calendar
-  access once, with Apple's full-access request, because reading needs full
-  access. The permission text says what it's for: "True Convo shows your
-  calendars in its own views. It only reads them, and nothing leaves this
-  Mac."
+  access once. The app still supports macOS 13 (`apps/mac/Package.swift`),
+  so it takes the path for each system. On macOS 14 and later it uses
+  Apple's full-access request, because reading needs full access, with the
+  `NSCalendarsFullAccessUsageDescription` text. On macOS 13 it uses the
+  older calendar access request, with the `NSCalendarsUsageDescription`
+  text. Both texts say what it's for: "True Convo shows your calendars in
+  its own views. It only reads them, and nothing leaves this Mac." The two
+  paths sit behind one interface, and the fake store tests both: granted,
+  refused, and revoked later. CI's macOS runner builds with both
+  availability branches compiled in.
 - It lists the calendars the Mac knows (name, color, account type such as
   iCloud, Google, Exchange or On My Mac) and returns the event occurrences
   in a date range of up to 400 days. Apple's framework already expands
@@ -100,10 +106,23 @@ plain link. Nothing is billed per use.
   nothing, and the link needs no key.
 - **Travel time.** Between two timed meetings on the same day that both have
   a location, the views show the driving time, worked out with Apple's maps
-  framework (`MKDirections`). This sends the two locations to Apple's maps
-  service, so it is **off by default**. The person switches it on once, in
-  settings that say exactly that. Only location text and a departure time
-  are sent: no titles, no attendees, no calendar names.
+  framework. This sends the two locations to Apple's maps service, so it is
+  **off by default**. The person switches it on once, in settings that say
+  exactly that. Only location text or coordinates and a departure time are
+  sent: no titles, no attendees, no calendar names.
+- **Turning a location into a place.** Directions need two map places, not
+  text. The reader also passes on an event's structured location
+  coordinates when the calendar has them (often the case when a place was
+  picked from a map). Without coordinates, the location text is looked up
+  with Apple's place search (`MKLocalSearch`), under the same opt-in and
+  sending only that text. The search's first result is used only when it
+  is a single clear match. When the search finds nothing, finds several
+  equally likely places, or fails, the view shows "travel time unavailable"
+  for that pair, and the Google Maps link still works. A looked-up place is
+  kept for the day, on the Mac, under the same rules as travel times.
+  Directions then run between the two places (`MKDirections`). Tests cover
+  coordinates, a clear match, no match, several matches and a failed search
+  with a fake maps service.
 - When the travel time is longer than the gap between the meetings, the day
   view marks the clash ("about 35 minutes' drive, 20 minutes free").
 - Results are kept for the day, on the Mac, so the same pair isn't asked
@@ -126,7 +145,7 @@ plain link. Nothing is billed per use.
   the Google Maps search link. Each is approved once by the owner
   (foundations, principle 6). The pull request that adds each one carries
   the risk hold, and the owner approves it on GitHub.
-- **New Mac permission:** calendar full access, with the usage text above.
+- **New Mac permission:** calendar access (full access on macOS 14 and later, the older access on macOS 13), with the usage texts above.
   It needs the owner's approval in PR 1 (security.md checklist, item 5).
 - **Protected paths.** Wiring a new module into the app touches
   `apps/mac/Package.swift` and `apps/mac/Sources/VoiceCursorMac/main.swift`,
