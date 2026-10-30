@@ -147,7 +147,9 @@ repeating its numbers.
    `cloud` route: only `os` and `cloud`. For `none`: only the fixes that
    could open a route, that is the `os` fix and whichever of `memory` or
    `disk` blocks the local route, then one last step, "or switch to a
-   cloud model in settings" (unless `mode` is already `cloud`). Ollama and
+   cloud model in settings", added only when `memory` or `disk` is the
+   block and `os` passes (a cloud model can't get around the macOS
+   minimum, so with an `os` stop the update stays the only way on). Ollama and
    download steps are left out of `none`, because they can't help until
    the block is cleared. Command text in a step (for example
    `ollama pull qwen3:8b`) is shown for the person to run; the engine never

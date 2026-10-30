@@ -137,7 +137,13 @@ clock, the machine's time zone, locale or random values.
 
 ## Output
 
-`{ schemaVersion: 1, sources, duplicates, refused, counts }`. Each source is
+`{ schemaVersion: 1, sources, duplicates, refused, counts }`. `counts` is
+exactly `{ items, sources, links, clips, duplicates, refused,
+droppedWords }`, each a whole number: `items` in the drop; `sources`,
+`duplicates` and `refused` (the lengths of those lists, which add up to
+`items`); `links` and `clips` (adding up to `sources`); and `droppedWords`,
+the number of white-space-separated words removed from text items around
+their link. Each source is
 `{ id, kind (link or clip), sourceKey, site?, url?, title,
 addedAt, file? }`, ordered by `addedAt`, then `id`. Each refusal is `{ id,
 reason }` in plain words. The command's plain summary prints the counts,
