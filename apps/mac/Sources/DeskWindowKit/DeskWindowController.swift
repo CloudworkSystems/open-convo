@@ -151,6 +151,14 @@ public final class SheetUnsavedWorkPrompt: DeskUnsavedWorkPrompting {
 /// answer 14). A Desk lock or close dismisses the statement and abandons a
 /// pending request (quit reaches it through the session's close; F7's quit
 /// path calls the owner too).
+///
+/// The adapter's "Approve Anthropic once" control (contract section 21.4)
+/// appears only when `hostApproval` is given, which the app never does
+/// before the adapter's PR 4b: its own row, apart from the local checks'
+/// line, with the approval's state line and Approve or Withdraw. Either one
+/// opens its statement sheet first and needs the Desk open; a Desk lock or
+/// close answers an open statement Cancel. A change makes the page read
+/// availability again, like a confirmation.
 @MainActor
 public final class DeskWindowController: NSWindowController, NSWindowDelegate {
     public static let windowIdentifier = NSUserInterfaceItemIdentifier("trueconvo.desk")
@@ -226,6 +234,16 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
     /// The confirmation was active at the last change the window saw: a
     /// change out of it refreshes the page (Codex F4-6).
     private var paidUsageWasActive = false
+    /// Section 21.4's control, only with `hostApproval` (nil otherwise:
+    /// nothing is built or shown).
+    let hostApproval: DeskHostApprovalControlling?
+    let approvalStatement: DeskHostApprovalStatementPrompting?
+    private(set) var hostApprovalRow: NSView?
+    let hostApprovalLine = NSTextField(wrappingLabelWithString: "")
+    let hostApprovalResult = NSTextField(wrappingLabelWithString: "")
+    let hostApprovalButton = NSButton(title: DeskHostApprovalWording.approveButton, target: nil, action: nil)
+    /// From the Approve or Withdraw press to its result.
+    private(set) var approvalFlowActive = false
     /// The already-focused page's one pending re-focus.
     private(set) var refocus: Task<Void, Never>?
     /// The session state the window last showed: a change out of `open`
@@ -236,7 +254,8 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
 
     public init(session: DeskSession, verifier: DeskUnlockVerifier, prompt: DeskUnsavedWorkPrompting? = nil,
                 log: @escaping DeskSession.Log = { _, _ in }, paidUsage: DeskPaidUsageControlling? = nil,
-                statement: DeskPaidUsageStatementPrompting? = nil, recoveryPrompt: DeskRecoveryKeyPrompting? = nil) {
+                statement: DeskPaidUsageStatementPrompting? = nil, recoveryPrompt: DeskRecoveryKeyPrompting? = nil,
+                hostApproval: DeskHostApprovalControlling? = nil, approvalStatement: DeskHostApprovalStatementPrompting? = nil) {
         self.session = session
         self.recoveryPrompt = recoveryPrompt ?? SheetRecoveryKeyPrompt()
         self.verifier = verifier
@@ -244,6 +263,8 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
         self.log = log
         self.paidUsage = paidUsage
         self.statement = paidUsage == nil ? nil : (statement ?? SheetPaidUsageStatement())
+        self.hostApproval = hostApproval
+        self.approvalStatement = hostApproval == nil ? nil : (approvalStatement ?? SheetHostApprovalStatement())
         let window = DeskWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 760),
                                 styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: true)
         window.identifier = Self.windowIdentifier
@@ -273,6 +294,7 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
         }
         paidUsage?.onChange = { [weak self] in self?.paidUsageChanged() }
         if case .active? = paidUsage?.state { paidUsageWasActive = true }
+        hostApproval?.onChange = { [weak self] in self?.renderHostApproval() }
         render()
     }
 
@@ -449,6 +471,10 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
         Task { await confirmPaidUsage() }
     }
 
+    @objc func hostApprovalPressed(_ sender: Any?) {
+        Task { await changeHostApproval() }
+    }
+
     // MARK: Paid usage (section 17)
 
     /// "Check Claude": section 5's local checks only, shown as one line. It
@@ -509,6 +535,37 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
         if ended { refreshPageAvailability() }
     }
 
+    // MARK: Host approval (section 21.4)
+
+    /// "Approve Anthropic once…" or "Withdraw Approval…": the statement sheet
+    /// first, then the owner's write, only with the Desk open (its store is
+    /// the open Desk's). A change makes the page read availability again.
+    @discardableResult
+    func changeHostApproval() async -> DeskHostApprovalResult? {
+        guard let hostApproval, let approvalStatement, let window, session.state == .open, !approvalFlowActive else {
+            return nil
+        }
+        let which: DeskHostApprovalStatement
+        switch hostApproval.state {
+        case .notApproved: which = .approve
+        case .approved: which = .withdraw
+        case .unreadable: return nil
+        }
+        approvalFlowActive = true
+        defer {
+            approvalFlowActive = false
+            renderHostApproval()
+        }
+        hostApprovalResult.stringValue = ""
+        renderHostApproval()
+        let proceed = await approvalStatement.ask(which, in: window)
+        guard proceed, session.state == .open else { return nil }
+        let result = which == .approve ? hostApproval.approve() : hostApproval.withdraw()
+        hostApprovalResult.stringValue = DeskHostApprovalWording.resultLine(result) ?? ""
+        if result != .failed { refreshPageAvailability() }
+        return result
+    }
+
     /// How long an already-focused page stays unfocused before it is focused
     /// again (`refreshPageAvailability`).
     static let refocusDelayNanoseconds: UInt64 = 100_000_000
@@ -562,6 +619,7 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
         }
         // A pending confirmation's result is discarded once the window goes.
         statement?.dismiss()
+        approvalStatement?.dismiss()
         paidUsage?.abandonPendingConfirmation()
         await session.close()
         closingNow = true
@@ -644,6 +702,11 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
             paidUsageRow = row
             rows.append(row)
         }
+        if hostApproval != nil {
+            let row = buildHostApprovalRow()
+            hostApprovalRow = row
+            rows.append(row)
+        }
         heldLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         for button in [heldCopyButton, heldDismissButton] {
             button.target = self
@@ -715,6 +778,42 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
         return row
     }
 
+    /// Section 21.4's row: the approval's state line and the last attempt's
+    /// line, then Approve or Withdraw.
+    private func buildHostApprovalRow() -> NSView {
+        hostApprovalLine.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .medium)
+        hostApprovalResult.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        hostApprovalResult.textColor = .secondaryLabelColor
+        hostApprovalButton.target = self
+        hostApprovalButton.action = #selector(hostApprovalPressed(_:))
+        hostApprovalButton.bezelStyle = .rounded
+        hostApprovalButton.setContentHuggingPriority(.required, for: .horizontal)
+        let texts = NSStackView(views: [hostApprovalLine, hostApprovalResult])
+        texts.orientation = .vertical
+        texts.alignment = .leading
+        texts.spacing = 2
+        texts.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let row = NSStackView(views: [texts, hostApprovalButton])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.edgeInsets = NSEdgeInsets(top: 4, left: 12, bottom: 6, right: 12)
+        return row
+    }
+
+    /// The approval row as of now (nothing without `hostApproval`).
+    func renderHostApproval() {
+        guard let hostApproval else { return }
+        let state = hostApproval.state
+        hostApprovalLine.stringValue = DeskHostApprovalWording.stateLine(state, time: formatTime)
+        hostApprovalResult.isHidden = hostApprovalResult.stringValue.isEmpty
+        if case .approved = state {
+            hostApprovalButton.title = DeskHostApprovalWording.withdrawButton
+        } else {
+            hostApprovalButton.title = DeskHostApprovalWording.approveButton
+        }
+        hostApprovalButton.isEnabled = session.state == .open && !approvalFlowActive && state != .unreadable
+    }
+
     /// The paid-usage row as of now (nothing without `paidUsage`).
     func renderPaidUsage() {
         guard let paidUsage else { return }
@@ -760,6 +859,7 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
             // A Desk lock, close or quit: the statement is answered Cancel
             // and a pending confirmation's result is discarded.
             statement?.dismiss()
+            approvalStatement?.dismiss()
             paidUsage?.abandonPendingConfirmation()
         }
         if let shownState, shownState != state {
@@ -802,6 +902,7 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
             }
         }
         renderPaidUsage()
+        renderHostApproval()
         renderHeld()
         renderRecovery()
         onStateChange?()

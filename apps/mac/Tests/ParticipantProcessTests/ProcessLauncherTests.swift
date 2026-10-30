@@ -415,7 +415,8 @@ struct ProcessLauncherGateTests {
         // Section 17's window adapter (plan F4) joins the owner to the Desk
         // window's plain controls; only the test target links it, so the app
         // links neither it nor ParticipantProcess until activation (F7).
-        #expect(dependencies["ParticipantDeskControls"] == ["DeskWindowKit", "ParticipantProcess"])
+        // The Claude Code adapter's PR 4a adds the approval's store (DeskHost).
+        #expect(dependencies["ParticipantDeskControls"] == ["DeskHost", "DeskWindowKit", "ParticipantProcess"])
         let adapterDependents = dependencies.filter { $0.value.contains("ParticipantDeskControls") }.keys.sorted()
         #expect(adapterDependents == ["ParticipantProcessTests"], "\(adapterDependents)")
         // Linking the coordinator is what could pull it into the app: only

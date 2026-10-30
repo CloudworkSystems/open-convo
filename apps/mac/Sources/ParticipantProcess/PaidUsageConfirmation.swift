@@ -303,7 +303,9 @@ public final class PaidUsageConfirmationOwner: AvailabilityReporting, @unchecked
     /// and the run must not be dispatched. A counted run is never refunded.
     ///
     /// Section 21.4's approval is read again here, before the owner's lock
-    /// (the store's in-memory state, no I/O): anything but approved refuses
+    /// (the store's in-memory state, no I/O, though the store's own lock is
+    /// taken briefly for the read, so a store write under way delays the
+    /// claim until it ends): anything but approved refuses
     /// the claim and counts nothing, so a revoke during the coordinator's
     /// durable start write still stops the spawn (Codex review of PR 3d).
     public func claimRun() -> Bool {

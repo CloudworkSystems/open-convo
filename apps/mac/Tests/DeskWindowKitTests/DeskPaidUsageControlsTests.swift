@@ -167,7 +167,7 @@ final class DeskPaidUsageControlsTests: XCTestCase {
         XCTAssertTrue(made.checkClaudeButton.isEnabled, "Check Claude works before unlock")
         XCTAssertFalse(made.confirmPaidUsageButton.isEnabled, "Confirm needs the Desk open")
 
-        for (answer, line) in [(DeskClaudeCheck.signedOut, "Claude Code is signed out."), (.passed, "Claude checks passed.")] {
+        for (answer, line) in [(DeskClaudeCheck.signedOut, "Claude Code is signed out."), (.passed, "Claude's local checks passed.")] {
             controls.checkAnswer = answer
             let checked = await made.checkClaude()
             XCTAssertEqual(checked, answer)

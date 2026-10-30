@@ -122,7 +122,8 @@ struct PaidUsageGateTests {
         // String literals in the controls' sources too.
         let literal = try NSRegularExpression(pattern: "\"[^\"]*\"")
         for file in ["DeskWindowKit/DeskPaidUsageControls.swift", "ParticipantProcess/OwnerAuthentication.swift",
-                     "ParticipantDeskControls/PaidUsageDeskControls.swift"] {
+                     "ParticipantDeskControls/PaidUsageDeskControls.swift", "DeskWindowKit/DeskHostApprovalControls.swift",
+                     "ParticipantDeskControls/HostApprovalDeskControls.swift"] {
             for line in try Sources.lines(of: file) {
                 for match in literal.matches(in: line.line, range: NSRange(line.line.startIndex..., in: line.line)) {
                     let text = String(line.line[Range(match.range, in: line.line)!]).lowercased()
@@ -186,16 +187,21 @@ struct PaidUsageGateTests {
         let checks = all.filter { $0.line.contains("LocalAuthenticationOwnerCheck(") }
         #expect(checks.map(\.file) == ["ParticipantProcess/PaidUsageConfirmation.swift"], "only the owner's public initializer: \(checks)")
         #expect(!all.contains { $0.line.contains("PaidUsageDeskControls(") || $0.line.contains("PaidUsageEndSignals(") })
+        // The Claude Code adapter's PR 4a: nothing constructs the approval's
+        // store adapter, and the app names no approval control before PR 4b.
+        #expect(!all.contains { $0.line.contains("HostApprovalDeskControls(") })
         let ownerInit = all.filter { $0.line.contains("confirmationOwner") }
         #expect(Set(ownerInit.map(\.file)) == ["ParticipantCoordinator/ParticipantCoordinator.swift"], "declared, never called: \(ownerInit)")
         let app = try Sources.code("VoiceCursorMac")
         #expect(app.count > 1_000)
         for name in ["paidUsage", "PaidUsage", "ParticipantProcess", "ParticipantCoordinator", "ParticipantDeskControls",
-                     "OwnerAuthentication"] {
+                     "OwnerAuthentication", "hostApproval", "HostApproval", "approveHost", "revokeHost"] {
             #expect(!app.contains { $0.line.contains(name) }, "the app names \(name)")
         }
         let window = try Sources.lines(of: "DeskWindowKit/DeskWindowController.swift")
         #expect(window.contains { $0.line.contains("paidUsage: DeskPaidUsageControlling? = nil") }, "defaults to nil")
+        #expect(window.contains { $0.line.contains("hostApproval: DeskHostApprovalControlling? = nil") }, "defaults to nil")
+        #expect(!window.contains { $0.line.contains("approveHost") || $0.line.contains("ProofStore") }, "the window writes no store itself")
         let package = try String(contentsOf: Sources.root.appendingPathComponent("Package.swift"), encoding: .utf8)
         let appTarget = try #require(package.range(of: "name: \"VoiceCursorMac\",\n            dependencies: [").map {
             String(package[$0.upperBound...].prefix { $0 != "]" })
