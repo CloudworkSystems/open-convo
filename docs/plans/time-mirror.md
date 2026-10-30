@@ -86,12 +86,12 @@ page in step 5, are the library's.
    service `rescuetime-api-key`) with `security find-generic-password -w`
    and sent only to that host. It is never taken from a command-line
    argument, an environment variable or a file, and never printed, logged or
-   written. RescueTime documents the Analytic Data API with the key in the
-   `key=` query parameter (its `Authorization: Bearer` form is for OAuth
-   apps), so the code pull request uses the query parameter unless Gate 0
-   shows the header works. Either way, an error shows only the HTTP status
-   and a fixed message: never the request URL with its query string, and
-   never RescueTime's response body.
+   written. The key goes in an `Authorization: Bearer` header, never in the
+   request URL, so it stays out of URL logs. If Gate 0 shows RescueTime
+   refuses the header for his key, slice 1 stops there: the older `key=`
+   query parameter needs the owner's separate yes first. An error shows only
+   the HTTP status and a fixed message, never the request URL and never
+   RescueTime's response body.
 3. **Turn into tags.** Productivity levels map to three tags: **productive**
    (RescueTime's +1 and +2), **neutral** (0) and **distracting** (-1 and
    -2), plus **total**. An optional local file, `tags.json`, kept next to
@@ -205,8 +205,9 @@ before anything ships.
   (each keeps the last good page and says plainly what failed).
 - A test that the only requests made are the two allowed kinds, to that one
   host, and that no request asks for per-site or per-app rows.
-- A test (in the command's tests) that the key never appears in output,
-  errors or the page, and that an error shows no response body.
+- A test (in the command's tests) that the key is sent only in the
+  `Authorization` header, never in a request URL, output, error or the page,
+  and that an error shows no response body.
 - A test that builds the trackers through the habit grid engine itself
   (targetless count trackers in minutes), so the engine's own checks run,
   and draws them with `renderSvg`.
