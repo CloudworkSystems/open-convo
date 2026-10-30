@@ -3346,8 +3346,10 @@ fake-CLI host cases (overflow held and released, overflow signal, tools in
 init, a provider override, an oversize reply, Stop before and after the
 first piece, lock, supervisor loss) follow the page-level cases in section
 19's seeded form (PR 3e), with the file's own `records`. Each root seeds the
-off-Mac pin, and every run carries one earlier turn as context, so the
-oversize reply counts that turn's bytes. A Claude host case may also state
+off-Mac pin and Claude's 4,096-byte first-trial input bound, and every run
+carries one earlier turn as context. So the oversize reply starts within that
+bound and crosses the shared 262,144-byte bound on its output, the earlier
+turn's bytes counted. A Claude host case may also state
 `stdin`: for a start it accepted and launched, the exact bytes the launcher
 was handed (21.3's layout); a case without it launches nothing. The Swift
 harness replays them through section 19's harness

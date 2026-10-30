@@ -135,8 +135,9 @@ const chainOf = (entry: (typeof fixture.cases)[number]) => {
 };
 const join = (chunks: string[]) => chunks.join('');
 
-test('host cases: eleven, after the page-level cases, each rooted in the off-Mac pin', () => {
+test('host cases: eleven, after the page-level cases, each rooted in the off-Mac pin and the first-trial bound', () => {
   assert.equal(hostCases.length, 11);
+  for (const entry of hostCases) assert.equal(chainOf(entry)[0]!.seed!.inputBound, 4096, entry.name);
   assert.deepEqual(fixture.cases.slice(0, 8), pageCases);
   for (const entry of hostCases) assert.deepEqual(chainOf(entry)[0]!.seed!.pin, fixture.context.claudeParticipant, entry.name);
 });

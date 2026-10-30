@@ -58,8 +58,10 @@ struct ClaudeHostVectors {
             return .object(fields)
         }
         claude["cases"] = .array(stripped)
-        // Section 19's context (connection, generation, handle, launch,
-        // CLI version) with the Claude file's records and cases.
+        // Section 19's root supplies `context` (connection, generation,
+        // workspace handle, launch id, CLI version) and nothing else this
+        // file relies on: its `records` and `cases` are replaced by the
+        // Claude file's.
         root["records"] = records
         root["cases"] = claude["cases"]
         let vectors = try ParticipantVectors(data: JSONValue.object(root).canonicalData())
@@ -127,12 +129,14 @@ struct ClaudeHostVectorTests {
         #expect(passed == Self.enabled.map(\.number), "every host case passes")
     }
 
-    @Test("Each root seeds the off-Mac pin, and every run it saves carries its context; the starts that launch name their stdin")
+    @Test("Each root seeds the off-Mac pin and Claude's input bound, and every run it saves carries its context; the starts that launch name their stdin")
     func rootsAndContext() throws {
         let claude = try ClaudeHostVectors.load()
         for vector in claude.hostCases {
             let root = try claude.vectors.chain(to: vector)[0]
             #expect(root.seed["pin"].flatMap(ParticipantPin.init(json:)) == claude.pin, "#\(vector.number)")
+            #expect(root.seed["inputBound"] == .number(Double(ParticipantLimits.firstTrialInputBound)),
+                    "#\(vector.number): Claude's first-trial input bound, as the coordinator requires")
             for run in vector.afterRuns ?? [] {
                 let entry = try #require(run.objectValue)
                 #expect(entry["participant"].flatMap(ParticipantPin.init(json:)) == claude.pin, "#\(vector.number)")
