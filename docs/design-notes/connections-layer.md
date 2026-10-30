@@ -60,10 +60,16 @@ For each app, True Convo uses the first route on this list that works:
 
 1. **The Mac itself.** Apple's own frameworks and app scripting reach
    Calendar, Reminders and Contacts, and Shortcuts and scripting reach Mail,
-   Notes and other apps. These cost nothing and need no sign-in, and nothing
-   leaves the device. Each needs a Mac permission that the person grants
-   once. Each new permission also needs the owner's approval
-   ([security.md](../plans/security.md) checklist, item 5).
+   Notes and other apps. These cost nothing and need no sign-in of ours.
+   They are not automatically on-device, though. When the calendar, list or
+   mailbox is synced to iCloud, Google, Exchange or another account, a change
+   made through the Mac app goes to that provider. So each route-1 connector
+   checks which account backs the item it touches and declares what an
+   action sends out. Changes to a synced account get the same outside-host
+   approval, logging and privacy handling as a direct connection. Only items
+   kept "On My Mac" count as local. Each connector needs a Mac permission
+   that the person grants once, and each new permission also needs the
+   owner's approval ([security.md](../plans/security.md) checklist, item 5).
 2. **The app's own official MCP server.** Many services now run one with
    standard sign-in (MCP authorization, built on OAuth 2.1). Newer versions
    of the standard let a client identify itself with a published metadata
@@ -122,7 +128,7 @@ product's back end is almost nothing.
 
 | Item | Cost | Who pays |
 | --- | --- | --- |
-| The Mac's own apps, official MCP servers, standard protocols | $0 | Nobody |
+| The Mac's own apps (synced accounts still reach their provider), official MCP servers, standard protocols | $0 | Nobody |
 | Registering True Convo with most providers | $0 | Nobody, with the owner's approval |
 | Google's restricted-scope review, only if we use the Gmail API | Yearly; about $500 to several thousand dollars (unconfirmed) | The owner, if he decides to; IMAP avoids it |
 | The app's own plan limits | The person's existing plan | The person |
@@ -155,7 +161,8 @@ Per the build rule, a slice is planned only once the owner would use it
 within a week. Candidates:
 
 1. **Calendar and Reminders through the Mac** (route 1). It feeds the Today
-   agenda and the calendar merge engine.
+   agenda and the calendar merge engine. Reading comes first; any change to a
+   synced calendar goes through approval, as described under route 1.
 2. **One official MCP server** (route 2), to prove the sign-in flow and tool
    search with a real service the owner already uses.
 3. **Read-only mail over IMAP** (route 4). It feeds the email sorting engine
