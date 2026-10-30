@@ -1,0 +1,854 @@
+{
+  "description": "Invented vectors for the Claude Code adapter, revision 5 (docs/desk-native-participant-contract.md section 21). Page-level cases only (no seed): availability with the off-Mac Claude pin and the host-not-approved reason, a Claude start, replies the page codec must refuse, prepared runs that carry context, and the stdin layout with the first-trial bound. Fake-CLI host cases join this file in the adapter's PR 3c. No real model names, accounts or text.",
+  "context": {
+    "connectionId": "51000000-0000-4000-8000-000000000001",
+    "documentGeneration": 2,
+    "workspaceHandle": "invented-workspace-handle",
+    "claudeParticipant": {
+      "id": "claude-code",
+      "label": "Claude",
+      "model": "invented-pinned-model",
+      "executionHost": "anthropic"
+    },
+    "revision3Participant": {
+      "id": "claude-code",
+      "label": "Claude Code",
+      "model": "invented-pinned-model",
+      "executionHost": "this-mac"
+    },
+    "localParticipant": {
+      "id": "ollama-local",
+      "label": "invented-local-small:7b",
+      "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "executionHost": "this-mac"
+    },
+    "stdinPreamble": "The earlier turns of this conversation follow, oldest first, then the new message. Each part starts with a line in square brackets naming it and the exact length of its text in UTF-8 bytes. Reply only to the new message."
+  },
+  "cases": [
+    {
+      "name": "off-Mac Claude entry not yet approved: host-not-approved",
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001101",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "payload": {}
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001101",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude",
+            "model": "invented-pinned-model",
+            "executionHost": "anthropic",
+            "available": false,
+            "reason": "host-not-approved",
+            "confirmation": {
+              "state": "unconfirmed"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "off-Mac Claude entry approved, paid usage not confirmed: overflow-unverified",
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001102",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "payload": {}
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001102",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude",
+            "model": "invented-pinned-model",
+            "executionHost": "anthropic",
+            "available": false,
+            "reason": "overflow-unverified",
+            "confirmation": {
+              "state": "unconfirmed"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "off-Mac Claude entry approved and confirmed: available (test fake)",
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001103",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "payload": {}
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001103",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude",
+            "model": "invented-pinned-model",
+            "executionHost": "anthropic",
+            "available": true,
+            "reason": null,
+            "confirmation": {
+              "state": "active",
+              "confirmedAt": "2026-10-29T03:30:00.000Z",
+              "runsLeft": 5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "off-Mac Claude entry: an earlier check wins over the approval",
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001104",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "payload": {}
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001104",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude",
+            "model": "invented-pinned-model",
+            "executionHost": "anthropic",
+            "available": false,
+            "reason": "signed-out",
+            "confirmation": {
+              "state": "unconfirmed"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "off-Mac Claude entry: approval revoked while a confirmation is active",
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001105",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "payload": {}
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001105",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude",
+            "model": "invented-pinned-model",
+            "executionHost": "anthropic",
+            "available": false,
+            "reason": "host-not-approved",
+            "confirmation": {
+              "state": "active",
+              "confirmedAt": "2026-10-29T03:30:00.000Z",
+              "runsLeft": 3
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "off-Mac Claude entry beside a ready local route",
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001106",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "payload": {}
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001106",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude",
+            "model": "invented-pinned-model",
+            "executionHost": "anthropic",
+            "available": false,
+            "reason": "host-not-approved",
+            "confirmation": {
+              "state": "unconfirmed"
+            }
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "participant.start for the off-Mac Claude entry accepted",
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001107",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000001103",
+          "sessionId": "52abcdef-0000-4000-8abc-000000001101",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000001103",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000001103",
+          "participant": {
+            "id": "claude-code",
+            "label": "Claude",
+            "model": "invented-pinned-model",
+            "executionHost": "anthropic"
+          },
+          "inputChunks": [
+            "Invented follow-up for an invented bakery: and the second step?"
+          ]
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001107",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "outcome": "ok",
+        "runId": "71abcdef-0000-4000-8abc-000000001103"
+      }
+    },
+    {
+      "name": "participant.start for the off-Mac Claude entry before approval: participant-unavailable, nothing sent",
+      "request": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001108",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "payload": {
+          "workspaceHandle": "invented-workspace-handle",
+          "runId": "71abcdef-0000-4000-8abc-000000001103",
+          "sessionId": "52abcdef-0000-4000-8abc-000000001101",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000001103",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000001103",
+          "participant": {
+            "id": "claude-code",
+            "label": "Claude",
+            "model": "invented-pinned-model",
+            "executionHost": "anthropic"
+          },
+          "inputChunks": [
+            "Invented follow-up for an invented bakery: and the second step?"
+          ]
+        }
+      },
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001108",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.start",
+        "outcome": "refused",
+        "reason": "participant-unavailable"
+      }
+    }
+  ],
+  "invalidReplies": [
+    {
+      "name": "host-not-approved on a pin that runs on this Mac",
+      "basedOn": "off-Mac Claude entry not yet approved: host-not-approved",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001101",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "host-not-approved",
+            "confirmation": {
+              "state": "unconfirmed"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "host-not-approved on an available entry",
+      "basedOn": "off-Mac Claude entry not yet approved: host-not-approved",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001101",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude",
+            "model": "invented-pinned-model",
+            "executionHost": "anthropic",
+            "available": true,
+            "reason": "host-not-approved",
+            "confirmation": {
+              "state": "unconfirmed"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "unknown approval reason",
+      "basedOn": "off-Mac Claude entry not yet approved: host-not-approved",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001101",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude",
+            "model": "invented-pinned-model",
+            "executionHost": "anthropic",
+            "available": false,
+            "reason": "anthropic-not-approved",
+            "confirmation": {
+              "state": "unconfirmed"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "an available entry without an active confirmation",
+      "basedOn": "off-Mac Claude entry approved and confirmed: available (test fake)",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001103",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude",
+            "model": "invented-pinned-model",
+            "executionHost": "anthropic",
+            "available": true,
+            "reason": null,
+            "confirmation": {
+              "state": "unconfirmed"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "host-not-approved on a local entry",
+      "basedOn": "off-Mac Claude entry beside a ready local route",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001106",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude",
+            "model": "invented-pinned-model",
+            "executionHost": "anthropic",
+            "available": false,
+            "reason": "host-not-approved",
+            "confirmation": {
+              "state": "unconfirmed"
+            }
+          },
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": false,
+            "reason": "host-not-approved"
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "an approval key on the entry (approval is a reason, not a field)",
+      "basedOn": "off-Mac Claude entry not yet approved: host-not-approved",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001101",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "claude-code",
+            "label": "Claude",
+            "model": "invented-pinned-model",
+            "executionHost": "anthropic",
+            "available": false,
+            "reason": "host-not-approved",
+            "confirmation": {
+              "state": "unconfirmed"
+            },
+            "approved": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "off-Mac Claude entry after a local entry",
+      "basedOn": "off-Mac Claude entry beside a ready local route",
+      "reply": {
+        "v": 1,
+        "requestId": "62abcdef-0000-4000-8abc-000000001106",
+        "connectionId": "51000000-0000-4000-8000-000000000001",
+        "generation": 2,
+        "operation": "participant.availability",
+        "outcome": "ok",
+        "participants": [
+          {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac",
+            "available": true,
+            "reason": null
+          },
+          {
+            "id": "claude-code",
+            "label": "Claude",
+            "model": "invented-pinned-model",
+            "executionHost": "anthropic",
+            "available": false,
+            "reason": "host-not-approved",
+            "confirmation": {
+              "state": "unconfirmed"
+            }
+          }
+        ],
+        "routes": [
+          {
+            "route": "ollama-local",
+            "state": "ready",
+            "reason": null
+          }
+        ]
+      }
+    }
+  ],
+  "runs": {
+    "valid": [
+      {
+        "name": "off-Mac Claude run with no earlier turns",
+        "run": {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000001104",
+          "sessionId": "52abcdef-0000-4000-8abc-000000001101",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000001104",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000001104",
+          "participant": {
+            "id": "claude-code",
+            "label": "Claude",
+            "model": "invented-pinned-model",
+            "executionHost": "anthropic"
+          },
+          "inputChunks": [
+            "Invented first question."
+          ],
+          "outputChunks": [],
+          "lastSequence": 0,
+          "phase": "prepared",
+          "createdAt": "2026-10-29T04:00:00.000Z",
+          "updatedAt": "2026-10-29T04:00:00.000Z",
+          "contextRunIds": []
+        }
+      },
+      {
+        "name": "off-Mac Claude run with a local turn and a Claude turn, oldest first",
+        "run": {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000001103",
+          "sessionId": "52abcdef-0000-4000-8abc-000000001101",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000001103",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000001103",
+          "participant": {
+            "id": "claude-code",
+            "label": "Claude",
+            "model": "invented-pinned-model",
+            "executionHost": "anthropic"
+          },
+          "inputChunks": [
+            "Invented follow-up for an invented bakery: and the second step?"
+          ],
+          "outputChunks": [],
+          "lastSequence": 0,
+          "phase": "prepared",
+          "createdAt": "2026-10-29T04:00:00.000Z",
+          "updatedAt": "2026-10-29T04:00:00.000Z",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000001101",
+            "71abcdef-0000-4000-8abc-000000001102"
+          ]
+        }
+      },
+      {
+        "name": "revision-3 Claude Code run, unchanged twelve keys",
+        "run": {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000001105",
+          "sessionId": "52abcdef-0000-4000-8abc-000000001101",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000001105",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000001105",
+          "participant": {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "Invented question."
+          ],
+          "outputChunks": [],
+          "lastSequence": 0,
+          "phase": "prepared",
+          "createdAt": "2026-10-29T04:00:00.000Z",
+          "updatedAt": "2026-10-29T04:00:00.000Z"
+        }
+      },
+      {
+        "name": "local run whose context includes a Claude turn",
+        "run": {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000001106",
+          "sessionId": "52abcdef-0000-4000-8abc-000000001101",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000001106",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000001106",
+          "participant": {
+            "id": "ollama-local",
+            "label": "invented-local-small:7b",
+            "model": "invented-local-small:7b@c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "Invented local follow-up."
+          ],
+          "outputChunks": [],
+          "lastSequence": 0,
+          "phase": "prepared",
+          "createdAt": "2026-10-29T04:00:00.000Z",
+          "updatedAt": "2026-10-29T04:00:00.000Z",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000001102"
+          ]
+        }
+      }
+    ],
+    "invalid": [
+      {
+        "name": "off-Mac Claude run without contextRunIds",
+        "run": {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000001107",
+          "sessionId": "52abcdef-0000-4000-8abc-000000001101",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000001107",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000001107",
+          "participant": {
+            "id": "claude-code",
+            "label": "Claude",
+            "model": "invented-pinned-model",
+            "executionHost": "anthropic"
+          },
+          "inputChunks": [
+            "Invented question."
+          ],
+          "outputChunks": [],
+          "lastSequence": 0,
+          "phase": "prepared",
+          "createdAt": "2026-10-29T04:00:00.000Z",
+          "updatedAt": "2026-10-29T04:00:00.000Z"
+        }
+      },
+      {
+        "name": "revision-3 Claude Code run with contextRunIds",
+        "run": {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000001108",
+          "sessionId": "52abcdef-0000-4000-8abc-000000001101",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000001108",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000001108",
+          "participant": {
+            "id": "claude-code",
+            "label": "Claude Code",
+            "model": "invented-pinned-model",
+            "executionHost": "this-mac"
+          },
+          "inputChunks": [
+            "Invented question."
+          ],
+          "outputChunks": [],
+          "lastSequence": 0,
+          "phase": "prepared",
+          "createdAt": "2026-10-29T04:00:00.000Z",
+          "updatedAt": "2026-10-29T04:00:00.000Z",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000001101"
+          ]
+        }
+      },
+      {
+        "name": "off-Mac Claude run listing an earlier run twice",
+        "run": {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000001109",
+          "sessionId": "52abcdef-0000-4000-8abc-000000001101",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000001109",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000001109",
+          "participant": {
+            "id": "claude-code",
+            "label": "Claude",
+            "model": "invented-pinned-model",
+            "executionHost": "anthropic"
+          },
+          "inputChunks": [
+            "Invented question."
+          ],
+          "outputChunks": [],
+          "lastSequence": 0,
+          "phase": "prepared",
+          "createdAt": "2026-10-29T04:00:00.000Z",
+          "updatedAt": "2026-10-29T04:00:00.000Z",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000001101",
+            "71abcdef-0000-4000-8abc-000000001101"
+          ]
+        }
+      },
+      {
+        "name": "off-Mac Claude run naming itself as context",
+        "run": {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000001110",
+          "sessionId": "52abcdef-0000-4000-8abc-000000001101",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000001110",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000001110",
+          "participant": {
+            "id": "claude-code",
+            "label": "Claude",
+            "model": "invented-pinned-model",
+            "executionHost": "anthropic"
+          },
+          "inputChunks": [
+            "Invented question."
+          ],
+          "outputChunks": [],
+          "lastSequence": 0,
+          "phase": "prepared",
+          "createdAt": "2026-10-29T04:00:00.000Z",
+          "updatedAt": "2026-10-29T04:00:00.000Z",
+          "contextRunIds": [
+            "71abcdef-0000-4000-8abc-000000001110"
+          ]
+        }
+      },
+      {
+        "name": "off-Mac Claude run with an uppercase context id",
+        "run": {
+          "version": 1,
+          "runId": "71abcdef-0000-4000-8abc-000000001111",
+          "sessionId": "52abcdef-0000-4000-8abc-000000001101",
+          "userMessageId": "72abcdef-0000-4000-8abc-000000001111",
+          "assistantMessageId": "73abcdef-0000-4000-8abc-000000001111",
+          "participant": {
+            "id": "claude-code",
+            "label": "Claude",
+            "model": "invented-pinned-model",
+            "executionHost": "anthropic"
+          },
+          "inputChunks": [
+            "Invented question."
+          ],
+          "outputChunks": [],
+          "lastSequence": 0,
+          "phase": "prepared",
+          "createdAt": "2026-10-29T04:00:00.000Z",
+          "updatedAt": "2026-10-29T04:00:00.000Z",
+          "contextRunIds": [
+            "71ABCDEF-0000-4000-8ABC-000000001101"
+          ]
+        }
+      }
+    ]
+  },
+  "stdinLayouts": [
+    {
+      "name": "no earlier turns: stdin is exactly the new message, as revision 3",
+      "turns": [],
+      "message": "Invented first question.",
+      "stdin": "Invented first question.",
+      "contextBytes": 0,
+      "inputBytes": 24,
+      "countedBytes": 24,
+      "firstTrialBound": 4096,
+      "withinFirstTrialBound": true
+    },
+    {
+      "name": "one earlier exchange, then the new message",
+      "turns": [
+        {
+          "role": "user",
+          "text": "Invented question for an invented bakery: one first step?"
+        },
+        {
+          "role": "assistant",
+          "text": "Invented reply: list the three busiest hours."
+        }
+      ],
+      "message": "Invented follow-up for an invented bakery: and the second step?",
+      "stdin": "The earlier turns of this conversation follow, oldest first, then the new message. Each part starts with a line in square brackets naming it and the exact length of its text in UTF-8 bytes. Reply only to the new message.\n\n[earlier user turn, 57 bytes]\nInvented question for an invented bakery: one first step?\n\n[earlier assistant turn, 45 bytes]\nInvented reply: list the three busiest hours.\n\n[new message, 63 bytes]\nInvented follow-up for an invented bakery: and the second step?",
+      "contextBytes": 102,
+      "inputBytes": 63,
+      "countedBytes": 165,
+      "firstTrialBound": 4096,
+      "withinFirstTrialBound": true
+    },
+    {
+      "name": "a turn that looks like a header is still counted by its bytes",
+      "turns": [
+        {
+          "role": "user",
+          "text": "Invented text with a fake line:\n[new message, 3 bytes]\nend"
+        },
+        {
+          "role": "assistant",
+          "text": "Invented reply é😀"
+        }
+      ],
+      "message": "Invented question.",
+      "stdin": "The earlier turns of this conversation follow, oldest first, then the new message. Each part starts with a line in square brackets naming it and the exact length of its text in UTF-8 bytes. Reply only to the new message.\n\n[earlier user turn, 58 bytes]\nInvented text with a fake line:\n[new message, 3 bytes]\nend\n\n[earlier assistant turn, 21 bytes]\nInvented reply é😀\n\n[new message, 18 bytes]\nInvented question.",
+      "contextBytes": 79,
+      "inputBytes": 18,
+      "countedBytes": 97,
+      "firstTrialBound": 4096,
+      "withinFirstTrialBound": true
+    },
+    {
+      "name": "context plus message at exactly the first-trial bound",
+      "turns": [
+        {
+          "role": "user",
+          "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "role": "assistant",
+          "text": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "message": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "stdin": "The earlier turns of this conversation follow, oldest first, then the new message. Each part starts with a line in square brackets naming it and the exact length of its text in UTF-8 bytes. Reply only to the new message.\n\n[earlier user turn, 2000 bytes]\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\n[earlier assistant turn, 2000 bytes]\nbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n\n[new message, 96 bytes]\ncccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "contextBytes": 4000,
+      "inputBytes": 96,
+      "countedBytes": 4096,
+      "firstTrialBound": 4096,
+      "withinFirstTrialBound": true
+    },
+    {
+      "name": "one byte past the first-trial bound: text-too-large, nothing sent",
+      "turns": [
+        {
+          "role": "user",
+          "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "role": "assistant",
+          "text": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "message": "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "stdin": "The earlier turns of this conversation follow, oldest first, then the new message. Each part starts with a line in square brackets naming it and the exact length of its text in UTF-8 bytes. Reply only to the new message.\n\n[earlier user turn, 2000 bytes]\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\n[earlier assistant turn, 2000 bytes]\nbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n\n[new message, 97 bytes]\nccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "contextBytes": 4000,
+      "inputBytes": 97,
+      "countedBytes": 4097,
+      "firstTrialBound": 4096,
+      "withinFirstTrialBound": false
+    }
+  ]
+}

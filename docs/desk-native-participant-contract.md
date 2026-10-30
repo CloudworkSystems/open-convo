@@ -3201,8 +3201,11 @@ PR 4, and until both trials have passed only invented text goes to Claude
   label: "Claude", model: <the pinned model>, executionHost: "anthropic"}`.
   `executionHost` `anthropic` says where the conversation is processed: the
   CLI runs on this Mac, but what it is sent leaves the Mac. The pinned model
-  is chosen by the owner at the adapter's PR 3c (the plan's question 7);
-  the vectors use `invented-pinned-model`.
+  is chosen by the owner at the adapter's PR 3c (the plan's question 7):
+  on October 29, 2026 he chose `claude-sonnet-5-5` (Sonnet 5.5), one model
+  per app build, with a per-conversation model menu left for a later plan
+  revision. The app's lane pins it from PR 3c, still never available. The
+  vectors use `invented-pinned-model`.
 - The revision-3 pin (`label` `Claude Code`, `executionHost` `this-mac`, as
   in section 19's vectors) stays a valid entry for a revision-4 host, and
   saved runs prepared under it keep their identity (section 15). It never
@@ -3272,7 +3275,11 @@ no tools). What native writes to stdin, in UTF-8, before closing it:
   CLI do; at worst the reply misreads the conversation. The text is the
   owner's own earlier messages and replies from the same session.
 - The vectors' `stdinLayouts` give the exact bytes for invented turns; the
-  launcher in PR 3c must produce them byte for byte.
+  launcher (PR 3c) produces them byte for byte, and native's preparing
+  checks count them against the first-trial bound as each entry says
+  (`ClaudeVectorTests`). At start native resolves and hashes the turns
+  again before step 13's recheck (`run-mismatch` on any difference, nothing
+  written or sent), and the launch hands the launcher exactly those turns.
 
 ### 21.4 Bounds and approval
 
@@ -3324,6 +3331,9 @@ countedBytes, firstTrialBound, withinFirstTrialBound}`), with the preamble
 in `context.stdinPreamble`. The page codec runs all of them now. The
 fake-CLI host cases (overflow held and released, overflow signal, tools in
 init, a provider override, an oversize reply, Stop before and after the
-first piece, lock, supervisor loss) and the tools refusal join this file
-with the Mac host in PR 3c, in section 19's seeded form; the Swift harness
-runs them there.
+first piece, lock, supervisor loss) join this file in section 19's seeded
+form in PR 3d, with the approval state behind `host-not-approved`, and the
+Swift harness runs them there; the page-level cases above run in Swift
+then too. The tools refusal is proved in PR 3c against the real supervisor
+and the fake CLI, with and without earlier turns. Every one of these passes
+before PR 4b turns anything on.

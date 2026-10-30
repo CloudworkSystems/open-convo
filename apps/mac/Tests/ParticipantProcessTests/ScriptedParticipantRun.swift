@@ -415,14 +415,20 @@ final class ScriptedLauncher: ParticipantLaunching, @unchecked Sendable {
         let mode = nextMode
         lock.unlock()
         if let failure { throw failure }
-        // The same stdin rule as the production launcher (Codex Q17).
-        let input = request.stdin
-        guard input.count == request.inputBytes else {
-            throw ParticipantLaunchError.inputBytesMismatch(expected: request.inputBytes, actual: input.count)
+        // The same stdin rules as the production launcher (Codex Q17,
+        // section 21.3).
+        let message = request.message
+        guard message.count == request.inputBytes else {
+            throw ParticipantLaunchError.inputBytesMismatch(expected: request.inputBytes, actual: message.count)
+        }
+        guard request.context.allSatisfy({ $0.role == "user" || $0.role == "assistant" }),
+              request.context.reduce(0, { $0 + $1.text.utf8.count }) == request.contextBytes else {
+            throw ParticipantLaunchError.contextMismatch
         }
         let run = world.launch(
             identity: request.identity,
-            configuration: StreamJSONReader.Configuration(expectedInit: expectedInit, inputBytes: request.inputBytes,
+            configuration: StreamJSONReader.Configuration(expectedInit: expectedInit,
+                                                          inputBytes: request.contextBytes + request.inputBytes,
                                                           preparedBytes: request.preparedBytes, limits: limits),
             mode: mode, script: script, untilTerminal: true)
         lock.lock(); launched.append(run); lock.unlock()

@@ -48,7 +48,9 @@ chats only). Scope:
 | PR 1: Scope | Merged (#75) |
 | PR 2: Contract revision 5 and the page codec (invented chats only; started on the owner's yes, October 28) | Merged (#181) |
 | PR 3a: Close the contract's pre-activation items (stale replies without a lane, the combined renderer proof, the shared handle rule, the nine page cases; inactive) | Merged (#188) |
-| PR 3b: Availability for real: the sign-in check with its network blocked by macOS, Pro and Max only (the owner's D1 choice, October 29; inactive). It relies on macOS's deprecated `sandbox-exec`: if an update removes it, Claude reads as unavailable (`check-failed`, `network-block`), not as a bug | In review |
+| PR 3b: Availability for real: the sign-in check with its network blocked by macOS, Pro and Max only (the owner's D1 choice, October 29; inactive). It relies on macOS's deprecated `sandbox-exec`: if an update removes it, Claude reads as unavailable (`check-failed`, `network-block`), not as a bug. Retest the denied services on each major macOS release before relying on the block there | Merged (#195) |
+| PR 3c: Context and launch: Claude runs take earlier turns (a local model's or Claude's) in the contract's fixed stdin layout, checked against the first-trial bound and resolved again at start; the app's lane pins Claude to Sonnet 5.5, the owner's choice of October 29; still never available, and the app's launcher still refuses | In review |
+| PR 3d: The approval state (`host-not-approved`) and the fake-CLI host cases in the Claude vectors file, run by the Swift harness; split from 3b and 3c to keep each review small. Must pass before PR 4b | Not started |
 
 ## Done
 

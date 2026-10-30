@@ -37,7 +37,8 @@ public enum LocalAliasBinding: Equatable, Sendable {
     case unavailable
 }
 
-/// One earlier turn sent as context (section 20.3): `user` or `assistant`.
+/// One earlier turn sent as context (sections 20.3 and 21.3): `user` or
+/// `assistant`.
 public struct LocalTurn: Equatable, Sendable {
     public let role: String
     public let text: String
