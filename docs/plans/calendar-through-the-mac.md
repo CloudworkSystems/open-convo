@@ -48,7 +48,9 @@ plain link. Nothing is billed per use.
   `NSCalendarsFullAccessUsageDescription` text. On macOS 13 it uses the
   older calendar access request, with the `NSCalendarsUsageDescription`
   text. Both texts say what it's for: "True Convo shows your calendars in
-  its own views. It only reads them, and nothing leaves this Mac." The two
+  its own views. It only reads them, on this Mac. Meeting places are shared
+  only if you turn on travel time (sent to Apple) or open a place in Google
+  Maps." The two
   paths sit behind one interface, and the fake store tests both: granted,
   refused, and revoked later. CI's macOS runner builds with both
   availability branches compiled in.
@@ -73,8 +75,13 @@ plain link. Nothing is billed per use.
     the rule that two copies from the same calendar never merge all stay
     the same.
 
-  EventKit's external identifier stands in for `UID`, and its last-modified
-  date stands in for `SEQUENCE` and `LAST-MODIFIED`. Each group lists every
+  EventKit's external identifier stands in for `UID`.
+- **Which copy wins, carried to the build** (Codex, PR #204 review thread
+  4425672904). EventKit exposes no `SEQUENCE`, so the merge engine's order
+  can't be carried over as is. PR 1 defines and tests an EventKit winner
+  rule (for example, the later last-modified date, then the earlier
+  calendar in the person's list) and shows in its tests that a copy with
+  older details can't win just because it was touched later. Each group lists every
   calendar it came from. Tests repeat the merge engine's duplicate cases,
   "Dentist" included, against the fake store.
 - The owner picks which calendars show, in the app. The choice is stored
