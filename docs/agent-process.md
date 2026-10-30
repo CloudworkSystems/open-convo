@@ -425,8 +425,9 @@ nothing said so. The same rule for True Convo's own agents is in
   app (`chatgpt-codex-connector[bot]`), which posts its reviews and its cloud
   builds; and the repo's GitHub Actions workflows (such as `owner-queue`,
   and a Gemini review workflow once one is built), which post as
-  `github-actions[bot]`. Codex doesn't
-  answer `cloudwork-bot`'s requests yet, so asking Codex to fix its own pull
+  `github-actions[bot]`. Since October 30 Codex answers a `cloudwork-bot`
+  comment that starts with `@codex review`, but it refuses the bot's other
+  requests ("create a Codex account"), so asking Codex to fix its own pull
   request waits for the owner until the bot has its own Codex access.
 - An agent that finds itself signed in as `CloudworkSystems` stops and tells
   the owner instead of acting.
