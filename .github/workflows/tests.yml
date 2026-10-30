@@ -53,7 +53,8 @@ jobs:
           echo "desk=$([ "$all" = true ] && echo true || has '^(apps/desk/|packages/clarity/)')" >> "$GITHUB_OUTPUT"
           # The Mac tests also read the Desk's shared fixtures.
           echo "mac=$([ "$all" = true ] && echo true || has '^(apps/mac/|apps/desk/tests/fixtures/)')" >> "$GITHUB_OUTPUT"
-          echo "gate=$all" >> "$GITHUB_OUTPUT"
+          # The rules-file map test also runs when any rules file changes.
+          echo "gate=$([ "$all" = true ] && echo true || has '(^|/)(AGENTS|CLAUDE)\.md$|^docs/agent-process\.md$')" >> "$GITHUB_OUTPUT"
           echo "sync_core=$([ "$all" = true ] && echo true || has '^packages/sync-core/')" >> "$GITHUB_OUTPUT"
           # Every other package with a package.json, found by folder, so new
           # packages are covered without editing this file.
