@@ -21,6 +21,7 @@ jobs:
       desk: ${{ steps.diff.outputs.desk }}
       mac: ${{ steps.diff.outputs.mac }}
       gate: ${{ steps.diff.outputs.gate }}
+      sync_core: ${{ steps.diff.outputs.sync_core }}
       # JSON list of the other packages/* folders to test (see the packages job).
       packages: ${{ steps.diff.outputs.packages }}
     steps:
@@ -38,7 +39,7 @@ jobs:
         run: |
           if [ -z "$BASE" ]; then
             # Manual run: test everything.
-            for part in clarity desk mac gate; do echo "$part=true" >> "$GITHUB_OUTPUT"; done
+            for part in clarity desk mac gate sync_core; do echo "$part=true" >> "$GITHUB_OUTPUT"; done
             packages=$(node .github/scripts/package-changes.mjs --all)
             echo "packages=$packages" >> "$GITHUB_OUTPUT"
             exit 0
@@ -53,6 +54,7 @@ jobs:
           # The Mac tests also read the Desk's shared fixtures.
           echo "mac=$([ "$all" = true ] && echo true || has '^(apps/mac/|apps/desk/tests/fixtures/)')" >> "$GITHUB_OUTPUT"
           echo "gate=$all" >> "$GITHUB_OUTPUT"
+          echo "sync_core=$([ "$all" = true ] && echo true || has '^packages/sync-core/')" >> "$GITHUB_OUTPUT"
           # Every other package with a package.json, found by folder, so new
           # packages are covered without editing this file.
           packages=$(echo "$files" | node .github/scripts/package-changes.mjs)
@@ -156,6 +158,28 @@ jobs:
           node-version: 22
       - run: node --test .github/scripts/tests/*.test.mjs
 
+  # The sync core is a Swift package (docs/plans/sync-core.md, "Before The
+  # Builder's Pull Request Can Merge"). It uses only Foundation, so it runs on
+  # Linux, where minutes are cheap, with the Swift the runner image ships.
+  sync-core:
+    needs: changes
+    if: needs.changes.outputs.sync_core == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # Before the sync core merges, the folder doesn't exist yet on a
+      # .github-only change; there is nothing to test then.
+      - run: |
+          if [ ! -f packages/sync-core/Package.swift ]; then
+            echo "No packages/sync-core yet."
+            exit 0
+          fi
+          swift --version
+          cd packages/sync-core && swift test
+
   # One run per changed package in packages/ that has no job of its own above
   # (site-engine, household-lists, and new ones such as habit-grid).
   packages:
@@ -195,7 +219,7 @@ jobs:
   # The one check branch protection requires. Passes only if every part that
   # ran passed; parts with no changes are skipped.
   tests:
-    needs: [changes, clarity, desk, mac, fixtures, gate, packages]
+    needs: [changes, clarity, desk, mac, fixtures, gate, sync-core, packages]
     if: always()
     runs-on: ubuntu-latest
     steps:
