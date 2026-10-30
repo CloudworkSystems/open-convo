@@ -238,6 +238,9 @@ or task gets a row here first.
 - Keep build output, downloads, model files and private data out of Git.
 - No public release, deployment, publication, spending, account or credential
   change, or service that outlives the session without the owner's approval.
+- A merge to `main` that changes `site/`, `brand/tokens.css` or `brand/fonts/`
+  publishes it on trueconvo.com (the `pages` workflow). Before auto-merge goes
+  on, the pull request quotes the owner's yes for it, with its date and thread.
 - Preserve other agents' edits and unsaved work. No force-push, history
   rewriting or deletion of the owner's work.
 - License choice is the owner's decision and is still open. Do not add one.
