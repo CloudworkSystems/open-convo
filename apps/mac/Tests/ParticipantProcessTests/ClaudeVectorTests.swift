@@ -192,3 +192,10 @@ struct ClaudeVectorTests {
         }
     }
 }
+
+private extension JSONValue {
+    var listItems: [JSONValue]? {
+        if case .array(let items) = self { return items }
+        return nil
+    }
+}
