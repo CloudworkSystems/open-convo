@@ -109,6 +109,10 @@ reviews. Plan approved (merged as #127 on October 24):
 
 **Calendar merge engine** (Personal, launch set), Claude builds (the owner's choice on October 24, in place of Codex), GrokBot or a fresh Claude reviews; plan approved (`docs/plans/calendar-merge-engine.md`); build in review (#130).
 
+**Setup check engine** (Personal; first slice of the first-run guide), GrokBot team A builds, Codex reviews; plan approved October 30 (`docs/plans/setup-check-engine.md`); starts once #146 is done.
+
+**Capture inbox engine** (Personal; first slice of the iPhone capture app), GrokBot team B builds, Codex reviews; plan approved October 30 (`docs/plans/capture-inbox-engine.md`); starts once #139 is done.
+
 **Cloudwork Rail Map** (Desk, Cloudwork Nexus), Claude builds; a fifth Nexus view showing this repository's branches, commits and pull requests from a saved snapshot (`apps/desk/scripts/rail-map-snapshot.mjs`); merged October 24 (#132).
 
 **Skin check** (Personal, new Health module), Claude builds, GrokBot or a fresh Claude reviews; plan approved (`docs/plans/skin-check.md`). Slice 1, the standalone engine in `packages/skin-check/`, is built; the iPhone source joins the iPhone app on the parallel sync line, and the Desk view follows.
