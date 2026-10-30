@@ -32,10 +32,13 @@ beside it that points to it.
 - [site/AGENTS.md](site/AGENTS.md): the public website. Merges go live.
 - [.github/AGENTS.md](.github/AGENTS.md): the merge gate's own checks and
   workflows.
+- [docs/skills/first-principles-decision/SKILL.md](docs/skills/first-principles-decision/SKILL.md):
+  the first portable skill, a draft. Read before changing or running it.
 
 Every rules file with folder files below it has a map like this one near the top. The
-gate tests check that each map lists every rules file directly below it and
-that every listed file exists. Today the repo uses
+gate tests check that each map lists every rules file directly below it
+(`AGENTS.md`, `SKILL.md`, `REVIEW.md` and `intent.md`) and that every listed
+file exists. Today the repo uses
 `AGENTS.md` (with `CLAUDE.md` pointers), plans in `docs/plans/` for each
 module's goal and finish line, package READMEs and `SKILL.md` skills. Other
 kinds, such as `REVIEW.md` or `intent.md`, are welcome when a tool we use
