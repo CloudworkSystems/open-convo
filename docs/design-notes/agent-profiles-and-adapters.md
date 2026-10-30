@@ -170,6 +170,97 @@ Vendor harnesses are used only where a subscription requires its own program.
 (Pi Durable, the experimental add-on, is still not adopted; see
 `durable-agents.md`.)
 
+## Foreign Agents Start at Zero Trust (Owner, October 25 and 30)
+
+A **foreign agent** runs on another company's model or harness that True Convo
+neither runs nor can inspect. Meta's Muse is the first case: the owner's Muse
+agent, Cam. The owner's rule (October 25): zero trust is the starting baseline
+for any unknown foreign model or agent inside True Convo. Other notes point
+here for it (`security.md`, `prime-agent.md`, `computer-use.md`,
+`verified-owner-yes.md`, `back-end-and-agent-hosts.md`).
+
+The baseline:
+
+- **Nothing by default.** No tools, memory, files, screen view or control,
+  and no other agents' threads. It gets only what its profile grants, and
+  only the owner grants it, on an approval card. A request relayed by another
+  agent is not a grant.
+- **Its words are data.** Whatever it says or returns is never an instruction
+  to True Convo or to another agent. It speaks under its own name
+  (`agents-speak-for-themselves.md`), and every message is logged where the
+  owner can read it.
+- **It never holds a credential.** No keys, sign-ins or repository access.
+  Where an action needs a credential, True Convo holds it and the owner's yes
+  unlocks it (`verified-owner-yes.md`).
+- **Nothing goes to a host the owner hasn't approved,** and only what the
+  memory rules allow. Whatever we send it is read by its company's model, so
+  by default it sees only what is already public.
+- **Guardrails stay in code outside every model,** ours and theirs
+  (`portable-capability-layer.md`).
+- **Working isn't trusted.** A health check that shows it answering says
+  nothing about trust (see "Knowing When an Agent Isn't Working" below).
+- **Wider trust is the owner's decision,** recorded in `docs/decisions.md`.
+
+### Foreign Agents Never Touch the Code (October 30)
+
+The owner's rule: a foreign agent never touches the repository or the
+codebase. When it wants something built or changed, it **submits a work
+request, the way a future human client would submit a ticket**.
+
+- A request says who is asking, what they want and why. It lands in an
+  inbox the owner sees, and nothing starts until the owner accepts it.
+- Accepted work goes to our own builders (Claude, Codex, GrokBot) and through
+  the normal review loop. The builder works from the owner's accepted version
+  of the request, not from the requester's wording, so a request can't steer
+  a builder.
+- The requester hears back only what the owner chooses to share: accepted,
+  declined, done.
+- **One front door.** Agents and human clients use the same intake, so it is
+  built once. A foreign agent is the first client.
+
+The other direction works too: **we can ask a foreign agent for work it is
+good at**, and it hands back a finished piece rather than changing anything
+of ours. For Cam, that means social posts, carousels, images, landing page
+copy, and personal-assistant work in Facebook, Instagram and WhatsApp, where
+Meta's reach is strongest. Codex or Claude can help with the same pieces.
+
+- What it hands back is a **deliverable**: a draft the owner reviews, never
+  something published, sent or merged on its own. Publishing or posting
+  still stops for the owner (AGENTS.md "Limits").
+- A deliverable is data. If it goes into the repo (landing page copy, for
+  example), one of our builders copies it in through a normal pull request.
+- The brief we send it holds only what may go to its company's model: public
+  material and what the owner chose to share, never private memory or
+  conversations.
+- Open for the owner: where requests live. The repository is public, so a
+  GitHub issue would publish whatever the requester sends. A private inbox on
+  the Desk or on the public side (`back-end-and-agent-hosts.md`) avoids that.
+  The intake's own plan decides.
+
+## Pi Extensions: MCP and Subagents (October 25)
+
+Pi stays minimal and adds features through extensions. Two came up for agent
+profiles (from a video the owner shared, read through its written companion):
+`pi-mcp-adapter`, which puts all MCP servers behind one small tool (about 200
+tokens), and `@tintinweb/pi-subagents`, which lets a Pi run start helpers in
+parallel, as Claude Code does.
+
+- **The MCP adapter: use it, pointed only at True Convo's own capability
+  server.** That is how every Pi profile reaches True Convo's capabilities,
+  and one small tool suits the local default model, which needs few tools and
+  a short context (`portable-capability-layer.md`). Outside MCP servers are
+  reached through True Convo's server, never added to Pi directly, so
+  approvals, caps and logs always apply. Before adoption, check where the
+  adapter keeps sign-in tokens for remote servers: if it is a plain file, it
+  stays off for those servers, as with `auth.json` under Credentials.
+- **Pi's subagents: not the delegation design.** The dispatcher delegates, so
+  every helper appears on the one screen that shows every agent ("Borrowed
+  From Scion"), with its own space and caps. Helpers started inside a Pi run
+  appear in neither. Several local helpers at once would also overload an 8 to
+  16 GB Mac. At most, allow them for read-only exploration on cloud profiles.
+- Both are third-party code running inside Pi, so each passes the install
+  gate and the action check in `portable-capability-layer.md` first.
+
 ## How Each Model Is Paid For
 
 | Route | Runs inside | Paid by | Notes |
@@ -409,3 +500,7 @@ cloud model the owner has not approved.
   transcript October 15, 2026 (secondary; its 7-minute-to-5-second figure is not
   in Anthropic's post):
   https://www.youtube.com/watch?v=6Ozh4BKmtvs
+- Pi extensions, read October 25, 2026 through the written companion to the
+  owner's video (secondary; the video itself was not reachable):
+  https://zazencodes.com/blog/upgrade-your-pi-agent-with-subagents-mcp and
+  https://www.youtube.com/watch?v=l3YCoX2i-78
