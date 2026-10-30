@@ -1936,6 +1936,10 @@ extension ProofStore: HostApprovalReading {
     /// Section 21.4's read for availability: the visible state, so a revoke
     /// counts at once. Nil while the store cannot be read.
     public func isApproved(host: String) -> Bool? {
-        (try? hostApproval(host)).map { $0 != nil }
+        do {
+            return try hostApproval(host) != nil
+        } catch {
+            return nil
+        }
     }
 }

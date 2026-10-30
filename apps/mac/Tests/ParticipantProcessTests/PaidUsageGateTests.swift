@@ -66,8 +66,9 @@ struct PaidUsageGateTests {
         #expect(!authentication.contains { $0.line.hasPrefix("public ") || $0.line.contains(" public ") }, "internal only")
         let owner = try Sources.lines(of: "ParticipantProcess/PaidUsageConfirmation.swift")
         let publicInits = owner.filter { $0.line.hasPrefix("public") && $0.line.contains("init(") }
-        #expect(publicInits.map(\.line) == ["public convenience init(checks: ClaudeLocalChecks) {"], "\(publicInits)")
-        #expect(owner.contains { $0.line == "self.init(checks: checks, authentication: LocalAuthenticationOwnerCheck())" })
+        #expect(publicInits.map(\.line) == ["public convenience init(checks: ClaudeLocalChecks, approval: any HostApprovalReading) {"],
+                "\(publicInits)")
+        #expect(owner.contains { $0.line == "self.init(checks: checks, approval: approval, authentication: LocalAuthenticationOwnerCheck())" })
         for folder in ["ParticipantProcess", "ParticipantDeskControls", "ParticipantCoordinator"] {
             for reused in ["MacOwnerVerifier", "StubUnlockVerifier", "DeskUnlockVerifier"] {
                 #expect(!(try Sources.code(folder)).contains { $0.line.contains(reused) }, "\(folder) uses \(reused)")
