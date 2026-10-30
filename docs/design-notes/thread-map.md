@@ -33,9 +33,10 @@ Map. It's an early version of Nexus Navigator's grouping.
    view reads from live sources. It never shows a hand-made list:
    - True Convo's own conversations and agent runs are read from the app's
      own data, so they're current as they change.
-   - Pull request state comes from GitHub: a webhook where the back end can
-     receive one, otherwise polling on a schedule, with the time of the last
-     update shown on the view.
+   - Pull request state comes from GitHub, polled by the app on the owner's
+     device on a schedule, with the time of the last update shown on the
+     view. A webhook would need a server of ours to receive it, and the
+     private side has none (`back-end-and-agent-hosts.md`), so polling it is.
    - Outside sources with no API or webhook (a claude.ai project today) get
      refreshed by a scheduled agent, and the view shows how old each
      source's data is.
@@ -43,7 +44,9 @@ Map. It's an early version of Nexus Navigator's grouping.
 ## Privacy
 
 Thread titles and section names are the owner's private working notes. They
-belong in the owner's own data on the device or his back end, never in this
+stay on the owner's devices and in his private iCloud, like his other
+conversations (decided October 22 and 25, `docs/decisions.md`). They never go
+to a server of ours, including the public side, and never into this
 repository, which is public. Unlike the Rail Map's saved snapshot
 (`apps/desk/src/content/rail-map.json`), the thread map's data is never
 committed. Tests use invented threads.
