@@ -33,7 +33,7 @@ struct ClaudeConsentProofTests {
                 let name = "approved \(approved), confirmed \(confirmed)"
                 if approved && confirmed {
                     #expect(reply.outcome == .ok, "\(name): \(reply)")
-                    #expect(claude.world.launcher.requests.count == 1, name)
+                    #expect(claude.world.launcher.requests.count == 1, "\(name)")
                     launched.append(name)
                 } else {
                     #expect(reply.outcome == .refused && reply.reason == .participantUnavailable, "\(name): \(reply)")
