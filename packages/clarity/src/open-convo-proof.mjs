@@ -199,7 +199,7 @@ export const openConvoProof = Object.freeze({
     "Three-action jargon clarity proof receipt: workbench/receipts/2026-08-06-trueconvo-three-action-jargon-clarity-proof.md",
     "Session-view jargon controls proof: npm run tca-session-focus-v0:jargon:prove from ../cloudwork_nexus",
     "Guarded Memory Steward preference store proof: npm run check:communication-preferences from ../tca_brain",
-    "Live Wait and Memory Steward connection receipt: workbench/receipts/2026-08-06-trueconvo-live-wait-wong-connection-proof.md",
+    "Live Wait and Memory Steward connection receipt: dated 2026-08-06 in True Convo's workbench/receipts (file name not copied)",
     "Preferred-term and narrow retrieval receipt: workbench/receipts/2026-08-06-tca-session-preferred-terms-and-retrieval-proof.md",
     "Owner identity and sync ceiling: docs/TCA_OWNER_IDENTITY_AND_SYNC_BOUNDARY.md",
     "Session-view control reference: ../cloudwork_nexus/tools/tca-studio-session-focus-v0/static/index.html",
