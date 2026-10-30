@@ -362,15 +362,18 @@ struct ClaudeLocalChecksUnitTests {
         #expect(lines.count > 1_000, "the scan read the sources")
         let constructions = lines.filter { $0.line.contains("ClaudeLocalChecks(") || $0.line.contains("ClaudeLocalChecks.init") }
         // The test-only probe makes two: the tests' gate, and the public
-        // initializer's (which never runs auth status, Codex F34-D1).
+        // initializer's (which runs auth status with its network blocked,
+        // the owner's D1 decision).
         #expect(constructions.map(\.file) == Array(repeating: "ParticipantTestFakes/AvailabilityProbe/main.swift", count: 2),
                 "\(constructions)")
-        // Only the test-only probe names the tests' step 4 gate (Codex F34-D1).
+        // Only the test-only probe names the tests' step 4 gate (Codex
+        // F34-D1); the public initializer blocks the network, through the
+        // system's tool only.
         let runsAuthStatus = lines.filter { $0.line.contains(".runForTests") || $0.line.contains("runForTests)") }
-        #expect(Set(runsAuthStatus.map(\.file)) == ["ParticipantTestFakes/AvailabilityProbe/main.swift",
-                                                     "ParticipantProcess/ClaudeCheckRun.swift"], "\(runsAuthStatus)")
-        #expect(runsAuthStatus.filter { $0.file == "ParticipantProcess/ClaudeCheckRun.swift" }.map(\.line)
-                    == ["guard authStatus == .runForTests else { return end(.checkFailed, .authStatus, .remoteSettings, .unguarded) }"])
+        #expect(runsAuthStatus.map(\.file) == ["ParticipantTestFakes/AvailabilityProbe/main.swift"], "\(runsAuthStatus)")
+        #expect(lines.filter { $0.line.contains("authStatus: .production") }.map(\.file) == ["ParticipantProcess/ClaudeLocalChecks.swift"])
+        let tools = lines.filter { $0.line.contains("ClaudeNetworkBlock(toolPath:") }
+        #expect(tools.map(\.line) == ["package static let system = ClaudeNetworkBlock(toolPath: \"/usr/bin/sandbox-exec\")"], "\(tools)")
         let production = lines.filter { $0.line.contains("forCurrentUser(") }
         #expect(production.map(\.line) == ["public static func forCurrentUser(probeParent: URL) -> ClaudeCheckRoots? {"],
                 "declared, never called: \(production)")
@@ -381,8 +384,10 @@ struct ClaudeLocalChecksUnitTests {
                                     "ParticipantProcess/ClaudeCheckAnswers.swift", "ParticipantProcess/ClaudeCheckLog.swift"])
         let checkLines = lines.filter { checkFiles.contains($0.file) }
         let spawns = checkLines.filter { $0.line.contains("posix_spawn(") }
-        #expect(spawns.map(\.line) == ["guard posix_spawn(&pid, binaryPath, &actions, &attributes, argv, envp) == 0, pid > 0 else { return nil }"],
-                "one spawn, of the pinned file only")
+        #expect(spawns.map(\.line) == ["guard posix_spawn(&pid, executable, &actions, &attributes, argv, envp) == 0, pid > 0 else { return nil }"],
+                "one spawn: of the pinned file, or of the network block's tool running it")
+        #expect(checkLines.filter { $0.line.hasPrefix("let executable = ") }.map(\.line)
+                    == ["let executable = networkBlock?.toolPath ?? binaryPath"])
         for forbidden in ["Process(", "NSTask", "system(", "popen(", "execv", "execl", "fork(", "import Security", "SecItem",
                           "SecKeychain", "LAContext", "LocalAuthentication", "URLSession", "getenv(", "@_spi", "#if"] {
             #expect(!checkLines.contains { $0.line.contains(forbidden) }, "\(forbidden)")

@@ -1,6 +1,7 @@
 # Risk Review: Escalate By What A Change Does, Not Only Where It Lives
 
-Status: Draft (Oct 26): plan only; the code follows in a separate pull request.
+Status: In progress (Oct 29): the code pull request is in review; Built once
+the finish line below is met.
 
 Written October 26, 2026 at the owner's request ("Do it"), after comparing a
 video on Claude Code "software factories" with how this repo already works.

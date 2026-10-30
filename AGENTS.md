@@ -56,7 +56,9 @@ reads from and writes to `CloudworkSystems/open-convo`.
   `.github/CODEOWNERS`. Claude-built and Codex-built pull requests open with
   auto-merge off. The coordinator switches it on once the independent review
   ("Independent reviews" below) and any plan check are clean on the latest
-  commit; for GrokBot, after its plan check passes. Agents never merge by hand. Every agent
+  commit; for GrokBot, after its plan check passes. The PR keeper does it
+  when nobody has ("Keeping Finished Work Moving" below). Agents never merge
+  by hand, apart from that section's one exception. Every agent
   signs in to GitHub as `cloudwork-bot` (three app exceptions are listed in
   Accounts And Provenance), so the owner can approve their protected-path
   pull requests. Codex reviews every pull request on
@@ -159,6 +161,36 @@ reads from and writes to `CloudworkSystems/open-convo`.
     the pull request before auto-merge goes on, but no required check reads
     the independent review yet. Making it a required check is a later code
     change and the owner's call.
+  - **Privacy and security checklist (owner decision, October 26, 2026;
+    [docs/plans/risk-review.md](docs/plans/risk-review.md) and
+    [docs/plans/security.md](docs/plans/security.md) section 2).** Every
+    independent review, and the coordinator's plan check on GrokBot work,
+    ends with one block answering these, each "no" or "yes" with the file
+    and line: (1) data leaving the device, and which plan allows it;
+    (2) secrets in code, logs, test output or files; (3) real personal data
+    in any added or changed file (contact details the owner chose to
+    publish are listed, not a finding); (4) private data written outside
+    the protected store or where backups or sync pick it up; (5) a new Mac
+    permission or wider agent powers; (6) outside input, and whether it is
+    validated and kept from becoming instructions or commands; (7) who may
+    read or change what, checked per item; (8) new code from elsewhere:
+    needed, pinned, trusted; (9) failure output leaking traces, keys or
+    personal data; (10) money spent, with a cap, a stop and consent.
+    A "yes" on 2 or 3 is always a P1; any other "yes" no plan allows is a
+    P1; a "yes" on 6 or 7 the tests don't cover, or on 10 without a cap, is
+    a P1. Docs-only pull requests get the block too, from an agent that
+    didn't write them (checklist only, not a full review). The coordinator
+    doesn't switch on auto-merge, or pass a GrokBot plan check, until the
+    block is posted for the latest commit.
+  - **`risk-escalate`.** A reviewer who thinks the owner should see a risk
+    even when a plan allows it ends the block with
+    `risk-escalate: <one-line reason>`. The coordinator then keeps
+    auto-merge off and adds the label `needs-owner: risk-escalate`, which
+    lists the pull request on issue #52, until the owner approves the head
+    commit after that comment; then the coordinator removes the label (the
+    workflow never touches it). On a pull request opened from the owner's
+    account, the work is reopened from `cloudwork-bot`, carrying the
+    escalation over.
   - Each GrokBot review spends Cursor usage; the coordinator asks for one
     per commit, never more.
   - Older plans (for example `email-actions-preview.md` and
@@ -199,6 +231,9 @@ looping for 8 to 17 rounds on ever-narrower edge cases, so:
 - On plan and docs pull requests (`docs/`, `PLAN.md`, `STATUS.md`), flag only
   P0 and P1: places where the plan would lead to the wrong build. Build-level
   detail belongs in the code pull request.
+- On a plan or docs pull request, from the third Codex round on, a P1 the
+  builder has copied into the plan's requirements for the code pull requests
+  counts as answered. Raise it again only if the copied line gets it wrong.
 - Don't raise again a P2 or P3 finding the pull request already answers or
   explains as not applying, and don't reopen an area a previous round already
   settled unless the new commit changed it. A P0 or P1 is raised again on
@@ -207,6 +242,10 @@ looping for 8 to 17 rounds on ever-narrower edge cases, so:
   raise that finding again on every round until the judge rates it or the
   code fixes it, so the judge sees it on the latest commit.
 - Give all findings for a commit in one round, most severe first.
+- A pull request that adds an outside host, a dependency, a Mac permission
+  or a key name is held for the owner by `codex-approved` (the risk hold),
+  and the triage judge always rates findings about privacy, secrets or
+  permissions as real ([docs/plans/risk-review.md](docs/plans/risk-review.md)).
 - End each finding with one line that starts `For the owner:`, written to
   the owner in your own words. He reads reviews as the product's owner, not
   as a programmer: say in at most two plain sentences what would go wrong
@@ -268,7 +307,8 @@ request itself, so the owner doesn't have to carry messages:
   for pull requests it launched; it doesn't change other agents' pull requests
   and never reviews its own work. It reviews another agent's pull request
   only when the coordinator asks ("Independent reviews" above).
-- No agent merges or approves a pull request; the merge gate merges.
+- No agent merges or approves a pull request; the merge gate merges (one
+  exception: "Keeping Finished Work Moving" below).
   Outside-builder pull requests wait for a "Ready to merge" planning check
   from the coordinator, which switches on auto-merge once the check passes.
   Every other pull request follows the Review Loop above as before.
@@ -308,6 +348,73 @@ request itself, so the owner doesn't have to carry messages:
   Claude-built and Codex-built pull requests it only lists unanswered
   findings in its report. The keeper runs in the cloud as `cloudwork-bot`,
   not on the Mac (owner decision, October 25, 2026).
+
+## Keeping Finished Work Moving (Owner Decision, October 29, 2026)
+
+On October 29, eight pull requests had `tests` and `codex-approved`
+passing on their latest commit and had sat for one to three days, because
+the step after Codex (the independent review, the plan check, switching on
+auto-merge) waited for someone to remember it. Plan pull requests also took
+six Codex rounds of build-level P1s, and the owner had to click Merge when
+GitHub wouldn't set auto-merge. The owner chose these rules in the thread
+"Speed up Open Convo delivery". Where they differ from the sections above,
+they win.
+
+- **The keeper supplies the missing step.** At each hourly run, for every
+  open pull request whose latest commit passes `tests` and `codex-approved`
+  while auto-merge is off, the PR keeper supplies what that commit still
+  lacks, once per commit:
+  - No independent review: it asks GrokBot (the `@cursor` request in
+    "Independent reviews"). If GrokBot hasn't answered 60 minutes later, the
+    keeper does the fresh Claude review itself (at most one per run) and
+    posts it on the pull request, unless the keeper pushed any commit the
+    review would cover ("Claude-built findings at night" below). Then it
+    lists the pull request on issue #52 for a fresh Claude review from a
+    separate agent, which the coordinator asks for.
+  - An outside module with no plan check: the keeper does the coordinator's
+    plan check and posts it.
+  - A plan pull request without the owner's quoted yes: the keeper lists it
+    on issue #52 as waiting on the owner, and does nothing else.
+- **The keeper switches auto-merge on** under the same conditions as the
+  coordinator: Codex clean, an independent review of the latest commit with
+  no open P1 or P2, any plan check passed, and for a plan the owner's quoted
+  yes. The coordinator may still do it first.
+- **The one hand merge.** When GitHub refuses to switch on auto-merge because
+  the pull request is already mergeable, the coordinator or the keeper merges
+  it as `cloudwork-bot`, under the same conditions, with a plain merge
+  through GitHub's merge API (never an admin bypass). The branch rules still
+  require `tests`, `codex-approved` and the owner's approval on protected
+  paths, so this merge passes the same gate auto-merge would have. Nothing
+  else is merged by hand.
+- **Plans stop after two Codex rounds.** From the third Codex round on a plan
+  or docs pull request, the builder copies each new P1 into the plan's
+  requirements for the code pull requests, in one line linking its thread,
+  and replies "carried to the build" on the thread in the same push. That
+  counts as answered (Review Guidelines), so Codex's next round on the new
+  head should come back clean; if it raises the carried P1 again, the owner's
+  accept line is the way through. Carrying needs no new yes from the owner. A P1 showing that
+  the plan's goal or limits are wrong is still fixed in the plan itself.
+- **Dependabot updates.** A Dependabot patch or minor update that touches no
+  protected path needs no independent review, since no agent wrote it. Once
+  `tests` and `codex-approved` pass, the keeper switches auto-merge on.
+  Major-version updates, and any that touch a protected path such as
+  `.github/`, go on the owner's list on issue #52.
+- **Claude-built findings at night.** When Codex findings on the latest
+  commit of a Claude-built pull request have had no push and no reply from
+  its builder for 2 hours, the keeper fixes them on that pull request's
+  branch (one pull request per run) under the code path. Its fix then needs
+  an independent review by another agent, never by the keeper itself.
+- **A hung Codex review doesn't block the owner's override.** The
+  `owner-accepts-findings` line counts once Codex's summary has shown the
+  pull request's exact head as running for 30 minutes or more, as well as
+  after Codex finishes reviewing it. If Codex later posts a P0 or P1 on a
+  commit that has already merged, the keeper opens an issue for it.
+- **Ask for a re-approval only when it was dismissed.** A clean update from
+  `main` keeps the owner's approval; GitHub dismisses it only when a commit
+  changes the pull request's own diff. Before asking him to approve again,
+  check that his latest review shows as dismissed. Don't update a pull
+  request from `main` after he has posted an accept line unless it has
+  conflicts, since a new head needs a new line.
 
 ## Agent Setup And Silence (Owner Decision, October 26, 2026)
 
@@ -410,7 +517,7 @@ nothing said so. The same rule for True Convo's own agents is in
 | Codex | its own app | Reviews every pull request; builds Codex modules |
 | Gemini review | GitHub Actions, once built | Independent reviewer of Codex-built and Claude-built pull requests, alongside GrokBot (advisory for now; not set up yet: the Gemini Code Assist app is gone for individual accounts, see Agent Setup And Silence) |
 | PR steward (scheduled, 8:41 AM and 5:41 PM) | `cloudwork-bot` | Reviews Codex-built pull requests; flags stuck ones on issue #52 |
-| PR keeper (scheduled, hourly, in the cloud) | `cloudwork-bot` | Keeps pull requests moving: updates auto-merge pull requests that fall behind `main` once they are otherwise ready, restarts a hung Codex review once per commit, relays Codex findings to GrokBot's builders, and reports silent or not-set-up agents in its "Not working" comment on issue #52 |
+| PR keeper (scheduled, hourly, in the cloud) | `cloudwork-bot` | Keeps pull requests moving: updates auto-merge pull requests that fall behind `main` once they are otherwise ready, restarts a hung Codex review once per commit, relays Codex findings to GrokBot's builders, finishes ready pull requests and fixes stalled Claude-built findings ("Keeping Finished Work Moving"), and reports silent or not-set-up agents in its "Not working" comment on issue #52 |
 | Daily list (scheduled, 7:52 AM) | `cloudwork-bot`, reading only | Sends the owner issue #52's list, including the keeper's "Not working" comment, plus pull requests Codex has gone silent on |
 | Nightly Test build (scheduled, 2–6 AM) | none | Rebuilds True Convo Test from `main` on the owner's Mac |
 | Recycling pass (scheduled, Sundays) | `cloudwork-bot` | One pull request proposing fixes for stale docs |

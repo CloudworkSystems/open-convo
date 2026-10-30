@@ -1,0 +1,290 @@
+[
+  {
+    "name": "_http_agent",
+    "mark": "network only through the stubbed net and tls entry points"
+  },
+  {
+    "name": "_http_client",
+    "mark": "network only through the stubbed net and tls entry points"
+  },
+  {
+    "name": "_http_common",
+    "mark": "no network"
+  },
+  {
+    "name": "_http_incoming",
+    "mark": "no network"
+  },
+  {
+    "name": "_http_outgoing",
+    "mark": "no network"
+  },
+  {
+    "name": "_http_server",
+    "mark": "network only through the stubbed net and tls entry points"
+  },
+  {
+    "name": "_stream_duplex",
+    "mark": "no network"
+  },
+  {
+    "name": "_stream_passthrough",
+    "mark": "no network"
+  },
+  {
+    "name": "_stream_readable",
+    "mark": "no network"
+  },
+  {
+    "name": "_stream_transform",
+    "mark": "no network"
+  },
+  {
+    "name": "_stream_wrap",
+    "mark": "no network"
+  },
+  {
+    "name": "_stream_writable",
+    "mark": "no network"
+  },
+  {
+    "name": "_tls_common",
+    "mark": "no network"
+  },
+  {
+    "name": "_tls_wrap",
+    "mark": "network only through the stubbed net and tls entry points"
+  },
+  {
+    "name": "assert",
+    "mark": "no network"
+  },
+  {
+    "name": "assert/strict",
+    "mark": "no network"
+  },
+  {
+    "name": "async_hooks",
+    "mark": "no network"
+  },
+  {
+    "name": "buffer",
+    "mark": "no network"
+  },
+  {
+    "name": "child_process",
+    "mark": "network or process: stubbed"
+  },
+  {
+    "name": "cluster",
+    "mark": "network or process: stubbed"
+  },
+  {
+    "name": "console",
+    "mark": "no network"
+  },
+  {
+    "name": "constants",
+    "mark": "no network"
+  },
+  {
+    "name": "crypto",
+    "mark": "no network"
+  },
+  {
+    "name": "dgram",
+    "mark": "network or process: stubbed"
+  },
+  {
+    "name": "diagnostics_channel",
+    "mark": "no network"
+  },
+  {
+    "name": "dns",
+    "mark": "network or process: stubbed"
+  },
+  {
+    "name": "dns/promises",
+    "mark": "network or process: stubbed"
+  },
+  {
+    "name": "domain",
+    "mark": "no network"
+  },
+  {
+    "name": "events",
+    "mark": "no network"
+  },
+  {
+    "name": "fs",
+    "mark": "no network"
+  },
+  {
+    "name": "fs/promises",
+    "mark": "no network"
+  },
+  {
+    "name": "http",
+    "mark": "network or process: stubbed"
+  },
+  {
+    "name": "http2",
+    "mark": "network or process: stubbed"
+  },
+  {
+    "name": "https",
+    "mark": "network or process: stubbed"
+  },
+  {
+    "name": "inspector",
+    "mark": "network or process: stubbed"
+  },
+  {
+    "name": "inspector/promises",
+    "mark": "network or process: stubbed"
+  },
+  {
+    "name": "module",
+    "mark": "no network"
+  },
+  {
+    "name": "net",
+    "mark": "network or process: stubbed"
+  },
+  {
+    "name": "os",
+    "mark": "no network"
+  },
+  {
+    "name": "path",
+    "mark": "no network"
+  },
+  {
+    "name": "path/posix",
+    "mark": "no network"
+  },
+  {
+    "name": "path/win32",
+    "mark": "no network"
+  },
+  {
+    "name": "perf_hooks",
+    "mark": "no network"
+  },
+  {
+    "name": "process",
+    "mark": "no network"
+  },
+  {
+    "name": "punycode",
+    "mark": "no network"
+  },
+  {
+    "name": "querystring",
+    "mark": "no network"
+  },
+  {
+    "name": "readline",
+    "mark": "no network"
+  },
+  {
+    "name": "readline/promises",
+    "mark": "no network"
+  },
+  {
+    "name": "repl",
+    "mark": "no network"
+  },
+  {
+    "name": "sea",
+    "mark": "no network"
+  },
+  {
+    "name": "sqlite",
+    "mark": "no network"
+  },
+  {
+    "name": "stream",
+    "mark": "no network"
+  },
+  {
+    "name": "stream/consumers",
+    "mark": "no network"
+  },
+  {
+    "name": "stream/promises",
+    "mark": "no network"
+  },
+  {
+    "name": "stream/web",
+    "mark": "no network"
+  },
+  {
+    "name": "string_decoder",
+    "mark": "no network"
+  },
+  {
+    "name": "sys",
+    "mark": "no network"
+  },
+  {
+    "name": "test",
+    "mark": "no network"
+  },
+  {
+    "name": "test/reporters",
+    "mark": "no network"
+  },
+  {
+    "name": "timers",
+    "mark": "no network"
+  },
+  {
+    "name": "timers/promises",
+    "mark": "no network"
+  },
+  {
+    "name": "tls",
+    "mark": "network or process: stubbed"
+  },
+  {
+    "name": "trace_events",
+    "mark": "no network"
+  },
+  {
+    "name": "tty",
+    "mark": "no network"
+  },
+  {
+    "name": "url",
+    "mark": "no network"
+  },
+  {
+    "name": "util",
+    "mark": "no network"
+  },
+  {
+    "name": "util/types",
+    "mark": "no network"
+  },
+  {
+    "name": "v8",
+    "mark": "no network"
+  },
+  {
+    "name": "vm",
+    "mark": "no network"
+  },
+  {
+    "name": "wasi",
+    "mark": "no network"
+  },
+  {
+    "name": "worker_threads",
+    "mark": "network or process: stubbed"
+  },
+  {
+    "name": "zlib",
+    "mark": "no network"
+  }
+]

@@ -181,14 +181,19 @@ public enum ParticipantPrepare {
         // prepared, nothing sequenced or written yet, never updated. On a
         // host with a local route, a run whose participant id is
         // `ollama-local` has `contextRunIds` too (section 20.3): a list of
-        // at most 256 distinct canonical lowercase UUIDv4 strings.
+        // at most 256 distinct canonical lowercase UUIDv4 strings. So does a
+        // run under the off-Mac pin on a host that pins it (section 21.2);
+        // a host pinning the revision-3 entry is revision 4 exactly.
         let localRun = local != nil && isString(run["participant"]?.objectValue?["id"], LocalRouteWire.participantId)
-        guard Set(run.keys) == (localRun ? preparedRunKeys.union(["contextRunIds"]) : preparedRunKeys),
+        let offMacRun = pin.isOffMac && isString(run["participant"]?.objectValue?["id"], ParticipantPin.claudeCodeId)
+            && isString(run["participant"]?.objectValue?["executionHost"], ParticipantPin.anthropicHost)
+        let contextRun = localRun || offMacRun
+        guard Set(run.keys) == (contextRun ? preparedRunKeys.union(["contextRunIds"]) : preparedRunKeys),
               run["version"] == .number(1), isString(run["phase"], "prepared"),
               run["lastSequence"] == .number(0), run["outputChunks"] == .array([]),
               sameValue(run["updatedAt"], run["createdAt"]) else { return .refused(.runNotPrepared) }
         var contextRunIds: [String] = []
-        if localRun {
+        if contextRun {
             guard let ids = contextIds(run["contextRunIds"]) else { return .refused(.runNotPrepared) }
             contextRunIds = ids
         }
@@ -218,10 +223,10 @@ public enum ParticipantPrepare {
             participant = named
         }
 
-        // A local run's earlier turns, resolved from this same record
-        // (section 20.3, after step 5).
+        // A local or off-Mac run's earlier turns, resolved from this same
+        // record (sections 20.3 and 21.2, after step 5).
         var turns: [(role: String, text: String)] = []
-        if localRun {
+        if contextRun {
             guard let ownIndex = elements.firstIndex(where: { $0.objectValue?["runId"]?.stringValue.map { ParticipantPin.sameBytes($0, claim.runId) } ?? false }),
                   let resolved = resolveContext(contextRunIds, in: elements, before: ownIndex, sessionId: claim.sessionId) else {
                 return .refused(.runMismatch)
@@ -245,10 +250,11 @@ public enum ParticipantPrepare {
         }
         // Section 17's first-trial bound is Claude Code's; a local run has
         // one limit instead, over its resolved context and its input
-        // together (section 20.3).
+        // together (section 20.3). An off-Mac run has both, each over its
+        // resolved context and its input together (section 21.4).
         let contextBytes = turns.reduce(0) { $0 + $1.text.utf8.count }
-        let bound = localRun ? ParticipantLimits.inputTotalBytes - contextBytes
-            : min(ParticipantLimits.inputTotalBytes, inputBound ?? ParticipantLimits.inputTotalBytes)
+        let bound = (localRun ? ParticipantLimits.inputTotalBytes
+            : min(ParticipantLimits.inputTotalBytes, inputBound ?? ParticipantLimits.inputTotalBytes)) - contextBytes
         guard inputBytes <= bound else {
             return .refused(.textTooLarge)
         }
@@ -263,7 +269,7 @@ public enum ParticipantPrepare {
             runId: claim.runId, sessionId: claim.sessionId, userMessageId: claim.userMessageId,
             assistantMessageId: claim.assistantMessageId, participant: participant, createdAt: claim.createdAt,
             inputHash: PayloadHash.hex(of: .array(chunks.map(JSONValue.string))), inputBytes: inputBytes, preparedBytes: preparedBytes,
-            context: localRun ? ParticipantRunContext(runIds: contextRunIds, bytes: contextBytes,
+            context: contextRun ? ParticipantRunContext(runIds: contextRunIds, bytes: contextBytes,
                                                       hash: ParticipantRunContext.hash(of: turns)) : nil
         ) else { return .refused(.malformedEnvelope) }
         return .passed(prepared)

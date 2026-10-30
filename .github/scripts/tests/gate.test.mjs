@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { evaluateCodexSignal, editedOnlyByCodex, dismissedByOwner, ownerAcceptance, CODEX_LOGIN, CODEX_BOT_LOGIN, OWNER_LOGIN } from '../codex-signal.mjs';
+import { evaluateCodexSignal, editedOnlyByCodex, dismissedByOwner, ownerAcceptance, CODEX_LOGIN, CODEX_BOT_LOGIN, OWNER_LOGIN, HUNG_AFTER_MS } from '../codex-signal.mjs';
 import { parseCodeowners, protectedFiles, ownerOpenedBlock, withOwnerOpenedHold } from '../codeowners.mjs';
 import { packagesToTest, listPackages, OWN_JOB } from '../package-changes.mjs';
 
@@ -670,4 +670,31 @@ test('triage: only an error reply from the API is unbilled (and releases the cla
   assert.equal(await billedError(judgeFindings({ findings: e.findings, apiKey: 'k', fetchImpl: async () => { throw new Error('network'); } })), true);
   const script = readFileSync(new URL('../codex-approved.mjs', import.meta.url), 'utf8');
   assert.match(script, /if \(!error\.billed\) await gh\.patch/);
+});
+
+test('owner note counts once Codex has shown the head as running for 30 minutes', () => {
+  const running = stateComment(HEAD, { status: 'running', at: '2026-10-15T02:00:00Z' });
+  const started = Date.parse('2026-10-15T02:00:00Z');
+  const input = (now, extra = []) => ({ headSha: HEAD, prAuthor: 'cloudwork-bot', now, comments: [running, note(`owner-accepts-findings ${HEAD}`), ...extra] });
+  assert.equal(evaluateCodexSignal(input(started + HUNG_AFTER_MS - 1000)).approved, false);
+  const r = evaluateCodexSignal(input(started + HUNG_AFTER_MS));
+  assert.equal(r.approved, true);
+  assert.equal(r.reason, `Owner accepted ${HEAD} while Codex's review of it hung.`);
+  // Without the note, a hung review still never approves.
+  assert.equal(evaluateCodexSignal({ headSha: HEAD, prAuthor: 'cloudwork-bot', now: started + 2 * HUNG_AFTER_MS, comments: [running] }).approved, false);
+});
+
+test('a hung review of another commit, a forged one, or the owner\'s own pull request does not let the note count', () => {
+  const later = Date.parse('2026-10-15T02:00:00Z') + 2 * HUNG_AFTER_MS;
+  const accept = note(`owner-accepts-findings ${HEAD}`);
+  const cases = [
+    { comments: [stateComment(OLD, { status: 'running' }), accept] },
+    { comments: [stateComment(HEAD, { status: 'running', user: impostor }), accept] },
+    { comments: [{ ...stateComment(HEAD, { status: 'running' }), edit_history: editedBy(botEditor) }, accept] },
+    { comments: [stateComment(HEAD, { status: 'running' }), accept], prAuthor: OWNER_LOGIN },
+    { comments: [stateComment(HEAD, { status: 'running' }), note(`owner-accepts-findings ${OLD}`)] },
+  ];
+  for (const c of cases) {
+    assert.equal(evaluateCodexSignal({ headSha: HEAD, prAuthor: 'cloudwork-bot', now: later, ...c }).approved, false, JSON.stringify(c.prAuthor ?? ''));
+  }
 });

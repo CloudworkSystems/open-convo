@@ -103,12 +103,16 @@ public enum ClaudeCheckDetail: String, Sendable, CaseIterable {
     /// An earlier check's file or process work outlived its 12 s bound and
     /// has not returned: nothing new is started.
     case stalled
-    /// Step 4 was not run: `auth status` could fetch server-managed settings
-    /// and run a helper they carry before any inspection sees it, and
-    /// nothing in 2.1.283 skips that fetch (Codex F34-D1; a probe-only proxy
-    /// held closed could make it fail, an option not built). Until the owner
-    /// and Codex decide (the D1 decision), production stops here.
-    case unguarded
+    /// Step 4 was not run: its network block (the owner's D1 decision)
+    /// could not be applied, because the system tool that applies it is
+    /// missing or is not a root-owned file only root can change. Without
+    /// the block, `auth status` could fetch server-managed settings and run
+    /// a helper they carry before any inspection sees it (Codex F34-D1).
+    case networkBlock = "network-block"
+    /// The login is a claude.ai plan other than Pro or Max (the owner's D1
+    /// decision): a Team or Enterprise plan can have server-managed
+    /// settings, so it is refused as `not-subscription`.
+    case planNotAccepted = "plan-not-accepted"
 }
 
 /// One check's log line: whether the result was reused, its result, and

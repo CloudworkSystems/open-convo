@@ -140,7 +140,8 @@ public struct StreamJSONReader {
 
     public struct Configuration: Equatable, Sendable {
         public var expectedInit: ParticipantInitExpectation
-        /// UTF-8 bytes of the run's input.
+        /// UTF-8 bytes of the run's input, an off-Mac run's context
+        /// included (sections 8 and 21.4).
         public var inputBytes: Int
         /// The prepared run's serialized size (section 6).
         public var preparedBytes: Int

@@ -9,7 +9,7 @@ import Foundation
 // the section 15 shape cannot exist in memory, and a stored one that does
 // makes the whole store corrupt.
 
-/// A local run's earlier turns, bound by hash and never kept as text
+/// A local or off-Mac run's earlier turns, bound by hash and never kept as text
 /// (contract section 20.3): the run ids in turn order, the resolved turns'
 /// text bytes, and SHA-256 of the canonical JSON array of those turns.
 public struct ParticipantRunContext: Equatable, Sendable {
@@ -73,7 +73,8 @@ public struct ParticipantPreparedRun: Equatable, Sendable {
     public let inputHash: String
     public let inputBytes: Int
     public let preparedBytes: Int
-    /// A local run's earlier turns (section 20.3); nil for any other run.
+    /// A local or off-Mac run's earlier turns (sections 20.3 and 21.2); nil
+    /// for any other run.
     public let context: ParticipantRunContext?
 
     /// Nil unless the run and message ids are canonical lowercase UUIDv4,
@@ -81,8 +82,9 @@ public struct ParticipantPreparedRun: Equatable, Sendable {
     /// case, `createdAt` a real `.mmmZ` time, `inputHash` 64 lowercase hex
     /// digits, `inputBytes` 1-262,144 (section 6 step 6) and
     /// `preparedBytes` 1-785,408 (step 7). A `context` comes exactly with
-    /// participant id `ollama-local`, never names the run itself, and with
-    /// the input stays within 262,144 bytes (section 20.5).
+    /// participant id `ollama-local` or the off-Mac pin (sections 20.5 and
+    /// 21.2), never names the run itself, and with the input stays within
+    /// 262,144 bytes.
     public init?(runId: String, sessionId: String, userMessageId: String, assistantMessageId: String,
                  participant: ParticipantPin, createdAt: String, inputHash: String, inputBytes: Int, preparedBytes: Int,
                  context: ParticipantRunContext? = nil) {
@@ -92,8 +94,7 @@ public struct ParticipantPreparedRun: Equatable, Sendable {
               WireTimestamp.isValid(createdAt), ParticipantRunText.isSHA256Hex(inputHash),
               (1...ParticipantLimits.inputTotalBytes).contains(inputBytes),
               (1...ParticipantLimits.preparedRunBytes).contains(preparedBytes) else { return nil }
-        let local = ParticipantPin.sameBytes(participant.id, LocalRouteWire.participantId)
-        guard local == (context != nil) else { return nil }
+        guard participant.carriesContext == (context != nil) else { return nil }
         if let context {
             guard !context.runIds.contains(runId), context.bytes + inputBytes <= ParticipantLimits.inputTotalBytes else { return nil }
         }
@@ -248,7 +249,7 @@ public struct ParticipantRunEntry: Equatable, Sendable {
     /// Null until a terminal; then true, false, or null when nothing was
     /// spawned. Only ever moves from false to true.
     public let groupCleared: Bool?
-    /// A local run's `contextRunIds`, `contextBytes` and `contextHash`
+    /// A local or off-Mac run's `contextRunIds`, `contextBytes` and `contextHash`
     /// (section 20.5); nil, and the keys absent, for any other run.
     public let context: ParticipantRunContext?
 
@@ -284,7 +285,8 @@ public struct ParticipantRunEntry: Equatable, Sendable {
 
     /// Strict: exactly the fourteen keys, each of its section 15 type and
     /// form, plus all three context keys or none (section 20.5); the context
-    /// keys appear exactly when `participant.id` is `ollama-local`. Anything
+    /// keys appear exactly when `participant.id` is `ollama-local` or the
+    /// participant is the off-Mac pin (section 21.2). Anything
     /// else is nil, which the store reads as corrupt.
     public init?(json: JSONValue) {
         guard let fields = json.objectValue else { return nil }
@@ -330,7 +332,7 @@ public struct ParticipantRunEntry: Equatable, Sendable {
     }
 
     /// The fourteen keys, nulls written out (as the vectors' `afterRuns`),
-    /// and a local run's three context keys.
+    /// and a local or off-Mac run's three context keys.
     public var jsonValue: JSONValue {
         var fields: [String: JSONValue] = [
             "runId": .string(runId),

@@ -4,7 +4,9 @@ name: owner-queue
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened, ready_for_review, closed]
+    # auto_merge_enabled and auto_merge_disabled keep the hidden auto-merge
+    # line current for the PR keeper between hourly runs.
+    types: [opened, synchronize, reopened, ready_for_review, closed, auto_merge_enabled, auto_merge_disabled]
   schedule:
     # Also catches the owner's approvals; pull_request_review is left out
     # because it would run the pull request's copy of this file.
@@ -31,7 +33,7 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/scripts
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - run: node .github/scripts/owner-queue.mjs

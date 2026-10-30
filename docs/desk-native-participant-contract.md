@@ -11,6 +11,19 @@ Revision 4 (October 15, proposed) adds local models through Ollama in
 section 20; it changes nothing for the Claude Code entry or the existing
 vectors.
 
+Revision 5 (October 29, proposed) prepares the Claude Code adapter in
+section 21: the off-Mac pin, context for Claude runs, the stdin layout, the
+`host-not-approved` reason and a new vectors file. It changes no existing
+vector, and nothing in it is turned on.
+
+The adapter build's PR 3a (October 29, proposed) closes four of section
+18's pre-activation items in native code and tests, invented data only:
+reply-time stale suppression on the path with no lane (section 3), the
+combined renderer proof (section 7), the named conformance of the nine
+required `pageCases` (section 19) and the shared opaque-handle rule. No wire
+or vector changed. The combined proof needs a built Desk page
+(`TRUECONVO_DESK_BUNDLE`) to run; section 18 item 2 says where it ran.
+
 Status: Claude's proposed wire, revision 2 (October 10). It applies Codex's
 review of a4165ef: four corrections and its answers to the twelve decisions
 (section 18). Revision 3 (October 10, later) rewrites section 17 for
@@ -268,18 +281,26 @@ a lane, native itself drops what has gone stale, whatever the page would do.
   later check, and comes after the lane's or the host's hop), which echoes
   only that old request's own identifiers and a reason. The coordinator
   keeps no availability answer, so nothing there can be reused either.
-- Open item (the path with no lane, which is the app as
-  shipped; unchanged here): every reply goes back to the promise that asked
-  with no native check, and by the observation above WebKit does not
-  reliably drop it once the document is gone. A v1 answer computed across a
-  reload, a `workspace.read` with workspace content included, can therefore
-  reach the old document's callback running against the new document's
-  `window`. The current page's transport discards answers after it is
-  disposed, the old realm's state is not the new page's, and it is the same
-  origin and the same person, so the risk is low. Codex's S11 review ruled
-  (ruling (a)) that this path gets native reply-time stale suppression, as
-  a scoped follow-up; WebKit's disposal is not its safety argument. It is
-  still open (section 18).
+- The path with no lane (the app as shipped; Codex's S11 ruling (a), built
+  in the adapter's PR 3a). Before PR 3a every reply went back to the
+  promise that asked with no native check, so a v1 answer computed across a
+  reload, a `workspace.read` with workspace content included, could reach
+  the old document's callback running against the new document's `window`.
+  Now the same reply-time check runs on every v1 reply: a request admitted
+  while its connection is valid gets its answer only if, when the answer is
+  ready (on the main thread, in the same turn as the reply), that
+  connection is still valid and the host is neither locked nor closed;
+  otherwise the promise gets only the content-free
+  `host-transport-failure`. There is no lane epoch on this path: a lock or
+  close marks the host on the main thread before its step revokes
+  anything, so the host's flags carry it. Correct replies to the live
+  document are unchanged, and a request that named a connection already
+  gone still gets v1's identifier-only preflight refusal. The safety
+  argument is this check, not WebKit's disposal. Tests
+  (`ParticipantLaneWiringTests`, "Without a lane") hold a computed
+  `workspace.read` answer, invented record included, across a reload and
+  across a lock and a window close whose steps are held before they revoke
+  anything.
 - Pushes. A `participant.event` is delivered only if, on the main thread at
   delivery, its connection and generation are the live document's own valid
   connection (the host's current connection, the one its committed document
@@ -369,16 +390,18 @@ omits the key.
 
 Checks are local: the pinned file, `claude --version` and the settings
 sources below; the design adds `claude auth status` (account fields dropped
-in memory), which production does not run until the D1 decision (step 4,
-below). No model
+in memory), which production runs only with its network blocked (the
+owner's D1 choice; step 4, below). No model
 request, billing read or provider probe; no configured key, refresh, proxy,
 headers or policy helper is ever run; the app never reads the CLI's own
-Keychain item. That guarantee holds as built only because production never
-runs `claude auth status` until the D1 decision (Codex F34-D1, below): for an
-account the CLI treats as eligible for server-managed settings, that command
-can fetch new settings and run a policy helper they name before any
-inspection can see it. Nothing in 2.1.283 skips that fetch for an eligible
-account, and no check beforehand can tell whether the account is eligible.
+Keychain item. That guarantee holds as built only because production runs
+`claude auth status` with every network operation denied (Codex F34-D1, the
+owner's D1 choice, below): for an account the CLI treats as eligible for
+server-managed settings, that command could otherwise fetch new settings and
+run a policy helper they name before any inspection can see it. Nothing in
+2.1.283 skips that fetch for an eligible account, and no check beforehand
+can tell whether the account is eligible; so the block stops the fetch, and
+only Pro and Max plans, which the reading says are not eligible, pass.
 By the same byte reading, a proxy address given to that probe alone and
 held closed by the app would make the fetch fail; that is one of the D1
 options, not built. Each subprocess runs under section 11's environment rule (the
@@ -520,7 +543,8 @@ probe's own count of paths outside its folder (Codex F4-1, F34-2). In order:
    An unresolved source stops the checks before `auth status` (no auth
    command runs while a startup override cannot be ruled out), so it can
    hide a later `signed-out` or `not-subscription`.
-4. **Not run in production until the D1 decision (Codex F34-D1;
+4. **Run in production only with its network blocked (the owner's D1
+   choice, October 29, 2026, option 1; Codex F34-D1;
    `docs/reviews/2026-10-12-claude-f34-d1-decision.md`, a True Convo review record, not moved).** A byte reading of
    2.1.283 (never run) shows that `auth status` starts a background fetch of
    server-managed settings for an eligible account (a Team, Enterprise or
@@ -531,23 +555,65 @@ probe's own count of paths outside its folder (Codex F4-1, F34-2). In order:
    Nothing in that build skips the fetch for an eligible account (the
    essential-traffic switch is not consulted; the settings-path and mock
    overrides are compiled out), and eligibility depends on the plan in the
-   CLI's Keychain login, which the app never reads. Making the fetch fail is
-   another matter: by the same reading, a proxy address set for this probe
-   only (`HTTPS_PROXY` and `HTTP_PROXY`), on a loopback port the app holds
-   and refuses, takes every route the fetch can travel, with no direct
-   fallback, while `auth status --json` still answers from local data. It
-   covers the probe, not the run, and is not built: it is option 2 of the
-   decision. So production (`ClaudeLocalChecks`'s
-   public initializer) stops here: after every earlier check passes, step 4
-   is `check-failed` (log `source=remote-settings detail=unguarded`) and the
-   command never runs; earlier failures still win. Only the test target and
-   the test-only probe can run it, over invented trees and the fake CLI (a
-   source scan holds that), and what follows describes that path, kept for
-   whichever option is decided. The same reading says the run itself, for an
-   eligible account, can fetch and run such a helper too; the decision
-   covers it.
+   CLI's Keychain login, which the app never reads. So production
+   (`ClaudeLocalChecks`'s public initializer) runs the probe under macOS's
+   sandbox with its network use denied: it spawns the system's
+   `/usr/bin/sandbox-exec -p "(version 1)(allow default)(deny network*)
+   (deny mach-lookup …)"` followed by the pinned file and
+   `auth status --json`. The tool replaces
+   itself with the pinned file (same process, same group, section 11's
+   environment and folder), and the block covers everything the probe
+   starts: IP and local sockets alike, outbound, inbound and bind, so the
+   settings fetch cannot open a connection and no new payload arrives. A
+   host name lookup would leave the Mac through a system service rather
+   than a socket, so the profile also denies looking up the DNS service
+   (`com.apple.dnssd.service`; the resolver's other route, the
+   `/var/run/mDNSResponder` socket, is already denied) and the services
+   that fetch or open a URL on a process's behalf
+   (`com.apple.nsurlsessiond`, `com.apple.coreservices.launchservicesd`).
+   The tests show, on the Mac runner, that under the block the fake CLI
+   finds none of those services and cannot open a connection to the DNS
+   resolver, and that without it the same fake connects and finds every
+   one (so no name on the list is a typo). Names the Mac answers from its own hosts file, such as
+   `localhost`, still resolve under the block (the tests saw it), without
+   anything leaving the Mac. Other system services stay allowed, so the CLI
+   still reads its own login from the Keychain. One that fetches on request
+   and is not on that list would be a gap the narrower promise below
+   accepts: the certificate service (`trustd`, which can fetch revocation
+   and issuer URLs named in a certificate it is handed; denying it could
+   break the Keychain and code signing, so it is not denied without a test
+   against the real CLI), WebKit's networking service, and Apple Events to
+   a browser (which macOS asks the user about first). The CLI uses none of
+   them for `auth status` by the same reading, and a helper that might
+   comes only from a payload, which can no longer arrive (a cached one is
+   step 3's). Before
+   it is used, the tool must be what the pinned file must be (section 5
+   step 1), owned by root: not a link, a regular executable file with no
+   group or other write and no setuid or setgid bit, in a root-owned folder
+   (not a link) no one else can write. Otherwise, after every earlier check
+   passes, step 4 is `check-failed` (log `source=auth-status
+   detail=network-block`) and the command never runs; earlier failures
+   still win. If a macOS update removes the tool, the checks fail closed
+   this way and the participant reads as unavailable (`check-failed`), not
+   as a bug. Apple marks the tool deprecated, so the tests run it on the
+   Mac CI runner each time: under the block the fake CLI's connects to a
+   TCP listener on loopback and to a local socket both fail, and without it
+   they succeed. Only Pro and Max plans pass (below), which the reading says
+   never fetch, so the block is a second wall for them, not the only one.
 
-   `auth status --json` (tests and the test-only probe only): exit 0 or 1 and one JSON object whose read fields
+   **The narrower promise this choice accepts.** The checks see the Mac as
+   it is when they run. A Team or Enterprise login, a profile login or a
+   stored key signed in after the check and before a run, or a settings
+   helper added in that gap, is not caught by the check; the run itself is
+   not network-blocked (it needs Anthropic), so for that run the fetch and
+   the helper the reading describes could happen. Section 17's recheck at
+   start narrows the gap to the moments between that recheck and the spawn;
+   it does not close it. Production code and this contract claim nothing
+   more.
+
+   `auth status --json` (network-blocked in production; run directly only
+   by the tests and the test-only probe, over invented trees and the fake
+   CLI, which a source scan holds): exit 0 or 1 and one JSON object whose read fields
    have their types (`configDirectory` included: the reading says it is
    always present), `loggedIn` true exactly when exit 0. Then, in order:
    `provider-override` for any `apiKeySource` (so a stored Console key,
@@ -558,9 +624,10 @@ probe's own count of paths outside its folder (Codex F4-1, F34-2). In order:
    config folder the checks did not inspect, which catches a
    `CLAUDE_CONFIG_DIR` or `HOME` redirect the sources did not show (Codex
    F3-1); `signed-out` when logged out; `not-subscription` for a claude.ai
-   login with no `subscriptionType`; an unknown method or plan (known:
-   `pro`, `max`, `team`, `enterprise`), no account, or any other shape is
-   `check-failed`. Only the plan and the comparator are kept; email,
+   login with no `subscriptionType`, and for a `team` or `enterprise` plan
+   (detail `plan-not-accepted`, the owner's D1 choice: only Pro and Max
+   pass); an unknown method or plan (known: `pro`, `max`, `team`,
+   `enterprise`), no account, or any other shape is `check-failed`. Only the plan and the comparator are kept; email,
    organization and the output are dropped in memory.
 
 Each probe (answer 10) runs the pinned file directly, not through the
@@ -617,11 +684,12 @@ the shapes are F1's predictions, unconfirmed by a run, so the first real
 check may answer `check-failed`; the run itself, for an account the CLI
 treats as eligible, may still fetch server-managed settings at its own start,
 after the check, and run a policy helper they name (the D1 reading); and
-`auth status`, were it run, could do the same inside the probe, applying a
-new payload that needs consent in memory only, so the second inspection
-could not even see it (Codex F34-9 and F34-D1: why production does not run
-it, and the options, are in the D1 decision); were `auth status` or the run
-started, the CLI would also run, at its start, a policy helper named in a
+`auth status`, run without its network blocked, could do the same inside
+the probe, applying a new payload that needs consent in memory only, so the
+second inspection could not even see it (Codex F34-9 and F34-D1: why
+production blocks its network, and the options, are in the D1 decision);
+the block depends on Apple's deprecated `sandbox-exec`, retested on each
+macOS version; were `auth status` or the run started, the CLI would also run, at its start, a policy helper named in a
 local managed source that another program (the user's own Claude Code
 session writing newly fetched server-managed settings, say) changed after
 the inspection: the second inspection detects that, it does not prevent it,
@@ -641,8 +709,9 @@ module, and F2's packaged evidence, stay byte-identical.
 
 **The report with section 17's owner, as built (plan F4, October 11;
 inactive; the R4 fix of October 12 awaiting Codex's re-review of the combined
-F3+F4 candidate).** Over the public `ClaudeLocalChecks` it can never answer
-`available` until the D1 decision, since those checks stop at step 4.
+F3+F4 candidate).** Over the public `ClaudeLocalChecks` (step 4
+network-blocked since the D1 choice) it answers `available` only as below,
+and a new launch never does: it starts `unconfirmed`.
 `PaidUsageConfirmationOwner` (`ParticipantProcess`) is the reporter a host
 with section 17 built uses; nothing in the app constructs it, and the release
 app keeps `ShippingAvailability` and links neither module. `report()` asks the
@@ -2546,14 +2615,13 @@ which named the supervisor helper, the recovery-only port and the nine
 Still open, by name:
 
 1. Reply-time stale suppression on the path with no lane (Codex's S11
-   ruling (a); section 3). Native adds a reply-time stale check to the v1
-   path as a scoped follow-up, whose safety argument is not WebKit's
-   disposal. It keeps correct replies and identifier-only refusals, and
-   its tests hold v1 content across reload, lock and close. Codex's ruling
-   is that it is tracked explicitly before that path is extended to private
-   persistent work. Native's own proposal, a question for Codex (native's
-   pre-activation questions, 27(a)), is stricter: until it lands, that
-   path is not extended to private persistent work.
+   ruling (a); section 3). Built in the adapter's PR 3a, awaiting its
+   review: the v1 path runs the same reply-time check as the lane's, with
+   the host's lock and close flags and no lane epoch. It keeps correct
+   replies and identifier-only refusals, and its tests hold v1 content (a
+   `workspace.read` record) across reload, lock and close. Until that
+   review passes, native's stricter proposal (27(a)) still holds: the path
+   is not extended to private persistent work.
 2. The combined renderer proof (Codex's S10 ruling 1 and S11 ruling (c);
    section 7), required before participant activation. With the real page,
    the real coordinator and invented data: hold a Start before step 14,
@@ -2563,7 +2631,23 @@ Still open, by name:
    explicit Start succeeds once with the retained prepared identity. It
    runs on the combined page, including main's NF-1 and the reviewed
    NF-2/NF-3 changes when they are available. The existing streaming-lock
-   proof (section 14, S11 reading 9) does not exercise it.
+   proof (section 14, S11 reading 9) does not exercise it. Written in the
+   adapter's PR 3a as the second test in `ParticipantDeskEndToEndTests`:
+   the start is held at step 13's availability recheck, the menu lock
+   lands, the start is refused `store-locked` with nothing written and its
+   answer dropped by native, the fresh document after the unlock restores
+   the run and nothing launches or records a start through 20 seconds (more
+   than the page's 15-second quiet poll), and then the page's own "Start
+   prepared message" launches the same prepared run once, with its
+   preparation unchanged. Like the first proof it needs
+   `TRUECONVO_DESK_BUNDLE`; the pull request records the page commit it
+   ran against. Its first run on CI found a page fault: when the quiet
+   poll's status read was still out as the person pressed Start, the
+   restored controller skipped Start's own fresh read and did nothing, so
+   the first click was lost (nothing launched; a second click started the
+   run once). PR 3a fixes the controller: Start lets the earlier read
+   settle, then reads again, and only that read can authorize it. A page
+   test covers the race, and the proof now takes exactly one click.
 3. The activation work still ahead. None of it is done, and these source
    reviews grant no permission for installation, Keychain creation,
    signing, provider calls or extra usage:
@@ -2616,18 +2700,28 @@ Still open, by name:
    the port directly without a controller or a final expected-state check.
    The harness uses an in-memory NativeHostTransport and EventTarget, not
    WKHostTransport, WKWebView or DeskHost. Swift counts and walks pageCases;
-   that walk does not execute the page controller.
+   that walk does not execute the page controller. Named conformance
+   (the adapter's PR 3a): the page-cases test now lists each of the nine by
+   name with the tests that execute it (the matrix test of the same name;
+   cases 13 and 15 also their adapter checks) and fails if that list and
+   the fixture's `requires` cases ever differ. These tests run in the
+   `tests` check on main, which is the combined candidate F9 was to
+   consume; the `requires` text stays as the record of the renderer change
+   each case first needed. Closed once PR 3a's review passes.
 5. One shared opaque-handle rule (Codex's S7 review, inbox 68524fc3, report
    8032ddb, open item 1; kept, not waived, by the S8 review, inbox
    59dfb711, report 6e003da): byte equality, as a small separate reviewed
    change with ASCII-compatibility tests and canonically equivalent,
    different-byte examples, and no silent normalization of stored handles.
-   Not done: v1's workspace-handle checks still compare with Swift's `==`,
-   which treats canonically equivalent text as equal, while the
-   participant path compares exact bytes. Today's `ws-<uuid>` handles are
-   ASCII, so nothing differs now. Whether it ships with the protected store
-   or must come first is a question for Codex (native's pre-activation
-   questions, 27(b)).
+   Built in the adapter's PR 3a, ahead of the protected store (27(b)):
+   `OpaqueHandle.same` (UTF-8 byte equality) is now the one comparison for
+   `workspaceHandle` in v1's checks, the binding check, the store's load
+   check and the coordinator. `OpaqueHandleTests` covers ASCII handles,
+   canonically equivalent pairs with different bytes (composed and
+   decomposed "é", the Kelvin sign and "K", the Angstrom sign and "Å") on
+   every v1 operation and the byte path, and a store reopen that keeps the
+   stored bytes. Today's `ws-<uuid>` handles are ASCII, so nothing changes
+   for them.
 
 ## 19. Vectors file
 
@@ -3085,3 +3179,161 @@ with a local route:
   carries no conversation text; and a bind that fails its check deletes the
   alias, after which the start's own cleanup asks once more (Ollama answers
   404).
+
+## 21. Revision 5: the Claude Code adapter (proposed, October 29)
+
+In plain words: the Claude Code entry gets its real name and says plainly
+that a conversation sent to it leaves the Mac for Anthropic. Like a local
+model, it continues a conversation by sending earlier turns as context, and
+availability says when the owner has not yet approved sending to Anthropic.
+Scope and order: [docs/plans/claude-code-adapter.md](plans/claude-code-adapter.md)
+(this is its PR 2). Sections 1-20 stay in force; this section only adds. A
+host that pins the revision-3 entry (below) is revision 4 exactly, and every
+existing vector, in `native-participant-v1.json` and
+`native-participant-local-v1.json`, stays byte-identical. Nothing here is
+turned on: the Mac host follows in the adapter's PR 3 and the Desk wiring in
+PR 4, and until both trials have passed only invented text goes to Claude
+(the plan's safety model, item 7).
+
+### 21.1 The off-Mac pin
+
+- A revision-5 host pins the Claude Code entry as `{id: "claude-code",
+  label: "Claude", model: <the pinned model>, executionHost: "anthropic"}`.
+  `executionHost` `anthropic` says where the conversation is processed: the
+  CLI runs on this Mac, but what it is sent leaves the Mac. The pinned model
+  is chosen by the owner at the adapter's PR 3c (the plan's question 7):
+  on October 29, 2026 he chose `claude-sonnet-5-5` (Sonnet 5.5), one model
+  per app build, with a per-conversation model menu left for a later plan
+  revision. The app's lane pins it from PR 3c, still never available. The
+  vectors use `invented-pinned-model`.
+- The revision-3 pin (`label` `Claude Code`, `executionHost` `this-mac`, as
+  in section 19's vectors) stays a valid entry for a revision-4 host, and
+  saved runs prepared under it keep their identity (section 15). It never
+  carries context (21.2) or `host-not-approved` (21.4). No host pins both.
+- The page never words a `claude-code` entry or run as staying on this
+  Mac, whatever its `executionHost`. Its picker line is "Claude · <model> ·
+  Anthropic (not on this Mac)" and, above the composer, "Sends this message
+  and N earlier turns to Anthropic." (wired in the adapter's PR 4a). None of
+  that text goes in the pin, which is compared exactly at preparation and
+  start; section 17's wording rule still holds.
+
+### 21.2 Context for Claude runs
+
+- Section 20.3 applies to a run whose participant is the off-Mac pin,
+  unchanged: the prepared run has section 6's twelve keys plus
+  `contextRunIds` (possibly empty, at most 256 distinct lowercase v4 ids,
+  oldest first); native resolves each id in the same request's record
+  (same `sessionId`, phase `completed`, earlier in `conversationRuns`, else
+  `run-mismatch`); the runs entry stores `contextRunIds`, `contextBytes`
+  and `contextHash`, never context text; and at start native resolves them
+  again from the committed record and recomputes the hash, sending nothing
+  on any difference (`run-mismatch`).
+- Section 6 step 5 for such a run is unchanged: `run.participant` and
+  `participantId` must equal native's current Claude Code pin. Step 3
+  allows the thirteenth key exactly when the participant is the off-Mac
+  pin or a local entry. A run under the revision-3 pin with
+  `contextRunIds`, or an off-Mac run without it, is `run-not-prepared` at
+  step 3 (the page refuses both before preparing).
+- A context run may have been answered by any participant of the same
+  session: a local model or Claude. The wire carries either answer to the
+  plan's question 4 (may one conversation mix local and Claude turns?); the
+  page decides which earlier runs to name, and the line above the composer
+  counts them, so a turn that stayed on the Mac is never sent without the
+  owner seeing that it will be.
+- Load invariants (section 20.5) widen to match: the three context keys
+  appear together, exactly on entries whose `participant` is a local entry
+  or the off-Mac pin.
+
+### 21.3 Stdin layout
+
+Section 11's argv and environment are unchanged (`-p`, plain-text stdin,
+no tools). What native writes to stdin, in UTF-8, before closing it:
+
+- With no context runs: exactly the new message, `join(inputChunks)`, as in
+  revision 3.
+- Otherwise, in this one fixed layout, with `\n` line endings:
+
+  ```
+  <preamble>\n\n
+  [earlier user turn, <n> bytes]\n<text>\n\n
+  [earlier assistant turn, <n> bytes]\n<text>\n\n
+  ... (two parts per context run, oldest first) ...
+  [new message, <n> bytes]\n<join(inputChunks)>
+  ```
+
+  `<preamble>` is exactly: "The earlier turns of this conversation follow,
+  oldest first, then the new message. Each part starts with a line in
+  square brackets naming it and the exact length of its text in UTF-8
+  bytes. Reply only to the new message." `<n>` is the decimal UTF-8 byte
+  count of the text that follows the header's newline, not counting the
+  newlines after it. The turns are exactly the ones native just hashed
+  (20.3), user then assistant for each run.
+- Limit, stated plainly: the model reads this as text. A turn whose text
+  contains a line that looks like a header can mislead the model about
+  where a turn ends; the byte counts are authoritative for any program, not
+  for the model. With no tools there is nothing such a line can make the
+  CLI do; at worst the reply misreads the conversation. The text is the
+  owner's own earlier messages and replies from the same session.
+- The vectors' `stdinLayouts` give the exact bytes for invented turns; the
+  launcher (PR 3c) produces them byte for byte, and native's preparing
+  checks count them against the first-trial bound as each entry says
+  (`ClaudeVectorTests`). At start native resolves and hashes the turns
+  again before step 13's recheck (`run-mismatch` on any difference, nothing
+  written or sent), and the launch hands the launcher exactly those turns.
+
+### 21.4 Bounds and approval
+
+- **Input bound.** Section 17's first-trial bound (4,096 UTF-8 bytes) and
+  section 6 step 6's 262,144 count the resolved turns' text plus the new
+  message, as 20.3 does, at preparation and again at start (section 7 step
+  11): `text-too-large`, nothing sent. The layout's own header lines are not
+  counted. The page (wired in PR 4a) counts the same way before preparing
+  and leaves out the oldest whole runs until it fits; it never cuts a turn. Raising the bound
+  to 32,768 is the plan's question 3, for the owner, after the fake-CLI
+  proofs pass. Section 8's `reply-too-long` counts `contextBytes +
+  inputBytes + output` against 262,144, as 20.4 does for a local run.
+- **`host-not-approved`.** A new availability reason, for the off-Mac pin
+  only: the owner has not approved sending to Anthropic (the plan's
+  "Approve Anthropic once" screen, in the app's own window, saved in the
+  protected store and revocable). Display only: the approval is never a
+  page input, never part of the pin, the saved choice or any identity, and
+  the page can neither give nor withdraw it. It is checked after every
+  local check passes and before section 17's confirmation, so its place in
+  section 5's order is just before `overflow-unverified`; an earlier
+  failing check wins, and `check-failed` keeps its meaning at any point. A
+  confirmation may still be reported as `active` beside it (the approval
+  was withdrawn after confirming); `available` stays false. At start, step
+  13's availability recheck refuses a run without the approval as
+  `participant-unavailable` before anything is spawned, so no new refusal
+  reason is added. A revoked approval stops the next spawn, never a run
+  already under way (Stop does that).
+- Preparing a run (section 6) never needs the approval: nothing leaves the
+  Mac until a start passes step 13.
+
+### 21.5 Section 5 step 4 (the D1 choice)
+
+The owner chose option 1 on October 29, 2026: `claude auth status` runs
+with macOS blocking all its network use, and only Pro and Max plans pass.
+Section 5 step 4 says how (built in the adapter's PR 3b, still inactive:
+nothing constructs the checks outside the tests and the test-only probe)
+and states the narrower promise the choice accepts. The off-Mac pin is
+still never available, since `overflow-unverified` comes after every local
+check, which is what the page shows.
+
+### 21.6 Vectors
+
+A separate file, `native-participant-claude-v1.json`, beside sections 19 and
+20's files and in their format: page-level availability and start cases for
+the off-Mac pin, replies the page codec must refuse, prepared runs that
+carry context (and the revision-3 and mismatched shapes it must refuse), and
+`stdinLayouts` (`{name, turns, message, stdin, contextBytes, inputBytes,
+countedBytes, firstTrialBound, withinFirstTrialBound}`), with the preamble
+in `context.stdinPreamble`. The page codec runs all of them now. The
+fake-CLI host cases (overflow held and released, overflow signal, tools in
+init, a provider override, an oversize reply, Stop before and after the
+first piece, lock, supervisor loss) join this file in section 19's seeded
+form in PR 3d, with the approval state behind `host-not-approved`, and the
+Swift harness runs them there; the page-level cases above run in Swift
+then too. The tools refusal is proved in PR 3c against the real supervisor
+and the fake CLI, with and without earlier turns. Every one of these passes
+before PR 4b turns anything on.

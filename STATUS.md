@@ -46,6 +46,11 @@ chats only). Scope:
 | Part | State |
 | --- | --- |
 | PR 1: Scope | Merged (#75) |
+| PR 2: Contract revision 5 and the page codec (invented chats only; started on the owner's yes, October 28) | Merged (#181) |
+| PR 3a: Close the contract's pre-activation items (stale replies without a lane, the combined renderer proof, the shared handle rule, the nine page cases; inactive) | Merged (#188) |
+| PR 3b: Availability for real: the sign-in check with its network blocked by macOS, Pro and Max only (the owner's D1 choice, October 29; inactive). It relies on macOS's deprecated `sandbox-exec`: if an update removes it, Claude reads as unavailable (`check-failed`, `network-block`), not as a bug. Retest the denied services on each major macOS release before relying on the block there | Merged (#195) |
+| PR 3c: Context and launch: Claude runs take earlier turns (a local model's or Claude's) in the contract's fixed stdin layout, checked against the first-trial bound and resolved again at start; the app's lane pins Claude to Sonnet 5.5, the owner's choice of October 29; still never available, and the app's launcher still refuses | In review |
+| PR 3d: The approval state (`host-not-approved`) and the fake-CLI host cases in the Claude vectors file, run by the Swift harness; split from 3b and 3c to keep each review small. Must pass before PR 4b | Not started |
 
 ## Done
 
@@ -57,7 +62,8 @@ chats only). Scope:
   Desk-to-Mac specs, Ember brand, load alarm, four module concept notes.
 - **Design notes written:** agent profiles and adapters, Convo Engine, Site
   Engine, Visibility Agent, capabilities and primitives, Sage, durable agents,
-  portable capability layer, agents speak for themselves.
+  portable capability layer, agents speak for themselves, Atlas wiki and
+  status lines on Canvas.
 
 ## Next
 
@@ -140,6 +146,12 @@ October 21 (OC-261021-owner-accepts-findings): the owner can accept the
 remaining Codex findings on one exact head commit: post a comment containing
 only this line, `owner-accepts-findings <full head sha>`. Any other text in
 the comment makes it not count. It satisfies only `codex-approved`.
+October 29 (risk review, [docs/plans/risk-review.md](docs/plans/risk-review.md)):
+`codex-approved` also holds a pull request that adds an outside host, a
+dependency, a Mac permission or a key name until the owner approves it
+(`.github/risk-allowlist.json` lists what he has already accepted), and every
+independent review ends with the privacy and security checklist. Code pull
+request in review; Built once the first real hold and checklist have run.
 
 **Building faster** (more outside modules, parallel lanes, a dogfooding
 cadence): approved by the owner October 21. The limit of three outside

@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs';
 import { client, repoFromEnv } from './github.mjs';
 import { evaluateCodexSignal, CODEX_LOGIN, OWNER_LOGIN } from './codex-signal.mjs';
 import { parseCodeowners, ownerOpenedBlock, withOwnerOpenedHold } from './codeowners.mjs';
+import { applyRiskHold, readAllowlist, withRiskHold } from './risk-check.mjs';
 import { triageEligibility, triagePasses, alreadyClaimed, claimComment, releasedComment, judgeFindings, verdictComment, ACTIONS_LOGIN } from './codex-triage.mjs';
 
 const CONTEXT = 'codex-approved';
@@ -64,11 +65,14 @@ async function withEditHistory(comments) {
   return comments.map((c) => ({ ...c, edit_history: history.get(c.node_id) ?? null }));
 }
 
-// CODEOWNERS from the default branch, never the pull request's copy.
+// CODEOWNERS and the risk allowlist from the default branch, never the pull
+// request's copies.
+let defaultBranch;
+const defaultRef = async () => (defaultBranch ??= (await gh.get(base)).default_branch);
 let ownerRules;
 async function codeownersRules() {
   if (!ownerRules) {
-    const { default_branch: ref } = await gh.get(base);
+    const ref = await defaultRef();
     const file = await gh.get(`${base}/contents/.github/CODEOWNERS?ref=${encodeURIComponent(ref)}`);
     ownerRules = parseCodeowners(Buffer.from(file.content, 'base64').toString('utf8'));
   }
@@ -125,6 +129,7 @@ async function triage({ number, pr, comments, reviews, dismissals, reason, mayJu
   return { approved: false, reason };
 }
 
+let allowlist;
 async function check(number, mayJudge) {
   const pr = await gh.get(`${base}/pulls/${number}`);
   if (pr.state !== 'open') return;
@@ -148,7 +153,19 @@ async function check(number, mayJudge) {
   const blocked = ownerOpenedBlock({ prAuthor: pr.user?.login, files, rules: await codeownersRules(), complete });
   let result = evaluateCodexSignal({ headSha: pr.head.sha, prAuthor: pr.user?.login, comments, reviews, reactions, dismissals });
   if (!result.approved && !blocked) result = await triage({ number, pr, comments, reviews, dismissals, reason: result.reason, mayJudge });
-  const { approved, reason } = withOwnerOpenedHold(result, blocked);
+  // The risk hold (docs/plans/risk-review.md), after the owner-opened hold,
+  // which already makes the pull request wait. A scan that can't finish holds.
+  let risk = null;
+  if (!blocked) {
+    try {
+      allowlist ??= await readAllowlist({ gh, repoBase: base, ref: await defaultRef() });
+      risk = await applyRiskHold({ gh, repoBase: base, pr, comments, reviews, allowlist });
+    } catch (error) {
+      console.error(`#${number}: risk check failed: ${error.message}`);
+      risk = 'Risk check could not finish; it runs again on the next run';
+    }
+  }
+  const { approved, reason } = withOwnerOpenedHold(withRiskHold(result, risk), blocked);
   const state = approved ? 'success' : 'pending';
 
   const current = await gh.get(`${base}/commits/${pr.head.sha}/status`);

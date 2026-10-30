@@ -30,10 +30,12 @@ public enum LocalConversationLane {
         identity.kind == .test && identity.bundleIdentifier == AppIdentity.testBundleIdentifier
     }
 
-    /// The Claude Code entry as availability names it until the Claude Code
-    /// adapter exists: never available, never offered in the picker.
-    static let claudePin = ParticipantPin(id: "claude-code", label: "Claude Code", model: "not-connected",
-                                          executionHost: "this-mac")!
+    /// The Claude Code entry: the off-Mac pin of contract section 21.1, with
+    /// the model the owner chose for the adapter's PR 3c (October 29, 2026).
+    /// Still never available and never offered in the picker: availability
+    /// stays shipping's, and the launcher behind it refuses.
+    static let claudePin = ParticipantPin(id: "claude-code", label: "Claude", model: "claude-sonnet-5-5",
+                                          executionHost: "anthropic")!
 
     /// The coordinator the factory builds, with `route` as the local route
     /// (the real `OllamaClient` at the fixed loopback base in the app; a
@@ -47,10 +49,12 @@ public enum LocalConversationLane {
     }
 }
 
-/// The Claude Code side of the lane until its adapter exists: every launch
-/// is refused, so nothing is spawned. Unreachable behind availability (a
-/// start's step 13 recheck answers `participant-unavailable` first); this is
-/// the second barrier.
+/// The Claude Code side of the lane until the adapter is turned on (its PR
+/// 4b): every launch is refused, so nothing is spawned. Unreachable behind
+/// availability (a start's step 13 recheck answers `participant-unavailable`
+/// first); this is the second barrier. The production launcher takes an
+/// off-Mac run's context (section 21.3) but is built only in the tests: its
+/// init expectation is section 16's values, recorded at the live check.
 struct ClaudeNotConnected: ParticipantLaunching {
     struct Refused: Error, Equatable {}
 

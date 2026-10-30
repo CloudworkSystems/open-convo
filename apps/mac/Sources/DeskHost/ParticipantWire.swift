@@ -67,6 +67,25 @@ public struct ParticipantPin: Equatable, Sendable {
         lhs.utf8.elementsEqual(rhs.utf8)
     }
 
+    /// The Claude Code entry's id, and its revision-5 pin's `executionHost`
+    /// (section 21.1): the CLI runs on this Mac, but what it is sent leaves
+    /// the Mac for Anthropic.
+    public static let claudeCodeId = "claude-code"
+    public static let anthropicHost = "anthropic"
+
+    /// The off-Mac pin (section 21.1): `claude-code` whose `executionHost`
+    /// is `anthropic`. The revision-3 pin (`this-mac`) is not.
+    public var isOffMac: Bool {
+        Self.sameBytes(id, Self.claudeCodeId) && Self.sameBytes(executionHost, Self.anthropicHost)
+    }
+
+    /// A run under this participant carries `contextRunIds`: a local
+    /// model's (section 20.3) and the off-Mac pin's (section 21.2), as the
+    /// page's `carriesContext` decides. Never the revision-3 pin's.
+    public var carriesContext: Bool {
+        Self.sameBytes(id, LocalRouteWire.participantId) || isOffMac
+    }
+
     /// Nonblank as the page's `String.prototype.trim` sees it, and at most
     /// `maxFieldBytes` UTF-8 bytes. A Swift string holds no unpaired
     /// surrogate, so its UTF-8 count is the byte count the page measures.

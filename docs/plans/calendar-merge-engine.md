@@ -13,6 +13,34 @@ coordinator checks the result against this plan. Codex never reviews its own
 work. It takes one of the outside-builder places (AGENTS.md); it doesn't
 start while every place is taken.
 
+## Revision, October 29: Claude Builds
+
+On October 24 the owner chose a Claude builder for this engine in place of
+Codex, and the build is in review as #130. On October 29 (Eastern), in the
+Claude thread "Fix failing PR steward and recycling tasks", he said yes to
+recording that here. Where the rest of this plan names Codex as the builder
+or Gemini Code Assist as the reviewer, this section wins:
+
+- **Builder.** A Claude building session, on the branch
+  `OC-261024-calendar-merge-engine`, with the label `agent: claude`; the
+  pull request's last line names the Claude thread. Every other rule in
+  "Rules For The Builder" applies to Claude unchanged (only
+  `packages/calendar-merge/`, no commands on the owner's Mac, invented data
+  only, no network, AI, paid services or new dependencies).
+  One reported exception: #130's description says its tests were also run
+  once on a temporary worktree of the owner's Mac checkout. That run is
+  recorded here, not allowed going forward; further Mac commands for this
+  job need the owner's yes.
+- **Reviews.** It takes the code path in AGENTS.md's Review Loop: Codex
+  reviews every commit by itself, and the independent review is GrokBot or a
+  fresh Claude review by an agent that didn't build it ("Independent
+  reviews"). Gemini Code Assist isn't set up on this repo, so Owner Question
+  1 no longer applies. The builder fixes every P1 and P2 from either review,
+  or explains in the pull request why one doesn't apply.
+- **Finish line.** Unchanged, with "the independent review" meaning the
+  GrokBot or fresh Claude review above. The coordinator's plan check and
+  try-it note still come before auto-merge.
+
 ## Why
 
 The owner keeps his life in several calendars: iCloud, Google, his work
@@ -423,7 +451,8 @@ nothing missing from this document.
 The owner hasn't answered these yet. Builders use the recommended answer
 unless the owner changes it before the code pull request merges.
 
-1. **Gemini Code Assist on the repo.** The same question as in
+1. **Gemini Code Assist on the repo.** (Superseded, see "Revision, October
+   29: Claude Builds".) The same question as in
    [email-sorting-engine.md](email-sorting-engine.md): its GitHub app needs
    installing by the owner. Until it reviews, the PR steward's Claude review
    stands in.

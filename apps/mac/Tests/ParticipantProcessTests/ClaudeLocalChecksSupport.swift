@@ -198,9 +198,9 @@ final class InventedClaudeTree {
          "CLAUDE_CODE_USE_BEDROCK": "1", "CLAUDE_CONFIG_DIR": "/invented/config", "TRUECONVO_PARTICIPANT_AVAILABLE": "1"]
     }
 
-    /// The checks over this tree. They run `auth status` (the fake's), which
-    /// production never does until the D1 decision, unless `authStatus`
-    /// says otherwise.
+    /// The checks over this tree. They run `auth status` (the fake's) with
+    /// nothing around it, where production blocks its network, unless
+    /// `authStatus` says otherwise.
     func checks(limits: ClaudeCheckLimits = .contract, clock: any ParticipantClock = SystemParticipantClock(),
                 environment: [String: String]? = nil, roots: ClaudeCheckRoots? = nil,
                 authStatus: ClaudeAuthStatusGate = .runForTests) -> ClaudeLocalChecks {
@@ -329,5 +329,77 @@ final class CountingChecker: AvailabilityChecking, @unchecked Sendable {
 extension ClaudeProbeResult {
     static func exited(_ code: Int32, _ text: String) -> ClaudeProbeResult {
         ClaudeProbeResult(ending: .exited(code << 8), stdout: Data(text.utf8))
+    }
+}
+
+/// A listening socket the test itself opens, for the fake's `auth status`
+/// to try (`networkPort`, `networkSocket`): TCP on 127.0.0.1 with a port the
+/// system picks, or a local socket under `/tmp` (a socket path is at most
+/// 104 bytes, too short for the temporary folder). Nothing is ever accepted.
+final class InventedListener {
+    let socket: Int32
+    let port: Int
+    let path: String
+
+    private init(socket: Int32, port: Int, path: String) {
+        self.socket = socket
+        self.port = port
+        self.path = path
+    }
+
+    struct Failed: Error {
+        let step: String
+        let code: Int32
+    }
+
+    static func tcp() throws -> InventedListener {
+        let socket = Darwin.socket(AF_INET, SOCK_STREAM, 0)
+        guard socket >= 0 else { throw Failed(step: "socket", code: errno) }
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_addr.s_addr = inet_addr("127.0.0.1")
+        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        let bound = withUnsafeMutablePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(socket, $0, length) == 0 && getsockname(socket, $0, &length) == 0 }
+        }
+        guard bound, listen(socket, 4) == 0 else { let code = errno; Darwin.close(socket); throw Failed(step: "bind", code: code) }
+        return InventedListener(socket: socket, port: Int(UInt16(bigEndian: address.sin_port)), path: "")
+    }
+
+    static func local() throws -> InventedListener {
+        let path = "/tmp/oc-\(UUID().uuidString.prefix(8)).sock"
+        let socket = Darwin.socket(AF_UNIX, SOCK_STREAM, 0)
+        guard socket >= 0 else { throw Failed(step: "socket", code: errno) }
+        var address = sockaddr_un()
+        address.sun_family = sa_family_t(AF_UNIX)
+        address.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
+        _ = withUnsafeMutableBytes(of: &address.sun_path) { buffer in
+            path.utf8CString.withUnsafeBytes { buffer.copyMemory(from: UnsafeRawBufferPointer(rebasing: $0.prefix(buffer.count - 1))) }
+        }
+        let bound = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(socket, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) == 0 }
+        }
+        guard bound, listen(socket, 4) == 0 else { let code = errno; Darwin.close(socket); throw Failed(step: "bind", code: code) }
+        return InventedListener(socket: socket, port: 0, path: path)
+    }
+
+    /// Whether a connection is waiting, without accepting it.
+    var hasConnection: Bool {
+        var waiting = pollfd(fd: socket, events: Int16(POLLIN), revents: 0)
+        return poll(&waiting, 1, 0) == 1 && waiting.revents & Int16(POLLIN) != 0
+    }
+
+    func close() {
+        Darwin.close(socket)
+        if !path.isEmpty { unlink(path) }
+    }
+}
+
+extension ClaudeLocalCheckResult {
+    /// Whatever the snapshot, whether the checks passed.
+    var didPass: Bool {
+        if case .passed = self { return true }
+        return false
     }
 }
