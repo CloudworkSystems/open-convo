@@ -173,7 +173,7 @@ const requestId = () => '30000000-0000-4000-8000-' + String(++seq).padStart(12, 
 const codec = new NativeProofCodec(context, 256);
 const client = new NativeHostClient(transport, codec, { ...context, maxWireBytes: NATIVE_PROOF_LIMITS.envelopeBytes, maxRetainedRequests: 256, timeoutMs: 5000 });
 const connection = new NativeParticipantConnection({ client, context, workspaceHandle: 'invented-workspace', events, requestId });
-const runtime = createNativeProofRuntime(repository, lifecycle, { createId, nativeParticipants: connection });
+const runtime = createNativeProofRuntime(repository, lifecycle, { createId, nativeParticipants: connection, offerClaude: !!options.offerClaude });
 void connection.refreshAvailability();
 window.__stored = () => structuredClone(stored);
 ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App, { runtime }));
@@ -189,12 +189,12 @@ const ready = { outcome: 'ok', participants: [claude,
 routes: [{ route: 'ollama-local', state: 'ready', reason: null }] };
 const down = (reason) => ({ outcome: 'ok', participants: [claude], routes: [{ route: 'ollama-local', state: 'unavailable', reason }] });
 
-async function fixture({ availability = ready, choice, refuseStart, holdStarted, restored } = {}) {
+async function fixture({ availability = ready, choice, refuseStart, holdStarted, restored, offerClaude } = {}) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
   const errors = []; const outside = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.addInitScript((value) => { window.__localOptions = value; }, { availability, choice, refuseStart, holdStarted, restored });
+  await page.addInitScript((value) => { window.__localOptions = value; }, { availability, choice, refuseStart, holdStarted, restored, offerClaude });
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
     if (url.origin !== origin) { outside.push(url.origin); return route.abort(); }
@@ -492,6 +492,117 @@ test('Stop before the Mac reported started says no reply started, never "stays o
     await expect(transcript).toContainText('No reply started');
     await expect(transcript).not.toContainText('stays on this Mac');
     await expect(transcript.getByRole('heading', { name: 'Ollama · invented-model:7b' })).toBeVisible();
+    f.check();
+  } finally { await f.close(); }
+});
+
+// Claude Code adapter PR 4a: the off-Mac Claude entry (contract section 21),
+// listed only where the integration asks (PR 4b does). Invented text only.
+const offMac = { id: 'claude-code', label: 'Claude', model: 'invented-pinned-model', executionHost: 'anthropic' };
+const withClaude = { outcome: 'ok', participants: [
+  { ...offMac, available: true, reason: null, confirmation: { state: 'active', confirmedAt: '2026-10-29T03:30:00.000Z', runsLeft: 5 } },
+  { ...local, available: true, reason: null }],
+routes: [{ route: 'ollama-local', state: 'ready', reason: null }] };
+const claudeTitle = 'Claude · invented-pinned-model · Anthropic (not on this Mac)';
+const destination = (page) => page.locator('[data-send-destination]');
+
+test('Claude stays out of the picker unless the integration lists it (owner decision, October 16)', async () => {
+  const f = await fixture({ availability: withClaude });
+  try {
+    const { page } = f;
+    await page.getByRole('button', { name: /^Model and participant/ }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading', { name: 'Local · invented-model:7b · stays on this Mac' })).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: /Claude/ })).toHaveCount(0);
+    f.check();
+  } finally { await f.close(); }
+});
+
+test('Claude stays out of the picker from a host with no local route too (independent review on #205)', async () => {
+  const f = await fixture({ availability: { outcome: 'ok', participants: [withClaude.participants[0]] } });
+  try {
+    const { page } = f;
+    await page.getByRole('button', { name: /^Model and participant/ }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText('No approved participants are listed.').first()).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: /Claude/ })).toHaveCount(0);
+    f.check();
+  } finally { await f.close(); }
+});
+
+test('Claude is named "Anthropic (not on this Mac)"; the line above the box counts the earlier turns, a local one included, and they go by run id', async () => {
+  const f = await fixture({ availability: withClaude, choice: local, offerClaude: true });
+  try {
+    const { page } = f;
+    await expect(destination(page)).toHaveCount(0, { message: 'a local model has no off-Mac line' });
+    await f.send('Invented local question.');
+    await expect.poll(async () => (await f.host()).starts.length).toBe(1);
+    await f.emit('text', { text: 'Invented local answer.' });
+    await f.emit('completed');
+    await expect.poll(async () => (await f.stored()).conversationRuns?.[0]?.phase).toBe('completed');
+
+    await page.getByRole('button', { name: /^Model and participant/ }).click();
+    const dialog = page.getByRole('dialog');
+    const entry = dialog.locator('li', { has: page.getByRole('heading', { name: claudeTitle }) });
+    await expect(entry).toContainText('Claude Code, on your Claude plan');
+    await expect(entry).toContainText('Anthropic (not on this Mac)');
+    await expect(entry).not.toContainText('stays on this Mac');
+    await dialog.getByRole('button', { name: `Choose participant: ${claudeTitle}` }).click();
+    await dialog.getByRole('button', { name: 'Done' }).click();
+    await expect(destination(page)).toHaveText('Sends this message and 1 earlier turn to Anthropic.');
+
+    await f.send('Invented question for Claude.');
+    await expect.poll(async () => (await f.host()).starts.length).toBe(2);
+    const [first, second] = (await f.host()).starts;
+    assert.deepEqual(second.payload.participant, offMac);
+    assert.deepEqual(second.saved.contextRunIds, [first.payload.runId], 'the local turn is sent as context');
+    assert.equal(JSON.stringify(second.payload).includes('Invented local answer.'), false, 'context goes by run id, never as text from the page');
+    await expect(page.locator('[data-run-id]').nth(1)).toContainText('Anthropic (not on this Mac)');
+    f.check();
+  } finally { await f.close(); }
+});
+
+test('the earlier turns and the new message share the 4,096-byte trial limit: the oldest turns stay out, and a message past it alone is held', async () => {
+  const f = await fixture({ availability: withClaude, choice: offMac, offerClaude: true });
+  try {
+    const { page } = f;
+    await expect(destination(page)).toHaveText('Sends this message to Anthropic, with no earlier turns.');
+    await f.send('a'.repeat(2500));
+    await expect.poll(async () => (await f.host()).starts.length).toBe(1);
+    await f.emit('text', { text: 'Invented reply.' });
+    await f.emit('completed');
+    await expect.poll(async () => (await f.stored()).conversationRuns?.[0]?.phase).toBe('completed');
+    const box = page.getByRole('textbox', { name: 'Your message', exact: true });
+    await box.fill('b'.repeat(100));
+    await expect(destination(page)).toHaveText('Sends this message and 1 earlier turn to Anthropic.');
+    await box.fill('b'.repeat(2000));
+    await expect(destination(page)).toHaveText('Sends this message to Anthropic, with no earlier turns. The oldest turn stays on this Mac to fit the current trial’s limit.');
+    await page.getByRole('button', { name: 'Send message', exact: true }).click();
+    await expect.poll(async () => (await f.host()).starts.length).toBe(2);
+    assert.deepEqual((await f.host()).starts[1].saved.contextRunIds, []);
+    await f.emit('completed');
+    await expect.poll(async () => (await f.stored()).conversationRuns?.[1]?.phase).toBe('completed');
+    await box.fill('c'.repeat(4097));
+    await expect(page.locator('#send-blocked-reason')).toContainText('too long for the current trial');
+    await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
+    assert.equal((await f.host()).starts.length, 2);
+    f.check();
+  } finally { await f.close(); }
+});
+
+test('Stop ends a Claude reply and offers Retry, which only refills the message box', async () => {
+  const f = await fixture({ availability: withClaude, choice: offMac, offerClaude: true });
+  try {
+    const { page } = f;
+    await f.send('Invented Claude question to stop.');
+    await expect.poll(async () => (await f.host()).starts.length).toBe(1);
+    await f.emit('text', { text: 'Invented partial' });
+    await expect(page.locator('[data-run-id]')).toContainText('Invented partial');
+    await page.getByRole('button', { name: 'Stop', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Retry', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toHaveValue('Invented Claude question to stop.');
+    assert.equal((await f.host()).starts.length, 1, 'Retry never sends on its own');
     f.check();
   } finally { await f.close(); }
 });

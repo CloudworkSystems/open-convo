@@ -119,6 +119,16 @@
   line-height: 1.45;
 }
 
+/* Claude Code adapter: what Send takes off the Mac, always above the box. */
+.adjustable-composer .composer-destination {
+  margin: 0;
+  padding: 2px 5px;
+  color: var(--tca-text-body);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
 /* While a reply is being written, Send becomes a clearly labelled Stop. */
 .adjustable-composer .send-button.stop-button {
   gap: 7px;

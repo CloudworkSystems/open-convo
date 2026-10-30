@@ -15,6 +15,7 @@ import type { NativeParticipantConnection } from '../adapters/native-participant
 import type { NativeParticipantConfirmation } from '../adapters/native-participant-codec';
 import type { NativeDictationLane } from '../adapters/native-dictation';
 import { localEntryMessage, localRouteMessage, ollamaResidency, type LocalCatalogView } from '../domain/local-participant';
+import { CLAUDE_DESTINATION, isOffMacClaude } from '../domain/claude-participant';
 
 export interface RuntimeLifecycle {
   isActive(): boolean;
@@ -138,7 +139,7 @@ function captureParticipantCatalog(value: readonly ParticipantChoice[] | undefin
   } catch { throw new Error('Invalid participant catalog.'); }
 }
 
-function createRuntime(mode: DeskRuntime['mode'], workspace: WorkspaceRepository, host?: RuntimeLifecycle, createId?: () => string, participant?: ParticipantPort, participantChoices?: readonly ParticipantChoice[], nativeParticipants?: NativeParticipantConnection, dictation?: NativeDictationLane): DeskRuntime {
+function createRuntime(mode: DeskRuntime['mode'], workspace: WorkspaceRepository, host?: RuntimeLifecycle, createId?: () => string, participant?: ParticipantPort, participantChoices?: readonly ParticipantChoice[], nativeParticipants?: NativeParticipantConnection, dictation?: NativeDictationLane, offerClaude = false): DeskRuntime {
   const choices = captureParticipantCatalog(participantChoices)?.map((choice) => {
     const connected = !!participant && sameParticipantIdentity(participant.identity, choice.identity);
     return Object.freeze({ ...choice, identity: Object.freeze({ ...choice.identity }),
@@ -207,8 +208,9 @@ function createRuntime(mode: DeskRuntime['mode'], workspace: WorkspaceRepository
       if (!entry) return Object.freeze([]);
       const { id, label, model, executionHost, reason, confirmation } = entry;
       const available = snapshot.available;
+      const offMac = isOffMacClaude(entry);
       const claude = Object.freeze({ identity: Object.freeze({ id, label, model, executionHost }),
-        provider: 'Claude subscription', destination: 'Anthropic cloud', approved: true,
+        provider: offMac ? 'Claude Code, on your Claude plan' : 'Claude subscription', destination: offMac ? CLAUDE_DESTINATION : 'Anthropic cloud', approved: true,
         available, unavailableReason: available ? null : snapshot.checking ? availabilityChecking
           : snapshot.error ? availabilityCheckFailed : nativeAvailabilityMessage(reason, !!confirmation),
       });
@@ -229,6 +231,10 @@ function createRuntime(mode: DeskRuntime['mode'], workspace: WorkspaceRepository
       // first (section 20.2), never available; the page doesn't offer it,
       // even while a later read is failing. A host without one (contract
       // revision 3) keeps it as before.
+      // An off-Mac Claude entry (contract revision 5) is listed only when
+      // the integration passes `offerClaude` (the adapter's PR 4b), whatever
+      // shape the host's reply has.
+      if (offMac) return Object.freeze(offerClaude ? [claude, ...local] : local);
       return Object.freeze(snapshot.offersLocal ? local : [claude, ...local]);
     },
     get participantAvailabilityMessage() {
@@ -302,8 +308,10 @@ export function createBrowserRuntime(): DeskRuntime { return createRuntime('brow
  * globals/URLs. Workspace writes go solely to the supplied native authority;
  * auxiliary identity, geometry, placement and preferences last for this visit.
  */
-export function createNativeProofRuntime(workspace: WorkspaceRepository, lifecycle: RuntimeLifecycle, options: { createId?: () => string; participant?: ParticipantPort; participantChoices?: readonly ParticipantChoice[]; nativeParticipants?: NativeParticipantConnection; dictation?: NativeDictationLane } = {}): DeskRuntime {
-  return createRuntime('native-proof', workspace, lifecycle, options.createId, options.participant, options.participantChoices, options.nativeParticipants, options.dictation);
+export function createNativeProofRuntime(workspace: WorkspaceRepository, lifecycle: RuntimeLifecycle, options: { createId?: () => string; participant?: ParticipantPort; participantChoices?: readonly ParticipantChoice[]; nativeParticipants?: NativeParticipantConnection; dictation?: NativeDictationLane;
+  /** Lists the host's Claude entry beside its local models. No integration passes it before the adapter's PR 4b. */
+  offerClaude?: boolean } = {}): DeskRuntime {
+  return createRuntime('native-proof', workspace, lifecycle, options.createId, options.participant, options.participantChoices, options.nativeParticipants, options.dictation, options.offerClaude);
 }
 
 const availabilityCheckFailed = 'The Mac app could not confirm participant availability. Your draft is kept. Check availability again in the participant picker.';

@@ -519,7 +519,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
           participantBusy={runs.busy}
           participantSendUnavailable={runs.unavailable}
           participantSendBlockedReason={runs.sendBlockedReason}
-          participantStop={runs.composerStop} participantSendWaitingReason={runs.sendWaitingReason}
+          participantStop={runs.composerStop} participantSendWaitingReason={runs.sendWaitingReason} participantSendDestination={runs.sendDestination}
           onSend={(sessionId) => {
             if (runs.participantLabel !== undefined) runs.send(sessionId);
             else dispatch({ type: 'send-demo', sessionId, expectedDraft: stateRef.current!.drafts[sessionId] });
