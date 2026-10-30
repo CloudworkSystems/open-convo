@@ -60,13 +60,22 @@ plain link. Nothing is billed per use.
   repeating events and applies changed and cancelled occurrences, so this
   module doesn't repeat that work.
 - Each occurrence carries only what the views need: a stable key, title,
-  start and end (UTC and local, with the offset), all-day flag, location
-  text, calendar id and status. Notes, attendees, links and alarms are not
-  read into True Convo.
+  location text, calendar id, status, the original start of a repeating
+  occurrence (none for a one-off event), and its time. A timed occurrence
+  has a start and end (UTC and local, with the offset). An all-day
+  occurrence has a start date and an end date, with the end date exclusive,
+  and no clock times, as in calendar-merge-engine.md and the Today agenda,
+  so it never shifts a day when the time zone changes. Tests cover an
+  all-day event read in two time zones and a two-day all-day event. Notes,
+  attendees, links and alarms are not read into True Convo.
 - **The same meeting in two calendars shows once.** Occurrences are grouped
   with all the rules in calendar-merge-engine.md ("The Same Event In Two
   Calendars"), and the builder carries them over unchanged:
   - The same invitation identifier and the same occurrence count as one.
+    "The same occurrence" means the same original start of the repeating
+    occurrence (EventKit's occurrence date, which stays fixed when one
+    occurrence is moved), or none for both in a one-off event. Tests cover
+    a repeating meeting in two calendars with one occurrence moved.
   - With different identifiers, a match on title (ignoring case, accents and
     spaces at the ends) plus the exact start and end (or the same dates, for
     all-day events) also counts as one, provided the copies are from
@@ -78,10 +87,15 @@ plain link. Nothing is billed per use.
   EventKit's external identifier stands in for `UID`.
 - **Which copy wins, carried to the build** (Codex, PR #204 review thread
   4425672904). EventKit exposes no `SEQUENCE`, so the merge engine's order
-  can't be carried over as is. PR 1 defines and tests an EventKit winner
-  rule (for example, the later last-modified date, then the earlier
-  calendar in the person's list) and shows in its tests that a copy with
-  older details can't win just because it was touched later. Each group lists every
+  can't be carried over as is, and a last-modified date can't stand in for
+  it: a copy with older details can be touched later (a color or alarm
+  change), so "newest touch wins" would show stale details. The rule is:
+  the copy from the organizer's own calendar wins when the Mac has it
+  (EventKit marks the organizer as the current user); otherwise the copy
+  from the earliest calendar in the person's list wins. Last-modified dates
+  are never used to pick. Tests show an organizer copy beating a
+  later-touched attendee copy, and the list order deciding when neither is
+  the organizer's. Each group lists every
   calendar it came from. Tests repeat the merge engine's duplicate cases,
   "Dentist" included, against the fake store.
 - The owner picks which calendars show, in the app. The choice is stored
@@ -111,6 +125,15 @@ plain link. Nothing is billed per use.
   opens Google Maps' public search page for that text in the person's
   browser. It's a plain link the person clicks. True Convo itself sends
   nothing, and the link needs no key.
+- **Calendar text is outside input.** Titles and locations come from
+  whoever sent the invitation. The link is always built as Google Maps'
+  fixed search address with the location text percent-encoded as the
+  query, never pasted in as an address. Tests feed locations that look
+  like web addresses, `javascript:` links, quotes, `&` and `#`, and check
+  the link always points at the maps search page. Titles and locations are
+  shown as plain text, never as markup or links, and nothing in them is
+  ever acted on by True Convo or its agents (security.md checklist,
+  item 6).
 - **Travel time.** Between two timed meetings on the same day that both have
   a location, the views show the driving time, worked out with Apple's maps
   framework. This sends the two locations to Apple's maps service, so it is
@@ -126,14 +149,16 @@ plain link. Nothing is billed per use.
   is a single clear match. When the search finds nothing, finds several
   equally likely places, or fails, the view shows "travel time unavailable"
   for that pair, and the Google Maps link still works. A looked-up place is
-  kept for the day, on the Mac, under the same rules as travel times.
+  kept for the day under the same rules as travel times (below).
   Directions then run between the two places (`MKDirections`). Tests cover
   coordinates, a clear match, no match, several matches and a failed search
   with a fake maps service.
 - When the travel time is longer than the gap between the meetings, the day
   view marks the clash ("about 35 minutes' drive, 20 minutes free").
-- Results are kept for the day, on the Mac, so the same pair isn't asked
-  twice. Apple limits how often an app can ask. When that limit is reached,
+- Results are kept for the day so the same pair isn't asked twice. Looked-up
+  places and travel times are held in memory only, or in the protected
+  store, never in a plain file, cache folder or anything a backup copies
+  unsealed. Turning travel time off clears them. Apple limits how often an app can ask. When that limit is reached,
   the view shows "travel time unavailable" and doesn't retry in a loop.
 
 ## Rules For The Builder
