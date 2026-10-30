@@ -21,6 +21,7 @@ beside it that points to it.
 - [docs/agent-process.md](docs/agent-process.md): the full review, merge and
   agent process summarized below. Read the section you need before you open,
   fix, review or merge a pull request.
+- [docs/coordinator-playbook.md](docs/coordinator-playbook.md): how to run that loop in practice.
 - [apps/mac/AGENTS.md](apps/mac/AGENTS.md): the Mac app, its owner-protected
   parts and the paid-AI path.
 - [apps/desk/AGENTS.md](apps/desk/AGENTS.md): the Desk, and building from an
