@@ -518,6 +518,18 @@ test('Claude stays out of the picker unless the integration lists it (owner deci
   } finally { await f.close(); }
 });
 
+test('Claude stays out of the picker from a host with no local route too (independent review on #205)', async () => {
+  const f = await fixture({ availability: { outcome: 'ok', participants: [withClaude.participants[0]] } });
+  try {
+    const { page } = f;
+    await page.getByRole('button', { name: /^Model and participant/ }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText('No approved participants are listed.').first()).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: /Claude/ })).toHaveCount(0);
+    f.check();
+  } finally { await f.close(); }
+});
+
 test('Claude is named "Anthropic (not on this Mac)"; the line above the box counts the earlier turns, a local one included, and they go by run id', async () => {
   const f = await fixture({ availability: withClaude, choice: local, offerClaude: true });
   try {

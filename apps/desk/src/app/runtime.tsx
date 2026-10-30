@@ -231,8 +231,11 @@ function createRuntime(mode: DeskRuntime['mode'], workspace: WorkspaceRepository
       // first (section 20.2), never available; the page doesn't offer it,
       // even while a later read is failing. A host without one (contract
       // revision 3) keeps it as before.
-      // The Claude Code adapter's PR 4b passes `offerClaude` to list it there.
-      return Object.freeze(snapshot.offersLocal ? offerClaude ? [claude, ...local] : local : [claude, ...local]);
+      // An off-Mac Claude entry (contract revision 5) is listed only when
+      // the integration passes `offerClaude` (the adapter's PR 4b), whatever
+      // shape the host's reply has.
+      if (offMac) return Object.freeze(offerClaude ? [claude, ...local] : local);
+      return Object.freeze(snapshot.offersLocal ? local : [claude, ...local]);
     },
     get participantAvailabilityMessage() {
       if (!nativeParticipants || !isActive()) return undefined;
