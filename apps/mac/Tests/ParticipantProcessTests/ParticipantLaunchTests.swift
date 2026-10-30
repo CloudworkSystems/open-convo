@@ -174,7 +174,7 @@ struct ParticipantLaunchTests {
         #expect(!answer.available)
         #expect(ParticipantUnavailableReason.allCases.map(\.rawValue) == [
             "cli-missing", "cli-version-mismatch", "provider-override", "signed-out", "not-subscription",
-            "overflow-unverified", "check-failed"
+            "host-not-approved", "overflow-unverified", "check-failed"
         ])
         // The test target's own fake is the only way to an available answer.
         let fake = await InventedAvailability().check()

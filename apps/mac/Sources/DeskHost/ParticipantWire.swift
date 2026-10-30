@@ -387,6 +387,9 @@ public enum WireTimestamp {
         return true
     }
 
+    /// The wire form of `millis` since 1970, as `toISOString` writes it.
+    public static func text(millis: Int64) -> String { format(millis: millis) }
+
     /// `ParticipantTimestamp.format`, byte for byte.
     private static func format(millis: Int64) -> String {
         // Floor division, as `toISOString` writes it: a time before 1970 with

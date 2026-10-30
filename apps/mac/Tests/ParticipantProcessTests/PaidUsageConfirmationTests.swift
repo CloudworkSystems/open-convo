@@ -513,7 +513,7 @@ struct PaidUsageBypassTests {
 extension ProcessSuites {
     @Suite("Section 17 owner: a new launch")
     struct PaidUsageNewLaunch {
-        @Test("A new launch with invented environment, arguments, defaults and flag files: unconfirmed, overflow-unverified with every local check passing, and nothing claimed; the tree is unchanged and the probe touched nothing outside it")
+        @Test("A new launch with invented environment, arguments, defaults and flag files: unconfirmed, host-not-approved (no store, so nothing approved) with every local check passing, and nothing claimed; the tree is unchanged and the probe touched nothing outside it")
         func newLaunchProbe() throws {
             let tree = try InventedClaudeTree()
             defer { tree.clean() }
@@ -540,7 +540,7 @@ extension ProcessSuites {
             let ran = try runBounded(process)
             #expect(ran?.status == 0, "the probe ended in time")
             #expect(ran?.output
-                    == "available=false reason=overflow-unverified confirmation=unconfirmed recheck=overflow-unverified claim=false outside=0\n")
+                    == "available=false reason=host-not-approved confirmation=unconfirmed recheck=host-not-approved claim=false outside=0\n")
             #expect(tree.probes("version") >= 2 && tree.probes("auth-status") >= 2, "the real local checks ran and passed, twice")
             #expect(listing() == before, "the owner wrote nothing (the probes' folders came and went)")
         }
@@ -553,7 +553,7 @@ extension ProcessSuites {
             let tree = try InventedClaudeTree()
             defer { tree.clean() }
             let authentication = FakeOwnerAuthentication()
-            let owner = PaidUsageConfirmationOwner(checks: tree.checks(), authentication: authentication, clock: InventedWallClock())
+            let owner = PaidUsageConfirmationOwner(checks: tree.checks(), approval: InventedApproval(), authentication: authentication, clock: InventedWallClock())
             #expect(await owner.confirm() == .confirmed, "\(tree.log.entries.map(\.line))")
             #expect(authentication.requests == 1)
             #expect(tree.probes("auth-status") == 2, "a fresh check before the request and one after")

@@ -7,6 +7,9 @@ public enum ParticipantUnavailableReason: String, Sendable, CaseIterable {
     case providerOverride = "provider-override"
     case signedOut = "signed-out"
     case notSubscription = "not-subscription"
+    /// Contract section 21.4: every local check passed, but the owner has
+    /// not approved sending to Anthropic. Display only.
+    case hostNotApproved = "host-not-approved"
     case overflowUnverified = "overflow-unverified"
     case checkFailed = "check-failed"
 }

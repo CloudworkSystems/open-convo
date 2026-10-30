@@ -8,8 +8,8 @@ import Testing
 /// `stdinLayouts` entry byte for byte, native's preparing checks count the
 /// earlier turns against the first-trial bound as the vectors do, and every
 /// prepared run the page accepts or refuses is accepted or refused here. The
-/// availability cases wait for the approval state (`host-not-approved`),
-/// which the Mac host does not build yet; they are counted, not run.
+/// eight page-level cases run through the coordinator in
+/// `ClaudeVectorPageCaseTests` (PR 3d).
 private struct ClaudeVectors {
     static let resourceName = "native-participant-claude-v1"
     let data: Data
@@ -72,7 +72,7 @@ struct ClaudeVectorTests {
         #expect(bundled == original, "copy apps/desk/tests/fixtures/native-participant-claude-v1.json over the test fixture; never edit the copy")
     }
 
-    @Test("Every entry is counted: five layouts, four valid and five invalid runs run here; the eight page-level cases wait for the approval state")
+    @Test("Every entry is counted: five layouts, four valid and five invalid runs run here; the eight page-level cases run in ClaudeApprovalTests")
     func everyEntryCounted() throws {
         let vectors = try ClaudeVectors.load()
         #expect(vectors.layouts.count == 5)

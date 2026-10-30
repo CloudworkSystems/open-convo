@@ -951,7 +951,7 @@ extension ProcessSuites {
 
             // Section 17's owner over it: nothing is asked, nothing confirmed.
             let authentication = FakeOwnerAuthentication()
-            let owner = PaidUsageConfirmationOwner(checks: refusing, authentication: authentication, clock: InventedWallClock())
+            let owner = PaidUsageConfirmationOwner(checks: refusing, approval: InventedApproval(), authentication: authentication, clock: InventedWallClock())
             #expect(await owner.confirm() == .checksFailed(.checkFailed))
             #expect(authentication.requests == 0)
             #expect(await owner.report().availability == .unavailable(.checkFailed))

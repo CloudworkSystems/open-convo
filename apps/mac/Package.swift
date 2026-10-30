@@ -162,7 +162,7 @@ let package = Package(
         // environment, arguments, defaults and files.
         .executableTarget(
             name: "ParticipantAvailabilityProbe",
-            dependencies: ["ParticipantProcess"],
+            dependencies: ["DeskHost", "ParticipantProcess"],
             path: "Sources/ParticipantTestFakes/AvailabilityProbe"
         ),
         // Section 17's owner as the Desk window's native controls see it

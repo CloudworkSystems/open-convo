@@ -3309,6 +3309,19 @@ no tools). What native writes to stdin, in UTF-8, before closing it:
   already under way (Stop does that).
 - Preparing a run (section 6) never needs the approval: nothing leaves the
   Mac until a start passes step 13.
+- **Where it is kept (adapter PR 3d).** The protected store holds it as
+  `approvals`, beside `runs` and outside the page's record: a list of
+  exactly `{host, approvedAt}`, only `anthropic`, one per host, omitted
+  while there is none, so a store that never approved keeps its earlier
+  bytes. Any other form makes the store corrupt. Only native writes it
+  (`approveHost`, `revokeHost`); a commit carries it over unchanged.
+  Section 17's owner reads it once every local check has passed, before
+  its own lock; a store that cannot be read (locked, closed, missing,
+  corrupt) answers `check-failed`, never available. A host with no store
+  reads it as not approved. The run claim reads it again, so a revoke
+  after a start's recheck still stops that spawn and counts no run.
+  Nothing in the app builds the owner yet, and
+  the approval screen is PR 4a's.
 
 ### 21.5 Section 5 step 4 (the D1 choice)
 
@@ -3332,8 +3345,9 @@ in `context.stdinPreamble`. The page codec runs all of them now. The
 fake-CLI host cases (overflow held and released, overflow signal, tools in
 init, a provider override, an oversize reply, Stop before and after the
 first piece, lock, supervisor loss) join this file in section 19's seeded
-form in PR 3d, with the approval state behind `host-not-approved`, and the
-Swift harness runs them there; the page-level cases above run in Swift
-then too. The tools refusal is proved in PR 3c against the real supervisor
+form in PR 3e, and the Swift harness runs them there. The page-level cases
+above run in Swift from PR 3d, through the coordinator over section 17's
+owner with the approval and confirmation each case names
+(`ClaudeVectorPageCaseTests`). The tools refusal is proved in PR 3c against the real supervisor
 and the fake CLI, with and without earlier turns. Every one of these passes
 before PR 4b turns anything on.

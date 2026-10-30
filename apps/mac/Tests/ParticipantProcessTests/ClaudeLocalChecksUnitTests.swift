@@ -15,7 +15,7 @@ struct ClaudeLocalChecksUnitTests {
 
     @Test("The six local reasons map to section 5's, in its order; overflow-unverified is never one; no result is ever available")
     func reasons() {
-        #expect(ClaudeLocalFailure.allCases.map(\.reason) == ParticipantUnavailableReason.allCases.filter { $0 != .overflowUnverified })
+        #expect(ClaudeLocalFailure.allCases.map(\.reason) == ParticipantUnavailableReason.allCases.filter { $0 != .hostNotApproved && $0 != .overflowUnverified })
         #expect(ClaudeLocalFailure.allCases.map(\.rawValue) == ClaudeLocalFailure.allCases.map(\.reason.rawValue))
         for failure in ClaudeLocalFailure.allCases {
             #expect(ClaudeLocalCheckResult.failed(failure).availability == .unavailable(failure.reason))

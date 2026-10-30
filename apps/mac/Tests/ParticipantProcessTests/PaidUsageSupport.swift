@@ -1,4 +1,5 @@
 import Darwin
+import DeskHost
 import Foundation
 @testable import ParticipantCoordinator
 @testable import ParticipantProcess
@@ -198,13 +199,35 @@ struct InventedWallClock: ParticipantClock {
 
 /// The owner with fakes, active when `confirmed`.
 func inventedOwner(checks: ScriptedLocalChecks = ScriptedLocalChecks(), authentication: FakeOwnerAuthentication = FakeOwnerAuthentication(),
-                   confirmed: Bool = false) async -> PaidUsageConfirmationOwner {
-    let owner = PaidUsageConfirmationOwner(checks: checks, authentication: authentication, clock: InventedWallClock())
+                   approval: InventedApproval = InventedApproval(), confirmed: Bool = false) async -> PaidUsageConfirmationOwner {
+    let owner = PaidUsageConfirmationOwner(checks: checks, approval: approval, authentication: authentication, clock: InventedWallClock())
     if confirmed {
         let outcome = await owner.confirm()
         precondition(outcome == .confirmed, "the invented confirmation: \(outcome)")
     }
     return owner
+}
+
+/// Section 21.4's approval, set by the test: approved unless changed, so
+/// the section 17 tests see the owner as before the approval existed; nil
+/// is an unreadable store.
+final class InventedApproval: HostApprovalReading, @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Bool?
+    private(set) var reads = 0
+
+    init(_ value: Bool? = true) { self.value = value }
+
+    func set(_ value: Bool?) {
+        lock.lock(); defer { lock.unlock() }
+        self.value = value
+    }
+
+    func isApproved(host: String) -> Bool? {
+        lock.lock(); defer { lock.unlock() }
+        reads += 1
+        return host == HostApproval.anthropic ? value : false
+    }
 }
 
 /// The section 17 owner seen by the coordinator through a counting proxy:
