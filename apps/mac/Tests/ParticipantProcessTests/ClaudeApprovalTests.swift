@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import DeskHost
 @testable import ParticipantCoordinator
+@testable import ParticipantDeskControls
 @testable import ParticipantProcess
 
 // The Claude Code adapter's PR 3d (contract section 21.4): the owner's
