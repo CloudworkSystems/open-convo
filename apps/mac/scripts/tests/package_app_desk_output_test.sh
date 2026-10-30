@@ -629,13 +629,15 @@ check "test copy: Services port True Convo Test" [ "$(plist_value "${TEST_PLIST}
 check "test copy: Services message unchanged" [ "$(plist_value "${TEST_PLIST}" NSServices.0.NSMessage)" == "correctSelectedTextService" ]
 check "test copy: microphone prompt names True Convo Test" eval '[[ "$(plist_value "${TEST_PLIST}" NSMicrophoneUsageDescription)" == "True Convo Test records "* ]]'
 check "test copy: speech prompt names True Convo Test" eval '[[ "$(plist_value "${TEST_PLIST}" NSSpeechRecognitionUsageDescription)" == "True Convo Test uses "* ]]'
+check "test copy: calendar prompt (macOS 14 and later) names True Convo Test" eval '[[ "$(plist_value "${TEST_PLIST}" NSCalendarsFullAccessUsageDescription)" == "True Convo Test shows "* ]]'
+check "test copy: calendar prompt (macOS 13) names True Convo Test" eval '[[ "$(plist_value "${TEST_PLIST}" NSCalendarsUsageDescription)" == "True Convo Test shows "* ]]'
 check "test copy: same version and build as the source" eval '[ "$(plist_value "${TEST_PLIST}" CFBundleShortVersionString)" == "$(plist_value "${INFO_PLIST_SRC}" CFBundleShortVersionString)" ] && [ "$(plist_value "${TEST_PLIST}" CFBundleVersion)" == "$(plist_value "${INFO_PLIST_SRC}" CFBundleVersion)" ]'
 # Put the source values back into a copy: then it must equal the source, so
 # no other key was changed, added or removed.
 only_the_test_names_differ() {
   local copy="${WORK}/test-plain/reverted.plist" key
   cp "$1" "${copy}" 2>/dev/null || return 1
-  for key in CFBundleIdentifier CFBundleName CFBundleDisplayName CFBundleExecutable NSServices.0.NSMenuItem.default NSServices.0.NSPortName NSMicrophoneUsageDescription NSSpeechRecognitionUsageDescription; do
+  for key in CFBundleIdentifier CFBundleName CFBundleDisplayName CFBundleExecutable NSServices.0.NSMenuItem.default NSServices.0.NSPortName NSMicrophoneUsageDescription NSSpeechRecognitionUsageDescription NSCalendarsFullAccessUsageDescription NSCalendarsUsageDescription; do
     /usr/bin/plutil -replace "${key}" -string "$(plist_value "${INFO_PLIST_SRC}" "${key}")" "${copy}" || return 1
   done
   /usr/bin/plutil -remove TCSourceCommit "${copy}" >/dev/null 2>&1 || return 1

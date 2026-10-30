@@ -10,6 +10,7 @@ import Security
 import ServiceManagement
 import Speech
 import ArchiveProtection
+import CalendarReader
 import CorrectionMemory
 import DeskWindowKit
 import ParticipantAppWiring
@@ -8949,6 +8950,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var deskSessionStorage: DeskSession?
     private var deskWindowController: DeskWindowController?
     private var deskLockSignals: DeskLockSignals?
+    // The calendar reader (docs/plans/calendar-through-the-mac.md). Nothing
+    // asks for calendar access until the Desk's calendar views use it.
+    private lazy var calendarReader = CalendarReader(store: EventKitCalendarStore())
     /// Set when the menu's Quit has asked the open Desk's page about unsaved
     /// work (and the person, when needed), so the termination that follows
     /// does not ask the page again.

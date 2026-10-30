@@ -26,6 +26,10 @@
 	<string>13.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>True Convo shows your calendars in its own views. It only reads them, on this Mac. Meeting places are shared only if you turn on travel time (sent to Apple) or open a place in Google Maps.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>True Convo shows your calendars in its own views. It only reads them, on this Mac. Meeting places are shared only if you turn on travel time (sent to Apple) or open a place in Google Maps.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright 2026 True Convo AI</string>
 	<key>NSMicrophoneUsageDescription</key>

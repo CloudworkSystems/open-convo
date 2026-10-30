@@ -206,6 +206,13 @@ let package = Package(
             name: "DeskWindowKitTests",
             dependencies: ["DeskWindowKit", "DeskHost", "DeskHostWebKit", "TrueConvoIdentity"]
         ),
+        // Reads the calendars on this Mac through Apple's calendar framework,
+        // read only (docs/plans/calendar-through-the-mac.md, PR 1).
+        .target(name: "CalendarReader"),
+        .testTarget(
+            name: "CalendarReaderTests",
+            dependencies: ["CalendarReader"]
+        ),
         .executableTarget(
             name: "DeskBundleManifest",
             dependencies: ["DeskHost", "DeskHostWebKit"]
@@ -213,7 +220,7 @@ let package = Package(
         .executableTarget(
             name: "VoiceCursorMac",
             dependencies: ["VoiceCursorCore", "CorrectionMemory", "ArchiveProtection", "DeskHost", "DeskHostWebKit", "DeskWindowKit", "TrueConvoIdentity",
-                           "ParticipantAppWiring"]
+                           "ParticipantAppWiring", "CalendarReader"]
         ),
         .executableTarget(
             name: "VoiceCursorPolicyCheck",
