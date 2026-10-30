@@ -25,7 +25,11 @@ struct ReadOnlyGateTests {
         let sources = try moduleSources()
         let source = try #require(sources.first { $0.name == "CalendarStore.swift" }).text
         let start = try #require(source.range(of: "public protocol CalendarStore: AnyObject {"))
-        let body = String(source[start.upperBound...].prefix { $0 != "}" })
+        // Up to the protocol's own closing brace, at the start of a line
+        // (`{ get }` inside it closes nothing).
+        let rest = source[start.upperBound...]
+        let end = try #require(rest.range(of: "\n}"))
+        let body = String(rest[..<end.lowerBound])
         let names = body.components(separatedBy: "\n").compactMap { line -> String? in
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.hasPrefix("///"), let match = trimmed.firstMatch(of: #/^(?:func|var)\s+(\w+)/#) else { return nil }
