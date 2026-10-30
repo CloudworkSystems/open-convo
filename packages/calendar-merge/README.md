@@ -190,7 +190,9 @@ input size.
   toward neither the occurrence share nor the 10,000 series limit. For ordinary calendars none of these shares is reached, so the
   result doesn't depend on the order of events or the number of sources.
 - `RDATE` and `EXDATE` values whose written date is outside the range (with a
-  day to spare) are skipped before any time zone work. Time zone offsets are
+  day to spare) are skipped before any time zone work. An `EXDATE` within a
+  day of a kept `RDATE` period's start is still read, since a long period can
+  start before the range and reach into it. Time zone offsets are
   cached per zone and hour, and time zone names are cached.
 - Title-and-time matching normalizes each title once, not once per
   occurrence, and resumes each search for a group where the last search for

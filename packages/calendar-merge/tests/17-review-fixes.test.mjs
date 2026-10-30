@@ -395,3 +395,16 @@ test('two copies of one UID in one source are reported as a UID match (review 70
   const changed = await merge({ a: cal(series, moved, movedOld) }, NOV);
   assert.deepEqual(changed.occurrences.map((o) => [o.title, o.matchedBy]), [['Daily', null], ['Moved', 'uid']]);
 });
+
+test('an EXDATE removes a long PERIOD RDATE that starts before the range but reaches into it (review r11)', async () => {
+  const period = 'RDATE;VALUE=PERIOD:20261020T000000Z/20261120T000000Z';
+  const base = ['UID:p@test.example', 'SUMMARY:Long', 'DTSTART:20260901T090000Z', 'DURATION:PT1H', period];
+  const week = { from: '2026-11-01', to: '2026-11-07', timeZone: 'UTC' };
+  const kept = await merge({ a: cal(ev(...base)) }, week);
+  assert.equal(kept.occurrences.length, 1);
+  for (const exdate of ['EXDATE:20261020T000000Z', 'EXDATE;TZID=America/New_York:20261019T200000', 'EXDATE;VALUE=DATE:20261020']) {
+    const result = await merge({ a: cal(ev(...base, exdate)) }, week);
+    assert.deepEqual(result.occurrences, [], exdate);
+    assert.deepEqual(result.problems, [], exdate);
+  }
+});

@@ -453,6 +453,11 @@ function expandFully(copy, q, single, stats, budget) {
   }
 
   if (!single) {
+    // Days on which a kept RDATE period starts. A long period can start well
+    // before the window and still reach the range, so an EXDATE naming its
+    // start must stay eligible even though it falls outside the window.
+    const periodDays = new Set();
+    const nearPeriod = (day) => periodDays.has(day - 1) || periodDays.has(day) || periodDays.has(day + 1);
     for (const rdate of copy.rdates) {
       const type = (rdate.params.VALUE?.[0] || '').toUpperCase();
       if (type === 'PERIOD') {
@@ -477,7 +482,9 @@ function expandFully(copy, q, single, stats, budget) {
           endMs = wallToInstant(s.zone, s.day + d.weeks * 7 + d.days, s.sec) + (d.hours * 3600 + d.minutes * 60 + d.seconds) * 1000;
         }
         if (endMs === undefined || endMs === null || endMs < s.ms) { at(`RDATE period "${rdate.text}" skipped: its end is not readable or is more than 10,000 years away`); continue; }
-        add(s, { allDay: false, startMs: s.ms, endMs, wallDay: wallAt(copy.zone, s.ms).day }, true);
+        const wallDay = wallAt(copy.zone, s.ms).day;
+        periodDays.add(startValue.day).add(wallDay);
+        add(s, { allDay: false, startMs: s.ms, endMs, wallDay }, true);
         continue;
       }
       const value = parseDateValue(rdate.text, rdate.params);
@@ -496,7 +503,7 @@ function expandFully(copy, q, single, stats, budget) {
     for (const exdate of copy.exdates) {
       const value = parseDateValue(exdate.text, exdate.params);
       if (!value) { at(`EXDATE "${exdate.text}" ignored: not a readable date`); continue; }
-      if (outside(value.day)) continue;
+      if (outside(value.day) && !nearPeriod(value.day)) continue;
       if (value.kind === 'date' || allDay) { exDays.add(value.day); continue; }
       const resolved = resolve(value);
       if (resolved.error) { at(`EXDATE "${exdate.text}" ignored: ${resolved.error}`); continue; }
