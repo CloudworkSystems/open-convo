@@ -116,6 +116,19 @@ function reviewStateSha(body) {
   } catch { return null; }
 }
 
+// How long Codex's review of a head may run before the owner's note counts anyway.
+export const HUNG_AFTER_MS = 30 * 60 * 1000;
+
+// The commit a started but unfinished code review names, if any.
+function unfinishedStateSha(body) {
+  const m = (body ?? '').match(REVIEW_STATE);
+  if (!m) return null;
+  try {
+    const code = JSON.parse(m[1])?.code_review;
+    return code?.status && code.status !== 'completed' ? code.commit_sha : null;
+  } catch { return null; }
+}
+
 /**
  * True only if the timeline shows the owner's account dismissed this review.
  * `dismissals` are the pull request's `review_dismissed` issue events (REST),
@@ -141,9 +154,10 @@ export function dismissedByOwner(review, dismissals) {
  * @param {Array} input.reactions reactions on the pull request (issue)
  * @param {Array} input.dismissals `review_dismissed` issue events (see dismissedByOwner)
  * @param {string} input.prAuthor login of the account that opened the pull request
+ * @param {number} input.now current time in milliseconds (for a hung review)
  * @returns {{approved: boolean, reason: string}}
  */
-export function evaluateCodexSignal({ headSha, comments: allComments = [], reviews = [], reactions = [], dismissals = [], prAuthor } = {}) {
+export function evaluateCodexSignal({ headSha, comments: allComments = [], reviews = [], reactions = [], dismissals = [], prAuthor, now = Date.now() } = {}) {
   if (!/^[0-9a-f]{40}$/i.test(headSha ?? '')) return { approved: false, reason: 'No head commit to check.' };
   const short = headSha.slice(0, 7);
   // Every signal below reads only Codex comments that Codex alone has edited.
@@ -214,6 +228,16 @@ export function evaluateCodexSignal({ headSha, comments: allComments = [], revie
     || comments.some((c) => (c.body ?? '').includes(SUMMARY_MARKER) && reviewStateSha(c.body) === headSha);
   if (codexReviewedHead && ownerAcceptance({ headSha, prAuthor, comments: allComments })) {
     return { approved: true, reason: `Owner accepted remaining findings on ${headSha}.` };
+  }
+  // A hung review (AGENTS.md "Keeping Finished Work Moving"): Codex's summary
+  // has shown this exact head as started and not finished for HUNG_AFTER_MS.
+  // Timed from the summary's last edit, so a later edit only makes it wait longer.
+  const hungSince = comments
+    .filter((c) => (c.body ?? '').includes(SUMMARY_MARKER) && unfinishedStateSha(c.body) === headSha)
+    .map((c) => time(c.updated_at ?? c.created_at));
+  const hung = hungSince.length > 0 && hungSince.every((t) => t && now - t >= HUNG_AFTER_MS);
+  if (hung && ownerAcceptance({ headSha, prAuthor, comments: allComments })) {
+    return { approved: true, reason: `Owner accepted ${headSha} while Codex's review of it hung.` };
   }
 
   if (lastFinding) return { approved: false, reason: `Codex left findings on ${short}; waiting for a clean round.` };

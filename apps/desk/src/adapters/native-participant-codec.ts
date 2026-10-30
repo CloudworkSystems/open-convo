@@ -9,8 +9,9 @@ export type NativeParticipantConfirmation =
   | { readonly state: 'unconfirmed' }
   | { readonly state: 'active'; readonly confirmedAt: string; readonly runsLeft: number }
   | { readonly state: 'ended'; readonly endedBy: 'lock' | 'sleep' | 'logout' | 'cli-changed' | 'login-changed' | 'run-limit' | 'paid-overflow' };
+/** `host-not-approved` (section 21.4) only on the off-Mac pin, whose `executionHost` is `anthropic`. */
 export type NativeParticipantAvailabilityReason = 'cli-missing' | 'cli-version-mismatch' | 'provider-override'
-  | 'signed-out' | 'not-subscription' | 'overflow-unverified' | 'check-failed';
+  | 'signed-out' | 'not-subscription' | 'host-not-approved' | 'overflow-unverified' | 'check-failed';
 export interface NativeParticipantAvailability extends Readonly<ParticipantIdentity> {
   readonly available: boolean;
   readonly reason: NativeParticipantAvailabilityReason | null;
@@ -85,7 +86,8 @@ const identities = (v: Obj, messageIds: boolean) => uuid4(v.runId) && recordId(v
     .map(id => (id as string).toLowerCase())).size === (messageIds ? 4 : 2);
 const pin = (v: unknown): v is ParticipantIdentity => object(v) && exact(v, ['id', 'label', 'model', 'executionHost'])
   && Object.values(v).every(item => validText(item, 256, true));
-const availabilityReasons = ['cli-missing', 'cli-version-mismatch', 'provider-override', 'signed-out', 'not-subscription', 'overflow-unverified', 'check-failed'];
+const availabilityReasons = ['cli-missing', 'cli-version-mismatch', 'provider-override', 'signed-out', 'not-subscription',
+  'host-not-approved', 'overflow-unverified', 'check-failed'];
 
 export function isNativeParticipantOperation(value: unknown): value is NativeParticipantOperation {
   return typeof value === 'string' && NATIVE_PARTICIPANT_OPERATIONS.includes(value as NativeParticipantOperation);
@@ -124,7 +126,9 @@ function availability(value: unknown): value is NativeParticipantAvailability {
   if (!object(value) || !exact(value, ['id', 'label', 'model', 'executionHost', 'available', 'reason',
     ...(Object.hasOwn(value, 'confirmation') ? ['confirmation'] : [])]) || value.id !== 'claude-code'
     || !pin({ id: value.id, label: value.label, model: value.model, executionHost: value.executionHost })
-    || typeof value.available !== 'boolean' || (value.available ? value.reason !== null : !availabilityReasons.includes(value.reason as string))) return false;
+    || typeof value.available !== 'boolean' || (value.available ? value.reason !== null : !availabilityReasons.includes(value.reason as string))
+    // Section 21.4: only a pin that says it sends to Anthropic can await that approval.
+    || value.reason === 'host-not-approved' && value.executionHost !== 'anthropic') return false;
   if (!Object.hasOwn(value, 'confirmation')) return true;
   if (!confirmation(value.confirmation)) return false;
   // Earlier checks may fail despite an active confirmation, but its own check cannot.

@@ -1,4 +1,4 @@
-import { LOCAL_PARTICIPANT_ID } from '../domain/conversation-runs';
+import { carriesContext } from '../domain/conversation-runs';
 import type { DeskState } from '../domain/types';
 import { validateState } from '../domain/validation';
 import type { NativeHostClient, NativeRequestOutcome } from './native-host-client';
@@ -118,11 +118,12 @@ export class NativeProofRepository implements WorkspaceRepository {
       if (run) {
         // Validation also accepts later recovery annotations. Native preparation
         // permits only the original twelve fields, without reason or closure,
-        // plus `contextRunIds` for a local model's run (contract section 20.3;
-        // step 3 PR 4b: without it a local run was never sent to the Mac).
-        const local = run.participant.id === LOCAL_PARTICIPANT_ID;
-        if (run.phase !== 'prepared' || Object.keys(run).length !== (local ? 13 : 12)
-          || local !== Object.hasOwn(run, 'contextRunIds')) return Promise.resolve(failed());
+        // plus `contextRunIds` for a run that carries context: a local model's
+        // (contract section 20.3; step 3 PR 4b: without it a local run was never
+        // sent to the Mac) or an off-Mac Claude Code pin's (section 21.2).
+        const context = carriesContext(run.participant);
+        if (run.phase !== 'prepared' || Object.keys(run).length !== (context ? 13 : 12)
+          || context !== Object.hasOwn(run, 'contextRunIds')) return Promise.resolve(failed());
         participantRun = { runId: run.runId, sessionId: run.sessionId, userMessageId: run.userMessageId,
           assistantMessageId: run.assistantMessageId, participantId: run.participant.id, createdAt: run.createdAt };
       }

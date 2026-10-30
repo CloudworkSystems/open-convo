@@ -1,6 +1,6 @@
 # Email Actions Preview (PRD)
 
-Status: Approved (Oct 25): merged in #138; build handed to the local Codex CLI job (#142).
+Status: Built (Oct 25): merged in #138; built by the local Codex CLI job (#142) and merged as #144.
 
 Written October 24, 2026 by a Claude session (project "261024 OC Steering")
 from the owner's choice that day. Session name:

@@ -9,9 +9,10 @@
 AGENTS.md @CloudworkSystems
 CLAUDE.md @CloudworkSystems
 
-# Decisions.
+# Decisions. Plans in docs/plans/ are approved by the owner's yes in a
+# Claude thread instead (AGENTS.md "Plans merge on the owner's yes"); the
+# folder's AGENTS.md and CLAUDE.md stay protected by the rule-file lines above.
 /PLAN.md @CloudworkSystems
-/docs/plans/ @CloudworkSystems
 /docs/decisions.md @CloudworkSystems
 
 # Keys, encryption, recovery and protected storage in the Mac app: the

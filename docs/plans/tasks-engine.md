@@ -1,6 +1,7 @@
 # Tasks And Reminders Engine (PRD)
 
-Status: In progress (Oct 25): merged in #138; GrokBot team A started the build (#141).
+Status: In progress (Oct 29): merged in #138; GrokBot team A building (#141, #146);
+scope narrowed October 29 ("Revision: Narrowed Scope" at the end).
 
 Written October 24, 2026 by a Claude session (project "261024 OC Steering")
 from the owner's choice that day. Session name: `OC-261024-tasks-engine`.
@@ -378,3 +379,65 @@ and switches on auto-merge once the plan check passes. Done when the tests
 pass with one command, Codex has no open P1 or P2 on the latest commit (or
 the Codex triage judge passes it, [codex-triage.md](codex-triage.md)), and
 the plan check finds nothing missing.
+
+## Revision: Narrowed Scope (October 29, 2026)
+
+Written by a Claude session (project "261024 OC Steering", thread "Unstick
+tasks engine scope check") at the owner's request. Pull request #146 went
+through more than 20 Codex rounds, and almost every finding after the first
+few was a combination this plan never named: a due-date edit merged with a
+repeat added on another device, a snooze that moved the due date followed by
+a second snooze, the second 1:30 of a fall-back night carried through a
+repeat. Each was raised as P1 because the plan seemed to promise an answer.
+This revision says which promises this slice makes, so the rest wait for
+the sync slice. It changes nothing above that it doesn't name, and it adds
+no work for the builder.
+
+**What this slice still promises, unchanged:** everything under "What It
+Does", "Views" and "Dates", the "Built For Sync Later" rules as written, and
+every case in Tests 1 to 13.
+
+**What it no longer promises** (any result is acceptable as long as it is
+deterministic, passes the merge-law check in test 9, never throws on a merge
+of two valid files, and leaves every task valid):
+
+1. **Concurrent edits to fields that interact.** When two devices change
+   different fields of one task that depend on each other, and the case
+   isn't named in test 9, this slice doesn't decide which outcome is right.
+   That covers a due-date edit (moved, cleared or set) merged with a repeat
+   added, changed or removed elsewhere; a due-moving snooze merged with a
+   due-date edit elsewhere; and a reminder edit merged with a due-date or
+   repeat edit elsewhere. Field-level merge (the higher stamp wins each
+   field) is enough. The sync slice ([sync-core.md](sync-core.md)) writes
+   those rules, with tests, before the engine is registered.
+2. **The second occurrence of a repeated wall time.** "Dates" says a wall
+   time that happens twice on a fall-back day uses the first. That is the
+   only promise. Carrying the second occurrence (for example 1:30 the
+   second time) through repeats, occurrence names, schedule names, fixed
+   reminders or snoozes is not required. `laterToday` is still "+3 hours"
+   from the instant passed in.
+3. **Stacked snoozes.** The snooze promises are the ones in "What It Does"
+   and test 8: the highest-stamped snooze for the current occurrence
+   applies, and no snooze moves a series on. How several snoozes on
+   different reminders of one occurrence combine, or how a due-moving
+   snooze combines with a later edit, only needs a deterministic result.
+4. **Reopening an older occurrence.** Only the latest closed occurrence of a
+   repeating task has to be reopenable. Reopening an older one may be
+   refused with a plain message.
+
+**For reviewers.** A finding that falls only under items 1 to 4 is not a
+broken promise of this plan, so it is P3 at most (AGENTS.md "Review
+Guidelines"). A finding in one of these areas still counts as P1 when it
+shows a crash or an exception on valid input, a merge-law failure
+(commutative, associative, idempotent), an invalid task left behind, lost
+records or data, or a break in one of the promises above.
+
+**For the builder (GrokBot team A).** Nothing to remove: what is already
+built for items 1 to 4 can stay while the tests pass. Don't add more code
+for them. Answer a new finding that falls only under items 1 to 4 in one
+line on its review thread, naming this section, instead of changing code.
+The rule "edge cases this plan doesn't name: follow RFC 5545" doesn't
+reopen items 1 to 4.
+
+**Plan Of Record.** Step 2 (sync through the sync core) now also owns the
+rules for items 1 to 3.

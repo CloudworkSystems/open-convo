@@ -790,7 +790,7 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
         switch ParticipantRequests.start(request.payload) {
         case .refused(let refusal): return refusal
         case .value(let start):
-            return ParticipantPin.sameBytes(start.run.workspaceHandle, stack.store.workspaceHandle) ? nil : .unknownHandle
+            return OpaqueHandle.same(start.run.workspaceHandle, stack.store.workspaceHandle) ? nil : .unknownHandle
         }
     }
 
@@ -819,7 +819,7 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
         case .value(let value): start = value
         }
         // 3. The handle.
-        guard ParticipantPin.sameBytes(start.run.workspaceHandle, stack.store.workspaceHandle) else {
+        guard OpaqueHandle.same(start.run.workspaceHandle, stack.store.workspaceHandle) else {
             return .answer(.refused(.unknownHandle, echo: echo))
         }
 
@@ -1763,7 +1763,7 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
         case .refused(let refusal): return .refused(refusal, echo: echo)
         case .value(let value): read = value
         }
-        guard ParticipantPin.sameBytes(read.workspaceHandle, stack.store.workspaceHandle) else {
+        guard OpaqueHandle.same(read.workspaceHandle, stack.store.workspaceHandle) else {
             return .refused(.unknownHandle, echo: echo)
         }
         var stack = stack
@@ -1907,7 +1907,7 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
         case .refused(let refusal): return .refused(refusal, echo: echo)
         case .value(let value): read = value
         }
-        guard ParticipantPin.sameBytes(read.run.workspaceHandle, stack.store.workspaceHandle) else {
+        guard OpaqueHandle.same(read.run.workspaceHandle, stack.store.workspaceHandle) else {
             return .refused(.unknownHandle, echo: echo)
         }
         let runId = read.run.runId
@@ -2016,7 +2016,7 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
         case .refused(let refusal): return .refused(refusal, echo: echo)
         case .value(let value): read = value
         }
-        guard ParticipantPin.sameBytes(read.workspaceHandle, stack.store.workspaceHandle) else {
+        guard OpaqueHandle.same(read.workspaceHandle, stack.store.workspaceHandle) else {
             return .refused(.unknownHandle, echo: echo)
         }
         var stack = stack

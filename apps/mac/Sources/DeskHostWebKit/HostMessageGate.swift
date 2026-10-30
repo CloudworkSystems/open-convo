@@ -14,7 +14,7 @@ public enum HostTransportFailure: String, Equatable, Sendable {
     /// Not a refusal at the gate: the request was admitted on a live
     /// connection, but by the time its answer was ready that connection was
     /// gone (a reload, navigation, lock, close or crash revoked it), so the
-    /// answer was dropped (with a participant lane only; see
+    /// answer was dropped (with a participant lane or without; see
     /// `HostMessageHandler`).
     case staleReply = "stale-reply"
 }

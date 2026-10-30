@@ -1,0 +1,34 @@
+{
+  "skill_id": "first-principles-decision",
+  "title": "First-Principles Decision",
+  "version": "0.1.0",
+  "status": "draft",
+  "created": "2026-10-28",
+  "body": "SKILL.md",
+  "kind": "workflow",
+  "trigger_phrases": [
+    "run first principles on",
+    "first principles this",
+    "rethink this from first principles"
+  ],
+  "scripts": [],
+  "actions_needing_approval": [
+    "send an email or message",
+    "publish anything",
+    "spend money, including paid searches or API calls",
+    "read or share private data"
+  ],
+  "install_gate": {
+    "outcome": "not run yet",
+    "expected": "partial",
+    "note": "Frontier models can reason from first principles unprompted. The expected gap is the sourced-facts file, the PASS/FAIL/BLOCKED check and the separate reviewer, plus explicit steps for small local models."
+  },
+  "example_runs": "examples.md",
+  "models_passed": [],
+  "not_proven": [
+    "Not yet run on the local default model (qwen3:8b).",
+    "The example runs are drafts the owner hasn't confirmed.",
+    "No run has been checked by a separate reviewer yet."
+  ],
+  "credit": "Idea from a public prompt card by @0xPontiuz; text written fresh."
+}
