@@ -1,3 +1,4 @@
+import DeskHost
 import Foundation
 
 // Section 17's confirmation owner (plan F4; Codex F0 answers 9, 12 and 13,
@@ -108,8 +109,10 @@ public enum PaidUsageConfirmOutcome: Equatable, Sendable {
 ///
 /// - `report()` and `recheck()` (section 5): the local checks' answer (F3;
 ///   `recheck` never reuses one) with the confirmation's display. Available
-///   only when the checks pass, the confirmation is active and the check's
-///   snapshot matches it; any check that shows a changed file, version,
+///   only when the checks pass, Anthropic is approved (contract section
+///   21.4: `host-not-approved` otherwise, `check-failed` when the approval
+///   cannot be read), the confirmation is active and the check's snapshot
+///   matches it; any check that shows a changed file, version,
 ///   login or account ends it first (`cli-changed`, `login-changed`). An
 ///   earlier failing check wins as the reason; the confirmation is reported
 ///   as it is.
@@ -169,6 +172,7 @@ public final class PaidUsageConfirmationOwner: AvailabilityReporting, @unchecked
 
     private let lock = NSLock()
     private let checks: any ClaudeLocalChecking
+    private let approval: any HostApprovalReading
     private let authentication: any OwnerAuthentication
     private let clock: any ParticipantClock
     private var state = State.unconfirmed
@@ -179,15 +183,19 @@ public final class PaidUsageConfirmationOwner: AvailabilityReporting, @unchecked
     /// public way to make the owner: over section 5's real local checks and
     /// the one `OwnerAuthentication` conformer, so no module can give it
     /// other checks or another authenticator (Codex F34-6).
-    public convenience init(checks: ClaudeLocalChecks) {
-        self.init(checks: checks, authentication: LocalAuthenticationOwnerCheck())
+    ///
+    /// `approval` is where section 21.4's approval is read: the Desk's
+    /// protected store, or `NoHostApproval` where there is none.
+    public convenience init(checks: ClaudeLocalChecks, approval: any HostApprovalReading) {
+        self.init(checks: checks, approval: approval, authentication: LocalAuthenticationOwnerCheck())
     }
 
-    /// Tests only (through `@testable`): fakes for the checks, the
-    /// authenticator and the clock.
-    init(checks: any ClaudeLocalChecking, authentication: any OwnerAuthentication,
+    /// Tests only (through `@testable`): fakes for the checks, the approval,
+    /// the authenticator and the clock.
+    init(checks: any ClaudeLocalChecking, approval: any HostApprovalReading, authentication: any OwnerAuthentication,
          clock: any ParticipantClock = SystemParticipantClock()) {
         self.checks = checks
+        self.approval = approval
         self.authentication = authentication
         self.clock = clock
     }
@@ -235,6 +243,11 @@ public final class PaidUsageConfirmationOwner: AvailabilityReporting, @unchecked
     }
 
     private func assess(_ result: ClaudeLocalCheckResult) -> ParticipantAvailabilityReport {
+        // Section 21.4: read before taking this owner's lock (the store has
+        // its own), and only once every local check has passed, so an
+        // earlier failing check wins.
+        var approved: Bool?
+        if case .passed = result { approved = approval.isApproved(host: HostApproval.anthropic) }
         lock.lock()
         var ended: Abandoned?
         if case .active(let confirmation) = state, let end = confirmation.end(for: result) {
@@ -253,10 +266,23 @@ public final class PaidUsageConfirmationOwner: AvailabilityReporting, @unchecked
             }
         }
         var availability = result.availability
-        if case .passed = result, case .active = state {
-            // The one available answer outside `ParticipantAvailability`:
-            // the checks pass and match an active confirmation.
-            availability = ParticipantAvailability.available
+        if case .passed = result {
+            switch approved {
+            case false?:
+                // Just before `overflow-unverified` in section 5's order; an
+                // active confirmation is still reported beside it.
+                availability = .unavailable(.hostNotApproved)
+            case nil:
+                availability = .unavailable(.checkFailed)
+            case true?:
+                if case .active = state {
+                    // The one available answer outside
+                    // `ParticipantAvailability`: the checks pass, Anthropic
+                    // is approved, and the checks match an active
+                    // confirmation.
+                    availability = ParticipantAvailability.available
+                }
+            }
         }
         let display = displayLocked()
         lock.unlock()

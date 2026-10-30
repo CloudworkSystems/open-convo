@@ -72,10 +72,11 @@ public final class PaidUsageDeskControls: DeskPaidUsageControlling {
     }
 
     /// A report's first failing local check, or `passed` when the local
-    /// checks passed (`overflow-unverified`, or available).
+    /// checks passed (`host-not-approved`, `overflow-unverified`, or
+    /// available).
     nonisolated static func check(_ report: ParticipantAvailabilityReport) -> DeskClaudeCheck {
         switch report.availability.reason {
-        case nil, .overflowUnverified?: return .passed
+        case nil, .hostNotApproved?, .overflowUnverified?: return .passed
         case .cliMissing?: return .cliMissing
         case .cliVersionMismatch?: return .cliVersionMismatch
         case .providerOverride?: return .providerOverride

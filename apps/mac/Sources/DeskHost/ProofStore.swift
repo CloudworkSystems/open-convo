@@ -204,6 +204,8 @@ public enum StoreStatus: String, Equatable, Sendable {
 
 public enum ProofStoreError: Error, Equatable, Sendable {
     case invalidDirectory
+    /// `approveHost` named a host other than `anthropic`.
+    case invalidHost
     case secondWriter
     case keyMissing
     case keyRefused
@@ -379,10 +381,12 @@ public enum DispatchWithdrawal: Equatable, Sendable {
 /// before the runs copy is published. It is called under `lock`, and the
 /// index never calls back: lock order `lock`, then the index's lock.
 public final class ProofStore: @unchecked Sendable {
-    /// Still 3 with `runs` (section 15). That holds only while participant
-    /// hosts are inactive and every store with runs holds invented data: an
-    /// older build reads such a file, ignores `runs` and the identities'
-    /// `runId`, and drops both on its next write. Downgrading a format-3
+    /// Still 3 with `runs` (section 15) and `approvals` (section 21.4). That
+    /// holds only while participant hosts are inactive and every store with
+    /// runs or approvals holds invented data: an older build reads such a
+    /// file, ignores `runs`, `approvals` and the identities' `runId`, and
+    /// drops them on its next write (a dropped approval is only asked for
+    /// again, never granted). Downgrading a format-3
     /// store that holds runs is unsupported; keep those stores away from
     /// older writable builds. Before any enabled or reusable-store build, a
     /// reviewed forward-only format marker that older writers refuse must
@@ -425,13 +429,18 @@ public final class ProofStore: @unchecked Sendable {
         var deliveries: [DeliveryRecord]
         /// Participant runs, in preparation order. Never evicted.
         var runs: [ParticipantRunEntry]
+        /// The owner's host approvals (contract section 21.4): at most one
+        /// per host, and only `anthropic`. Written only by `approveHost` and
+        /// `revokeHost`; a commit carries them over unchanged.
+        var approvals: [HostApproval]
 
         private enum CodingKeys: String, CodingKey {
-            case formatVersion, workspace, receipts, ledger, identities, deliveries, runs
+            case formatVersion, workspace, receipts, ledger, identities, deliveries, runs, approvals
         }
 
         init(formatVersion: Int, workspace: WorkspaceRecord, receipts: [DispatchReceipt], ledger: [ReplayEntry],
-             identities: [RequestIdentity], deliveries: [DeliveryRecord], runs: [ParticipantRunEntry] = []) {
+             identities: [RequestIdentity], deliveries: [DeliveryRecord], runs: [ParticipantRunEntry] = [],
+             approvals: [HostApproval] = []) {
             self.formatVersion = formatVersion
             self.workspace = workspace
             self.receipts = receipts
@@ -439,6 +448,7 @@ public final class ProofStore: @unchecked Sendable {
             self.identities = identities
             self.deliveries = deliveries
             self.runs = runs
+            self.approvals = approvals
         }
 
         /// A file without `runs` (every file written before runs existed)
@@ -453,6 +463,12 @@ public final class ProofStore: @unchecked Sendable {
             identities = try container.decode([RequestIdentity].self, forKey: .identities)
             deliveries = try container.decode([DeliveryRecord].self, forKey: .deliveries)
             runs = container.contains(.runs) ? try container.decode([ParticipantRunEntry].self, forKey: .runs) : []
+            // As `runs`: absent is none; present must be a non-empty list of
+            // valid approvals, one per host, or the store is corrupt.
+            approvals = container.contains(.approvals) ? try container.decode([HostApproval].self, forKey: .approvals) : []
+            if container.contains(.approvals), approvals.isEmpty || Set(approvals.map(\.host)).count != approvals.count {
+                throw DecodingError.dataCorruptedError(forKey: .approvals, in: container, debugDescription: "approvals")
+            }
         }
 
         /// No `runs` key while there are none, so a store that never
@@ -466,6 +482,7 @@ public final class ProofStore: @unchecked Sendable {
             try container.encode(identities, forKey: .identities)
             try container.encode(deliveries, forKey: .deliveries)
             if !runs.isEmpty { try container.encode(runs, forKey: .runs) }
+            if !approvals.isEmpty { try container.encode(approvals, forKey: .approvals) }
         }
 
         /// Ids with a terminal result, in the ledger or the identity records.
@@ -1104,6 +1121,51 @@ public final class ProofStore: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return try applyRunChange { try Self.groupClearedChange(in: $0, runId: runId) }
+    }
+
+    // MARK: Host approval (contract section 21.4)
+
+    /// Saves the owner's approval of `host` (only `anthropic`), made at
+    /// `now`. Native's own: only the app's approval screen calls it, never
+    /// anything the page sends. An approval already saved is kept as it was
+    /// and returned. Errors as `persist`: `writeFailed` is definite (nothing
+    /// saved); `replacedUnsynced` means it is saved and visible but not yet
+    /// known durable.
+    @discardableResult
+    public func approveHost(_ host: String, at now: Date = Date()) throws -> HostApproval {
+        lock.lock()
+        defer { lock.unlock() }
+        let current = try syncedState()
+        if let saved = current.approvals.first(where: { $0.host == host }) { return saved }
+        let millis = Int64((now.timeIntervalSince1970 * 1000).rounded(.down))
+        guard let approval = HostApproval(host: host, approvedAt: WireTimestamp.text(millis: millis)) else {
+            throw ProofStoreError.invalidHost
+        }
+        var next = current
+        next.approvals.append(approval)
+        try persist(next)
+        return approval
+    }
+
+    /// Withdraws the approval of `host`. With none saved nothing is written.
+    /// It stops the next spawn (a start's recheck reads it), never a run
+    /// already under way. Errors as `approveHost`.
+    public func revokeHost(_ host: String) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        let current = try syncedState()
+        guard current.approvals.contains(where: { $0.host == host }) else { return }
+        var next = current
+        next.approvals.removeAll { $0.host == host }
+        try persist(next)
+    }
+
+    /// The saved approval of `host`, or nil. Throws as `read()` while the
+    /// store is locked, closed, missing or corrupt.
+    public func hostApproval(_ host: String) throws -> HostApproval? {
+        lock.lock()
+        defer { lock.unlock() }
+        return try readyState().approvals.first { $0.host == host }
     }
 
     /// Flushes any pending folder flush, then publishes the runs copy. The
@@ -1867,5 +1929,13 @@ enum AtomicFile {
         guard descriptor >= 0 else { throw AtomicWriteError(stage: .directoryFlush, code: errno) }
         defer { Darwin.close(descriptor) }
         try flush(descriptor, stage: .directoryFlush)
+    }
+}
+
+extension ProofStore: HostApprovalReading {
+    /// Section 21.4's read for availability: the visible state, so a revoke
+    /// counts at once. Nil while the store cannot be read.
+    public func isApproved(host: String) -> Bool? {
+        (try? hostApproval(host)).map { $0 != nil }
     }
 }

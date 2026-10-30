@@ -158,7 +158,7 @@ final class PaidUsageDeskRefreshTests: CoordinatorDeskTestCase {
         let launcher = ScriptedLauncher(world: world, script: [ScriptStep(atMs: 0, .initClean), ScriptStep(atMs: 0, .rateLimitOK)])
         let checks = ScriptedLocalChecks()
         let authentication = FakeOwnerAuthentication()
-        let owner = PaidUsageConfirmationOwner(checks: checks, authentication: authentication)
+        let owner = PaidUsageConfirmationOwner(checks: checks, approval: InventedApproval(), authentication: authentication)
         let coordinator = ParticipantCoordinator(configuration: ParticipantCoordinator.Configuration(
             hostConfiguration: ParticipantHostConfiguration(pin: CoordinatorDesk.pin), availability: owner,
             launchId: UUID().uuidString.lowercased(), clock: world.clock, executor: BackgroundMutationExecutor(),

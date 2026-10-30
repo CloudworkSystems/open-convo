@@ -156,7 +156,8 @@ public struct ClaudeCheckLimits: Sendable, Equatable {
 }
 
 /// Why the local checks fail: section 5's reasons in its order, except
-/// `overflow-unverified`, which only section 17's owner decides (F4).
+/// `host-not-approved` and `overflow-unverified`, which only section 17's
+/// owner decides (F4; contract section 21.4).
 public enum ClaudeLocalFailure: String, Sendable, CaseIterable {
     case cliMissing = "cli-missing"
     case cliVersionMismatch = "cli-version-mismatch"
