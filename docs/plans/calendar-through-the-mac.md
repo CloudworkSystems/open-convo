@@ -72,7 +72,8 @@ plain link. Nothing is billed per use.
   with all the rules in calendar-merge-engine.md ("The Same Event In Two
   Calendars"), and the builder carries them over unchanged:
   - The same invitation identifier and the same occurrence count as one.
-    "The same occurrence" means the same original start of the repeating
+    Here "the same occurrence" (never a count or a position in the series)
+    means the same original start of the repeating
     occurrence (EventKit's occurrence date, which stays fixed when one
     occurrence is moved), or none for both in a one-off event. Tests cover
     a repeating meeting in two calendars with one occurrence moved.
@@ -98,11 +99,13 @@ plain link. Nothing is billed per use.
   location and status, the earliest calendar in the person's list supplies
   the shown copy, since they are the same; if they disagree on any of
   those, the view shows the event once with a plain "the copies differ"
-  mark and both versions side by side, and never quietly picks one.
+  mark and every version side by side (two, or more when a third calendar
+  holds a copy), and never quietly picks one.
   Last-modified dates are never used to pick. Tests show an organizer copy
   beating a later-touched attendee copy, agreeing copies merging by list
-  order, and disagreeing copies showing the mark with both versions, both
-  when no copy is the organizer's and when two are (Codex, PR #204 review
+  order, and disagreeing copies showing the mark with every version (a
+  three-calendar case included), both when no copy is the organizer's and
+  when two are (Codex, PR #204 review
   threads 4425797327 and 4425820723). Each group lists every
   calendar it came from. Tests repeat the merge engine's duplicate cases,
   "Dentist" included, against the fake store.
@@ -125,7 +128,14 @@ plain link. Nothing is billed per use.
   "list calendars" and "occurrences in range"). Its tests use invented
   calendars, run in the Desk's existing test setup and need no Mac.
 - The Today agenda (#147) gets its meetings from the same occurrences
-  through a small adapter, so "what's my day?" and the views agree.
+  through a small adapter, so "what's my day?" and the views agree. A group
+  whose copies agree becomes one agenda entry under the group's key. A
+  group whose copies differ becomes one entry per version, each under its
+  own key (the group's key plus the version's calendar id), all marked as
+  differing copies of one meeting, so every version stays visible, the
+  agenda's one-start-per-entry and no-repeated-key rules hold, and the day
+  view always opens. Tests feed the adapter a two-version and a
+  three-version group.
 
 ### Places and travel time (PR 3)
 
@@ -216,7 +226,8 @@ under Internet Accounts:
    ones included, and he picks which show.
 2. The month view for this month matches Google Calendar's month view on
    the web: same events, same days, same times, and no duplicates for an
-   invitation that sits in two calendars.
+   invitation whose copies in two calendars agree. Copies that disagree
+   show once, with the "the copies differ" mark and every version.
 3. Change an event in Google Calendar on the web. It appears changed in
    True Convo once the Mac has synced, with no restart.
 4. Click a place on an event. Google Maps opens to that place in his
