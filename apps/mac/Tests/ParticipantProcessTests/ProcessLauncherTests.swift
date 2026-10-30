@@ -217,7 +217,7 @@ extension ProcessSuites {
 
             let launcher = LauncherFixture.launcher(folder, parent: parent, log: RecordingLog())
             let wrong = LauncherFixture.request(inputBytes: 1)
-            #expect(throws: ParticipantLaunchError.inputBytesMismatch(expected: 1, actual: wrong.stdin.count)) {
+            #expect(throws: ParticipantLaunchError.inputBytesMismatch(expected: 1, actual: wrong.message.count)) {
                 try launcher.launch(wrong)
             }
             #expect(LauncherFixture.children(of: parent).isEmpty, "refused before any folder is made")

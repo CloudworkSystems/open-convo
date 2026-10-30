@@ -905,9 +905,10 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
         }
         // 11. Chunk limits and the first-trial bound, which also refuses a
         // run prepared above it. A local run has no first-trial bound; its
-        // one limit is context and input together (section 20.3).
-        guard Self.inputFits(start.inputChunks, bound: local ? nil : configuration.hostConfiguration.inputBound),
-              !local || (entry.context?.bytes ?? 0) + entry.inputBytes <= ParticipantLimits.inputTotalBytes else {
+        // one limit is context and input together (section 20.3). An
+        // off-Mac run's context counts against both (section 21.4).
+        guard Self.inputFits(start.inputChunks, contextBytes: entry.context?.bytes ?? 0,
+                             bound: local ? nil : configuration.hostConfiguration.inputBound) else {
             return refuse(.textTooLarge)
         }
         // 12. Another start in progress; a spawned run whose cleanup,
@@ -945,6 +946,50 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
         defer {
             latch?.resolve(.reevaluate)
             noteProgress()
+        }
+
+        // Section 21.2 at start, before step 13: an off-Mac run's context
+        // ids resolved again from the committed record and hashed again
+        // (`run-mismatch` on any difference). Native sends exactly these.
+        // After the read, as after the recheck below: let go, a Stop, or a
+        // lock, close or quit ends the start, writing nothing.
+        var turns: [LocalTurn] = []
+        if let context = admitted.entry.context {
+            let store = stack.store
+            let read: Result<WorkspaceRecord, Error>
+            do {
+                read = .success(try await configuration.executor.run { try store.read() })
+            } catch {
+                read = .failure(error)
+            }
+            guard stillAttached(stack) != nil else {
+                identities.releaseStarting(admitted.requestId)
+                owned[runId] = nil
+                return .refused(.unknownConnection, echo: echo)
+            }
+            if stopRequested(runId) {
+                identities.releaseStarting(admitted.requestId)
+                return await cancelBeforeStart(admitted, latch: latch, stack: stack, echo: echo)
+            }
+            func refuse(_ reason: HostRefusal) -> HostResponse {
+                identities.releaseStarting(admitted.requestId)
+                owned[runId] = nil
+                return .refused(reason, echo: echo)
+            }
+            if gate.state.serial != admitted.serial { return refuse(.storeLocked) }
+            switch read {
+            case .failure(let error):
+                if let refusal = Self.definiteReadFailure(error) { return refuse(refusal) }
+                // Not readable now: nothing was written or sent.
+                identities.releaseStarting(admitted.requestId)
+                owned[runId] = nil
+                return .unknown(echo)
+            case .success(let workspace):
+                guard let resolved = Self.resolveContext(context, of: admitted.entry, in: workspace.record) else {
+                    return refuse(.runMismatch)
+                }
+                turns = resolved
+            }
         }
 
         // 13. The availability recheck: never a reused check (section 5).
@@ -1039,8 +1084,8 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
         let launch = ParticipantLaunchRequest(
             identity: ParticipantRunIdentity(runId: runId, sessionId: entry.sessionId,
                                              createdAtMillis: ParticipantTimestamp.parse(entry.createdAt) ?? 0),
-            model: configuration.hostConfiguration.pin.model, inputChunks: admitted.request.inputChunks,
-            inputBytes: entry.inputBytes, preparedBytes: entry.preparedBytes)
+            model: configuration.hostConfiguration.pin.model, context: turns, contextBytes: entry.context?.bytes ?? 0,
+            inputChunks: admitted.request.inputChunks, inputBytes: entry.inputBytes, preparedBytes: entry.preparedBytes)
         // Section 17's run claim (Codex F0 answer 12), at the commit-to-spawn
         // boundary: after the durable record and the checks after it, once,
         // synchronously on this actor, with no await between it and the
@@ -1222,7 +1267,7 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
         return .ok(echo, ["runId": .string(runId)])
     }
 
-    /// Section 20.3 at start: the run's context ids resolved again from the
+    /// Sections 20.3 and 21.2 at start: the run's context ids resolved again from the
     /// committed record (the run itself must be there, once), the same
     /// byte count and hash as its prepared entry; nil on any difference.
     private static func resolveContext(_ context: ParticipantRunContext, of entry: ParticipantRunEntry,
@@ -1366,11 +1411,12 @@ public actor ParticipantCoordinator: ParticipantLane, ParticipantStackAttaching 
             && ParticipantPin.sameBytes(model, pin.model) && ParticipantPin.sameBytes(executionHost, pin.executionHost)
     }
 
-    /// Step 11: at least one chunk, each 1-16,384 bytes, together at most
-    /// 262,144 and at most the first-trial bound when the host has one.
-    private static func inputFits(_ chunks: [String], bound: Int?) -> Bool {
+    /// Step 11: at least one chunk, each 1-16,384 bytes, together with the
+    /// run's context bytes at most 262,144 and at most the first-trial
+    /// bound when the host has one.
+    private static func inputFits(_ chunks: [String], contextBytes: Int, bound: Int?) -> Bool {
         guard !chunks.isEmpty, chunks.allSatisfy({ (1...ParticipantLimits.chunkBytes).contains($0.utf8.count) }) else { return false }
-        let total = chunks.reduce(0) { $0 + $1.utf8.count }
+        let total = chunks.reduce(0) { $0 + $1.utf8.count } + contextBytes
         return total <= min(ParticipantLimits.inputTotalBytes, bound ?? ParticipantLimits.inputTotalBytes)
     }
 

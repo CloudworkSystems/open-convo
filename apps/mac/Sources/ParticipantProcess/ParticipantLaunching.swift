@@ -29,35 +29,68 @@ public struct ParticipantLaunchRequest: Sendable {
     public var identity: ParticipantRunIdentity
     /// The build's pinned model, the only variable part of the command line.
     public var model: String
+    /// An off-Mac run's earlier turns (section 21.2): exactly the ones the
+    /// start just re-resolved and re-hashed, user then assistant for each
+    /// context run, oldest first. Empty for a run with no context runs.
+    public var context: [LocalTurn]
+    /// The prepared entry's `contextBytes`; must equal the turns' text bytes.
+    public var contextBytes: Int
     /// The prepared run's `inputChunks`, kept as an array: the prepared
     /// `inputHash` is over the array, so chunk boundaries matter there even
     /// though they never reach the CLI.
     public var inputChunks: [String]
-    /// The prepared entry's `inputBytes`; must equal `stdin.count`.
+    /// The prepared entry's `inputBytes`; must equal the new message's bytes.
     public var inputBytes: Int
     /// The prepared entry's `preparedBytes` (section 6).
     public var preparedBytes: Int
 
-    public init(identity: ParticipantRunIdentity, model: String, inputChunks: [String], inputBytes: Int,
-                preparedBytes: Int) {
+    public init(identity: ParticipantRunIdentity, model: String, context: [LocalTurn] = [], contextBytes: Int = 0,
+                inputChunks: [String], inputBytes: Int, preparedBytes: Int) {
         self.identity = identity
         self.model = model
+        self.context = context
+        self.contextBytes = contextBytes
         self.inputChunks = inputChunks
         self.inputBytes = inputBytes
         self.preparedBytes = preparedBytes
     }
 
-    /// The CLI's stdin (Codex Q17): the chunks concatenated as they are and
+    /// The new message (Codex Q17): the chunks concatenated as they are and
     /// UTF-8 encoded, with no separator, trailing newline, JSON wrapper or
     /// Unicode normalization.
-    public var stdin: Data {
+    public var message: Data {
         Data(inputChunks.joined().utf8)
+    }
+
+    /// The preamble of section 21.3's layout, exactly.
+    public static let stdinPreamble = "The earlier turns of this conversation follow, oldest first, then the new message. "
+        + "Each part starts with a line in square brackets naming it and the exact length of its text in UTF-8 bytes. "
+        + "Reply only to the new message."
+
+    /// The CLI's stdin (section 21.3). With no earlier turns, exactly
+    /// `message`, as in revision 3. Otherwise the one fixed layout: the
+    /// preamble, then each turn and the new message, each after a header
+    /// line naming it and its text's UTF-8 byte count, the parts separated
+    /// by a blank line, with `\n` line endings and nothing after the
+    /// message.
+    public var stdin: Data {
+        guard !context.isEmpty else { return message }
+        var text = Self.stdinPreamble + "\n\n"
+        for turn in context {
+            text += "[earlier \(turn.role) turn, \(turn.text.utf8.count) bytes]\n" + turn.text + "\n\n"
+        }
+        let message = inputChunks.joined()
+        text += "[new message, \(message.utf8.count) bytes]\n" + message
+        return Data(text.utf8)
     }
 }
 
 public enum ParticipantLaunchError: Error, Equatable {
-    /// The stdin bytes are not the entry's `inputBytes` (Codex Q17).
+    /// The new message's bytes are not the entry's `inputBytes` (Codex Q17).
     case inputBytesMismatch(expected: Int, actual: Int)
+    /// The earlier turns' text bytes are not the entry's `contextBytes`, or
+    /// a turn is neither the user's nor the assistant's (section 21.3).
+    case contextMismatch
 }
 
 /// Starts runs. One launch is one spawn attempt: a throw means nothing ran
@@ -183,10 +216,15 @@ public struct ProcessParticipantLauncher: ParticipantLaunching {
     }
 
     public func launch(_ request: ParticipantLaunchRequest) throws -> any ParticipantRunning {
-        let input = request.stdin
-        guard input.count == request.inputBytes else {
-            throw ParticipantLaunchError.inputBytesMismatch(expected: request.inputBytes, actual: input.count)
+        let message = request.message
+        guard message.count == request.inputBytes else {
+            throw ParticipantLaunchError.inputBytesMismatch(expected: request.inputBytes, actual: message.count)
         }
+        guard request.context.allSatisfy({ $0.role == "user" || $0.role == "assistant" }),
+              request.context.reduce(0, { $0 + $1.text.utf8.count }) == request.contextBytes else {
+            throw ParticipantLaunchError.contextMismatch
+        }
+        let input = request.stdin
         let folder = try ParticipantWorkingFolder.create(under: workingParent.url)
         let process: SpawnedParticipant
         do {
@@ -202,7 +240,9 @@ public struct ProcessParticipantLauncher: ParticipantLaunching {
         }
         let run = ParticipantRun(
             identity: request.identity, process: process,
-            configuration: StreamJSONReader.Configuration(expectedInit: expectedInit, inputBytes: request.inputBytes,
+            // Section 8's `reply-too-long` counts the context too (21.4).
+            configuration: StreamJSONReader.Configuration(expectedInit: expectedInit,
+                                                          inputBytes: request.contextBytes + request.inputBytes,
                                                           preparedBytes: request.preparedBytes, limits: limits),
             clock: clock, log: log)
         return LaunchedParticipantRun(run: run, runId: request.identity.runId, workingFolder: folder, log: log)

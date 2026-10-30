@@ -36,12 +36,16 @@ struct LocalConversationLaneTests {
         #expect(configuration.hostConfiguration.localRoute === route)
         #expect(configuration.hostConfiguration.pin == LocalConversationLane.claudePin)
         #expect(configuration.hostConfiguration.pin.id == "claude-code")
+        // The off-Mac pin (section 21.1) with the owner's chosen model.
+        #expect(configuration.hostConfiguration.pin.isOffMac)
+        #expect(configuration.hostConfiguration.pin == ParticipantPin(id: "claude-code", label: "Claude", model: "claude-sonnet-5-5",
+                                                                      executionHost: "anthropic"))
         #expect(configuration.launcher is ClaudeNotConnected)
         #expect(configuration.launcher.cliVersion == ParticipantCommandLine.pinnedCLIVersion)
         let request = ParticipantLaunchRequest(
             identity: ParticipantRunIdentity(runId: "71abcdef-0000-4000-8abc-000000000a01", sessionId: "52abcdef-0000-4000-8abc-000000000a01",
                                          createdAtMillis: 0),
-            model: "not-connected", inputChunks: ["Invented."], inputBytes: 9, preparedBytes: 9)
+            model: "claude-sonnet-5-5", inputChunks: ["Invented."], inputBytes: 9, preparedBytes: 9)
         #expect(throws: ClaudeNotConnected.Refused.self) { _ = try configuration.launcher.launch(request) }
     }
 
@@ -70,6 +74,8 @@ struct LocalConversationLaneTests {
         #expect(participants.count == 2)
         let claude = participants.first?.objectValue
         #expect(claude?["id"] == .string("claude-code"))
+        #expect(claude?["label"] == .string("Claude") && claude?["executionHost"] == .string("anthropic"),
+                "the off-Mac pin: the page never words it as staying on this Mac")
         #expect(claude?["available"] == .bool(false))
         #expect(claude?["reason"] == .string("overflow-unverified"))
         #expect(claude?["confirmation"] == nil, "no confirmation key: section 17 is not built into this lane")
