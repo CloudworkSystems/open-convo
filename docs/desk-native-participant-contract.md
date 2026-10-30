@@ -3318,7 +3318,9 @@ no tools). What native writes to stdin, in UTF-8, before closing it:
   Section 17's owner reads it once every local check has passed, before
   its own lock; a store that cannot be read (locked, closed, missing,
   corrupt) answers `check-failed`, never available. A host with no store
-  reads it as not approved. Nothing in the app builds the owner yet, and
+  reads it as not approved. The run claim reads it again, so a revoke
+  after a start's recheck still stops that spawn and counts no run.
+  Nothing in the app builds the owner yet, and
   the approval screen is PR 4a's.
 
 ### 21.5 Section 5 step 4 (the D1 choice)

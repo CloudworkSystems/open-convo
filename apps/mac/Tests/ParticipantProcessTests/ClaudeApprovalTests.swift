@@ -130,18 +130,25 @@ struct ClaudeApprovalOwnerTests {
         #expect(await owner.recheck().availability.available)
     }
 
-    @Test("A revoked approval stops the next answer at once, keeps the active confirmation as it is, and claims nothing; approving again restores available")
+    @Test("A revoked approval stops the next answer and the next claim at once, keeps the active confirmation as it is, and counts nothing; approving again restores both")
     func revoke() async throws {
         let approval = InventedApproval(true)
         let owner = await inventedOwner(approval: approval, confirmed: true)
         #expect(owner.claimRun())
+        let runsLeft = await owner.report().confirmation
+        approval.set(false)
+        #expect(!owner.claimRun(), "a revoke after the recheck still stops the spawn")
+        approval.set(nil)
+        #expect(!owner.claimRun(), "an unreadable store never claims")
         approval.set(false)
         let report = await owner.report()
         #expect(report.availability == .unavailable(.hostNotApproved))
         #expect(report.confirmation?.isActive == true, "the confirmation is not ended by the revoke")
+        #expect(report.confirmation == runsLeft, "a refused claim counts nothing")
         #expect(await owner.recheck().availability == .unavailable(.hostNotApproved), "a start's recheck reads it afresh")
         approval.set(true)
         #expect(await owner.recheck().availability.available)
+        #expect(owner.claimRun())
     }
 
     @Test("Over the real store: approving and revoking in the protected store change the owner's next answer")

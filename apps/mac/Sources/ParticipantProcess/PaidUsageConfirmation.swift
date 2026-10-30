@@ -117,7 +117,8 @@ public enum PaidUsageConfirmOutcome: Equatable, Sendable {
 ///   earlier failing check wins as the reason; the confirmation is reported
 ///   as it is.
 /// - `claimRun()` (section 7, Codex F0 answer 12): counts one run of an
-///   active confirmation; the fifth ends it with `run-limit`.
+///   active confirmation while the host is still approved (21.4); the
+///   fifth ends it with `run-limit`.
 /// - `endForPaidOverflow()`, `end(_:)` and `abandonPendingConfirmation()`:
 ///   the ends. Each, and the claim, takes one lock and returns at once: no
 ///   wait on the main thread, no user interaction, no I/O (Codex S8 R1).
@@ -300,7 +301,13 @@ public final class PaidUsageConfirmationOwner: AvailabilityReporting, @unchecked
     /// counted. The fifth claim ends the confirmation (`run-limit`), and that
     /// fifth run may finish. With no active confirmation nothing is counted
     /// and the run must not be dispatched. A counted run is never refunded.
+    ///
+    /// Section 21.4's approval is read again here, before the owner's lock
+    /// (the store's in-memory state, no I/O): anything but approved refuses
+    /// the claim and counts nothing, so a revoke during the coordinator's
+    /// durable start write still stops the spawn (Codex review of PR 3d).
     public func claimRun() -> Bool {
+        guard approval.isApproved(host: HostApproval.anthropic) == true else { return false }
         lock.lock()
         guard case .active(var confirmation) = state else {
             lock.unlock()
