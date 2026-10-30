@@ -101,13 +101,18 @@ page in step 5, are the library's.
    because custom categories can carry names he chose (a client's name, for
    example): only the category names he maps ever get written, and only as
    his tag names.
-4. **Draw.** Each tag becomes an **amount** tracker in the habit grid engine
-   (`packages/habit-grid/`, imported by relative path, not copied), in
-   minutes per day, with check-ins marked `source: 'automatic'`, a value the
-   engine already accepts. The engine's `renderSvg` draws each grid, built
-   fresh in memory on every run; nothing is merged into a saved habit file.
-   The grids have no targets, so they shade by the tracker's own range and
-   never show "missed".
+4. **Draw.** Each tag becomes a **count** tracker with no target and the
+   unit `minutes` in the habit grid engine (`packages/habit-grid/`, imported
+   by relative path, not copied), with one check-in per day of that day's
+   minutes, marked `source: 'automatic'`, a value the engine already
+   accepts. Count, not amount: the engine refuses an amount tracker without
+   a target, and only a targetless count tracker shades by its own range, so
+   this needs no engine change. The engine's `renderSvg` draws each grid,
+   built fresh in memory on every run; nothing is merged into a saved habit
+   file. With no target, a day without minutes shows as empty, never
+   "missed". The grid draws a day with no data and a day with zero minutes
+   the same way, so the page lists the days with no data (step 5) and the
+   code pull request adds no zero check-ins.
 5. **Write one page.** One self-contained HTML file (no outside scripts,
    fonts or images) with a grid per tag, the date range held, and the days
    with no data. It is written to
@@ -202,6 +207,9 @@ before anything ships.
   host, and that no request asks for per-site or per-app rows.
 - A test (in the command's tests) that the key never appears in output,
   errors or the page, and that an error shows no response body.
+- A test that builds the trackers through the habit grid engine itself
+  (targetless count trackers in minutes), so the engine's own checks run,
+  and draws them with `renderSvg`.
 - A test that the library itself never imports `fs`, `child_process` or a
   network module, so the package rule holds.
 - A test that the written page contains no URL, no outside resource, and
