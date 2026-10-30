@@ -2,6 +2,7 @@ import { useId, useRef } from 'react';
 import type { ConversationRun, ConversationRunPhase, ParticipantStopReason } from '../domain/conversation-run-types';
 import type { ConversationRunStatus, ParticipantCleanupState } from '../adapters/participant-runtime';
 import { isConversationRunClosed } from '../domain/conversation-runs';
+import { CLAUDE_DESTINATION, isOffMacClaude } from '../domain/claude-participant';
 import { isLocalParticipant, localModelName, localRunOutcome, localRunStarted } from '../domain/local-participant';
 import './run-transcript.css';
 
@@ -173,7 +174,7 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
         ) : <p className="run-empty">{emptyOutput}</p>}
         <dl className="run-participant">
           <div><dt>Model</dt><dd>{local ? localModelName(run.participant) : run.participant.model}</dd></div>
-          <div><dt>{ended ? 'Where it ran' : 'Where it runs'}</dt><dd>{local ? sentLocally ? 'This Mac · stays on this Mac' : 'No reply started' : run.participant.executionHost}</dd></div>
+          <div><dt>{ended ? 'Where it ran' : 'Where it runs'}</dt><dd>{local ? sentLocally ? 'This Mac · stays on this Mac' : 'No reply started' : isOffMacClaude(run.participant) ? CLAUDE_DESTINATION : run.participant.executionHost}</dd></div>
         </dl>
       </article>
       <div className="run-save-state" aria-live="off" data-save-state={prefixMismatch ? 'unknown' : pending ? 'pending' : 'saved'}

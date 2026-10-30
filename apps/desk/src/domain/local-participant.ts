@@ -160,15 +160,25 @@ export type LocalContextResult =
  * record's order, which is the order native checks.
  */
 export function selectLocalContext(runs: readonly Readonly<ConversationRun>[], sessionId: string, input: string): LocalContextResult {
+  return selectContext(runs, sessionId, input, MAX_LOCAL_CONTEXT_BYTES);
+}
+
+/**
+ * The same selection within any one limit over the earlier turns' text plus
+ * the new message: section 20.3's for a local model, section 21.2's
+ * first-trial bound for an off-Mac Claude run. Every earlier completed turn
+ * of the session counts, whichever model wrote it.
+ */
+export function selectContext(runs: readonly Readonly<ConversationRun>[], sessionId: string, input: string, limit: number): LocalContextResult {
   const inputBytes = utf8(input);
-  if (inputBytes > MAX_LOCAL_CONTEXT_BYTES) return { kind: 'too-large' };
+  if (inputBytes > limit) return { kind: 'too-large' };
   const earlier = runs.filter((run) => run.sessionId === sessionId && run.phase === 'completed');
   const chosen: string[] = [];
   let total = inputBytes;
   for (let index = earlier.length - 1; index >= 0 && chosen.length < MAX_CONTEXT_RUNS; index--) {
     const run = earlier[index]!;
     const size = utf8(run.inputChunks.join('')) + utf8(run.outputChunks.join(''));
-    if (total + size > MAX_LOCAL_CONTEXT_BYTES) break;
+    if (total + size > limit) break;
     total += size;
     chosen.push(run.runId);
   }

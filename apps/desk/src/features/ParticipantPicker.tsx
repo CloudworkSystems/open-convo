@@ -8,6 +8,7 @@ import {
   type ParticipantChoice,
 } from '../domain/participant-choices';
 import { isLocalParticipant, localModelName, ollamaChoiceShortName, ollamaChoiceTitle, ollamaResidency, type LocalCatalogView } from '../domain/local-participant';
+import { CLAUDE_DESTINATION, claudeChoiceTitle, isOffMacClaude } from '../domain/claude-participant';
 import { Icon } from '../ui/Icon';
 import { Modal } from '../ui/Modal';
 import './participant-picker.css';
@@ -58,17 +59,21 @@ export function ParticipantPicker({
   const shortName = (identity: ParticipantIdentity) => isLocalParticipant(identity)
     ? ollamaChoiceShortName(identity, localCatalog) : identity.model;
   const title = (identity: ParticipantIdentity) => isLocalParticipant(identity)
-    ? ollamaChoiceTitle(identity, localCatalog) : identity.label;
+    ? ollamaChoiceTitle(identity, localCatalog) : isOffMacClaude(identity) ? claudeChoiceTitle(identity) : identity.label;
+  // Where it runs: an off-Mac Claude entry always names Anthropic, never this Mac.
+  const location = (identity: ParticipantIdentity) => isLocalParticipant(identity)
+    ? { local: 'This Mac', cloud: 'Ollama’s servers', unknown: 'Unknown right now' }[residency(identity)]
+    : isOffMacClaude(identity) ? CLAUDE_DESTINATION : identity.executionHost;
   const currentConfirmation = availabilityChecking || availabilityMessage ? undefined : confirmation;
 
   return <>
     <button
       type="button"
       className="model-harness-slot participant-picker-trigger"
-      aria-label={`Model and participant: ${selected ? isLocalParticipant(selected) ? title(selected) : `${selected.label}, ${selected.model}` : 'Choose participant'}`}
+      aria-label={`Model and participant: ${selected ? isLocalParticipant(selected) || isOffMacClaude(selected) ? title(selected) : `${selected.label}, ${selected.model}` : 'Choose participant'}`}
       aria-haspopup="dialog"
       aria-expanded={open}
-      title={selected ? isLocalParticipant(selected) ? title(selected) : `${selected.label} · ${selected.model}` : 'Choose participant'}
+      title={selected ? isLocalParticipant(selected) || isOffMacClaude(selected) ? title(selected) : `${selected.label} · ${selected.model}` : 'Choose participant'}
       disabled={disabled}
       onClick={() => { setOpen(true); onOpen?.(); }}
     >
@@ -100,7 +105,7 @@ export function ParticipantPicker({
             <dt>Model</dt><dd>{isLocalParticipant(selected) ? localModelName(selected) : selected.model}</dd>
             <dt>Provider</dt><dd>Unknown</dd>
             <dt>Data destination</dt><dd>Unknown</dd>
-            <dt>Process location</dt><dd>{isLocalParticipant(selected) ? { local: 'This Mac', cloud: 'Ollama’s servers', unknown: 'Unknown right now' }[residency(selected)] : selected.executionHost}</dd>
+            <dt>Process location</dt><dd>{location(selected)}</dd>
           </dl>
           <p className="participant-picker-availability">{availabilityChecking ? 'Checking participant availability.' : availabilityMessage ?? (isLocalParticipant(selected) && selectedProblem
             ? `Unavailable — ${selectedProblem}` : 'Unavailable — this saved selection is not in the approved participant list.')}</p>
@@ -122,7 +127,7 @@ export function ParticipantPicker({
                   {isLocalParticipant(choice.identity) && <><dt>Version</dt><dd>{choice.identity.model.slice(choice.identity.label.length + 1, choice.identity.label.length + 13)}</dd></>}
                   <dt>Provider</dt><dd>{choice.provider}</dd>
                   <dt>Data destination</dt><dd>{choice.destination}</dd>
-                  <dt>Process location</dt><dd>{isLocalParticipant(choice.identity) ? { local: 'This Mac', cloud: 'Ollama’s servers', unknown: 'Unknown right now' }[residency(choice.identity)] : choice.identity.executionHost}</dd>
+                  <dt>Process location</dt><dd>{location(choice.identity)}</dd>
                 </dl>
                 <p id={availabilityId} className="participant-picker-availability">
                   {availabilityChecking ? 'Checking availability' : choice.available ? 'Available' : `Unavailable — ${choice.unavailableReason}`}
@@ -130,7 +135,7 @@ export function ParticipantPicker({
                 <button
                   type="button"
                   className="secondary-button participant-picker-select"
-                  aria-label={`Choose participant: ${isLocalParticipant(choice.identity) ? title(choice.identity) : `${choice.identity.label}, ${choice.identity.model}`}`}
+                  aria-label={`Choose participant: ${isLocalParticipant(choice.identity) || isOffMacClaude(choice.identity) ? title(choice.identity) : `${choice.identity.label}, ${choice.identity.model}`}`}
                   aria-pressed={active}
                   aria-describedby={`${descriptionId} ${detailsId} ${availabilityId}`}
                   disabled={disabled}

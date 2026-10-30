@@ -37,6 +37,7 @@ export function Conversation({
   participantSendBlockedReason,
   participantStop,
   participantSendWaitingReason,
+  participantSendDestination,
 }: {
   goal?: Goal;
   session?: Session;
@@ -63,6 +64,8 @@ export function Conversation({
   participantSendBlockedReason?: string;
   participantStop?: ComposerStop;
   participantSendWaitingReason?: string;
+  /** What Send takes off the Mac, for a participant that isn't on it (safety model item 1). */
+  participantSendDestination?: string;
 }) {
   const conversation = useRef<HTMLElement>(null);
   const scrollArea = useRef<HTMLDivElement>(null);
@@ -331,6 +334,7 @@ export function Conversation({
             ? <p className="composer-notice" id="send-blocked-reason">{participantSendBlockedReason}</p>
             : sendWaitingReason && <p className="composer-wait" id="send-waiting-reason">{sendWaitingReason}</p>}
         </div>
+        {participantSendDestination && <p className="composer-destination" id="send-destination" data-send-destination>{participantSendDestination}</p>}
         <label className="sr-only" htmlFor="message-draft">
           Your message
         </label>
@@ -342,8 +346,8 @@ export function Conversation({
           disabled={!session || readOnly}
           placeholder={participantMode ? 'Write an invented message…' : "What's on your mind? Try a sample idea…"}
           rows={3}
-          aria-describedby={participantSendBlockedReason ? 'message-shortcuts send-blocked-reason'
-            : sendWaitingReason ? 'message-shortcuts send-waiting-reason' : 'message-shortcuts'}
+          aria-describedby={`${participantSendBlockedReason ? 'message-shortcuts send-blocked-reason'
+            : sendWaitingReason ? 'message-shortcuts send-waiting-reason' : 'message-shortcuts'}${participantSendDestination ? ' send-destination' : ''}`}
           onChange={(event) => session && onDraftChange(session.id, event.target.value)}
           onFocus={(event) => reportDraftSelection(event.currentTarget, true)}
           onSelect={(event) => reportDraftSelection(event.currentTarget, document.activeElement === event.currentTarget)}

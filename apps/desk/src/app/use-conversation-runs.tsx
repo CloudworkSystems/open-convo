@@ -9,6 +9,7 @@ import type { DeskState } from '../domain/types';
 import { RunTranscript } from '../features/RunTranscript';
 import { canRetryLocalRun, isLocalParticipant, localChoiceProblem, localModelName, noLocalChoiceMessage, ollamaChoiceTitle, localStartRefusalMessage,
   selectLocalContext } from '../domain/local-participant';
+import { canRetryClaudeRun, claudeSendLine, isOffMacClaude, selectClaudeContext } from '../domain/claude-participant';
 import type { DeskRuntime } from './runtime';
 
 export type WorkspaceAttemptResult = WorkspaceSaveResult | { kind: 'blocked'; error: string };
@@ -371,7 +372,15 @@ export function useConversationRuns(options: RunWorkspace) {
         const id = access.runtime.createId ?? (() => crypto.randomUUID());
         // Section 20.3: a local model is sent this session's earlier completed
         // turns by run id, oldest whole turns left out to fit one limit.
-        const context = local ? selectLocalContext(state.conversationRuns ?? [], sessionId, input) : undefined;
+        // Section 21.2: an off-Mac Claude run is sent them too, within the
+        // first-trial bound over context and message together.
+        const offMac = isOffMacClaude(participant.identity);
+        const context = local ? selectLocalContext(state.conversationRuns ?? [], sessionId, input)
+          : offMac ? selectClaudeContext(state.conversationRuns ?? [], sessionId, input, access.runtime.participantInputLimit) : undefined;
+        if (offMac && context?.kind === 'too-large') {
+          access.error('This message is too long for the current trial. Shorten it before sending. Your full draft is kept; nothing was sent.');
+          return;
+        }
         if (context?.kind === 'too-large') {
           access.error('This message is too long for a local model. Shorten it before sending. Your full draft is kept; nothing was sent.');
           return;
@@ -453,7 +462,7 @@ export function useConversationRuns(options: RunWorkspace) {
   function retry(run: ConversationRun) {
     const access = latest.current;
     const state = access.current();
-    if (!state || !access.runtime.isActive() || !access.restoreDraft || !canRetryLocalRun(run)) return;
+    if (!state || !access.runtime.isActive() || !access.restoreDraft || !(canRetryLocalRun(run) || canRetryClaudeRun(run))) return;
     if ((state.drafts[run.sessionId] ?? '') !== '') {
       access.error('Retry needs an empty message box so nothing you typed is replaced. Clear or send your draft first.');
       return;
@@ -520,7 +529,7 @@ export function useConversationRuns(options: RunWorkspace) {
         : 'Close as unknown keeps the recorded prefix and allows another message after saving. It does not stop a participant or confirm completion.'}</p>
         <button type="button" className="recovery-button secondary"
           onClick={(event) => { focusStatus(event.currentTarget); void closeUnknown(run); }}>{interruptedClose ? 'Close interrupted reply' : 'Close as unknown'}</button></>}
-      {run.runId === lastSelectedRunId && canRetryLocalRun(run) && !local && checkpointPending === false && options.restoreDraft && <>
+      {run.runId === lastSelectedRunId && (canRetryLocalRun(run) || canRetryClaudeRun(run)) && !local && checkpointPending === false && options.restoreDraft && <>
         <p className="run-recovery-note">Retry puts your message back in the box below. Nothing is sent until you press Send; this reply stays as it is.</p>
         <button type="button" className="recovery-button secondary" onClick={() => retry(run)}>Retry</button></>}
     </div>;
@@ -592,6 +601,9 @@ export function useConversationRuns(options: RunWorkspace) {
     : options.runtime.participant?.identity.label;
   const participantMode = options.runtime.participantChoices !== undefined || !!selectedSession?.participantChoice
     || !!options.runtime.participant || options.state?.schemaVersion === 2;
+  // Safety model item 1: what Send would take off the Mac, before Send.
+  const sendDestination = participantMode && selected && isOffMacClaude(savedSelection)
+    ? claudeSendLine(options.state?.conversationRuns ?? [], selected, options.state?.drafts[selected] ?? '', inputLimit) ?? undefined : undefined;
   // Step 3 trial: while this conversation's reply is being written, the
   // composer's Send becomes Stop, wired to the same controller.stop() as the
   // transcript's own Stop. Recovery states (Retry Stop, cleanup) stay in the
@@ -619,7 +631,7 @@ export function useConversationRuns(options: RunWorkspace) {
   return { send, refreshAvailability, confirmSaved, content, otherRunControls, hasUnconfirmed, canSaveEdits,
     participantLabel: participantMode ? choiceLabel ?? 'Participant unavailable' : undefined,
     selectedLocalProblem: selectedLocal && savedSelection && !options.runtime.participantAvailabilityChecking ? catalogBlock(savedSelection) : undefined,
-    busy: selectedBusy, composerStop, sendWaitingReason,
+    busy: selectedBusy, composerStop, sendWaitingReason, sendDestination,
     unavailable: participantMode && (!(selectedLocal ? options.runtime.participantForRun : options.runtime.participant) || options.blocked() || cleanupPending() || !!selectionBlock || inputTooLarge),
     sendBlockedReason: participantMode && options.blocked()
       ? 'Sending is paused until the workspace save is resolved. Your draft is retained.'

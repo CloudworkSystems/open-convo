@@ -9,7 +9,7 @@ export const DEVELOPMENT_SOURCE_FILES = Object.freeze([
   'src/app/runtime.tsx', 'src/app/native-bootstrap.ts',
   'src/app/use-conversation-runs.tsx', 'src/adapters/participant-runtime.ts',
   'src/domain/conversation-run-types.ts', 'src/domain/conversation-runs.ts', 'src/domain/conversation-workspace.ts',
-  'src/domain/participant-choices.ts', 'src/domain/local-participant.ts', 'src/features/ParticipantPicker.tsx', 'src/features/participant-picker.css',
+  'src/domain/participant-choices.ts', 'src/domain/local-participant.ts', 'src/domain/claude-participant.ts', 'src/features/ParticipantPicker.tsx', 'src/features/participant-picker.css',
   'src/features/RunTranscript.tsx', 'src/features/run-transcript.css',
   'src/adapters/workspace-repository.ts', 'src/adapters/native-proof-repository.ts',
   'src/adapters/native-host-client.ts', 'src/adapters/native-host-codec.ts', 'src/adapters/wk-host-transport.ts',
