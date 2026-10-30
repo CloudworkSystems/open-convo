@@ -172,9 +172,15 @@ Vendor harnesses are used only where a subscription requires its own program.
 
 ## Foreign Agents Start at Zero Trust (Owner, October 25 and 30)
 
-A **foreign agent** runs on another company's model or harness that True Convo
-neither runs nor can inspect. Meta's Muse is the first case: the owner's Muse
-agent, Cam. The owner's rule (October 25): zero trust is the starting baseline
+A **foreign agent** is an agent the owner hasn't taken on as one of his own:
+it lives in another company's agent product, with that product's own memory,
+tools and loop, which True Convo neither runs nor can inspect. Meta's Muse is
+the first case: the owner's Muse agent, Cam. Using another company's model is
+not enough to make an agent foreign. The trusted builders in AGENTS.md "Who
+Does What" (Claude, Codex, GrokBot) run on outside models too, but they work
+under the build and review loop there, and the work below goes to them.
+Profiles the owner sets up in True Convo also start with nothing, and get
+only what he grants (`computer-use.md`). The owner's rule (October 25): zero trust is the starting baseline
 for any unknown foreign model or agent inside True Convo. Other notes point
 here for it (`security.md`, `prime-agent.md`, `computer-use.md`,
 `verified-owner-yes.md`, `back-end-and-agent-hosts.md`).
