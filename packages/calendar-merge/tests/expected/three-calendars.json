@@ -1,0 +1,378 @@
+{
+  "schemaVersion": 1,
+  "query": {
+    "from": {
+      "utc": "2026-11-01T04:00:00Z",
+      "local": "2026-11-01T00:00:00-04:00"
+    },
+    "to": {
+      "utc": "2026-11-08T05:00:00Z",
+      "local": "2026-11-08T00:00:00-05:00"
+    },
+    "timeZone": "America/New_York",
+    "includeCancelled": false
+  },
+  "occurrences": [
+    {
+      "key": "9E8D7C6B-5A4F-4E3D-8C2B-1A0F9E8D7C6B/2026-11-01T05:30:00Z",
+      "uid": "9E8D7C6B-5A4F-4E3D-8C2B-1A0F9E8D7C6B",
+      "title": "Night feed reminder",
+      "location": null,
+      "allDay": false,
+      "start": {
+        "utc": "2026-11-01T05:30:00Z",
+        "local": "2026-11-01T01:30:00-04:00"
+      },
+      "end": {
+        "utc": "2026-11-01T05:45:00Z",
+        "local": "2026-11-01T01:45:00-04:00"
+      },
+      "eventTimeZone": "America/New_York",
+      "floating": false,
+      "status": "confirmed",
+      "sources": [
+        {
+          "id": "home",
+          "name": "home"
+        }
+      ],
+      "matchedBy": null,
+      "isRepeat": false,
+      "isChanged": false,
+      "repeatNotSupported": false
+    },
+    {
+      "key": "040000008200E00074C5B7101A82E0080000000010A1B2C3D4E5F60000000000000000/2026-11-02T14:00:00Z",
+      "uid": "040000008200E00074C5B7101A82E0080000000010A1B2C3D4E5F60000000000000000",
+      "title": "Team stand-up",
+      "location": "Microsoft Teams Meeting",
+      "allDay": false,
+      "start": {
+        "utc": "2026-11-02T14:00:00Z",
+        "local": "2026-11-02T09:00:00-05:00"
+      },
+      "end": {
+        "utc": "2026-11-02T14:15:00Z",
+        "local": "2026-11-02T09:15:00-05:00"
+      },
+      "eventTimeZone": "America/New_York",
+      "floating": false,
+      "status": "confirmed",
+      "sources": [
+        {
+          "id": "work",
+          "name": "work"
+        }
+      ],
+      "matchedBy": null,
+      "isRepeat": true,
+      "isChanged": false,
+      "repeatNotSupported": false
+    },
+    {
+      "key": "7A1C9E2B-3D4F-4A5B-9C8D-0E1F2A3B4C5D/2026-11-02T21:00:00Z",
+      "uid": "7A1C9E2B-3D4F-4A5B-9C8D-0E1F2A3B4C5D",
+      "title": "Piano lesson",
+      "location": "Maple Street Music, Room 2",
+      "allDay": false,
+      "start": {
+        "utc": "2026-11-02T21:00:00Z",
+        "local": "2026-11-02T16:00:00-05:00"
+      },
+      "end": {
+        "utc": "2026-11-02T21:45:00Z",
+        "local": "2026-11-02T16:45:00-05:00"
+      },
+      "eventTimeZone": "America/New_York",
+      "floating": false,
+      "status": "confirmed",
+      "sources": [
+        {
+          "id": "home",
+          "name": "home"
+        }
+      ],
+      "matchedBy": null,
+      "isRepeat": true,
+      "isChanged": false,
+      "repeatNotSupported": false
+    },
+    {
+      "key": "040000008200E00074C5B7101A82E0080000000010A1B2C3D4E5F60000000000000000/2026-11-03T14:00:00Z",
+      "uid": "040000008200E00074C5B7101A82E0080000000010A1B2C3D4E5F60000000000000000",
+      "title": "Team stand-up",
+      "location": "Microsoft Teams Meeting",
+      "allDay": false,
+      "start": {
+        "utc": "2026-11-03T14:00:00Z",
+        "local": "2026-11-03T09:00:00-05:00"
+      },
+      "end": {
+        "utc": "2026-11-03T14:15:00Z",
+        "local": "2026-11-03T09:15:00-05:00"
+      },
+      "eventTimeZone": "America/New_York",
+      "floating": false,
+      "status": "confirmed",
+      "sources": [
+        {
+          "id": "work",
+          "name": "work"
+        }
+      ],
+      "matchedBy": null,
+      "isRepeat": true,
+      "isChanged": false,
+      "repeatNotSupported": false
+    },
+    {
+      "key": "040000008200E00074C5B7101A82E00800000000AABBCCDDEEFF0011000000000000000/2026-11-03T15:00:00Z + dentist-home-4471@icloud.example/2026-11-03T15:00:00Z",
+      "uid": "040000008200E00074C5B7101A82E00800000000AABBCCDDEEFF0011000000000000000",
+      "title": "dentist ",
+      "location": "Out of office",
+      "allDay": false,
+      "start": {
+        "utc": "2026-11-03T15:00:00Z",
+        "local": "2026-11-03T10:00:00-05:00"
+      },
+      "end": {
+        "utc": "2026-11-03T16:00:00Z",
+        "local": "2026-11-03T11:00:00-05:00"
+      },
+      "eventTimeZone": "America/New_York",
+      "floating": false,
+      "status": "confirmed",
+      "sources": [
+        {
+          "id": "home",
+          "name": "home"
+        },
+        {
+          "id": "work",
+          "name": "work"
+        }
+      ],
+      "matchedBy": "title-and-time",
+      "isRepeat": false,
+      "isChanged": false,
+      "repeatNotSupported": false
+    },
+    {
+      "key": "040000008200E00074C5B7101A82E0080000000010A1B2C3D4E5F60000000000000000/2026-11-04T14:00:00Z",
+      "uid": "040000008200E00074C5B7101A82E0080000000010A1B2C3D4E5F60000000000000000",
+      "title": "Team stand-up",
+      "location": "Microsoft Teams Meeting",
+      "allDay": false,
+      "start": {
+        "utc": "2026-11-04T14:00:00Z",
+        "local": "2026-11-04T09:00:00-05:00"
+      },
+      "end": {
+        "utc": "2026-11-04T14:15:00Z",
+        "local": "2026-11-04T09:15:00-05:00"
+      },
+      "eventTimeZone": "America/New_York",
+      "floating": false,
+      "status": "confirmed",
+      "sources": [
+        {
+          "id": "work",
+          "name": "work"
+        }
+      ],
+      "matchedBy": null,
+      "isRepeat": true,
+      "isChanged": false,
+      "repeatNotSupported": false
+    },
+    {
+      "key": "1a2b3c4d5e6f7g8h9i0j@google.example/2026-11-05",
+      "uid": "1a2b3c4d5e6f7g8h9i0j@google.example",
+      "title": "Grandma Rosalind visiting",
+      "location": null,
+      "allDay": true,
+      "start": "2026-11-05",
+      "end": "2026-11-08",
+      "eventTimeZone": null,
+      "floating": false,
+      "status": "confirmed",
+      "sources": [
+        {
+          "id": "family",
+          "name": "family"
+        }
+      ],
+      "matchedBy": null,
+      "isRepeat": false,
+      "isChanged": false,
+      "repeatNotSupported": false
+    },
+    {
+      "key": "2F4E6A8C-0B1D-4E3F-8A5B-7C9D1E3F5A7B/2026-11-05",
+      "uid": "2F4E6A8C-0B1D-4E3F-8A5B-7C9D1E3F5A7B",
+      "title": "Recycling day",
+      "location": null,
+      "allDay": true,
+      "start": "2026-11-05",
+      "end": "2026-11-06",
+      "eventTimeZone": null,
+      "floating": false,
+      "status": "confirmed",
+      "sources": [
+        {
+          "id": "home",
+          "name": "home"
+        }
+      ],
+      "matchedBy": null,
+      "isRepeat": true,
+      "isChanged": false,
+      "repeatNotSupported": false
+    },
+    {
+      "key": "040000008200E00074C5B7101A82E0080000000010A1B2C3D4E5F60000000000000000/2026-11-05T14:00:00Z",
+      "uid": "040000008200E00074C5B7101A82E0080000000010A1B2C3D4E5F60000000000000000",
+      "title": "Team stand-up (late start)",
+      "location": "Microsoft Teams Meeting",
+      "allDay": false,
+      "start": {
+        "utc": "2026-11-05T14:30:00Z",
+        "local": "2026-11-05T09:30:00-05:00"
+      },
+      "end": {
+        "utc": "2026-11-05T14:45:00Z",
+        "local": "2026-11-05T09:45:00-05:00"
+      },
+      "eventTimeZone": "America/New_York",
+      "floating": false,
+      "status": "confirmed",
+      "sources": [
+        {
+          "id": "work",
+          "name": "work"
+        }
+      ],
+      "matchedBy": null,
+      "isRepeat": true,
+      "isChanged": true,
+      "repeatNotSupported": false
+    },
+    {
+      "key": "ptc-2026-11@school.example/2026-11-05T20:30:00Z",
+      "uid": "ptc-2026-11@school.example",
+      "title": "Parent-teacher conference",
+      "location": "Library, Room 3",
+      "allDay": false,
+      "start": {
+        "utc": "2026-11-05T20:30:00Z",
+        "local": "2026-11-05T15:30:00-05:00"
+      },
+      "end": {
+        "utc": "2026-11-05T21:00:00Z",
+        "local": "2026-11-05T16:00:00-05:00"
+      },
+      "eventTimeZone": "UTC",
+      "floating": false,
+      "status": "confirmed",
+      "sources": [
+        {
+          "id": "home",
+          "name": "home"
+        },
+        {
+          "id": "family",
+          "name": "family"
+        }
+      ],
+      "matchedBy": "uid",
+      "isRepeat": false,
+      "isChanged": false,
+      "repeatNotSupported": false
+    },
+    {
+      "key": "040000008200E00074C5B7101A82E00800000000556677889900AABB000000000000000/2026-11-05T22:00:00Z",
+      "uid": "040000008200E00074C5B7101A82E00800000000556677889900AABB000000000000000",
+      "title": "Quarterly review with the Pacific office",
+      "location": "Conference room \"Cedar\" <3rd floor>",
+      "allDay": false,
+      "start": {
+        "utc": "2026-11-05T22:00:00Z",
+        "local": "2026-11-05T17:00:00-05:00"
+      },
+      "end": {
+        "utc": "2026-11-05T23:30:00Z",
+        "local": "2026-11-05T18:30:00-05:00"
+      },
+      "eventTimeZone": "America/Los_Angeles",
+      "floating": false,
+      "status": "tentative",
+      "sources": [
+        {
+          "id": "work",
+          "name": "work"
+        }
+      ],
+      "matchedBy": null,
+      "isRepeat": false,
+      "isChanged": false,
+      "repeatNotSupported": false
+    },
+    {
+      "key": "040000008200E00074C5B7101A82E0080000000010A1B2C3D4E5F60000000000000000/2026-11-06T14:00:00Z",
+      "uid": "040000008200E00074C5B7101A82E0080000000010A1B2C3D4E5F60000000000000000",
+      "title": "Team stand-up",
+      "location": "Microsoft Teams Meeting",
+      "allDay": false,
+      "start": {
+        "utc": "2026-11-06T14:00:00Z",
+        "local": "2026-11-06T09:00:00-05:00"
+      },
+      "end": {
+        "utc": "2026-11-06T14:15:00Z",
+        "local": "2026-11-06T09:15:00-05:00"
+      },
+      "eventTimeZone": "America/New_York",
+      "floating": false,
+      "status": "confirmed",
+      "sources": [
+        {
+          "id": "work",
+          "name": "work"
+        }
+      ],
+      "matchedBy": null,
+      "isRepeat": true,
+      "isChanged": false,
+      "repeatNotSupported": false
+    },
+    {
+      "key": "C3D5E7F9-1A2B-4C3D-9E4F-5A6B7C8D9E0F/2026-11-08T00:00:00Z",
+      "uid": "C3D5E7F9-1A2B-4C3D-9E4F-5A6B7C8D9E0F",
+      "title": "Dinner with the Ashgroves",
+      "location": "Willow Bistro, 12 Elm St, Brookfield",
+      "allDay": false,
+      "start": {
+        "utc": "2026-11-08T00:00:00Z",
+        "local": "2026-11-07T19:00:00-05:00"
+      },
+      "end": {
+        "utc": "2026-11-08T02:00:00Z",
+        "local": "2026-11-07T21:00:00-05:00"
+      },
+      "eventTimeZone": "America/New_York",
+      "floating": false,
+      "status": "confirmed",
+      "sources": [
+        {
+          "id": "home",
+          "name": "home"
+        }
+      ],
+      "matchedBy": null,
+      "isRepeat": false,
+      "isChanged": false,
+      "repeatNotSupported": false
+    }
+  ],
+  "problems": []
+}
