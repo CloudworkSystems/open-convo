@@ -263,7 +263,8 @@ parallel, as Claude Code does.
   every helper appears on the one screen that shows every agent ("Borrowed
   From Scion"), with its own space and caps. Helpers started inside a Pi run
   appear in neither. Several local helpers at once would also overload an 8 to
-  16 GB Mac. At most, allow them for read-only exploration on cloud profiles.
+  16 GB Mac. So they stay off. A helper that can't be seen and stopped there
+doesn't run.
 - Both are third-party code running inside Pi, so each passes the install
   gate and the action check in `portable-capability-layer.md` first.
 
