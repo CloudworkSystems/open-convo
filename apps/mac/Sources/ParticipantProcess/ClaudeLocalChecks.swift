@@ -11,9 +11,10 @@ import Foundation
 // own: a pass is still `overflow-unverified`, which only section 17's
 // confirmation owner (F4) may lift. They make no model request, billing read
 // or provider probe, never execute a configured key or policy helper, and
-// never read the CLI's own Keychain item. Until the D1 decision they never
-// run `auth status` either (`ClaudeAuthStatusGate`): a helper that
-// server-managed settings deliver during it could run (Codex F34-D1).
+// never read the CLI's own Keychain item. They run `auth status` only with
+// its network blocked by macOS (`ClaudeAuthStatusGate`, the owner's D1
+// decision), so server-managed settings cannot arrive during it and arm a
+// helper (Codex F34-D1).
 
 /// Where the checks look. Every path root is injected: tests give invented
 /// trees; production would give `forCurrentUser`, which nothing calls yet.
@@ -103,27 +104,34 @@ public struct ClaudeCheckRoots: Sendable, Equatable {
     }
 }
 
-/// Whether section 5's step 4 runs `auth status` (Codex F34-D1). Read only
-/// (bytes, never run), Claude Code 2.1.283's `auth status` starts a
-/// server-managed settings fetch for an eligible account (a Team or
-/// Enterprise plan, an unknown plan, a profile login or a stored key), applies
-/// a new payload in memory for that non-interactive run without writing it
-/// to `remote-settings.json`, and can then run a policy helper the payload
-/// names, before any inspection can see it. Nothing in that build skips the
-/// fetch for an eligible account, and which accounts are eligible depends on
-/// the login's plan, which only `auth status` (or the CLI's Keychain item,
-/// never read) tells. So no check before it can rule that out. A proxy
-/// address for this probe alone, held closed by the app, would make the
-/// fetch fail by the same reading (the decision's option 2; not built).
-/// Until the owner and Codex decide, production refuses at step 4
-/// (`docs/reviews/2026-10-12-claude-f34-d1-decision.md`).
+/// Whether and how section 5's step 4 runs `auth status` (Codex F34-D1).
+/// Read only (bytes, never run), Claude Code 2.1.283's `auth status` starts
+/// a server-managed settings fetch for an eligible account (a Team or
+/// Enterprise plan, an unknown plan, a profile login or a stored key),
+/// applies a new payload in memory for that non-interactive run without
+/// writing it to `remote-settings.json`, and can then run a policy helper the
+/// payload names, before any inspection can see it. Nothing in that build
+/// skips the fetch for an eligible account, and which accounts are eligible
+/// depends on the login's plan, which only `auth status` (or the CLI's
+/// Keychain item, never read) tells. So no check before it can rule that
+/// out.
+///
+/// The owner's D1 decision (October 29, 2026, option 1): the probe runs with
+/// every network operation denied by macOS (`ClaudeNetworkBlock`), so the
+/// fetch cannot reach Anthropic and no new payload arrives, and only Pro and
+/// Max plans pass (a Team or Enterprise login is `not-subscription`). A
+/// cached payload is already on disk, where step 3 reads it first.
 package enum ClaudeAuthStatusGate: Sendable, Equatable {
-    /// Production: step 4 is `check-failed` (`unguarded`); `auth status`
-    /// never runs, so the checks never pass.
-    case refuseUntilDecided
+    /// Production: `auth status` runs under `ClaudeNetworkBlock`. If the
+    /// block cannot be applied (its tool missing or not the system's), step
+    /// 4 is `check-failed` and `auth status` never runs.
+    case runWithNetworkBlocked(ClaudeNetworkBlock)
     /// The test target and the test-only probe only, over invented trees
-    /// and the fake CLI: step 4 runs `auth status`.
+    /// and the fake CLI: step 4 runs `auth status` with nothing around it.
     case runForTests
+
+    /// What production uses.
+    package static let production = ClaudeAuthStatusGate.runWithNetworkBlocked(.system)
 }
 
 /// Section 5's bounds. `contract` is the only production value.
@@ -195,6 +203,10 @@ public struct ClaudeCLIFileIdentity: Equatable, Sendable {
 /// The claude.ai plan `auth status` reports.
 public enum ClaudeSubscriptionPlan: String, Sendable, CaseIterable {
     case pro, max, team, enterprise
+
+    /// The plans the checks pass (the owner's D1 decision): the others can
+    /// carry server-managed settings.
+    static let accepted: Set<ClaudeSubscriptionPlan> = [.pro, .max]
 }
 
 /// How the CLI is signed in, when the checks pass: always a claude.ai plan
@@ -306,11 +318,13 @@ package typealias ClaudeCheckObserver = @Sendable (ClaudeCheckAccess) -> Void
 /// 4. `auth status --json`: provider evidence (`apiKeySource`, another
 ///    `apiProvider`, an API key, key helper, OAuth token or third-party
 ///    method) is `provider-override`; logged out is `signed-out`; a
-///    claude.ai login without a plan is `not-subscription`. The settings
-///    sources are read once more after it, and the binary's identity is
-///    checked again after each probe: a change is `check-failed`. Until the
-///    D1 decision production never runs it (`ClaudeAuthStatusGate`): step 4
-///    is `check-failed` (`unguarded`), so these checks never pass there.
+///    claude.ai login without a plan, or on a plan other than Pro or Max, is
+///    `not-subscription`. The settings sources are read once more after it,
+///    and the binary's identity is checked again after each probe: a change
+///    is `check-failed`. Production runs it with every network operation
+///    denied (`ClaudeAuthStatusGate`, the owner's D1 decision); when that
+///    block cannot be applied, step 4 is `check-failed` (`network-block`)
+///    and `auth status` never runs.
 ///
 /// Each probe runs the pinned file directly under section 11's environment
 /// rule (`ParticipantEnvironment.build`), in a fresh empty app-owned 0700
@@ -358,13 +372,13 @@ public actor ClaudeLocalChecks: ClaudeLocalChecking, AvailabilityChecking {
     private var nextWork: UInt64 = 0
 
     /// The probes' environment is built, at each check, from this process's
-    /// own environment under section 11's rule. Step 4 never runs
-    /// `auth status` (`ClaudeAuthStatusGate.refuseUntilDecided`).
+    /// own environment under section 11's rule. Step 4 runs `auth status`
+    /// with its network blocked (`ClaudeAuthStatusGate.production`).
     public init(roots: ClaudeCheckRoots, limits: ClaudeCheckLimits = .contract,
                 clock: any ParticipantClock = SystemParticipantClock(),
                 log: any ClaudeCheckLogSink = SystemClaudeCheckLog()) {
         self.init(roots: roots, limits: limits, clock: clock, log: log, environment: nil, observer: nil,
-                  authStatus: .refuseUntilDecided)
+                  authStatus: .production)
     }
 
     /// The test-only availability probe's (a separate process, which cannot

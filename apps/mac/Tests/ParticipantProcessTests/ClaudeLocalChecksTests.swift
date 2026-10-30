@@ -837,22 +837,110 @@ extension ProcessSuites {
             #expect(FileManager.default.fileExists(atPath: marker), "run by the test itself, it writes the marker")
         }
 
-        // MARK: The D1 gate (Codex F34-D1)
+        // MARK: The D1 gate (Codex F34-D1; the owner's choice, option 1)
 
-        @Test("Until the D1 decision production never runs auth status: with every earlier check passing, step 4 is check-failed (server-managed settings unguarded), no auth command runs and the owner asks nothing; earlier failures still win; the public initializer has this gate")
-        func authStatusGate() async throws {
+        @Test("Production runs auth status under macOS's network block: the checks pass through the system's sandbox tool, which runs the pinned file with every argument after it; the public initializer has this gate")
+        func authStatusNetworkBlocked() async throws {
             let tree = try InventedClaudeTree()
             defer { tree.clean() }
-            let refusing = tree.checks(authStatus: .refuseUntilDecided)
-            #expect(await refusing.evaluateFresh() == .failed(.checkFailed))
-            #expect(tree.log.last?.line == "check=fresh result=check-failed step=auth-status source=remote-settings detail=unguarded")
-            #expect(await refusing.recheck() == .unavailable(.checkFailed))
-            #expect(tree.probes("version") == 2 && tree.probes("auth-status") == 0, "--version ran; auth status never did")
-            #expect(Set(tree.accesses.executed) == [tree.binaryPath])
+            let blocked = tree.checks(authStatus: .production)
+            #expect(await blocked.evaluateFresh().didPass)
+            #expect(tree.log.last?.line == "check=fresh result=passed step=finished")
+            #expect(tree.probes("version") == 1 && tree.probes("auth-status") == 1)
+            let tool = ClaudeNetworkBlock.system.toolPath
+            #expect(tree.accesses.executed == [tree.binaryPath, tool, tree.binaryPath],
+                    "--version directly; auth status through the tool, which runs the pinned file")
+            #expect(Set(tree.outside) == [tool], "only the system tool is outside the tree: \(tree.outside)")
+            let argv = tree.record("auth-status.json")?["argv"] as? [String]
+            #expect(argv.map { Array($0.suffix(3)) } == ["auth", "status", "--json"], "\(argv ?? [])")
+            #expect(ClaudeNetworkBlock.system.arguments(running: tree.binaryPath, ["auth", "status", "--json"])
+                        == [tool, "-p", ClaudeNetworkBlock.profile, tree.binaryPath, "auth", "status", "--json"])
+            #expect(ClaudeNetworkBlock.profile.hasPrefix("(version 1)(allow default)(deny network*)(deny mach-lookup "))
+            for service in ClaudeNetworkBlock.deniedServices {
+                #expect(ClaudeNetworkBlock.profile.contains("(global-name \"\(service)\")"), "\(service)")
+            }
+            #expect(await blocked.recheck() == .unavailable(.overflowUnverified))
+
+            // The public initializer (what F7 would compose) blocks the
+            // network; only the tests' and the test-only probe's
+            // initializers run it with nothing around it.
+            #expect(ClaudeLocalChecks(roots: tree.roots, log: tree.log).authStatusGate == .production)
+            #expect(tree.checks().authStatusGate == .runForTests)
+        }
+
+        @Test("Under the block, what auth status starts reaches no listener, over TCP or a local socket, finds none of the resolver and fetch services and cannot connect to the DNS resolver; without it, the same fake does all of these and finds every service (not vacuous, and no name on the list is a typo)")
+        func authStatusNetworkDenied() async throws {
+            let tree = try InventedClaudeTree()
+            defer { tree.clean() }
+            let tcp = try InventedListener.tcp()
+            defer { tcp.close() }
+            let local = try InventedListener.local()
+            defer { local.close() }
+            try tree.setScenario(["authStatus": "subscription", "networkPort": tcp.port, "networkSocket": local.path,
+                                  "networkServices": ClaudeNetworkBlock.deniedServices, "networkResolver": true])
+
+            #expect(await tree.checks(authStatus: .production).evaluateFresh().didPass)
+            let denied = tree.record("network.json")
+            #expect(denied?["tcpConnected"] as? Bool == false && denied?["localConnected"] as? Bool == false, "\(denied ?? [:])")
+            #expect((denied?["tcpErrno"] as? Int ?? 0) != 0 && (denied?["localErrno"] as? Int ?? 0) != 0)
+            #expect(!tcp.hasConnection && !local.hasConnection, "neither listener saw a connection")
+            let deniedLookups = denied?["services"] as? [String: Int] ?? [:]
+            #expect(Set(deniedLookups.keys) == Set(ClaudeNetworkBlock.deniedServices), "\(deniedLookups)")
+            #expect(deniedLookups.values.allSatisfy { $0 != 0 }, "no denied service was found: \(deniedLookups)")
+            #expect((denied?["resolver"] as? Int).map { $0 != 0 } == true, "the DNS resolver was unreachable: \(denied ?? [:])")
+
+            tree.remove(tree.records.appendingPathComponent("network.json").path)
+            #expect(await tree.checks(authStatus: .runForTests).evaluateFresh().didPass)
+            let reached = tree.record("network.json")
+            #expect(reached?["tcpConnected"] as? Bool == true && reached?["localConnected"] as? Bool == true, "\(reached ?? [:])")
+            #expect(tcp.hasConnection && local.hasConnection)
+            let reachedLookups = reached?["services"] as? [String: Int] ?? [:]
+            #expect(Set(reachedLookups.keys) == Set(ClaudeNetworkBlock.deniedServices)
+                        && reachedLookups.values.allSatisfy { $0 == 0 }, "every denied service exists: \(reachedLookups)")
+            #expect(reached?["resolver"] as? Int == 0, "the DNS resolver was reachable: \(reached ?? [:])")
+        }
+
+        @Test("Only Pro and Max pass: a Team or Enterprise login is not-subscription (plan-not-accepted), under the block or not")
+        func authStatusPlans() async throws {
+            let tree = try InventedClaudeTree()
+            defer { tree.clean() }
+            for gate in [ClaudeAuthStatusGate.production, .runForTests] {
+                for plan in ["pro", "subscription"] {
+                    try tree.setScenario(["authStatus": plan])
+                    #expect(await tree.checks(authStatus: gate).evaluateFresh().didPass, "\(plan)")
+                }
+                for plan in ["team", "enterprise"] {
+                    try tree.setScenario(["authStatus": plan])
+                    #expect(await tree.checks(authStatus: gate).evaluateFresh() == .failed(.notSubscription), "\(plan)")
+                    #expect(tree.log.last?.line
+                                == "check=fresh result=not-subscription step=auth-status source=auth-status detail=plan-not-accepted")
+                }
+            }
+            #expect(ClaudeSubscriptionPlan.accepted == [.pro, .max])
+        }
+
+        @Test("When the block can't be applied, auth status never runs: a missing tool, one that isn't root's, a link, or a relative path is check-failed (network-block), the owner asks nothing; earlier failures still win")
+        func authStatusBlockRefused() async throws {
+            let tree = try InventedClaudeTree()
+            defer { tree.clean() }
+            let ownTool = tree.root.appendingPathComponent("invented-sandbox").path
+            try tree.write("#!/bin/sh\nexit 0\n", to: ownTool)
+            tree.chmod(ownTool, 0o755)
+            let link = tree.root.appendingPathComponent("invented-link").path
+            try FileManager.default.createSymbolicLink(atPath: link, withDestinationPath: ClaudeNetworkBlock.system.toolPath)
+            for path in [tree.root.appendingPathComponent("missing").path, ownTool, link, "usr/bin/sandbox-exec"] {
+                let refusing = tree.checks(authStatus: .runWithNetworkBlocked(ClaudeNetworkBlock(toolPath: path)))
+                #expect(await refusing.evaluateFresh() == .failed(.checkFailed), "\(path)")
+                #expect(tree.log.last?.line == "check=fresh result=check-failed step=auth-status source=auth-status detail=network-block",
+                        "\(path)")
+            }
+            #expect(tree.probes("version") == 4 && tree.probes("auth-status") == 0, "--version ran; auth status never did")
+            #expect(!tree.accesses.executed.contains(ownTool) && !tree.accesses.executed.contains(link))
             for source in ClaudeCheckSource.settingsSources where source != .managedDropIn && source != .localSettings {
                 #expect(tree.accesses.read.contains(tree.path(source)), "\(source.rawValue) still inspected first")
             }
 
+            let refusing = tree.checks(authStatus: .runWithNetworkBlocked(ClaudeNetworkBlock(toolPath: ownTool)))
             // Earlier failures still win, in section 5's order.
             try tree.writeJSON(["apiKeyHelper": "/invented/never-run"], to: tree.path(.userSettings))
             #expect(await refusing.evaluateFresh() == .failed(.providerOverride))
@@ -868,11 +956,6 @@ extension ProcessSuites {
             #expect(authentication.requests == 0)
             #expect(await owner.report().availability == .unavailable(.checkFailed))
             #expect(tree.probes("auth-status") == 0)
-
-            // The public initializer (what F7 would compose) refuses; only the
-            // tests' and the test-only probe's initializers can run it.
-            #expect(ClaudeLocalChecks(roots: tree.roots, log: tree.log).authStatusGate == .refuseUntilDecided)
-            #expect(tree.checks().authStatusGate == .runForTests)
             #expect(tree.outside.isEmpty, "\(tree.outside)")
         }
 
@@ -1134,12 +1217,12 @@ extension ProcessSuites {
                 #expect(ran?.status == 0, "the probe ended in time")
                 return ran?.output
             }
-            #expect(try run() == "available=false reason=overflow-unverified local=passed production=check-failed outside=0\n")
+            #expect(try run() == "available=false reason=overflow-unverified local=passed production=passed outside=0\n")
             #expect(tree.probes("version") >= 1 && tree.probes("auth-status") >= 1, "the checks really ran and passed")
             let authStatuses = tree.probes("auth-status")
-            #expect(try run().map { $0.contains(" production=check-failed ") } == true)
-            #expect(tree.probes("auth-status") == authStatuses + 2,
-                    "check() and recheck() ran it (evaluate() reused); the public initializer's check never did")
+            #expect(try run().map { $0.contains(" production=passed ") } == true)
+            #expect(tree.probes("auth-status") == authStatuses + 3,
+                    "check() and recheck() ran it (evaluate() reused), and the public initializer's check ran it with its network blocked")
             tree.remove(tree.binaryPath)
             #expect(try run() == "available=false reason=cli-missing local=cli-missing production=cli-missing outside=0\n")
         }

@@ -3,8 +3,9 @@ import Foundation
 import ParticipantSupervisorCore
 
 // One availability probe (`--version` or `auth status --json`) of the pinned
-// file (contract section 5; Codex F0 answer 10). It is spawned directly,
-// never through the supervisor (it carries no conversation text): section
+// file (contract section 5; Codex F0 answer 10). It is spawned directly
+// (step 4 in production through `ClaudeNetworkBlock`'s tool, which then runs
+// the pinned file in the same process), never through the supervisor (it carries no conversation text): section
 // 11's environment rule, a fresh empty app-owned 0700 working folder, stdin
 // a pipe already closed (EOF), stdout capped, stderr drained and dropped,
 // its own process group. Once the leader exits the group is killed (the
@@ -27,8 +28,66 @@ struct ClaudeProbeResult: Equatable, Sendable {
     let stdout: Data
 }
 
+/// The owner's D1 decision (October 29, 2026, option 1): `auth status` runs
+/// under macOS's sandbox with its network use denied, so a server-managed
+/// settings fetch it starts cannot reach Anthropic (Codex F34-D1). Its own
+/// sockets are denied, and so are the system services that would resolve a
+/// host name or fetch for it (`deniedServices`); everything else is
+/// allowed, so the CLI still reads its own login (the Keychain's services
+/// stay reachable). The block applies to the probe and to anything it
+/// starts, and is applied by the system's `sandbox-exec`, which Apple marks
+/// deprecated: it is retested on each macOS version (the tests here run on
+/// the Mac CI runner). Only that tool is used: a root-owned regular file
+/// that only root can change, on the system volume. Anything else and the
+/// probe never runs (`network-block`).
+package struct ClaudeNetworkBlock: Sendable, Equatable {
+    /// The system services a process reaches over Mach to resolve a host
+    /// name (the DNS service) or to have a URL fetched or opened for it
+    /// (Codex F34-D1, review of PR 3b). The resolver's other socket,
+    /// `/var/run/mDNSResponder`, is a local socket, already denied.
+    static let deniedServices = ["com.apple.dnssd.service", "com.apple.nsurlsessiond", "com.apple.coreservices.launchservicesd"]
+
+    /// The profile: allow everything, then deny every network operation
+    /// (outbound, inbound and bind, IP and local sockets alike) and the
+    /// lookup of each denied service.
+    static let profile = "(version 1)(allow default)(deny network*)(deny mach-lookup "
+        + deniedServices.map { "(global-name \"\($0)\")" }.joined(separator: " ") + ")"
+
+    let toolPath: String
+
+    package static let system = ClaudeNetworkBlock(toolPath: "/usr/bin/sandbox-exec")
+
+    /// Tests only: a tool at another path, to show what is refused.
+    init(toolPath: String) {
+        self.toolPath = toolPath
+    }
+
+    /// Nil when the tool may be used: not a link, a regular file owned by
+    /// root, executable, with no group or other write and no setuid or
+    /// setgid bit, in a root-owned folder (not a link) no one else can write.
+    func refusal(observer: ClaudeCheckObserver?) -> ClaudeCheckDetail? {
+        guard toolPath.hasPrefix("/"), !toolPath.utf8.contains(0) else { return .networkBlock }
+        observer?(.inspect(toolPath))
+        // The pinned file's own rules (`ClaudePinnedBinary`), with root as
+        // the owner.
+        let folder = (toolPath as NSString).deletingLastPathComponent
+        var info = stat()
+        guard lstat(folder, &info) == 0, ClaudePinnedBinary.folderRefusal(info, owner: 0) == nil,
+              lstat(toolPath, &info) == 0, ClaudePinnedBinary.fileRefusal(info, owner: 0) == nil else { return .networkBlock }
+        return nil
+    }
+
+    /// The argument list that runs `binary` with `arguments` under the block.
+    func arguments(running binary: String, _ arguments: [String]) -> [String] {
+        [toolPath, "-p", Self.profile, binary] + arguments
+    }
+}
+
 struct ClaudeProbeRunner: Sendable {
     let binaryPath: String
+    /// Nil: the pinned file is spawned directly. Otherwise the network
+    /// block's tool is spawned, and it runs the pinned file (step 4 only).
+    var networkBlock: ClaudeNetworkBlock? = nil
     let workParent: URL
     /// `NAME=value` entries, as `ParticipantEnvironment.build` made them.
     let environment: [String]
@@ -55,7 +114,7 @@ struct ClaudeProbeRunner: Sendable {
             ClaudeProbeResult(ending: ending, stdout: Data())
         }
         guard binaryPath.hasPrefix("/"),
-              !([binaryPath] + arguments + environment).contains(where: { $0.utf8.contains(0) }) else {
+              !([binaryPath, networkBlock?.toolPath ?? ""] + arguments + environment).contains(where: { $0.utf8.contains(0) }) else {
             return ended(.spawnFailed)
         }
         let folder: ParticipantWorkingFolder
@@ -91,8 +150,11 @@ struct ClaudeProbeRunner: Sendable {
             closeAll()
             return ended(.timedOut)
         }
+        let executable = networkBlock?.toolPath ?? binaryPath
+        let argv = networkBlock?.arguments(running: binaryPath, arguments) ?? [binaryPath] + arguments
+        if networkBlock != nil { observer?(.execute(executable)) }
         observer?(.execute(binaryPath))
-        let pid = spawn(arguments: [binaryPath] + arguments, folder: folderDescriptor,
+        let pid = spawn(executable, arguments: argv, folder: folderDescriptor,
                         stdin: input.read, stdout: output.write, stderr: errors.write)
         // The child holds its ends now. Closing the write end of stdin here
         // is what gives it EOF at once.
@@ -105,7 +167,8 @@ struct ClaudeProbeRunner: Sendable {
         return collect(pid: pid, stdout: output.read, stderr: errors.read, deadline: deadline, abandoned: abandoned)
     }
 
-    private func spawn(arguments: [String], folder: Int32, stdin: Int32, stdout: Int32, stderr: Int32) -> pid_t? {
+    private func spawn(_ executable: String, arguments: [String], folder: Int32, stdin: Int32, stdout: Int32,
+                       stderr: Int32) -> pid_t? {
         var attributes: posix_spawnattr_t?
         guard posix_spawnattr_init(&attributes) == 0 else { return nil }
         defer { posix_spawnattr_destroy(&attributes) }
@@ -135,7 +198,7 @@ struct ClaudeProbeRunner: Sendable {
             envp.forEach { free($0) }
         }
         var pid: pid_t = 0
-        guard posix_spawn(&pid, binaryPath, &actions, &attributes, argv, envp) == 0, pid > 0 else { return nil }
+        guard posix_spawn(&pid, executable, &actions, &attributes, argv, envp) == 0, pid > 0 else { return nil }
         return pid
     }
 
