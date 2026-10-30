@@ -62,13 +62,15 @@ struct PaidUsageGateTests {
         #expect(authentication.filter { $0.line.contains("localizedReason:") }.count == 1, "one fixed reason")
         // The compiler, not this scan alone, keeps a second authenticator or
         // other checks out of the owner (Codex F34-6): nothing here is public,
-        // and the owner's only public initializer takes the real checks.
+        // and the owner's only public initializer takes the real checks and
+        // the real store (never a reader that could always approve).
         #expect(!authentication.contains { $0.line.hasPrefix("public ") || $0.line.contains(" public ") }, "internal only")
         let owner = try Sources.lines(of: "ParticipantProcess/PaidUsageConfirmation.swift")
         let publicInits = owner.filter { $0.line.hasPrefix("public") && $0.line.contains("init(") }
-        #expect(publicInits.map(\.line) == ["public convenience init(checks: ClaudeLocalChecks, approval: any HostApprovalReading) {"],
+        #expect(publicInits.map(\.line) == ["public convenience init(checks: ClaudeLocalChecks, store: ProofStore?) {"],
                 "\(publicInits)")
         #expect(owner.contains { $0.line == "self.init(checks: checks, approval: approval, authentication: LocalAuthenticationOwnerCheck())" })
+        #expect(owner.contains { $0.line == "let approval: any HostApprovalReading = store ?? NoHostApproval()" }, "the store or nothing")
         for folder in ["ParticipantProcess", "ParticipantDeskControls", "ParticipantCoordinator"] {
             for reused in ["MacOwnerVerifier", "StubUnlockVerifier", "DeskUnlockVerifier"] {
                 #expect(!(try Sources.code(folder)).contains { $0.line.contains(reused) }, "\(folder) uses \(reused)")

@@ -184,9 +184,12 @@ public final class PaidUsageConfirmationOwner: AvailabilityReporting, @unchecked
     /// the one `OwnerAuthentication` conformer, so no module can give it
     /// other checks or another authenticator (Codex F34-6).
     ///
-    /// `approval` is where section 21.4's approval is read: the Desk's
-    /// protected store, or `NoHostApproval` where there is none.
-    public convenience init(checks: ClaudeLocalChecks, approval: any HostApprovalReading) {
+    /// Section 21.4's approval is read from `store`, the Desk's protected
+    /// store; with no store (`nil`) nothing is approved. It takes the store
+    /// itself, never a reader, so no module can hand the owner a reader that
+    /// always approves (independent review of PR 3d).
+    public convenience init(checks: ClaudeLocalChecks, store: ProofStore?) {
+        let approval: any HostApprovalReading = store ?? NoHostApproval()
         self.init(checks: checks, approval: approval, authentication: LocalAuthenticationOwnerCheck())
     }
 

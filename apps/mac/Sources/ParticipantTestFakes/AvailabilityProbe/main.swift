@@ -92,7 +92,7 @@ Task.detached {
         print("available=\(report.availability.available) reason=\(report.availability.reason?.rawValue ?? "none") "
               + "confirmation=\(confirmation)")
     case "ParticipantConfirmationOwnerProbe":
-        let owner = PaidUsageConfirmationOwner(checks: inventedLocalChecks(), approval: NoHostApproval())
+        let owner = PaidUsageConfirmationOwner(checks: inventedLocalChecks(), store: nil)
         let report = await owner.report()
         let rechecked = await owner.recheck()
         let claimed = owner.claimRun()
