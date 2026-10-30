@@ -56,9 +56,21 @@ plain link. Nothing is billed per use.
   text, calendar id and status. Notes, attendees, links and alarms are not
   read into True Convo.
 - **The same meeting in two calendars shows once.** Occurrences are grouped
-  with the same rules as calendar-merge-engine.md ("The Same Event In Two
-  Calendars"): same invitation identifier and the same start. The group
-  lists every calendar it came from.
+  with all the rules in calendar-merge-engine.md ("The Same Event In Two
+  Calendars"), and the builder carries them over unchanged:
+  - The same invitation identifier and the same occurrence count as one.
+  - With different identifiers, a match on title (ignoring case, accents and
+    spaces at the ends) plus the exact start and end (or the same dates, for
+    all-day events) also counts as one, provided the copies are from
+    different calendars and have the same status.
+  - The one-to-one grouping order, the choice of which copy is shown, and
+    the rule that two copies from the same calendar never merge all stay
+    the same.
+
+  EventKit's external identifier stands in for `UID`, and its last-modified
+  date stands in for `SEQUENCE` and `LAST-MODIFIED`. Each group lists every
+  calendar it came from. Tests repeat the merge engine's duplicate cases,
+  "Dentist" included, against the fake store.
 - The owner picks which calendars show, in the app. The choice is stored
   with his other Desk settings, inside the protected store.
 - If access is refused, or later revoked in System Settings, the views say
