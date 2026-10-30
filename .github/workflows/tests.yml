@@ -44,7 +44,9 @@ jobs:
             echo "packages=$packages" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          files=$(git diff --name-only "$(git merge-base "$BASE" "$HEAD")" "$HEAD")
+          # --no-renames lists both sides of a rename, so moving a file out of a
+          # folder still runs that folder's tests.
+          files=$(git diff --no-renames --name-only "$(git merge-base "$BASE" "$HEAD")" "$HEAD")
           echo "$files"
           has() { echo "$files" | grep -Eq "$1" && echo true || echo false; }
           # A change to the checks themselves runs every part.
