@@ -83,11 +83,14 @@ For each app, True Convo uses the first route on this list that works:
    register True Convo as an app for free.
 4. **Standard protocols, where the API costs money or needs a review.**
    These are IMAP and SMTP for mail and CalDAV and CardDAV for calendars and
-   contacts, signed in with an app password the person creates. For example,
-   reading Gmail through Google's API needs Google's restricted-scope review
-   and a yearly security assessment that costs money. Public estimates range
-   from about $500 to several thousand dollars a year, and none is confirmed.
-   IMAP avoids it.
+   contacts, signed in with an app password the person creates. Gmail is
+   the open case. Google's API needs its restricted-scope review. Google
+   ties the yearly paid security assessment to restricted data reached from
+   or through a third-party server, and in this design the data stays on
+   the Mac. So the assessment may not apply, but that isn't confirmed. The
+   Gmail slice's plan settles Google's actual requirement for a Mac-only
+   app before choosing between the Gmail API (route 3) and IMAP. IMAP is
+   the fallback, not the default.
 5. **Browser or computer use,** only when none of the above exists. It is
    slower and less reliable, and it follows
    [computer-use.md](computer-use.md).
@@ -105,7 +108,12 @@ product's back end is almost nothing.
 - An app ID True Convo registers with a provider is public. The app ships no
   client secrets, because a secret inside a desktop app isn't secret.
 - A person can bring their own provider app instead, such as their own Google
-  Cloud project. Its 100-user testing limit doesn't matter for one person.
+  Cloud project. Its 100-user testing limit doesn't matter for one person,
+  but while a Google project is left in Testing, its sign-ins for mail,
+  calendar and contacts expire after seven days. So that path either has
+  the person publish their project to production, or True Convo tells them
+  plainly that they'll need to sign in again each week, and asks before the
+  sign-in lapses.
 - Registering True Convo with a provider, and any review fee, is an account
   or spending step, so each needs the owner's approval.
 
@@ -130,7 +138,7 @@ product's back end is almost nothing.
 | --- | --- | --- |
 | The Mac's own apps (synced accounts still reach their provider), official MCP servers, standard protocols | $0 | Nobody |
 | Registering True Convo with most providers | $0 | Nobody, with the owner's approval |
-| Google's restricted-scope review, only if we use the Gmail API | Yearly; about $500 to several thousand dollars (unconfirmed) | The owner, if he decides to; IMAP avoids it |
+| Google's restricted-scope review, only if we use the Gmail API | The review itself; a yearly paid assessment only if Google requires one for a Mac-only app (to confirm) | The owner, if he decides to; IMAP is the fallback |
 | The app's own plan limits | The person's existing plan | The person |
 | The model that picks and runs tools | The person's own sign-in, key or local model (foundations, principle 16) | The person |
 
