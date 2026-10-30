@@ -43,9 +43,15 @@ Provenance"). The coordinator does the git work; Codex only edits files.
 2. Run Codex non-interactively in that worktree:
 
    ```sh
-   codex exec -C <worktree> -s workspace-write -m <model> "<prompt>" < /dev/null
+   codex exec -C <worktree> -s workspace-write -m <model> "$(cat <prompt-file>)" < /dev/null
    ```
 
+   - **Write the prompt to a file first,** outside the worktree, and pass it
+     with `"$(cat <prompt-file>)"` as above. Never paste the prompt straight
+     into the command: the shell would run any backticks or `$(...)` in it
+     and expand `$` variables before Codex sees them, so text copied from an
+     issue could run commands on the Mac. Reading the file this way passes
+     its contents exactly as written.
    - **Always pass `-m`.** The model in the local Codex config can be one the
      account rejects, and the run then fails before doing anything. Name a
      model the account accepts.
