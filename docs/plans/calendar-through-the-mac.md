@@ -90,9 +90,10 @@ plain link. Nothing is billed per use.
   can't be carried over as is, and a last-modified date can't stand in for
   it: a copy with older details can be touched later (a color or alarm
   change), so "newest touch wins" would show stale details. The rule is:
-  the copy from the organizer's own calendar wins when the Mac has it
-  (EventKit marks the organizer as the current user). When neither copy is
-  the organizer's (the common case for an invitation from someone else),
+  the copy from the organizer's own calendar wins when exactly one copy
+  qualifies (EventKit marks the organizer as the current user). When no
+  copy qualifies (the common case for an invitation from someone else),
+  or more than one does (the owner's own event in two of his calendars),
   no copy is treated as right: if the copies agree on title, time,
   location and status, the earliest calendar in the person's list supplies
   the shown copy, since they are the same; if they disagree on any of
@@ -100,8 +101,9 @@ plain link. Nothing is billed per use.
   mark and both versions side by side, and never quietly picks one.
   Last-modified dates are never used to pick. Tests show an organizer copy
   beating a later-touched attendee copy, agreeing copies merging by list
-  order, and disagreeing non-organizer copies showing the mark with both
-  versions (Codex, PR #204 review thread 4425797327). Each group lists every
+  order, and disagreeing copies showing the mark with both versions, both
+  when no copy is the organizer's and when two are (Codex, PR #204 review
+  threads 4425797327 and 4425820723). Each group lists every
   calendar it came from. Tests repeat the merge engine's duplicate cases,
   "Dentist" included, against the fake store.
 - The owner picks which calendars show, in the app. The choice is stored
