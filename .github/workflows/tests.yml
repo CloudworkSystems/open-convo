@@ -44,7 +44,9 @@ jobs:
             echo "packages=$packages" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          files=$(git diff --name-only "$(git merge-base "$BASE" "$HEAD")" "$HEAD")
+          # --no-renames lists both sides of a rename, so moving a file out of a
+          # folder still runs that folder's tests.
+          files=$(git diff --no-renames --name-only "$(git merge-base "$BASE" "$HEAD")" "$HEAD")
           echo "$files"
           has() { echo "$files" | grep -Eq "$1" && echo true || echo false; }
           # A change to the checks themselves runs every part.
@@ -53,7 +55,9 @@ jobs:
           echo "desk=$([ "$all" = true ] && echo true || has '^(apps/desk/|packages/clarity/)')" >> "$GITHUB_OUTPUT"
           # The Mac tests also read the Desk's shared fixtures.
           echo "mac=$([ "$all" = true ] && echo true || has '^(apps/mac/|apps/desk/tests/fixtures/)')" >> "$GITHUB_OUTPUT"
-          echo "gate=$all" >> "$GITHUB_OUTPUT"
+          # The rules-file map test also runs when any Markdown file changes,
+          # since a map may point at any kind of rules file.
+          echo "gate=$([ "$all" = true ] && echo true || has '\.md$')" >> "$GITHUB_OUTPUT"
           echo "sync_core=$([ "$all" = true ] && echo true || has '^packages/sync-core/')" >> "$GITHUB_OUTPUT"
           # Every other package with a package.json, found by folder, so new
           # packages are covered without editing this file.

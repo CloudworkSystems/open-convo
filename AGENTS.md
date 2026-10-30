@@ -10,9 +10,41 @@
   update it in any pull request that changes the step or a part's state.
   Owner decisions: [docs/decisions.md](docs/decisions.md), which only the
   owner approves.
-- Some folders add their own `AGENTS.md` (with a `CLAUDE.md` pointing to it):
-  [docs/plans/](docs/plans/AGENTS.md) and [packages/](packages/AGENTS.md).
-  They only add that folder's rules; nothing in them loosens this file.
+
+## Map
+
+This file holds the rules for the whole repo. These files hold the rest.
+Read the one for a folder before you change anything in it. Each folder file
+only adds rules; nothing in one loosens this file. Each has a `CLAUDE.md`
+beside it that points to it.
+
+- [docs/agent-process.md](docs/agent-process.md): the full review, merge and
+  agent process summarized below. Read the section you need before you open,
+  fix, review or merge a pull request.
+- [apps/mac/AGENTS.md](apps/mac/AGENTS.md): the Mac app, its owner-protected
+  parts and the paid-AI path.
+- [apps/desk/AGENTS.md](apps/desk/AGENTS.md): the Desk, and building from an
+  annotation round.
+- [packages/AGENTS.md](packages/AGENTS.md): the standalone libraries.
+- [docs/plans/AGENTS.md](docs/plans/AGENTS.md): writing and revising plans.
+- [docs/annotations/AGENTS.md](docs/annotations/AGENTS.md): the owner's
+  annotation rounds.
+- [site/AGENTS.md](site/AGENTS.md): the public website. Merges go live.
+- [.github/AGENTS.md](.github/AGENTS.md): the merge gate's own checks and
+  workflows.
+- [docs/skills/first-principles-decision/SKILL.md](docs/skills/first-principles-decision/SKILL.md):
+  the first portable skill, a draft. Read before changing or running it.
+
+Every rules file with folder files below it has a map like this one near the top. The
+gate tests check that each map lists every rules file directly below it
+(`AGENTS.md`, `SKILL.md`, `REVIEW.md` and `intent.md`) and that every listed
+file exists. Today the repo uses
+`AGENTS.md` (with `CLAUDE.md` pointers), plans in `docs/plans/` for each
+module's goal and finish line, package READMEs and `SKILL.md` skills. Other
+kinds, such as `REVIEW.md` or `intent.md`, are welcome when a tool we use
+reads them or a plan gives them a job (for example, `intent.md` in the
+durable-agent work). Add one through a pull request, and list it in the map
+of the folder above it.
 
 ## Moving Code From True Convo
 
@@ -211,6 +243,9 @@ or task gets a row here first.
 - Keep build output, downloads, model files and private data out of Git.
 - No public release, deployment, publication, spending, account or credential
   change, or service that outlives the session without the owner's approval.
+- A merge to `main` that changes `site/`, `brand/tokens.css` or `brand/fonts/`
+  publishes it on trueconvo.com (the `pages` workflow). Before auto-merge goes
+  on, the pull request quotes the owner's yes for it, with its date and thread.
 - Preserve other agents' edits and unsaved work. No force-push, history
   rewriting or deletion of the owner's work.
 - License choice is the owner's decision and is still open. Do not add one.
