@@ -258,10 +258,11 @@ request itself, so the owner doesn't have to carry messages:
   failed review it skipped even real commits until someone asked, while the
   bot's `@codex review` on #179 started a review within two minutes on
   October 30. A comment also leaves the head, the checks and the owner's
-  approval as they were. The comment starts with `@codex review`. Agents
-  keep any other Codex mention out of pull request descriptions, because
-  Codex refuses one from the bot as a task request and then skips its
-  PR-opened review (#202).
+  approval as they were. The comment starts with `@codex review`. Anywhere
+  else on GitHub (descriptions, comments, reviews) agents write "Codex"
+  without the at sign: Codex reads any other mention from the bot as a
+  task request and refuses it, and a refused mention in #202's description
+  went with a skipped PR-opened review.
 - Every update from `main` is a new commit that Codex reviews again, so the
   PR keeper updates a pull request that has fallen behind `main` only when
   auto-merge is on and its latest commit already passes `tests` and
