@@ -104,12 +104,16 @@ page in step 5, are the library's.
 4. **Draw.** Each tag becomes a **count** tracker with no target and the
    unit `minutes` in the habit grid engine (`packages/habit-grid/`, imported
    by relative path, not copied), with one check-in per day of that day's
-   minutes, marked `source: 'automatic'`, a value the engine already
-   accepts. Count, not amount: the engine refuses an amount tracker without
-   a target, and only a targetless count tracker shades by its own range, so
-   this needs no engine change. The engine's `renderSvg` draws each grid,
-   built fresh in memory on every run; nothing is merged into a saved habit
-   file. With no target, a day without minutes shows as empty, never
+   minutes, written through the engine's public `HabitGrid` API. Count, not
+   amount: the engine refuses an amount tracker without a target, and only a
+   targetless count tracker shades by its own range. The engine writes only
+   `manual` check-ins today, and that is fine here: the grids are built
+   fresh in memory on every run and never saved or merged into a habit
+   file, so the source is never stored or shown. Marking them `automatic`
+   waits for slice 3, which stores the history and plans that engine change
+   in its own pull request. So slice 1 needs no engine change, and the
+   library never writes the engine's saved format by hand. The engine's
+   `renderSvg` draws each grid. With no target, a day without minutes shows as empty, never
    "missed". The grid draws a day with no data and a day with zero minutes
    the same way, so the page lists the days with no data (step 5) and the
    code pull request adds no zero check-ins.
@@ -169,9 +173,9 @@ before anything ships.
 
 ## Which True Convo Modules It Touches
 
-- **Habit grid** (`packages/habit-grid/`): used as is, for the first
-  `automatic` check-ins. No engine change. If one turns out to be needed,
-  it goes in its own pull request.
+- **Habit grid** (`packages/habit-grid/`): used as is, through its public
+  API, in memory only. No engine change. Slice 3's `automatic` check-ins,
+  or any other engine change, go in their own pull request.
 - **Personal space and the Desk** (step 5): later, a Time view, and these
   grids next to his habits (slice 3).
 - **Protected storage** (step 2): later, where the history is kept (slice 3).
