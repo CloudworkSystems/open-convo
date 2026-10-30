@@ -163,7 +163,7 @@ output_preflight() {
   done
 }
 
-# Test copy only: gives the copied Info.plist the test copy's names. The two
+# Test copy only: gives the copied Info.plist the test copy's names. The
 # permission prompts name "True Convo Test" too, so they can be told apart.
 apply_test_identity_plist() {
   local plist="$1" key value
@@ -173,7 +173,7 @@ apply_test_identity_plist() {
   plutil -replace CFBundleExecutable -string "${TEST_EXECUTABLE_NAME}" "${plist}"
   plutil -replace NSServices.0.NSMenuItem.default -string "${TEST_SERVICES_MENU_ITEM}" "${plist}"
   plutil -replace NSServices.0.NSPortName -string "${TEST_SERVICES_PORT_NAME}" "${plist}"
-  for key in NSMicrophoneUsageDescription NSSpeechRecognitionUsageDescription; do
+  for key in NSMicrophoneUsageDescription NSSpeechRecognitionUsageDescription NSCalendarsFullAccessUsageDescription NSCalendarsUsageDescription; do
     if ! value="$(plutil -extract "${key}" raw -o - "${plist}" 2>/dev/null)"; then
       rm -rf "${APP_DIR}"
       echo "Test copy: ${key} is missing from Info.plist. Removed dist/${APP_NAME}.app; nothing was signed." >&2
@@ -184,13 +184,13 @@ apply_test_identity_plist() {
   plutil -insert TCSourceCommit -string "${SOURCE_COMMIT}" "${plist}"
 }
 
-# Test copy only: reads every name back, and checks that both permission
-# prompts start with "True Convo Test ". A test-named app carrying the real
+# Test copy only: reads every name back, and checks that every permission
+# prompt starts with "True Convo Test ". A test-named app carrying the real
 # bundle id would share the real app's settings, keys and archive, so any
 # mismatch removes dist/True Convo Test.app and stops (exit 1).
 verify_test_identity_plist() {
   local plist="$1" pair key expected actual
-  for key in NSMicrophoneUsageDescription NSSpeechRecognitionUsageDescription; do
+  for key in NSMicrophoneUsageDescription NSSpeechRecognitionUsageDescription NSCalendarsFullAccessUsageDescription NSCalendarsUsageDescription; do
     actual="$(plutil -extract "${key}" raw -o - "${plist}" 2>/dev/null || true)"
     if [[ "${actual}" != "${TEST_APP_NAME} "* ]]; then
       rm -rf "${APP_DIR}"

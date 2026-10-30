@@ -1,6 +1,6 @@
 # Status
 
-Updated October 29, 2026. The short version of where the build is. The full
+Updated October 30, 2026. The short version of where the build is. The full
 plan is in [PLAN.md](PLAN.md).
 
 ## Now
@@ -110,6 +110,15 @@ reviews. Plan approved (merged as #127 on October 24):
 **Email sorting engine** (Personal, launch set), Claude builds (the owner's choice on October 24, in place of Codex), GrokBot or a fresh Claude reviews; plan `docs/plans/email-sorting-engine.md`; merged as #128 on October 24 (`packages/email-sorting/`).
 
 **Calendar merge engine** (Personal, launch set), Claude builds (the owner's choice on October 24, in place of Codex), GrokBot or a fresh Claude reviews; plan approved (`docs/plans/calendar-merge-engine.md`); build in review (#130).
+
+**Calendar through the Mac** (Personal; first slice of the connections layer), Claude builds, GrokBot or a fresh Claude reviews; plan approved October 30 (`docs/plans/calendar-through-the-mac.md`). Reads the Mac's calendars, Google ones included, through Apple's calendar framework, read only.
+
+| Part | State |
+| --- | --- |
+| PR 1: Calendar reader (calendar access on macOS 13 and 14, read only, the same meeting shown once), fake-store tests, wiring | In review |
+| PR 2: Desk calendar views (month, week, day), the calendar picker saved in the protected store, the refused-access notice, bridge messages, Today adapter | Next |
+| PR 3: Open in Google Maps, travel time (off by default), clash marks | Later |
+| PR 4: Owner's trial | Later |
 
 **Setup check engine** (Personal; first slice of the first-run guide), GrokBot team A builds, Codex reviews; plan approved October 30 (`docs/plans/setup-check-engine.md`); starts once #146 is done.
 

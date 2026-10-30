@@ -15,6 +15,10 @@ carries the native side of the Desk: a window that hosts the Desk from
   invented data only so far.
 - `ParticipantProcess`, `ParticipantSupervisor`: runs one subscription-backed
   AI participant per conversation run. Not connected to a real model yet.
+- `CalendarReader`: reads the Mac's calendars (Google ones included, when the
+  account is added under Internet Accounts) through Apple's calendar
+  framework, read only. Asks for calendar access only when the Desk's
+  calendar views use it.
 
 ## Build and Test (on a Mac)
 
