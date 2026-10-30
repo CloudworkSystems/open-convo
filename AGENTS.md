@@ -35,11 +35,13 @@ beside it that points to it.
 
 Every rules file with folder files below it has a map like this one near the top. The
 gate tests check that each map lists every rules file directly below it and
-that every listed file exists. The repo uses only `AGENTS.md` (with
-`CLAUDE.md` pointers), plans in `docs/plans/` for each module's goal and
-finish line, package READMEs and `SKILL.md` skills. No other rules file
-(such as REVIEW.md, intent.md or GEMINI.md) is used, because no tool here
-reads one that `AGENTS.md` doesn't already cover.
+that every listed file exists. Today the repo uses
+`AGENTS.md` (with `CLAUDE.md` pointers), plans in `docs/plans/` for each
+module's goal and finish line, package READMEs and `SKILL.md` skills. Other
+kinds, such as `REVIEW.md` or `intent.md`, are welcome when a tool we use
+reads them or a plan gives them a job (for example, `intent.md` in the
+durable-agent work). Add one through a pull request, and list it in the map
+of the folder above it.
 
 ## Moving Code From True Convo
 
