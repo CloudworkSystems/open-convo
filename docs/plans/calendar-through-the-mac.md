@@ -71,9 +71,9 @@ plain link. Nothing is billed per use.
 - **The same meeting in two calendars shows once.** Occurrences are grouped
   with all the rules in calendar-merge-engine.md ("The Same Event In Two
   Calendars"), and the builder carries them over unchanged:
-  - The same invitation identifier and the same occurrence count as one.
-    Here "the same occurrence" (never a count or a position in the series)
-    means the same original start of the repeating
+  - Two copies are one meeting when they have the same invitation
+    identifier and the same occurrence. "The same occurrence" (never a
+    count or a position in the series) means the same original start of the repeating
     occurrence (EventKit's occurrence date, which stays fixed when one
     occurrence is moved), or none for both in a one-off event. Tests cover
     a repeating meeting in two calendars with one occurrence moved.
