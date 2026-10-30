@@ -55,8 +55,10 @@ final class ClaudeApprovalWorld {
 
     func clean() { world.clean() }
 
+    /// The page-level cases: those with no `seed` (the seeded host cases
+    /// run in `ClaudeHostVectorTests`).
     var cases: [[String: JSONValue]] {
-        (vectors["cases"]?.arrayValue ?? []).compactMap(\.objectValue)
+        (vectors["cases"]?.arrayValue ?? []).compactMap(\.objectValue).filter { $0["seed"] == nil }
     }
 
     func named(_ name: String) throws -> [String: JSONValue] {

@@ -1186,7 +1186,11 @@ enum VectorReplay {
         HostOperation.participantEvents.rawValue
     ]
 
-    static func run(_ target: ParticipantVectors.Case, in vectors: ParticipantVectors) async throws {
+    /// `inspect` sees the world once every step's stated fields have
+    /// matched, before the confirmation and reopen checks (the Claude host
+    /// cases read what the scripted launcher received there).
+    static func run(_ target: ParticipantVectors.Case, in vectors: ParticipantVectors,
+                    inspect: ((VectorWorld) throws -> Void)? = nil) async throws {
         let chain = try vectors.chain(to: target)
         for step in chain {
             if let extra = step.keys.subtracting(caseKeys).sorted().first {
@@ -1227,6 +1231,7 @@ enum VectorReplay {
                 try checkTarget(target, outcome, world: world)
             }
         }
+        try inspect?(world)
         try await checkConfirmation(world: world)
         // The folder reopens as it was seeded (ready or not), and a ready
         // one publishes exactly the runs on disk: every load invariant holds.

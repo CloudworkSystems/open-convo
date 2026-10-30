@@ -3344,8 +3344,16 @@ countedBytes, firstTrialBound, withinFirstTrialBound}`), with the preamble
 in `context.stdinPreamble`. The page codec runs all of them now. The
 fake-CLI host cases (overflow held and released, overflow signal, tools in
 init, a provider override, an oversize reply, Stop before and after the
-first piece, lock, supervisor loss) join this file in section 19's seeded
-form in PR 3e, and the Swift harness runs them there. The page-level cases
+first piece, lock, supervisor loss) follow the page-level cases in section
+19's seeded form (PR 3e), with the file's own `records`. Each root seeds the
+off-Mac pin and Claude's 4,096-byte first-trial input bound, and every run
+carries one earlier turn as context. So the oversize reply starts within that
+bound and crosses the shared 262,144-byte bound on its output, the earlier
+turn's bytes counted. A Claude host case may also state
+`stdin`: for a start it accepted and launched, the exact bytes the launcher
+was handed (21.3's layout); a case without it launches nothing. The Swift
+harness replays them through section 19's harness
+(`ClaudeHostVectorTests`), and the page decodes their replies and pushes. The page-level cases
 above run in Swift from PR 3d, through the coordinator over section 17's
 owner with the approval and confirmation each case names
 (`ClaudeVectorPageCaseTests`). The tools refusal is proved in PR 3c against the real supervisor

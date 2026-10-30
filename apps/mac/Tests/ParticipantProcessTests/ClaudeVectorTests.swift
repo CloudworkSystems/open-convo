@@ -9,7 +9,8 @@ import Testing
 /// earlier turns against the first-trial bound as the vectors do, and every
 /// prepared run the page accepts or refuses is accepted or refused here. The
 /// eight page-level cases run through the coordinator in
-/// `ClaudeVectorPageCaseTests` (PR 3d).
+/// `ClaudeVectorPageCaseTests` (PR 3d), the seeded host cases through
+/// section 19's harness in `ClaudeHostVectorTests` (PR 3e).
 private struct ClaudeVectors {
     static let resourceName = "native-participant-claude-v1"
     let data: Data
@@ -72,13 +73,14 @@ struct ClaudeVectorTests {
         #expect(bundled == original, "copy apps/desk/tests/fixtures/native-participant-claude-v1.json over the test fixture; never edit the copy")
     }
 
-    @Test("Every entry is counted: five layouts, four valid and five invalid runs run here; the eight page-level cases run in ClaudeApprovalTests")
+    @Test("Every entry is counted: five layouts, four valid and five invalid runs run here; the eight page-level cases run in ClaudeApprovalTests, the eleven seeded host cases in ClaudeHostVectorTests")
     func everyEntryCounted() throws {
         let vectors = try ClaudeVectors.load()
         #expect(vectors.layouts.count == 5)
         #expect(vectors.runs("valid").count == 4 && vectors.runs("invalid").count == 5)
-        #expect(vectors.cases.count == 8)
-        #expect(vectors.cases.allSatisfy { $0["seed"] == nil }, "no seeded host case yet")
+        #expect(vectors.cases.count == 19)
+        #expect(vectors.cases.prefix(8).allSatisfy { $0["seed"] == nil }, "the page-level cases come first")
+        #expect(vectors.cases.dropFirst(8).allSatisfy { $0["seed"] != nil }, "then the seeded host cases")
     }
 
     @Test("The launcher's stdin is each layout's bytes exactly, with the vectors' preamble and counts")
