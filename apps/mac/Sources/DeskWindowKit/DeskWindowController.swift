@@ -803,6 +803,17 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
     /// The approval row as of now (nothing without `hostApproval`).
     func renderHostApproval() {
         guard let hostApproval else { return }
+        // A Desk that isn't open shows nothing of the approval, at once: the
+        // store's own lock step runs later, so reading it here could still
+        // show a saved approval and its time over a locked Desk (Codex, #207).
+        guard session.state == .open else {
+            hostApprovalLine.stringValue = DeskHostApprovalWording.lockedLine
+            hostApprovalResult.stringValue = ""
+            hostApprovalResult.isHidden = true
+            hostApprovalButton.title = DeskHostApprovalWording.approveButton
+            hostApprovalButton.isEnabled = false
+            return
+        }
         let state = hostApproval.state
         hostApprovalLine.stringValue = DeskHostApprovalWording.stateLine(state, time: formatTime)
         hostApprovalResult.isHidden = hostApprovalResult.stringValue.isEmpty
@@ -811,7 +822,7 @@ public final class DeskWindowController: NSWindowController, NSWindowDelegate {
         } else {
             hostApprovalButton.title = DeskHostApprovalWording.approveButton
         }
-        hostApprovalButton.isEnabled = session.state == .open && !approvalFlowActive && state != .unreadable
+        hostApprovalButton.isEnabled = !approvalFlowActive && state != .unreadable
     }
 
     /// The paid-usage row as of now (nothing without `paidUsage`).

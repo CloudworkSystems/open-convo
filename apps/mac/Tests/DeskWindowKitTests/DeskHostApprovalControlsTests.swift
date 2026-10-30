@@ -116,11 +116,15 @@ final class DeskHostApprovalControlsTests: XCTestCase {
         paidUsage.checkAnswer = .passed
         _ = await made.checkClaude()
         XCTAssertEqual(made.paidUsageResult.stringValue, "Claude's local checks passed.")
-        XCTAssertEqual(made.hostApprovalLine.stringValue,
-                       "Anthropic: not approved. Claude can't receive messages until you approve it.")
         XCTAssertEqual(session.state, .lockedNoStack)
+        XCTAssertEqual(made.hostApprovalLine.stringValue, "Anthropic: unlock the Desk to see or change the approval.",
+                       "a locked Desk shows nothing of the approval")
         XCTAssertFalse(made.hostApprovalButton.isEnabled, "approving needs the Desk open")
         XCTAssertEqual(made.hostApprovalButton.title, "Approve Anthropic once…")
+        await session.unlock(verifier: StubUnlockVerifier(.verified))
+        XCTAssertEqual(made.hostApprovalLine.stringValue,
+                       "Anthropic: not approved. Claude can't receive messages until you approve it.")
+        XCTAssertTrue(made.hostApprovalButton.isEnabled)
 
         approval.state = .approved(at: Date())
         approval.onChange?()
@@ -131,7 +135,6 @@ final class DeskHostApprovalControlsTests: XCTestCase {
         approval.onChange?()
         XCTAssertEqual(made.hostApprovalLine.stringValue,
                        "Anthropic: the approval can't be read right now, so Claude stays off.")
-        await session.unlock(verifier: StubUnlockVerifier(.verified))
         XCTAssertEqual(session.state, .open)
         XCTAssertFalse(made.hostApprovalButton.isEnabled, "nothing to change while it can't be read")
         let answer = await made.changeHostApproval()
@@ -205,6 +208,28 @@ final class DeskHostApprovalControlsTests: XCTestCase {
         let failed = await made.changeHostApproval()
         XCTAssertEqual(failed, .failed)
         XCTAssertFalse(window.firstResponder === webView, "nothing changed, so nothing to read again")
+    }
+
+    func testALockHidesTheApprovalAtOnce() async throws {
+        let approval = FakeHostApprovalControls()
+        approval.state = .approved(at: Date())
+        let statement = FakeHostApprovalStatement()
+        statement.answer = true
+        approval.answer = .failed
+        let (made, session) = try make(approval, statement: statement)
+        await session.unlock(verifier: StubUnlockVerifier(.verified))
+        _ = await made.changeHostApproval()
+        XCTAssertTrue(made.hostApprovalLine.stringValue.hasPrefix("Anthropic: approved 3:42 PM."))
+        XCTAssertFalse(made.hostApprovalResult.isHidden)
+        session.lockNow(reason: .lockButton)
+        // The fake still answers approved, as the store does until its own
+        // lock step runs: the window shows none of it.
+        XCTAssertEqual(made.hostApprovalLine.stringValue, "Anthropic: unlock the Desk to see or change the approval.")
+        XCTAssertTrue(made.hostApprovalResult.isHidden)
+        XCTAssertEqual(made.hostApprovalResult.stringValue, "")
+        XCTAssertFalse(made.hostApprovalButton.isEnabled)
+        approval.onChange?()
+        XCTAssertEqual(made.hostApprovalLine.stringValue, "Anthropic: unlock the Desk to see or change the approval.")
     }
 
     func testALockOrCloseAnswersAnOpenStatementCancel() async throws {

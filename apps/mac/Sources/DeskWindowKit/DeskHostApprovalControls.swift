@@ -33,11 +33,15 @@ public enum DeskHostApprovalResult: Equatable, Sendable {
 /// The owner, as the window's control drives it.
 @MainActor
 public protocol DeskHostApprovalControlling: AnyObject {
+    /// Read on every redraw while the Desk is open; it takes the store's
+    /// lock briefly.
     var state: DeskHostApprovalState { get }
     /// Called on the main thread after the state changes.
     var onChange: (@MainActor () -> Void)? { get set }
     /// Saves the approval of Anthropic in the protected store. Called only
-    /// after the statement sheet's continue, with the Desk open.
+    /// after the statement sheet's continue, with the Desk open. It is the
+    /// store's durable write, run on the main thread: a one-time owner
+    /// action, so a brief wait behind the disk flush is accepted.
     func approve() -> DeskHostApprovalResult
     /// Withdraws it. It stops the next send, never a reply under way.
     func withdraw() -> DeskHostApprovalResult
@@ -84,6 +88,9 @@ public enum DeskHostApprovalWording {
     public static let withdrawContinue = "Withdraw Approval"
     public static let cancel = "Cancel"
 
+    /// The line while the Desk isn't open: nothing of the approval shows.
+    public static let lockedLine = "Anthropic: unlock the Desk to see or change the approval."
+
     /// The state line. `time` formats the approval's time for display.
     public static func stateLine(_ state: DeskHostApprovalState, time: (Date) -> String) -> String {
         switch state {
@@ -107,7 +114,7 @@ public enum DeskHostApprovalWording {
 
     /// Every fixed string, for the wording scan.
     static var allFixed: [String] {
-        [approveButton, withdrawButton, approveMessage, approveDetail, approveContinue, withdrawMessage, withdrawDetail,
+        [approveButton, withdrawButton, lockedLine, approveMessage, approveDetail, approveContinue, withdrawMessage, withdrawDetail,
          withdrawContinue, cancel, resultLine(.unsynced)!, resultLine(.failed)!]
     }
 }
