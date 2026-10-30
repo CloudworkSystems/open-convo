@@ -101,9 +101,9 @@ decision October 22): GrokBot team B builds, Codex reviews. Plan approved
 
 **Calendar merge engine** (Personal, launch set), Codex builds, GrokBot or a fresh Claude reviews; plan approved (`docs/plans/calendar-merge-engine.md`); Codex can start when a builder place is free.
 
-**Setup check engine** (Personal; first slice of the first-run guide), GrokBot team A builds, Codex reviews; plan drafted October 29 (`docs/plans/setup-check-engine.md`), waiting on the owner's yes.
+**Setup check engine** (Personal; first slice of the first-run guide), GrokBot team A builds, Codex reviews; plan approved October 30 (`docs/plans/setup-check-engine.md`); starts once #146 is done.
 
-**Capture inbox engine** (Personal; first slice of the iPhone capture app), GrokBot team B builds, Codex reviews; plan drafted October 29 (`docs/plans/capture-inbox-engine.md`), waiting on the owner's yes.
+**Capture inbox engine** (Personal; first slice of the iPhone capture app), GrokBot team B builds, Codex reviews; plan approved October 30 (`docs/plans/capture-inbox-engine.md`); starts once #139 is done.
 
 **Cloudwork Rail Map** (Desk, Cloudwork Nexus), Claude builds; a fifth Nexus view showing this repository's branches, commits and pull requests from a saved snapshot (`apps/desk/scripts/rail-map-snapshot.mjs`); merged October 24 (#132).
 

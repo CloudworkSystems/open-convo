@@ -1,6 +1,6 @@
 # Setup Check Engine (PRD)
 
-Status: Draft (Oct 29): plan only; waiting on the owner's yes.
+Status: Approved (Oct 30): the owner said yes in the thread "Draft next plans for outside builders"; the build waits for the builder team to finish its current module.
 
 Written October 29, 2026 by a Claude session (project "261024 OC Steering",
 thread "Draft next plans for outside builders"). Session name:
