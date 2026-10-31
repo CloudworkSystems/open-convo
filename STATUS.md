@@ -126,6 +126,8 @@ reviews. Plan approved (merged as #127 on October 24):
 
 **Cloudwork Rail Map** (Desk, Cloudwork Nexus), Claude builds; a fifth Nexus view showing this repository's branches, commits and pull requests from a saved snapshot (`apps/desk/scripts/rail-map-snapshot.mjs`); merged October 24 (#132).
 
+**PR history spreadsheet** (all work; owner asked October 29), Claude builds; one row per pull request (builder, dates, areas, Codex rounds and findings, outside review), rebuilt each morning by `.github/workflows/pr-history.yml` onto its own branch, `pr-history-data`, never `main`. The owner's Google Sheet reads its CSV with `IMPORTDATA`; the JSON copy shares the Rail Map's pull fields for Canvas and Atlas. In review.
+
 **Skin check** (Personal, new Health module), Claude builds, GrokBot or a fresh Claude reviews; plan approved (`docs/plans/skin-check.md`). Slice 1, the standalone engine in `packages/skin-check/`, is built; the iPhone source joins the iPhone app on the parallel sync line, and the Desk view follows.
 
 **Time mirror** (Personal, the observability layer's first slice; owner asked October 29 to start it ahead of the core order), Claude builds, GrokBot or a fresh Claude reviews; plan approved by the owner on October 29 (`docs/plans/time-mirror.md`): RescueTime daily totals drawn as habit-grid heat maps on the Mac, nothing new leaving the device.
