@@ -148,7 +148,7 @@ public enum DeskPaidUsageWording {
     /// What "Check Claude" found.
     public static func checkLine(_ check: DeskClaudeCheck) -> String {
         switch check {
-        case .passed: return "Claude checks passed."
+        case .passed: return "Claude's local checks passed."
         case .cliMissing: return "Claude Code 2.1.283 was not found on this Mac."
         case .cliVersionMismatch: return "The installed Claude Code is not version 2.1.283."
         case .providerOverride: return "Claude Code is set to use an API key or another provider."

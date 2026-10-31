@@ -165,14 +165,16 @@ let package = Package(
             dependencies: ["DeskHost", "ParticipantProcess"],
             path: "Sources/ParticipantTestFakes/AvailabilityProbe"
         ),
-        // Section 17's owner as the Desk window's native controls see it
-        // (plan F4). INACTIVE: only the test target depends on it, so the app
-        // never links it (it reaches ParticipantProcess only through
-        // ParticipantAppWiring, step 3 PR 4b); the window shows the controls
-        // only when given them, and the app gives none.
+        // Section 17's owner, and section 21.4's approval in the open Desk's
+        // store (DeskHost), as the Desk window's native controls see them
+        // (plan F4; the Claude Code adapter's PR 4a). INACTIVE: only the
+        // test target depends on it, so the app never links it (it reaches
+        // ParticipantProcess only through ParticipantAppWiring, step 3 PR
+        // 4b); the window shows the controls only when given them, and the
+        // app gives none.
         .target(
             name: "ParticipantDeskControls",
-            dependencies: ["DeskWindowKit", "ParticipantProcess"]
+            dependencies: ["DeskHost", "DeskWindowKit", "ParticipantProcess"]
         ),
         .testTarget(
             name: "ParticipantProcessTests",
