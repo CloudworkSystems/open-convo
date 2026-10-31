@@ -38,7 +38,7 @@ named event happens, and a steady feed that keeps adding lessons.
 | What | Where it lives | Who could hurt it |
 |---|---|---|
 | The owner's conversations, memory and records | His Mac (protected storage, step 2); later sync | Malware or a malicious web page on his Mac; a sync bug; an agent sending data out |
-| Keys and sign-ins (Anthropic key, Gemini key, bot account) | Keychain, the owner's "Open Convo Agents" 1Password vault (Mac only), exe.dev Integrations, repository secrets | A key committed by mistake; a workflow that exposes one; a prompt that tricks an agent |
+| Keys and sign-ins (Anthropic key, Gemini key, bot account) | Keychain, the owner's "Open Convo Agents" 1Password vault (Mac only, through a service account limited to that vault), exe.dev Integrations, repository secrets | A key committed by mistake; a workflow that exposes one; a prompt that tricks an agent |
 | The code and the merge gate | This public repo | Anyone opening a pull request; a poisoned dependency; an agent following instructions hidden in a comment |
 | The owner's money | Paid AI calls, GitHub Actions minutes | Runaway loops; outsiders triggering paid calls |
 | Users' data, once there are users | Their devices; later the sync server | Anyone who can reach the server; one user reaching another's data |
