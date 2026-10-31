@@ -111,6 +111,10 @@ test('keeps the True Convo folder read-only', () => {
     `cd ${tc} && sed -i '' s/a/b/ file.txt`,
     `cd ${tc} && find . -name '*.o' -delete`,
     `cd ${tc} && touch x`,
+    `cd ${tc} && cd src && rm Piece.swift`,
+    `cd ${tc}/src && cd .. && rm -rf build`,
+    `cd /Users/patrick && cd True-Convo-AI && rm x`,
+    `cd /Users/patrick && git -C True-Convo-AI pull`,
   ]) {
     assert.ok(checkBash(cmd, feature), cmd);
   }
@@ -123,6 +127,7 @@ test('keeps the True Convo folder read-only', () => {
     `cd ${tc} && grep -rn Keychain src`,
     `cd ${tc} && find . -name '*.swift'`,
     `cd ${tc} && cd /home/user/open-convo && rm -rf output`,
+    `cd ${tc} && cd .. && cd OPEN-CONVO && rm -rf output`,
     `cp ${tc}/src/Piece.swift apps/mac/Sources/Piece.swift`,
     `grep -rn Keychain ${tc}/src`,
     `git commit -m "Move piece from ${tc}/src/Piece.swift"`,

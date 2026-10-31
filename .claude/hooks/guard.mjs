@@ -11,6 +11,8 @@
 //   3. No admin-bypass merges.
 //   4. No writes into the True Convo folder, which is a read-only reference.
 import { execFileSync } from 'node:child_process';
+import { homedir } from 'node:os';
+import { resolve as resolvePath } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const PROTECTED = new Set(['main', 'master']);
@@ -120,17 +122,26 @@ function checkInsideTrueConvo(argv) {
   return null;
 }
 
+// Where a cd lands: relative paths resolve against the folder the command is
+// already in, so cd True-Convo-AI && cd src stays inside it.
+function changeDir(from, to) {
+  if (!to || to === '~') return homedir();
+  if (to === '-') return from;
+  const target = to.startsWith('~/') ? resolvePath(homedir(), to.slice(2)) : to;
+  return resolvePath(from, target);
+}
+
 export function checkBash(command, cwd = process.cwd()) {
   let here = cwd;
   for (const argv of splitCommands(command)) {
-    if (argv[0] === 'cd' && argv[1]) here = argv[1];
+    if (argv[0] === 'cd') here = changeDir(here, argv[1]);
     if (TRUE_CONVO.test(here) && !gitCall(argv)) {
       const reason = checkInsideTrueConvo(argv);
       if (reason) return reason;
     }
     const git = gitCall(argv);
     if (git) {
-      const where = git.dir ?? here;
+      const where = git.dir ? changeDir(here, git.dir) : here;
       if (git.sub === 'push') {
         const reason = checkPush(git.args, where);
         if (reason) return reason;
