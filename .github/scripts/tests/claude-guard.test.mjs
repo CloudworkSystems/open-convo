@@ -115,6 +115,9 @@ test('keeps the True Convo folder read-only', () => {
     `cd ${tc}/src && cd .. && rm -rf build`,
     `cd /Users/patrick && cd True-Convo-AI && rm x`,
     `cd /Users/patrick && git -C True-Convo-AI pull`,
+    `git -C ${tc} diff --output=README.md`,
+    `git -C ${tc} log --output README.md`,
+    `cd ${tc} && git show HEAD > out.txt`,
   ]) {
     assert.ok(checkBash(cmd, feature), cmd);
   }

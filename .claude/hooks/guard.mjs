@@ -155,7 +155,10 @@ export function checkBash(command, cwd = process.cwd()) {
       // In the True Convo folder only read-only git subcommands are allowed;
       // anything else (pull, restore, commit, checkout ...) is blocked.
       const reads = ['status', 'log', 'show', 'diff', 'grep', 'blame', 'ls-files', 'ls-tree', 'cat-file', 'rev-parse', 'rev-list', 'describe', 'show-ref', 'shortlog', 'help', 'version', '--version'];
-      if (TRUE_CONVO.test(where) && !reads.includes(git.sub ?? '')) {
+      // Read commands can still write a file (diff --output, format-patch -o,
+      // a redirect), so those options are blocked there too.
+      const writesFile = git.args.some((a) => a.includes('>') || /^--output(-directory)?(=|$)/.test(a) || a === '-o');
+      if (TRUE_CONVO.test(where) && (!reads.includes(git.sub ?? '') || writesFile)) {
         return 'The True Convo folder is read-only (AGENTS.md "Moving Code From True Convo"). Copy the piece into this repo instead.';
       }
     }
