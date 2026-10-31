@@ -41,6 +41,9 @@ test('blocks a bare push while on main', () => {
   assert.ok(checkBash('git push', onMain));
   assert.ok(checkBash('git push origin', onMain));
   assert.equal(checkBash('git push', feature), null);
+  assert.ok(checkBash(`cd ${onMain} && git push`, feature));
+  assert.ok(checkBash(`cd ${onMain} && git push -u origin HEAD`, feature));
+  assert.equal(checkBash(`cd ${feature} && git push`, onMain + '/..'), null);
 });
 
 test('resolves HEAD and @ to the current branch', () => {
@@ -113,6 +116,7 @@ test('keeps the True Convo folder read-only', () => {
     `cd ${tc} && echo hi>notes.md`,
     `cd ${tc} && sed -i '' s/a/b/ file.txt`,
     `cd ${tc} && find . -name '*.o' -delete`,
+    `cd ${tc} && find . -fprint0 README.md`,
     `cd ${tc} && touch x`,
     `cd ${tc} && cd src && rm Piece.swift`,
     `cd ${tc} && sort -o README.md README.md`,

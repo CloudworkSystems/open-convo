@@ -79,7 +79,15 @@ function currentBranch(cwd) {
   }
 }
 
-function checkPush(args, cwd) {
+function checkPush(args, dirs) {
+  for (const cwd of dirs) {
+    const reason = checkPushIn(args, cwd);
+    if (reason) return reason;
+  }
+  return null;
+}
+
+function checkPushIn(args, cwd) {
   const opts = args.filter((a) => a.startsWith('-'));
   const positional = args.filter((a) => !a.startsWith('-'));
   if (opts.some((o) => /^--force(-with-lease|-if-includes)?(=|$)/.test(o) || /^-[a-zA-Z]*f/.test(o))) {
@@ -118,7 +126,9 @@ function checkInsideTrueConvo(argv) {
   const blocked = 'The True Convo folder is read-only (AGENTS.md "Moving Code From True Convo"). Only reading commands can run inside it.';
   if (!READ_ONLY_PROGRAMS.has(program)) return blocked;
   if (argv.some((a) => a.includes('>'))) return blocked;
-  if (program === 'find' && argv.some((a) => ['-delete', '-exec', '-execdir', '-ok', '-okdir', '-fprint', '-fprintf', '-fls'].includes(a))) return blocked;
+  // find's write actions: -delete, -exec/-execdir/-ok/-okdir, and every
+  // -fprint*/-fls file output.
+  if (program === 'find' && argv.some((a) => a === '-delete' || /^-(exec|ok)(dir)?$/.test(a) || /^-f(print|ls)/.test(a))) return blocked;
   return null;
 }
 
@@ -149,8 +159,16 @@ function entersTrueConvo(segments, cwd) {
 export function checkBash(command, cwd = process.cwd()) {
   const segments = splitCommands(command);
   const strict = entersTrueConvo(segments, cwd);
+  // Every folder a cd or pushd may have moved to. A push is checked against
+  // all of them, since cd -, subshells and pushd stacks make the real one
+  // hard to know for sure.
+  const dirs = [cwd];
   for (const raw of segments) {
     const argv = programArgs(raw);
+    if (argv[0] === 'cd' || argv[0] === 'pushd') {
+      const operand = argv.slice(1).find((a) => !a.startsWith('-'));
+      if (operand) dirs.push(resolvePath(dirs[dirs.length - 1], operand.replace(/^~(?=\/|$)/, process.env.HOME ?? '~')));
+    }
     if (strict && !gitCall(argv)) {
       const reason = checkInsideTrueConvo(argv);
       if (reason) return reason;
@@ -159,7 +177,7 @@ export function checkBash(command, cwd = process.cwd()) {
     if (git) {
       const where = git.dir ? resolvePath(cwd, git.dir) : cwd;
       if (git.sub === 'push') {
-        const reason = checkPush(git.args, where);
+        const reason = checkPush(git.args, git.dir ? dirs.map((d) => resolvePath(d, git.dir)) : dirs);
         if (reason) return reason;
       }
       if (git.sub === 'filter-branch' || git.sub === 'filter-repo') {
