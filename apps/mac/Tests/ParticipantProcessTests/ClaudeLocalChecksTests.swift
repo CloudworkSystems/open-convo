@@ -900,14 +900,14 @@ extension ProcessSuites {
             #expect(reached?["resolver"] as? Int == 0, "the DNS resolver was reachable: \(reached ?? [:])")
         }
 
-        @Test("Only Pro, Max and Ultra pass, by auth status's plan code, never a display name: a Team or Enterprise login is not-subscription (plan-not-accepted), an unknown code (a later rename) is check-failed, under the block or not")
+        @Test("Only Pro and Max pass, by auth status's plan code, never a display name (an Ultra account reports max): a Team or Enterprise login is not-subscription (plan-not-accepted), an unknown code (ultra, or a later rename) is check-failed, under the block or not")
         func authStatusPlans() async throws {
             let tree = try InventedClaudeTree()
             defer { tree.clean() }
             for gate in [ClaudeAuthStatusGate.production, .runForTests] {
                 // `subscription` is `max`, which Claude Code 2.1.283 reports
                 // for an Ultra account too (the owner's reading, October 30).
-                for plan in ["pro", "subscription", "ultra"] {
+                for plan in ["pro", "subscription"] {
                     try tree.setScenario(["authStatus": plan])
                     #expect(await tree.checks(authStatus: gate).evaluateFresh().didPass, "\(plan)")
                 }
@@ -917,10 +917,12 @@ extension ProcessSuites {
                     #expect(tree.log.last?.line
                                 == "check=fresh result=not-subscription step=auth-status source=auth-status detail=plan-not-accepted")
                 }
-                try tree.setScenario(["authStatus": "unknown-plan"])
-                #expect(await tree.checks(authStatus: gate).evaluateFresh() == .failed(.checkFailed), "an unknown code never passes")
+                for plan in ["unknown-plan", "ultra"] {
+                    try tree.setScenario(["authStatus": plan])
+                    #expect(await tree.checks(authStatus: gate).evaluateFresh() == .failed(.checkFailed), "\(plan) never passes")
+                }
             }
-            #expect(ClaudeSubscriptionPlan.accepted == [.pro, .max, .ultra])
+            #expect(ClaudeSubscriptionPlan.accepted == [.pro, .max])
             #expect(Set(ClaudeSubscriptionPlan.allCases).subtracting(ClaudeSubscriptionPlan.accepted) == [.team, .enterprise])
         }
 

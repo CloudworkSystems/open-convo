@@ -187,8 +187,8 @@ struct ClaudeCheckRun: Sendable {
         case .subscription(let plan, let email, let organization):
             login = (plan, email, organization)
         }
-        // Only Pro, Max and Ultra (the owner's D1 decision, with Ultra the
-        // October 30 rename of Max 20x): a Team or Enterprise
+        // Only Pro and Max (the owner's D1 decision; Ultra, the October 30
+        // rename of Max 20x, reports `max`): a Team or Enterprise
         // plan can carry server-managed settings.
         guard ClaudeSubscriptionPlan.accepted.contains(login.plan) else {
             return end(.notSubscription, .authStatus, .authStatus, .planNotAccepted)

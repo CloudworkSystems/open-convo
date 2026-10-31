@@ -402,7 +402,7 @@ run a policy helper they name before any inspection can see it. Nothing in
 2.1.283 skips that fetch for an eligible account, and no check beforehand
 can tell whether the account is eligible; so the block stops the fetch, and
 only Pro and Max plans, which the reading says are not eligible, pass
-(Ultra too: see section 5 step 4).
+(an Ultra account reports `max`: see section 5 step 4).
 By the same byte reading, a proxy address given to that probe alone and
 held closed by the app would make the fetch fail; that is one of the D1
 options, not built. Each subprocess runs under section 11's environment rule (the
@@ -599,7 +599,7 @@ probe's own count of paths outside its folder (Codex F4-1, F34-2). In order:
    as a bug. Apple marks the tool deprecated, so the tests run it on the
    Mac CI runner each time: under the block the fake CLI's connects to a
    TCP listener on loopback and to a local socket both fail, and without it
-   they succeed. Only Pro, Max and Ultra plans pass (below), which the reading says
+   they succeed. Only Pro and Max plans pass (below), which the reading says
    never fetch, so the block is a second wall for them, not the only one.
 
    **The narrower promise this choice accepts.** The checks see the Mac as
@@ -626,11 +626,12 @@ probe's own count of paths outside its folder (Codex F4-1, F34-2). In order:
    `CLAUDE_CONFIG_DIR` or `HOME` redirect the sources did not show (Codex
    F3-1); `signed-out` when logged out; `not-subscription` for a claude.ai
    login with no `subscriptionType`, and for a `team` or `enterprise` plan
-   (detail `plan-not-accepted`, the owner's D1 choice: only Pro, Max and
-   Ultra pass, read by plan code, never by display name; Ultra is
-   Anthropic's October 30, 2026 name for Max 20x, which Claude Code 2.1.283
-   still reports as `max`); an unknown method or plan (known: `pro`, `max`,
-   `ultra`, `team`, `enterprise`), no account, or any other shape is `check-failed`. Only the plan and the comparator are kept; email,
+   (detail `plan-not-accepted`, the owner's D1 choice: only Pro and Max
+   pass, read by plan code, never by display name; Ultra is Anthropic's
+   October 30, 2026 name for Max 20x, which Claude Code 2.1.283 still
+   reports as `max`); an unknown method or plan (known: `pro`, `max`,
+   `team`, `enterprise`; an `ultra` code is unknown until a newer pinned
+   version's reading rechecks it), no account, or any other shape is `check-failed`. Only the plan and the comparator are kept; email,
    organization and the output are dropped in memory.
 
 Each probe (answer 10) runs the pinned file directly, not through the
@@ -3330,9 +3331,9 @@ no tools). What native writes to stdin, in UTF-8, before closing it:
 
 The owner chose option 1 on October 29, 2026: `claude auth status` runs
 with macOS blocking all its network use, and only Pro and Max plans pass
-(on October 30 the owner added Ultra, Anthropic's new name for Max 20x;
-2.1.283 reports it as `max`, and the `ultra` code matters only for a later
-pinned version, whose reading must recheck eligibility).
+(Ultra, Anthropic's October 30 name for Max 20x, reports `max` in 2.1.283
+and passes as Max; an `ultra` code stays unknown, `check-failed`, until a
+newer pinned version's reading rechecks it).
 Section 5 step 4 says how (built in the adapter's PR 3b, still inactive:
 nothing constructs the checks outside the tests and the test-only probe)
 and states the narrower promise the choice accepts. The off-Mac pin is

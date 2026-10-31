@@ -99,8 +99,7 @@ struct ClaudeLocalChecksUnitTests {
         #expect(read(with(["orgId": NSNull()])) == .subscription(.pro, email: "invented@example.invalid", organization: nil))
         #expect(read(with(["apiKeySource": NSNull()])) == .subscription(.pro, email: "invented@example.invalid", organization: "invented-org"),
                 "a null key source is no key source")
-        for (name, plan) in [("pro", ClaudeSubscriptionPlan.pro), ("max", .max), ("ultra", .ultra), ("team", .team),
-                             ("enterprise", .enterprise)] {
+        for (name, plan) in [("pro", ClaudeSubscriptionPlan.pro), ("max", .max), ("team", .team), ("enterprise", .enterprise)] {
             #expect(read(with(["subscriptionType": name])) == .subscription(plan, email: "invented@example.invalid", organization: "invented-org"))
         }
         let override = ClaudeAuthAnswer.failure(.providerOverride, .override)
@@ -129,6 +128,11 @@ struct ClaudeLocalChecksUnitTests {
 
         let unknown: [([String: Any], Int32, ClaudeCheckDetail, String)] = [
             (with(["subscriptionType": "invented-plan"]), 0, .unknownPlan, "unknown plan"),
+            // Not yet a code 2.1.283 reports (Codex P1 on #212): an Ultra
+            // account reads `max`; a display name never passes either.
+            (with(["subscriptionType": "ultra"]), 0, .unknownPlan, "the ultra code"),
+            (with(["subscriptionType": "Ultra"]), 0, .unknownPlan, "a display name"),
+            (with(["subscriptionType": "Max"]), 0, .unknownPlan, "a display name, capitalized"),
             (with(["email": nil]), 0, .noAccount, "no email"),
             (with(["email": ""]), 0, .noAccount, "empty email"),
             (with(["authMethod": "none"]), 0, .unparseable, "logged in with no method"),
