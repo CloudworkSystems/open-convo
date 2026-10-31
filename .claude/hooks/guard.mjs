@@ -11,7 +11,6 @@
 //   3. No admin-bypass merges.
 //   4. No writes into the True Convo folder, which is a read-only reference.
 import { execFileSync } from 'node:child_process';
-import { homedir } from 'node:os';
 import { resolve as resolvePath } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -123,30 +122,42 @@ function checkInsideTrueConvo(argv) {
   return null;
 }
 
-// Where a cd lands: relative paths resolve against the folder the command is
-// already in, so cd True-Convo-AI && cd src stays inside it.
-function changeDir(from, to) {
-  if (!to || to === '~') return homedir();
-  if (to === '-') return from;
-  const target = to.startsWith('~/') ? resolvePath(homedir(), to.slice(2)) : to;
-  return resolvePath(from, target);
+// Strip leading VAR=value assignments and command/exec/env wrappers.
+function programArgs(argv) {
+  let i = 0;
+  for (;;) {
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(argv[i] ?? '')) i += 1;
+    else if (['command', 'exec', 'env', 'nohup', 'time'].includes(argv[i])) i += 1;
+    else break;
+  }
+  return argv.slice(i);
+}
+
+// Does this command work inside the True Convo folder at any point? Tracking
+// the shell's folder step by step (subshells, cd -, pushd stacks) is a losing
+// game, so instead: if the command starts there, or any cd or pushd in
+// it names the folder, every step of the whole command must be read-only.
+function entersTrueConvo(segments, cwd) {
+  if (TRUE_CONVO.test(cwd)) return true;
+  return segments.some((argv) => {
+    const a = programArgs(argv);
+    if (a[0] === 'cd' || a[0] === 'pushd') return a.slice(1).some((w) => TRUE_CONVO.test(w));
+    return false;
+  });
 }
 
 export function checkBash(command, cwd = process.cwd()) {
-  let here = cwd;
-  for (const argv of splitCommands(command)) {
-    if (argv[0] === 'cd' || argv[0] === 'pushd') {
-      // Skip options such as -P, -L or -e; the first other word is the folder.
-      const operand = argv.slice(1).find((a) => a === '-' || !a.startsWith('-'));
-      here = changeDir(here, operand);
-    }
-    if (TRUE_CONVO.test(here) && !gitCall(argv)) {
+  const segments = splitCommands(command);
+  const strict = entersTrueConvo(segments, cwd);
+  for (const raw of segments) {
+    const argv = programArgs(raw);
+    if (strict && !gitCall(argv)) {
       const reason = checkInsideTrueConvo(argv);
       if (reason) return reason;
     }
     const git = gitCall(argv);
     if (git) {
-      const where = git.dir ? changeDir(here, git.dir) : here;
+      const where = git.dir ? resolvePath(cwd, git.dir) : cwd;
       if (git.sub === 'push') {
         const reason = checkPush(git.args, where);
         if (reason) return reason;
@@ -163,7 +174,7 @@ export function checkBash(command, cwd = process.cwd()) {
       // Read commands can still write a file (diff --output, format-patch -o,
       // a redirect), so those options are blocked there too.
       const writesFile = git.args.some((a) => a.includes('>') || /^--output(-directory)?(=|$)/.test(a) || a === '-o');
-      if (TRUE_CONVO.test(where) && (!reads.includes(git.sub ?? '') || writesFile)) {
+      if ((strict || TRUE_CONVO.test(where)) && (!reads.includes(git.sub ?? '') || writesFile)) {
         return 'The True Convo folder is read-only (AGENTS.md "Moving Code From True Convo"). Copy the piece into this repo instead.';
       }
     }

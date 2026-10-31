@@ -86,6 +86,9 @@ test('blocks history rewriting, deleting main and admin merges', () => {
   assert.ok(checkBash('gh pr merge 12 --squash --admin', feature));
   assert.ok(checkBash('gh -R CloudworkSystems/open-convo pr merge 12 --admin', feature));
   assert.ok(checkBash('gh --repo CloudworkSystems/open-convo pr merge 12 --admin=true', feature));
+  assert.ok(checkBash('GH_PROMPT_DISABLED=1 gh pr merge 12 --admin', feature));
+  assert.ok(checkBash('command gh pr merge 12 --admin', feature));
+  assert.ok(checkBash('env gh pr merge 12 --admin', feature));
   assert.equal(checkBash('gh pr merge 12 --squash', feature), null);
   assert.equal(checkBash('git branch -D claude/old', feature), null);
 });
@@ -116,6 +119,9 @@ test('keeps the True Convo folder read-only', () => {
     `cd -P ${tc} && rm notes.md`,
     `cd -L -- ${tc} && rm notes.md`,
     `pushd ${tc} && rm notes.md`,
+    `cd ${tc} && (cd /tmp && pwd) && rm notes.md`,
+    `cd ${tc} && cd /tmp && cd - && rm notes.md`,
+    `cd ${tc} && cd /home/user/open-convo && rm -rf output`,
     `cd ${tc} && uniq in.txt out.txt`,
     `cd ${tc} && awk '{print}' a`,
     `cd ${tc}/src && cd .. && rm -rf build`,
@@ -135,8 +141,6 @@ test('keeps the True Convo folder read-only', () => {
     `cd ${tc} && ls -la && cat README.md | head -20`,
     `cd ${tc} && grep -rn Keychain src`,
     `cd ${tc} && find . -name '*.swift'`,
-    `cd ${tc} && cd /home/user/open-convo && rm -rf output`,
-    `cd ${tc} && cd .. && cd OPEN-CONVO && rm -rf output`,
     `cp ${tc}/src/Piece.swift apps/mac/Sources/Piece.swift`,
     `grep -rn Keychain ${tc}/src`,
     `git commit -m "Move piece from ${tc}/src/Piece.swift"`,
