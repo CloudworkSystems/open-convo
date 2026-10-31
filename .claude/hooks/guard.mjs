@@ -122,8 +122,10 @@ export function checkBash(command, cwd = process.cwd()) {
       if (git.sub === 'branch' && git.args.some((a) => /^-[a-zA-Z]*D/.test(a) || a === '--delete' || /^-[a-zA-Z]*d/.test(a)) && git.args.some((a) => PROTECTED.has(a))) {
         return 'Deleting main is not allowed.';
       }
-      const writes = ['push', 'commit', 'merge', 'rebase', 'reset', 'checkout', 'switch', 'cherry-pick', 'am', 'apply', 'stash', 'worktree', 'clean', 'rm', 'mv', 'add', 'tag'];
-      if (writes.includes(git.sub) && TRUE_CONVO.test(where)) {
+      // In the True Convo folder only read-only git subcommands are allowed;
+      // anything else (pull, restore, commit, checkout ...) is blocked.
+      const reads = ['status', 'log', 'show', 'diff', 'grep', 'blame', 'ls-files', 'ls-tree', 'cat-file', 'rev-parse', 'rev-list', 'describe', 'show-ref', 'shortlog', 'help', 'version', '--version'];
+      if (TRUE_CONVO.test(where) && !reads.includes(git.sub ?? '')) {
         return 'The True Convo folder is read-only (AGENTS.md "Moving Code From True Convo"). Copy the piece into this repo instead.';
       }
     }
@@ -132,11 +134,12 @@ export function checkBash(command, cwd = process.cwd()) {
       return 'Admin-bypass merges are not allowed (AGENTS.md "Keeping Finished Work Moving").';
     }
   }
-  // Shell writes into the True Convo folder: redirects, cp/mv/rm/tee/sed -i into it.
+  // Shell writes into the True Convo folder: redirects, tee, sed -i, cp/rsync/ln
+  // into it, and mv/rm and friends anywhere on it (a move deletes the source).
   if (TRUE_CONVO.test(command)) {
     const writesInto = /(>>?|\btee\b(\s+-a)?)\s*["']?[^\s"']*True-Convo-AI/i.test(command)
-      || /\b(cp|mv|rsync|ln|install)\b[^;&|\n]*\s["']?[^\s"']*True-Convo-AI[^\s"']*["']?\s*($|[;&|\n])/i.test(command)
-      || /\b(rm|rmdir|unlink|touch|mkdir|chmod|chown|truncate)\b[^;&|\n]*True-Convo-AI/i.test(command)
+      || /\b(cp|rsync|ln|install)\b[^;&|\n]*\s["']?[^\s"']*True-Convo-AI[^\s"']*["']?\s*($|[;&|\n])/i.test(command)
+      || /\b(mv|rm|rmdir|unlink|touch|mkdir|chmod|chown|truncate)\b[^;&|\n]*True-Convo-AI/i.test(command)
       || /\bsed\b[^;&|\n]*\s-i\b[^;&|\n]*True-Convo-AI/i.test(command);
     if (writesInto) {
       return 'The True Convo folder is read-only (AGENTS.md "Moving Code From True Convo"). Copy the piece into this repo instead.';

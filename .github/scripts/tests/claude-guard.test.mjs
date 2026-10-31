@@ -98,12 +98,19 @@ test('keeps the True Convo folder read-only', () => {
     `cp notes.md ${tc}/notes.md`,
     `rm -rf ${tc}/build`,
     `sed -i '' s/a/b/ ${tc}/file.txt`,
+    `git -C ${tc} pull`,
+    `git -C ${tc} restore src/Piece.swift`,
+    `git -C ${tc} fetch origin`,
+    `cd ${tc} && git stash`,
+    `mv ${tc}/src/Piece.swift apps/mac/Sources/Piece.swift`,
   ]) {
     assert.ok(checkBash(cmd, feature), cmd);
   }
   for (const cmd of [
     `cat ${tc}/README.md`,
     `git -C ${tc} log --oneline -5`,
+    `git -C ${tc} show HEAD:src/Piece.swift`,
+    `cd ${tc} && git status`,
     `cp ${tc}/src/Piece.swift apps/mac/Sources/Piece.swift`,
     `grep -rn Keychain ${tc}/src`,
     `git commit -m "Move piece from ${tc}/src/Piece.swift"`,
