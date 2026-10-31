@@ -130,7 +130,11 @@ export function checkBash(command, cwd = process.cwd()) {
       }
     }
     const isGh = /(^|\/)gh$/.test(argv[0] ?? '');
-    if (isGh && argv[1] === 'pr' && argv[2] === 'merge' && argv.includes('--admin')) {
+    // gh accepts global flags such as -R owner/repo before the subcommand, so
+    // look for "pr merge" anywhere rather than at fixed positions.
+    const prAt = argv.indexOf('pr');
+    const isMerge = prAt > 0 && argv[prAt + 1] === 'merge';
+    if (isGh && isMerge && argv.some((a) => a === '--admin' || a.startsWith('--admin='))) {
       return 'Admin-bypass merges are not allowed (AGENTS.md "Keeping Finished Work Moving").';
     }
   }

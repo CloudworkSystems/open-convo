@@ -84,6 +84,8 @@ test('blocks history rewriting, deleting main and admin merges', () => {
   assert.ok(checkBash('git filter-repo --path secret', feature));
   assert.ok(checkBash('git branch -D main', feature));
   assert.ok(checkBash('gh pr merge 12 --squash --admin', feature));
+  assert.ok(checkBash('gh -R CloudworkSystems/open-convo pr merge 12 --admin', feature));
+  assert.ok(checkBash('gh --repo CloudworkSystems/open-convo pr merge 12 --admin=true', feature));
   assert.equal(checkBash('gh pr merge 12 --squash', feature), null);
   assert.equal(checkBash('git branch -D claude/old', feature), null);
 });
