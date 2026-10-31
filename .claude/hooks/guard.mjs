@@ -110,14 +110,15 @@ function checkPush(args, cwd) {
 // Once a command is working inside the True Convo folder, relative paths
 // point into it, so only read-only programs are allowed there, with no
 // redirects and no in-place or delete options.
-const READ_ONLY_PROGRAMS = new Set(['cd', 'ls', 'cat', 'head', 'tail', 'less', 'more', 'grep', 'rg', 'find', 'wc', 'file', 'stat', 'pwd', 'echo', 'printf', 'sed', 'awk', 'diff', 'tree', 'du', 'sort', 'uniq', 'cut', 'true', 'test', '[']);
+// Programs with a file-output mode (sed w, awk print >, sort -o, uniq OUT,
+// tree -o) are left out on purpose; copy the file out and work on the copy.
+const READ_ONLY_PROGRAMS = new Set(['cd', 'ls', 'cat', 'head', 'tail', 'less', 'more', 'grep', 'rg', 'find', 'wc', 'file', 'stat', 'pwd', 'echo', 'printf', 'diff', 'cut', 'true', 'test', '[']);
 
 function checkInsideTrueConvo(argv) {
   const program = (argv[0] ?? '').replace(/^.*\//, '');
   const blocked = 'The True Convo folder is read-only (AGENTS.md "Moving Code From True Convo"). Only reading commands can run inside it.';
   if (!READ_ONLY_PROGRAMS.has(program)) return blocked;
   if (argv.some((a) => a.includes('>'))) return blocked;
-  if (program === 'sed' && argv.some((a) => /^-[a-zA-Z]*i/.test(a) || a.startsWith('--in-place'))) return blocked;
   if (program === 'find' && argv.some((a) => ['-delete', '-exec', '-execdir', '-ok', '-okdir', '-fprint', '-fprintf', '-fls'].includes(a))) return blocked;
   return null;
 }
