@@ -240,7 +240,9 @@ or task gets a row here first.
 ## Limits
 
 - Write every file as if this repo were public: no secrets, keys, private records,
-  raw chats or personal details. Secrets belong in Keychain, never in files or logs.
+  raw chats or personal details. Secrets belong in Keychain or the owner's
+  "Open Convo Agents" vault in 1Password, read only through its own
+  service account (docs/decisions.md, October 31), never in files or logs.
 - Keep build output, downloads, model files and private data out of Git.
 - No public release, deployment, publication, spending, account or credential
   change, or service that outlives the session without the owner's approval.
