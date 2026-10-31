@@ -203,11 +203,16 @@ public struct ClaudeCLIFileIdentity: Equatable, Sendable {
 
 /// The claude.ai plan `auth status` reports.
 public enum ClaudeSubscriptionPlan: String, Sendable, CaseIterable {
-    case pro, max, team, enterprise
+    case pro, max, ultra, team, enterprise
 
     /// The plans the checks pass (the owner's D1 decision): the others can
-    /// carry server-managed settings.
-    static let accepted: Set<ClaudeSubscriptionPlan> = [.pro, .max]
+    /// carry server-managed settings. These are `auth status`'s plan codes,
+    /// never the plans' display names. On October 30, 2026 Anthropic renamed
+    /// Max 20x to Ultra and Max 5x to Max; Claude Code 2.1.283 still reports
+    /// `max` for an Ultra account (the owner's own reading that day), and
+    /// `ultra` is accepted too in case a later version reports it (the
+    /// owner's ask, October 30). Any other code stays `check-failed`.
+    static let accepted: Set<ClaudeSubscriptionPlan> = [.pro, .max, .ultra]
 }
 
 /// How the CLI is signed in, when the checks pass: always a claude.ai plan

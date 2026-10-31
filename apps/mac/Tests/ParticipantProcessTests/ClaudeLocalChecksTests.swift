@@ -900,12 +900,14 @@ extension ProcessSuites {
             #expect(reached?["resolver"] as? Int == 0, "the DNS resolver was reachable: \(reached ?? [:])")
         }
 
-        @Test("Only Pro and Max pass: a Team or Enterprise login is not-subscription (plan-not-accepted), under the block or not")
+        @Test("Only Pro, Max and Ultra pass, by auth status's plan code, never a display name: a Team or Enterprise login is not-subscription (plan-not-accepted), an unknown code (a later rename) is check-failed, under the block or not")
         func authStatusPlans() async throws {
             let tree = try InventedClaudeTree()
             defer { tree.clean() }
             for gate in [ClaudeAuthStatusGate.production, .runForTests] {
-                for plan in ["pro", "subscription"] {
+                // `subscription` is `max`, which Claude Code 2.1.283 reports
+                // for an Ultra account too (the owner's reading, October 30).
+                for plan in ["pro", "subscription", "ultra"] {
                     try tree.setScenario(["authStatus": plan])
                     #expect(await tree.checks(authStatus: gate).evaluateFresh().didPass, "\(plan)")
                 }
@@ -915,8 +917,11 @@ extension ProcessSuites {
                     #expect(tree.log.last?.line
                                 == "check=fresh result=not-subscription step=auth-status source=auth-status detail=plan-not-accepted")
                 }
+                try tree.setScenario(["authStatus": "unknown-plan"])
+                #expect(await tree.checks(authStatus: gate).evaluateFresh() == .failed(.checkFailed), "an unknown code never passes")
             }
-            #expect(ClaudeSubscriptionPlan.accepted == [.pro, .max])
+            #expect(ClaudeSubscriptionPlan.accepted == [.pro, .max, .ultra])
+            #expect(Set(ClaudeSubscriptionPlan.allCases).subtracting(ClaudeSubscriptionPlan.accepted) == [.team, .enterprise])
         }
 
         @Test("When the block can't be applied, auth status never runs: a missing tool, one that isn't root's, a link, or a relative path is check-failed (network-block), the owner asks nothing; earlier failures still win")

@@ -99,7 +99,8 @@ struct ClaudeLocalChecksUnitTests {
         #expect(read(with(["orgId": NSNull()])) == .subscription(.pro, email: "invented@example.invalid", organization: nil))
         #expect(read(with(["apiKeySource": NSNull()])) == .subscription(.pro, email: "invented@example.invalid", organization: "invented-org"),
                 "a null key source is no key source")
-        for (name, plan) in [("pro", ClaudeSubscriptionPlan.pro), ("max", .max), ("team", .team), ("enterprise", .enterprise)] {
+        for (name, plan) in [("pro", ClaudeSubscriptionPlan.pro), ("max", .max), ("ultra", .ultra), ("team", .team),
+                             ("enterprise", .enterprise)] {
             #expect(read(with(["subscriptionType": name])) == .subscription(plan, email: "invented@example.invalid", organization: "invented-org"))
         }
         let override = ClaudeAuthAnswer.failure(.providerOverride, .override)
