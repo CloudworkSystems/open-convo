@@ -6,6 +6,16 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Oct 31:** On the owner's Mac, agents get keys from 1Password, which he
+  already pays for, so it costs nothing new. The keys sit in one vault named
+  "Open Convo Agents" that holds only agent keys. Agents read it through the
+  1Password command-line tool linked to his 1Password app, and he approves
+  each read with his Apple Watch or his password (his Mac has no Touch ID).
+  Agents never read his other vaults, his personal logins or his 2FA codes.
+  Cloud agents and the builders' VM get no 1Password access: no service
+  account and no token outside the Mac. Keychain stays an approved store
+  until each agent's setup moves to 1Password, and a key is removed from
+  Keychain only after the agent that uses it reads it from 1Password.
 - **Oct 27:** Gemini runs on the owner's own Google AI Studio API key, with
   billing on, under a monthly budget he sets: Google ended Gemini
   subscription sign-in for the old Gemini CLI and the Gemini Code Assist
