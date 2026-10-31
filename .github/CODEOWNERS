@@ -6,6 +6,8 @@
 /CLAUDE.md @CloudworkSystems
 /docs/agent-process.md @CloudworkSystems
 /.github/ @CloudworkSystems
+# Claude Code settings and the guard hook that enforces the hard rules.
+/.claude/ @CloudworkSystems
 # Folder rule files anywhere in the repo.
 AGENTS.md @CloudworkSystems
 CLAUDE.md @CloudworkSystems
