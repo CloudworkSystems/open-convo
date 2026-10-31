@@ -112,7 +112,7 @@ function checkPush(args, cwd) {
 // redirects and no in-place or delete options.
 // Programs with a file-output mode (sed w, awk print >, sort -o, uniq OUT,
 // tree -o) are left out on purpose; copy the file out and work on the copy.
-const READ_ONLY_PROGRAMS = new Set(['cd', 'ls', 'cat', 'head', 'tail', 'less', 'more', 'grep', 'rg', 'find', 'wc', 'file', 'stat', 'pwd', 'echo', 'printf', 'diff', 'cut', 'true', 'test', '[']);
+const READ_ONLY_PROGRAMS = new Set(['cd', 'pushd', 'popd', 'ls', 'cat', 'head', 'tail', 'less', 'more', 'grep', 'rg', 'find', 'wc', 'file', 'stat', 'pwd', 'echo', 'printf', 'diff', 'cut', 'true', 'test', '[']);
 
 function checkInsideTrueConvo(argv) {
   const program = (argv[0] ?? '').replace(/^.*\//, '');
@@ -135,7 +135,11 @@ function changeDir(from, to) {
 export function checkBash(command, cwd = process.cwd()) {
   let here = cwd;
   for (const argv of splitCommands(command)) {
-    if (argv[0] === 'cd') here = changeDir(here, argv[1]);
+    if (argv[0] === 'cd' || argv[0] === 'pushd') {
+      // Skip options such as -P, -L or -e; the first other word is the folder.
+      const operand = argv.slice(1).find((a) => a === '-' || !a.startsWith('-'));
+      here = changeDir(here, operand);
+    }
     if (TRUE_CONVO.test(here) && !gitCall(argv)) {
       const reason = checkInsideTrueConvo(argv);
       if (reason) return reason;
