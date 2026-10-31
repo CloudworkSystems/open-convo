@@ -43,6 +43,14 @@ test('blocks a bare push while on main', () => {
   assert.equal(checkBash('git push', feature), null);
 });
 
+test('resolves HEAD and @ to the current branch', () => {
+  assert.ok(checkBash('git push -u origin HEAD', onMain));
+  assert.ok(checkBash('git push origin @', onMain));
+  assert.ok(checkBash('git push origin main:HEAD', onMain));
+  assert.equal(checkBash('git push -u origin HEAD', feature), null);
+  assert.equal(checkBash('git push origin HEAD:claude/x', onMain), null);
+});
+
 test('blocks force-push in every spelling', () => {
   for (const cmd of [
     'git push --force origin claude/x',

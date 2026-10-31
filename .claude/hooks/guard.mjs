@@ -91,7 +91,12 @@ function checkPush(args, cwd) {
   if (refs.some((r) => r.startsWith('+'))) {
     return 'A "+" refspec is a force-push, which is not allowed (AGENTS.md "Limits").';
   }
-  if (refs.some((r) => PROTECTED.has(branchTarget(r)))) {
+  // A bare HEAD or @ (as in "git push -u origin HEAD") means the current branch.
+  const resolve = (r) => {
+    const dst = branchTarget(r);
+    return dst === 'HEAD' || dst === '@' ? currentBranch(cwd) : dst;
+  };
+  if (refs.some((r) => PROTECTED.has(resolve(r)))) {
     return 'Pushing to or deleting main is not allowed. Work on your own branch and open a pull request.';
   }
   if (refs.length === 0 && PROTECTED.has(currentBranch(cwd))) {
