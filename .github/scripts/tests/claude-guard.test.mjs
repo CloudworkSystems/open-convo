@@ -105,6 +105,12 @@ test('keeps the True Convo folder read-only', () => {
     `git -C ${tc} fetch origin`,
     `cd ${tc} && git stash`,
     `mv ${tc}/src/Piece.swift apps/mac/Sources/Piece.swift`,
+    `cd ${tc} && rm -rf build`,
+    `cd ${tc} && echo hi > notes.md`,
+    `cd ${tc} && echo hi>notes.md`,
+    `cd ${tc} && sed -i '' s/a/b/ file.txt`,
+    `cd ${tc} && find . -name '*.o' -delete`,
+    `cd ${tc} && touch x`,
   ]) {
     assert.ok(checkBash(cmd, feature), cmd);
   }
@@ -113,12 +119,18 @@ test('keeps the True Convo folder read-only', () => {
     `git -C ${tc} log --oneline -5`,
     `git -C ${tc} show HEAD:src/Piece.swift`,
     `cd ${tc} && git status`,
+    `cd ${tc} && ls -la && cat README.md | head -20`,
+    `cd ${tc} && grep -rn Keychain src`,
+    `cd ${tc} && find . -name '*.swift'`,
+    `cd ${tc} && cd /home/user/open-convo && rm -rf output`,
     `cp ${tc}/src/Piece.swift apps/mac/Sources/Piece.swift`,
     `grep -rn Keychain ${tc}/src`,
     `git commit -m "Move piece from ${tc}/src/Piece.swift"`,
   ]) {
     assert.equal(checkBash(cmd, feature), null, cmd);
   }
+  assert.ok(checkBash('rm -rf build', `${tc}/src`));
+  assert.equal(checkBash('cat README.md', tc), null);
   assert.ok(checkTool({ tool_name: 'Write', tool_input: { file_path: `${tc}/x.md` } }));
   assert.ok(checkTool({ tool_name: 'Edit', tool_input: { file_path: `${tc}/x.md` } }));
   assert.equal(checkTool({ tool_name: 'Write', tool_input: { file_path: `${root}/x.md` } }), null);

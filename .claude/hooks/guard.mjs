@@ -105,10 +105,29 @@ function checkPush(args, cwd) {
   return null;
 }
 
+// Once a command is working inside the True Convo folder, relative paths
+// point into it, so only read-only programs are allowed there, with no
+// redirects and no in-place or delete options.
+const READ_ONLY_PROGRAMS = new Set(['cd', 'ls', 'cat', 'head', 'tail', 'less', 'more', 'grep', 'rg', 'find', 'wc', 'file', 'stat', 'pwd', 'echo', 'printf', 'sed', 'awk', 'diff', 'tree', 'du', 'sort', 'uniq', 'cut', 'true', 'test', '[']);
+
+function checkInsideTrueConvo(argv) {
+  const program = (argv[0] ?? '').replace(/^.*\//, '');
+  const blocked = 'The True Convo folder is read-only (AGENTS.md "Moving Code From True Convo"). Only reading commands can run inside it.';
+  if (!READ_ONLY_PROGRAMS.has(program)) return blocked;
+  if (argv.some((a) => a.includes('>'))) return blocked;
+  if (program === 'sed' && argv.some((a) => /^-[a-zA-Z]*i/.test(a) || a.startsWith('--in-place'))) return blocked;
+  if (program === 'find' && argv.some((a) => ['-delete', '-exec', '-execdir', '-ok', '-okdir', '-fprint', '-fprintf', '-fls'].includes(a))) return blocked;
+  return null;
+}
+
 export function checkBash(command, cwd = process.cwd()) {
   let here = cwd;
   for (const argv of splitCommands(command)) {
     if (argv[0] === 'cd' && argv[1]) here = argv[1];
+    if (TRUE_CONVO.test(here) && !gitCall(argv)) {
+      const reason = checkInsideTrueConvo(argv);
+      if (reason) return reason;
+    }
     const git = gitCall(argv);
     if (git) {
       const where = git.dir ?? here;
