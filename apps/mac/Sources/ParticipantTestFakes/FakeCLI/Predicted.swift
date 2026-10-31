@@ -83,7 +83,7 @@ enum Predicted {
             return (pretty(signedIn("oauth_token", "firstParty")), 0)
         case "gateway":
             return (pretty(signedIn("claude.ai", "gateway") + [("email", #""invented@example.invalid""#)]), 0)
-        case "pro", "team", "enterprise":
+        case "pro", "ultra", "team", "enterprise":
             // A plan login like `subscription`, on that plan.
             return (pretty(signedIn("claude.ai", "firstParty") + account + [("subscriptionType", "\"\(variant)\"")]), 0)
         case "unknown-plan":

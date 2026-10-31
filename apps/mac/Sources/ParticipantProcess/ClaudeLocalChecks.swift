@@ -206,7 +206,14 @@ public enum ClaudeSubscriptionPlan: String, Sendable, CaseIterable {
     case pro, max, team, enterprise
 
     /// The plans the checks pass (the owner's D1 decision): the others can
-    /// carry server-managed settings.
+    /// carry server-managed settings. These are `auth status`'s plan codes,
+    /// never the plans' display names. On October 30, 2026 Anthropic renamed
+    /// Max 20x to Ultra and Max 5x to Max; Claude Code 2.1.283 still reports
+    /// `max` for an Ultra account (the owner's own reading that day), so
+    /// Ultra passes as `max`. Any other code, `ultra` included, stays
+    /// `check-failed`: 2.1.283 treats a plan it doesn't know as one that
+    /// fetches server-managed settings, so a new code passes only with a new
+    /// pinned version whose reading rechecks that (Codex P1 on #212).
     static let accepted: Set<ClaudeSubscriptionPlan> = [.pro, .max]
 }
 
