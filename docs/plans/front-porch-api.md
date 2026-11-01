@@ -71,6 +71,11 @@ the normal review loop.
   editing this one Worker, stored as an environment secret (below). The owner creates
   that token and the Cloudflare account settings; no agent signs in to
   Cloudflare. The workflow lives under `.github/`, so the owner approves it.
+  The deploy configuration uploads the Worker and sets its own settings
+  (such as turning `workers.dev` off) but never adds, changes or removes
+  routes or custom domains: that needs zone-wide routing rights the
+  one-Worker token doesn't have. The owner attaches `api.trueconvo.com` to
+  the Worker himself in the Cloudflare dashboard (Before It Goes Live).
 - **Every deploy needs the owner (requirement).** Approving the workflow once
   must not let later content changes publish on their own. Two gates, both
   required:
@@ -96,10 +101,14 @@ the normal review loop.
 - The content file says nothing about features the app doesn't have,
   labeling each one with its real status.
 - **Abuse guard for the daily quota.** One caller must not be able to use up
-  the 100,000 free requests a day. A Cloudflare rate limiting rule on
-  `api.trueconvo.com` (the free plan includes one, with a 10-second counting
+  the 100,000 free requests a day. A Cloudflare rate limiting rule on the
+  `trueconvo.com` zone (the free plan includes one, with a 10-second counting
   period and a 10-second block) blocks any single IP address that sends more
-  than 10 requests in 10 seconds. Blocked requests stop at
+  than 10 requests in 10 seconds to the API's paths. The free plan can't
+  match on hostname, only on path, so the rule's expression must match only
+  paths starting with `/v1/`, `/mcp` or `/openapi.json`. An "all incoming
+  requests" rule is not allowed: it would also count the public website's
+  requests and could block its visitors. Blocked requests stop at
   Cloudflare's edge before they reach the Worker, so they don't count toward
   the quota. The rule lives in the Cloudflare settings, not in the code, so
   the service stays portable; on another host, that host's equivalent limit
@@ -139,7 +148,7 @@ run. How each applies here:
   `tools/call` exchange through ZAP. The scan report must list every path
   and pass with no medium or high alerts.
 - **No public side door after staging.** The `workers.dev` address isn't
-  covered by the rate limiting rule on `api.trueconvo.com`, so the
+  covered by the zone's rate limiting rule, so the
   production deploy configuration turns it off (`workers_dev = false`, and
   preview URLs off) once the scan passes. From then on the Worker answers
   only at `api.trueconvo.com`.
@@ -155,9 +164,13 @@ run. How each applies here:
    access to that one Worker only, adds it as a secret of the
    `front-porch-production` environment (with himself as required
    reviewer), and approves the deploy workflow and the CODEOWNERS line.
-4. The rate limiting rule is in place on `api.trueconvo.com` (the owner adds
-   it in Cloudflare, or a session on his Mac does with his OK).
-5. The owner's OK to go live.
+4. After the staging scan passes, the owner attaches `api.trueconvo.com` to
+   the Worker as a custom domain in the Cloudflare dashboard. The workflow
+   never does this.
+5. The path-only rate limiting rule is in place on the `trueconvo.com` zone
+   (the owner adds it in Cloudflare, or a session on his Mac does with his
+   OK), and a check confirms the public website is unaffected.
+6. The owner's OK to go live.
 
 ## Finish Line
 
