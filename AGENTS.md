@@ -185,6 +185,11 @@ looping for 8 to 17 rounds on ever-narrower edge cases, so:
   raise that finding again on every round until the judge rates it or the
   code fixes it, so the judge sees it on the latest commit.
 - Give all findings for a commit in one round, most severe first.
+- When a plan's "When it goes wrong" section promises a behavior and the
+  code leaves it out, that is a broken promise (P1). A failure state the plan
+  never mentions is P3 at most, unless it meets the P0 or P1 definitions
+  above on its own (data loss, a privacy or security hole, money spent)
+  ([docs/plans/when-it-goes-wrong.md](docs/plans/when-it-goes-wrong.md)).
 - A pull request that adds an outside host, a dependency, a Mac permission
   or a key name is held for the owner by `codex-approved` (the risk hold),
   and the triage judge always rates findings about privacy, secrets or
