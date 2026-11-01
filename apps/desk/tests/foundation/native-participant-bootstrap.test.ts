@@ -123,7 +123,7 @@ const claudeVectors = JSON.parse(readFileSync(new URL('../fixtures/native-partic
 const offMacEntry = () => structuredClone(claudeVectors.cases.find(entry => entry.name
   === 'Claude host: availability under a provider override names the off-Mac entry unavailable')!.reply.participants[0]) as NativeParticipantAvailability;
 
-test('the Claude Code adapter PR 4b: the native bootstrap offers an off-Mac Claude entry in the picker', async () => {
+test('the Claude Code adapter PR 4b: the native bootstrap offers an off-Mac Claude entry in the picker, only from a host with section 17 built', async () => {
   const h = host();
   h.setEntry(offMacEntry());
   const initialized = await initializeNativeProof(h.environment, { requestId: nextIds(), timeoutMs: 50 });
@@ -131,6 +131,9 @@ test('the Claude Code adapter PR 4b: the native bootstrap offers an off-Mac Clau
   if (initialized.kind !== 'ready') return;
   const runtime = initialized.runtime;
   try {
+    await runtime.refreshParticipants!();
+    assert.equal(runtime.participantChoices!.length, 0, 'no confirmation built: never offered, since it could never run');
+    h.setEntry({ ...offMacEntry(), reason: 'overflow-unverified', confirmation: { state: 'unconfirmed' } } as NativeParticipantAvailability);
     await runtime.refreshParticipants!();
     const choices = runtime.participantChoices!;
     assert.equal(choices.length, 1, 'listed, not left out as before PR 4b');

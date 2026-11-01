@@ -28,8 +28,7 @@ public final class ClaudeConversation {
     /// Section 21.4's approval, read from the store the Desk has open now.
     nonisolated let approvals: CurrentStoreApproval
     /// The production launcher over the pinned CLI file and the bundled
-    /// supervisor, or a refusal while section 16's init values are not
-    /// recorded (`recordedInit`).
+    /// supervisor (tests may give another).
     nonisolated let launcher: any ParticipantLaunching
     let signals: PaidUsageEndSignals
     /// The window's section 17 controls.
@@ -37,8 +36,8 @@ public final class ClaudeConversation {
 
     /// The values Claude Code's first stream line must carry besides the
     /// model and the empty tool lists (section 11's init rule): recorded in
-    /// section 16's run on the owner's Mac. Nil until then, so the launcher
-    /// refuses and nothing is spawned.
+    /// section 16's run on the owner's Mac. Nil until then, so there is no
+    /// entry (`make` answers nil) and nothing can be spawned.
     nonisolated static let recordedInit: ParticipantInitExpectation? = nil
 
     init(owner: PaidUsageConfirmationOwner, approvals: CurrentStoreApproval, launcher: any ParticipantLaunching,
@@ -51,14 +50,27 @@ public final class ClaudeConversation {
     }
 
     /// True Convo Test's Claude entry, with its end observers started; nil
-    /// for every other identity, the real app included, and nil (the entry
-    /// stays never available, as before) if this user's folders cannot be
-    /// read or the private participants folder cannot be made, under the
-    /// Desk's own invented-data folder (`paths`). The supervisor is the one
-    /// bundled beside `executable`.
+    /// for every other identity, the real app included. Nil too, so the
+    /// entry stays never available and out of the picker, as before, until
+    /// section 16's init values are recorded (`recordedInit`): nothing is
+    /// offered that could not run (Codex P1 on #228). And nil if this user's
+    /// folders cannot be read or the private participants folder cannot be
+    /// made, under the Desk's own invented-data folder (`paths`). The
+    /// supervisor is the one bundled beside `executable`.
     public static func make(for identity: AppIdentity, paths: DeskPaths, executable: URL?,
                             log: @escaping @Sendable (_ event: String, _ detail: String) -> Void) -> ClaudeConversation? {
+        make(for: identity, paths: paths, executable: executable, log: log, expectedInit: recordedInit)
+    }
+
+    /// The same, with the init values given (tests give invented ones).
+    static func make(for identity: AppIdentity, paths: DeskPaths, executable: URL?,
+                     log: @escaping @Sendable (_ event: String, _ detail: String) -> Void,
+                     expectedInit: ParticipantInitExpectation?) -> ClaudeConversation? {
         guard LocalConversationLane.turnsOn(for: identity) else { return nil }
+        guard let expectedInit else {
+            log("claude.wiring.off", "reason=init-unrecorded")
+            return nil
+        }
         guard let executable else {
             log("claude.wiring.off", "reason=no-executable")
             return nil
@@ -79,16 +91,11 @@ public final class ClaudeConversation {
         }
         let approvals = CurrentStoreApproval()
         let owner = PaidUsageConfirmationOwner(checks: ClaudeLocalChecks(roots: roots), approvals: approvals)
-        let launcher: any ParticipantLaunching
-        if let expectedInit = recordedInit {
-            launcher = ProcessParticipantLauncher(supervisorPath: ParticipantSupervisorLocation.besides(executable: executable),
+        let launcher = ProcessParticipantLauncher(supervisorPath: ParticipantSupervisorLocation.besides(executable: executable),
                                                   cliPath: roots.binaryPath, workingParent: parent, expectedInit: expectedInit)
-        } else {
-            launcher = ClaudeNotConnected()
-        }
         let signals = PaidUsageEndSignals(owner: owner, workspaceCenter: NSWorkspace.shared.notificationCenter)
         signals.start()
-        log("claude.wiring.on", "launcher=\(recordedInit == nil ? "refusing" : "process")")
+        log("claude.wiring.on", "")
         return ClaudeConversation(owner: owner, approvals: approvals, launcher: launcher, signals: signals)
     }
 

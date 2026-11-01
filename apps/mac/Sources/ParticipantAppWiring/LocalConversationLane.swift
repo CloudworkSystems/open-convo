@@ -13,7 +13,8 @@ import TrueConvoIdentity
 /// Claude entry's availability and run claims, with the first-trial input
 /// bound, and the launcher is the production one. The real True Convo app
 /// gets no lane at all, exactly as before. Without a `ClaudeConversation`
-/// (its folders could not be made) the Claude entry still travels first on
+/// (section 16's init values not yet recorded, or its folders could not be
+/// made) the Claude entry still travels first on
 /// the wire (section 20.2 requires it) and is never available: shipping
 /// availability, always `overflow-unverified`, no owner, and a launcher that
 /// refuses every launch.
@@ -70,9 +71,7 @@ public enum LocalConversationLane {
 /// The Claude Code side of the lane when it is not connected: every launch
 /// is refused, so nothing is spawned. Without a `ClaudeConversation` it is
 /// unreachable behind availability (a start's step 13 recheck answers
-/// `participant-unavailable` first), the second barrier. With one, it stands
-/// in for the production launcher until section 16's run records the init
-/// values that launcher expects (`ClaudeConversation.recordedInit`).
+/// `participant-unavailable` first), the second barrier.
 struct ClaudeNotConnected: ParticipantLaunching {
     struct Refused: Error, Equatable {}
 

@@ -33,40 +33,55 @@ struct ClaudeConversationWiringTests {
                                                                workspaceCenter: NotificationCenter()))
     }
 
-    @Test("Made for True Convo Test only: nil for the real app and with no executable, and nothing is made in their folders")
+    /// Invented init values, as section 16's run would record them.
+    static let invented = ParticipantInitExpectation(model: LocalConversationLane.claudePin.model, slashCommands: ["invented-command"],
+                                                     skills: [], plugins: .array([]), apiKeySource: "none")
+    static let executable = URL(fileURLWithPath: "/invented/True Convo Test.app/Contents/MacOS/True Convo Test")
+
+    @Test("Made for True Convo Test only, and only once section 16's init values are recorded: nil for the real app, before the recording and with no executable, and nothing is made in their folders")
     @MainActor
     func testCopyOnly() throws {
         let root = try Self.folder()
         defer { try? FileManager.default.removeItem(at: root) }
         let paths = DeskPaths(applicationSupport: root, identity: .release)
-        let executable = URL(fileURLWithPath: "/invented/True Convo Test.app/Contents/MacOS/True Convo Test")
-        #expect(ClaudeConversation.make(for: .release, paths: paths, executable: executable, log: { _, _ in }) == nil)
-        #expect(ClaudeConversation.make(for: .current, paths: paths, executable: executable, log: { _, _ in }) == nil,
-                "unit tests have no bundle id, so they are the real app")
         let testPaths = DeskPaths(applicationSupport: root, identity: .test)
-        #expect(ClaudeConversation.make(for: .test, paths: testPaths, executable: nil, log: { _, _ in }) == nil)
+        #expect(ClaudeConversation.make(for: .release, paths: paths, executable: Self.executable, log: { _, _ in },
+                                        expectedInit: Self.invented) == nil)
+        #expect(ClaudeConversation.make(for: .current, paths: paths, executable: Self.executable, log: { _, _ in },
+                                        expectedInit: Self.invented) == nil, "unit tests have no bundle id, so they are the real app")
+        #expect(ClaudeConversation.make(for: .test, paths: testPaths, executable: nil, log: { _, _ in },
+                                        expectedInit: Self.invented) == nil)
+        // Codex P1 on #228: nothing is offered that could not run.
+        #expect(ClaudeConversation.recordedInit == nil, "not recorded until section 16's run")
+        let logs = LockedLines()
+        #expect(ClaudeConversation.make(for: .test, paths: testPaths, executable: Self.executable,
+                                        log: { logs.append("\($0) \($1)") }) == nil, "the app's call, before the recording")
+        #expect(logs.lines == ["claude.wiring.off reason=init-unrecorded"])
         #expect(try FileManager.default.contentsOfDirectory(atPath: root.path).isEmpty, "no folder made for any of them")
     }
 
-    @Test("For True Convo Test: the private participants folder under the Desk's invented-data folder, and a refusing launcher until section 16's init values are recorded")
+    @Test("For True Convo Test: the private participants folder under the Desk's invented-data folder, the production launcher over the pinned file, the bundled supervisor and the recorded values, and the end observers running")
     @MainActor
     func madeForTheTestCopy() throws {
         let root = try Self.folder()
         defer { try? FileManager.default.removeItem(at: root) }
         let paths = DeskPaths(applicationSupport: root, identity: .test)
-        let executable = URL(fileURLWithPath: "/invented/True Convo Test.app/Contents/MacOS/True Convo Test")
         let logs = LockedLines()
-        let entry = try #require(ClaudeConversation.make(for: .test, paths: paths, executable: executable,
-                                                         log: { logs.append("\($0) \($1)") }))
+        let entry = try #require(ClaudeConversation.make(for: .test, paths: paths, executable: Self.executable,
+                                                         log: { logs.append("\($0) \($1)") }, expectedInit: Self.invented))
         defer { entry.stopObserving() }
         var info = stat()
-        let participants = paths.base.appendingPathComponent(ParticipantsFolder.name).path
-        #expect(lstat(participants, &info) == 0 && (info.st_mode & S_IFMT) == S_IFDIR)
+        let participants = paths.base.appendingPathComponent(ParticipantsFolder.name)
+        #expect(lstat(participants.path, &info) == 0 && (info.st_mode & S_IFMT) == S_IFDIR)
         #expect(info.st_mode & 0o7777 == 0o700 && info.st_uid == getuid(), "this user's, and no one else's")
-        #expect(ClaudeConversation.recordedInit == nil, "not recorded until section 16's run")
-        #expect(entry.launcher is ClaudeNotConnected, "so nothing can be spawned")
+        let launcher = try #require(entry.launcher as? ProcessParticipantLauncher)
+        #expect(launcher.supervisorPath == "/invented/True Convo Test.app/Contents/MacOS/ParticipantSupervisor")
+        #expect(launcher.cliPath.hasSuffix("/.local/share/claude/versions/" + ParticipantCommandLine.pinnedCLIVersion),
+                "the exact pinned file, never the launcher link: \(launcher.cliPath)")
+        #expect(launcher.workingParent.url.standardizedFileURL.path == participants.standardizedFileURL.path)
+        #expect(launcher.expectedInit == Self.invented)
         #expect(entry.signals.isRunning, "the end observers run from launch")
-        #expect(logs.lines == ["claude.wiring.on launcher=refusing"])
+        #expect(logs.lines == ["claude.wiring.on "])
     }
 
     @Test("With the entry, the lane's Claude side is section 17's owner, with the first-trial bound and the entry's launcher; the local route is unchanged")

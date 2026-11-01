@@ -360,13 +360,13 @@ struct ProcessLauncherGateTests {
         // The Claude Code adapter's PR 4b: True Convo Test's Claude entry
         // (`ClaudeConversation.make`, nil for the real app) makes the private
         // participants folder once and the launcher once, over the pinned
-        // file and the bundled supervisor, and only with section 16's
-        // recorded init values (ClaudeConversationWiringTests).
+        // file and the bundled supervisor, and only once section 16's init
+        // values are recorded (ClaudeConversationWiringTests).
         let wiring = "ClaudeConversation.swift: "
         #expect(found.filter { $0.hasPrefix(wiring) } == [
             wiring + "let parent: ParticipantsParent",
             wiring + "parent = try ParticipantsFolder.prepare(in: try paths.prepareBase())",
-            wiring + "launcher = ProcessParticipantLauncher(supervisorPath: ParticipantSupervisorLocation.besides(executable: executable),",
+            wiring + "let launcher = ProcessParticipantLauncher(supervisorPath: ParticipantSupervisorLocation.besides(executable: executable),",
         ], "\(found)")
         #expect(found.filter { !$0.hasPrefix(wiring) }.isEmpty, "\(found)")
     }
