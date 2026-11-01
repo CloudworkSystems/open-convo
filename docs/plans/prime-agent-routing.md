@@ -48,10 +48,10 @@ memory the host granted for this job. The host writes `record` itself; a
 model's output never goes into it. The engine can't check where its
 arguments came from, so this is a rule for the caller (prime-agent.md step
 3), stated in the README's first section. What the engine does enforce:
-`input` may not carry the message, approvals or memory at all (a field
-named `message`, `approvals`, `usedApprovals` or `memory` in `input` is
-refused), so a model-filled object can't smuggle in a sender, a yes or
-private memory.
+`input` may not carry the message, the space, approvals or memory at all
+(a field named `message`, `space`, `approvals`, `usedApprovals` or
+`memory` in `input` or its `facts` is refused), so a model-filled object
+can't smuggle in a sender, a space, a yes or private memory.
 
 ### Input
 
@@ -71,7 +71,6 @@ One JSON object. Unknown fields are refused, naming the field.
     `share-private`.
   - `offerAccepted`: `true` when this message is the person saying yes to
     an earlier offer of a session.
-  - `space`: the memory space the conversation is in (an id string).
   Each action `id` names one run of that action: a retry of a send is a
   new `id`, never the old one.
 - `limits`: optional numbers for `quickSteps` (default 3).
@@ -81,6 +80,8 @@ One JSON object. Unknown fields are refused, naming the field.
 - `message`: `{ text, from }`, taken by the host from where the message
   actually came in. `from` is `person`, `agent` or `system`. `text` is kept
   only to quote it in a brief (up to 16 KB). The reader never sets either.
+- `space`: the memory space the conversation is open in (an id string),
+  as the host knows it. The reader never sets it.
 - `jobId`: the id of the job a hand-off would start (a string).
 - `approvals`: a list of `{ approvalId, actionId, payloadDigest, by, how,
   at }`, every approval anyone has claimed for this conversation.
@@ -140,7 +141,7 @@ One JSON object. Unknown fields are refused, naming the field.
    unchanged), `goal` and `finishLine` (empty strings for the model to
    fill), `known` and `guessed` (empty lists, kept apart), `ruledOut`
    (empty list), `limits` (the unapproved outside actions, plus "nothing
-   outside the space" when `space` is set), and `memoryPackage`: only the
+   outside the space" when the record's `space` is set), and `memoryPackage`: only the
    grants whose `jobId` is the record's `jobId`, each with all of its
    contract fields. A grant from the conversation's own space needs
    nothing more. A grant from another space counts only when it carries
@@ -199,8 +200,9 @@ invented messages only. At least:
    field is refused.
 5b. Routes: a `task` with `steps` at or below `quickSteps` gets
    **answer**, one above it gets **hand-off**.
-5a. Provenance and one use: an `input` carrying `message`, `approvals`,
-   `usedApprovals` or `memory` is refused; a person's yes whose
+5a. Provenance and one use: an `input` carrying `message`, `space`,
+   `approvals`, `usedApprovals` or `memory` is refused; grants are scoped
+   by the record's `space` only; a person's yes whose
    `approvalId` is in `usedApprovals` asks again; an approved action comes
    back with its `approvalId`; a retried action with a new `id` asks
    again.
