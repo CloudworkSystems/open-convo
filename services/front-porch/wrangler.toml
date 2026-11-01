@@ -5,11 +5,20 @@ name = "front-porch"
 main = "src/worker.js"
 compatibility_date = "2026-10-01"
 
-# Staging: until the ZAP scan passes against it, the workers.dev address is
-# the staging step. The pull request that follows a passing staging scan sets
-# both of these to false, so the Worker then answers only at api.trueconvo.com.
-workers_dev = true
+# Production, used by every ordinary deploy: no workers.dev address and no
+# preview URLs, so the Worker answers only at api.trueconvo.com, behind the
+# zone's rate limit. With workers_dev off and no route or routes key, Wrangler
+# leaves the routes and custom domain the owner set in the dashboard alone.
+workers_dev = false
 preview_urls = false
 
 # No routes or custom domains here, on purpose. The one-Worker token can't
 # manage them, and the owner attaches api.trueconvo.com in the dashboard.
+
+# Staging, only for the one ZAP scan before api.trueconvo.com is attached:
+# the same Worker with its workers.dev address on. The workflow refuses a
+# staging deploy once api.trueconvo.com answers.
+[env.staging]
+name = "front-porch"
+workers_dev = true
+preview_urls = false

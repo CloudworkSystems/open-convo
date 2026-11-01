@@ -86,9 +86,8 @@ connector programs), built by Claude. Plan:
 PR 1 (#239, merged): the service, its content, OpenAPI and MCP, with tests.
 PR 2, in review: the owner-approved deploy workflow, the OWASP ZAP API scan in
 CI and for staging, and OpenAPI 3.1 validation. Not live: next come the
-owner's Cloudflare setup, the staging scan, and, at go-live, the docs page,
-the privacy policy section and turning the workers.dev address off, then his
-OK to go live.
+owner's Cloudflare setup, the staging scan, and, at go-live, the docs page
+and the privacy policy section, then his OK to go live.
 
 **Site Engine, standalone first slice**, built by an outside builder (GrokBot
 builds, Codex reviews). Plan:

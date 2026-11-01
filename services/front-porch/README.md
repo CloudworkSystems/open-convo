@@ -20,7 +20,9 @@ separate OK (the plan's "Before It Goes Live").
   read-only.
 - `src/worker.js`: the Cloudflare Workers entry point.
 - `src/node-server.js`: a Node 22 entry point running the same handler.
-- `wrangler.toml`: the Worker's settings. It sets no routes or custom domains.
+- `wrangler.toml`: the Worker's settings. Ordinary deploys use the
+  production settings (workers.dev off); `[env.staging]` turns workers.dev on
+  for the one staging scan. Neither sets routes or custom domains.
 - `scan/`: the OWASP ZAP API scan (`zap-scan.mjs`, needs Docker) and its ZAP
   hooks, which add the recorded MCP exchange.
 
@@ -47,6 +49,8 @@ environment. It needs, in that environment:
   the `front-porch` Worker only, created after the empty Worker exists,
 - the variable `FRONT_PORCH_CLOUDFLARE_ACCOUNT_ID`.
 
-A manual run with `staging_url` set to the Worker's workers.dev address also
-runs the ZAP scan against it. The owner attaches `api.trueconvo.com` in the
-Cloudflare dashboard only after that scan passes.
+A manual run with `staging_url` set to the Worker's workers.dev address
+deploys the staging settings and runs the ZAP scan against that address. It
+is refused once `api.trueconvo.com` answers. The owner attaches
+`api.trueconvo.com` in the Cloudflare dashboard only after that scan passes;
+the next ordinary deploy turns the workers.dev address off again.
