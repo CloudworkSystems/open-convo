@@ -45,7 +45,7 @@ import Foundation
 //   start, which step 4 runs with the network blocked.
 // - For section 5's checks (F3), more invented variants: `authStatus`
 //   "console-login", "api-key-helper", "oauth-token", "gateway",
-//   "pro", "team", "enterprise" (a plan login on that plan), "unknown-plan", "unknown-method", "no-account", "logged-in-exit-1",
+//   "pro", "ultra", "team", "enterprise" (a plan login on that plan; "ultra" is a code 2.1.283 never reports), "unknown-plan", "unknown-method", "no-account", "logged-in-exit-1",
 //   "logged-in-number", "empty" and "oversized", with the scenario's
 //   `configDirectory` if it has one; `versionMode` "garbled",
 //   "empty", "oversized", "exit-2" or "slow" (after `versionSlowMs`, default
