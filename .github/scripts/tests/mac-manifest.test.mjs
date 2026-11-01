@@ -113,7 +113,29 @@ export function parseTargets(text) {
   });
 }
 
+/** The package's products as "kind name -> targets", read as strictly as the targets. */
+export function parseProducts(text) {
+  const body = text.trim();
+  const head = body.match(/^(?:import PackageDescription\s+)?let package = Package\s*\(/);
+  if (!head) throw new Error('Package.swift must be one `let package = Package(...)` and nothing else');
+  const args = Object.fromEntries(elements(body, head[0].length - 1).map(labeled));
+  if (!args.products) return [];
+  return arrayItems(args.products, 'products').map((entry) => {
+    const m = entry.match(/^\.(executable|library)\(/);
+    if (!m || closing(entry, m[0].length - 1) !== entry.length) throw new Error(`unexpected product entry: ${entry.slice(0, 60)}`);
+    let name;
+    let list;
+    for (const [label, value] of elements(entry, m[0].length - 1).map(labeled)) {
+      if (label === 'name') name = strValue(value, 'product name');
+      else if (label === 'targets') list = arrayItems(value, 'product targets').map((v) => strValue(v, 'product target'));
+      else throw new Error(`unexpected product argument ${label}:`);
+    }
+    return `${m[1]} ${name} -> ${(list ?? []).join(', ')}`;
+  });
+}
+
 const targets = parseTargets(code);
+const products = parseProducts(code);
 const byName = new Map(targets.map((t) => [t.name, t]));
 
 function linkedBy(root) {
@@ -144,6 +166,18 @@ test('the manifest uses only plain targets: no plugins, flags, conditions or dro
   }
 });
 
+test('the products are the approved ones, each built from its own target', () => {
+  // The packaging script copies the VoiceCursorMac product's binary into the
+  // app, so which target a product builds is pinned too. A new product needs
+  // the owner (this file is protected).
+  assert.deepEqual(products, [
+    'executable VoiceCursorMac -> VoiceCursorMac',
+    'executable VoiceCursorPolicyCheck -> VoiceCursorPolicyCheck',
+    'executable ParticipantSupervisor -> ParticipantSupervisor',
+    'executable DeskBundleManifest -> DeskBundleManifest',
+  ]);
+});
+
 test('the app links exactly the participant-path modules the owner approved', () => {
   assert.ok(byName.has('VoiceCursorMac'), 'the app target is missing');
   const linked = [...linkedBy('VoiceCursorMac')].filter(isParticipantPath).sort();
@@ -154,11 +188,22 @@ test('the app links exactly the participant-path modules the owner approved', ()
   ]);
 });
 
-test('every folder under Tests/ is built by a target, so every protected test runs', () => {
-  const built = new Set(targets.map((t) => t.path ?? (t.kind === 'testTarget' ? `Tests/${t.name}` : `Sources/${t.name}`)));
+test('every folder under Tests/ is a test target, so every test runs', () => {
+  const folderOf = (t) => t.path ?? (t.kind === 'testTarget' ? `Tests/${t.name}` : `Sources/${t.name}`);
+  const tested = new Set(targets.filter((t) => t.kind === 'testTarget').map(folderOf));
+  // The kill-mid-reply proof's app lives under Tests/ but is a program a test
+  // runs, not a suite (step 3, PR 5). Any other exception needs the owner.
+  const programs = new Map([['Tests/LocalConversationProofHost', 'LocalConversationProofHost']]);
   const folders = readdirSync(join(mac, 'Tests'), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => `Tests/${d.name}`);
   assert.ok(folders.length > 0);
-  for (const folder of folders) assert.ok(built.has(folder), `${folder} is not built by any target in Package.swift`);
+  for (const folder of folders) {
+    if (programs.has(folder)) {
+      const owner = byName.get(programs.get(folder));
+      assert.ok(owner?.kind === 'executableTarget' && owner.path === folder, `${folder} must stay the ${programs.get(folder)} program`);
+    } else {
+      assert.ok(tested.has(folder), `${folder} is not built by a test target in Package.swift, so swift test won't run it`);
+    }
+  }
   // The protected tests named in .github/CODEOWNERS, by their test targets.
   for (const name of ['ArchiveProtectionTests', 'ProtectionProofTests', 'ParticipantProcessTests', 'DeskWindowKitTests', 'DeskHostTests']) {
     assert.equal(byName.get(name)?.kind, 'testTarget', `${name} must stay a test target`);
@@ -188,5 +233,10 @@ test('the parser reads plain literals and rejects anything it cannot read fully'
     wrap('.plugin(name: "P", capability: .buildTool())'),
   ]) {
     assert.throws(() => parseTargets(bad), undefined, bad);
+  }
+  const withProducts = (p) => `import PackageDescription\nlet package = Package(name: "P", products: [${p}], targets: [])`;
+  assert.deepEqual(parseProducts(withProducts('.executable(name: "App", targets: ["Other"])')), ['executable App -> Other']);
+  for (const bad of ['.executable(name: "App", targets: appTargets)', '.executable(name: appName, targets: ["App"])', '.plugin(name: "P", targets: ["P"])']) {
+    assert.throws(() => parseProducts(withProducts(bad)), undefined, bad);
   }
 });
