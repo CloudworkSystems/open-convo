@@ -1,6 +1,6 @@
 # Capture Inbox Engine (PRD)
 
-Status: Approved (Oct 30): the owner said yes in the thread "Draft next plans for outside builders". On November 1 he moved the build from team B to team C so it starts now (build issue #221).
+Status: In progress (Nov 1): approved October 30 in the thread "Draft next plans for outside builders"; the owner moved the build from team B to team C on November 1 so it starts now (build issue #221).
 
 Written October 29, 2026 by a Claude session (project "261024 OC Steering",
 thread "Draft next plans for outside builders"). Session name:
@@ -238,3 +238,10 @@ auto-merge once the plan check passes. Done when the tests pass with one
 command, Codex has no open P1 or P2 on the latest commit (or the Codex triage
 judge passes it, [codex-triage.md](codex-triage.md)), and the plan check
 finds nothing missing.
+
+## Revision (November 1, 2026)
+
+The owner moved this build from GrokBot team B to team C, so it could start
+while team B finishes sync core (#139). Only the builder's name changed, in
+the opening paragraph, the rules heading and the sign-off line; every
+requirement, rule, limit and the finish line stay as approved.
