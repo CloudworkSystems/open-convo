@@ -201,8 +201,10 @@ invented messages only. At least:
 5b. Routes: a `task` with `steps` at or below `quickSteps` gets
    **answer**, one above it gets **hand-off**.
 5a. Provenance and one use: an `input` carrying `message`, `space`,
-   `approvals`, `usedApprovals` or `memory` is refused; grants are scoped
-   by the record's `space` only; a person's yes whose
+   `approvals`, `usedApprovals` or `memory` is refused; "this space" in
+   rule 5 is always the record's `space`, never one the reader names (a
+   grant from another space still joins only with `sharedByPerson: true`,
+   as test 5 says); a person's yes whose
    `approvalId` is in `usedApprovals` asks again; an approved action comes
    back with its `approvalId`; a retried action with a new `id` asks
    again.
