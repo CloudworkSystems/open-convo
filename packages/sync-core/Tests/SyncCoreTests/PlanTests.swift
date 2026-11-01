@@ -507,6 +507,9 @@ final class SyncCorePlanTests: XCTestCase {
             payload: secret
         )
         try a.device.queueLocalEdit(purge)
+        XCTAssertTrue(live(a, "page").purged)
+        XCTAssertTrue(live(a, "page").payload.isEmpty)
+        XCTAssertFalse(holds(secret, peer: a))
         let queued = try XCTUnwrap(a.device.queuedRecords().first { $0.record.id == "page" })
         XCTAssertTrue(queued.record.purged)
         XCTAssertTrue(queued.record.payload.isEmpty)

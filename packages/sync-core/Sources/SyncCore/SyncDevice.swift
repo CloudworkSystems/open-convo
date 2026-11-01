@@ -156,7 +156,9 @@ public final class SyncDevice {
         if !record.purged && holdsPurge(record.id) {
             throw SyncError.recordPurged
         }
-        let record = withoutPurgedPayload(record)
+        let supplied = record
+        let record = withoutPurgedPayload(supplied)
+        let persistMarker = supplied.purged && supplied.payload != record.payload
         let cleanup = record.purged ? stagePurgeCleanup(for: record.id) : []
         observe(record.stamp)
         editEpoch += 1
@@ -176,11 +178,11 @@ public final class SyncDevice {
             epoch: editEpoch
         ))
         local[record.id] = record
-        if !cleanup.isEmpty {
+        if !cleanup.isEmpty || persistMarker {
             let checkpoint = saveCheckpoint()
             deliver(AppSaveRequest(
                 record: record,
-                replaceLocalRecord: false,
+                replaceLocalRecord: persistMarker,
                 conflictCopies: [],
                 checkpointBeforeRequest: checkpoint,
                 conflictCopiesToRemove: cleanup
@@ -308,12 +310,14 @@ public final class SyncDevice {
         }
         for record in byID.values {
             if record.purged {
+                let marker = withoutPurgedPayload(record)
                 let cleanup = stagePurgeCleanup(for: record.id)
-                if !cleanup.isEmpty {
+                let persistMarker = marker.payload != record.payload
+                if !cleanup.isEmpty || persistMarker {
                     let checkpoint = saveCheckpoint()
                     deliver(AppSaveRequest(
-                        record: withoutPurgedPayload(record),
-                        replaceLocalRecord: false,
+                        record: marker,
+                        replaceLocalRecord: persistMarker,
                         conflictCopies: [],
                         checkpointBeforeRequest: checkpoint,
                         conflictCopiesToRemove: cleanup
