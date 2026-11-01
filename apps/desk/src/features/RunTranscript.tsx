@@ -4,6 +4,7 @@ import type { ConversationRunStatus, ParticipantCleanupState } from '../adapters
 import { isConversationRunClosed } from '../domain/conversation-runs';
 import { CLAUDE_DESTINATION, isOffMacClaude } from '../domain/claude-participant';
 import { isLocalParticipant, localModelName, localRunOutcome, localRunStarted } from '../domain/local-participant';
+import { MessageActions } from './MessageActions';
 import './run-transcript.css';
 
 export type RunStopState = 'idle' | 'requesting' | 'unknown' | 'confirmed';
@@ -21,6 +22,8 @@ export interface RunTranscriptProps {
   checkpointPending?: boolean;
   saving: boolean;
   error?: string;
+  /** The latest reply in the conversation keeps its actions visible. */
+  latest?: boolean;
   onStop: () => void;
 }
 
@@ -70,7 +73,7 @@ function localCleanupLine(state: ParticipantCleanupState, acknowledged: boolean,
 }
 
 /** Presentation only: provider text stays literal and save failure never prevents Stop. */
-export function RunTranscript({ run, savedSequence, savedOutput, stopState, canStop = true, cleanupState = 'none', runtimeStatus, checkpointPending = false, saving, error, onStop }: RunTranscriptProps) {
+export function RunTranscript({ run, savedSequence, savedOutput, stopState, canStop = true, cleanupState = 'none', runtimeStatus, checkpointPending = false, saving, error, latest = false, onStop }: RunTranscriptProps) {
   const statusId = useId();
   const pendingLabelId = useId();
   const statusTarget = useRef<HTMLParagraphElement>(null);
@@ -137,6 +140,7 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
       <article className="run-message" aria-label="Your message" data-message-id={run.userMessageId}>
         <h3>You</h3>
         <div className="run-message-text" dir="auto">{run.inputChunks.join('')}</div>
+        <MessageActions messageId={run.userMessageId} role="user" text={run.inputChunks.join('')} ended />
       </article>
       <article className="run-message" aria-label={`${local ? `${sentLocally ? 'Local' : 'Ollama'} ${localModelName(run.participant)}` : run.participant.label} response`} data-message-id={run.assistantMessageId}>
         <h3>{local ? `${sentLocally ? 'Local' : 'Ollama'} · ${localModelName(run.participant)}` : run.participant.label}</h3>
@@ -176,6 +180,7 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
           <div><dt>Model</dt><dd>{local ? localModelName(run.participant) : run.participant.model}</dd></div>
           <div><dt>{ended ? 'Where it ran' : 'Where it runs'}</dt><dd>{local ? sentLocally ? 'This Mac · stays on this Mac' : 'No reply started' : isOffMacClaude(run.participant) ? CLAUDE_DESTINATION : run.participant.executionHost}</dd></div>
         </dl>
+        <MessageActions messageId={run.assistantMessageId} role="assistant" text={output} ended={terminal || closed} latest={latest} />
       </article>
       <div className="run-save-state" aria-live="off" data-save-state={prefixMismatch ? 'unknown' : pending ? 'pending' : 'saved'}
         data-saved-sequence={sequenceConfirmed ? savedSequence : undefined}>

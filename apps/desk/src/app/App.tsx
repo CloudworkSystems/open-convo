@@ -7,6 +7,7 @@ import { applyCommand, isViewCommand } from '../domain/commands';
 import { createDemoState } from '../domain/demo';
 import type { DeskCommand, DeskState } from '../domain/types';
 import { DeskFoundation } from '../features/DeskFoundation';
+import { MessageActionsContext } from '../features/MessageActions';
 import { parsePreviewBuild, retireAnnotationDiagnostics, watchPreviewUpdates } from './preview-updates';
 import type { PreviewUpdateNotice } from './preview-updates';
 import { useConversationRuns, type WorkspaceAttemptResult } from './use-conversation-runs';
@@ -477,6 +478,15 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
       {runs.otherRunControls}
       <div className="workspace-wrap">
         <DeskDictationContext.Provider value={dictation}>
+        <MessageActionsContext.Provider value={{
+          marks: new Map((state.messageMarks ?? []).map((mark) => [mark.messageId, mark])),
+          // Plan rule 6: while saving is paused, nothing that changes what is saved is offered.
+          // Any save problem, including a definite failure: edits made then
+          // are held only in this visit until Retry, so marks wait.
+          saveBlockedReason: problem ? 'Ratings and reactions are off until saving works again.' : undefined,
+          onRate: (messageId, rating) => dispatch({ type: 'set-message-rating', messageId, rating }),
+          onReact: (messageId, reaction) => dispatch({ type: 'toggle-message-reaction', messageId, reaction }),
+        }}>
         <DeskFoundation
           state={state}
           saveStatus={saveStatus}
@@ -531,6 +541,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
           onThemeChange={(theme) => dispatch({ type: 'set-theme', theme })}
           onNexusViewChange={(view) => dispatch({ type: 'set-nexus-view', view })}
         />
+        </MessageActionsContext.Provider>
         </DeskDictationContext.Provider>
       </div>
     </div>

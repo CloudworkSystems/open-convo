@@ -3,6 +3,7 @@ import { demoResponse, domainClock } from './demo';
 import { defaultSessionTitle } from './session-naming';
 import { sameParticipantIdentity, validParticipantIdentity } from './participant-choices';
 import { isMemoryCommand, mutateMemory } from './memory';
+import { isMessageMarkCommand, mutateMessageMark } from './message-marks';
 import type { Activity, DeskCommand, DeskState, DomainOptions, Goal, Session } from './types';
 
 export class DomainError extends Error {
@@ -32,6 +33,7 @@ function logicalCommandTime(state: DeskState, wallTime: string): string {
     latest = Math.max(latest, Date.parse(value.createdAt));
   }
   for (const value of state.memories ?? []) latest = Math.max(latest, Date.parse(value.createdAt), Date.parse(value.updatedAt));
+  for (const value of state.messageMarks ?? []) latest = Math.max(latest, Date.parse(value.updatedAt));
   // Revisions order writes; timestamps must remain valid even when the device clock moves back.
   return new Date(latest).toISOString();
 }
@@ -62,6 +64,12 @@ export function applyCommand(state: DeskState, command: DeskCommand, options: Do
       if (result.summary) event('noted', result.summary, result.goalId ?? null);
     } catch (error) {
       throw new DomainError(error instanceof Error ? error.message : 'The memory change could not be applied.');
+    }
+  } else if (isMessageMarkCommand(command)) {
+    try {
+      if (!mutateMessageMark(next, command, now)) return state;
+    } catch (error) {
+      throw new DomainError(error instanceof Error ? error.message : 'The mark could not be saved.');
     }
   } else switch (command.type) {
     case 'create-goal': {

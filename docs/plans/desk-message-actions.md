@@ -1,6 +1,6 @@
 # Desk Message Actions
 
-Status: Approved (Nov 1): the owner said yes on November 1, 2026; PR 2 is next.
+Status: In progress (Nov 1): approved by the owner November 1, 2026; PR 2 (action row, Copy, ratings, reactions) in review.
 
 Written November 1, 2026 by a Claude session (project "261024 OC Steering")
 at the owner's request that day: every message in a Desk conversation gets

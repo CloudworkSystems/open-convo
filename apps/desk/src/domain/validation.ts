@@ -1,5 +1,6 @@
 import { isFolderIcon } from './folder-icons';
 import { validateMemoryFields } from './memory';
+import { markableMessages, validMessageMarks } from './message-marks';
 import { isConversationRunClosed, validateConversationRun } from './conversation-runs';
 import { validParticipantIdentity } from './participant-choices';
 import type { DeskState } from './types';
@@ -38,7 +39,7 @@ export function validateState(input: unknown): StateValidation {
   const invalid = (error: string): StateValidation => ({ valid: false, error });
   if (!record(input)) return invalid('The synthetic workspace is not an object.');
   if (input.schemaVersion !== 1 && input.schemaVersion !== 2) return invalid('This synthetic workspace version is unsupported. Its contents were kept.');
-  if (!withOptional(input, ['schemaVersion', 'revision', 'updatedAt', 'goals', 'sessions', 'messages', 'drafts', 'goalDrafts', 'workItems', 'notes', 'activity', 'selection', 'preferences', 'capabilities', ...(input.schemaVersion === 2 ? ['conversationRuns'] : [])], ['memories', 'memoryDrafts'])) return invalid('The synthetic workspace has unexpected or missing fields.');
+  if (!withOptional(input, ['schemaVersion', 'revision', 'updatedAt', 'goals', 'sessions', 'messages', 'drafts', 'goalDrafts', 'workItems', 'notes', 'activity', 'selection', 'preferences', 'capabilities', ...(input.schemaVersion === 2 ? ['conversationRuns'] : [])], ['memories', 'memoryDrafts', 'messageMarks'])) return invalid('The synthetic workspace has unexpected or missing fields.');
   if (!Number.isSafeInteger(input.revision) || (input.revision as number) < 0 || !timestamp(input.updatedAt)) return invalid('The synthetic workspace revision or timestamp is invalid.');
   const allIds = new Set<string>();
   const goalIds = new Set<string>();
@@ -124,6 +125,7 @@ export function validateState(input: unknown): StateValidation {
       }
     }
   }
+  if (!validMessageMarks(input.messageMarks, markableMessages({ messages: input.messages, conversationRuns: input.schemaVersion === 2 ? input.conversationRuns as DeskState['conversationRuns'] : undefined }), input.updatedAt as string)) return invalid('A message rating or reaction has invalid fields or a message reference.');
   if (!record(input.selection) || !exact(input.selection, ['goalId', 'sessionId', 'route']) || !(input.selection.goalId === null || (identifier(input.selection.goalId) && goalIds.has(input.selection.goalId))) || !(input.selection.sessionId === null || (identifier(input.selection.sessionId) && sessionGoals.has(input.selection.sessionId) && sessionGoals.get(input.selection.sessionId) === input.selection.goalId)) || !oneOf(input.selection.route, ['setup', 'sessions', 'work', 'memory', 'data'])) return invalid('The selected session, domain or route is invalid.');
   if (!record(input.preferences) || !withOptional(input.preferences, ['theme'], ['nexusView']) || !oneOf(input.preferences.theme, ['system', 'light', 'dark']) || !(input.preferences.nexusView === undefined || oneOf(input.preferences.nexusView, ['navigator', 'canvas', 'atlas', 'railmap', 'roadmap']))) return invalid('A view preference is invalid.');
   if (!record(input.capabilities) || !exact(input.capabilities, ['mode', 'provider', 'native']) || input.capabilities.mode !== 'synthetic' || input.capabilities.provider !== (input.schemaVersion === 1 ? 'demo-only' : 'runtime-selected') || input.capabilities.native !== 'unavailable') return invalid('The invented-data workspace has invalid capability metadata.');
