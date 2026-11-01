@@ -119,6 +119,27 @@ test('legacy capability ordering remains accepted without participant authority'
   } finally { initialized.runtime.revoke(); }
 });
 
+const claudeVectors = JSON.parse(readFileSync(new URL('../fixtures/native-participant-claude-v1.json', import.meta.url), 'utf8')) as typeof vectors;
+const offMacEntry = () => structuredClone(claudeVectors.cases.find(entry => entry.name
+  === 'Claude host: availability under a provider override names the off-Mac entry unavailable')!.reply.participants[0]) as NativeParticipantAvailability;
+
+test('the Claude Code adapter PR 4b: the native bootstrap offers an off-Mac Claude entry in the picker', async () => {
+  const h = host();
+  h.setEntry(offMacEntry());
+  const initialized = await initializeNativeProof(h.environment, { requestId: nextIds(), timeoutMs: 50 });
+  assert.equal(initialized.kind, 'ready');
+  if (initialized.kind !== 'ready') return;
+  const runtime = initialized.runtime;
+  try {
+    await runtime.refreshParticipants!();
+    const choices = runtime.participantChoices!;
+    assert.equal(choices.length, 1, 'listed, not left out as before PR 4b');
+    assert.deepEqual(choices[0]!.identity, { id: 'claude-code', label: 'Claude', model: 'invented-pinned-model', executionHost: 'anthropic' });
+    assert.equal(choices[0]!.available, false, 'the host decides availability; offering it grants nothing');
+    assert.ok(!h.sent.some(request => request.operation === 'participant.start'));
+  } finally { runtime.revoke(); }
+});
+
 test('full capabilities connect the exact four-field pin, dynamic catalog and separate display confirmation', async () => {
   const h = host();
   const initialized = await initializeNativeProof(h.environment, { requestId: nextIds(), timeoutMs: 50 });

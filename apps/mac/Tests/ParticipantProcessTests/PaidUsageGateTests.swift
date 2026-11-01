@@ -179,25 +179,46 @@ struct PaidUsageGateTests {
         #expect(PaidUsageDeskControls.state(.ended(.cliChanged)) == .ended(.cliChanged))
     }
 
-    @Test("Inactive: only the test-only probe constructs the owner or the LocalAuthentication check; nothing constructs the controls or the observers, or calls the owner initializer; the app passes no controls and links none of it")
-    func inactive() throws {
+    @Test("Activation (the Claude Code adapter's PR 4b): only the test-only probe and True Convo Test's Claude entry construct the owner, its controls, its observers and the approval control, once each; the app names only the entry and passes its two controls; it links none of the participant modules directly")
+    func activation() throws {
         let all = try Sources.code()
+        let wiring = "ParticipantAppWiring/ClaudeConversation.swift"
         let owners = all.filter { $0.line.contains("PaidUsageConfirmationOwner(") }
-        #expect(owners.map(\.file) == ["ParticipantTestFakes/AvailabilityProbe/main.swift"], "\(owners)")
+        #expect(owners.map(\.file).sorted() == [wiring, "ParticipantTestFakes/AvailabilityProbe/main.swift"], "\(owners)")
+        #expect(owners.filter { $0.file == wiring }.map(\.line)
+                    == ["let owner = PaidUsageConfirmationOwner(checks: ClaudeLocalChecks(roots: roots), approvals: approvals)"],
+                "the public initializer over section 5's real checks and the open store's approval")
         let checks = all.filter { $0.line.contains("LocalAuthenticationOwnerCheck(") }
-        #expect(checks.map(\.file) == ["ParticipantProcess/PaidUsageConfirmation.swift"], "only the owner's public initializer: \(checks)")
-        #expect(!all.contains { $0.line.contains("PaidUsageDeskControls(") || $0.line.contains("PaidUsageEndSignals(") })
-        // The Claude Code adapter's PR 4a: nothing constructs the approval's
-        // store adapter, and the app names no approval control before PR 4b.
-        #expect(!all.contains { $0.line.contains("HostApprovalDeskControls(") })
+        #expect(checks.map(\.file) == Array(repeating: "ParticipantProcess/PaidUsageConfirmation.swift", count: 2),
+                "only the owner's two public initializers: \(checks)")
+        for construction in ["PaidUsageDeskControls(", "PaidUsageEndSignals(", "HostApprovalDeskControls(", "CurrentStoreApproval("] {
+            #expect(all.filter { $0.line.contains(construction) }.map(\.file) == [wiring], "\(construction)")
+        }
+        let signals = all.filter { $0.file == wiring && $0.line.contains("PaidUsageEndSignals(") }
+        #expect(signals.map(\.line)
+                    == ["let signals = PaidUsageEndSignals(owner: owner, workspaceCenter: NSWorkspace.shared.notificationCenter)"],
+                "the workspace center section 17 names, and the distributed default")
+        #expect(all.filter { $0.file == wiring }.contains { $0.line == "signals.start()" }, "started as the entry is made")
         let ownerInit = all.filter { $0.line.contains("confirmationOwner") }
-        #expect(Set(ownerInit.map(\.file)) == ["ParticipantCoordinator/ParticipantCoordinator.swift"], "declared, never called: \(ownerInit)")
+        #expect(Set(ownerInit.map(\.file)) == ["ParticipantCoordinator/ParticipantCoordinator.swift", "ParticipantAppWiring/LocalConversationLane.swift"],
+                "\(ownerInit)")
+        #expect(ownerInit.filter { $0.file == "ParticipantAppWiring/LocalConversationLane.swift" }.map(\.line)
+                    == ["confirmationOwner: claude.owner,"])
         let app = try Sources.code("VoiceCursorMac")
         #expect(app.count > 1_000)
-        for name in ["paidUsage", "PaidUsage", "ParticipantProcess", "ParticipantCoordinator", "ParticipantDeskControls",
-                     "OwnerAuthentication", "hostApproval", "HostApproval", "approveHost", "revokeHost"] {
+        for name in ["PaidUsage", "ParticipantProcess", "ParticipantCoordinator", "ParticipantDeskControls",
+                     "OwnerAuthentication", "HostApproval", "approveHost", "revokeHost", "ProofStore"] {
             #expect(!app.contains { $0.line.contains(name) }, "the app names \(name)")
         }
+        // The app's only Claude lines: the entry, made at launch for the
+        // running copy (nil in the real app), its store follow, its quit, and
+        // the window's two controls.
+        #expect(app.filter { $0.line.contains("paidUsage") }.map(\.line) == ["paidUsage: claudeConversation?.paidUsage,"])
+        #expect(app.filter { $0.line.contains("hostApproval") }.map(\.line) == ["hostApproval: claudeConversation?.hostApproval(for: session))"])
+        #expect(app.filter { $0.line.contains("ClaudeConversation.make(") }.map(\.line)
+                    == ["claudeConversation = ClaudeConversation.make(for: AppIdentity.current, paths: paths,"])
+        #expect(app.filter { $0.line.contains("claudeConversation?.follow(") }.map(\.line) == ["claudeConversation?.follow(session)"])
+        #expect(app.filter { $0.line.contains("appWillQuit") }.map(\.line) == ["onMainThread(()) { claudeConversation?.appWillQuit() }"])
         let window = try Sources.lines(of: "DeskWindowKit/DeskWindowController.swift")
         #expect(window.contains { $0.line.contains("paidUsage: DeskPaidUsageControlling? = nil") }, "defaults to nil")
         #expect(window.contains { $0.line.contains("hostApproval: DeskHostApprovalControlling? = nil") }, "defaults to nil")
@@ -211,14 +232,13 @@ struct PaidUsageGateTests {
             #expect(!appTarget.contains("\"\(module)\""), "the app links \(module)")
         }
         // Step 3 PR 4b: the app links the lane wiring, which builds a lane
-        // only for True Convo Test, with shipping availability and no owner,
-        // controls or process launcher (LocalConversationLaneTests).
+        // only for True Convo Test; the Claude Code adapter's PR 4b gives it
+        // the Claude entry there (ClaudeConversationWiringTests).
         #expect(appTarget.contains("\"ParticipantAppWiring\""))
-        let wiring = try Sources.code("ParticipantAppWiring")
-        #expect(!wiring.isEmpty)
-        for name in ["PaidUsage", "ParticipantDeskControls", "ProcessParticipantLauncher", "confirmationOwner", "ClaudeLocalChecks",
-                     "OwnerAuthentication", "@testable"] {
-            #expect(!wiring.contains { $0.line.contains(name) }, "the lane wiring names \(name)")
+        let wiringCode = try Sources.code("ParticipantAppWiring")
+        #expect(!wiringCode.isEmpty)
+        for name in ["OwnerAuthentication", "@testable", "authStatus:", "runForTests"] {
+            #expect(!wiringCode.contains { $0.line.contains(name) }, "the lane wiring names \(name)")
         }
         let windowKit = try #require(package.range(of: "name: \"DeskWindowKit\",\n            dependencies: [").map {
             String(package[$0.upperBound...].prefix { $0 != "]" })

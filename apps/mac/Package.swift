@@ -118,12 +118,15 @@ let package = Package(
             dependencies: ["DeskHost", "ParticipantProcess"]
         ),
         // Step 3 PR 4b: the app's one participant lane, the local route in
-        // True Convo Test only (nil for the real app). The Claude Code entry
-        // stays never available: shipping availability, no confirmation owner,
-        // and a launcher that refuses every launch.
+        // True Convo Test only (nil for the real app). The Claude Code
+        // adapter's PR 4b adds the Claude entry there, in True Convo Test
+        // only: section 17's owner and its window controls, section 21.4's
+        // approval and its control (DeskWindowKit for the Desk session's
+        // store), and the production launcher.
         .target(
             name: "ParticipantAppWiring",
-            dependencies: ["DeskHost", "LocalModelRoute", "ParticipantCoordinator", "ParticipantProcess", "TrueConvoIdentity"]
+            dependencies: ["DeskHost", "DeskWindowKit", "LocalModelRoute", "ParticipantCoordinator", "ParticipantDeskControls",
+                           "ParticipantProcess", "TrueConvoIdentity"]
         ),
         .testTarget(
             name: "LocalModelRouteTests",
@@ -178,11 +181,9 @@ let package = Package(
         ),
         // Section 17's owner, and section 21.4's approval in the open Desk's
         // store (DeskHost), as the Desk window's native controls see them
-        // (plan F4; the Claude Code adapter's PR 4a). INACTIVE: only the
-        // test target depends on it, so the app never links it (it reaches
-        // ParticipantProcess only through ParticipantAppWiring, step 3 PR
-        // 4b); the window shows the controls only when given them, and the
-        // app gives none.
+        // (plan F4; the Claude Code adapter's PR 4a). Besides the test
+        // target, only the app's lane wiring links it (the adapter's PR 4b),
+        // which gives the window the controls in True Convo Test only.
         .target(
             name: "ParticipantDeskControls",
             dependencies: ["DeskHost", "DeskWindowKit", "ParticipantProcess"]

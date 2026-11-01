@@ -14,8 +14,8 @@ import Foundation
 // (`ProcessParticipantLauncher`) with the real supervisor. Only the CLI is
 // the test's fake (`ParticipantFakeCLI`, never the real one), and section 5's
 // local checks and macOS's owner check are invented passes, since neither
-// can run here. The app's own lane is untouched: True Convo Test still gets
-// `ClaudeNotConnected` until PR 4b. A small stand-in for the page saves each
+// can run here. PR 4b composes the same parts in the app
+// (`ClaudeConversation`), in True Convo Test only. A small stand-in for the page saves each
 // pushed event into the conversation record the way the Desk does, and
 // prints a line only after that save has returned, so the proof can SIGKILL
 // it at an exact point. Invented text only.

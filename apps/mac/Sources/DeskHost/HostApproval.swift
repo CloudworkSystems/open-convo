@@ -64,3 +64,33 @@ public struct NoHostApproval: HostApprovalReading {
     public init() {}
     public func isApproved(host: String) -> Bool? { false }
 }
+
+/// Section 21.4's approval read from the store the Desk has open now (the
+/// Claude Code adapter's PR 4b). Each unlock opens a new `ProofStore`, so
+/// the app hands this the session's store as it changes; section 17's owner
+/// reads through it at every availability check and run claim. It only
+/// ever reads a real `ProofStore`, so it cannot make an approval up: with
+/// no store open (the Desk locked or closed) it answers not approved, as
+/// `NoHostApproval` does, and a closed or unreadable store answers nil, as
+/// the store itself does. A final class, so no module can put another
+/// reader in its place.
+public final class CurrentStoreApproval: HostApprovalReading, @unchecked Sendable {
+    private let lock = NSLock()
+    private var store: ProofStore?
+
+    public init() {}
+
+    /// The Desk's store now, or nil once it has gone.
+    public func use(_ store: ProofStore?) {
+        lock.lock(); defer { lock.unlock() }
+        self.store = store
+    }
+
+    public func isApproved(host: String) -> Bool? {
+        lock.lock()
+        let store = self.store
+        lock.unlock()
+        guard let store else { return false }
+        return store.isApproved(host: host)
+    }
+}

@@ -252,6 +252,33 @@ final class DeskSessionParticipantTests: XCTestCase {
 
     // MARK: Inactive by default (contract section 2)
 
+    /// The Claude Code adapter's PR 4b: section 21.4's approval reader
+    /// follows the store through `onStoreChange`: each stack's store before
+    /// its page loads, then nil once it has closed, never a store that has
+    /// gone.
+    func testTheStoreChangeReportsEachStacksStoreThenNil() async throws {
+        let folder = try DeskTestFolder()
+        defer { folder.clean() }
+        let session = makeSession(folder, bundle: try folder.fixtureBundle())
+        var seen: [ProofStore?] = []
+        session.onStoreChange = { seen.append($0) }
+        await session.unlock(verifier: StubUnlockVerifier(.verified))
+        XCTAssertEqual(session.state, .open)
+        let first = try XCTUnwrap(session.store)
+        XCTAssertEqual(seen.count, 1)
+        XCTAssertTrue(seen.last! === first, "the open stack's store")
+        await session.close()
+        XCTAssertEqual(seen.count, 2)
+        XCTAssertNil(seen.last!, "nil once it has closed")
+        await session.unlock(verifier: StubUnlockVerifier(.verified))
+        let second = try XCTUnwrap(session.store)
+        XCTAssertFalse(second === first, "a new store for a new stack")
+        XCTAssertEqual(seen.count, 3)
+        XCTAssertTrue(seen.last! === second)
+        await session.close()
+        XCTAssertNil(seen.last!)
+    }
+
     func testTheDefaultSessionHasNoLaneAndAdvertisesSevenOperations() async throws {
         let folder = try DeskTestFolder()
         defer { folder.clean() }
@@ -272,7 +299,8 @@ final class DeskSessionParticipantTests: XCTestCase {
     /// The app makes its one session with the lane factory of
     /// `LocalConversationLane` for the running copy, which is nil (no lane)
     /// for the real app and the local route for True Convo Test only (step 3
-    /// PR 4b; `LocalConversationLaneTests` checks the factory itself). The
+    /// PR 4b; `LocalConversationLaneTests` checks the factory itself), with
+    /// the Claude entry from the Claude Code adapter's PR 4b. The
     /// only thing in Sources that conforms to the stack attachment a lane
     /// needs is the coordinator (Codex's S10 carried requirement 1), which
     /// only that wiring constructs (ProcessLauncherTests' gates).
@@ -293,7 +321,10 @@ final class DeskSessionParticipantTests: XCTestCase {
         XCTAssertEqual(sessions.map(\.file), ["VoiceCursorMac/main.swift"], "the app's one session")
         XCTAssertFalse(sessions.contains { $0.line.contains("makeParticipantLane") }, "the factory is its own argument line")
         let appFactory = lines.filter { $0.file == "VoiceCursorMac/main.swift" && $0.line.contains("makeParticipantLane") }
-        XCTAssertEqual(appFactory.map(\.line), ["makeParticipantLane: LocalConversationLane.factory(for: AppIdentity.current))"],
+        // The Claude Code adapter's PR 4b: with the launch's Claude entry,
+        // itself nil for the real app (ClaudeConversationWiringTests).
+        XCTAssertEqual(appFactory.map(\.line),
+                       ["makeParticipantLane: LocalConversationLane.factory(for: AppIdentity.current, claude: claudeConversation))"],
                        "the app's one factory: the running copy's, nil for the real app")
         XCTAssertEqual(Set(lines.filter { $0.line.contains("makeParticipantLane") }.map(\.file)),
                        ["DeskWindowKit/DeskSession.swift", "VoiceCursorMac/main.swift"], "only the session and the app name its factory")

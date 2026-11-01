@@ -2433,7 +2433,9 @@ fake, this is that owner; the readings' rules are unchanged.
   defaults to nil and the app gives none, so the shipping window shows
   nothing new; the app links neither `ParticipantProcess` nor
   `ParticipantDeskControls`, and the release path keeps
-  `ShippingAvailability`. F7 composes activation.
+  `ShippingAvailability`. F7 composes activation. (The Claude Code
+  adapter's PR 4b composes it, in True Convo Test only:
+  `ClaudeConversation` in `ParticipantAppWiring`.)
 - **One way in, held by the compiler (Codex F34-6).** The owner's only
   public initializer takes section 5's real `ClaudeLocalChecks` and uses
   `LocalAuthenticationOwnerCheck`; `OwnerAuthentication`, its outcome and
