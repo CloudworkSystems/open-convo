@@ -12,6 +12,9 @@ full plan and history are in [PLAN.md](../PLAN.md).
   account that can read that one vault and nothing else, so 1Password
   itself blocks them from his other vaults, his personal logins and his 2FA
   codes. The service account's token is kept in Keychain on his Mac.
+  Agents read that vault without asking him each time; he accepted that
+  trade on November 1 in exchange for 1Password enforcing the one-vault
+  limit.
   Agents never use the 1Password app link, because that signs in as the
   owner and reaches every vault. If his plan has no service accounts,
   agent keys stay in Keychain. Cloud agents and the builders' VM get no
