@@ -1,7 +1,8 @@
 # Claude Code Adapter Scope: Claude Joins The Conversation
 
-Status: In progress (Oct 29): scope merged (#75, approved Oct 23); PR 2 in
-review, started early on invented chats only (see "Revision, October 28").
+Status: In progress (Nov 1): scope merged (#75, approved Oct 23); PR 2 through
+PR 4b merged (PR 2 started early on invented chats only, see "Revision,
+October 28"; PR 4b as #228).
 
 Builder: Claude building sessions. Reviewers: Codex on every pull request,
 plus an independent review (GrokBot with a non-Claude model, or a fresh

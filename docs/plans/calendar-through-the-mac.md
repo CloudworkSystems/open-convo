@@ -1,6 +1,6 @@
 # Calendar Through The Mac (PRD)
 
-Status: Approved (Oct 30): the owner said yes to this piece and to this plan text on October 30, in the Claude thread "Plan an in-house connector layer for TCA".
+Status: In progress (Oct 30): the owner said yes to this piece and to this plan text on October 30, in the Claude thread "Plan an in-house connector layer for TCA"; PR 1, the calendar reader, merged as #209.
 
 Written October 30, 2026 by a Claude session (project "261024 OC
 Steering", thread "Plan an in-house connector layer for TCA"). Session name:

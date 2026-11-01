@@ -1,6 +1,6 @@
 # Desk Message Actions
 
-Status: In progress (Nov 1): approved by the owner November 1, 2026; PR 2 (action row, Copy, ratings, reactions) in review.
+Status: In progress (Nov 1): approved by the owner November 1, 2026; PR 2 (action row, Copy, ratings, reactions) merged as #224.
 
 Written November 1, 2026 by a Claude session (project "261024 OC Steering")
 at the owner's request that day: every message in a Desk conversation gets
