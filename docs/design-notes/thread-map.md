@@ -52,10 +52,12 @@ Map. It's an early version of Nexus Navigator's grouping.
    - memories that mention it;
    - its priority as the agent sees it, with a short reason;
    - room for more fields later.
-   The agent's priority also shows on the row itself, as a badge beside
-   its state, so the owner can scan priorities without opening the rail.
-   It's the agent's suggestion, labeled as such: the owner can change it,
-   and his choice wins, as with sections.
+   The priority also shows on the row itself, as a badge beside its
+   state, so the owner can scan priorities without opening the rail. The
+   agent's priority and the owner's are kept as two separate values. The
+   badge shows the agent's, labeled as the agent's, until the owner sets
+   his own. From then on the badge shows his, labeled as his, and the rail
+   still shows what the agent rated it and why.
 
 ## Privacy
 
