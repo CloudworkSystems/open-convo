@@ -12,8 +12,49 @@ import { fileURLToPath } from 'node:url';
 
 const mac = normalize(join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'apps', 'mac'));
 const raw = readFileSync(join(mac, 'Package.swift'), 'utf8');
-// Comments may say anything; only code counts.
-const code = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+/**
+ * The manifest with its comments removed exactly as Swift reads them: a line
+ * comment runs to the end of its line (a "/*" inside it is just text), block
+ * comments nest, and strings are kept whole. Anything this can't read the way
+ * Swift does (a multi-line or raw string, an unclosed comment or string)
+ * throws, so the checks below always see the text Swift compiles.
+ */
+export function stripComments(text) {
+  let out = '';
+  for (let i = 0; i < text.length; ) {
+    if (text.startsWith('//', i)) {
+      const end = text.indexOf('\n', i);
+      i = end < 0 ? text.length : end;
+    } else if (text.startsWith('/*', i)) {
+      let depth = 0;
+      do {
+        if (text.startsWith('/*', i)) { depth += 1; i += 2; }
+        else if (text.startsWith('*/', i)) { depth -= 1; i += 2; }
+        else if (i >= text.length) throw new Error('unclosed block comment in Package.swift');
+        else i += 1;
+      } while (depth > 0);
+      out += ' ';
+    } else if (text[i] === '"') {
+      if (text.startsWith('"""', i)) throw new Error('multi-line strings are not allowed in Package.swift');
+      if (text[i - 1] === '#') throw new Error('raw strings are not allowed in Package.swift');
+      let j = i + 1;
+      for (; j < text.length && text[j] !== '"'; j += 1) {
+        if (text[j] === '\n') throw new Error('unclosed string in Package.swift');
+        if (text[j] === '\\') j += 1;
+      }
+      if (j >= text.length) throw new Error('unclosed string in Package.swift');
+      out += text.slice(i, j + 1);
+      i = j + 1;
+    } else {
+      out += text[i];
+      i += 1;
+    }
+  }
+  return out;
+}
+
+const code = stripComments(raw);
 
 /** The index just past the bracket or parenthesis that closes the one at `open`, skipping strings. */
 function closing(text, open) {
@@ -178,14 +219,20 @@ test('the products are the approved ones, each built from its own target', () =>
   ]);
 });
 
-test('the app links exactly the participant-path modules the owner approved', () => {
-  assert.ok(byName.has('VoiceCursorMac'), 'the app target is missing');
-  const linked = [...linkedBy('VoiceCursorMac')].filter(isParticipantPath).sort();
-  // Step 3 PR 4b: the local route in True Convo Test only, through
-  // ParticipantAppWiring. ParticipantDeskControls stays unlinked.
-  assert.deepEqual(linked, [
-    'LocalModelRoute', 'ParticipantAppWiring', 'ParticipantCoordinator', 'ParticipantProcess', 'ParticipantSupervisorCore',
-  ]);
+test('every program links exactly the participant-path modules the owner approved', () => {
+  // Step 3 PR 4b: the app reaches the local route in True Convo Test only,
+  // through ParticipantAppWiring, and ParticipantDeskControls stays unlinked.
+  // The supervisor ships inside the app too, so every product is walked.
+  const approved = {
+    VoiceCursorMac: ['LocalModelRoute', 'ParticipantAppWiring', 'ParticipantCoordinator', 'ParticipantProcess', 'ParticipantSupervisorCore'],
+    VoiceCursorPolicyCheck: [],
+    ParticipantSupervisor: ['ParticipantSupervisor', 'ParticipantSupervisorCore'],
+    DeskBundleManifest: [],
+  };
+  for (const [product, expected] of Object.entries(approved)) {
+    assert.ok(byName.has(product), `the ${product} target is missing`);
+    assert.deepEqual([...linkedBy(product)].filter(isParticipantPath).sort(), expected, product);
+  }
 });
 
 test('every folder under Tests/ is a test target, so every test runs', () => {
@@ -234,6 +281,15 @@ test('the parser reads plain literals and rejects anything it cannot read fully'
   ]) {
     assert.throws(() => parseTargets(bad), undefined, bad);
   }
+  // Comments are removed the way Swift reads them, never hiding code.
+  assert.equal(stripComments('a // x /* y\nb */ c'), 'a \nb */ c');
+  assert.equal(stripComments('a /* x /* y */ z */ b'), 'a   b');
+  assert.equal(stripComments('"//not a comment" x'), '"//not a comment" x');
+  for (const bad of ['a /* never closed', '"""\nx\n"""', '#"raw"#', '"unclosed\n"']) {
+    assert.throws(() => stripComments(bad), undefined, bad);
+  }
+  const hidden = wrap('.target(name: "A", dependencies: ["B", // /*\n "ParticipantDeskControls"])');
+  assert.deepEqual(parseTargets(stripComments(hidden))[0].dependencies, ['B', 'ParticipantDeskControls']);
   const withProducts = (p) => `import PackageDescription\nlet package = Package(name: "P", products: [${p}], targets: [])`;
   assert.deepEqual(parseProducts(withProducts('.executable(name: "App", targets: ["Other"])')), ['executable App -> Other']);
   for (const bad of ['.executable(name: "App", targets: appTargets)', '.executable(name: appName, targets: ["App"])', '.plugin(name: "P", targets: ["P"])']) {
