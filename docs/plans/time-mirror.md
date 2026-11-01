@@ -79,12 +79,16 @@ Keychain or real personal data, or writes to disk):
   tests (`scripts/time-mirror.test.mjs`) cover the key and error handling
   with an invented key and a fake fetch. Today the `tests` check runs only
   the packages a pull request changes, so it would skip this file. The
-  command's pull request therefore also changes the `tests` workflow so the
-  check runs `node --test scripts/time-mirror.test.mjs` whenever
-  `scripts/time-mirror*` or `packages/time-mirror/` changes, and shows in
-  its description a run where those tests ran. That workflow is a protected
+  command's pull request therefore makes the check run it without touching
+  any workflow file (the bot can't push those): the library's `npm test`
+  script also runs `node --test ../../scripts/time-mirror.test.mjs`, and
+  `.github/scripts/package-changes.mjs` counts a change to
+  `scripts/time-mirror*` as a change to the `time-mirror` package, with a
+  test for that mapping. The pull request shows in its description a
+  `tests` run where the command's tests ran. `.github/` is a protected
   path, so the owner approves it on GitHub along with the risk hold the
-  pull request already needs. No key goes into the library for this.
+  pull request already needs. The test file stays in `scripts/`, so no key
+  goes into the library.
 
 Steps 1, 2, 5 and 6 below are the command's. Steps 3 and 4, and building the
 page in step 5, are the library's.
