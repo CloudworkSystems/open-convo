@@ -73,7 +73,11 @@ function main() {
     'zap-api-scan.py', '-t', '/zap/wrk/scan-openapi.json', '-f', 'openapi',
     '-J', 'report.json', '-r', 'report.html', '--hook', '/zap/wrk/zap-hooks.py', '-I',
   ], { stdio: 'inherit' });
-  if (run.status === null || run.error) throw new Error('Docker could not run ZAP.');
+  // With -I, zap-api-scan.py exits 0 on a finished scan; anything else (1 for a
+  // FAIL rule, 3 for a scan error, or no status at all) fails this check.
+  if (run.error || run.status !== 0) {
+    throw new Error('The ZAP scan did not finish cleanly (exit status ' + run.status + ').');
+  }
 
   const report = JSON.parse(readFileSync(join(out, 'report.json'), 'utf8'));
   const urls = readFileSync(join(out, 'urls.txt'), 'utf8').split('\n').filter(Boolean);

@@ -38,14 +38,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: front-porch-production
+    permissions:
+      contents: read
+      actions: read
     steps:
+      # Reading an environment's settings needs the Actions read permission
+      # (given to this job above); as the repo is public, an unsigned read is
+      # tried if the token's is refused. If both fail, nothing is deployed.
       - name: Check that the owner still approves every deploy
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
-          rules=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$REPO/environments/front-porch-production")
+          url="https://api.github.com/repos/$REPO/environments/front-porch-production"
+          rules=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$url" \
+            || curl -fsS -H "Accept: application/vnd.github+json" "$url")
           echo "$rules" | node -e '
             const env = JSON.parse(require("fs").readFileSync(0, "utf8"));
             const reviewers = (env.protection_rules || []).filter((r) => r.type === "required_reviewers");
