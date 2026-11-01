@@ -19,10 +19,14 @@ full plan and history are in [PLAN.md](../PLAN.md).
   keys where they belong. This changes the Oct 31 entry's read-only account:
   a new account with read and write access to that one vault replaces it,
   and the old token is revoked once the new one works. It gets no other
-  vault and no sharing. Agents save the keys they create there and change an
-  existing item only when the owner asks; they never delete one. 1Password
-  keeps each item's history and its recently deleted items, so a bad edit
-  can be undone. To give agents an older login, the owner moves it into the
+  vault and no sharing. Saving new keys is the write he asked for, but
+  1Password's write access also lets the account edit or delete any item in
+  that vault, including logins he moves in, and nothing in 1Password turns
+  that off. So "agents save the keys they create, change an existing item
+  only when the owner asks and never delete one" is a rule agents follow,
+  not a block; an agent tricked by a page it reads could still break it.
+  1Password keeps each item's history and its recently deleted items, so a
+  bad edit or deletion can be undone afterward, not prevented. To give agents an older login, the owner moves it into the
   vault himself in the 1Password app (a move, not a copy, so there is one
   copy to keep current). He never moves in an Apple ID or iCloud password,
   a bank or payment login, or the email account his password resets go to.
