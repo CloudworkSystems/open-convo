@@ -135,6 +135,11 @@ run. How each applies here:
   Worker on its `workers.dev` address before `api.trueconvo.com` is
   attached. That address is the staging step; the scan must pass with no
   medium or high alerts.
+- **No public side door after staging.** The `workers.dev` address isn't
+  covered by the rate limiting rule on `api.trueconvo.com`, so the
+  production deploy configuration turns it off (`workers_dev = false`, and
+  preview URLs off) once the scan passes. From then on the Worker answers
+  only at `api.trueconvo.com`.
 
 ## Before It Goes Live
 
@@ -164,6 +169,7 @@ run. How each applies here:
 - The server controls in [security.md](security.md) section 3 ("Any server
   we run") are met, as set out in Server Security Controls above, including
   a passing OWASP ZAP baseline scan before the custom domain is attached.
+- After going live, the Worker's `workers.dev` address no longer answers.
 - STATUS.md lists the service and its state.
 
 ## After This Slice
