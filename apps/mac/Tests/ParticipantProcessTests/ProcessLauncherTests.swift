@@ -384,7 +384,10 @@ struct ProcessLauncherGateTests {
         #expect(dependencies["VoiceCursorMac"]?.contains("DeskWindowKit") == true, "the scan reads dependency lists")
         #expect(dependencies["ParticipantCoordinator"] == ["DeskHost", "ParticipantProcess"], "the coordinator sits above both (Codex Q19)")
         let dependents = dependencies.filter { $0.value.contains("ParticipantProcess") }.keys.sorted()
-        #expect(dependents == ["LocalModelRoute", "LocalModelRouteTests", "ParticipantAppWiring", "ParticipantAvailabilityProbe",
+        // The Claude Code adapter's PR 4-proof: its kill proof's app
+        // (test-only, debug builds only, never bundled) runs the production
+        // launcher against the fake CLI.
+        #expect(dependents == ["ClaudeConversationProofHost", "LocalModelRoute", "LocalModelRouteTests", "ParticipantAppWiring", "ParticipantAvailabilityProbe",
                                "ParticipantCoordinator", "ParticipantDeskControls", "ParticipantProcessTests", "ParticipantTestHost"],
                 "\(dependents)")
         // The local route (contract section 20) sits on ParticipantProcess,
@@ -404,9 +407,11 @@ struct ProcessLauncherGateTests {
         #expect(dependencies["ParticipantAppWiring"]
                     == ["DeskHost", "LocalModelRoute", "ParticipantCoordinator", "ParticipantProcess", "TrueConvoIdentity"])
         let wiringDependents = dependencies.filter { $0.value.contains("ParticipantAppWiring") }.keys.sorted()
-        // Besides the app, only tests: this target and the kill-mid-reply
-        // proof's app (step 3 PR 5), which runs the app's own lane.
-        #expect(wiringDependents == ["LocalConversationProofHost", "ParticipantProcessTests", "VoiceCursorMac"], "\(wiringDependents)")
+        // Besides the app, only tests: this target, the kill-mid-reply
+        // proof's app (step 3 PR 5), which runs the app's own lane, and the
+        // Claude Code adapter's kill proof app (PR 4-proof), for the app's pin.
+        #expect(wiringDependents == ["ClaudeConversationProofHost", "LocalConversationProofHost", "ParticipantProcessTests", "VoiceCursorMac"],
+                "\(wiringDependents)")
         let appParticipantModules = (dependencies["VoiceCursorMac"] ?? []).filter { $0.hasPrefix("Participant") || $0 == "LocalModelRoute" }
         #expect(appParticipantModules == ["ParticipantAppWiring"], "the app links the lane wiring and nothing else of the participant path")
         for name in ["DeskWindowKit", "DeskHost", "DeskHostWebKit", "DeskBundleManifest"] {
@@ -421,9 +426,12 @@ struct ProcessLauncherGateTests {
         #expect(adapterDependents == ["ParticipantProcessTests"], "\(adapterDependents)")
         // Linking the coordinator is what could pull it into the app: only
         // the test target and the app's lane wiring may (Codex Q1, Q19; step
-        // 3 PR 4b). Never the window or a host directly.
+        // 3 PR 4b), and the Claude Code adapter's kill proof app (PR
+        // 4-proof, test-only, never bundled). Never the window or a host
+        // directly.
         let coordinatorDependents = dependencies.filter { $0.value.contains("ParticipantCoordinator") }.keys.sorted()
-        #expect(coordinatorDependents == ["ParticipantAppWiring", "ParticipantProcessTests"], "\(coordinatorDependents)")
+        #expect(coordinatorDependents == ["ClaudeConversationProofHost", "ParticipantAppWiring", "ParticipantProcessTests"],
+                "\(coordinatorDependents)")
     }
 
     @Test("Nothing in Sources outside the coordinator's own folder imports, names or constructs ParticipantCoordinator but the app's lane wiring, which constructs it once; nothing constructs it in its own folder")

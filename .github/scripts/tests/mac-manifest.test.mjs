@@ -238,9 +238,13 @@ test('every program links exactly the participant-path modules the owner approve
 test('every folder under Tests/ is a test target, so every test runs', () => {
   const folderOf = (t) => t.path ?? (t.kind === 'testTarget' ? `Tests/${t.name}` : `Sources/${t.name}`);
   const tested = new Set(targets.filter((t) => t.kind === 'testTarget').map(folderOf));
-  // The kill-mid-reply proof's app lives under Tests/ but is a program a test
-  // runs, not a suite (step 3, PR 5). Any other exception needs the owner.
-  const programs = new Map([['Tests/LocalConversationProofHost', 'LocalConversationProofHost']]);
+  // The kill-mid-reply proofs' apps live under Tests/ but are programs a test
+  // runs, not suites (step 3 PR 5, and the Claude Code adapter's 4-proof).
+  // Any other exception needs the owner.
+  const programs = new Map([
+    ['Tests/LocalConversationProofHost', 'LocalConversationProofHost'],
+    ['Tests/ClaudeConversationProofHost', 'ClaudeConversationProofHost'],
+  ]);
   const folders = readdirSync(join(mac, 'Tests'), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => `Tests/${d.name}`);
   assert.ok(folders.length > 0);
   for (const folder of folders) {

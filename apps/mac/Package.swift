@@ -158,6 +158,17 @@ let package = Package(
             dependencies: ["DeskHost", "LocalModelRoute", "ParticipantAppWiring"],
             path: "Tests/LocalConversationProofHost"
         ),
+        // The Claude Code adapter's PR 4-proof: the fake-CLI kill proof's app
+        // (the app's Claude pin, the real coordinator over section 17's
+        // owner, its host and store, the production launcher and supervisor,
+        // with the test's fake CLI), which a test SIGKILLs mid-reply. Debug
+        // builds only, never bundled, and kept under Tests/ like the local
+        // proof's app, so the Sources gates still cover all product code.
+        .executableTarget(
+            name: "ClaudeConversationProofHost",
+            dependencies: ["DeskHost", "ParticipantAppWiring", "ParticipantCoordinator", "ParticipantProcess"],
+            path: "Tests/ClaudeConversationProofHost"
+        ),
         // Prints the shipping availability answer, run by a test with invented
         // environment, arguments, defaults and files.
         .executableTarget(
