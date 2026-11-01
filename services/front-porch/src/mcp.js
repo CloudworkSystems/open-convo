@@ -122,7 +122,12 @@ export async function handleMcp(request, { content, json, error, maxBytes }) {
   if (id === null || (typeof id !== 'string' && typeof id !== 'number')) {
     return json(400, rpcError(null, -32600, 'Invalid request.'));
   }
-  const params = message.params ?? {};
+  // JSON-RPC allows params only as an object or array, and every MCP method
+  // here takes named params, so anything but a plain object is refused.
+  const params = message.params === undefined ? {} : message.params;
+  if (params === null || typeof params !== 'object' || Array.isArray(params)) {
+    return json(200, rpcError(id, -32602, 'Invalid params.'));
+  }
 
   const toolset = tools(content);
   switch (message.method) {
