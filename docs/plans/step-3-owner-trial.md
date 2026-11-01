@@ -1,8 +1,7 @@
 # Step 3: The Owner's Trial
 
-Status: In progress (Nov 1): first trial run done. Eight checks passed; quit
-mid-reply (8) failed and crash recovery (10, 11) fell short. Waiting on fixes
-F11 and F12, then a re-check of 8, 10 and 11.
+Status: In progress (Nov 1): first trial run done. Ten checks passed; quit
+mid-reply (8) failed. Waiting on the F11 fix, then a re-check of check 8.
 
 The last part of step 3 (PR 5). The scripted proof checks the local route
 with a fake Ollama and a test store. This trial checks the real True Convo
@@ -95,14 +94,14 @@ menu couldn't be opened (step 2 findings F2 and F3), quit used `osascript -e
 | 7. Continue | Passed (recalled the suggested name) |
 | 8. Quit while it's writing | **Failed** (F11) |
 | 9. Ollama closed | Passed (typed text stayed unsent in the box) |
-| 10. Crash while it's writing | **Partly passed** (F12) |
-| 11. Retry the cut-off reply | **Blocked** (F12) |
+| 10. Crash while it's writing | Passed (text kept, not resent; wording: F12) |
+| 11. Retry the cut-off reply | Passed, after **Close as unknown** (F12) |
 
 Nothing was ever sent again on its own, and nothing went anywhere but the
 local model.
 
-Step 3 stays open until F11 and F12 are fixed; then the owner repeats checks
-8, 10 and 11 on a fresh build.
+Step 3 stays open until F11 is fixed; then the owner repeats check 8 on a
+fresh build. F12 is a wording change and doesn't block the re-check.
 
 ### Findings
 
@@ -121,11 +120,16 @@ Numbered after step 2's F1 to F6.
   Expected: "stopped on this Mac" with the text so far. The quit was a normal
   quit Apple event, which should match the menu's Quit; the builder should
   confirm.
-- **F12. After a crash the reply is left open, with no Retry.** A force quit
-  mid-reply kept the text so far, but the reply showed "Where it runs", a red
+- **F12. Crash recovery is correct but unclear.** A force quit mid-reply
+  kept the text so far and nothing was resent. The reply then showed a red
   "Some response updates have not arrived. Check this run to recover the
-  missing updates; the received prefix is retained." and the buttons "Check
-  run status" and "Close as unknown". "Check run status" changed it to "Run
-  status unknown" with a live Stop; Stop changed to "retry stop". No Retry
-  ever appeared. The wording (run, prefix, participant, unknown) is for
-  engineers; the owner expects a plain "cut off" mark and Retry.
+  missing updates; the received prefix is retained." with the buttons "Check
+  run status" and "Close as unknown". By design (step 3 plan, the
+  kill-mid-reply proof), Retry appears only after **Close as unknown**. The
+  trial first tried "Check run status" (it became "Run status unknown" with a
+  live Stop) and Stop (it became "retry stop"); neither shows Retry. After
+  Close as unknown, Retry put the message back in the box unsent, and Send
+  started a new reply that finished. The fix is wording, not behavior: plain
+  words instead of run, prefix, participant and unknown, and a line saying to
+  close the unfinished reply before Retry. The checklist's check 10 should
+  name that step too.
