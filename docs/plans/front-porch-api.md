@@ -130,11 +130,14 @@ run. How each applies here:
 - **Logs without personal data:** the service writes no logs of its own.
 - **Backups with a tested restore:** the only data is `content.json` in Git;
   restoring means redeploying from `main`, which the first deploy proves.
-- **OWASP ZAP scan against staging before launch:** a ZAP baseline scan runs
-  in CI against the Node entry point, and once more against the deployed
-  Worker on its `workers.dev` address before `api.trueconvo.com` is
-  attached. That address is the staging step; the scan must pass with no
-  medium or high alerts.
+- **OWASP ZAP scan against staging before launch:** the ZAP API scan
+  (`zap-api-scan.py`), importing `openapi.json` so it reaches every `/v1/*`
+  path, runs in CI against the Node entry point, and once more against the
+  deployed Worker on its `workers.dev` address before `api.trueconvo.com` is
+  attached. That address is the staging step. `/mcp` isn't in the OpenAPI
+  file, so the scan also sends a recorded MCP `initialize`, `tools/list` and
+  `tools/call` exchange through ZAP. The scan report must list every path
+  and pass with no medium or high alerts.
 - **No public side door after staging.** The `workers.dev` address isn't
   covered by the rate limiting rule on `api.trueconvo.com`, so the
   production deploy configuration turns it off (`workers_dev = false`, and
@@ -168,7 +171,7 @@ run. How each applies here:
   address gets blocked (HTTP 429) while other callers still get answers.
 - The server controls in [security.md](security.md) section 3 ("Any server
   we run") are met, as set out in Server Security Controls above, including
-  a passing OWASP ZAP baseline scan before the custom domain is attached.
+  a passing OWASP ZAP API scan covering every path before the custom domain is attached.
 - After going live, the Worker's `workers.dev` address no longer answers.
 - STATUS.md lists the service and its state.
 
