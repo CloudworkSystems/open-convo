@@ -41,6 +41,24 @@ export function MessageActions({ messageId, role, text, ended, latest = false }:
   const reset = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(reset.current), []);
   const mark = context?.marks.get(messageId);
+  // Plan rule 5: rating and reaction changes are announced. Only a change the
+  // owner just asked for here is announced, and only once it is applied.
+  const [markNotice, setMarkNotice] = useState('');
+  const expecting = useRef<MessageMark | undefined | null>(null);
+  const noticeReset = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(noticeReset.current), []);
+  useEffect(() => {
+    const before = expecting.current;
+    if (before === null) return;
+    const notice = markChangeNotice(before, mark);
+    if (!notice) return;
+    expecting.current = null;
+    clearTimeout(noticeReset.current);
+    setMarkNotice(notice);
+    noticeReset.current = setTimeout(() => setMarkNotice(''), 4000);
+  }, [mark]);
+  const rate = (rating: 'up' | 'down' | null) => { expecting.current = mark; context?.onRate(messageId, rating); };
+  const react = (reaction: MessageReaction) => { expecting.current = mark; context?.onReact(messageId, reaction); };
   const reply = role === 'assistant';
   const blocked = context?.saveBlockedReason ?? (ended ? undefined : 'Wait until this reply has ended to rate or react to it.');
   const markDisabled = blocked !== undefined;
@@ -69,12 +87,12 @@ export function MessageActions({ messageId, role, text, ended, latest = false }:
         {context && reply && <>
           <button type="button" className="message-action" aria-pressed={mark?.rating === 'up'} disabled={markDisabled}
             aria-label="Good reply" title={blocked ?? 'Good reply'} data-rating="up"
-            onClick={() => context.onRate(messageId, mark?.rating === 'up' ? null : 'up')}>
+            onClick={() => rate(mark?.rating === 'up' ? null : 'up')}>
             <Icon name="thumb-up" size={15} />
           </button>
           <button type="button" className="message-action" aria-pressed={mark?.rating === 'down'} disabled={markDisabled}
             aria-label="Bad reply" title={blocked ?? 'Bad reply'} data-rating="down"
-            onClick={() => context.onRate(messageId, mark?.rating === 'down' ? null : 'down')}>
+            onClick={() => rate(mark?.rating === 'down' ? null : 'down')}>
             <Icon name="thumb-down" size={15} />
           </button>
         </>}
@@ -85,11 +103,12 @@ export function MessageActions({ messageId, role, text, ended, latest = false }:
         <span id={statusId} className="message-action-status" aria-live="polite">
           {copy === 'copied' ? 'Copied' : copy === 'failed' ? 'Couldn’t copy. Select the text and copy it instead.' : ''}
         </span>
+        <span className="message-mark-status" aria-live="polite" data-mark-notice>{markNotice}</span>
       </div>
       {context && picking && !markDisabled && <div id={pickerId} className="message-reaction-picker" role="group" aria-label="Reactions">
         {MESSAGE_REACTIONS.map((reaction) => <button key={reaction.name} type="button" className="message-reaction-choice"
           aria-pressed={chosen.has(reaction.name)} aria-label={reaction.label} title={reaction.label}
-          onClick={() => { context.onReact(messageId, reaction.name); setPicking(false); pickerButton.current?.focus(); }}>
+          onClick={() => { react(reaction.name); setPicking(false); pickerButton.current?.focus(); }}>
           <span aria-hidden="true">{reaction.emoji}</span>
         </button>)}
       </div>}
@@ -98,11 +117,24 @@ export function MessageActions({ messageId, role, text, ended, latest = false }:
         {MESSAGE_REACTIONS.filter((reaction) => chosen.has(reaction.name)).map((reaction) =>
           <button key={reaction.name} type="button" className="message-mark-chip" disabled={markDisabled}
             aria-label={`Remove reaction: ${reaction.label}`} title={blocked ?? `Remove ${reaction.label}`}
-            onClick={() => context.onReact(messageId, reaction.name)}>
+            onClick={() => { react(reaction.name); pickerButton.current?.focus(); }}>
             <span aria-hidden="true">{reaction.emoji}</span>
           </button>)}
       </div> : null}
       {context?.saveBlockedReason && mark && <p className="message-actions-note">{context.saveBlockedReason}</p>}
     </div>
   );
+}
+
+const reactionLabel = (name: MessageReaction) => MESSAGE_REACTIONS.find((reaction) => reaction.name === name)?.label ?? name;
+
+/** Words for what changed between two marks, or '' when nothing did. */
+export function markChangeNotice(before: MessageMark | undefined, after: MessageMark | undefined): string {
+  const parts: string[] = [];
+  if (before?.rating !== after?.rating) parts.push(after?.rating === 'up' ? 'Rated good' : after?.rating === 'down' ? 'Rated bad' : 'Rating cleared');
+  const was = new Set(before?.reactions ?? []);
+  const now = new Set(after?.reactions ?? []);
+  for (const name of now) if (!was.has(name)) parts.push(`Added reaction: ${reactionLabel(name)}`);
+  for (const name of was) if (!now.has(name)) parts.push(`Removed reaction: ${reactionLabel(name)}`);
+  return parts.join('. ');
 }

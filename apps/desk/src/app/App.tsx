@@ -481,8 +481,9 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
         <MessageActionsContext.Provider value={{
           marks: new Map((state.messageMarks ?? []).map((mark) => [mark.messageId, mark])),
           // Plan rule 6: while saving is paused, nothing that changes what is saved is offered.
-          saveBlockedReason: problem && problem.kind !== 'failed'
-            ? 'Ratings and reactions are off until saving works again.' : undefined,
+          // Any save problem, including a definite failure: edits made then
+          // are held only in this visit until Retry, so marks wait.
+          saveBlockedReason: problem ? 'Ratings and reactions are off until saving works again.' : undefined,
           onRate: (messageId, rating) => dispatch({ type: 'set-message-rating', messageId, rating }),
           onReact: (messageId, reaction) => dispatch({ type: 'toggle-message-reaction', messageId, reaction }),
         }}>

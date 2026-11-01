@@ -125,3 +125,12 @@
 .message-actions-user .message-action-status {
   margin: 0 6px 0 0;
 }
+/* Spoken, not shown: the rating and reaction chips already show the result. */
+.message-mark-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
