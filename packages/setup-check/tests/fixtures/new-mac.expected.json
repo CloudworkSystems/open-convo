@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "ready": false,
+  "summary": "This Mac can run a local model. Install Ollama, then download qwen3:8b (5.2 GB).",
+  "checks": [
+    {
+      "id": "os",
+      "state": "pass",
+      "message": "macOS 15.0 meets the minimum of 13"
+    },
+    {
+      "id": "chip",
+      "state": "pass",
+      "message": "Apple silicon"
+    },
+    {
+      "id": "memory",
+      "state": "pass",
+      "message": "enough memory for a local model"
+    },
+    {
+      "id": "disk",
+      "state": "pass",
+      "message": "enough disk space for qwen3:8b with 5 GB spare"
+    },
+    {
+      "id": "ollama",
+      "state": "warn",
+      "message": "Ollama is not installed",
+      "fix": "Download Ollama from https://ollama.com/download"
+    },
+    {
+      "id": "model",
+      "state": "warn",
+      "message": "qwen3:8b is not installed",
+      "fix": "Download qwen3:8b (5.2 GB): ollama pull qwen3:8b"
+    }
+  ],
+  "recommendation": {
+    "route": "local",
+    "model": "qwen3:8b",
+    "reason": "A catalog model fits and no check stops a local model."
+  },
+  "nextSteps": [
+    "Download Ollama from https://ollama.com/download",
+    "Download qwen3:8b (5.2 GB): ollama pull qwen3:8b"
+  ]
+}

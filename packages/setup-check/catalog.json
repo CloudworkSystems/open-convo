@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "models": [
+    {
+      "name": "qwen3:8b",
+      "sizeGB": 5.2,
+      "minMemoryGB": 16,
+      "note": "Desk default. The 8B tag is 5.2 GB. An 8 GB Mac cannot run an 8B model well, so 16 GB is the minimum."
+    },
+    {
+      "name": "qwen3:4b",
+      "sizeGB": 2.5,
+      "minMemoryGB": 12,
+      "note": "Smaller fallback. The 4B tag is 2.5 GB with a 256K context. 12 GB is the smallest Mac this guide will call enough."
+    },
+    {
+      "name": "qwen3:1.7b",
+      "sizeGB": 1.4,
+      "minMemoryGB": 8,
+      "note": "Smallest fallback. The 1.7B tag is 1.4 GB. 8 GB leaves a thin margin after macOS; 4 GB does not."
+    }
+  ]
+}
