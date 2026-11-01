@@ -52,8 +52,11 @@ memory is the source of truth.
   - *Nothing* (the default for any foreign agent, per the zero-trust rule
     in [agent-profiles-and-adapters.md](agent-profiles-and-adapters.md)).
   - *Per job*: a context package (foundations.md, "Context packages") built
-    for one task and discarded when it ends.
-  - *Read one space*: standing read access to the files in one space.
+    for one task, holding only the files that task needs, and discarded
+    when it ends.
+  There is no standing access to a whole space. Each job gets its own
+  package, as foundations.md and prime-agent.md require; replacing that
+  rule would be the owner's decision and a change to foundations first.
   An agent whose model runs in another company's cloud gets nothing the
   person hasn't shared with it, and nothing at all until the person has
   approved that model and host once, as prime-agent.md rules 5 and 7
@@ -83,8 +86,11 @@ memory is the source of truth.
 - **Treat a harness's built-in memory as a cache, not a record.** Where
   the person uses an outside agent with True Convo's memory, that agent's
   own memory is switched off where it can be, as prime-agent.md already
-  requires for its skill. Where it can't be, nothing from it counts as kept
-  memory.
+  requires for its skill. Where it can't be switched off, that agent gets
+  no real memory through the door at all, only invented or public
+  material: its vendor would keep its own copy of whatever it was sent,
+  which is the hosted duplicate this note rules out. Nothing from an
+  agent's own memory ever counts as kept memory.
 - **A one-time import.** What Claude, ChatGPT and the others already
   remember about the person can be brought in once, through each product's
   own export, as candidates for the person to sort into spaces. Nothing is
@@ -108,7 +114,7 @@ memory is the source of truth.
 - A foreign agent starts with no access, and every grant can be seen and
   taken back.
 - Personal and each business stay separate spaces. A reader gets only the
-  space it was given.
+  files its job's package holds, from one space.
 - Every read and every proposal is logged, and every kept write can be
   undone (step 5's Remember, correct, forget, Undo).
 
@@ -125,7 +131,8 @@ memory is the source of truth.
 - Should the first outside readers be only the coding agents (Claude Code,
   Codex), or also the chat apps (Claude, ChatGPT) once they can reach a
   local server?
-- What should the default share level be for an agent the person has
-  confirmed: per job, or one space?
+- For an agent the person has confirmed, should a per-job package be built
+  automatically from the job's brief, or shown to the person first each
+  time?
 - Should session-end capture be on by default for confirmed agents, or
   only after the person turns it on?
