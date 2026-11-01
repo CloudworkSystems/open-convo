@@ -7,21 +7,23 @@ for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
 - **Oct 31:** On the owner's Mac, agents get keys from 1Password, which he
-  already pays for. The keys sit in one vault named "True Convo AI" that
-  holds only items meant for agents, and never an Apple ID or iCloud
-  password, including app-specific ones. Agents reach it only through a
-  1Password service account that can read that one vault and nothing else,
-  so 1Password itself blocks them from his other vaults, his personal logins and his 2FA
-  codes. The service account's token is kept in Keychain on his Mac.
-  Agents read that vault without asking him each time; he accepted that
-  trade on November 1 in exchange for 1Password enforcing the one-vault
-  limit.
-  Agents never use the 1Password app link, because that signs in as the
-  owner and reaches every vault. If his plan has no service accounts,
-  agent keys stay in Keychain. Cloud agents and the builders' VM get no
-  1Password access. Keychain stays an approved store until each agent's
-  setup moves over, and a key leaves Keychain only after the agent that
-  uses it reads it from 1Password.
+  already pays for. The keys sit in his existing vault named "True Convo
+  AI". Agents reach it only through a 1Password service account that can
+  read that one vault and nothing else, so 1Password itself blocks them
+  from his other vaults, his personal logins and his 2FA codes. Inside that
+  vault, 1Password blocks nothing: agents can read every item in it. So
+  anything agents must not read stays in another vault. That includes any
+  Apple ID or iCloud password, app-specific ones too. This is a rule about
+  what gets stored, not a block, so he checks the vault for such items
+  before the service account is created. The service account's token is
+  kept in Keychain on his Mac. Agents read that vault without asking him
+  each time; he accepted that trade on November 1 in exchange for
+  1Password enforcing the one-vault limit. Agents never use the 1Password
+  app link, because that signs in as the owner and reaches every vault. If
+  his plan has no service accounts, agent keys stay in Keychain. Cloud
+  agents and the builders' VM get no 1Password access. Keychain stays an
+  approved store until each agent's setup moves over, and a key leaves
+  Keychain only after the agent that uses it reads it from 1Password.
 - **Oct 27:** Gemini runs on the owner's own Google AI Studio API key, with
   billing on, under a monthly budget he sets: Google ended Gemini
   subscription sign-in for the old Gemini CLI and the Gemini Code Assist
