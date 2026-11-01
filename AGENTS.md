@@ -233,7 +233,7 @@ judge that isn't there (owner decision, October 25, 2026).
 | Open-decision sweep (Claude thread "Nudge on idle open decisions", daily, 7:45 AM) | none; reads the steering project's thread list only | Lists the steering project's threads that have waited on the owner for 2 days or more and nudges him once per wait in that thread; changes nothing else |
 | Nightly Test build (scheduled, 2–6 AM) | none | Rebuilds True Convo Test from `main` on the owner's Mac |
 | Recycling pass (scheduled, Sundays) | `cloudwork-bot` | One pull request proposing fixes for stale docs |
-| Security sweep (scheduled, Mondays, in the cloud) | `cloudwork-bot`, read-only tools plus one issue-comment tool | Runs the weekly self-audit in [docs/plans/security.md](docs/plans/security.md) and rewrites its "Security" comment on issue #52; never changes code, settings or merges |
+| Security sweep (scheduled, Mondays, in the cloud) | `cloudwork-bot`, the PR keeper's access (owner decision, November 1, 2026); its only write is its own comment | Runs the weekly self-audit in [docs/plans/security.md](docs/plans/security.md) and rewrites its "Security" comment on issue #52; never changes code, settings or merges |
 | Sender feed (scheduled, weekly) | the owner's Gmail, read and search only; no GitHub access | Reads only the followed senders' emails and posts drafted lessons and ideas in the owner's private steering project; after the owner picks, a building session opens the lessons pull request ([docs/plans/security.md](docs/plans/security.md) section 5) |
 | `owner-queue` workflow | GitHub Actions | Rewrites issue #52, "Needs the owner", every hour |
 
