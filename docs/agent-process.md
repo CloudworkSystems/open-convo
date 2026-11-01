@@ -192,8 +192,10 @@ reads from and writes to `CloudworkSystems/open-convo`.
     owner's API key for now. Where a person can sign in, Google's Antigravity
     CLI also accepts his subscription sign-in, which is to be tried next and
     then used there; where nobody can, such as a GitHub workflow, it stays a
-    key. A key lives in a repository secret, Keychain or exe.dev
-    Integrations, never in files.
+    key. A key lives in a repository secret, Keychain, exe.dev
+    Integrations, or on the owner's Mac in his "True Convo AI" 1Password
+    vault read through its service account (docs/decisions.md, October 31),
+    never in files.
 - *Proposed October 15, pending the owner's approval at merge:* every review,
   by any agent or the owner, asks two questions of each change. Does it break
   a rule of this system? Does it fix a problem the owner actually has?
