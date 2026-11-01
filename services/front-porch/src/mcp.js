@@ -85,7 +85,7 @@ function validArgs(tool, args) {
   if (args === null || typeof args !== 'object' || Array.isArray(args)) return null;
   const allowed = tool.inputSchema.properties;
   for (const [key, value] of Object.entries(args)) {
-    if (!(key in allowed)) return null;
+    if (!Object.hasOwn(allowed, key)) return null;
     if (typeof value !== 'string' || value.length > MAX_QUERY_LENGTH) return null;
   }
   return args;

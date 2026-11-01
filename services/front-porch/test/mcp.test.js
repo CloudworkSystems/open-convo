@@ -52,6 +52,11 @@ test('unknown tools, bad arguments and unknown methods are refused', async () =>
   assert.equal((await rpc('tools/call', { name: 'faq', arguments: { q: 'x'.repeat(201) } })).error.code, -32602);
   assert.equal((await rpc('tools/call', { name: 'faq', arguments: { other: 'x' } })).error.code, -32602);
   assert.equal((await rpc('tools/call', { name: 'about', arguments: 'text' })).error.code, -32602);
+  for (const key of ['constructor', 'toString', '__proto__']) {
+    const args = JSON.parse('{"' + key + '":"x"}');
+    assert.equal((await rpc('tools/call', { name: 'about', arguments: args })).error.code, -32602, key);
+    assert.equal((await rpc('tools/call', { name: 'faq', arguments: args })).error.code, -32602, key);
+  }
   assert.equal((await rpc('resources/list')).error.code, -32601);
 });
 
