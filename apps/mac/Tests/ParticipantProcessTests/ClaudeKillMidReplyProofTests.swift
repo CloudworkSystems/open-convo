@@ -92,9 +92,11 @@ final class ClaudeProofWorld {
         return steps
     }
 
-    /// The retry's stream, ungated.
+    /// The retry's stream, ungated, with the pin's model in its init line
+    /// (the reader ends a run whose init reports another).
     static func passingSteps() -> [[String: Any]] {
-        Invented.passingStream([retryReply]).map { ["out": $0] } + [["exit": 0]]
+        [Invented.initLine(model: "claude-sonnet-5-5"), Invented.rateLimit(), Invented.messageStart, Invented.blockStart(0),
+         Invented.textDelta(retryReply), Invented.result()].map { ["out": $0] } + [["exit": 0]]
     }
 
     /// Replaces the scenario the next spawn reads.
