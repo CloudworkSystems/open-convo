@@ -945,6 +945,40 @@ final class SyncCorePlanTests: XCTestCase {
         XCTAssertFalse(holds(text("should-not-merge"), peer: b))
     }
 
+    func testEditAfterDroppedUploadUsesThatRevisionAsItsBase() throws {
+        let cloud = FakeCloud()
+        let a = Peer("phone-a", cloud: cloud)
+        let b = Peer("phone-b", cloud: cloud)
+        a.boot()
+        b.boot()
+        _ = try a.edit("note", payload: text("base"))
+        try syncAll([a, b])
+        let first = try a.edit("note", payload: text("first"))
+        cloud.dropResponseAfterCommit = true
+        XCTAssertThrowsError(try a.sync()) { error in
+            XCTAssertEqual(error as? SyncError, .connectionDropped)
+        }
+        XCTAssertEqual(cloud.record("note")?.record.payload, first.payload)
+        let second = try a.edit("note", payload: text("second"))
+        let queued = try XCTUnwrap(a.device.queuedRecords().first { $0.record.id == "note" })
+        XCTAssertEqual(queued.basedOnStamp, first.stamp)
+        XCTAssertEqual(queued.record.payload, second.payload)
+        var merges = 0
+        a.merge { _, _ in
+            merges += 1
+            return MergeOutput(payload: text("should-not-merge"))
+        }
+        try a.sync()
+        XCTAssertEqual(merges, 0)
+        XCTAssertTrue(a.device.conflictCopies().isEmpty)
+        XCTAssertNotEqual(a.device.status().kind, .needsAttention)
+        try b.sync()
+        XCTAssertEqual(live(a, "note").payload, second.payload)
+        XCTAssertEqual(live(b, "note").payload, second.payload)
+        XCTAssertEqual(live(a, "note").stamp, second.stamp)
+        XCTAssertEqual(cloud.record("note")?.basedOnStamp, first.stamp)
+    }
+
     func testDescendantOfADroppedUploadIsNotAConflict() throws {
         let cloud = FakeCloud()
         let a = Peer("phone-a", cloud: cloud)

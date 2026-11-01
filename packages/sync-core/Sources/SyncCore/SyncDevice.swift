@@ -160,11 +160,16 @@ public final class SyncDevice {
         let cleanup = record.purged ? stagePurgeCleanup(for: record.id) : []
         observe(record.stamp)
         editEpoch += 1
+        let replaced = outbox.first { $0.record.id == record.id }
         outbox.removeAll { $0.record.id == record.id }
+        // A newer edit continues from the queued revision it replaces. That
+        // revision may already be on the server if its upload response was lost.
+        let basedOn = replaced?.record.stamp ?? memory[record.id]?.lastSeenStamp
+        let baseTag = replaced?.baseChangeTag ?? memory[record.id]?.lastSeenChangeTag
         outbox.append(Entry(
             record: record,
-            baseChangeTag: memory[record.id]?.lastSeenChangeTag,
-            basedOnStamp: memory[record.id]?.lastSeenStamp,
+            baseChangeTag: baseTag,
+            basedOnStamp: basedOn,
             appSaveConfirmed: false,
             durable: false,
             isMergeResult: false,
@@ -591,6 +596,14 @@ public final class SyncDevice {
         }
         if entry.record.stamp == server.record.stamp {
             acknowledge(snapshot, tag: server.changeTag)
+            return
+        }
+        if server.record.stamp == entry.basedOnStamp,
+           let index = outbox.firstIndex(where: { $0.record.id == snapshot.id && $0.record.stamp == snapshot.stamp }),
+           outbox[index].baseChangeTag != server.changeTag {
+            outbox[index].baseChangeTag = server.changeTag
+            outbox[index].basedOnStamp = server.record.stamp
+            rememberSeen(id: snapshot.id, stamp: server.record.stamp, tag: server.changeTag)
             return
         }
         try resolveDivergent(entry: entry, remote: server, zone: zone)
