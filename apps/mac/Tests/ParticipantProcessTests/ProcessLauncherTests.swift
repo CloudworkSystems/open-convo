@@ -365,7 +365,11 @@ struct ProcessLauncherGateTests {
         let wiring = "ClaudeConversation.swift: "
         #expect(found.filter { $0.hasPrefix(wiring) } == [
             wiring + "let parent: ParticipantsParent",
+            // Each of these two matches two needles (a construction and a
+            // mention), so each is listed twice.
             wiring + "parent = try ParticipantsFolder.prepare(in: try paths.prepareBase())",
+            wiring + "parent = try ParticipantsFolder.prepare(in: try paths.prepareBase())",
+            wiring + "let launcher = ProcessParticipantLauncher(supervisorPath: ParticipantSupervisorLocation.besides(executable: executable),",
             wiring + "let launcher = ProcessParticipantLauncher(supervisorPath: ParticipantSupervisorLocation.besides(executable: executable),",
         ], "\(found)")
         #expect(found.filter { !$0.hasPrefix(wiring) }.isEmpty, "\(found)")

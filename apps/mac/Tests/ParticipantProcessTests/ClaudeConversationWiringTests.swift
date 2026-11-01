@@ -76,8 +76,9 @@ struct ClaudeConversationWiringTests {
         #expect(info.st_mode & 0o7777 == 0o700 && info.st_uid == getuid(), "this user's, and no one else's")
         let launcher = try #require(entry.launcher as? ProcessParticipantLauncher)
         #expect(launcher.supervisorPath == "/invented/True Convo Test.app/Contents/MacOS/ParticipantSupervisor")
-        #expect(launcher.cliPath.hasSuffix("/.local/share/claude/versions/" + ParticipantCommandLine.pinnedCLIVersion),
-                "the exact pinned file, never the launcher link: \(launcher.cliPath)")
+        let roots = try #require(ClaudeCheckRoots.forCurrentUser(probeParent: participants))
+        #expect(launcher.cliPath == roots.binaryPath, "the exact pinned file the local checks read, never the launcher link")
+        #expect(launcher.cliPath.hasSuffix("/" + ParticipantCommandLine.pinnedCLIVersion))
         #expect(launcher.workingParent.url.standardizedFileURL.path == participants.standardizedFileURL.path)
         #expect(launcher.expectedInit == Self.invented)
         #expect(entry.signals.isRunning, "the end observers run from launch")
