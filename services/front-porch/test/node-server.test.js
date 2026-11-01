@@ -71,6 +71,13 @@ test('methods a web Request refuses still get the handler\'s 405 or 404', async 
     assert.match(await ask(method, '/mcp'), /^HTTP\/1\.1 405 [\s\S]*\r\nallow: POST\r\n/i, method);
     assert.match(await ask(method, '/nowhere'), /^HTTP\/1\.1 404 /, method);
   }
+
+  const connect = await ask('CONNECT', '/v1/about');
+  assert.match(connect, /^HTTP\/1\.1 405 [\s\S]*\r\nallow: GET\r\n/i);
+  assert.match(connect, /"Method not allowed\."/);
+  assert.match(await ask('CONNECT', '/mcp'), /^HTTP\/1\.1 405 [\s\S]*\r\nallow: POST\r\n/i);
+  assert.match(await ask('CONNECT', 'example.com:443'), /^HTTP\/1\.1 (400|404) /);
+  assert.equal((await fetch('http://127.0.0.1:' + port + '/v1/about')).status, 200);
 });
 
 test('the service imports nothing host-specific', async () => {
