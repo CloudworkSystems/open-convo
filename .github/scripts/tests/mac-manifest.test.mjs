@@ -219,6 +219,28 @@ test('the products are the approved ones, each built from its own target', () =>
   ]);
 });
 
+test('every target builds from its own folder, and the moved ones are pinned', () => {
+  // A target without a path builds from Sources/<name> (Tests/<name> for a
+  // suite), so the app can't be swapped for another program by name alone.
+  // The few targets that live elsewhere are pinned here; a new one, or a
+  // changed path, needs the owner (this file is protected).
+  const moved = {
+    ProtectionProofHost: 'Sources/ParticipantTestFakes/ProtectionProofHost',
+    ParticipantSupervisorCore: 'Sources/ParticipantSupervisor/Core',
+    ParticipantSupervisor: 'Sources/ParticipantSupervisor/Main',
+    ParticipantFakeCLI: 'Sources/ParticipantTestFakes/FakeCLI',
+    ParticipantTestHost: 'Sources/ParticipantTestFakes/TestHost',
+    ParticipantPausingSupervisor: 'Sources/ParticipantTestFakes/PausingSupervisor',
+    LocalConversationProofHost: 'Tests/LocalConversationProofHost',
+    ClaudeConversationProofHost: 'Tests/ClaudeConversationProofHost',
+    ParticipantAvailabilityProbe: 'Sources/ParticipantTestFakes/AvailabilityProbe',
+  };
+  const explicit = Object.fromEntries(targets.filter((t) => t.path !== null).map((t) => [t.name, t.path]));
+  assert.deepEqual(explicit, moved);
+  const names = targets.map((t) => t.name);
+  assert.equal(new Set(names).size, names.length, 'two targets share a name');
+});
+
 test('every program links exactly the participant-path modules the owner approved', () => {
   // Step 3 PR 4b: the app reaches the local route in True Convo Test only,
   // through ParticipantAppWiring, and ParticipantDeskControls stays unlinked.
