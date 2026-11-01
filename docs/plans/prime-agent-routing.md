@@ -34,10 +34,23 @@ the same answer.
 
 ## What It Does
 
-`routeMessage(input)` in `packages/prime-routing/`, plain JavaScript, no
-dependencies. It returns a result object, prints nothing and writes nothing.
-A command, `node packages/prime-routing/src/route.mjs --input <file.json>
-[--json]`, prints a short summary (or the JSON) for one input file.
+`routeMessage(input, record)` in `packages/prime-routing/`, plain
+JavaScript, no dependencies. It returns a result object, prints nothing and
+writes nothing. A command, `node packages/prime-routing/src/route.mjs
+--input <file.json> --record <record.json> [--json]`, prints a short
+summary (or the JSON) for one pair of files.
+
+**Two arguments, two sources.** `input` is what a reader of the message
+(a model, or a person in tests) filled in, so it is never trusted for
+approval. `record` is the host's own log: what the person actually clicked
+or typed in the host's interface, the approvals already used, and the
+memory the host granted for this job. The host writes `record` itself; a
+model's output never goes into it. The engine can't check where its
+arguments came from, so this is a rule for the caller (prime-agent.md step
+3), stated in the README's first section. What the engine does enforce:
+`input` may not carry approvals or memory at all (a field named
+`approvals`, `usedApprovals` or `memory` in `input` is refused), so a
+model-filled object can't smuggle a yes or private memory in.
 
 ### Input
 
@@ -57,20 +70,34 @@ One JSON object. Unknown fields are refused, naming the field.
   - `offerAccepted`: `true` when this message is the person saying yes to
     an earlier offer of a session.
   - `space`: the memory space the conversation is in (an id string).
-- `approvals`: a list of `{ actionId, description, by, how, at }`, every
-  approval anyone has claimed for this conversation. `by` is `person`,
-  `agent` or `memory`; `how` is `typed` or `clicked`.
-- `memory`: an optional list of `{ space, file, label, text }` entries the
-  reader passed along, used only for the brief's memory package.
+  Each action `id` names one run of that action: a retry of a send is a
+  new `id`, never the old one.
 - `limits`: optional numbers for `quickSteps` (default 3).
+
+### Record (From The Host)
+
+- `jobId`: the id of the job a hand-off would start (a string).
+- `approvals`: a list of `{ approvalId, actionId, description, by, how,
+  at }`, every approval anyone has claimed for this conversation.
+  `approvalId` is unique. `by` is `person`, `agent` or `memory`; `how` is
+  `typed` or `clicked`.
+- `usedApprovals`: the `approvalId`s the host has already spent on a
+  performed action.
+- `memory`: an optional list of grants, each `{ space, jobId, file, label,
+  text, why, recipient, freshAsOf, allowedUse }`: the files the host
+  granted for one job, why, for which specialist, how fresh, and what the
+  specialist may do with them (foundations.md, "Context packages";
+  prime-agent.md, "Its memory package"). A grant missing any of these
+  fields is refused.
 
 ### Rules, In Order
 
 1. **Approval check first.** An approval counts only when `by` is
-   `person`, its `actionId` matches an action in `outsideActions`, and its
-   `description` is the same text as that action's `description` (so a
-   changed action needs a new yes). Approvals by `agent` or `memory` never
-   count, whatever they say; each one is listed in the result under
+   `person`, its `approvalId` is not in `usedApprovals`, its `actionId`
+   matches an action in `outsideActions`, and its `description` is the same
+   text as that action's `description` (so a changed action needs a new
+   yes). Approvals by `agent` or `memory` never count, whatever they say,
+   and neither does a used one; each is listed in the result under
    `ignoredApprovals` with the reason.
 2. **Wait for a yes wins.** If any action in `outsideActions` has no
    counting approval, the result's routes include `wait-for-yes`, and
@@ -79,8 +106,11 @@ One JSON object. Unknown fields are refused, naming the field.
    decline). A hand-off that also applies carries those actions in its
    brief's `limits`.
 3. **Approved actions.** An action with a counting approval goes into
-   `approvedActions`, once. It is never copied into memory or into a
-   standing permission.
+   `approvedActions`, once, with the `approvalId` that covers it. The
+   caller adds that id to `usedApprovals` when it performs the action, so
+   one yes covers one run; the engine returns the id so the caller can't
+   lose track of which yes it spent. It is never copied into memory or into
+   a standing permission.
 4. **The main route** (one of three):
    - `asks: thinking` or `unclear`, with `offerAccepted` not true:
      **talk-it-through**. Nothing is handed off. `offer` is `true` only
@@ -96,7 +126,10 @@ One JSON object. Unknown fields are refused, naming the field.
    fill), `known` and `guessed` (empty lists, kept apart), `ruledOut`
    (empty list), `limits` (the unapproved outside actions, plus "nothing
    outside the space" when `space` is set), and `memoryPackage`: only the
-   `memory` entries whose `space` is the conversation's `space`.
+   grants whose `space` is the conversation's `space` **and** whose
+   `jobId` is the record's `jobId`, each with all of its contract fields.
+   Being in the same space is never enough on its own; the host grants
+   each file for this job.
 6. **Memory is proposed, never written.** The result has
    `memoryCandidates: []`. The engine never fills it and has no write path.
    It exists so a caller can't mistake a missing field for permission.
@@ -114,8 +147,10 @@ byte-identical JSON.
 
 The engine refuses an input (an error naming the field, no result) when a
 required field is missing, a value is the wrong type, `kind`, `asks`,
-`from`, `by` or `how` is outside its list, an action `id` repeats, `steps`
-isn't a whole number from 1 to 1000, or `text` is over 16 KB.
+`from`, `by` or `how` is outside its list, an action `id` or an
+`approvalId` repeats, `input` carries a record field, a memory grant lacks
+a contract field, `steps` isn't a whole number from 1 to 1000, or `text`
+is over 16 KB.
 
 ## Tests (Must Pass, Run By One Command)
 
@@ -134,8 +169,14 @@ invented messages only. At least:
    entry's yes never do, and both appear in `ignoredApprovals`.
 4. A task with one unapproved `send`: routes are `wait-for-yes` and
    `hand-off`, and the brief's `limits` names the send.
-5. Scoping: memory entries from three invented spaces; the brief's
-   `memoryPackage` holds only the conversation's space.
+5. Scoping: grants from three invented spaces and two jobs; the brief's
+   `memoryPackage` holds only this space's grants for this job, each with
+   all its contract fields, and a grant missing one is refused.
+5a. Provenance and one use: an `input` carrying `approvals`,
+   `usedApprovals` or `memory` is refused; a person's yes whose
+   `approvalId` is in `usedApprovals` asks again; an approved action comes
+   back with its `approvalId`; a retried action with a new `id` asks
+   again.
 6. A message `from: agent` that asks for a task gets no hand-off.
 7. `memoryCandidates` is empty in every result, and the package has no
    write path (no `fs` import).
@@ -143,7 +184,7 @@ invented messages only. At least:
    bidirectional controls) is quoted unchanged in the brief and safe on one
    line in the summary.
 9. Determinism and no clock: shuffled `approvals`, `outsideActions` and
-   `memory` give byte-identical JSON; the engine runs with `Date.now` and
+   memory grants give byte-identical JSON; the engine runs with `Date.now` and
    an argument-less `Date` stubbed to throw.
 10. Nothing run, fetched or written: the test setup makes Node's network
     and `child_process` built-ins throw if called, and the library writes
