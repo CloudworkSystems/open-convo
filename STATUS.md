@@ -135,6 +135,8 @@ reviews. Plan approved (merged as #127 on October 24):
 
 **Time mirror** (Personal, the observability layer's first slice; owner asked October 29 to start it ahead of the core order), Codex team A builds the library and then a Claude building session the Mac command (owner's pick, November 1), GrokBot or a fresh Claude reviews; plan approved by the owner on October 29 (`docs/plans/time-mirror.md`): RescueTime daily totals drawn as habit-grid heat maps on the Mac, nothing new leaving the device.
 
+**Prime agent routing engine** (Personal, step 2 of the prime agent plan), Codex team B builds, GrokBot or a fresh Claude reviews; plan approved by the owner on November 1 (`docs/plans/prime-agent-routing.md`): the wait-for-a-yes and hand-off rules as a standalone package in `packages/prime-routing/`, with no model calls, network or storage. Build issue open.
+
 **Public website (trueconvo.com)**, Claude builds, Codex reviews; a home page (with two Desk preview screenshots) and a plain-language privacy policy in `site/`, published by `.github/workflows/pages.yml` from `main` (#153, October 25). For Meta's developer early-access application and regular visitors. The owner turned on Pages and set the custom domain, and the site is published at trueconvo.com (latest deploy October 26).
 
 **Security** (all work; owner asked October 28): plan

@@ -1,6 +1,8 @@
 # Prime Agent Routing Engine (PRD)
 
-Status: Draft (Nov 1): written for the owner's yes; nothing is built yet.
+Status: Approved (Nov 1): the owner said yes on November 1, 2026, in the
+Claude thread "Draft next plans for outside builders" (his card pick: "Yes,
+start Codex on it"). Nothing is built yet.
 
 Written November 1, 2026 by a Claude session (project "261024 OC Steering",
 thread "Draft next plans for outside builders"). Session name:
