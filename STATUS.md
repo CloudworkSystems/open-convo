@@ -120,9 +120,9 @@ reviews. Plan approved (merged as #127 on October 24):
 | PR 3: Open in Google Maps, travel time (off by default), clash marks | Later |
 | PR 4: Owner's trial | Later |
 
-**Setup check engine** (Personal; first slice of the first-run guide), GrokBot team A builds, Codex reviews; plan approved October 30 (`docs/plans/setup-check-engine.md`); starts once #146 is done.
+**Setup check engine** (Personal; first slice of the first-run guide), GrokBot team A builds, Codex reviews; plan approved October 30 (`docs/plans/setup-check-engine.md`); build started November 1 (#219).
 
-**Capture inbox engine** (Personal; first slice of the iPhone capture app), GrokBot team B builds, Codex reviews; plan approved October 30 (`docs/plans/capture-inbox-engine.md`); starts once #139 is done.
+**Capture inbox engine** (Personal; first slice of the iPhone capture app), GrokBot team C builds (moved from team B by the owner on November 1), Codex reviews; plan approved October 30 (`docs/plans/capture-inbox-engine.md`); build started November 1 (#221).
 
 **Cloudwork Rail Map** (Desk, Cloudwork Nexus), Claude builds; a fifth Nexus view showing this repository's branches, commits and pull requests from a saved snapshot (`apps/desk/scripts/rail-map-snapshot.mjs`); merged October 24 (#132).
 
