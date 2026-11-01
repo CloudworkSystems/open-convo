@@ -11,10 +11,12 @@
 # in wrangler.toml (workers.dev off), which leave that custom domain alone.
 #
 # A manual run with staging_url deploys the staging settings instead (the same
-# Worker with its workers.dev address on) and scans that address with OWASP
-# ZAP. That is the one staging step before the custom domain is attached, so
-# it is refused once api.trueconvo.com answers. The next ordinary deploy turns
-# the workers.dev address off again.
+# Worker with its workers.dev address on), scans that address with OWASP ZAP,
+# and then, in the same approved run and whatever the scan found, deploys the
+# production settings again so the workers.dev address is off before the
+# owner attaches the custom domain. It is the one staging step before
+# api.trueconvo.com is attached, so it runs only while that name doesn't
+# exist in DNS; any other answer, including a timeout or an error, refuses it.
 name: front-porch-deploy
 
 on:
@@ -40,7 +42,7 @@ jobs:
     # A manual run can pick any branch; only main may deploy.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     environment: front-porch-production
     permissions:
       contents: read
@@ -82,48 +84,57 @@ jobs:
         working-directory: services/front-porch
       - run: npm test
         working-directory: services/front-porch
-      # A staging deploy would turn the workers.dev address back on, outside
-      # the zone's rate limit, so it is only allowed before the custom domain
-      # answers.
-      - name: Refuse a staging deploy once api.trueconvo.com answers
+      # A staging deploy turns the workers.dev address on, outside the zone's
+      # rate limit, so it runs only before the custom domain exists. curl exit
+      # code 6 means the name doesn't resolve; anything else (an answer, a
+      # timeout, an error page) refuses the run.
+      - name: Refuse a staging deploy unless api.trueconvo.com is not set up yet
         if: github.event_name == 'workflow_dispatch' && inputs.staging_url != ''
         run: |
-          if curl -fsS -m 15 -o /dev/null https://api.trueconvo.com/v1/status; then
-            echo "api.trueconvo.com already answers, so the staging deploy is refused. Run without staging_url."
+          set +e
+          curl -sS -m 15 -o /dev/null https://api.trueconvo.com/v1/status
+          code=$?
+          set -e
+          if [ "$code" -ne 6 ]; then
+            echo "api.trueconvo.com exists or couldn't be checked (curl exit $code), so the staging deploy is refused. Run without staging_url."
             exit 1
           fi
       - name: Deploy the Worker
+        if: github.event_name != 'workflow_dispatch' || inputs.staging_url == ''
         working-directory: services/front-porch
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.FRONT_PORCH_CLOUDFLARE_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.FRONT_PORCH_CLOUDFLARE_ACCOUNT_ID }}
           WRANGLER_SEND_METRICS: 'false'
-          STAGING: ${{ github.event_name == 'workflow_dispatch' && inputs.staging_url != '' }}
-        run: |
-          if [ "$STAGING" = true ]; then
-            npx wrangler deploy --env staging
-          else
-            npx wrangler deploy
-          fi
-
-  staging-scan:
-    needs: deploy
-    if: github.event_name == 'workflow_dispatch' && inputs.staging_url != ''
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-      # The scan script refuses any address but the Worker's workers.dev one.
-      - run: node scan/zap-scan.mjs "$STAGING_URL"
+        run: npx wrangler deploy
+      - name: Deploy the staging settings
+        id: staging
+        if: github.event_name == 'workflow_dispatch' && inputs.staging_url != ''
+        working-directory: services/front-porch
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.FRONT_PORCH_CLOUDFLARE_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.FRONT_PORCH_CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: npx wrangler deploy --env staging
+      # The scan step never sees the token. The scan script refuses any
+      # address but the Worker's workers.dev one.
+      - name: Scan the staging address with OWASP ZAP
+        if: steps.staging.outcome == 'success'
         working-directory: services/front-porch
         env:
           STAGING_URL: ${{ inputs.staging_url }}
-      - if: always()
+        run: node scan/zap-scan.mjs "$STAGING_URL"
+      # Runs whenever the staging deploy was tried, even if it or the scan
+      # failed, so the workers.dev address never stays on after this run.
+      - name: Turn the workers.dev address off again
+        if: always() && (steps.staging.outcome == 'success' || steps.staging.outcome == 'failure')
+        working-directory: services/front-porch
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.FRONT_PORCH_CLOUDFLARE_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.FRONT_PORCH_CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: npx wrangler deploy
+      - if: always() && steps.staging.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: front-porch-staging-zap-report

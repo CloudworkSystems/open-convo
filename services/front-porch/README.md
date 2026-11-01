@@ -50,7 +50,9 @@ environment. It needs, in that environment:
 - the variable `FRONT_PORCH_CLOUDFLARE_ACCOUNT_ID`.
 
 A manual run with `staging_url` set to the Worker's workers.dev address
-deploys the staging settings and runs the ZAP scan against that address. It
-is refused once `api.trueconvo.com` answers. The owner attaches
-`api.trueconvo.com` in the Cloudflare dashboard only after that scan passes;
-the next ordinary deploy turns the workers.dev address off again.
+deploys the staging settings, runs the ZAP scan against that address, and
+then deploys the production settings again in the same run, whatever the scan
+found, so the workers.dev address is off when the run ends. It runs only while
+`api.trueconvo.com` doesn't exist in DNS; any other answer, a timeout or an
+error refuses it. The owner attaches `api.trueconvo.com` in the Cloudflare
+dashboard only after that scan passes.
