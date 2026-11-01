@@ -140,9 +140,11 @@ reviews. Plan approved (merged as #127 on October 24):
 **Security** (all work; owner asked October 28): plan
 [docs/plans/security.md](docs/plans/security.md), in progress.
 Baseline in #166: the Desk's Vite patched, Dependabot, `SECURITY.md`, and the
-triage judge closed to outside pull requests. A security checklist on every
-review, a weekly sweep, controls tied to triggers (sync core first), and a
-weekly feed of lessons from followed senders follow.
+triage judge closed to outside pull requests. The weekly sweep runs Mondays
+at 6:37 AM as a scheduled task, like the PR keeper (owner decision,
+November 1), and keeps its "Security" comment on issue #52. A security
+checklist on every review, controls tied to triggers (sync core first), and
+a weekly feed of lessons from followed senders follow.
 
 **Followed sources** (Personal; owner asked October 29), Claude builds, GrokBot or a fresh Claude reviews: plan
 [docs/plans/followed-sources.md](docs/plans/followed-sources.md), approved by the owner October 29. True Convo's own version of the
