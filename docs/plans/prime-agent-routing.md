@@ -92,7 +92,11 @@ One JSON object. Unknown fields are refused, naming the field.
   accepted offer, `input.facts` (including `outsideActions`) describe the
   `offeredRequest`, not the "yes": the caller has the reader read the
   offered request again, so its outside actions still wait for their own
-  yes. Accepting a session is never a yes to an outside action.
+  yes. Accepting a session is never a yes to an outside action. An
+  accepted offer also carries a unique `acceptanceId`; the caller claims
+  it the same way as an approval (saved as used before the specialist
+  starts, at most once), and the engine treats an `acceptanceId` listed in
+  the record's `usedAcceptances` as no acceptance.
 - `approvals`: a list of `{ approvalId, actionId, payloadDigest, by, how,
   at }`, every approval anyone has claimed for this conversation.
   `payloadDigest` is what the host computed, with the engine's exported
@@ -218,7 +222,8 @@ invented messages only. At least:
 5b. Routes: a `task` with `steps` at or below `quickSteps` gets
    **answer**, one above it gets **hand-off**; an accepted offer gets a
    hand-off whose `personsWords` holds the `offeredRequest`, and an
-   accepted offer without one is refused; an accepted offer whose request
+   accepted offer without one is refused; a used `acceptanceId` gives no
+   hand-off; an accepted offer whose request
    has an unapproved `send` routes `wait-for-yes` and `hand-off`, with the
    send in the brief's `limits`.
 5a. Provenance and one use: an `input` carrying `message`, `space`,
