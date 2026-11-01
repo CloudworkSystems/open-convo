@@ -1,0 +1,15 @@
+# Cloudflare Workers settings for the front porch (docs/plans/front-porch-api.md).
+# Deploys run only from the front-porch-deploy workflow, behind the owner's
+# approval of each run.
+name = "front-porch"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+
+# Staging: until the ZAP scan passes against it, the workers.dev address is
+# the staging step. The pull request that follows a passing staging scan sets
+# both of these to false, so the Worker then answers only at api.trueconvo.com.
+workers_dev = true
+preview_urls = false
+
+# No routes or custom domains here, on purpose. The one-Worker token can't
+# manage them, and the owner attaches api.trueconvo.com in the dashboard.

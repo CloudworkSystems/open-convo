@@ -1,0 +1,104 @@
+# Deploys the front porch API to Cloudflare Workers (docs/plans/front-porch-api.md).
+# Runs only main's own files, never a pull request's. Every run waits for the
+# owner's approval: the job runs in the front-porch-production environment,
+# whose required reviewer is the owner, and the Cloudflare token is a secret of
+# that environment only. The job also refuses to deploy if that reviewer rule
+# is missing.
+#
+# The deploy uploads the Worker and its own settings. It never adds, changes
+# or removes routes or custom domains; the owner attaches api.trueconvo.com in
+# the Cloudflare dashboard.
+#
+# A manual run can also scan the Worker's workers.dev staging address with
+# OWASP ZAP after deploying (the staging step before the custom domain).
+name: front-porch-deploy
+
+on:
+  push:
+    branches: [main]
+    paths: ['services/front-porch/**', '.github/workflows/front-porch-deploy.yml']
+  workflow_dispatch:
+    inputs:
+      staging_url:
+        description: "Optional: the Worker's workers.dev address to ZAP-scan after deploying, such as https://front-porch.example.workers.dev"
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: front-porch-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # A manual run can pick any branch; only main may deploy.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: front-porch-production
+    steps:
+      - name: Check that the owner still approves every deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          rules=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/environments/front-porch-production")
+          echo "$rules" | node -e '
+            const env = JSON.parse(require("fs").readFileSync(0, "utf8"));
+            const reviewers = (env.protection_rules || []).filter((r) => r.type === "required_reviewers");
+            const owner = reviewers.flatMap((r) => r.reviewers || []).some((r) => r.type === "User" && r.reviewer && r.reviewer.login === "CloudworkSystems");
+            if (!owner) { console.error("front-porch-production has no required reviewer rule naming the owner, so nothing is deployed."); process.exit(1); }
+            console.log("The owner is the required reviewer of front-porch-production.");'
+      - name: Check that the Cloudflare setup is in place
+        env:
+          HAS_TOKEN: ${{ secrets.FRONT_PORCH_CLOUDFLARE_TOKEN != '' }}
+          HAS_ACCOUNT: ${{ vars.FRONT_PORCH_CLOUDFLARE_ACCOUNT_ID != '' }}
+        run: |
+          if [ "$HAS_TOKEN" != true ] || [ "$HAS_ACCOUNT" != true ]; then
+            echo "The front-porch-production environment needs the FRONT_PORCH_CLOUDFLARE_TOKEN secret and the FRONT_PORCH_CLOUDFLARE_ACCOUNT_ID variable first. Nothing was deployed."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: services/front-porch
+      - run: npm test
+        working-directory: services/front-porch
+      - name: Deploy the Worker
+        working-directory: services/front-porch
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.FRONT_PORCH_CLOUDFLARE_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.FRONT_PORCH_CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: npx wrangler deploy
+
+  staging-scan:
+    needs: deploy
+    if: github.event_name == 'workflow_dispatch' && inputs.staging_url != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # The scan script refuses any address but the Worker's workers.dev one.
+      - run: node scan/zap-scan.mjs "$STAGING_URL"
+        working-directory: services/front-porch
+        env:
+          STAGING_URL: ${{ inputs.staging_url }}
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: front-porch-staging-zap-report
+          path: services/front-porch/scan/out/report.*
+          if-no-files-found: ignore
