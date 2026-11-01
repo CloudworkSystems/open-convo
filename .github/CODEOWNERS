@@ -1,20 +1,18 @@
 # Paths that always need the owner's approval (docs/plans/merge-gate.md).
 # Branch protection requires a code-owner review and dismisses it on new commits.
 
-# The rules, including the checks and this file.
-/AGENTS.md @CloudworkSystems
-/CLAUDE.md @CloudworkSystems
+# The merge process itself: its full binding text, the checks and this file.
+# Rules files (AGENTS.md and CLAUDE.md, at the top and in every folder) merge
+# on the owner's yes in a Claude thread instead (owner decision, November 1,
+# 2026; docs/agent-process.md "Rules files merge on the owner's yes"). The
+# full text stays here, so no agent can loosen that rule without him.
 /docs/agent-process.md @CloudworkSystems
 /.github/ @CloudworkSystems
 # Claude Code settings and the guard hook that enforces the hard rules.
 /.claude/ @CloudworkSystems
-# Folder rule files anywhere in the repo.
-AGENTS.md @CloudworkSystems
-CLAUDE.md @CloudworkSystems
 
 # Decisions. Plans in docs/plans/ are approved by the owner's yes in a
-# Claude thread instead (AGENTS.md "Plans merge on the owner's yes"); the
-# folder's AGENTS.md and CLAUDE.md stay protected by the rule-file lines above.
+# Claude thread instead (AGENTS.md "Plans merge on the owner's yes").
 /PLAN.md @CloudworkSystems
 /docs/decisions.md @CloudworkSystems
 
@@ -59,10 +57,12 @@ CLAUDE.md @CloudworkSystems
 /apps/mac/Tests/ProtectionProofTests/ @CloudworkSystems
 
 # What wires the above into the shipping app and could switch the paid path
-# on: the app's composition root, the package manifest (which modules link),
-# and the test that forbids linking the participant path today. Most Mac app
-# pull requests touch main.swift, so they wait for the owner; moving the
-# storage and paid-path wiring into small files of their own would end that.
+# on: the app's composition root and the test that forbids linking the
+# participant path today. Most Mac app pull requests touch main.swift, so they
+# wait for the owner; moving the storage and paid-path wiring into small files
+# of their own would end that. The package manifest left this list on
+# November 1, 2026: the risk hold catches a new outside package, and
+# .github/scripts/tests/mac-manifest.test.mjs pins which participant-path
+# modules the app links and keeps every protected test building.
 /apps/mac/Sources/VoiceCursorMac/main.swift @CloudworkSystems
-/apps/mac/Package.swift @CloudworkSystems
 /apps/mac/Tests/DeskWindowKitTests/DeskSessionParticipantTests.swift @CloudworkSystems

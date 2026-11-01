@@ -21,3 +21,9 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 2
+    # One pull request a month for every action update, since each one changes
+    # .github/ and waits for the owner (owner decision, November 1, 2026). A
+    # major update still comes in its own pull request.
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]

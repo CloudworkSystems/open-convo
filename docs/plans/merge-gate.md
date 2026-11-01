@@ -101,6 +101,18 @@ GitHub approval, so `docs/plans/` left `CODEOWNERS`. The folder's `AGENTS.md`
 and `CLAUDE.md`, `PLAN.md` and `docs/decisions.md` stay protected. The rule
 is in AGENTS.md ("Plans merge on the owner's yes").
 
+### Revision (November 1, 2026)
+
+The owner decided that rules files (`AGENTS.md` and `CLAUDE.md`, at the top
+and in every folder) also merge on his yes in a Claude thread, and that
+`apps/mac/Package.swift` leaves `CODEOWNERS`. The full process text
+(`docs/agent-process.md`), `.github/`, `.claude/`, `PLAN.md` and
+`docs/decisions.md` stay protected. The manifest is guarded by the risk hold
+for new packages and by `.github/scripts/tests/mac-manifest.test.mjs`.
+GitHub Actions updates from Dependabot now come grouped, one pull request a
+month. The rule is in docs/agent-process.md ("Rules files merge on the
+owner's yes").
+
 ## Status (October 20, 2026)
 
 **On.** The owner approved switching the gate on for `main` on October 20.
