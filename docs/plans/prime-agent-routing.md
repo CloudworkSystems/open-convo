@@ -85,9 +85,9 @@ One JSON object. Unknown fields are refused, naming the field.
 - `approvals`: a list of `{ approvalId, actionId, payloadDigest, by, how,
   at }`, every approval anyone has claimed for this conversation.
   `payloadDigest` is what the host computed, with the engine's exported
-  `actionDigest(payload)` (SHA-256 of the payload as canonical JSON, keys
-  sorted, using `node:crypto`), over the exact action it showed the person
-  when they said yes.
+  `actionDigest({ kind, payload })` (SHA-256 of the action's `kind` and
+  `payload` as canonical JSON, keys sorted, using `node:crypto`), over the
+  exact action it showed the person when they said yes.
   `approvalId` is unique. `by` is `person`, `agent` or `memory`; `how` is
   `typed` or `clicked`.
 - `usedApprovals`: the `approvalId`s the host has already spent on a
@@ -105,7 +105,7 @@ One JSON object. Unknown fields are refused, naming the field.
 1. **Approval check first.** An approval counts only when `by` is
    `person`, its `approvalId` is not in `usedApprovals`, its `actionId`
    matches an action in `outsideActions`, and its `payloadDigest` equals
-   `actionDigest` of that action's `payload`. The description never
+   `actionDigest` of that action's `kind` and `payload`. The description never
    counts, so an action whose recipient, content or amount changed needs a
    new yes even if its label stayed the same. The caller runs exactly the
    payload that matched. Approvals by `agent` or `memory` never count, whatever they say,
@@ -185,8 +185,9 @@ invented messages only. At least:
    approval `by: memory`. Every case passes.
 2. A person's yes for an action, then the same action with the same id
    and description but a changed recipient or amount in its `payload`: the
-   second asks again. `actionDigest` gives the same value for the same
-   payload with its keys in any order.
+   second asks again, and so does the same payload with only `kind`
+   changed (a `send` approval never covers a `publish`). `actionDigest`
+   gives the same value for the same action with its keys in any order.
 3. A clicked yes and a typed yes both count; an agent's yes and a memory
    entry's yes never do, and both appear in `ignoredApprovals`.
 4. A task with one unapproved `send`: routes are `wait-for-yes` and
