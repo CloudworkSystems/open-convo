@@ -80,6 +80,13 @@ chats only). Scope:
 
 ## Beside The Main Build
 
+**Front porch API** (public, read-only answers about True Convo for Meta's
+connector programs), built by Claude. Plan:
+[docs/plans/front-porch-api.md](docs/plans/front-porch-api.md) (#238).
+PR 1: the service, its content, OpenAPI and MCP, with tests; in review. Not
+live: the ZAP scan, deploy workflow, docs page and privacy policy section come
+next, then the owner's Cloudflare setup and his OK to go live.
+
 **Site Engine, standalone first slice**, built by an outside builder (GrokBot
 builds, Codex reviews). Plan:
 [docs/plans/site-engine-standalone.md](docs/plans/site-engine-standalone.md).
