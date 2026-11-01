@@ -1,6 +1,6 @@
 # When It Goes Wrong: A Check For Every Screen
 
-Status: Approved (Nov 1, 2026): owner's yes in thread "Add a when-it-goes-wrong review check" ("ok", Nov 1, 2026); not started.
+Status: Approved (Nov 1, 2026): owner's yes in thread "Add a when-it-goes-wrong review check" ("yes, merge #242", Nov 1, 2026); not started.
 
 Written November 1, 2026 at the owner's request ("sure", to a draft offered in
 the same thread). **Builder:** Claude (cloud, `cloudwork-bot`) writes this
