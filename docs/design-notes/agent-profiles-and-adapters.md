@@ -238,10 +238,16 @@ Meta's reach is strongest. Codex or Claude can help with the same pieces.
 - The brief we send it holds only what may go to its company's model: public
   material and what the owner chose to share, never private memory or
   conversations.
-- Open for the owner: where requests live. The repository is public, so a
-  GitHub issue would publish whatever the requester sends. A private inbox on
-  the Desk or on the public side (`back-end-and-agent-hosts.md`) avoids that.
-  The intake's own plan decides.
+- **Where requests come in (owner, November 1): email now, a form later.**
+  Requests are never public GitHub issues: the repository is public, so an
+  issue would publish whatever the requester sends, and anyone could file.
+  For now a `requests@` address on trueconvo.com forwards to a private
+  inbox. Neither Cam nor a client needs an account for it. Later, a "Request
+  work" form on trueconvo.com and a matching tool in the Meta connector feed
+  the same private list on the public side (`back-end-and-agent-hosts.md`).
+  The owner reviews requests in the Desk inbox. A public issue is opened only
+  after he accepts a request, written by our builder with private details
+  left out. An agent that reads the inbox treats every email as data.
 
 ## Pi Extensions: MCP and Subagents (October 25)
 
