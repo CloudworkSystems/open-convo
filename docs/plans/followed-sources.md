@@ -1,6 +1,6 @@
 # Followed Sources (PRD)
 
-Status: Draft (Oct 29): written for the owner's yes; nothing is built yet.
+Status: In progress (Oct 29): approved by the owner October 29 and merged as #175; slice 1, the standalone engine in `packages/followed-sources/`, merged as #182.
 
 Written October 29, 2026 by Claude (thread "Revisit The Faction security
 ideas") from the owner's ask that day. Session name:

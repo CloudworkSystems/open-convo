@@ -1,6 +1,6 @@
 # Idea Harvest From True Convo
 
-Status: Draft (Oct 29): written for the owner's yes; no run has happened yet.
+Status: Approved (Oct 30): merged as #194 on the owner's yes; no run has happened yet.
 
 Written October 29, 2026 by Claude (thread "Fix failing PR steward and
 recycling tasks") from the owner's ask that day. Session name:

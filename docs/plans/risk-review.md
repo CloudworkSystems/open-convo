@@ -1,6 +1,6 @@
 # Risk Review: Escalate By What A Change Does, Not Only Where It Lives
 
-Status: In progress (Oct 29): the code pull request is in review; Built once
+Status: In progress (Oct 29): the code pull request merged as #180; Built once
 the finish line below is met.
 
 Written October 26, 2026 at the owner's request ("Do it"), after comparing a

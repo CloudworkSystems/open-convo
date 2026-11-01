@@ -55,7 +55,7 @@ chats only). Scope:
 | PR 4a: Desk wiring on the page: the Claude entry named "Claude · <model> · Anthropic (not on this Mac)" (built, but still left out of the picker until PR 4b, per the October 16 decision), the line above the message box "Sends this message and N earlier turns to Anthropic" (local turns counted), earlier turns sent by run id within the 4,096-byte trial limit, and Retry for Claude replies. Nothing turned on | Merged (#205) |
 | PR 4a-native: the Mac app's "Approve Anthropic once" screen, its approval shown apart from "local checks passed", and the consent proof (no spawn without both gates); split from 4a to keep each review small. Nothing turned on: the window shows the screen only when given it, and the app gives it nothing before PR 4b | Merged (#207) |
 | PR 3b follow-up: the plan rename (Ultra reports `max` and passes; an `ultra` code fails closed), with a test for each name | Merged (#212) |
-| PR 4-proof: the fake-CLI kill proof. A test copy of the app, wired as PR 4b will wire it (the real owner, coordinator, store, launcher and supervisor, with a fake Claude Code), is killed at four exact points mid-reply: no process is left, the next launch keeps exactly the saved text, sends nothing again, asks for a new paid-usage confirmation, and Retry makes exactly one new run; a graceful quit records `stopped`; and a start with either consent gate closed (not approved, not confirmed, approval withdrawn, confirmation ended) spawns nothing. The app itself still refuses every Claude launch | In review |
+| PR 4-proof: the fake-CLI kill proof. A test copy of the app, wired as PR 4b will wire it (the real owner, coordinator, store, launcher and supervisor, with a fake Claude Code), is killed at four exact points mid-reply: no process is left, the next launch keeps exactly the saved text, sends nothing again, asks for a new paid-usage confirmation, and Retry makes exactly one new run; a graceful quit records `stopped`; and a start with either consent gate closed (not approved, not confirmed, approval withdrawn, confirmation ended) spawns nothing. The app itself still refuses every Claude launch | Merged (#223) |
 
 ## Done
 
@@ -101,23 +101,23 @@ Plan: [docs/plans/habit-grid-engine.md](docs/plans/habit-grid-engine.md).
 **Sync core** (Personal; first slice of the iPhone and sync line, owner
 decision October 22): GrokBot team B builds it as its next module, Codex
 reviews. Plan approved (merged as #127 on October 24):
-[docs/plans/sync-core.md](docs/plans/sync-core.md). Build in review (#139).
+[docs/plans/sync-core.md](docs/plans/sync-core.md). Built and merged as #139 on November 1.
 
 **Email actions preview** (Personal, right after launch), Codex builds through the local Codex CLI, GrokBot or a fresh Claude reviews; plan merged in #138; built through the Codex CLI job (#142) and merged in #144 (Oct 25) (`packages/email-actions/`, `docs/plans/email-actions-preview.md`).
 
-**Tasks and reminders engine** (Personal, day one), GrokBot team A builds, Codex reviews; plan merged in #138, build started Oct 25 (#141) (`docs/plans/tasks-engine.md`).
+**Tasks and reminders engine** (Personal, day one), GrokBot team A builds, Codex reviews; plan merged in #138; built (issue #141) and merged as #146 (Oct 29) (`packages/tasks/`, `docs/plans/tasks-engine.md`).
 
 **Today agenda** (Personal, day one), GrokBot team C builds, Codex reviews; plan merged in #138; built and merged in #147 (Oct 28) (`packages/today-agenda/`, `docs/plans/today-agenda.md`).
 
 **Email sorting engine** (Personal, launch set), Claude builds (the owner's choice on October 24, in place of Codex), GrokBot or a fresh Claude reviews; plan `docs/plans/email-sorting-engine.md`; merged as #128 on October 24 (`packages/email-sorting/`).
 
-**Calendar merge engine** (Personal, launch set), Claude builds (the owner's choice on October 24, in place of Codex), GrokBot or a fresh Claude reviews; plan approved (`docs/plans/calendar-merge-engine.md`); build in review (#130).
+**Calendar merge engine** (Personal, launch set), Claude builds (the owner's choice on October 24, in place of Codex), GrokBot or a fresh Claude reviews; plan approved (`docs/plans/calendar-merge-engine.md`); merged as #130 on October 30 (`packages/calendar-merge/`).
 
 **Calendar through the Mac** (Personal; first slice of the connections layer), Claude builds, GrokBot or a fresh Claude reviews; plan approved October 30 (`docs/plans/calendar-through-the-mac.md`). Reads the Mac's calendars, Google ones included, through Apple's calendar framework, read only.
 
 | Part | State |
 | --- | --- |
-| PR 1: Calendar reader (calendar access on macOS 13 and 14, read only, the same meeting shown once), fake-store tests, wiring | In review |
+| PR 1: Calendar reader (calendar access on macOS 13 and 14, read only, the same meeting shown once), fake-store tests, wiring | Merged (#209) |
 | PR 2: Desk calendar views (month, week, day), the calendar picker saved in the protected store, the refused-access notice, bridge messages, Today adapter | Next |
 | PR 3: Open in Google Maps, travel time (off by default), clash marks | Later |
 | PR 4: Owner's trial | Later |
@@ -128,7 +128,7 @@ reviews. Plan approved (merged as #127 on October 24):
 
 **Cloudwork Rail Map** (Desk, Cloudwork Nexus), Claude builds; a fifth Nexus view showing this repository's branches, commits and pull requests from a saved snapshot (`apps/desk/scripts/rail-map-snapshot.mjs`); merged October 24 (#132).
 
-**PR history spreadsheet** (all work; owner asked October 29), Claude builds; one row per pull request (builder, dates, areas, Codex rounds and findings, outside review), rebuilt each morning by `.github/workflows/pr-history.yml` onto its own branch, `pr-history-data`, never `main`. The owner's Google Sheet reads its CSV with `IMPORTDATA`; the JSON copy shares the Rail Map's pull fields for Canvas and Atlas. In review.
+**PR history spreadsheet** (all work; owner asked October 29), Claude builds; one row per pull request (builder, dates, areas, Codex rounds and findings, outside review), rebuilt each morning by `.github/workflows/pr-history.yml` onto its own branch, `pr-history-data`, never `main`. The owner's Google Sheet reads its CSV with `IMPORTDATA`; the JSON copy shares the Rail Map's pull fields for Canvas and Atlas. Merged November 1 (#185).
 
 **Skin check** (Personal, new Health module), Claude builds, GrokBot or a fresh Claude reviews; plan approved (`docs/plans/skin-check.md`). Slice 1, the standalone engine in `packages/skin-check/`, is built; the iPhone source joins the iPhone app on the parallel sync line, and the Desk view follows.
 
@@ -150,7 +150,7 @@ owner picks. Slice 1, the standalone engine in `packages/followed-sources/`, is 
 Desk "Followed" view each need a plan revision.
 
 **Desk message actions** (Desk; owner asked November 1), Claude builds, GrokBot or a fresh Claude reviews: plan
-[docs/plans/desk-message-actions.md](docs/plans/desk-message-actions.md), approved by the owner November 1; PR 2 (action row, Copy, ratings, reactions) in review. Copy,
+[docs/plans/desk-message-actions.md](docs/plans/desk-message-actions.md), approved by the owner November 1; PR 2 (action row, Copy, ratings, reactions) merged (#224). Copy,
 thumbs up and down, reactions, reply with a quote, and a side chat on each message; ratings and reactions stay on the Mac.
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
@@ -175,7 +175,7 @@ October 29 (risk review, [docs/plans/risk-review.md](docs/plans/risk-review.md))
 dependency, a Mac permission or a key name until the owner approves it
 (`.github/risk-allowlist.json` lists what he has already accepted), and every
 independent review ends with the privacy and security checklist. Code pull
-request in review; Built once the first real hold and checklist have run.
+request merged October 29 (#180); Built once the first real hold and checklist have run.
 
 **Building faster** (more outside modules, parallel lanes, a dogfooding
 cadence): approved by the owner October 21. The limit of three outside
