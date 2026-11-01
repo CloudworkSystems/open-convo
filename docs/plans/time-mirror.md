@@ -1,17 +1,22 @@
 # Time Mirror: Observability Layer, Slice 1 (PRD)
 
-Status: Approved (Oct 29): the owner said yes in the thread "Plan the observability layer"; the code follows in a separate pull request.
+Status: Approved (Oct 29): the owner said yes in the thread "Plan the observability layer"; revised November 1 so Codex team A builds the library and a Claude building session builds the command (see "Revision (November 1, 2026)").
 
 Written October 29, 2026 by a Claude session (project "261024 OC Steering",
 thread "Plan the observability layer") at the owner's request: he wants to
 see where his computer time goes, tagged productive or not, as heat maps
 like the habit grid, and to start using it soon, ahead of the core build
-order. Umbrella: Personal. **Builder:** Claude (cloud, `cloudwork-bot`).
-**Reviewers:** Codex, and GrokBot or a fresh Claude as the independent
-review, which also answers the risk-review checklist
-([risk-review.md](risk-review.md)). **Finish line:** the package merges with
-`tests` passing, and the owner runs it once on his Mac and opens a page
-showing his own time as heat maps (Gate 0 below).
+order. Umbrella: Personal. **Builders** (revised November 1): **Codex
+team A** (an outside builder, AGENTS.md "Outside Builders") builds the
+library, `packages/time-mirror/`; then a **Claude** building session
+(cloud, `cloudwork-bot`) builds the command, `scripts/time-mirror.mjs`, the
+only part that touches the Keychain or the network. **Reviewers:** Codex
+reviews every push; GrokBot or a fresh Claude is the independent review of
+each pull request, and the one for the command also answers the
+risk-review checklist ([risk-review.md](risk-review.md)); the coordinator
+checks the library against this plan. **Finish line:** both pull requests
+merge with `tests` passing, and the owner runs the command once on his Mac
+and opens a page showing his own time as heat maps (Gate 0 below).
 
 ## Why
 
@@ -220,3 +225,63 @@ before anything ships.
 - A test that the written page contains no URL, no outside resource, and
   only daily per-tag numbers.
 - A README with the Gate 0 steps, written for someone new to Terminal.
+
+## Rules For The Builder (Codex Team A)
+
+These cover the library pull request only. The builder must follow them;
+the setup does not enforce them, so breaking one is a stop-and-report event.
+
+- Start when the coordinator's build issue names this plan. Work only in a
+  checkout of this repo, on the branch `OC-261101-time-mirror-library`,
+  signed in as `cloudwork-bot` (or as Codex's own GitHub app for a cloud
+  task). Open a pull request into `main` with auto-merge off and the label
+  `agent: codex`. Never push to `main` directly, and never switch on
+  auto-merge.
+- End the pull request description and every comment with
+  `— Codex team A`.
+- Run **no commands on the owner's Mac** apart from `npm test` inside
+  `packages/time-mirror/` and the `git` and `gh` commands needed to commit,
+  push and open the pull request. Read no file outside this repo.
+- Touch no keys, tokens, passwords, accounts, Keychain, iCloud or real
+  RescueTime data. Invented rows only. No API key appears anywhere, not even
+  an invented one: the library never sees a key.
+- Change files only under `packages/time-mirror/`. Nothing else, not
+  `scripts/`, not `STATUS.md`, not `packages/habit-grid/`. Import the habit
+  grid engine by relative path through its public API, as step 4 says; if
+  the engine lacks something, stop and report instead of changing it.
+- JavaScript modules (`.mjs`), Node 22 or later, `"type": "module"`,
+  `"private": true`, tests with `node --test`.
+- The library never imports `fs`, `child_process`, `node:http`,
+  `node:https`, `node:net` or `node:dns`, never calls `fetch`, and never
+  reads the clock: the caller passes the date range and the injected
+  `fetchRows`. A test checks this (Proof, above).
+- No new dependencies. Add no license file and no `license` field.
+- The library's tests cover the Proof items that belong to it: invented
+  responses (normal, missing and malformed days, and errors surfaced by an
+  injected `fetchRows`), the two allowed request kinds and nothing per-site
+  or per-app, trackers built through the habit grid engine and drawn with
+  `renderSvg`, the import check, and a page with no URL, no outside
+  resource and only daily per-tag numbers. The key and header tests belong
+  to the command's pull request.
+- Keep the slice small, with a short README describing the library's
+  inputs and output. The README's Gate 0 steps come with the command.
+- The pull request says what was built, how to run the tests, what was not
+  done, and anything unsure.
+- Supported setups are macOS and the Linux CI runners on Node 22 (AGENTS.md
+  "Review Guidelines").
+
+## Revision (November 1, 2026)
+
+The owner asked for Codex to build modules, not only review them, and on
+November 1 he picked this plan for Codex team A (thread "Run the
+Claude–StarFox coordination log", the card option "A and B (Codex's
+pick)"). Only who builds changed:
+
+- Codex team A builds the library alone, under the rules above, so an
+  outside builder never handles the owner's key or calls RescueTime.
+- A Claude building session builds `scripts/time-mirror.mjs` and its tests
+  after the library merges, under this plan's steps 1, 2, 5 and 6 and the
+  command's Proof items, and adds the README's Gate 0 steps.
+
+Every requirement, limit, risk check and the finish line above stay as
+approved on October 29.
