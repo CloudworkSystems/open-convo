@@ -5,7 +5,7 @@ import { handle, guarded, REST_PATHS } from '../src/handler.js';
 
 const content = JSON.parse(readFileSync(new URL('../content.json', import.meta.url), 'utf8'));
 const openapi = JSON.parse(readFileSync(new URL('../openapi.json', import.meta.url), 'utf8'));
-const get = (path, init) => handle(new Request(`https://api.trueconvo.com${path}`, init));
+const get = (path, init) => handle(new Request('https://api.trueconvo.com' + path, init));
 
 const SECURITY = {
   'content-security-policy': "default-src 'none'; frame-ancestors 'none'",
