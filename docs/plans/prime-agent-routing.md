@@ -88,7 +88,11 @@ One JSON object. Unknown fields are refused, naming the field.
   or typing yes to an earlier offer of a session. The reader never sets
   it. When it is `true`, the record also carries `offeredRequest`: the
   person's own words from the message that led to the offer, kept by the
-  host (up to 16 KB). An accepted offer without it is refused.
+  host (up to 16 KB). An accepted offer without it is refused. For an
+  accepted offer, `input.facts` (including `outsideActions`) describe the
+  `offeredRequest`, not the "yes": the caller has the reader read the
+  offered request again, so its outside actions still wait for their own
+  yes. Accepting a session is never a yes to an outside action.
 - `approvals`: a list of `{ approvalId, actionId, payloadDigest, by, how,
   at }`, every approval anyone has claimed for this conversation.
   `payloadDigest` is what the host computed, with the engine's exported
@@ -210,7 +214,9 @@ invented messages only. At least:
 5b. Routes: a `task` with `steps` at or below `quickSteps` gets
    **answer**, one above it gets **hand-off**; an accepted offer gets a
    hand-off whose `personsWords` holds the `offeredRequest`, and an
-   accepted offer without one is refused.
+   accepted offer without one is refused; an accepted offer whose request
+   has an unapproved `send` routes `wait-for-yes` and `hand-off`, with the
+   send in the brief's `limits`.
 5a. Provenance and one use: an `input` carrying `message`, `space`,
    `offerAccepted`, `recipient`,
    `approvals`, `usedApprovals` or `memory` is refused; "this space" in
