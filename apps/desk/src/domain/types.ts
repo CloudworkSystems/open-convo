@@ -132,11 +132,14 @@ export interface MessageMark {
   rating?: 'up' | 'down';
   /** At least one, unique, in the fixed order. */
   reactions?: MessageReaction[];
+  /** Other standard emoji from the full set, unique, in the order added. */
+  emoji?: string[];
   updatedAt: string;
 }
 export type MessageMarkCommand =
   | { type: 'set-message-rating'; messageId: string; rating: 'up' | 'down' | null }
-  | { type: 'toggle-message-reaction'; messageId: string; reaction: MessageReaction };
+  | { type: 'toggle-message-reaction'; messageId: string; reaction: MessageReaction }
+  | { type: 'toggle-message-emoji'; messageId: string; emoji: string };
 
 export interface Activity {
   id: string;

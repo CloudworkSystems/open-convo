@@ -1,6 +1,6 @@
 # Desk Message Actions
 
-Status: In progress (Nov 1): approved by the owner November 1, 2026; PR 2 (action row, Copy, ratings, reactions) merged as #224; PR 3 (Reply) merged as #245; PR 4 (Side chat) in review.
+Status: In progress (Nov 1): approved by the owner November 1, 2026; PR 2 (action row, Copy, ratings, reactions) merged as #224; PR 3 (Reply) merged as #245; PR 4 (Side chat) merged as #247; PR 5 (the full emoji set) in review.
 
 Written November 1, 2026 by a Claude session (project "261024 OC Steering")
 at the owner's request that day: every message in a Desk conversation gets
@@ -155,6 +155,58 @@ the side chat screen:
 - Use "Back to the message"; the main conversation opens at that message.
 - Move the main conversation to another folder; its side chats move too.
 - While saving is blocked, Side chat is off and says why; going back works.
+
+## Revision, November 1, 2026: The Full Emoji Set
+
+The owner asked on November 1, 2026, in the Claude thread "Add per-message
+actions to the Desk": "But as you also build in the ability to use the emoji
+library, like from Apple, or from whatever the generally accepted emoji
+library is". So the full emoji picker moves out of "Later" into a fifth pull
+request:
+
+5. **More emoji.** The reaction picker gains "More emoji": every standard
+   Unicode emoji (Emoji 17.0, 1,914, without skin-tone variants for now) in
+   Unicode's nine groups, with search by name. The list is a static file in
+   the repo generated from the MIT-licensed `unicode-emoji-json` data; it is
+   not a dependency, nothing is fetched at runtime, and it loads only when
+   first opened. The pictures come from the system emoji font, so on the Mac
+   they are Apple's. Picked emoji are saved in the same mark as an `emoji`
+   list (unique, at most 20 per message, checked on load); one of the six
+   quick reactions picked from the full set stays the same quick reaction.
+   Rules 1, 5 and 6 apply unchanged: these marks also stay on the Mac.
+
+This takes "A full emoji picker" out of "Later, Not In This Plan" below,
+which stays as approved. Skin-tone choices stay for later.
+
+### When It Goes Wrong (More Emoji)
+
+The five questions of [when-it-goes-wrong.md](when-it-goes-wrong.md), for
+the emoji picker:
+
+1. **No connection.** Doesn't apply: the emoji list ships with the Desk and
+   nothing is fetched, so it works offline.
+2. **Interrupted.** A pick is saved like the quick reactions; after a quit
+   or crash the chosen emoji are still on the message. Closing the picker
+   midway changes nothing.
+3. **Empty or first run.** The picker opens on the first group with the
+   search box focused. A search with no match says "No emoji match that
+   search."; a long result list says how many are shown and to type more.
+4. **Denied or stuck.** There is no prompt. Escape or picking an emoji
+   closes the picker and returns focus to "Add a reaction". If the list
+   file can't load, the picker says "The emoji list couldn’t load. Reload
+   the Desk to try again." and the six quick reactions still work.
+5. **The error message.** At the 20 emoji limit the Desk says "A message
+   can hold up to 20 emoji. Remove one first."; while saving is blocked the
+   picker is off with the shared reason.
+
+**Owner trial checks:** search for an emoji and add it; quit and reopen and
+it is still there; remove it from its chip; press Escape to close the
+picker; pick ❤️ from the full list and see it become the quick heart.
+
+The owner also chose (decision card, November 1, 2026) to have a follow-up
+plan in which agents can see his reactions in a conversation, with a line
+saying so, and can react back. That changes rule 1, so it is a separate plan
+and nothing here sends a reaction anywhere.
 
 ## Later, Not In This Plan
 
