@@ -160,7 +160,7 @@ owner picks. Slice 1, the standalone engine in `packages/followed-sources/`, is 
 Desk "Followed" view each need a plan revision.
 
 **Desk message actions** (Desk; owner asked November 1), Claude builds, GrokBot or a fresh Claude reviews: plan
-[docs/plans/desk-message-actions.md](docs/plans/desk-message-actions.md), approved by the owner November 1; PR 2 (action row, Copy, ratings, reactions) merged (#224); PR 3 (Reply) in review. Copy,
+[docs/plans/desk-message-actions.md](docs/plans/desk-message-actions.md), approved by the owner November 1; PR 2 (action row, Copy, ratings, reactions) merged (#224); PR 3 (Reply) merged (#245); PR 4 (side chat, opens in place) in review. Copy,
 thumbs up and down, reactions, reply with a quote, and a side chat on each message; ratings and reactions stay on the Mac.
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's

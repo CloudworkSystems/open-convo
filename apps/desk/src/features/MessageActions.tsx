@@ -16,6 +16,11 @@ export interface MessageActionsValue {
   onReact: (messageId: string, reaction: MessageReaction) => void;
   /** Quotes this message at the top of its conversation's draft. Returns false when it couldn't. */
   onReply?: (messageId: string, text: string) => boolean;
+  /** Starts a side chat about this message and opens it. */
+  onSideChat?: (messageId: string, text: string) => void;
+  /** Side chats already started about each message, oldest first. */
+  sideChats?: ReadonlyMap<string, readonly { id: string; title: string }[]>;
+  onOpenSession?: (sessionId: string) => void;
 }
 
 export const MessageActionsContext = createContext<MessageActionsValue | null>(null);
@@ -77,6 +82,7 @@ export function MessageActions({ messageId, role, text, ended, latest = false }:
   };
   const label = reply ? 'reply' : 'your message';
   const chosen = new Set(mark?.reactions ?? []);
+  const sideChats = context?.sideChats?.get(messageId) ?? [];
   return (
     <div className={`message-actions${latest ? ' message-actions-latest' : ''}${reply ? '' : ' message-actions-user'}`} role="group" aria-label={`Actions for ${label}`}
       data-message-actions={messageId} onKeyDown={(event) => {
@@ -111,6 +117,11 @@ export function MessageActions({ messageId, role, text, ended, latest = false }:
           }}>
           <Icon name="reply" size={15} />
         </button>}
+        {context?.onSideChat && <button type="button" className="message-action" disabled={markDisabled}
+          aria-label={`Start a side chat about ${label}`} title={blocked ?? 'Side chat about this message'} data-side-chat
+          onClick={() => context.onSideChat?.(messageId, text)}>
+          <Icon name="side-chat" size={15} />
+        </button>}
         {context && <button type="button" ref={pickerButton} className="message-action" aria-expanded={picking} aria-controls={pickerId}
           disabled={markDisabled} aria-label="Add a reaction" title={blocked ?? 'Add a reaction'} onClick={() => setPicking(!picking)}>
           <Icon name="smile" size={15} />
@@ -136,6 +147,12 @@ export function MessageActions({ messageId, role, text, ended, latest = false }:
             <span aria-hidden="true">{reaction.emoji}</span>
           </button>)}
       </div> : null}
+      {context?.onOpenSession && sideChats.length > 0 && <div className="message-side-chats">
+        {sideChats.map((chat) => <button key={chat.id} type="button" className="message-side-chat-link"
+          onClick={() => context.onOpenSession?.(chat.id)}>
+          <Icon name="side-chat" size={13} /><span>{chat.title}</span>
+        </button>)}
+      </div>}
       {context?.saveBlockedReason && mark && <p className="message-actions-note">{context.saveBlockedReason}</p>}
     </div>
   );

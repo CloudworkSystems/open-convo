@@ -1843,3 +1843,41 @@ test('Reply quotes the message into the draft, and Send sends exactly the box te
     await f.check();
   } finally { await f.close(); }
 });
+
+test('a side chat opens as its own linked conversation that quotes only the message, and leads back to it', async () => {
+  const f = await fixture();
+  try {
+    await f.send('Invented main question');
+    await expectSavedSequence(f, 1);
+    await f.emit('text', 'Invented main reply');
+    await expect(replyActions(f.page).getByRole('button', { name: 'Start a side chat about reply', exact: true })).toBeDisabled();
+    await f.emit('completed');
+    await expect.poll(() => savedRun(f)?.phase).toBe('completed');
+    const main = savedRun(f);
+    await replyActions(f.page).getByRole('button', { name: 'Start a side chat about reply', exact: true }).click();
+    const anchor = f.page.getByRole('complementary', { name: 'What this side chat is about', exact: true });
+    await expect(anchor.locator('blockquote')).toHaveText('Invented main reply');
+    const field = f.page.getByRole('textbox', { name: 'Your message', exact: true });
+    await expect(field).toHaveValue('> Invented main reply\n\n');
+    await expect.poll(() => f.stored.sessions.at(-1)?.sideOf).toEqual({ sessionId: main.sessionId, messageId: main.assistantMessageId });
+    const side = f.stored.sessions.at(-1);
+    await expect(f.page.locator('.session-row-side').getByRole('button', { name: side.title, exact: true })).toBeVisible();
+    // Sending in the side chat sends the box text and nothing from the main conversation.
+    await field.fill('> Invented main reply\n\nWhat does that mean?');
+    await f.page.getByRole('button', { name: 'Send message', exact: true }).click();
+    await expect.poll(() => f.calls.starts.length).toBe(2);
+    await expect.poll(() => f.stored.conversationRuns?.at(-1)?.sessionId).toBe(side.id);
+    const sideRun = f.stored.conversationRuns.at(-1);
+    assert.equal(sideRun.inputChunks.join(''), '> Invented main reply\n\nWhat does that mean?');
+    assert.ok(!sideRun.contextRunIds?.includes(main.runId));
+    await f.emit('completed');
+    await expect.poll(() => f.stored.conversationRuns?.at(-1)?.phase).toBe('completed');
+    await anchor.getByRole('button', { name: 'Back to the message', exact: true }).click();
+    await expect(f.page.locator(`[data-run-id="${main.runId}"]`)).toBeVisible();
+    await expect(replyActions(f.page).getByRole('button', { name: 'Start a side chat about reply', exact: true })).toBeFocused();
+    await expect(replyActions(f.page).getByRole('button', { name: side.title, exact: true })).toBeVisible();
+    await replyActions(f.page).getByRole('button', { name: side.title, exact: true }).click();
+    await expect(anchor).toBeVisible();
+    await f.check();
+  } finally { await f.close(); }
+});

@@ -4,6 +4,7 @@ import { defaultSessionTitle } from './session-naming';
 import { sameParticipantIdentity, validParticipantIdentity } from './participant-choices';
 import { isMemoryCommand, mutateMemory } from './memory';
 import { isMessageMarkCommand, mutateMessageMark } from './message-marks';
+import { createSideChat } from './side-chat';
 import type { Activity, DeskCommand, DeskState, DomainOptions, Goal, Session } from './types';
 
 export class DomainError extends Error {
@@ -108,6 +109,15 @@ export function applyCommand(state: DeskState, command: DeskCommand, options: Do
       next.selection = { goalId: command.goalId, sessionId, route: 'sessions' };
       next.preferences.nexusView = 'navigator';
       event('created', 'Session created.', command.goalId, sessionId);
+      break;
+    }
+    case 'create-side-chat': {
+      try {
+        const created = createSideChat(next, command.messageId, command.text, id(), now);
+        event('created', 'Side chat created.', created.goalId, created.id);
+      } catch (error) {
+        throw new DomainError(error instanceof Error ? error.message : 'The side chat could not be created.');
+      }
       break;
     }
     case 'set-domain-pinned': {

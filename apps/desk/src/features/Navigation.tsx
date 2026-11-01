@@ -137,10 +137,16 @@ export function Navigation({ state, onRouteChange, onGoalSelect, onSessionSelect
     revealCompleteCallback.current?.(sessionRevealRequest.token);
   }, [sessionRevealRequest, revealedSessionToken, expanded, ungroupedOpen, compact]);
   const isOpen = (goal: Goal) => expanded[goal.id] ?? true;
-  const unassigned = state.sessions.filter((session) => session.goalId === null);
+  // Side chats are listed under the conversation they came from, not on their own.
+  const sessionIds = new Set(state.sessions.map((session) => session.id));
+  const listedOnItsOwn = (session: DeskState['sessions'][number]) => !session.sideOf || !sessionIds.has(session.sideOf.sessionId);
+  const sideChatsOf = (parentId: string) => state.sessions.filter((session) => session.sideOf?.sessionId === parentId);
+  const sessionWithSideChats = (session: DeskState['sessions'][number]): ReactNode[] => [sessionButton(session),
+    ...sideChatsOf(session.id).flatMap((chat) => sessionWithSideChats(chat))];
+  const unassigned = state.sessions.filter((session) => session.goalId === null && listedOnItsOwn(session));
   const menuRecord = !menu ? null : menu.kind === 'domain' ? state.goals.find((item) => item.id === menu.id) : state.sessions.find((item) => item.id === menu.id);
   const sessionButton = (session: DeskState['sessions'][number]) => (
-    <div className="session-row" key={session.id}
+    <div className={`session-row${session.sideOf ? ' session-row-side' : ''}`} key={session.id}
       onContextMenu={(event) => contextMenu(event, 'session', session.id, session.title)}
       onKeyDown={(event) => keyboardMenu(event, 'session', session.id, session.title)}>
     <button type="button" title={session.title} aria-label={session.title} data-session-id={session.id}
@@ -200,7 +206,7 @@ export function Navigation({ state, onRouteChange, onGoalSelect, onSessionSelect
           </div>
           <div id={`${idPrefix}-domain-${goal.id}`} hidden={!isOpen(goal)} className="domain-contents">
             {folders(goal.id)}
-            {state.sessions.filter((session) => session.goalId === goal.id).map(sessionButton)}
+            {state.sessions.filter((session) => session.goalId === goal.id && listedOnItsOwn(session)).flatMap(sessionWithSideChats)}
             <button className="domain-session-add" type="button" disabled={readOnly}
               aria-label={`New session in ${goal.title}`} onClick={() => onSessionCreate(goal.id)}>
               <Icon name="plus" size={12} /><span>New session</span>
@@ -255,7 +261,7 @@ export function Navigation({ state, onRouteChange, onGoalSelect, onSessionSelect
               disabled={readOnly} onClick={() => { setUngroupedOpen(true); onSessionCreate(null); }}><Icon name="plus" size={16} /></button>
           </div>
           <nav id={`${idPrefix}-ungrouped-sessions`} hidden={!ungroupedOpen} className="session-list domain-contents" aria-label="Ungrouped session list">
-            {unassigned.map(sessionButton)}
+            {unassigned.flatMap(sessionWithSideChats)}
             {!unassigned.length && <p className="muted small session-empty">Sessions outside folders appear here.</p>}
           </nav>
         </section>

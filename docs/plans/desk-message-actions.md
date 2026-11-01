@@ -1,6 +1,6 @@
 # Desk Message Actions
 
-Status: In progress (Nov 1): approved by the owner November 1, 2026; PR 2 (action row, Copy, ratings, reactions) merged as #224; PR 3 (Reply) in review.
+Status: In progress (Nov 1): approved by the owner November 1, 2026; PR 2 (action row, Copy, ratings, reactions) merged as #224; PR 3 (Reply) merged as #245; PR 4 (Side chat) in review.
 
 Written November 1, 2026 by a Claude session (project "261024 OC Steering")
 at the owner's request that day: every message in a Desk conversation gets
@@ -36,7 +36,7 @@ reply:
 | Thumbs up / thumbs down | No | Yes | His rating of the reply. One at a time; pressing it again clears it. |
 | React | Yes | Yes | A fixed set of six reactions (for example 👍 ❤️ 🎉 👀 ✅ ❓) to tag a message for himself. |
 | Reply | Yes | Yes | Starts a new message in the main box that quotes this message. |
-| Side chat | Yes | Yes | Opens a side panel with a separate chat about this one message. |
+| Side chat | Yes | Yes | Opens a separate chat about this one message in place of the main one, with a link back (revision, November 1). |
 
 "Copy as Markdown" is left out for now: the Desk shows a reply's text
 exactly as received, so plain copy and Markdown copy would give the same
@@ -92,12 +92,25 @@ text. It arrives with Markdown rendering, if the Desk ever renders it.
    input limit, and browser tests that the sent text is exactly what the box
    showed.
 4. **Side chat.** A linked session (`sideOf`: parent session id and message
-   id), the side panel with its own message box, the quote as its first
+   id), opened in place of the main conversation with its own message box, the quote as its first
    message, its own participant line, and a way back to the message it came
    from. Side chats are listed under their parent, not as separate top-level
    conversations.
 
 Each pull request updates STATUS.md.
+
+## Revision, November 1, 2026: Side Chat Opens In Place
+
+PR 4 first planned a side panel beside the conversation. The Desk shows the
+runs of one selected conversation at a time, so a panel would mean showing
+two conversations' runs at once, a much larger change. The owner chose on
+November 1, 2026, in the Claude thread "Add per-message actions to the
+Desk", to open a side chat **in its place, with a back link**: the side chat
+replaces the main conversation in the same view, a note at the top says
+what message it is about (quoted), and "Back to the message" returns to the
+main conversation at that message. Side chats are listed under their parent
+in the sidebar, and each message lists links to its side chats. Rules 3, 4
+and 6 are unchanged.
 
 ## Later, Not In This Plan
 
