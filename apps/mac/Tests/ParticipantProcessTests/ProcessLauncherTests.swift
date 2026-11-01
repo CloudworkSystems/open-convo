@@ -332,7 +332,7 @@ struct ProcessLauncherGateTests {
         }
     }
 
-    @Test("Inactive: nothing in Sources outside its own file names the production launcher or the participants folder, and nothing constructs either")
+    @Test("Nothing in Sources outside its own file names the production launcher or the participants folder, and nothing constructs either, but True Convo Test's Claude entry, on these exact lines")
     func inactiveGate() throws {
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("Sources")
@@ -357,10 +357,25 @@ struct ProcessLauncherGateTests {
                 }
             }
         }
-        #expect(found.isEmpty, "\(found)")
+        // The Claude Code adapter's PR 4b: True Convo Test's Claude entry
+        // (`ClaudeConversation.make`, nil for the real app) makes the private
+        // participants folder once and the launcher once, over the pinned
+        // file and the bundled supervisor, and only once section 16's init
+        // values are recorded (ClaudeConversationWiringTests).
+        let wiring = "ClaudeConversation.swift: "
+        #expect(found.filter { $0.hasPrefix(wiring) } == [
+            wiring + "let parent: ParticipantsParent",
+            // Each of these two matches two needles (a construction and a
+            // mention), so each is listed twice.
+            wiring + "parent = try ParticipantsFolder.prepare(in: try paths.prepareBase())",
+            wiring + "parent = try ParticipantsFolder.prepare(in: try paths.prepareBase())",
+            wiring + "let launcher = ProcessParticipantLauncher(supervisorPath: ParticipantSupervisorLocation.besides(executable: executable),",
+            wiring + "let launcher = ProcessParticipantLauncher(supervisorPath: ParticipantSupervisorLocation.besides(executable: executable),",
+        ], "\(found)")
+        #expect(found.filter { !$0.hasPrefix(wiring) }.isEmpty, "\(found)")
     }
 
-    @Test("Only the test fakes, the test target, the coordinator, section 17's window adapter, the local route and the app's lane wiring depend on ParticipantProcess; the app reaches the coordinator and the local route only through ParticipantAppWiring; the adapter stays test-only; the Desk window and the hosts depend on none of them")
+    @Test("Only the test fakes, the test target, the coordinator, section 17's window adapter, the local route and the app's lane wiring depend on ParticipantProcess; the app reaches the coordinator, the local route and the window adapter only through ParticipantAppWiring; the Desk window and the hosts depend on none of them")
     func packageDependencies() throws {
         let manifest = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("Package.swift")
@@ -404,8 +419,12 @@ struct ProcessLauncherGateTests {
         // Step 3 PR 4b: the app's one lane. Exactly these modules, and only
         // the app (and this test target) link it. The Desk window kit and
         // the hosts still know no participant module.
+        // The Claude Code adapter's PR 4b adds the Desk session (for its
+        // store) and section 17's window adapter, for True Convo Test's
+        // Claude entry.
         #expect(dependencies["ParticipantAppWiring"]
-                    == ["DeskHost", "LocalModelRoute", "ParticipantCoordinator", "ParticipantProcess", "TrueConvoIdentity"])
+                    == ["DeskHost", "DeskWindowKit", "LocalModelRoute", "ParticipantCoordinator", "ParticipantDeskControls",
+                        "ParticipantProcess", "TrueConvoIdentity"])
         let wiringDependents = dependencies.filter { $0.value.contains("ParticipantAppWiring") }.keys.sorted()
         // Besides the app, only tests: this target, the kill-mid-reply
         // proof's app (step 3 PR 5), which runs the app's own lane, and the
@@ -418,12 +437,12 @@ struct ProcessLauncherGateTests {
             #expect(!(dependencies[name] ?? []).contains { $0.hasPrefix("Participant") || $0 == "LocalModelRoute" }, "\(name)")
         }
         // Section 17's window adapter (plan F4) joins the owner to the Desk
-        // window's plain controls; only the test target links it, so the app
-        // links neither it nor ParticipantProcess until activation (F7).
-        // The Claude Code adapter's PR 4a adds the approval's store (DeskHost).
+        // window's plain controls. The Claude Code adapter's PR 4a adds the
+        // approval's store (DeskHost); its PR 4b links it into the app's lane
+        // wiring only, so the app still reaches it only through there.
         #expect(dependencies["ParticipantDeskControls"] == ["DeskHost", "DeskWindowKit", "ParticipantProcess"])
         let adapterDependents = dependencies.filter { $0.value.contains("ParticipantDeskControls") }.keys.sorted()
-        #expect(adapterDependents == ["ParticipantProcessTests"], "\(adapterDependents)")
+        #expect(adapterDependents == ["ParticipantAppWiring", "ParticipantProcessTests"], "\(adapterDependents)")
         // Linking the coordinator is what could pull it into the app: only
         // the test target and the app's lane wiring may (Codex Q1, Q19; step
         // 3 PR 4b), and the Claude Code adapter's kill proof app (PR
@@ -444,10 +463,16 @@ struct ProcessLauncherGateTests {
         // Step 3 PR 4b: the app's lane wiring is the one file outside the
         // module that may import, name and construct it: these lines exactly.
         let wiring = "ParticipantAppWiring/LocalConversationLane.swift"
-        let wiringLines: Set<String> = [
+        // The Claude Code adapter's PR 4b: one construction still, over one
+        // of two configurations (with the launch's Claude entry, or never
+        // available without it).
+        let wiringLines: [String] = [
             "import ParticipantCoordinator",
-            "static func makeCoordinator(route: any LocalRouteLaunching, launchId: String) -> ParticipantCoordinator {",
-            "ParticipantCoordinator(configuration: ParticipantCoordinator.Configuration(",
+            "claude: ClaudeConversation? = nil) -> ParticipantCoordinator {",
+            "ParticipantCoordinator(configuration: configuration(route: route, launchId: launchId, claude: claude))",
+            "claude: ClaudeConversation?) -> ParticipantCoordinator.Configuration {",
+            "return ParticipantCoordinator.Configuration(",
+            "return ParticipantCoordinator.Configuration(",
         ]
         #expect(files.contains(wiring))
         var found: [String] = []
@@ -473,7 +498,7 @@ struct ProcessLauncherGateTests {
             }
         }
         #expect(found.isEmpty, "\(found)")
-        #expect(wiringFound.sorted() == wiringLines.sorted(), "the wiring constructs it exactly once: \(wiringFound)")
+        #expect(wiringFound == wiringLines, "the wiring constructs it exactly once: \(wiringFound)")
     }
 
     @Test("The coordinator cannot make an answer available: its sources never write `available`, and its entry comes from the report")

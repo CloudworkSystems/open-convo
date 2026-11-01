@@ -149,7 +149,14 @@ public final class DeskSession {
     /// This run's store folder, made on the first unlock.
     public private(set) var runFolder: URL?
     public private(set) var host: DeskWebViewHost?
-    public private(set) var store: ProofStore?
+    public private(set) var store: ProofStore? {
+        didSet { if store !== oldValue { onStoreChange?(store) } }
+    }
+    /// Called on the main actor after `store` changes: the store a stack
+    /// opened (before its page loads), then nil once it has closed. The
+    /// Claude Code adapter's PR 4b points section 21.4's approval reader
+    /// at it (`CurrentStoreApproval`).
+    public var onStoreChange: (@MainActor (ProofStore?) -> Void)?
     private var hostProtocol: DeskHostProtocol?
     /// The stack's dictation registry: its set-aside words live here, in
     /// memory only, through a lock; they go when the stack closes.

@@ -156,8 +156,12 @@ export async function initializeNativeProof(
     }
     repository = new NativeProofRepository(client, capabilities.workspaceHandle, requestId, () => lifecycle.revoke(),
       { participants: supportsParticipants });
+    // The Claude Code adapter's PR 4b: an off-Mac Claude entry joins the
+    // picker (the October 16 decision's "works": every fake-CLI safety proof
+    // passed). Only a host with a participant lane sends one, and only True
+    // Convo Test has a lane; the real app's Desk has no participants at all.
     const runtime = createNativeProofRuntime(repository, lifecycle, { createId: requestId, nativeParticipants: participants,
-      dictation });
+      dictation, offerClaude: true });
     if (!active || !runtime.isActive()) { runtime.revoke(); return unavailable(); }
     // Availability must not delay opening saved work. Later checks are tied to
     // focus/visibility, Send, picker actions and explicit Start, never an idle page timer.

@@ -8950,6 +8950,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var deskSessionStorage: DeskSession?
     private var deskWindowController: DeskWindowController?
     private var deskLockSignals: DeskLockSignals?
+    // The Claude Code adapter's PR 4b: True Convo Test's Claude entry, made
+    // at launch (nil in the real app).
+    private var claudeConversation: ClaudeConversation?
     // The calendar reader (docs/plans/calendar-through-the-mac.md). Nothing
     // asks for calendar access until the Desk's calendar views use it.
     private lazy var calendarReader = CalendarReader(store: EventKitCalendarStore())
@@ -9032,6 +9035,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         RunLog.write("permission.accessibility.status", "trusted=\(TextInjector.canAutoPaste)")
+        // The Claude Code adapter's PR 4b: made at launch, so section 17's
+        // end observers (screen lock, sleep, logout) run whether or not the
+        // Desk is open. True Convo Test only; nil in the real app.
+        onMainThread(()) {
+            guard deskBundle != nil, let paths = DeskPaths.standard(identity: AppIdentity.current) else { return }
+            claudeConversation = ClaudeConversation.make(for: AppIdentity.current, paths: paths,
+                                                         executable: Bundle.main.executableURL, log: { RunLog.write($0, $1) })
+        }
         rememberCursorTarget(NSWorkspace.shared.frontmostApplication)
         workspaceActivationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
@@ -9234,6 +9245,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         controller.shutdown()
         TextInjector.externalLivePreviewGuardHandler = nil
+        // Section 17: a paid-usage confirmation under way is abandoned.
+        onMainThread(()) { claudeConversation?.appWillQuit() }
     }
 
     /// No Desk opened in this run: `.terminateNow`, exactly as before. With a
@@ -11347,11 +11360,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Step 2, PR 4b: the Desk's one recovery key also covers the
         // dictation archive's key.
         // Step 3, PR 4b: True Convo Test gets the local-model lane (Ollama on
-        // this Mac only); the real app gets none (the factory is nil).
+        // this Mac only); the real app gets none (the factory is nil). The
+        // Claude Code adapter's PR 4b adds the Claude entry to that lane.
         let session = DeskSession(paths: paths, bundle: deskBundle, info: DeskSession.hostInfo(), storage: .keychain(identity: .current),
                                   recoveryCompanion: Archive.recovery,
                                   log: { RunLog.write($0, $1) },
-                                  makeParticipantLane: LocalConversationLane.factory(for: AppIdentity.current))
+                                  makeParticipantLane: LocalConversationLane.factory(for: AppIdentity.current, claude: claudeConversation))
+        claudeConversation?.follow(session)
         deskSessionStorage = session
         return session
     }
@@ -11377,7 +11392,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let existing = deskWindowController {
             windowController = existing
         } else {
-            windowController = DeskWindowController(session: session, verifier: MacOwnerVerifier(), log: { RunLog.write($0, $1) })
+            // The Claude Code adapter's PR 4b: the paid-usage and Anthropic
+            // approval screens, in True Convo Test only (nil in the real app).
+            windowController = DeskWindowController(session: session, verifier: MacOwnerVerifier(), log: { RunLog.write($0, $1) },
+                                                    paidUsage: claudeConversation?.paidUsage,
+                                                    hostApproval: claudeConversation?.hostApproval(for: session))
             // Clicking into the Desk during an outside dictation is input
             // outside the target, like a click in another app.
             windowController.onBecameKey = { [weak self] in

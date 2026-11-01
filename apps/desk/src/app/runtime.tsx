@@ -232,9 +232,11 @@ function createRuntime(mode: DeskRuntime['mode'], workspace: WorkspaceRepository
       // even while a later read is failing. A host without one (contract
       // revision 3) keeps it as before.
       // An off-Mac Claude entry (contract revision 5) is listed only when
-      // the integration passes `offerClaude` (the adapter's PR 4b), whatever
-      // shape the host's reply has.
-      if (offMac) return Object.freeze(offerClaude ? [claude, ...local] : local);
+      // the integration passes `offerClaude` (the native bootstrap does, from
+      // the adapter's PR 4b) and the host has section 17's confirmation built
+      // (the entry carries `confirmation`): a host that could never run it
+      // doesn't get it offered (Codex P1 on #228).
+      if (offMac) return Object.freeze(offerClaude && confirmation ? [claude, ...local] : local);
       return Object.freeze(snapshot.offersLocal ? local : [claude, ...local]);
     },
     get participantAvailabilityMessage() {

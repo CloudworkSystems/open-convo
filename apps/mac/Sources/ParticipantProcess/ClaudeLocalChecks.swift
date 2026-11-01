@@ -79,7 +79,7 @@ public struct ClaudeCheckRoots: Sendable, Equatable {
     }
 
     /// The exact pinned version file (answer 9): never the launcher link.
-    var binaryPath: String {
+    public var binaryPath: String {
         ([home] + Self.pinnedBinaryFolders + [ParticipantCommandLine.pinnedCLIVersion]).joined(separator: "/")
     }
 

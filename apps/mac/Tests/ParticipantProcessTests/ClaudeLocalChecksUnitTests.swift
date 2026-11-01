@@ -351,7 +351,7 @@ struct ClaudeLocalChecksUnitTests {
 
     // MARK: Inactive gates
 
-    @Test("Inactive: only the test-only probe constructs ClaudeLocalChecks or names the tests' auth status gate, nothing in Sources calls forCurrentUser, the checks run nothing but the pin and read no Keychain, and no recheck has a default")
+    @Test("Only the test-only probe and True Convo Test's Claude entry construct ClaudeLocalChecks, only the probe names the tests' auth status gate, only that entry calls forCurrentUser, the checks run nothing but the pin and read no Keychain, and no recheck has a default")
     func inactiveGates() throws {
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("Sources")
@@ -368,9 +368,13 @@ struct ClaudeLocalChecksUnitTests {
         let constructions = lines.filter { $0.line.contains("ClaudeLocalChecks(") || $0.line.contains("ClaudeLocalChecks.init") }
         // The test-only probe makes two: the tests' gate, and the public
         // initializer's (which runs auth status with its network blocked,
-        // the owner's D1 decision).
-        #expect(constructions.map(\.file) == Array(repeating: "ParticipantTestFakes/AvailabilityProbe/main.swift", count: 2),
-                "\(constructions)")
+        // the owner's D1 decision). The Claude Code adapter's PR 4b: True
+        // Convo Test's Claude entry makes one, through that same public
+        // initializer.
+        #expect(constructions.map(\.file).sorted() == ["ParticipantAppWiring/ClaudeConversation.swift"]
+                    + Array(repeating: "ParticipantTestFakes/AvailabilityProbe/main.swift", count: 2), "\(constructions)")
+        #expect(constructions.filter { $0.file == "ParticipantAppWiring/ClaudeConversation.swift" }.map(\.line)
+                    == ["let owner = PaidUsageConfirmationOwner(checks: ClaudeLocalChecks(roots: roots), approvals: approvals)"])
         // Only the test-only probe names the tests' step 4 gate (Codex
         // F34-D1); the public initializer blocks the network, through the
         // system's tool only.
@@ -380,8 +384,9 @@ struct ClaudeLocalChecksUnitTests {
         let tools = lines.filter { $0.line.contains("ClaudeNetworkBlock(toolPath:") }
         #expect(tools.map(\.line) == ["package static let system = ClaudeNetworkBlock(toolPath: \"/usr/bin/sandbox-exec\")"], "\(tools)")
         let production = lines.filter { $0.line.contains("forCurrentUser(") }
-        #expect(production.map(\.line) == ["public static func forCurrentUser(probeParent: URL) -> ClaudeCheckRoots? {"],
-                "declared, never called: \(production)")
+        #expect(production.map(\.line).sorted() == ["guard let roots = ClaudeCheckRoots.forCurrentUser(probeParent: parent.url) else {",
+                                                     "public static func forCurrentUser(probeParent: URL) -> ClaudeCheckRoots? {"],
+                "declared, and called once, by True Convo Test's Claude entry: \(production)")
 
         let checkFiles = files.filter { $0.hasPrefix("ParticipantProcess/Claude") }
         #expect(Set(checkFiles) == ["ParticipantProcess/ClaudeLocalChecks.swift", "ParticipantProcess/ClaudeCheckRun.swift",
