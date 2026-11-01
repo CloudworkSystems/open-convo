@@ -1,0 +1,14 @@
+{
+  "name": "@open-convo/capture-inbox",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sorts a drop of shared links and video clips into inbox sources, duplicates and refusals. No network and no AI.",
+  "exports": "./src/index.mjs",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

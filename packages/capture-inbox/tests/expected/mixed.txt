@@ -1,0 +1,22 @@
+items: 8
+sources: 5
+links: 3
+clips: 2
+duplicates: 1
+refused: 2
+dropped words: 3
+
+Sources
+link  webloc-reel  web example.com/reel  https://example.com/reel  2026-11-01T15:00:00Z
+link  url-video  youtube www.youtube.com/watch  https://www.youtube.com/watch?v=aaaaaaaaaaa&t=12s  2026-11-01T16:00:00Z
+link  plain-note  web example.com/notes/1  https://example.com/notes/1  2026-11-01T17:00:00Z
+clip  clip-a  holiday  clip:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  2026-11-01T19:00:00Z
+clip  clip-b  interview  clip:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  2026-11-01T20:00:00Z
+
+Duplicates
+reel-again  repeats webloc-reel  https://example.com/reel
+
+Refused
+milk  Only links and video clips go in the capture folder.
+photo  Only links and video clips go in the capture folder.
+
