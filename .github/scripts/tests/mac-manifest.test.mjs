@@ -243,10 +243,14 @@ test('every target builds from its own folder, and the moved ones are pinned', (
 
 test('every program links exactly the participant-path modules the owner approved', () => {
   // Step 3 PR 4b: the app reaches the local route in True Convo Test only,
-  // through ParticipantAppWiring, and ParticipantDeskControls stays unlinked.
+  // through ParticipantAppWiring. The Claude Code adapter's PR 4b (#228)
+  // composes section 17's window controls there too, so
+  // ParticipantDeskControls is linked through ParticipantAppWiring only (the
+  // Mac package test pins that the app target names none of these directly).
   // The supervisor ships inside the app too, so every product is walked.
   const approved = {
-    VoiceCursorMac: ['LocalModelRoute', 'ParticipantAppWiring', 'ParticipantCoordinator', 'ParticipantProcess', 'ParticipantSupervisorCore'],
+    VoiceCursorMac: ['LocalModelRoute', 'ParticipantAppWiring', 'ParticipantCoordinator', 'ParticipantDeskControls', 'ParticipantProcess',
+      'ParticipantSupervisorCore'],
     VoiceCursorPolicyCheck: [],
     ParticipantSupervisor: ['ParticipantSupervisor', 'ParticipantSupervisorCore'],
     DeskBundleManifest: [],
