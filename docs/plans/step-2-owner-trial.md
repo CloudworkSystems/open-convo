@@ -65,6 +65,14 @@ Owner's decision (October 31, D1): record this run as "Desk passed, Archive
 History blocked". Step 2 stays open until F1 to F3 are fixed; then the owner
 repeats only the Archive History look on a fresh build.
 
+**Roles for the remaining work** (added in this revision, per the plans
+rule): Claude builds the F1 to F3 fixes in the Mac app, on a branch with its
+own pull request. Codex reviews every push, and GrokBot gives the
+independent review (a fresh Claude review if GrokBot is quiet for 60
+minutes). The finish line is the owner's Archive History look on a fresh
+True Convo Test build: today's dictations are listed and readable, opened
+from the menu bar icon without a stuck Keychain prompt.
+
 ### Findings
 
 - **F1. The recovery key check shows no boxes.** "Check Your Recovery Key"
