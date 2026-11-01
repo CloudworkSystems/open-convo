@@ -70,10 +70,13 @@ text. It arrives with Markdown rendering, if the Desk ever renders it.
 5. **Every action works from the keyboard.** The row is reachable by Tab,
    each button has a plain label, and copy, rating and reaction changes are
    announced.
-6. **Read-only and unsaved states.** While the Desk is read-only or a reply
-   is still streaming, Copy works on what is shown; rating, reacting, Reply
-   and Side chat wait until the reply has ended. A reply that is cut off or
-   failed can still be copied and rated.
+6. **Read-only and unsaved states.** Copy always works on what is shown.
+   Rating, reacting, Reply and Side chat change what is saved, so each needs
+   two things: the reply has ended, and the Desk can save (not read-only
+   after a save conflict or an unknown or unavailable save). While the Desk
+   is read-only they stay unavailable, with the reason shown, until saving
+   recovers; a mark is never kept only in memory. A reply that is cut off
+   or failed can still be copied and rated.
 7. **Invented data only** until step 2's owner trial passes, as for the
    rest of the Desk.
 
