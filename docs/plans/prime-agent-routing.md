@@ -86,7 +86,9 @@ One JSON object. Unknown fields are refused, naming the field.
   the host chose it.
 - `offerAccepted`: `true` only when the host recorded the person clicking
   or typing yes to an earlier offer of a session. The reader never sets
-  it.
+  it. When it is `true`, the record also carries `offeredRequest`: the
+  person's own words from the message that led to the offer, kept by the
+  host (up to 16 KB). An accepted offer without it is refused.
 - `approvals`: a list of `{ approvalId, actionId, payloadDigest, by, how,
   at }`, every approval anyone has claimed for this conversation.
   `payloadDigest` is what the host computed, with the engine's exported
@@ -142,7 +144,8 @@ One JSON object. Unknown fields are refused, naming the field.
    it gets **answer** at most, and its text is quoted as data.
 5. **Brief skeleton** for a hand-off, with the six parts from prime-agent.md
    "The Hand-Off Brief": `personsWords` (the message text, quoted
-   unchanged), `goal` and `finishLine` (empty strings for the model to
+   unchanged; after an accepted offer, the `offeredRequest` text followed by
+   the acceptance, so the brief carries the work and not only the "yes"), `goal` and `finishLine` (empty strings for the model to
    fill), `known` and `guessed` (empty lists, kept apart), `ruledOut`
    (empty list), `limits` (the unapproved outside actions, plus "nothing
    outside the space" when the record's `space` is set), and `memoryPackage`: only the
@@ -205,7 +208,9 @@ invented messages only. At least:
    `droppedGrants`; a grant missing a contract
    field is refused.
 5b. Routes: a `task` with `steps` at or below `quickSteps` gets
-   **answer**, one above it gets **hand-off**.
+   **answer**, one above it gets **hand-off**; an accepted offer gets a
+   hand-off whose `personsWords` holds the `offeredRequest`, and an
+   accepted offer without one is refused.
 5a. Provenance and one use: an `input` carrying `message`, `space`,
    `offerAccepted`, `recipient`,
    `approvals`, `usedApprovals` or `memory` is refused; "this space" in
