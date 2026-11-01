@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "os": { "name": "macOS", "version": "15.0" },
+  "chip": "apple-silicon",
+  "memoryGB": 16,
+  "freeDiskGB": 100,
+  "ollama": { "installed": false, "running": false, "models": [] },
+  "cloud": { "approved": [] }
+}
