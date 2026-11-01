@@ -77,7 +77,14 @@ Keychain or real personal data, or writes to disk):
   the only part that reads the Keychain, calls RescueTime and writes the page.
   It stays small, so nearly all of the logic is tested in the library. Its own
   tests (`scripts/time-mirror.test.mjs`) cover the key and error handling
-  with an invented key and a fake fetch.
+  with an invented key and a fake fetch. Today the `tests` check runs only
+  the packages a pull request changes, so it would skip this file. The
+  command's pull request therefore also changes the `tests` workflow so the
+  check runs `node --test scripts/time-mirror.test.mjs` whenever
+  `scripts/time-mirror*` or `packages/time-mirror/` changes, and shows in
+  its description a run where those tests ran. That workflow is a protected
+  path, so the owner approves it on GitHub along with the risk hold the
+  pull request already needs. No key goes into the library for this.
 
 Steps 1, 2, 5 and 6 below are the command's. Steps 3 and 4, and building the
 page in step 5, are the library's.
@@ -285,7 +292,9 @@ pick)"). Only who builds changed:
   outside builder never handles the owner's key or calls RescueTime.
 - A Claude building session builds `scripts/time-mirror.mjs` and its tests
   after the library merges, under this plan's steps 1, 2, 5 and 6 and the
-  command's Proof items, and adds the README's Gate 0 steps.
+  command's Proof items, and adds the README's Gate 0 steps. Its pull
+  request also makes the `tests` check run the command's tests (see "What
+  It Does"), so the key tests can't be skipped by a green check.
 
 Every requirement, limit, risk check and the finish line above stay as
 approved on October 29.
