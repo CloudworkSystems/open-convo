@@ -6,8 +6,10 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
-- **Oct 31:** On the owner's Mac, agents get keys from 1Password, which he
-  already pays for. The keys sit in his existing vault named "True Convo
+- **Oct 31:** On the owner's Mac, the agents that build True Convo (Claude,
+  Codex, Gemini and the like) get keys from 1Password, which he already
+  pays for. True Convo's own keys, such as its model adapters' keys, stay in
+  Keychain as its design notes say. The keys sit in his existing vault named "True Convo
   AI". Agents reach it only through a 1Password service account that can
   read that one vault and nothing else, so 1Password itself blocks them
   from his other vaults, his personal logins and his 2FA codes. Inside that

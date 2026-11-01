@@ -199,9 +199,7 @@ file. That breaks the rule that secrets live only in Keychain. So:
 
 Rules that apply to every route: no paid overflow; subscription access is not
 permission for paid API use; every paid route has the owner's approval and a cap;
-keys live in Keychain or the owner's "True Convo AI" 1Password vault
-read through its service account (docs/decisions.md, October 31), never in
-files or logs.
+keys live in Keychain, never in files or logs.
 
 ## Adapter Order
 
