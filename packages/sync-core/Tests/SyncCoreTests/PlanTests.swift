@@ -733,6 +733,37 @@ final class SyncCorePlanTests: XCTestCase {
         XCTAssertTrue(live(b, "note").payload.isEmpty)
     }
 
+    func testLateSaveRestoresTheNewerRecord() throws {
+        let cloud = FakeCloud()
+        let a = Peer("phone-a", cloud: cloud)
+        let b = Peer("phone-b", cloud: cloud)
+        a.boot()
+        b.boot()
+        _ = try a.edit("note", payload: text("base"))
+        try syncAll([a, b])
+        let remote = try a.edit("note", payload: text("from-a"))
+        try a.sync()
+        var deferred: AppSaveRequest?
+        b.holdSaves { deferred = $0 }
+        try b.sync()
+        let newer = try b.edit("note", payload: text("from-b"))
+        let request = try XCTUnwrap(deferred)
+        b.resumeSaves()
+        b.store.save(request.record)
+        XCTAssertThrowsError(try b.device.confirmLocalSave(request.record)) { error in
+            XCTAssertEqual(error as? SyncError, .staleRevision)
+        }
+        XCTAssertEqual(live(b, "note").payload, newer.payload)
+        XCTAssertEqual(live(b, "note").stamp, newer.stamp)
+        let checkpoint = b.device.saveCheckpoint()
+        try b.adopt(checkpoint)
+        try b.device.reconcile(b.store.all())
+        try syncAll([a, b])
+        XCTAssertEqual(live(a, "note").payload, newer.payload)
+        XCTAssertEqual(live(b, "note").payload, newer.payload)
+        XCTAssertNotEqual(live(a, "note").payload, remote.payload)
+    }
+
     func testNewerLocalEditUnblocksADeferredDownload() throws {
         let cloud = FakeCloud()
         let a = Peer("phone-a", cloud: cloud)

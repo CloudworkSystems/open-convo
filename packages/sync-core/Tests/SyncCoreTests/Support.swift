@@ -102,6 +102,9 @@ final class Peer {
         store.save(request.record)
         do {
             try device.confirmLocalSave(request.record)
+        } catch SyncError.staleRevision {
+            // The core sends the record that should stay. That request is
+            // handled before this error returns.
         } catch {
             failure = error
         }

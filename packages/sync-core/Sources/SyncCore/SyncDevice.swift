@@ -191,7 +191,12 @@ public final class SyncDevice {
     public func confirmLocalSave(_ record: SyncRecord) throws {
         guard hasCheckpoint else { throw SyncError.checkpointRequired }
         let record = withoutPurgedPayload(record)
-        if confirmationWouldRestoreOlderBytes(record) { throw SyncError.staleRevision }
+        if confirmationWouldRestoreOlderBytes(record) {
+            // The app may already have written this older request. Ask it to
+            // put the newer record back before the rejection returns.
+            redeliverRecordThatShouldRemain(insteadOf: record)
+            throw SyncError.staleRevision
+        }
         local[record.id] = record
         if let pending = pendingReplacements[record.id], record.stamp == pending.winnerStamp {
             pendingReplacements.removeValue(forKey: record.id)
@@ -933,6 +938,40 @@ public final class SyncDevice {
             pendingCleanups.append(copy)
         }
         return pendingCleanups.filter { $0.id == id }
+    }
+
+    private var redeliveringCurrentRecord = false
+
+    /// A late save confirmation was rejected. The record that should stay is
+    /// sent again so the app can undo a write it already made.
+    private func redeliverRecordThatShouldRemain(insteadOf rejected: SyncRecord) {
+        guard !redeliveringCurrentRecord else { return }
+        guard let current = recordThatShouldRemain(insteadOf: rejected) else { return }
+        redeliveringCurrentRecord = true
+        defer { redeliveringCurrentRecord = false }
+        let checkpoint = saveCheckpoint()
+        deliver(AppSaveRequest(
+            record: withoutPurgedPayload(current),
+            replaceLocalRecord: true,
+            conflictCopies: conflicts(for: current.id),
+            checkpointBeforeRequest: checkpoint
+        ))
+    }
+
+    private func recordThatShouldRemain(insteadOf rejected: SyncRecord) -> SyncRecord? {
+        if let current = local[rejected.id] {
+            if current.purged && !rejected.purged { return current }
+            if current.stamp > rejected.stamp { return current }
+        }
+        if let page = openPage {
+            let newer = page.revisions.filter {
+                $0.record.id == rejected.id && !$0.confirmed && $0.record.stamp > rejected.stamp
+            }
+            if let newest = newer.max(by: { $0.record.stamp < $1.record.stamp }) {
+                return newest.record
+            }
+        }
+        return nil
     }
 
     /// Last-seen follows the newest fetched revision whose earlier revisions
