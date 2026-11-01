@@ -130,8 +130,11 @@ One JSON object. Unknown fields are refused, naming the field.
    brief's `limits`.
 3. **Approved actions.** An action with a counting approval goes into
    `approvedActions`, once, with the `approvalId` that covers it. The
-   caller adds that id to `usedApprovals` when it performs the action, so
-   one yes covers one run; the engine returns the id so the caller can't
+   caller claims that id, writing it to `usedApprovals` and saving that
+   before the outside action starts (never after), and claims it at most
+   once even if two routings ran at the same time, so one yes covers one
+   run even across a crash. This is a rule for the caller's integration
+   (step 3) and goes in the README's first section; the engine returns the id so the caller can't
    lose track of which yes it spent. It is never copied into memory or into
    a standing permission.
 4. **The main route** (one of three):
