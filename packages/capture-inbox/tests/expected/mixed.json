@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "webloc-reel",
+      "kind": "link",
+      "sourceKey": "https://example.com/reel",
+      "site": "web",
+      "url": "https://example.com/reel",
+      "title": "web example.com/reel",
+      "addedAt": "2026-11-01T15:00:00Z"
+    },
+    {
+      "id": "url-video",
+      "kind": "link",
+      "sourceKey": "https://www.youtube.com/watch?v=aaaaaaaaaaa&t=12s",
+      "site": "youtube",
+      "url": "https://www.youtube.com/watch?v=aaaaaaaaaaa&t=12s",
+      "title": "youtube www.youtube.com/watch",
+      "addedAt": "2026-11-01T16:00:00Z"
+    },
+    {
+      "id": "plain-note",
+      "kind": "link",
+      "sourceKey": "https://example.com/notes/1",
+      "site": "web",
+      "url": "https://example.com/notes/1",
+      "title": "web example.com/notes/1",
+      "addedAt": "2026-11-01T17:00:00Z"
+    },
+    {
+      "id": "clip-a",
+      "kind": "clip",
+      "sourceKey": "clip:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "title": "holiday",
+      "addedAt": "2026-11-01T19:00:00Z",
+      "file": {
+        "sizeBytes": 1200,
+        "type": "public.mpeg-4",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "id": "clip-b",
+      "kind": "clip",
+      "sourceKey": "clip:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "title": "interview",
+      "addedAt": "2026-11-01T20:00:00Z",
+      "file": {
+        "sizeBytes": 2400,
+        "type": "com.apple.quicktime-movie",
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    }
+  ],
+  "duplicates": [
+    {
+      "id": "reel-again",
+      "sourceKey": "https://example.com/reel",
+      "repeats": "webloc-reel"
+    }
+  ],
+  "refused": [
+    {
+      "id": "milk",
+      "reason": "Only links and video clips go in the capture folder."
+    },
+    {
+      "id": "photo",
+      "reason": "Only links and video clips go in the capture folder."
+    }
+  ],
+  "counts": {
+    "items": 8,
+    "sources": 5,
+    "links": 3,
+    "clips": 2,
+    "duplicates": 1,
+    "refused": 2,
+    "droppedWords": 3
+  }
+}

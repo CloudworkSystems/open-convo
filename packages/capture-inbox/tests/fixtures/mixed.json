@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "id": "webloc-reel",
+      "name": "reel.webloc",
+      "addedAt": "2026-11-01T15:00:00Z",
+      "kind": "text",
+      "text": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\">\n<dict>\n<key>URL</key>\n<string>https://Example.COM/reel?utm_source=ig&amp;fbclid=AAA#</string>\n</dict>\n</plist>\n"
+    },
+    {
+      "id": "url-video",
+      "name": "video.url",
+      "addedAt": "2026-11-01T16:00:00Z",
+      "kind": "text",
+      "text": "[InternetShortcut]\nURL=https://m.youtube.com/watch?v=aaaaaaaaaaa&si=track&t=12s\n"
+    },
+    {
+      "id": "plain-note",
+      "name": "note.txt",
+      "addedAt": "2026-11-01T17:00:00Z",
+      "kind": "text",
+      "text": "Loved this https://example.com/notes/1 today"
+    },
+    {
+      "id": "milk",
+      "name": "milk.txt",
+      "addedAt": "2026-11-01T18:00:00Z",
+      "kind": "text",
+      "text": "Remember to buy milk"
+    },
+    {
+      "id": "clip-a",
+      "name": "holiday.mp4",
+      "addedAt": "2026-11-01T19:00:00Z",
+      "kind": "file",
+      "file": {
+        "sizeBytes": 1200,
+        "type": "public.mpeg-4",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "id": "clip-b",
+      "name": "interview.mov",
+      "addedAt": "2026-11-01T20:00:00Z",
+      "kind": "file",
+      "file": {
+        "sizeBytes": 2400,
+        "type": "com.apple.quicktime-movie",
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    {
+      "id": "photo",
+      "name": "sun.jpg",
+      "addedAt": "2026-11-01T21:00:00Z",
+      "kind": "file",
+      "file": {
+        "sizeBytes": 300,
+        "type": "public.jpeg"
+      }
+    },
+    {
+      "id": "reel-again",
+      "name": "again.txt",
+      "addedAt": "2026-11-01T22:00:00Z",
+      "kind": "text",
+      "text": "https://example.com/reel?utm_campaign=spring&gclid=BBB"
+    }
+  ],
+  "known": [
+    "clip:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "https://example.com/already"
+  ]
+}
