@@ -97,8 +97,9 @@ the normal review loop.
   labeling each one with its real status.
 - **Abuse guard for the daily quota.** One caller must not be able to use up
   the 100,000 free requests a day. A Cloudflare rate limiting rule on
-  `api.trueconvo.com` (the free plan includes one) blocks any single IP
-  address that goes over 60 requests a minute. Blocked requests stop at
+  `api.trueconvo.com` (the free plan includes one, with a 10-second counting
+  period and a 10-second block) blocks any single IP address that sends more
+  than 10 requests in 10 seconds. Blocked requests stop at
   Cloudflare's edge before they reach the Worker, so they don't count toward
   the quota. The rule lives in the Cloudflare settings, not in the code, so
   the service stays portable; on another host, that host's equivalent limit
@@ -108,12 +109,42 @@ the normal review loop.
   service stops answering until the daily reset and nothing is billed.
   Moving to a paid plan or another host is the owner's call, never automatic.
 
+## Server Security Controls (Requirements)
+
+[security.md](security.md) section 3 makes these required for any server we
+run. How each applies here:
+
+- **Login by a proven provider; sessions that expire and can be revoked:**
+  not applicable, because the service has no accounts, sign-in or sessions.
+  Adding any of them needs a new plan.
+- **Validation of every input:** the method, path, query and MCP body rules
+  in Safety Rules above, each covered by a test.
+- **Rate limits:** the abuse guard above.
+- **Security headers** on every response, checked by a test:
+  `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`,
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, and
+  `Strict-Transport-Security: max-age=31536000`.
+- **Errors without stack traces:** every error is a short JSON body with a
+  status and a fixed message; a test forces an internal error and checks
+  that no stack trace or file path comes back.
+- **Logs without personal data:** the service writes no logs of its own.
+- **Backups with a tested restore:** the only data is `content.json` in Git;
+  restoring means redeploying from `main`, which the first deploy proves.
+- **OWASP ZAP scan against staging before launch:** a ZAP baseline scan runs
+  in CI against the Node entry point, and once more against the deployed
+  Worker on its `workers.dev` address before `api.trueconvo.com` is
+  attached. That address is the staging step; the scan must pass with no
+  medium or high alerts.
+
 ## Before It Goes Live
 
 1. The owner's OK to build (a separate yes from this plan).
 2. The privacy policy on trueconvo.com gains a short section on the API,
    before it takes traffic, as the policy already promises.
-3. The owner creates the Cloudflare API token, adds it as a secret of the
+3. The owner creates the empty Worker (`front-porch`) in the Cloudflare
+   dashboard first, because a token limited to one Worker can only point at
+   a Worker that already exists. Then he creates the API token with Edit
+   access to that one Worker only, adds it as a secret of the
    `front-porch-production` environment (with himself as required
    reviewer), and approves the deploy workflow and the CODEOWNERS line.
 4. The rate limiting rule is in place on `api.trueconvo.com` (the owner adds
@@ -128,8 +159,11 @@ the normal review loop.
 - `openapi.json` validates as OpenAPI 3.1.
 - After going live, `https://api.trueconvo.com/v1/about` answers, and an MCP
   client lists and calls the tools.
-- After going live, a burst of more than 60 requests in a minute from one
+- After going live, a burst of more than 10 requests in 10 seconds from one
   address gets blocked (HTTP 429) while other callers still get answers.
+- The server controls in [security.md](security.md) section 3 ("Any server
+  we run") are met, as set out in Server Security Controls above, including
+  a passing OWASP ZAP baseline scan before the custom domain is attached.
 - STATUS.md lists the service and its state.
 
 ## After This Slice
