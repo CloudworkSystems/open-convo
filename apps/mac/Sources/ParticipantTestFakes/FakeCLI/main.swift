@@ -11,12 +11,16 @@ import Foundation
 // environment stay exactly what production passes. It records what it saw
 // in `records/` there: `cli.pid` first, then `cli.json` (pid, group, argv and
 // environment as exec'd, working directory, stdin, open descriptors), and `child.pid`
-// for a forked child.
+// for a forked child. Every run (never a check) also appends its pid to
+// `spawns.log`, so a test can count the runs a folder's fake was spawned for.
 //
 // Scenario: {"sigterm": "exit" | "ignore", "child": null | "ignore-term" |
 // "exit-on-term", "leaveGroup": bool, "readStdin": bool, "steps": [{"out":
 // line} | {"outRaw": text} | {"err": text} | {"sleepMs": n} | {"exit": code} |
-// {"hang": true}]}. `out` adds a newline; `outRaw` writes the text as is.
+// {"hang": true} | {"waitFile": name}]}. `out` adds a newline; `outRaw`
+// writes the text as is; `waitFile` waits, polling every 5 ms, until a file
+// of that name exists beside the scenario (a test's handshake: the next
+// step runs only when the test says so, never on timing).
 // Steps that end without `exit` or `hang` exit 0. With `leaveGroup` the fake,
 // after forking any child, moves itself into its parent's group (the
 // supervisor's) with `setpgid` and records the result in `moved.json`.
@@ -390,6 +394,7 @@ if scenario["readStdin"] as? Bool ?? true {
 if let record = invocationRecord(descriptors: descriptorsAtStart, stdin: stdinText) {
     writeAtomically(record, to: records + "/cli.json")
 }
+appendLine("\(getpid())", to: records + "/spawns.log")
 
 var exitWhenStepsEnd: Int32 = 0
 if let name = scenario["stream"] as? String {
@@ -420,6 +425,8 @@ for step in scenario["steps"] as? [[String: Any]] ?? [] {
         exit(Int32(code))
     } else if step["hang"] as? Bool == true {
         hangForever()
+    } else if let name = step["waitFile"] as? String {
+        while !FileManager.default.fileExists(atPath: folder + "/" + name) { usleep(5_000) }
     }
 }
 exit(exitWhenStepsEnd)
