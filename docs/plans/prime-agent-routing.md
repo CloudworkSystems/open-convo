@@ -96,8 +96,9 @@ One JSON object. Unknown fields are refused, naming the field.
   text, why, recipient, freshAsOf, allowedUse }`: the files the host
   granted for one job, why, for which specialist, how fresh, and what the
   specialist may do with them (foundations.md, "Context packages";
-  prime-agent.md, "Its memory package"). A grant missing any of these
-  fields is refused.
+  prime-agent.md, "Its memory package"), plus an optional
+  `sharedByPerson` (see rule 5). A grant missing any of the other fields is
+  refused.
 
 ### Rules, In Order
 
@@ -126,8 +127,10 @@ One JSON object. Unknown fields are refused, naming the field.
    - `asks: thinking` or `unclear`, with `offerAccepted` not true:
      **talk-it-through**. Nothing is handed off. `offer` is `true` only
      when `steps` is above `quickSteps`, so at most one offer is made.
-   - `asks: question` with `steps` at or below `quickSteps`: **answer**.
-   - Otherwise (`task`, a larger question, or `offerAccepted`):
+   - `asks: question` or `task` with `steps` at or below `quickSteps`,
+     and `offerAccepted` not true: **answer** (a quick lookup or small
+     task is done directly, as prime-agent.md describes).
+   - Otherwise (a larger question or task, or `offerAccepted`):
      **hand-off**.
    A message whose record `from` is `agent` or `system` never starts a
    hand-off by itself;
@@ -138,18 +141,23 @@ One JSON object. Unknown fields are refused, naming the field.
    fill), `known` and `guessed` (empty lists, kept apart), `ruledOut`
    (empty list), `limits` (the unapproved outside actions, plus "nothing
    outside the space" when `space` is set), and `memoryPackage`: only the
-   grants whose `space` is the conversation's `space` **and** whose
-   `jobId` is the record's `jobId`, each with all of its contract fields.
-   Being in the same space is never enough on its own; the host grants
-   each file for this job.
+   grants whose `jobId` is the record's `jobId`, each with all of its
+   contract fields. A grant from the conversation's own space needs
+   nothing more. A grant from another space counts only when it carries
+   `sharedByPerson: true`, which the host sets when the person shared that
+   file for this job (prime-agent.md: nothing from another space "unless
+   the person shared it for this job"); without it the grant is left out
+   and listed under `droppedGrants` with the reason. Being in the same
+   space is never enough on its own; the host grants each file for this
+   job.
 6. **Memory is proposed, never written.** The result has
    `memoryCandidates: []`. The engine never fills it and has no write path.
    It exists so a caller can't mistake a missing field for permission.
 
 ### Output
 
-`{ routes, main, waitFor, approvedActions, ignoredApprovals, offer, brief,
-memoryCandidates, counts }`. `routes` is sorted (`wait-for-yes` first when
+`{ routes, main, waitFor, approvedActions, ignoredApprovals,
+droppedGrants, offer, brief, memoryCandidates, counts }`. `routes` is sorted (`wait-for-yes` first when
 present). `brief` is `null` unless the main route is hand-off. `counts`
 gives the number of outside actions, counting approvals and ignored
 approvals. Lists come out in a fixed order, so the same input gives
@@ -184,8 +192,12 @@ invented messages only. At least:
 4. A task with one unapproved `send`: routes are `wait-for-yes` and
    `hand-off`, and the brief's `limits` names the send.
 5. Scoping: grants from three invented spaces and two jobs; the brief's
-   `memoryPackage` holds only this space's grants for this job, each with
-   all its contract fields, and a grant missing one is refused.
+   `memoryPackage` holds this job's grants from this space, plus a
+   cross-space grant marked `sharedByPerson: true`; an unmarked
+   cross-space grant lands in `droppedGrants`; a grant missing a contract
+   field is refused.
+5b. Routes: a `task` with `steps` at or below `quickSteps` gets
+   **answer**, one above it gets **hand-off**.
 5a. Provenance and one use: an `input` carrying `message`, `approvals`,
    `usedApprovals` or `memory` is refused; a person's yes whose
    `approvalId` is in `usedApprovals` asks again; an approved action comes
