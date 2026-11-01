@@ -1,0 +1,14 @@
+{
+  "name": "front-porch",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Read-only public API and MCP server that answers questions about True Convo from public text.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "start": "node src/node-server.js"
+  }
+}

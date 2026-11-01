@@ -16,6 +16,10 @@
 /PLAN.md @CloudworkSystems
 /docs/decisions.md @CloudworkSystems
 
+# The public front porch API: a merge to main changes what the public service
+# says, so every change needs the owner (docs/plans/front-porch-api.md).
+/services/front-porch/ @CloudworkSystems
+
 # Keys, encryption, recovery and protected storage in the Mac app: the
 # primitives, the code that chooses and drives them, and their tests. Name
 # patterns also cover files added later with the same names.

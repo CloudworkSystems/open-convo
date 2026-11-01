@@ -22,6 +22,7 @@ jobs:
       mac: ${{ steps.diff.outputs.mac }}
       gate: ${{ steps.diff.outputs.gate }}
       sync_core: ${{ steps.diff.outputs.sync_core }}
+      front_porch: ${{ steps.diff.outputs.front_porch }}
       # JSON list of the other packages/* folders to test (see the packages job).
       packages: ${{ steps.diff.outputs.packages }}
     steps:
@@ -39,7 +40,7 @@ jobs:
         run: |
           if [ -z "$BASE" ]; then
             # Manual run: test everything.
-            for part in clarity desk mac gate sync_core; do echo "$part=true" >> "$GITHUB_OUTPUT"; done
+            for part in clarity desk mac gate sync_core front_porch; do echo "$part=true" >> "$GITHUB_OUTPUT"; done
             packages=$(node .github/scripts/package-changes.mjs --all)
             echo "packages=$packages" >> "$GITHUB_OUTPUT"
             exit 0
@@ -61,6 +62,7 @@ jobs:
           # and so does the Mac package manifest's guard.
           echo "gate=$([ "$all" = true ] && echo true || has '(\.md$|^\.claude/|^apps/mac/Package\.swift$)')" >> "$GITHUB_OUTPUT"
           echo "sync_core=$([ "$all" = true ] && echo true || has '^packages/sync-core/')" >> "$GITHUB_OUTPUT"
+          echo "front_porch=$([ "$all" = true ] && echo true || has '^services/front-porch/')" >> "$GITHUB_OUTPUT"
           # Every other package with a package.json, found by folder, so new
           # packages are covered without editing this file.
           packages=$(echo "$files" | node .github/scripts/package-changes.mjs)
@@ -186,6 +188,23 @@ jobs:
           swift --version
           cd packages/sync-core && swift test
 
+  # The public front porch API (docs/plans/front-porch-api.md). No
+  # dependencies, so nothing to install.
+  front-porch:
+    needs: changes
+    if: needs.changes.outputs.front_porch == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: npm test
+        working-directory: services/front-porch
+
   # One run per changed package in packages/ that has no job of its own above
   # (site-engine, household-lists, and new ones such as habit-grid).
   packages:
@@ -225,7 +244,7 @@ jobs:
   # The one check branch protection requires. Passes only if every part that
   # ran passed; parts with no changes are skipped.
   tests:
-    needs: [changes, clarity, desk, mac, fixtures, gate, sync-core, packages]
+    needs: [changes, clarity, desk, mac, fixtures, gate, sync-core, front-porch, packages]
     if: always()
     runs-on: ubuntu-latest
     steps:
