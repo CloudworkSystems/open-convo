@@ -246,7 +246,10 @@ the setup does not enforce them, so breaking one is a stop-and-report event.
   RescueTime data. Invented rows only. No API key appears anywhere, not even
   an invented one: the library never sees a key.
 - Change files only under `packages/time-mirror/`. Nothing else, not
-  `scripts/`, not `STATUS.md`, not `packages/habit-grid/`. Import the habit
+  `scripts/`, not `STATUS.md`, not `packages/habit-grid/`. As with every
+  outside build, the coordinator updates `STATUS.md` in its own small pull
+  request when the library merges, so the shared state stays current
+  without the builder touching it. Import the habit
   grid engine by relative path through its public API, as step 4 says; if
   the engine lacks something, stop and report instead of changing it.
 - JavaScript modules (`.mjs`), Node 22 or later, `"type": "module"`,
