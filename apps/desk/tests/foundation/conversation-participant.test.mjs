@@ -1819,3 +1819,27 @@ test('after a definite save failure, ratings and reactions wait for Retry', asyn
     await f.check();
   } finally { await f.close(); }
 });
+
+test('Reply quotes the message into the draft, and Send sends exactly the box text', async () => {
+  const f = await fixture();
+  try {
+    await f.send('Invented first question');
+    await expectSavedSequence(f, 1);
+    await f.emit('text', 'Invented reply\nwith two lines');
+    await expect(replyActions(f.page).getByRole('button', { name: 'Reply to reply', exact: true })).toBeDisabled();
+    await f.emit('completed');
+    await expect.poll(() => savedRun(f)?.phase).toBe('completed');
+    const field = f.page.getByRole('textbox', { name: 'Your message', exact: true });
+    await field.fill('Already written');
+    await replyActions(f.page).getByRole('button', { name: 'Reply to reply', exact: true }).click();
+    await expect(field).toHaveValue('> Invented reply\n> with two lines\n\nAlready written');
+    await expect(field).toBeFocused();
+    await expect.poll(() => f.stored.drafts[savedRun(f).sessionId]).toBe('> Invented reply\n> with two lines\n\nAlready written');
+    // The quote is ordinary text: the owner can change it before Send.
+    await field.fill('> with two lines\n\nWhy two?');
+    await f.page.getByRole('button', { name: 'Send message', exact: true }).click();
+    await expect.poll(() => f.calls.starts.length).toBe(2);
+    await expect.poll(() => f.stored.conversationRuns?.at(-1)?.inputChunks.join('')).toBe('> with two lines\n\nWhy two?');
+    await f.check();
+  } finally { await f.close(); }
+});

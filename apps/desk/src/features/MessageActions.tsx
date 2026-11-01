@@ -14,6 +14,8 @@ export interface MessageActionsValue {
   saveBlockedReason?: string;
   onRate: (messageId: string, rating: 'up' | 'down' | null) => void;
   onReact: (messageId: string, reaction: MessageReaction) => void;
+  /** Quotes this message at the top of its conversation's draft. Returns false when it couldn't. */
+  onReply?: (messageId: string, text: string) => boolean;
 }
 
 export const MessageActionsContext = createContext<MessageActionsValue | null>(null);
@@ -60,7 +62,7 @@ export function MessageActions({ messageId, role, text, ended, latest = false }:
   const rate = (rating: 'up' | 'down' | null) => { expecting.current = mark; context?.onRate(messageId, rating); };
   const react = (reaction: MessageReaction) => { expecting.current = mark; context?.onReact(messageId, reaction); };
   const reply = role === 'assistant';
-  const blocked = context?.saveBlockedReason ?? (ended ? undefined : 'Wait until this reply has ended to rate or react to it.');
+  const blocked = context?.saveBlockedReason ?? (ended ? undefined : 'Wait until this reply has ended to rate, react or reply to it.');
   const markDisabled = blocked !== undefined;
   const copyText = async () => {
     clearTimeout(reset.current);
@@ -96,6 +98,19 @@ export function MessageActions({ messageId, role, text, ended, latest = false }:
             <Icon name="thumb-down" size={15} />
           </button>
         </>}
+        {context?.onReply && <button type="button" className="message-action" disabled={markDisabled}
+          aria-label={`Reply to ${label}`} title={blocked ?? 'Reply with a quote'} data-reply
+          onClick={() => {
+            if (context.onReply?.(messageId, text)) {
+              const field = document.getElementById('message-draft');
+              if (field instanceof HTMLTextAreaElement) requestAnimationFrame(() => {
+                field.focus();
+                field.setSelectionRange(field.value.length, field.value.length);
+              });
+            }
+          }}>
+          <Icon name="reply" size={15} />
+        </button>}
         {context && <button type="button" ref={pickerButton} className="message-action" aria-expanded={picking} aria-controls={pickerId}
           disabled={markDisabled} aria-label="Add a reaction" title={blocked ?? 'Add a reaction'} onClick={() => setPicking(!picking)}>
           <Icon name="smile" size={15} />
