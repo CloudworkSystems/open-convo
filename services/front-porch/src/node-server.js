@@ -3,18 +3,22 @@
 import { createServer, STATUS_CODES } from 'node:http';
 import { Readable } from 'node:stream';
 import { pathToFileURL } from 'node:url';
-import { handle } from './handler.js';
+import { error, handle } from './handler.js';
+
+const badRequest = () => error(400, 'Bad request.');
 
 export function createFrontPorchServer() {
   const server = createServer(async (req, res) => {
     try {
       await serve(req, res);
     } catch {
-      // A malformed request must never take the process down.
-      if (!res.headersSent) {
-        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff' });
+      // A malformed request must never take the process down. It gets the
+      // handler's own fixed JSON error, with the full security headers.
+      if (res.headersSent) {
+        res.end();
+      } else {
+        await send(res, req.method, badRequest());
       }
-      res.end(res.headersSent ? undefined : JSON.stringify({ error: { status: 400, message: 'Bad request.' } }));
     }
   });
   // Node hands CONNECT to its own event with the raw socket, and closes the
@@ -26,10 +30,7 @@ export function createFrontPorchServer() {
     try {
       response = await handle(new Request(new URL(req.url, ORIGIN), { method: 'DELETE' }));
     } catch {
-      response = new Response(JSON.stringify({ error: { status: 400, message: 'Bad request.' } }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff' },
-      });
+      response = badRequest();
     }
     const body = Buffer.from(await response.arrayBuffer());
     const head = ['HTTP/1.1 ' + response.status + ' ' + (STATUS_CODES[response.status] || '')];

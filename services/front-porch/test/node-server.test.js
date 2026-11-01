@@ -53,6 +53,14 @@ test('a malformed Host header gets an answer and the server keeps running', asyn
     const reply = await raw(port, `GET /v1/about HTTP/1.1\r\nHost: ${host}\r\nConnection: close\r\n\r\n`);
     assert.match(reply, /^HTTP\/1\.1 (200|400) /, host);
   }
+  for (const target of ['http://[::', 'http://%zz/']) {
+    const reply = await raw(port, 'GET ' + target + ' HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n');
+    assert.match(reply, /^HTTP\/1\.1 400 /, target);
+    assert.match(reply, /\r\ncontent-security-policy: default-src 'none'; frame-ancestors 'none'\r\n/i, target);
+    assert.match(reply, /\r\nstrict-transport-security: /i, target);
+    assert.match(reply, /\r\nreferrer-policy: no-referrer\r\n/i, target);
+    assert.match(reply, /\{"error":\{"status":400,"message":"Bad request\."\}\}/, target);
+  }
   const about = await fetch('http://127.0.0.1:' + port + '/v1/about');
   assert.equal(about.status, 200);
 });
