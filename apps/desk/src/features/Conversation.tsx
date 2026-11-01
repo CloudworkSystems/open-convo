@@ -8,6 +8,7 @@ import type { ParticipantChoice } from '../domain/participant-choices';
 import type { ParticipantIdentity } from '../domain/conversation-run-types';
 import type { LocalCatalogView } from '../domain/local-participant';
 import { useDeskDictationView } from '../app/use-desk-dictation';
+import { MessageActions } from './MessageActions';
 
 const MIN_DRAFT_HEIGHT = 78;
 const MIN_MESSAGES_HEIGHT = 120;
@@ -100,6 +101,8 @@ export function Conversation({
   const [draftHeight, setDraftHeight] = useState(90);
   const [maxDraftHeight, setMaxDraftHeight] = useState(220);
   const participantMode = participantLabel !== undefined;
+  const latestReplyId = Children.toArray(runContent).length ? undefined
+    : messages.filter((message) => message.role === 'assistant').at(-1)?.id;
   const responseRunning = messages.some((message) => message.sessionId === session?.id && message.status === 'running');
   const canSend = !readOnly && Boolean(session) && Boolean(draft.trim()) && !responseRunning
     && !participantBusy && !participantSendUnavailable;
@@ -257,6 +260,8 @@ export function Conversation({
               {message.status !== 'complete' && (
                 <span className="message-status">{message.status}</span>
               )}
+              <MessageActions messageId={message.id} role={message.role} text={message.body}
+                ended={message.status !== 'running'} latest={message.id === latestReplyId} />
             </div>
           </article>
         ))}

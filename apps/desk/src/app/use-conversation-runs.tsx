@@ -513,7 +513,7 @@ export function useConversationRuns(options: RunWorkspace) {
         canStop={snapshot?.canStop ?? false}
         cleanupState={cleanupState}
         checkpointPending={checkpointPending} saving={snapshot?.saving ?? local?.saving ?? false}
-        error={message} onStop={() => void controller?.stop()} />
+        error={message} latest={run.runId === lastSelectedRunId} onStop={() => void controller?.stop()} />
       {controller && snapshot?.canStart && <button type="button" className="recovery-button" disabled={options.blocked() || cleanupPending() || otherUnconfirmed(run.runId) || !!catalogBlock(run.participant)}
         onClick={(event) => { if (!latest.current.blocked() && !cleanupPending() && !otherUnconfirmed(run.runId) && !catalogBlock(run.participant)) { focusStatus(event.currentTarget); void startPrepared(controller); } }}>Start prepared message</button>}
       {controller && snapshot?.canCheckStatus && <button type="button" className="recovery-button secondary"

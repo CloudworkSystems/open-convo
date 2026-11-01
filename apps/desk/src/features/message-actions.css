@@ -1,0 +1,127 @@
+/* Per-message actions (docs/plans/desk-message-actions.md). The row stays in
+   the tab order; it is only faded until the message is hovered or focused. */
+.message-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+.message-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 28px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.message-actions-latest .message-actions-row,
+.message:hover .message-actions-row,
+.run-message:hover .message-actions-row,
+.message-actions:focus-within .message-actions-row {
+  opacity: 1;
+}
+@media (hover: none) {
+  .message-actions-row { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .message-actions-row { transition: none; }
+}
+.message-action {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tca-text-muted);
+  cursor: pointer;
+}
+.message-action:hover:not(:disabled) {
+  background: var(--tca-surface-2);
+  color: var(--tca-text-primary);
+}
+.message-action:focus-visible,
+.message-reaction-choice:focus-visible,
+.message-mark-chip:focus-visible {
+  outline: 2px solid var(--tca-focus-ring);
+  outline-offset: 1px;
+}
+.message-action[aria-pressed='true'] {
+  background: var(--tca-surface-2);
+  border-color: var(--tca-border-strong);
+  color: var(--tca-text-primary);
+}
+.message-action:disabled,
+.message-mark-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.message-action-status {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--tca-text-muted);
+}
+.message-reaction-picker {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  width: fit-content;
+  border: 1px solid var(--tca-border-default);
+  border-radius: 8px;
+  background: var(--tca-surface-1);
+}
+.message-reaction-choice,
+.message-mark-chip {
+  min-width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.message-reaction-choice[aria-pressed='true'] {
+  background: var(--tca-surface-2);
+  border-color: var(--tca-border-strong);
+}
+.message-marks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.message-mark-chip {
+  border-color: var(--tca-border-default);
+  background: var(--tca-surface-1);
+}
+.message-mark-rating {
+  font-size: 12px;
+  color: var(--tca-text-muted);
+}
+.message-actions-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tca-text-muted);
+}
+/* On the owner's own message the row sits on the heading line, so it adds no
+   height and Send still reveals the whole new message. */
+.run-transcript .run-message,
+.message-content {
+  position: relative;
+}
+.message-actions-user {
+  margin-top: 0;
+}
+.message-actions-user .message-actions-row {
+  position: absolute;
+  top: -4px;
+  right: 0;
+  flex-direction: row-reverse;
+}
+.message-actions-user .message-action-status {
+  margin: 0 6px 0 0;
+}
