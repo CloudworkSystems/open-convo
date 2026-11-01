@@ -95,6 +95,18 @@ the normal review loop.
   no logs of its own.
 - The content file says nothing about features the app doesn't have,
   labeling each one with its real status.
+- **Abuse guard for the daily quota.** One caller must not be able to use up
+  the 100,000 free requests a day. A Cloudflare rate limiting rule on
+  `api.trueconvo.com` (the free plan includes one) blocks any single IP
+  address that goes over 60 requests a minute. Blocked requests stop at
+  Cloudflare's edge before they reach the Worker, so they don't count toward
+  the quota. The rule lives in the Cloudflare settings, not in the code, so
+  the service stays portable; on another host, that host's equivalent limit
+  takes its place. The REST answers also send `Cache-Control: public,
+  max-age=300` so well-behaved clients and proxies reuse them.
+- If the quota still runs out (for example, many callers at once), the
+  service stops answering until the daily reset and nothing is billed.
+  Moving to a paid plan or another host is the owner's call, never automatic.
 
 ## Before It Goes Live
 
@@ -104,7 +116,9 @@ the normal review loop.
 3. The owner creates the Cloudflare API token, adds it as a secret of the
    `front-porch-production` environment (with himself as required
    reviewer), and approves the deploy workflow and the CODEOWNERS line.
-4. The owner's OK to go live.
+4. The rate limiting rule is in place on `api.trueconvo.com` (the owner adds
+   it in Cloudflare, or a session on his Mac does with his OK).
+5. The owner's OK to go live.
 
 ## Finish Line
 
@@ -114,6 +128,8 @@ the normal review loop.
 - `openapi.json` validates as OpenAPI 3.1.
 - After going live, `https://api.trueconvo.com/v1/about` answers, and an MCP
   client lists and calls the tools.
+- After going live, a burst of more than 60 requests in a minute from one
+  address gets blocked (HTTP 429) while other callers still get answers.
 - STATUS.md lists the service and its state.
 
 ## After This Slice
