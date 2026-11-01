@@ -35,7 +35,7 @@ node packages/capture-inbox/src/sort.mjs --drop <drop.json> [--json]
 }
 ```
 
-`items` holds up to 500 entries. `known` holds up to 50,000 `sourceKey` strings already in the inbox, in the cleaned form this library returns. `id` is 1 to 200 JavaScript characters (UTF-16 code units). `addedAt` is an RFC 3339 instant with seconds and either `Z` or a numeric offset. `kind` is `text` or `file`.
+`items` holds up to 500 entries. `known` holds up to 50,000 `sourceKey` strings already in the inbox, in the cleaned form this library returns. `id` is 1 to 200 JavaScript characters (UTF-16 code units). `addedAt` is an RFC 3339 instant with seconds and either `Z` or `z`, or a numeric offset. `T` and `t` both separate the date and the time. `kind` is `text` or `file`.
 
 A `text` item is a `.webloc`, a `.url` file, a `.txt`, or text shared directly. `text` is required and at most 65,536 UTF-8 bytes (64 KB). A `file` item was not read by the adapter. `file` is required: `{ sizeBytes, type, sha256? }`. `type` is an Apple uniform type identifier. `sha256`, when present, is 64 lowercase hex characters. A clip must have it.
 
@@ -114,7 +114,7 @@ These are the choices the plan does not spell out. Each one has a test.
 - A file-level problem throws `CaptureError` and produces no result. A bad name, scheme, userinfo, missing link or bad clip is one `refused` entry, and the other items are still sorted.
 - Positions are 1-based: `items, item 3`. `schemaVersion` must be the number `1`. Duplicate keys inside one JSON object follow `JSON.parse` (the last one wins). A leading BOM is not valid JSON.
 - `id` length is JavaScript characters. An emoji counts as two. `text` and `name` limits are UTF-8 bytes. Empty `text` is present, and is refused because it has no link.
-- `addedAt` requires seconds and a real calendar date. All fraction digits, up to 9, are used when ordering, so two captures in the same millisecond stay in time order. The original text is kept. `-00:00` and `Z` are the same instant. Years run from 0001 to 9999.
+- `addedAt` requires seconds and a real calendar date. All fraction digits, up to 9, are used when ordering, so two captures in the same millisecond stay in time order. The original text is kept. Lowercase `t` and `z` are the same instant as uppercase. `-00:00` and `Z` are the same instant. Years run from 0001 to 9999.
 - A present `sha256` must be 64 lowercase hex characters on every file item, or the drop is refused. Omitting the field is allowed until a clip is sorted, and then that clip is refused. `null` and `""` are present and refused with the drop.
 - `sizeBytes` is a safe whole number, 0 or more, and not `-0`. A 0-byte clip is allowed. Exactly 8 GB is allowed. One byte over is refused. The check applies only after the type is a clip, so an over-size image is still refused as not a clip.
 - Clip types match the two names exactly, including case. A longer name is not a clip.

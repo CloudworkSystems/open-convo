@@ -777,6 +777,16 @@ describe('edge cases', () => {
     assert.match(fileRefusal(makeDrop([textItem('a', 'https://example.com/a', { addedAt: '2026-11-01T24:00:00Z' })])), /addedAt/);
     assert.match(fileRefusal(makeDrop([textItem('a', 'https://example.com/a', { addedAt: '0000-01-01T00:00:00Z' })])), /addedAt/);
     assert.equal(cleaned('https://example.com/old', { addedAt: '0001-01-01T00:00:00Z' }).addedAt, '0001-01-01T00:00:00Z');
+    const lower = cleaned('https://example.com/lower', { addedAt: '2026-11-01t12:00:00z' });
+    assert.equal(lower.addedAt, '2026-11-01t12:00:00z');
+    const tied = sortDrop(makeDrop([
+      textItem('upper', 'https://example.com/same', { addedAt: '2026-11-01T12:00:00Z' }),
+      textItem('lower', 'https://example.com/same', { addedAt: '2026-11-01t12:00:00z' }),
+    ]));
+    assert.equal(tied.sources.length, 1);
+    assert.equal(tied.sources[0].id, 'lower');
+    assert.equal(tied.duplicates[0].repeats, 'lower');
+    assert.equal(cleaned('https://example.com/off', { addedAt: '2026-11-01t12:00:00+00:00' }).addedAt, '2026-11-01t12:00:00+00:00');
   });
 
   it('refuses a clip with no sha256 and allows the field to be absent on other files', () => {

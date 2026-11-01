@@ -17,7 +17,7 @@ function validYearMonthDay(year, month, day) {
   return utc.getUTCFullYear() === year && utc.getUTCMonth() === month - 1 && utc.getUTCDate() === day;
 }
 
-const INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})$/;
+const INSTANT = /^(\d{4})-(\d{2})-(\d{2})[Tt](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?([Zz]|[+-]\d{2}:\d{2})$/;
 
 // Nanoseconds since the epoch, or null. Every accepted fraction digit is
 // kept, so two instants in the same millisecond still order by which came
@@ -37,7 +37,7 @@ export function parseInstant(value) {
   if (!validYearMonthDay(year, month, day)) return null;
   if (hour > 23 || minute > 59 || second > 59) return null;
   let offsetMinutes = 0;
-  if (zone !== 'Z') {
+  if (zone !== 'Z' && zone !== 'z') {
     const sign = zone[0] === '-' ? -1 : 1;
     const offsetHour = Number(zone.slice(1, 3));
     const offsetMinute = Number(zone.slice(4, 6));
