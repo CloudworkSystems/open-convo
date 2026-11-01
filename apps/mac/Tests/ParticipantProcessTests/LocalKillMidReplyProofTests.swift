@@ -53,12 +53,19 @@ final class ProofApp: @unchecked Sendable {
     private var outputEnded = false
     private var taken: Set<Int> = []
 
-    init(_ world: ProofWorld) throws {
+    convenience init(_ world: ProofWorld) throws {
+        try self.init(path: Self.path, arguments: [world.store.path, world.keys.path, String(world.fake.port)])
+    }
+
+    /// Any proof app at `path` (the Claude Code adapter's 4-proof host too),
+    /// with `environment` in place of this process's own when given.
+    init(path: String, arguments: [String], environment: [String: String]? = nil) throws {
         // A missing app fails the proof, never skips it: a skipped proof
         // must not read as a passed one.
-        guard FileManager.default.isExecutableFile(atPath: Self.path) else { throw ProofAppError.missing(Self.path) }
-        process.executableURL = URL(fileURLWithPath: Self.path)
-        process.arguments = [world.store.path, world.keys.path, String(world.fake.port)]
+        guard FileManager.default.isExecutableFile(atPath: path) else { throw ProofAppError.missing(path) }
+        process.executableURL = URL(fileURLWithPath: path)
+        process.arguments = arguments
+        if let environment { process.environment = environment }
         process.standardInput = input
         process.standardOutput = output
         process.standardError = errors
