@@ -48,23 +48,25 @@ memory the host granted for this job. The host writes `record` itself; a
 model's output never goes into it. The engine can't check where its
 arguments came from, so this is a rule for the caller (prime-agent.md step
 3), stated in the README's first section. What the engine does enforce:
-`input` may not carry approvals or memory at all (a field named
-`approvals`, `usedApprovals` or `memory` in `input` is refused), so a
-model-filled object can't smuggle a yes or private memory in.
+`input` may not carry the message, approvals or memory at all (a field
+named `message`, `approvals`, `usedApprovals` or `memory` in `input` is
+refused), so a model-filled object can't smuggle in a sender, a yes or
+private memory.
 
 ### Input
 
 One JSON object. Unknown fields are refused, naming the field.
 
-- `message`: `{ text, from }`. `from` is `person`, `agent` or `system`.
-  `text` is kept only to quote it in a brief (up to 16 KB).
 - `facts`: what the reader of the message found, each a plain value:
   - `asks`: `question`, `task`, `thinking` (thinking aloud, exploring) or
     `unclear`.
   - `steps`: a whole number, the reader's estimate of the work's size
     (1 means one quick lookup).
-  - `outsideActions`: a list of `{ id, kind, description }`, one for each
-    change to the outside world the message would lead to. `kind` is one
+  - `outsideActions`: a list of `{ id, kind, description, payload }`, one
+    for each change to the outside world the message would lead to.
+    `payload` is the exact action as it would run (recipient, content,
+    amount and so on, a plain JSON object); `description` is only for
+    showing. `kind` is one
     of `send`, `publish`, `spend`, `delete`, `account`, `setting`,
     `share-private`.
   - `offerAccepted`: `true` when this message is the person saying yes to
@@ -76,9 +78,16 @@ One JSON object. Unknown fields are refused, naming the field.
 
 ### Record (From The Host)
 
+- `message`: `{ text, from }`, taken by the host from where the message
+  actually came in. `from` is `person`, `agent` or `system`. `text` is kept
+  only to quote it in a brief (up to 16 KB). The reader never sets either.
 - `jobId`: the id of the job a hand-off would start (a string).
-- `approvals`: a list of `{ approvalId, actionId, description, by, how,
+- `approvals`: a list of `{ approvalId, actionId, payloadDigest, by, how,
   at }`, every approval anyone has claimed for this conversation.
+  `payloadDigest` is what the host computed, with the engine's exported
+  `actionDigest(payload)` (SHA-256 of the payload as canonical JSON, keys
+  sorted, using `node:crypto`), over the exact action it showed the person
+  when they said yes.
   `approvalId` is unique. `by` is `person`, `agent` or `memory`; `how` is
   `typed` or `clicked`.
 - `usedApprovals`: the `approvalId`s the host has already spent on a
@@ -94,9 +103,11 @@ One JSON object. Unknown fields are refused, naming the field.
 
 1. **Approval check first.** An approval counts only when `by` is
    `person`, its `approvalId` is not in `usedApprovals`, its `actionId`
-   matches an action in `outsideActions`, and its `description` is the same
-   text as that action's `description` (so a changed action needs a new
-   yes). Approvals by `agent` or `memory` never count, whatever they say,
+   matches an action in `outsideActions`, and its `payloadDigest` equals
+   `actionDigest` of that action's `payload`. The description never
+   counts, so an action whose recipient, content or amount changed needs a
+   new yes even if its label stayed the same. The caller runs exactly the
+   payload that matched. Approvals by `agent` or `memory` never count, whatever they say,
    and neither does a used one; each is listed in the result under
    `ignoredApprovals` with the reason.
 2. **Wait for a yes wins.** If any action in `outsideActions` has no
@@ -118,7 +129,8 @@ One JSON object. Unknown fields are refused, naming the field.
    - `asks: question` with `steps` at or below `quickSteps`: **answer**.
    - Otherwise (`task`, a larger question, or `offerAccepted`):
      **hand-off**.
-   A message from an `agent` or `system` never starts a hand-off by itself;
+   A message whose record `from` is `agent` or `system` never starts a
+   hand-off by itself;
    it gets **answer** at most, and its text is quoted as data.
 5. **Brief skeleton** for a hand-off, with the six parts from prime-agent.md
    "The Hand-Off Brief": `personsWords` (the message text, quoted
@@ -163,8 +175,10 @@ invented messages only. At least:
    tasks (`thinking`, routed to talk-it-through); at least 2 carry an
    approval `by: agent` claiming the owner's yes; at least 2 carry an
    approval `by: memory`. Every case passes.
-2. A person's yes for an action, then the same action with a changed
-   description: the second asks again.
+2. A person's yes for an action, then the same action with the same id
+   and description but a changed recipient or amount in its `payload`: the
+   second asks again. `actionDigest` gives the same value for the same
+   payload with its keys in any order.
 3. A clicked yes and a typed yes both count; an agent's yes and a memory
    entry's yes never do, and both appear in `ignoredApprovals`.
 4. A task with one unapproved `send`: routes are `wait-for-yes` and
@@ -172,7 +186,7 @@ invented messages only. At least:
 5. Scoping: grants from three invented spaces and two jobs; the brief's
    `memoryPackage` holds only this space's grants for this job, each with
    all its contract fields, and a grant missing one is refused.
-5a. Provenance and one use: an `input` carrying `approvals`,
+5a. Provenance and one use: an `input` carrying `message`, `approvals`,
    `usedApprovals` or `memory` is refused; a person's yes whose
    `approvalId` is in `usedApprovals` asks again; an approved action comes
    back with its `approvalId`; a retried action with a new `id` asks
@@ -225,8 +239,8 @@ breaking one is a stop-and-report event.
 - JavaScript modules (`.mjs`), Node 22 or later, `"type": "module"`,
   `"private": true`, tests with `node --test`.
 - No network calls, no AI, no paid services, no `child_process`, no `fs` in
-  the library (the command may read its one input file), in the code or the
-  tests.
+  the library (the command may read its two input files), in the code or
+  the tests. `node:crypto` is allowed, only for `actionDigest`.
 - No new dependencies. Add no license file and no `license` field.
 - Keep the slice small: the engine, the command, the tests and a short
   README with the input, the rules and the output. Finishable in one to two
