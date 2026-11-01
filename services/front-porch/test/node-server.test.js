@@ -57,6 +57,22 @@ test('a malformed Host header gets an answer and the server keeps running', asyn
   assert.equal(about.status, 200);
 });
 
+test('methods a web Request refuses still get the handler\'s 405 or 404', async (t) => {
+  const server = createFrontPorchServer();
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const port = server.address().port;
+
+  const ask = (method, path) => raw(port, method + ' ' + path + ' HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n');
+  for (const method of ['TRACE']) {
+    const about = await ask(method, '/v1/about');
+    assert.match(about, /^HTTP\/1\.1 405 /, method);
+    assert.match(about, /\r\nallow: GET\r\n/i, method);
+    assert.match(await ask(method, '/mcp'), /^HTTP\/1\.1 405 [\s\S]*\r\nallow: POST\r\n/i, method);
+    assert.match(await ask(method, '/nowhere'), /^HTTP\/1\.1 404 /, method);
+  }
+});
+
 test('the service imports nothing host-specific', async () => {
   const { readFileSync } = await import('node:fs');
   for (const file of ['handler.js', 'mcp.js', 'faq.js']) {

@@ -23,8 +23,19 @@ export function createFrontPorchServer() {
 // takes only the path and query from the request.
 const ORIGIN = 'http://localhost';
 
+// TRACE reaches us from Node's parser, but the WHATWG Request constructor
+// refuses to build it. The handler would refuse it anyway, so it is routed as
+// another unsupported method with no body, which gives the same 404 or 405
+// answer as any other. (Node itself answers TRACK with 400 and sends CONNECT
+// to a separate event, so neither reaches this code.)
+const FORBIDDEN_METHODS = new Set(['TRACE']);
+
 async function serve(req, res) {
   const url = new URL(req.url, ORIGIN);
+  if (FORBIDDEN_METHODS.has(req.method)) {
+    req.resume();
+    return send(res, req.method, await handle(new Request(url, { method: 'DELETE' })));
+  }
   const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
   const headers = new Headers();
   for (const [key, value] of Object.entries(req.headers)) {
@@ -36,9 +47,12 @@ async function serve(req, res) {
     body: hasBody ? Readable.toWeb(req) : undefined,
     duplex: hasBody ? 'half' : undefined,
   });
-  const response = await handle(request);
+  return send(res, req.method, await handle(request));
+}
+
+async function send(res, method, response) {
   res.writeHead(response.status, Object.fromEntries(response.headers));
-  res.end(req.method === 'HEAD' ? undefined : Buffer.from(await response.arrayBuffer()));
+  res.end(method === 'HEAD' ? undefined : Buffer.from(await response.arrayBuffer()));
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
