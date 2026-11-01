@@ -61,7 +61,10 @@ Every screen or flow the owner sees answers these, in plain words:
   goes wrong" section promises a behavior and the code leaves it out, that is
   a broken promise in the plan, which is already a P1. A failure state the
   plan never mentioned is a P3 at most, so this check can't restart the long
-  review loops the guidelines were written to stop.
+  review loops the guidelines were written to stop. The cap never lowers a
+  finding that is P0 or P1 on its own terms: losing data, leaking private
+  information, spending money or opening a security hole stays P0 or P1
+  whether or not the plan mentioned it.
 
 ## Not In Scope
 
