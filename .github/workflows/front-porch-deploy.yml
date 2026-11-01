@@ -120,14 +120,16 @@ jobs:
       # address but the Worker's workers.dev one.
       - name: Scan the staging address with OWASP ZAP
         if: steps.staging.outcome == 'success'
+        timeout-minutes: 25
         working-directory: services/front-porch
         env:
           STAGING_URL: ${{ inputs.staging_url }}
         run: node scan/zap-scan.mjs "$STAGING_URL"
-      # Runs whenever the staging deploy was tried, even if it or the scan
-      # failed, so the workers.dev address never stays on after this run.
+      # Runs whenever the staging deploy was started, even if it or the scan
+      # failed or the run was cancelled (always() steps still run after a
+      # cancel), so the workers.dev address never stays on after this run.
       - name: Turn the workers.dev address off again
-        if: always() && (steps.staging.outcome == 'success' || steps.staging.outcome == 'failure')
+        if: always() && steps.staging.outcome != '' && steps.staging.outcome != 'skipped'
         working-directory: services/front-porch
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.FRONT_PORCH_CLOUDFLARE_TOKEN }}
