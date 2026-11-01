@@ -32,7 +32,7 @@ reply:
 
 | Action | On his messages | On replies | What it does |
 |---|---|---|---|
-| Copy | Yes | Yes | Copies the message text exactly as saved. A short "Copied" confirms it. |
+| Copy | Yes | Yes | Copies the message text exactly as shown, including any part not yet saved (rule 6). A short "Copied" confirms it. |
 | Thumbs up / thumbs down | No | Yes | His rating of the reply. One at a time; pressing it again clears it. |
 | React | Yes | Yes | A fixed set of six reactions (for example 👍 ❤️ 🎉 👀 ✅ ❓) to tag a message for himself. |
 | Reply | Yes | Yes | Starts a new message in the main box that quotes this message. |
@@ -70,7 +70,7 @@ text. It arrives with Markdown rendering, if the Desk ever renders it.
 5. **Every action works from the keyboard.** The row is reachable by Tab,
    each button has a plain label, and copy, rating and reaction changes are
    announced.
-6. **Read-only and unsaved states.** Copy always works on what is shown.
+6. **Read-only and unsaved states.** Copy always works and copies exactly the text shown, saved or not: what is on screen is what the owner is copying.
    Rating, reacting, Reply and Side chat change what is saved, so each needs
    two things: the reply has ended, and the Desk can save (not read-only
    after a save conflict or an unknown or unavailable save). While the Desk
