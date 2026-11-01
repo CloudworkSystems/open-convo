@@ -7,10 +7,11 @@ for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
 - **Oct 31:** On the owner's Mac, agents get keys from 1Password, which he
-  already pays for. The keys sit in one vault named "Open Convo Agents" that
-  holds only agent keys. Agents reach it only through a 1Password service
-  account that can read that one vault and nothing else, so 1Password
-  itself blocks them from his other vaults, his personal logins and his 2FA
+  already pays for. The keys sit in one vault named "True Convo AI" that
+  holds only items meant for agents, and never an Apple ID or iCloud
+  password, including app-specific ones. Agents reach it only through a
+  1Password service account that can read that one vault and nothing else,
+  so 1Password itself blocks them from his other vaults, his personal logins and his 2FA
   codes. The service account's token is kept in Keychain on his Mac.
   Agents read that vault without asking him each time; he accepted that
   trade on November 1 in exchange for 1Password enforcing the one-vault
