@@ -145,6 +145,10 @@ security feed: follow a sender, a links list or videos, get drafted lessons and 
 owner picks. Slice 1, the standalone engine in `packages/followed-sources/`, is built; real sources and the
 Desk "Followed" view each need a plan revision.
 
+**Desk message actions** (Desk; owner asked November 1), Claude builds, GrokBot or a fresh Claude reviews: plan
+[docs/plans/desk-message-actions.md](docs/plans/desk-message-actions.md), a draft waiting on the owner's yes. Copy,
+thumbs up and down, reactions, reply with a quote, and a side chat on each message; ratings and reactions stay on the Mac.
+
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:
 [docs/plans/merge-gate.md](docs/plans/merge-gate.md). Switched on for `main`
