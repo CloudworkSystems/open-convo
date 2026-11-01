@@ -152,7 +152,8 @@ One JSON object. Unknown fields are refused, naming the field.
    the acceptance, so the brief carries the work and not only the "yes"), `goal` and `finishLine` (empty strings for the model to
    fill), `known` and `guessed` (empty lists, kept apart), `ruledOut`
    (empty list), `limits` (the unapproved outside actions, plus "nothing
-   outside the space" when the record's `space` is set), and `memoryPackage`: only the
+   outside the space except the files in this package" when the record's
+   `space` is set, so a cross-space file the person shared is usable), and `memoryPackage`: only the
    grants whose `jobId` is the record's `jobId` **and** whose `recipient`
    is the record's `recipient`, each with all of its contract fields; a
    grant for another recipient goes to `droppedGrants`. A grant from the conversation's own space needs
