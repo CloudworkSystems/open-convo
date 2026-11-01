@@ -69,9 +69,11 @@ repeats only the Archive History look on a fresh build.
 rule): Claude builds the F1 to F3 fixes in the Mac app, on a branch with its
 own pull request. Codex reviews every push, and GrokBot gives the
 independent review (a fresh Claude review if GrokBot is quiet for 60
-minutes). The finish line is the owner's Archive History look on a fresh
-True Convo Test build: today's dictations are listed and readable, opened
-from the menu bar icon without a stuck Keychain prompt.
+minutes). The finish line is two short checks by the owner on a fresh True
+Convo Test build: he makes a recovery key and confirms it by typing back the
+two groups it asks for, and the banner stops saying it isn't confirmed (F1);
+then he opens Archive History from the menu bar icon without a stuck
+Keychain prompt and sees today's dictations listed and readable (F2, F3).
 
 ### Findings
 
