@@ -42,9 +42,11 @@ import Testing
 // A graceful quit mid-reply is checked the same way: it records `stopped`,
 // leaves no process, and the fake was spawned once.
 // And the plan's "Nothing leaves without consent" is rechecked through the
-// same app (Codex P1 on #223): a start before the approval, before the
+// same app (Codex P1s on #223): a start before the approval, before the
 // confirmation, after the approval is withdrawn and after the confirmation
-// ends is refused with nothing spawned; with both gates passed, one spawn.
+// ends is refused with nothing spawned; with both gates passed, one spawn;
+// and every spawned CLI's environment, as exec'd, holds none of the API
+// keys, provider switches and proxy settings planted in the app's own.
 
 /// One round's folders and fake CLI.
 final class ClaudeProofWorld {
@@ -76,7 +78,29 @@ final class ClaudeProofWorld {
     /// allow-list must drop).
     func app() throws -> ProofApp {
         try ProofApp(path: Self.path, arguments: [store.path, keys.path, Products.supervisor, fake.cliPath, runFolder.path],
-                     environment: fake.environment)
+                     environment: fake.environment.merging(Self.leaking) { _, planted in planted })
+    }
+
+    /// Credentials, provider switches and network routing the app's own
+    /// environment might carry: none may reach the spawned CLI (the plan's
+    /// "Nothing leaves without consent", rechecked here; Codex P1 on #223).
+    static let leaking = ["ANTHROPIC_API_KEY": "invented-not-a-key", "ANTHROPIC_AUTH_TOKEN": "invented-not-a-token",
+                          "ANTHROPIC_BASE_URL": "http://invented.invalid", "CLAUDE_CODE_USE_BEDROCK": "1",
+                          "CLAUDE_CODE_USE_VERTEX": "1", "HTTPS_PROXY": "http://invented-proxy.invalid:8080",
+                          "https_proxy": "http://invented-proxy.invalid:8080", "HTTP_PROXY": "http://invented-proxy.invalid:8080",
+                          "http_proxy": "http://invented-proxy.invalid:8080", "ALL_PROXY": "socks5://invented-proxy.invalid:1080",
+                          "NO_PROXY": "invented.invalid", "NODE_EXTRA_CA_CERTS": "/invented/ca.pem"]
+
+    /// Fails unless the spawned CLI's environment, as exec'd, holds none of
+    /// `leaking`, by name or by value.
+    static func expectNothingLeaked(_ environment: [String], _ what: String) {
+        #expect(!environment.isEmpty, "\(what): the fake recorded its environment")
+        for name in leaking.keys.sorted() {
+            #expect(!environment.contains { $0.hasPrefix(name + "=") }, "\(what): \(name) reached the CLI")
+        }
+        #expect(!environment.contains { $0.contains("invented-not-a") || $0.contains("invented-proxy") || $0.contains("invented.invalid")
+                                         || $0.contains("/invented/ca.pem") },
+                "\(what): a planted value reached the CLI: \(environment)")
     }
 
     /// The first run's stream: init, the rate-limit message that releases
@@ -127,12 +151,13 @@ final class ClaudeProofWorld {
     }
 
     /// The fake's and its supervisor's pids, from the latest spawn's record.
-    func processes() async throws -> (cli: pid_t, supervisor: pid_t, stdin: String) {
+    func processes() async throws -> (cli: pid_t, supervisor: pid_t, stdin: String, environment: [String]) {
         let record = try await fake.waitForCLIRecord(seconds: 20)
-        guard let cli = record["pid"] as? Int, let supervisor = record["ppid"] as? Int, let stdin = record["stdin"] as? String else {
+        guard let cli = record["pid"] as? Int, let supervisor = record["ppid"] as? Int, let stdin = record["stdin"] as? String,
+              let environment = record["env"] as? [String] else {
             throw ProofAppError.notMet("the fake's record: \(record)")
         }
-        return (pid_t(cli), pid_t(supervisor), stdin)
+        return (pid_t(cli), pid_t(supervisor), stdin, environment)
     }
 
     /// Fails unless neither process is left within 10 seconds.
@@ -208,6 +233,7 @@ struct ClaudeKillMidReplyProofTests {
             let spawned = try await world.processes()
             #expect(spawned.stdin.contains(ClaudeProofWorld.earlierInput) && spawned.stdin.contains(ClaudeProofWorld.message),
                     "\(label): the earlier turn and the message went on stdin")
+            ClaudeProofWorld.expectNothingLeaked(spawned.environment, label)
 
             var acknowledged = ""
             var inFlight: String?
@@ -297,6 +323,7 @@ struct ClaudeKillMidReplyProofTests {
             let retried = try await world.processes()
             #expect(retried.cli != spawned.cli, "\(label): the retry's own spawn")
             #expect(retried.stdin == spawned.stdin, "\(label): the same earlier turn and message")
+            ClaudeProofWorld.expectNothingLeaked(retried.environment, "\(label), the retry")
             try await ClaudeProofWorld.gone(retried.cli, retried.supervisor, "\(label), the retry")
 
             let after = try await second.json("record", "record")
@@ -360,8 +387,12 @@ struct ClaudeKillMidReplyProofTests {
         #expect(try await app.next("availability ") == "host-not-approved")
         try await refused(try await draft(), "confirmed, approval withdrawn")
 
+        // The two gates are independent: re-approving with the confirmation
+        // still active makes the entry available again at once.
         app.send("approve")
         #expect(try await app.next("approved ") == "true")
+        app.send("availability")
+        #expect(try await app.next("availability ") == "available", "re-approved, the confirmation still active")
         app.send("end")
         try await app.next("ended-confirmation")
         app.send("availability")
@@ -377,6 +408,7 @@ struct ClaudeKillMidReplyProofTests {
         #expect(try await app.next("ended \(allowed) ") == "completed -")
         #expect(world.spawns.count == 1, "both gates passed: one spawn")
         let spawned = try await world.processes()
+        ClaudeProofWorld.expectNothingLeaked(spawned.environment, "the allowed run")
         try await ClaudeProofWorld.gone(spawned.cli, spawned.supervisor, "the allowed run")
 
         app.send("quit")

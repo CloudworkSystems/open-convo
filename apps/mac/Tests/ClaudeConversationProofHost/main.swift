@@ -347,6 +347,9 @@ actor Page {
 
     /// Another prepared run of the same message with new ids, as Send
     /// makes one, its context the session's completed turns. Not started.
+    /// It skips the Desk's busy rule on purpose: the closed-gate proof
+    /// tries starts the page would not offer, to show the Mac app's own
+    /// gates refuse them.
     func draft() async throws -> String {
         let context = runs.compactMap { value -> String? in
             guard let run = value.objectValue, run["phase"] == .string("completed") else { return nil }
