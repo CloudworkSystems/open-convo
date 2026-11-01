@@ -83,7 +83,10 @@ One JSON object. Unknown fields are refused, naming the field.
   as the host knows it. The reader never sets it.
 - `jobId`: the id of the job a hand-off would start (a string).
 - `recipient`: the specialist a hand-off would go to (an id string), as
-  the host chose it.
+  the host chose it, and `recipientTrust`: `local` (runs on the person's
+  device) or `outside` (another company's cloud or a foreign agent).
+- `offerMade`: `true` when the host already showed a session offer in
+  this conversation and the person hasn't answered it.
 - `offerAccepted`: `true` only when the host recorded the person clicking
   or typing yes to an earlier offer of a session. The reader never sets
   it. When it is `true`, the record also carries `offeredRequest`: the
@@ -144,7 +147,8 @@ One JSON object. Unknown fields are refused, naming the field.
 4. **The main route** (one of three):
    - `asks: thinking` or `unclear`, with the record's `offerAccepted` not true:
      **talk-it-through**. Nothing is handed off. `offer` is `true` only
-     when `steps` is above `quickSteps`, so at most one offer is made.
+     when `steps` is above `quickSteps` and the record's `offerMade` is
+     not true, so at most one offer is made.
    - `asks: question` or `task` with `steps` at or below `quickSteps`,
      and `offerAccepted` not true: **answer** (a quick lookup or small
      task is done directly, as prime-agent.md describes).
@@ -164,7 +168,8 @@ One JSON object. Unknown fields are refused, naming the field.
    grants whose `jobId` is the record's `jobId` **and** whose `recipient`
    is the record's `recipient`, each with all of its contract fields; a
    grant for another recipient goes to `droppedGrants`. A grant from the conversation's own space needs
-   nothing more. A grant from another space counts only when it carries
+   nothing more when `recipientTrust` is `local`; for an `outside`
+   recipient every grant, from any space, needs `sharedByPerson: true`. A grant from another space counts only when it carries
    `sharedByPerson: true`, which the host sets when the person shared that
    file for this job (prime-agent.md: nothing from another space "unless
    the person shared it for this job"); without it the grant is left out
@@ -219,6 +224,10 @@ invented messages only. At least:
    cross-space grant and a grant for another recipient land in
    `droppedGrants`; a grant missing a contract
    field is refused.
+5c. Offers and outside recipients: a second thinking message with
+   `offerMade: true` gets `offer: false`; for an `outside` recipient a
+   same-space grant without `sharedByPerson: true` lands in
+   `droppedGrants`.
 5b. Routes: a `task` with `steps` at or below `quickSteps` gets
    **answer**, one above it gets **hand-off**; an accepted offer gets a
    hand-off whose `personsWords` holds the `offeredRequest`, and an
