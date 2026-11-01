@@ -27,9 +27,13 @@ import Foundation
 //                      `approved <true|false>`
 //   confirm            the owner's paid-usage confirmation (section 17):
 //                      `confirm <outcome>`
+//   revoke             withdraws the approval: `revoked <true|false>`
+//   end                ends the confirmation as a screen lock does: `ended-confirmation`
 //   availability       `availability <available|reason>` for the Claude entry
 //   prepare            the earlier turn, then the new turn as a prepared
 //                      Claude run naming it as context: `prepared <runId>`
+//   draft              another prepared run of the same message, new ids,
+//                      the completed turns as context: `prepared <runId>`
 //   start <runId>      `start <outcome> <reason|->`
 //   status <runId>     `status <reply JSON>`
 //   record             `record <conversationRuns JSON>`
@@ -341,6 +345,19 @@ actor Page {
         return (runId, nil)
     }
 
+    /// Another prepared run of the same message with new ids, as Send
+    /// makes one, its context the session's completed turns. Not started.
+    func draft() async throws -> String {
+        let context = runs.compactMap { value -> String? in
+            guard let run = value.objectValue, run["phase"] == .string("completed") else { return nil }
+            return run["runId"]?.stringValue
+        }
+        let runId = newId()
+        try await save(runs + [.object(Self.prepared(runId, user: newId(), assistant: newId(), input: Invented.input,
+                                                     context: context, at: now()))], claim: runId)
+        return runId
+    }
+
     func start(_ runId: String) async -> HostResponse? {
         guard let run = run(runId) else { return nil }
         var payload: [String: JSONValue] = ["workspaceHandle": .string(handle)]
@@ -470,6 +487,13 @@ Task {
         switch (words.first, words.count) {
         case ("approve"?, 1):
             say("approved \((try? store.approveHost(HostApproval.anthropic)) != nil)")
+        case ("revoke"?, 1):
+            say("revoked \((try? store.revokeHost(HostApproval.anthropic)) != nil)")
+        case ("end"?, 1):
+            owner.end(.lock)
+            say("ended-confirmation")
+        case ("draft"?, 1):
+            do { say("prepared \(try await page.draft())") } catch { fail("draft: \(error)") }
         case ("confirm"?, 1):
             say("confirm \(await owner.confirm())")
         case ("availability"?, 1):

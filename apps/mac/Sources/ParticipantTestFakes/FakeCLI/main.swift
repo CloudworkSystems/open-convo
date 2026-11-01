@@ -20,7 +20,8 @@ import Foundation
 // {"hang": true} | {"waitFile": name}]}. `out` adds a newline; `outRaw`
 // writes the text as is; `waitFile` waits, polling every 5 ms, until a file
 // of that name exists beside the scenario (a test's handshake: the next
-// step runs only when the test says so, never on timing).
+// step runs only when the test says so, never on timing), or exits 70
+// after 60 s.
 // Steps that end without `exit` or `hang` exit 0. With `leaveGroup` the fake,
 // after forking any child, moves itself into its parent's group (the
 // supervisor's) with `setpgid` and records the result in `moved.json`.
@@ -426,7 +427,17 @@ for step in scenario["steps"] as? [[String: Any]] ?? [] {
     } else if step["hang"] as? Bool == true {
         hangForever()
     } else if let name = step["waitFile"] as? String {
-        while !FileManager.default.fileExists(atPath: folder + "/" + name) { usleep(5_000) }
+        // Capped at 60 s, so a proof that failed before its release never
+        // leaves a fake waiting on the runner.
+        var waited = 0
+        while !FileManager.default.fileExists(atPath: folder + "/" + name) {
+            guard waited < 12_000 else {
+                writeAll(2, "invented fake: \(name) never came\n")
+                exit(70)
+            }
+            usleep(5_000)
+            waited += 1
+        }
     }
 }
 exit(exitWhenStepsEnd)

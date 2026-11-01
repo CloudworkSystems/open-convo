@@ -1,6 +1,7 @@
 import Darwin
 import DeskHost
 import Foundation
+@testable import ParticipantAppWiring
 @testable import ParticipantProcess
 import Testing
 
@@ -40,6 +41,10 @@ import Testing
 //   completes and leaves the closed old run exactly as it was.
 // A graceful quit mid-reply is checked the same way: it records `stopped`,
 // leaves no process, and the fake was spawned once.
+// And the plan's "Nothing leaves without consent" is rechecked through the
+// same app (Codex P1 on #223): a start before the approval, before the
+// confirmation, after the approval is withdrawn and after the confirmation
+// ends is refused with nothing spawned; with both gates passed, one spawn.
 
 /// One round's folders and fake CLI.
 final class ClaudeProofWorld {
@@ -79,7 +84,7 @@ final class ClaudeProofWorld {
     /// result, each step only once its `go-N` exists.
     static func gatedSteps() -> [[String: Any]] {
         var steps: [[String: Any]] = [["waitFile": "go-0"]]
-        for line in [Invented.initLine(model: "claude-sonnet-5-5"), Invented.rateLimit(), Invented.messageStart, Invented.blockStart(0)] {
+        for line in [Invented.initLine(model: LocalConversationLane.claudePin.model), Invented.rateLimit(), Invented.messageStart, Invented.blockStart(0)] {
             steps.append(["out": line])
         }
         for (index, piece) in pieces.enumerated() {
@@ -95,7 +100,7 @@ final class ClaudeProofWorld {
     /// The retry's stream, ungated, with the pin's model in its init line
     /// (the reader ends a run whose init reports another).
     static func passingSteps() -> [[String: Any]] {
-        [Invented.initLine(model: "claude-sonnet-5-5"), Invented.rateLimit(), Invented.messageStart, Invented.blockStart(0),
+        [Invented.initLine(model: LocalConversationLane.claudePin.model), Invented.rateLimit(), Invented.messageStart, Invented.blockStart(0),
          Invented.textDelta(retryReply), Invented.result()].map { ["out": $0] } + [["exit": 0]]
     }
 
@@ -313,6 +318,71 @@ struct ClaudeKillMidReplyProofTests {
             #expect(try await second.waitForExit() == 0)
             #expect(world.spawns.count == 2, "\(label): still two spawns after the quit")
         }
+    }
+
+    @Test("Nothing leaves without consent, rechecked through the same app: a start before the approval, before the confirmation, after the approval is withdrawn and after the confirmation ends is participant-unavailable with nothing spawned; with both gates passed exactly one spawn")
+    func closedGatesSpawnNothing() async throws {
+        let world = try ClaudeProofWorld()
+        defer { world.clean() }
+        try world.script(ClaudeProofWorld.passingSteps())
+        let app = try world.app()
+        try await app.next("ready")
+        app.send("prepare")
+        let notApproved = try await app.next("prepared ")
+
+        // Each refused start, then nothing spawned: no run record, no pid.
+        func refused(_ runId: String, _ state: String) async throws {
+            app.send("start \(runId)")
+            #expect(try await app.next("start ") == "refused participant-unavailable", "\(state)")
+            #expect(world.spawns.isEmpty, "\(state): nothing spawned")
+            #expect(world.fake.pid("cli.pid") == nil, "\(state): the fake never ran")
+        }
+        func draft() async throws -> String {
+            app.send("draft")
+            return try await app.next("prepared ")
+        }
+
+        app.send("availability")
+        #expect(try await app.next("availability ") == "host-not-approved")
+        try await refused(notApproved, "not approved")
+
+        app.send("approve")
+        #expect(try await app.next("approved ") == "true")
+        app.send("availability")
+        #expect(try await app.next("availability ") == "overflow-unverified")
+        try await refused(try await draft(), "approved, not confirmed")
+
+        app.send("confirm")
+        #expect(try await app.next("confirm ") == "confirmed")
+        app.send("revoke")
+        #expect(try await app.next("revoked ") == "true")
+        app.send("availability")
+        #expect(try await app.next("availability ") == "host-not-approved")
+        try await refused(try await draft(), "confirmed, approval withdrawn")
+
+        app.send("approve")
+        #expect(try await app.next("approved ") == "true")
+        app.send("end")
+        try await app.next("ended-confirmation")
+        app.send("availability")
+        #expect(try await app.next("availability ") == "overflow-unverified")
+        try await refused(try await draft(), "approved, confirmation ended by a lock")
+
+        // Both gates passed again: exactly one spawn, which completes.
+        app.send("confirm")
+        #expect(try await app.next("confirm ") == "confirmed")
+        let allowed = try await draft()
+        app.send("start \(allowed)")
+        #expect(try await app.next("start ") == "ok -")
+        #expect(try await app.next("ended \(allowed) ") == "completed -")
+        #expect(world.spawns.count == 1, "both gates passed: one spawn")
+        let spawned = try await world.processes()
+        try await ClaudeProofWorld.gone(spawned.cli, spawned.supervisor, "the allowed run")
+
+        app.send("quit")
+        #expect(try await app.next("quit ") == "reachedBound=false")
+        #expect(try await app.waitForExit() == 0)
+        #expect(world.spawns.count == 1)
     }
 
     @Test("A graceful quit mid-reply records stopped, not cut off: nothing is left running, the saved text stays, and the fake was spawned once")
