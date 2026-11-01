@@ -1,6 +1,6 @@
 # Status
 
-Updated October 31, 2026. The short version of where the build is. The full
+Updated November 1, 2026. The short version of where the build is. The full
 plan is in [PLAN.md](PLAN.md).
 
 ## Now
@@ -36,7 +36,7 @@ invented chats only, while the step 2 trial is pending. Scope:
 | PR 4b: Turn on the local route in the Mac app (True Convo Test only), default `qwen3:8b` | Merged (#61) |
 | PR 4c: Fake-Ollama host cases in the shared local vectors (26 cases, both sides) | Merged (#62) |
 | PR 5: Scripted kill-mid-reply proof | Merged (#65) |
-| PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-3-owner-trial.md)) | Waiting on the owner |
+| PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-3-owner-trial.md)) | First run October 31: ten of eleven checks passed; quitting mid-reply loses the text (F11). Waiting on that fix, then a re-check of check 8 |
 | Trial fixes (Stop, Ollama notice) | Merged (#76) |
 
 **Next build: the Claude Code adapter** (right after step 3; invented
@@ -48,12 +48,14 @@ chats only). Scope:
 | PR 1: Scope | Merged (#75) |
 | PR 2: Contract revision 5 and the page codec (invented chats only; started on the owner's yes, October 28) | Merged (#181) |
 | PR 3a: Close the contract's pre-activation items (stale replies without a lane, the combined renderer proof, the shared handle rule, the nine page cases; inactive) | Merged (#188) |
-| PR 3b: Availability for real: the sign-in check with its network blocked by macOS, Pro and Max only (the owner's D1 choice, October 29; inactive). It relies on macOS's deprecated `sandbox-exec`: if an update removes it, Claude reads as unavailable (`check-failed`, `network-block`), not as a bug. Retest the denied services on each major macOS release before relying on the block there | Merged (#195) |
+| PR 3b: Availability for real: the sign-in check with its network blocked by macOS, Pro and Max only (the owner's D1 choice, October 29; inactive). It reads the plan's code, not its name; Ultra (Max 20x renamed on October 30) reports `max` and passes, and an `ultra` code stays check-failed until a newer pinned Claude Code is re-read (#212). It relies on macOS's deprecated `sandbox-exec`: if an update removes it, Claude reads as unavailable (`check-failed`, `network-block`), not as a bug. Retest the denied services on each major macOS release before relying on the block there | Merged (#195) |
 | PR 3c: Context and launch: Claude runs take earlier turns (a local model's or Claude's) in the contract's fixed stdin layout, checked against the first-trial bound and resolved again at start; the app's lane pins Claude to Sonnet 5.5, the owner's choice of October 29; still never available, and the app's launcher still refuses | Merged (#196) |
 | PR 3d: The approval state (`host-not-approved`): the owner's approval of Anthropic, saved in the protected store, revocable, read by section 17's owner just before `overflow-unverified`; the Claude vectors file's eight page-level cases run in Swift through the coordinator. Still inactive: nothing in the app builds the owner, and there is no approval screen yet (PR 4a) | Merged (#200) |
 | PR 3e: The fake-CLI host cases in the Claude vectors file, in section 19's seeded form, run by the Swift harness; split from 3d to keep each review small. Must pass before PR 4b | Merged (#203) |
 | PR 4a: Desk wiring on the page: the Claude entry named "Claude · <model> · Anthropic (not on this Mac)" (built, but still left out of the picker until PR 4b, per the October 16 decision), the line above the message box "Sends this message and N earlier turns to Anthropic" (local turns counted), earlier turns sent by run id within the 4,096-byte trial limit, and Retry for Claude replies. Nothing turned on | Merged (#205) |
-| PR 4a-native: the Mac app's "Approve Anthropic once" screen, its approval shown apart from "local checks passed", and the consent proof (no spawn without both gates); split from 4a to keep each review small. Nothing turned on: the window shows the screen only when given it, and the app gives it nothing before PR 4b | In review |
+| PR 4a-native: the Mac app's "Approve Anthropic once" screen, its approval shown apart from "local checks passed", and the consent proof (no spawn without both gates); split from 4a to keep each review small. Nothing turned on: the window shows the screen only when given it, and the app gives it nothing before PR 4b | Merged (#207) |
+| PR 3b follow-up: the plan rename (Ultra reports `max` and passes; an `ultra` code fails closed), with a test for each name | Merged (#212) |
+| PR 4-proof: the fake-CLI kill proof. A test copy of the app, wired as PR 4b will wire it (the real owner, coordinator, store, launcher and supervisor, with a fake Claude Code), is killed at four exact points mid-reply: no process is left, the next launch keeps exactly the saved text, sends nothing again, asks for a new paid-usage confirmation, and Retry makes exactly one new run; a graceful quit records `stopped`; and a start with either consent gate closed (not approved, not confirmed, approval withdrawn, confirmation ended) spawns nothing. The app itself still refuses every Claude launch | In review |
 
 ## Done
 
@@ -120,11 +122,13 @@ reviews. Plan approved (merged as #127 on October 24):
 | PR 3: Open in Google Maps, travel time (off by default), clash marks | Later |
 | PR 4: Owner's trial | Later |
 
-**Setup check engine** (Personal; first slice of the first-run guide), GrokBot team A builds, Codex reviews; plan approved October 30 (`docs/plans/setup-check-engine.md`); starts once #146 is done.
+**Setup check engine** (Personal; first slice of the first-run guide), GrokBot team A builds, Codex reviews; plan approved October 30 (`docs/plans/setup-check-engine.md`); build started November 1 (#219).
 
-**Capture inbox engine** (Personal; first slice of the iPhone capture app), GrokBot team B builds, Codex reviews; plan approved October 30 (`docs/plans/capture-inbox-engine.md`); starts once #139 is done.
+**Capture inbox engine** (Personal; first slice of the iPhone capture app), GrokBot team C builds (moved from team B by the owner on November 1), Codex reviews; plan approved October 30 (`docs/plans/capture-inbox-engine.md`); build started November 1 (#221).
 
 **Cloudwork Rail Map** (Desk, Cloudwork Nexus), Claude builds; a fifth Nexus view showing this repository's branches, commits and pull requests from a saved snapshot (`apps/desk/scripts/rail-map-snapshot.mjs`); merged October 24 (#132).
+
+**PR history spreadsheet** (all work; owner asked October 29), Claude builds; one row per pull request (builder, dates, areas, Codex rounds and findings, outside review), rebuilt each morning by `.github/workflows/pr-history.yml` onto its own branch, `pr-history-data`, never `main`. The owner's Google Sheet reads its CSV with `IMPORTDATA`; the JSON copy shares the Rail Map's pull fields for Canvas and Atlas. In review.
 
 **Skin check** (Personal, new Health module), Claude builds, GrokBot or a fresh Claude reviews; plan approved (`docs/plans/skin-check.md`). Slice 1, the standalone engine in `packages/skin-check/`, is built; the iPhone source joins the iPhone app on the parallel sync line, and the Desk view follows.
 
@@ -144,6 +148,10 @@ weekly feed of lessons from followed senders follow.
 security feed: follow a sender, a links list or videos, get drafted lessons and ideas, and keep only what the
 owner picks. Slice 1, the standalone engine in `packages/followed-sources/`, is built; real sources and the
 Desk "Followed" view each need a plan revision.
+
+**Desk message actions** (Desk; owner asked November 1), Claude builds, GrokBot or a fresh Claude reviews: plan
+[docs/plans/desk-message-actions.md](docs/plans/desk-message-actions.md), approved by the owner November 1; PR 2 (action row, Copy, ratings, reactions) in review. Copy,
+thumbs up and down, reactions, reply with a quote, and a side chat on each message; ratings and reactions stay on the Mac.
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:

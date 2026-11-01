@@ -1,6 +1,7 @@
 # Step 3: The Owner's Trial
 
-Status: In progress (Oct 21): waiting on the owner's trial.
+Status: In progress (Nov 1): first trial run done. Ten checks passed; quit
+mid-reply (8) failed. Waiting on the F11 fix, then a re-check of check 8.
 
 The last part of step 3 (PR 5). The scripted proof checks the local route
 with a fake Ollama and a test store. This trial checks the real True Convo
@@ -72,3 +73,63 @@ building session.
 Step 3 is done. Once step 2's trial has also passed, you can hold real
 conversations with a local model. The Claude Code adapter comes next, so
 Claude can join the same conversations.
+
+## First Trial Run (October 31, 2026)
+
+Build: True Convo Test from commit 544432b on a Mac Studio, with Ollama
+0.40.13 (it updated itself at a restart) and `qwen3:8b`. Invented chats only:
+the Maple Crumb bakery prompts above, in a fresh session. Because the app's
+menu couldn't be opened (step 2 findings F2 and F3), quit used `osascript -e
+'tell application "True Convo Test" to quit'` and force quit used `killall
+-KILL "True Convo Test"`.
+
+| Check | Result |
+| --- | --- |
+| 1. Pick the model | Passed |
+| 2. Who receives what | Passed |
+| 3. First message | Passed (streams, but too fast to watch: F7) |
+| 4. It remembers | Passed |
+| 5. Stop | Passed ("Stopped on this Mac. The reply so far is kept.") |
+| 6. Quit and reopen | Passed |
+| 7. Continue | Passed (recalled the suggested name) |
+| 8. Quit while it's writing | **Failed** (F11) |
+| 9. Ollama closed | Passed (typed text stayed unsent in the box) |
+| 10. Crash while it's writing | Passed (text kept, not resent; wording: F12) |
+| 11. Retry the cut-off reply | Passed, after **Close as unknown** (F12) |
+
+Nothing was ever sent again on its own, and nothing went anywhere but the
+local model.
+
+Step 3 stays open until F11 is fixed; then the owner repeats check 8 on a
+fresh build. F12 is a wording change and doesn't block the re-check.
+
+### Findings
+
+Numbered after step 2's F1 to F6.
+
+- **F7. The reply area is narrow.** Much of the window is unused, long lines
+  run off the right edge, and replies stream too fast to watch.
+- **F8. Send and Stop are oversized.**
+- **F9. Raw Markdown.** Replies print `**bold**` asterisks instead of bold.
+- **F10. Closed.** The stopped mark is there, as a status line above the
+  reply's text, which at first read as if it came before the reply.
+- **F11. A normal quit mid-reply loses the text.** Twice, quitting while a
+  reply was streaming (once with several paragraphs on screen) reopened as
+  "Reply cut off. The text so far is kept." with "Some response updates
+  could not be verified. The retained response is incomplete." and no text.
+  Expected: "stopped on this Mac" with the text so far. The quit was a normal
+  quit Apple event, which should match the menu's Quit; the builder should
+  confirm.
+- **F12. Crash recovery is correct but unclear.** A force quit mid-reply
+  kept the text so far and nothing was resent. The reply then showed a red
+  "Some response updates have not arrived. Check this run to recover the
+  missing updates; the received prefix is retained." with the buttons "Check
+  run status" and "Close as unknown". By design (step 3 plan, the
+  kill-mid-reply proof), Retry appears only after **Close as unknown**. The
+  trial first tried "Check run status" (it became "Run status unknown" with a
+  live Stop) and Stop (it became "retry stop"); neither shows Retry. After
+  Close as unknown, Retry put the message back in the box unsent, and Send
+  started a new reply that finished. The fix is wording, not behavior: plain
+  words instead of run, prefix, participant and unknown, and a line saying to
+  close the unfinished reply before Retry. The checklist's check 10 should
+  name that step too.

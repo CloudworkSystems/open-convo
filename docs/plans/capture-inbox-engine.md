@@ -1,6 +1,6 @@
 # Capture Inbox Engine (PRD)
 
-Status: Approved (Oct 30): the owner said yes in the thread "Draft next plans for outside builders"; the build waits for the builder team to finish its current module.
+Status: In progress (Nov 1): approved October 30 in the thread "Draft next plans for outside builders"; the owner moved the build from team B to team C on November 1 so it starts now (build issue #221).
 
 Written October 29, 2026 by a Claude session (project "261024 OC Steering",
 thread "Draft next plans for outside builders"). Session name:
@@ -9,7 +9,7 @@ capture app** (PLAN.md, "After the Top Five": a "Share to True Convo" button
 for links and the owner's own video clips, landing as sources in the inbox;
 until then an Apple Shortcut saves shared items into an iCloud Drive folder
 the Mac app watches). Built by an outside builder under AGENTS.md "Outside
-Builders": **GrokBot team B** builds, through Cursor and signed in as
+Builders": **GrokBot team C** builds, through Cursor and signed in as
 `cloudwork-bot`; **Codex** reviews; the coordinator checks the result
 against this plan. It takes one of the outside-builder places.
 
@@ -194,7 +194,7 @@ their titles, the Apple Shortcut itself, iCloud, the iPhone share button,
 any app or Desk screen, any AI, storage or encryption code, network, and
 real personal data.
 
-## Rules For The Builder (GrokBot Team B)
+## Rules For The Builder (GrokBot Team C)
 
 These are rules the builder must follow; the setup does not enforce them, so
 breaking one is a stop-and-report event.
@@ -205,7 +205,7 @@ breaking one is a stop-and-report event.
   request into `main` with auto-merge off and the label `agent: grokbot`.
   Never push to `main` directly, and never switch on auto-merge.
 - Mark the work as AGENTS.md "Accounts And Provenance" says: `Cursor Agent`
-  as commit author, and `— GrokBot team B` as the last line of the pull
+  as commit author, and `— GrokBot team C` as the last line of the pull
   request description and every comment.
 - Run **no commands on the owner's Mac** for this job.
 - Touch no keys, tokens, passwords, accounts, Keychain, iCloud or private
@@ -238,3 +238,10 @@ auto-merge once the plan check passes. Done when the tests pass with one
 command, Codex has no open P1 or P2 on the latest commit (or the Codex triage
 judge passes it, [codex-triage.md](codex-triage.md)), and the plan check
 finds nothing missing.
+
+## Revision (November 1, 2026)
+
+The owner moved this build from GrokBot team B to team C, so it could start
+while team B finishes sync core (#139). Only the builder's name changed, in
+the opening paragraph, the rules heading and the sign-off line; every
+requirement, rule, limit and the finish line stay as approved.

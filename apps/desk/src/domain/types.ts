@@ -120,6 +120,22 @@ export type MemoryCommand =
   | { type: 'restore-memory'; memoryId: string; expectedRevision: number; use: 'active' | 'view-only' }
   | { type: 'undo-memory'; memoryId: string; expectedRevision: number };
 
+/** Fixed reaction names; the Desk shows each as an emoji. */
+export type MessageReaction = 'heart' | 'party' | 'eyes' | 'check' | 'question' | 'idea';
+/** The owner's own rating and reactions on one message. Never sent to a model. */
+export interface MessageMark {
+  /** A simulated message id, or a run's user or assistant message id. */
+  messageId: string;
+  /** Replies only. */
+  rating?: 'up' | 'down';
+  /** At least one, unique, in the fixed order. */
+  reactions?: MessageReaction[];
+  updatedAt: string;
+}
+export type MessageMarkCommand =
+  | { type: 'set-message-rating'; messageId: string; rating: 'up' | 'down' | null }
+  | { type: 'toggle-message-reaction'; messageId: string; reaction: MessageReaction };
+
 export interface Activity {
   id: string;
   goalId: string | null;
@@ -148,6 +164,8 @@ export interface DeskState {
   /** Recoverable unsent teaching forms, kept separately from usable memories. */
   memoryDrafts?: Record<string, MemoryDraft>;
   activity: Activity[];
+  /** Absent in earlier saves; a mark exists only while it holds a rating or reaction. */
+  messageMarks?: MessageMark[];
   selection: { goalId: string | null; sessionId: string | null; route: DeskRoute };
   preferences: { theme: ThemePreference; nexusView?: NexusView };
   /** Saved sample-mode metadata, never runtime authority or a live-connection assertion. */
@@ -163,6 +181,7 @@ export interface DomainOptions {
 
 export type DeskCommand =
   | MemoryCommand
+  | MessageMarkCommand
   | { type: 'create-goal'; title: string; nextStep?: string; parentId?: string | null; empty?: boolean }
   | { type: 'rename-domain'; domainId: string; title: string }
   | { type: 'set-domain-pinned'; domainId: string; pinned: boolean }

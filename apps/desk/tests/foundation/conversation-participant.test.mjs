@@ -1709,3 +1709,113 @@ test('participant picker reports a failed preference save inside its open dialog
     await f.check();
   } finally { await f.close(); }
 });
+
+// Desk message actions, PR 2 (docs/plans/desk-message-actions.md).
+const replyActions = (page) => transcript(page).getByRole('group', { name: 'Actions for reply', exact: true });
+const userActions = (page) => transcript(page).getByRole('group', { name: 'Actions for your message', exact: true });
+
+test('a finished reply can be copied, rated and reacted to; marks are saved beside the run and survive a reload', async () => {
+  const f = await fixture();
+  try {
+    await f.page.evaluate(() => {
+      window.__copied = [];
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => { window.__copied.push(text); } } });
+    });
+    await f.send('Invented question for actions');
+    await expectSavedSequence(f, 1);
+    await f.emit('text', 'Invented reply\nwith two lines');
+    // While the reply is being written it can be copied but not marked.
+    await expect(replyActions(f.page).getByRole('button', { name: 'Good reply', exact: true })).toBeDisabled();
+    await expect(replyActions(f.page).getByRole('button', { name: 'Copy reply', exact: true })).toBeEnabled();
+    await f.emit('completed');
+    await expect.poll(() => savedRun(f)?.phase).toBe('completed');
+    const run = savedRun(f);
+    // The latest reply keeps its row visible without hover.
+    await expect(replyActions(f.page).locator('.message-actions-row')).toHaveCSS('opacity', '1');
+    await replyActions(f.page).getByRole('button', { name: 'Copy reply', exact: true }).click();
+    await expect(replyActions(f.page).locator('.message-action-status')).toHaveText('Copied');
+    await userActions(f.page).getByRole('button', { name: 'Copy your message', exact: true }).click();
+    assert.deepEqual(await f.page.evaluate(() => window.__copied), ['Invented reply\nwith two lines', 'Invented question for actions']);
+    // Only replies are rated.
+    await expect(userActions(f.page).getByRole('button', { name: 'Good reply' })).toHaveCount(0);
+    const good = replyActions(f.page).getByRole('button', { name: 'Good reply', exact: true });
+    await good.click();
+    await expect(good).toHaveAttribute('aria-pressed', 'true');
+    await expect(replyActions(f.page).locator('[data-mark-notice]')).toHaveText('Rated good');
+    await expect.poll(() => f.stored.messageMarks).toEqual([{ messageId: run.assistantMessageId, rating: 'up', updatedAt: f.stored.messageMarks?.[0]?.updatedAt }]);
+    await replyActions(f.page).getByRole('button', { name: 'Add a reaction', exact: true }).click();
+    await replyActions(f.page).getByRole('button', { name: 'Idea', exact: true }).click();
+    await expect.poll(() => f.stored.messageMarks?.[0]?.reactions).toEqual(['idea']);
+    await expect(replyActions(f.page).locator('[data-mark-notice]')).toHaveText('Added reaction: Idea');
+    await expect(replyActions(f.page).getByRole('button', { name: 'Add a reaction', exact: true })).toBeFocused();
+    await userActions(f.page).getByRole('button', { name: 'Add a reaction', exact: true }).click();
+    await userActions(f.page).getByRole('button', { name: 'Look at later', exact: true }).click();
+    await expect.poll(() => f.stored.messageMarks?.length).toBe(2);
+    // Marks never enter the run record or start anything.
+    assert.deepEqual(savedRun(f), run);
+    assert.equal(f.calls.starts.length, 1);
+    await f.page.reload();
+    await expect(transcript(f.page)).toHaveAttribute('data-run-id', run.runId);
+    await expect(replyActions(f.page).getByRole('button', { name: 'Good reply', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(replyActions(f.page).getByRole('button', { name: 'Remove reaction: Idea', exact: true })).toBeVisible();
+    await expect(userActions(f.page).getByRole('button', { name: 'Remove reaction: Look at later', exact: true })).toBeVisible();
+    // Pressing a rating again clears it; removing the last reaction drops the mark.
+    await replyActions(f.page).getByRole('button', { name: 'Good reply', exact: true }).click();
+    await replyActions(f.page).getByRole('button', { name: 'Remove reaction: Idea', exact: true }).click();
+    await expect.poll(() => f.stored.messageMarks?.map((mark) => mark.messageId)).toEqual([run.userMessageId]);
+    await expect(replyActions(f.page).locator('[data-mark-notice]')).toHaveText('Removed reaction: Idea');
+    assert.equal(f.calls.starts.length, 1);
+    await f.check();
+  } finally { await f.close(); }
+});
+
+test('while the Desk cannot save, ratings and reactions are off and Copy still works', async () => {
+  const f = await fixture();
+  try {
+    await f.page.evaluate(() => {
+      window.__copied = [];
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => { window.__copied.push(text); } } });
+    });
+    await f.send();
+    await expectSavedSequence(f, 1);
+    await f.emit('text', 'Reply kept while saving is blocked');
+    await f.emit('completed');
+    await expect.poll(() => savedRun(f)?.phase).toBe('completed');
+    await replyActions(f.page).getByRole('button', { name: 'Bad reply', exact: true }).click();
+    await expect.poll(() => f.stored.messageMarks?.[0]?.rating).toBe('down');
+    await f.externalChange();
+    await expect(f.page.getByRole('alert', { name: 'Save recovery', exact: true })).toContainText('Another copy changed');
+    for (const name of ['Good reply', 'Bad reply', 'Add a reaction']) {
+      const button = replyActions(f.page).getByRole('button', { name, exact: true });
+      await expect(button).toBeDisabled();
+      await expect(button).toHaveAttribute('title', 'Ratings and reactions are off until saving works again.');
+    }
+    await expect(replyActions(f.page)).toContainText('Ratings and reactions are off until saving works again.');
+    await replyActions(f.page).getByRole('button', { name: 'Copy reply', exact: true }).click();
+    assert.deepEqual(await f.page.evaluate(() => window.__copied), ['Reply kept while saving is blocked']);
+    await f.check();
+  } finally { await f.close(); }
+});
+
+test('after a definite save failure, ratings and reactions wait for Retry', async () => {
+  const f = await fixture();
+  try {
+    await f.send();
+    await expectSavedSequence(f, 1);
+    await f.emit('text', 'Reply kept through a failed save');
+    await f.emit('completed');
+    await expect.poll(() => savedRun(f)?.phase).toBe('completed');
+    f.failNext(() => true);
+    await f.page.getByRole('textbox', { name: 'Your message', exact: true }).fill('Invented draft whose save fails');
+    await expect(f.page.getByRole('button', { name: 'Retry save', exact: true })).toBeVisible();
+    for (const name of ['Good reply', 'Bad reply', 'Add a reaction']) {
+      await expect(replyActions(f.page).getByRole('button', { name, exact: true })).toBeDisabled();
+    }
+    await expect(replyActions(f.page).getByRole('button', { name: 'Copy reply', exact: true })).toBeEnabled();
+    await f.page.getByRole('button', { name: 'Retry save', exact: true }).click();
+    await expect(f.page.getByRole('button', { name: 'Retry save', exact: true })).toHaveCount(0);
+    await expect(replyActions(f.page).getByRole('button', { name: 'Good reply', exact: true })).toBeEnabled();
+    assert.equal(f.stored.messageMarks, undefined);
+    await f.check();
+  } finally { await f.close(); }
+});

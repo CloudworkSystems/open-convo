@@ -11,12 +11,17 @@ import Foundation
 // environment stay exactly what production passes. It records what it saw
 // in `records/` there: `cli.pid` first, then `cli.json` (pid, group, argv and
 // environment as exec'd, working directory, stdin, open descriptors), and `child.pid`
-// for a forked child.
+// for a forked child. Every run (never a check) also appends its pid to
+// `spawns.log`, so a test can count the runs a folder's fake was spawned for.
 //
 // Scenario: {"sigterm": "exit" | "ignore", "child": null | "ignore-term" |
 // "exit-on-term", "leaveGroup": bool, "readStdin": bool, "steps": [{"out":
 // line} | {"outRaw": text} | {"err": text} | {"sleepMs": n} | {"exit": code} |
-// {"hang": true}]}. `out` adds a newline; `outRaw` writes the text as is.
+// {"hang": true} | {"waitFile": name}]}. `out` adds a newline; `outRaw`
+// writes the text as is; `waitFile` waits, polling every 5 ms, until a file
+// of that name exists beside the scenario (a test's handshake: the next
+// step runs only when the test says so, never on timing), or exits 70
+// after 60 s.
 // Steps that end without `exit` or `hang` exit 0. With `leaveGroup` the fake,
 // after forking any child, moves itself into its parent's group (the
 // supervisor's) with `setpgid` and records the result in `moved.json`.
@@ -45,7 +50,7 @@ import Foundation
 //   start, which step 4 runs with the network blocked.
 // - For section 5's checks (F3), more invented variants: `authStatus`
 //   "console-login", "api-key-helper", "oauth-token", "gateway",
-//   "pro", "team", "enterprise" (a plan login on that plan), "unknown-plan", "unknown-method", "no-account", "logged-in-exit-1",
+//   "pro", "ultra", "team", "enterprise" (a plan login on that plan; "ultra" is a code 2.1.283 never reports), "unknown-plan", "unknown-method", "no-account", "logged-in-exit-1",
 //   "logged-in-number", "empty" and "oversized", with the scenario's
 //   `configDirectory` if it has one; `versionMode` "garbled",
 //   "empty", "oversized", "exit-2" or "slow" (after `versionSlowMs`, default
@@ -390,6 +395,7 @@ if scenario["readStdin"] as? Bool ?? true {
 if let record = invocationRecord(descriptors: descriptorsAtStart, stdin: stdinText) {
     writeAtomically(record, to: records + "/cli.json")
 }
+appendLine("\(getpid())", to: records + "/spawns.log")
 
 var exitWhenStepsEnd: Int32 = 0
 if let name = scenario["stream"] as? String {
@@ -420,6 +426,18 @@ for step in scenario["steps"] as? [[String: Any]] ?? [] {
         exit(Int32(code))
     } else if step["hang"] as? Bool == true {
         hangForever()
+    } else if let name = step["waitFile"] as? String {
+        // Capped at 60 s, so a proof that failed before its release never
+        // leaves a fake waiting on the runner.
+        var waited = 0
+        while !FileManager.default.fileExists(atPath: folder + "/" + name) {
+            guard waited < 12_000 else {
+                writeAll(2, "invented fake: \(name) never came\n")
+                exit(70)
+            }
+            usleep(5_000)
+            waited += 1
+        }
     }
 }
 exit(exitWhenStepsEnd)

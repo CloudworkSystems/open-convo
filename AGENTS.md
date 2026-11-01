@@ -226,6 +226,7 @@ judge that isn't there (owner decision, October 25, 2026).
 | PR steward (scheduled, 8:41 AM and 5:41 PM) | `cloudwork-bot` | Reviews Codex-built pull requests; flags stuck ones on issue #52 |
 | PR keeper (scheduled, hourly, in the cloud) | `cloudwork-bot` | Keeps pull requests moving: updates auto-merge pull requests that fall behind `main` once they are otherwise ready, restarts a hung Codex review once per commit, relays Codex findings to GrokBot's builders, finishes ready pull requests and fixes stalled Claude-built findings ("Keeping Finished Work Moving"), and reports silent or not-set-up agents in its "Not working" comment on issue #52 |
 | Daily list (scheduled, 7:52 AM) | `cloudwork-bot`, reading only | Sends the owner issue #52's list, including the keeper's "Not working" comment, plus pull requests Codex has gone silent on |
+| Open-decision sweep (Claude thread "Nudge on idle open decisions", daily, 7:45 AM) | none; reads the steering project's thread list only | Lists the steering project's threads that have waited on the owner for 2 days or more and nudges him once per wait in that thread; changes nothing else |
 | Nightly Test build (scheduled, 2–6 AM) | none | Rebuilds True Convo Test from `main` on the owner's Mac |
 | Recycling pass (scheduled, Sundays) | `cloudwork-bot` | One pull request proposing fixes for stale docs |
 | Security sweep (scheduled, Mondays, in the cloud) | `cloudwork-bot`, read-only tools plus one issue-comment tool | Runs the weekly self-audit in [docs/plans/security.md](docs/plans/security.md) and rewrites its "Security" comment on issue #52; never changes code, settings or merges |
@@ -240,7 +241,9 @@ or task gets a row here first.
 ## Limits
 
 - Write every file as if this repo were public: no secrets, keys, private records,
-  raw chats or personal details. Secrets belong in Keychain, never in files or logs.
+  raw chats or personal details. Secrets belong in Keychain or the owner's
+  "True Convo AI" vault in 1Password, read only through its own
+  service account (docs/decisions.md, October 31), never in files or logs.
 - Keep build output, downloads, model files and private data out of Git.
 - No public release, deployment, publication, spending, account or credential
   change, or service that outlives the session without the owner's approval.
