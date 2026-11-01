@@ -752,15 +752,27 @@ describe('edge cases', () => {
     assert.equal(cleaned(body).url, body);
   });
 
-  it('keeps fraction digits only for ordering and accepts a real leap day', () => {
+  it('orders by the full fraction and accepts a real leap day', () => {
     const result = sortDrop(makeDrop([
       textItem('late', 'https://example.com/late', { addedAt: '2026-11-01T00:00:00.500Z' }),
       textItem('early', 'https://example.com/early', { addedAt: '2026-11-01T00:00:00.4009Z' }),
       textItem('b', 'https://example.com/b', { addedAt: '2026-11-01T01:00:00.1001Z' }),
       textItem('a', 'https://example.com/a', { addedAt: '2026-11-01T01:00:00.1009Z' }),
     ]));
-    assert.deepEqual(result.sources.map((source) => source.id), ['early', 'late', 'a', 'b']);
+    assert.deepEqual(result.sources.map((source) => source.id), ['early', 'late', 'b', 'a']);
     assert.equal(result.sources[0].addedAt, '2026-11-01T00:00:00.4009Z');
+    const same = sortDrop(makeDrop([
+      textItem('a', 'https://example.com/same', { addedAt: '2026-11-01T00:00:00.0009Z' }),
+      textItem('z', 'https://example.com/same', { addedAt: '2026-11-01T00:00:00.0001Z' }),
+    ]));
+    assert.equal(same.sources.length, 1);
+    assert.equal(same.sources[0].id, 'z');
+    assert.equal(same.sources[0].addedAt, '2026-11-01T00:00:00.0001Z');
+    assert.deepEqual(same.duplicates, [{
+      id: 'a',
+      sourceKey: 'https://example.com/same',
+      repeats: 'z',
+    }]);
     assert.equal(cleaned('https://example.com/leap', { addedAt: '2024-02-29T00:00:00Z' }).addedAt, '2024-02-29T00:00:00Z');
     assert.match(fileRefusal(makeDrop([textItem('a', 'https://example.com/a', { addedAt: '2026-11-01T24:00:00Z' })])), /addedAt/);
     assert.match(fileRefusal(makeDrop([textItem('a', 'https://example.com/a', { addedAt: '0000-01-01T00:00:00Z' })])), /addedAt/);

@@ -19,8 +19,9 @@ function validYearMonthDay(year, month, day) {
 
 const INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})$/;
 
-// Milliseconds since the epoch, or null. Digits past milliseconds are
-// dropped for ordering. A rolled date such as February 31 is refused.
+// Nanoseconds since the epoch, or null. Every accepted fraction digit is
+// kept, so two instants in the same millisecond still order by which came
+// first. A rolled date such as February 31 is refused.
 export function parseInstant(value) {
   if (typeof value !== 'string') return null;
   const match = INSTANT.exec(value);
@@ -43,6 +44,7 @@ export function parseInstant(value) {
     if (offsetHour > 23 || offsetMinute > 59) return null;
     offsetMinutes = sign * (offsetHour * 60 + offsetMinute);
   }
-  const millis = fraction.length === 0 ? 0 : Number(fraction.slice(0, 3).padEnd(3, '0'));
-  return utcMillis(year, month - 1, day, hour, minute, second, millis) - offsetMinutes * 60_000;
+  const nanos = fraction.length === 0 ? 0 : Number(fraction.padEnd(9, '0').slice(0, 9));
+  const wholeMs = utcMillis(year, month - 1, day, hour, minute, second, 0) - offsetMinutes * 60_000;
+  return BigInt(wholeMs) * 1_000_000n + BigInt(nanos);
 }

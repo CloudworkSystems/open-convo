@@ -9,8 +9,8 @@ function compareId(a, b) {
 }
 
 function compareEntry(a, b) {
-  if (a.addedAtMs < b.addedAtMs) return -1;
-  if (a.addedAtMs > b.addedAtMs) return 1;
+  if (a.instant < b.instant) return -1;
+  if (a.instant > b.instant) return 1;
   return compareId(a.id, b.id);
 }
 
@@ -58,20 +58,20 @@ export function sortDrop(drop) {
   for (const item of items) {
     const nameReason = nameProblem(item.name);
     if (nameReason) {
-      refused.push({ id: item.id, addedAtMs: item.addedAtMs, reason: nameReason });
+      refused.push({ id: item.id, instant: item.instant, reason: nameReason });
       continue;
     }
     if (item.kind === 'text') {
       const parsed = readTextItem(item.name, item.text);
       if (parsed.error) {
-        refused.push({ id: item.id, addedAtMs: item.addedAtMs, reason: parsed.error });
+        refused.push({ id: item.id, instant: item.instant, reason: parsed.error });
         continue;
       }
       droppedWords += parsed.droppedWords;
       accepted.push({
         id: item.id,
         addedAt: item.addedAt,
-        addedAtMs: item.addedAtMs,
+        instant: item.instant,
         kind: 'link',
         sourceKey: parsed.url,
         site: parsed.site,
@@ -82,13 +82,13 @@ export function sortDrop(drop) {
     }
     const parsed = readClip(item);
     if (parsed.error) {
-      refused.push({ id: item.id, addedAtMs: item.addedAtMs, reason: parsed.error });
+      refused.push({ id: item.id, instant: item.instant, reason: parsed.error });
       continue;
     }
     accepted.push({
       id: item.id,
       addedAt: item.addedAt,
-      addedAtMs: item.addedAtMs,
+      instant: item.instant,
       kind: 'clip',
       sourceKey: parsed.sourceKey,
       title: parsed.title,
@@ -111,7 +111,7 @@ export function sortDrop(drop) {
       for (const entry of ranked) {
         duplicates.push({
           id: entry.id,
-          addedAtMs: entry.addedAtMs,
+          instant: entry.instant,
           sourceKey,
           repeats: 'known',
         });
@@ -123,7 +123,7 @@ export function sortDrop(drop) {
     for (const entry of ranked.slice(1)) {
       duplicates.push({
         id: entry.id,
-        addedAtMs: entry.addedAtMs,
+        instant: entry.instant,
         sourceKey,
         repeats: winner.id,
       });

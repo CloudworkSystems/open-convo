@@ -62,8 +62,8 @@ function readItem(item, index, seen) {
   if (seen.has(item.id)) fail(`${where}: repeated id ${quoted(item.id)}.`);
   seen.add(item.id);
   if (typeof item.name !== 'string') fail(`${where}: name must be text.`);
-  const addedAtMs = parseInstant(item.addedAt);
-  if (addedAtMs === null) fail(`${where}: addedAt must be an RFC 3339 instant with an offset or Z.`);
+  const instant = parseInstant(item.addedAt);
+  if (instant === null) fail(`${where}: addedAt must be an RFC 3339 instant with an offset or Z.`);
   if (item.kind !== 'text' && item.kind !== 'file') fail(`${where}: kind must be text or file.`);
 
   if (item.kind === 'text') {
@@ -78,7 +78,7 @@ function readItem(item, index, seen) {
       id: item.id,
       name: item.name,
       addedAt: item.addedAt,
-      addedAtMs,
+      instant,
       kind: 'text',
       text: item.text,
     };
@@ -90,7 +90,7 @@ function readItem(item, index, seen) {
     id: item.id,
     name: item.name,
     addedAt: item.addedAt,
-    addedAtMs,
+    instant,
     kind: 'file',
     file: readFileObject(item.file, where),
   };
