@@ -12,8 +12,8 @@ library, `packages/time-mirror/`; then a **Claude** building session
 (cloud, `cloudwork-bot`) builds the command, `scripts/time-mirror.mjs`, the
 only part that touches the Keychain or the network. **Reviewers:** Codex
 reviews every push; GrokBot or a fresh Claude is the independent review of
-each pull request, and the one for the command also answers the
-risk-review checklist ([risk-review.md](risk-review.md)); the coordinator
+each pull request, and each of those reviews ends with the risk-review
+checklist ([risk-review.md](risk-review.md)); the coordinator
 checks the library against this plan. **Finish line:** both pull requests
 merge with `tests` passing, and the owner runs the command once on his Mac
 and opens a page showing his own time as heat maps (Gate 0 below).
@@ -238,7 +238,8 @@ the setup does not enforce them, so breaking one is a stop-and-report event.
   `agent: codex`. Never push to `main` directly, and never switch on
   auto-merge.
 - End the pull request description and every comment with
-  `— Codex team A`.
+  `— Codex team A, OC-261101-time-mirror-library` (the agent and its task,
+  as AGENTS.md "Accounts And Provenance" asks).
 - Run **no commands on the owner's Mac** apart from `npm test` inside
   `packages/time-mirror/` and the `git` and `gh` commands needed to commit,
   push and open the pull request. Read no file outside this repo.
