@@ -1,6 +1,6 @@
 # Setup Check Engine (PRD)
 
-Status: Approved (Oct 30): the owner said yes in the thread "Draft next plans for outside builders"; the build waits for the builder team to finish its current module.
+Status: Approved (Oct 30): the owner said yes in the thread "Draft next plans for outside builders". Build started November 1 (build issue #219).
 
 Written October 29, 2026 by a Claude session (project "261024 OC Steering",
 thread "Draft next plans for outside builders"). Session name:
