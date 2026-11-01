@@ -57,8 +57,9 @@ jobs:
           echo "mac=$([ "$all" = true ] && echo true || has '^(apps/mac/|apps/desk/tests/fixtures/)')" >> "$GITHUB_OUTPUT"
           # The rules-file map test also runs when any Markdown file changes,
           # since a map may point at any kind of rules file. The Claude Code
-          # guard hook's tests live here too, so .claude/ changes run them.
-          echo "gate=$([ "$all" = true ] && echo true || has '(\.md$|^\.claude/)')" >> "$GITHUB_OUTPUT"
+          # guard hook's tests live here too, so .claude/ changes run them,
+          # and so does the Mac package manifest's guard.
+          echo "gate=$([ "$all" = true ] && echo true || has '(\.md$|^\.claude/|^apps/mac/Package\.swift$)')" >> "$GITHUB_OUTPUT"
           echo "sync_core=$([ "$all" = true ] && echo true || has '^packages/sync-core/')" >> "$GITHUB_OUTPUT"
           # Every other package with a package.json, found by folder, so new
           # packages are covered without editing this file.

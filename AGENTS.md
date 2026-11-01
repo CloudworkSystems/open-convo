@@ -62,7 +62,7 @@ of the folder above it.
 
 The full text of each section below is in
 [docs/agent-process.md](docs/agent-process.md), under the same name. It is
-binding and protected like this file, and it governs where this summary
+binding and owner-protected, and it governs where this summary
 differs. Read the full section before you act on it.
 
 ### Review Loop (Codex Annotates, Claude Builds)
@@ -88,6 +88,10 @@ differs. Read the full section before you act on it.
   **Plans merge on the owner's yes**, said in a Claude thread and quoted
   with its date in the pull request. A plan that also changes a protected
   path still needs his approval on GitHub.
+- **Rules files merge on the owner's yes** too (owner decision, November 1,
+  2026): `AGENTS.md` and `CLAUDE.md` files, quoted the same way. The full
+  process text, `.github/`, `.claude/`, `PLAN.md` and `docs/decisions.md`
+  stay protected on GitHub.
 - **Independent reviews.** No agent reviews its own work. GrokBot or Gemini
   reviews Claude-built and Codex-built work. Codex reviews GrokBot's work, and
   the coordinator checks it against the plan. A fresh Claude review stands in

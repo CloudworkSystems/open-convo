@@ -8,9 +8,14 @@ or loosen it. What the app is and how to build it: [README.md](README.md).
   Limits).
 - Many paths here are owner-protected in `.github/CODEOWNERS`: keys,
   encryption, recovery and protected storage, the paid-AI participant path,
-  paid cloud calls, and the wiring in `main.swift` and `Package.swift`. A pull
-  request that touches one waits for the owner's approval on GitHub, so keep
-  changes to those files small and separate when you can.
+  paid cloud calls, and the wiring in `main.swift`. A pull request that
+  touches one waits for the owner's approval on GitHub, so keep changes to
+  those files small and separate when you can.
+- `Package.swift` isn't protected, but a gate test
+  (`.github/scripts/tests/mac-manifest.test.mjs`) pins which participant-path
+  modules the app links and fails if a test folder stops building, or if the
+  manifest uses `exclude:`, `sources:`, plugins, `unsafeFlags` or conditions.
+  A new outside package trips the risk hold.
 - Don't connect the participant path to a real model, or add a Mac
   permission, entitlement, outside host or key name, unless a merged plan
   allows it. These trip the risk hold ([docs/plans/risk-review.md](../../docs/plans/risk-review.md)).
