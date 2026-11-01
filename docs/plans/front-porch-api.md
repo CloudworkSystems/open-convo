@@ -68,9 +68,19 @@ the normal review loop.
   a rewrite.
 - **Deploys:** a GitHub Actions workflow deploys from `main` only, when
   `services/front-porch/**` changes, using a Cloudflare API token limited to
-  editing this one Worker, stored as a repository secret. The owner creates
+  editing this one Worker, stored as an environment secret (below). The owner creates
   that token and the Cloudflare account settings; no agent signs in to
   Cloudflare. The workflow lives under `.github/`, so the owner approves it.
+- **Every deploy needs the owner (requirement).** Approving the workflow once
+  must not let later content changes publish on their own. Two gates, both
+  required:
+  1. The deploy job runs in a GitHub environment (`front-porch-production`)
+     whose required reviewer is the owner's account, and the Cloudflare token
+     is an environment secret, not a repository secret. Each deploy waits
+     until the owner approves that run on GitHub.
+  2. The code pull request adds `services/front-porch/` to
+     `.github/CODEOWNERS`, so every change to the service or its content
+     also needs the owner's approval before it can merge.
 
 ## Safety Rules (Requirements)
 
@@ -91,8 +101,9 @@ the normal review loop.
 1. The owner's OK to build (a separate yes from this plan).
 2. The privacy policy on trueconvo.com gains a short section on the API,
    before it takes traffic, as the policy already promises.
-3. The owner creates the Cloudflare API token and adds it as a repository
-   secret, and approves the deploy workflow.
+3. The owner creates the Cloudflare API token, adds it as a secret of the
+   `front-porch-production` environment (with himself as required
+   reviewer), and approves the deploy workflow and the CODEOWNERS line.
 4. The owner's OK to go live.
 
 ## Finish Line
