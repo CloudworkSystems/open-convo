@@ -49,8 +49,9 @@ model's output never goes into it. The engine can't check where its
 arguments came from, so this is a rule for the caller (prime-agent.md step
 3), stated in the README's first section. What the engine does enforce:
 `input` may not carry the message, the space, approvals or memory at all
-(a field named `message`, `space`, `approvals`, `usedApprovals` or
-`memory` in `input` or its `facts` is refused), so a model-filled object
+(a field named `message`, `space`, `offerAccepted`, `recipient`,
+`approvals`, `usedApprovals` or `memory` in `input` or its `facts` is
+refused), so a model-filled object
 can't smuggle in a sender, a space, a yes or private memory.
 
 ### Input
@@ -69,8 +70,6 @@ One JSON object. Unknown fields are refused, naming the field.
     showing. `kind` is one
     of `send`, `publish`, `spend`, `delete`, `account`, `setting`,
     `share-private`.
-  - `offerAccepted`: `true` when this message is the person saying yes to
-    an earlier offer of a session.
   Each action `id` names one run of that action: a retry of a send is a
   new `id`, never the old one.
 - `limits`: optional numbers for `quickSteps` (default 3).
@@ -83,6 +82,11 @@ One JSON object. Unknown fields are refused, naming the field.
 - `space`: the memory space the conversation is open in (an id string),
   as the host knows it. The reader never sets it.
 - `jobId`: the id of the job a hand-off would start (a string).
+- `recipient`: the specialist a hand-off would go to (an id string), as
+  the host chose it.
+- `offerAccepted`: `true` only when the host recorded the person clicking
+  or typing yes to an earlier offer of a session. The reader never sets
+  it.
 - `approvals`: a list of `{ approvalId, actionId, payloadDigest, by, how,
   at }`, every approval anyone has claimed for this conversation.
   `payloadDigest` is what the host computed, with the engine's exported
@@ -125,7 +129,7 @@ One JSON object. Unknown fields are refused, naming the field.
    lose track of which yes it spent. It is never copied into memory or into
    a standing permission.
 4. **The main route** (one of three):
-   - `asks: thinking` or `unclear`, with `offerAccepted` not true:
+   - `asks: thinking` or `unclear`, with the record's `offerAccepted` not true:
      **talk-it-through**. Nothing is handed off. `offer` is `true` only
      when `steps` is above `quickSteps`, so at most one offer is made.
    - `asks: question` or `task` with `steps` at or below `quickSteps`,
@@ -142,8 +146,9 @@ One JSON object. Unknown fields are refused, naming the field.
    fill), `known` and `guessed` (empty lists, kept apart), `ruledOut`
    (empty list), `limits` (the unapproved outside actions, plus "nothing
    outside the space" when the record's `space` is set), and `memoryPackage`: only the
-   grants whose `jobId` is the record's `jobId`, each with all of its
-   contract fields. A grant from the conversation's own space needs
+   grants whose `jobId` is the record's `jobId` **and** whose `recipient`
+   is the record's `recipient`, each with all of its contract fields; a
+   grant for another recipient goes to `droppedGrants`. A grant from the conversation's own space needs
    nothing more. A grant from another space counts only when it carries
    `sharedByPerson: true`, which the host sets when the person shared that
    file for this job (prime-agent.md: nothing from another space "unless
@@ -196,11 +201,13 @@ invented messages only. At least:
 5. Scoping: grants from three invented spaces and two jobs; the brief's
    `memoryPackage` holds this job's grants from this space, plus a
    cross-space grant marked `sharedByPerson: true`; an unmarked
-   cross-space grant lands in `droppedGrants`; a grant missing a contract
+   cross-space grant and a grant for another recipient land in
+   `droppedGrants`; a grant missing a contract
    field is refused.
 5b. Routes: a `task` with `steps` at or below `quickSteps` gets
    **answer**, one above it gets **hand-off**.
 5a. Provenance and one use: an `input` carrying `message`, `space`,
+   `offerAccepted`, `recipient`,
    `approvals`, `usedApprovals` or `memory` is refused; "this space" in
    rule 5 is always the record's `space`, never one the reader names (a
    grant from another space still joins only with `sharedByPerson: true`,
