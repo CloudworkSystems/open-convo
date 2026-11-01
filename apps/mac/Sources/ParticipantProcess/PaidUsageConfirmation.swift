@@ -194,6 +194,14 @@ public final class PaidUsageConfirmationOwner: AvailabilityReporting, @unchecked
         self.init(checks: checks, approval: approval, authentication: LocalAuthenticationOwnerCheck())
     }
 
+    /// The same, reading section 21.4's approval from whichever store the
+    /// Desk has open now (the Claude Code adapter's PR 4b: each unlock opens
+    /// a new store). `approvals` only ever reads a real `ProofStore`, and is
+    /// a final class, so this keeps the guarantee above.
+    public convenience init(checks: ClaudeLocalChecks, approvals: CurrentStoreApproval) {
+        self.init(checks: checks, approval: approvals, authentication: LocalAuthenticationOwnerCheck())
+    }
+
     /// Tests only (through `@testable`): fakes for the checks, the approval,
     /// the authenticator and the clock.
     init(checks: any ClaudeLocalChecking, approval: any HostApprovalReading, authentication: any OwnerAuthentication,

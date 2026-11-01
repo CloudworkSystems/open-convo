@@ -6,6 +6,14 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Nov 1:** Fewer GitHub approvals. Rules files (`AGENTS.md` and
+  `CLAUDE.md`, top and folders) merge on the owner's yes in a Claude thread,
+  quoted in the pull request like plans; `docs/agent-process.md`,
+  `.github/`, `.claude/`, `PLAN.md` and this file stay protected.
+  `apps/mac/Package.swift` leaves `.github/CODEOWNERS`, guarded by the risk
+  hold and a gate test of what the app links. Dependabot's GitHub Actions
+  updates come grouped, one pull request a month (docs/agent-process.md
+  "Rules files merge on the owner's yes").
 - **Oct 31:** On the owner's Mac, the agents that build True Convo (Claude,
   Codex, Gemini and the like) get keys from 1Password, which he already
   pays for. True Convo's own keys, such as its model adapters' keys, stay in

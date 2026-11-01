@@ -1,6 +1,6 @@
 # Security: What We Protect, A Security Reviewer, And A Feed Of Lessons
 
-Status: In progress (Oct 28): approved by the owner's yes; the baseline's first part ships in the same pull request. Revised the same day after the independent review and Codex (feed tool allowlist with no GitHub access; the owner picks lessons before anything is published; Actions and token steps).
+Status: In progress (Oct 28): approved by the owner's yes; the baseline's first part ships in the same pull request. Revised the same day after the independent review and Codex (feed tool allowlist with no GitHub access; the owner picks lessons before anything is published; Actions and token steps). Revised November 1 on the owner's yes: the weekly sweep runs like the PR keeper, with normal access, and only reports (section 2).
 
 Written October 28, 2026 at the owner's request (thread "Revisit The Faction
 security ideas": "we haven't really talked anywhere in the repo, anywhere in
@@ -156,15 +156,28 @@ run, so the 8 AM list carries it. It only reports: it never changes code,
 switches settings, merges or approves. Fixes come as ordinary pull requests
 from a building session.
 
-What it reads (advisories, package data, repository files) can carry text
-written by strangers, so "only reports" is backed by a tool allowlist, not
-just its prompt, the same way as the feed in section 5. It gets read-only
-GitHub tools plus the single tool that edits an issue comment, and no tool
-that pushes, opens pull requests, merges, approves or changes settings. The
-allowlist is checked in the task's settings before the first run and
-recorded here. If GitHub access can't be narrowed that way, the sweep gets
-no GitHub write at all and posts its report in the owner's steering project
-instead, and the coordinator copies it to issue #52.
+**How it is run (owner decision, November 1, 2026).** What it reads
+(advisories, package data, repository files) can carry text written by
+strangers. The first version of this plan therefore wanted "only reports"
+backed by a tool allowlist, or else no GitHub write at all. On November 1
+the owner chose instead to run the sweep like the PR keeper: an ordinary
+scheduled task in the project, with the same access. The reasons:
+
+- Scheduled tasks can't limit single tools.
+- A task can only be given its own cloud environment if it also clones a
+  repository, and that brings GitHub write access back.
+- Every cloud task gets all of the owner's connectors, whichever project it
+  belongs to.
+- Walling off the sweep alone wouldn't change what the system is exposed
+  to. The PR keeper already reads comments that anyone can post on this
+  public repository, and it can write and merge.
+
+What limits harm for every agent is that `main` only changes through
+reviewed pull requests. So "only reports" rests on the sweep's
+instructions: its single GitHub write is its own "Security" comment on
+issue #52. Everything else it reads is data, and any instruction found
+in that data becomes a finding in the report. The task runs Mondays at
+6:37 AM Eastern, before the 8 AM list.
 
 **Where it lives.** The sweep and the sender feed (section 5) each have a
 row in AGENTS.md "Who Does What", added in this pull request so both are
@@ -335,8 +348,8 @@ plan. This task is the trial run that shows whether it's worth building.
 ## Done When
 
 - This pull request is merged and the four repository settings are on.
-- The weekly sweep's tool allowlist is recorded here, and it has posted its
-  first "Security" report.
+- The weekly sweep runs as a scheduled task and has posted its first
+  "Security" report.
 - `docs/security/lessons.md` holds the July ledger's lessons and the 28 new
   videos'.
 - The feed task's tool allowlist is recorded here, and the task has run

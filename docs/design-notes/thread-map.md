@@ -41,6 +41,24 @@ Map. It's an early version of Nexus Navigator's grouping.
      refreshed by a scheduled agent, and the view shows how old each
      source's data is.
 
+5. **Look like a map, with a detail rail** (owner, November 1). The view
+   is a page of named sections with one row per conversation and link
+   chips for its outputs, like the stand-in page, not a flat list sorted
+   by state like the claude.ai threads panel. Selecting a row fills a rail
+   on the right side with what's known about that conversation:
+   - its tags;
+   - related context, such as linked conversations, pull requests, pages
+     and documents;
+   - memories that mention it;
+   - its priority as the agent sees it, with a short reason;
+   - room for more fields later.
+   The priority also shows on the row itself, as a badge beside its
+   state, so the owner can scan priorities without opening the rail. The
+   agent's priority and the owner's are kept as two separate values. The
+   badge shows the agent's, labeled as the agent's, until the owner sets
+   his own. From then on the badge shows his, labeled as his, and the rail
+   still shows what the agent rated it and why.
+
 ## Privacy
 
 Thread titles and section names are the owner's private working notes. They
@@ -53,6 +71,8 @@ committed. Tests use invented threads.
 
 ## Until It's Built
 
-The stand-in page stays the owner's view. A scheduled task in its thread
-refreshes it once a day. It reads the project's threads, pull requests and
-pages, re-sorts them and republishes the page.
+The stand-in page stays the owner's view. On November 1 the owner chose to
+fold it into the private thread status page, which refreshes every 30
+minutes and reuses the map's sections and links, so there's one page to
+check instead of two. The detail rail isn't in the stand-in; it waits for
+the True Convo build.

@@ -17,7 +17,7 @@ plan is in [PLAN.md](PLAN.md).
 | PR 4b: Dictation archive key under the same recovery key | Merged (#32) |
 | PR 4c: Kept recordings sealed | Merged (#34, #35) |
 | PR 5: Scripted kill-and-reopen proof | Merged (#36) |
-| PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-2-owner-trial.md)) | Waiting on the owner |
+| PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-2-owner-trial.md)) | First run October 31: the Desk passed all five checks and dictations are sealed on disk; Archive History was blocked by a bug. Waiting on fixes F1 to F3, then a short re-check |
 
 Until the owner's trial passes, the installed Desk is for invented data only.
 
@@ -56,6 +56,7 @@ chats only). Scope:
 | PR 4a-native: the Mac app's "Approve Anthropic once" screen, its approval shown apart from "local checks passed", and the consent proof (no spawn without both gates); split from 4a to keep each review small. Nothing turned on: the window shows the screen only when given it, and the app gives it nothing before PR 4b | Merged (#207) |
 | PR 3b follow-up: the plan rename (Ultra reports `max` and passes; an `ultra` code fails closed), with a test for each name | Merged (#212) |
 | PR 4-proof: the fake-CLI kill proof. A test copy of the app, wired as PR 4b will wire it (the real owner, coordinator, store, launcher and supervisor, with a fake Claude Code), is killed at four exact points mid-reply: no process is left, the next launch keeps exactly the saved text, sends nothing again, asks for a new paid-usage confirmation, and Retry makes exactly one new run; a graceful quit records `stopped`; and a start with either consent gate closed (not approved, not confirmed, approval withdrawn, confirmation ended) spawns nothing. The app itself still refuses every Claude launch | Merged (#223) |
+| PR 4b: Turn it on in True Convo Test (the real app gets nothing). Claude joins the picker; the Desk window gets the "Approve Anthropic once" and paid-usage screens; the lane gets section 17's owner, the open store's approval, the end observers (lock, sleep, logout) from launch, and the 4,096-byte first-trial limit. Until Claude Code's start values (section 16) are recorded, none of it switches on: Claude stays out of the picker and nothing can be sent. To try: picking Claude in a conversation that had local-model turns sends those earlier turns to Anthropic too; the line above the message box says how many | Merged (#228) |
 
 ## Done
 
@@ -132,16 +133,18 @@ reviews. Plan approved (merged as #127 on October 24):
 
 **Skin check** (Personal, new Health module), Claude builds, GrokBot or a fresh Claude reviews; plan approved (`docs/plans/skin-check.md`). Slice 1, the standalone engine in `packages/skin-check/`, is built; the iPhone source joins the iPhone app on the parallel sync line, and the Desk view follows.
 
-**Time mirror** (Personal, the observability layer's first slice; owner asked October 29 to start it ahead of the core order), Claude builds, GrokBot or a fresh Claude reviews; plan approved by the owner on October 29 (`docs/plans/time-mirror.md`): RescueTime daily totals drawn as habit-grid heat maps on the Mac, nothing new leaving the device.
+**Time mirror** (Personal, the observability layer's first slice; owner asked October 29 to start it ahead of the core order), Codex team A builds the library and then a Claude building session the Mac command (owner's pick, November 1), GrokBot or a fresh Claude reviews; plan approved by the owner on October 29 (`docs/plans/time-mirror.md`): RescueTime daily totals drawn as habit-grid heat maps on the Mac, nothing new leaving the device.
 
 **Public website (trueconvo.com)**, Claude builds, Codex reviews; a home page (with two Desk preview screenshots) and a plain-language privacy policy in `site/`, published by `.github/workflows/pages.yml` from `main` (#153, October 25). For Meta's developer early-access application and regular visitors. The owner turned on Pages and set the custom domain, and the site is published at trueconvo.com (latest deploy October 26).
 
 **Security** (all work; owner asked October 28): plan
 [docs/plans/security.md](docs/plans/security.md), in progress.
 Baseline in #166: the Desk's Vite patched, Dependabot, `SECURITY.md`, and the
-triage judge closed to outside pull requests. A security checklist on every
-review, a weekly sweep, controls tied to triggers (sync core first), and a
-weekly feed of lessons from followed senders follow.
+triage judge closed to outside pull requests. The weekly sweep runs Mondays
+at 6:37 AM as a scheduled task, like the PR keeper (owner decision,
+November 1), and keeps its "Security" comment on issue #52. A security
+checklist on every review, controls tied to triggers (sync core first), and
+a weekly feed of lessons from followed senders follow.
 
 **Followed sources** (Personal; owner asked October 29), Claude builds, GrokBot or a fresh Claude reviews: plan
 [docs/plans/followed-sources.md](docs/plans/followed-sources.md), approved by the owner October 29. True Convo's own version of the

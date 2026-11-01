@@ -8,7 +8,9 @@ import Testing
 import TrueConvoIdentity
 
 // Step 3 PR 4b: the app's one participant lane. On in True Convo Test only;
-// the Claude Code entry is listed first (section 20.2) and never available.
+// the Claude Code entry is listed first (section 20.2). Without the launch's
+// Claude entry, as here, it is never available; with it, see
+// ClaudeConversationWiringTests (the Claude Code adapter's PR 4b).
 // Ollama is played by `ScriptedLocalRoute` (LocalStartTests.swift); nothing
 // here reaches the real Ollama. Invented data only.
 

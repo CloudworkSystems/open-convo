@@ -220,13 +220,15 @@ struct ParticipantWireTests {
 
     /// A tripwire: one place in the app builds a participant configuration,
     /// the app's lane wiring (step 3 PR 4b: the local route, in True Convo
-    /// Test only, with the never-available Claude entry), on one exact line;
+    /// Test only; the Claude Code adapter's PR 4b: with the Claude entry
+    /// behind section 17's owner, or never available without it), on two
+    /// exact lines;
     /// and the one hand-off to a host is the coordinator's `makeHost`,
     /// passing its own (Codex's S10 carried requirement 1; only the wiring
     /// constructs a coordinator, which ProcessLauncherTests' gates hold).
     /// Any other way to switch a lane on is a reviewed change that edits
     /// this test.
-    @Test("Only the app's lane wiring builds a ParticipantHostConfiguration, on one exact line, and only the coordinator's makeHost passes one to a host")
+    @Test("Only the app's lane wiring builds a ParticipantHostConfiguration, on two exact lines, and only the coordinator's makeHost passes one to a host")
     func nothingSwitchesTheLaneOn() throws {
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("Sources")
@@ -242,9 +244,14 @@ struct ParticipantWireTests {
             }
         }
         let wiring = lines.filter { $0.line.contains("ParticipantHostConfiguration(") }
-        #expect(wiring.map(\.file) == ["ParticipantAppWiring/LocalConversationLane.swift"], "\(wiring)")
-        #expect(wiring.map(\.line) == ["hostConfiguration: ParticipantHostConfiguration(pin: claudePin, localRoute: route),"],
-                "the Claude pin with no first-trial bound and the given local route; nothing else")
+        #expect(wiring.map(\.file) == Array(repeating: "ParticipantAppWiring/LocalConversationLane.swift", count: 2), "\(wiring)")
+        // The Claude Code adapter's PR 4b: with the launch's Claude entry,
+        // the same pin with section 17's first-trial bound (the owner's
+        // initializer stops on any other); without, no bound.
+        #expect(wiring.map(\.line) == [
+            "hostConfiguration: ParticipantHostConfiguration(pin: claudePin, localRoute: route),",
+            "hostConfiguration: ParticipantHostConfiguration(pin: claudePin, inputBound: ParticipantLimits.firstTrialInputBound, localRoute: route),",
+        ], "the Claude pin and the given local route, with the first-trial bound only beside the owner; nothing else")
         for construction in ["ParticipantHostConfiguration.init", "Self(pin:"] {
             #expect(lines.filter { $0.line.contains(construction) }.map(\.file) == [], "\(construction)")
         }

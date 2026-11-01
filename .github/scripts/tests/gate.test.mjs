@@ -102,7 +102,8 @@ test('no head commit never approves', () => {
 test('CODEOWNERS covers the rules, decisions and key files, and not ordinary code', () => {
   const rules = parseCodeowners(readFileSync(new URL('../../CODEOWNERS', import.meta.url), 'utf8'));
   const files = [
-    'AGENTS.md', 'CLAUDE.md', '.github/CODEOWNERS', '.github/workflows/tests.yml',
+    'docs/agent-process.md', '.github/CODEOWNERS', '.github/workflows/tests.yml', '.github/AGENTS.md',
+    '.github/CLAUDE.md', '.claude/settings.json', '.claude/hooks/guard.mjs',
     'PLAN.md', 'docs/decisions.md',
     'apps/mac/Sources/ArchiveProtection/ArchiveSeal.swift',
     'apps/mac/Sources/DeskHost/StoreCipher.swift',
@@ -113,7 +114,7 @@ test('CODEOWNERS covers the rules, decisions and key files, and not ordinary cod
     'apps/mac/Sources/ParticipantCoordinator/ParticipantCoordinator.swift',
     'apps/mac/Tests/DeskHostTests/StoreEncryptionTests.swift', 'apps/mac/Tests/DeskHostTests/WriteFaultRecoveryTests.swift',
     'apps/mac/Tests/DeskHostTests/ProofStoreTests.swift', 'apps/mac/Tests/ArchiveProtectionTests/SealedRecordingsTests.swift',
-    'apps/mac/Sources/VoiceCursorMac/main.swift', 'apps/mac/Package.swift',
+    'apps/mac/Sources/VoiceCursorMac/main.swift',
     'apps/mac/Tests/DeskWindowKitTests/DeskSessionParticipantTests.swift',
     'apps/mac/Sources/ParticipantProcess/ParticipantAvailability.swift',
     'apps/mac/Tests/ParticipantProcessTests/CoordinatorAppWiringTests.swift',
@@ -122,7 +123,6 @@ test('CODEOWNERS covers the rules, decisions and key files, and not ordinary cod
     'apps/mac/Tests/ProtectionProofTests/Anything.swift',
     'apps/mac/Sources/VoiceCursorMac/OpenAIRealtimeTranscriber.swift',
     'apps/mac/Sources/VoiceCursorMac/OpenAIRealtimeSmoke.swift',
-    'docs/plans/AGENTS.md', 'packages/CLAUDE.md', 'sub/AGENTS.md',
     // "/**/" matches zero folders too.
     'apps/mac/FooKeychain.swift', 'apps/mac/ParticipantX.swift',
   ];
@@ -131,7 +131,11 @@ test('CODEOWNERS covers the rules, decisions and key files, and not ordinary cod
     'docs/annotations/x.md', 'apps/mac/Sources/DeskHost/DeskHost.swift', 'docs/plans-old.md', 'docs/AGENTS-notes.md',
     // Plans merge on the owner's yes in a Claude thread (owner decision, October 27).
     'docs/plans/merge-gate.md', 'docs/plans/desk-annotation-layer.md',
-    'apps/mac/Sources/VoiceCursorCore/ElectronFocusPolicy.swift', 'apps/mac/Sources/CorrectionMemory/LocalDataBoundary.swift'];
+    'apps/mac/Sources/VoiceCursorCore/ElectronFocusPolicy.swift', 'apps/mac/Sources/CorrectionMemory/LocalDataBoundary.swift',
+    // Rules files merge on the owner's yes in a Claude thread, and the Mac
+    // manifest is guarded by mac-manifest.test.mjs (owner decision, November 1).
+    'AGENTS.md', 'CLAUDE.md', 'docs/plans/AGENTS.md', 'packages/CLAUDE.md', 'sub/AGENTS.md', 'apps/mac/AGENTS.md',
+    'apps/mac/Package.swift'];
   assert.deepEqual(protectedFiles(rules, open), []);
 });
 
@@ -483,8 +487,8 @@ test('a comment with anything besides the note never counts', () => {
 
 test('a pull request the owner opened waits when it changes a protected file', () => {
   const rules = parseCodeowners(readFileSync(new URL('../../CODEOWNERS', import.meta.url), 'utf8'));
-  const reason = ownerOpenedBlock({ prAuthor: OWNER_LOGIN, files: ['packages/x/a.mjs', 'AGENTS.md'], rules });
-  assert.match(reason, /AGENTS\.md/);
+  const reason = ownerOpenedBlock({ prAuthor: OWNER_LOGIN, files: ['packages/x/a.mjs', 'docs/agent-process.md'], rules });
+  assert.match(reason, /docs\/agent-process\.md/);
   // A renamed file's old path counts: moving a protected file away changes it.
   assert.ok(ownerOpenedBlock({ prAuthor: OWNER_LOGIN, files: ['docs/old-decisions.md', 'docs/decisions.md'], rules }));
 });

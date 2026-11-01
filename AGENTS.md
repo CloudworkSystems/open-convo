@@ -62,7 +62,7 @@ of the folder above it.
 
 The full text of each section below is in
 [docs/agent-process.md](docs/agent-process.md), under the same name. It is
-binding and protected like this file, and it governs where this summary
+binding and owner-protected, and it governs where this summary
 differs. Read the full section before you act on it.
 
 ### Review Loop (Codex Annotates, Claude Builds)
@@ -88,6 +88,10 @@ differs. Read the full section before you act on it.
   **Plans merge on the owner's yes**, said in a Claude thread and quoted
   with its date in the pull request. A plan that also changes a protected
   path still needs his approval on GitHub.
+- **Rules files merge on the owner's yes** too (owner decision, November 1,
+  2026): `AGENTS.md` and `CLAUDE.md` files, quoted the same way. The full
+  process text, `.github/`, `.claude/`, `PLAN.md` and `docs/decisions.md`
+  stay protected on GitHub.
 - **Independent reviews.** No agent reviews its own work. GrokBot or Gemini
   reviews Claude-built and Codex-built work. Codex reviews GrokBot's work, and
   the coordinator checks it against the plan. A fresh Claude review stands in
@@ -229,7 +233,7 @@ judge that isn't there (owner decision, October 25, 2026).
 | Open-decision sweep (Claude thread "Nudge on idle open decisions", daily, 7:45 AM) | none; reads the steering project's thread list only | Lists the steering project's threads that have waited on the owner for 2 days or more and nudges him once per wait in that thread; changes nothing else |
 | Nightly Test build (scheduled, 2–6 AM) | none | Rebuilds True Convo Test from `main` on the owner's Mac |
 | Recycling pass (scheduled, Sundays) | `cloudwork-bot` | One pull request proposing fixes for stale docs |
-| Security sweep (scheduled, Mondays, in the cloud) | `cloudwork-bot`, read-only tools plus one issue-comment tool | Runs the weekly self-audit in [docs/plans/security.md](docs/plans/security.md) and rewrites its "Security" comment on issue #52; never changes code, settings or merges |
+| Security sweep (scheduled, Mondays, in the cloud) | `cloudwork-bot`, the PR keeper's access (owner decision, November 1, 2026); its only write is its own comment | Runs the weekly self-audit in [docs/plans/security.md](docs/plans/security.md) and rewrites its "Security" comment on issue #52; never changes code, settings or merges |
 | Sender feed (scheduled, weekly) | the owner's Gmail, read and search only; no GitHub access | Reads only the followed senders' emails and posts drafted lessons and ideas in the owner's private steering project; after the owner picks, a building session opens the lessons pull request ([docs/plans/security.md](docs/plans/security.md) section 5) |
 | `owner-queue` workflow | GitHub Actions | Rewrites issue #52, "Needs the owner", every hour |
 
