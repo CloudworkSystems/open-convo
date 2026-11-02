@@ -53,7 +53,13 @@ export interface Session {
   /** A side chat: the conversation and message it is about. Absent on ordinary sessions. */
   sideOf?: { sessionId: string; messageId: string };
   /** Shared reactions: on only for this exact participant (docs/plans/desk-shared-reactions.md). */
-  reactionSharing?: { participant: ParticipantIdentity; since: string; note?: string };
+  reactionSharing?: {
+    participant: ParticipantIdentity;
+    since: string;
+    note?: string;
+    /** Reactions added while sharing is on; only those after the latest Send are listed. */
+    added?: { messageId: string; emoji: string; at: string }[];
+  };
   createdAt: string;
   updatedAt: string;
 }

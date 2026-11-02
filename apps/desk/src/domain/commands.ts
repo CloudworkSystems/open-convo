@@ -3,7 +3,7 @@ import { demoResponse, domainClock } from './demo';
 import { defaultSessionTitle } from './session-naming';
 import { sameParticipantIdentity, validParticipantIdentity } from './participant-choices';
 import { isMemoryCommand, mutateMemory } from './memory';
-import { isMessageMarkCommand, mutateMessageMark } from './message-marks';
+import { isMessageMarkCommand, MESSAGE_REACTIONS, mutateMessageMark, quickReactionFor } from './message-marks';
 import { createSideChat, linkedSessionIds, messageSessionId } from './side-chat';
 import { reactionSharingOn, stopReactionSharing, syncReactionsNote } from './shared-reactions';
 import type { Activity, DeskCommand, DeskState, DomainOptions, Goal, Session } from './types';
@@ -72,7 +72,13 @@ export function applyCommand(state: DeskState, command: DeskCommand, options: Do
       if (!mutateMessageMark(next, command, now)) return state;
       // Shared reactions: a reaction change updates this chat's note in the draft.
       const owner = next.sessions.find((item) => item.id === messageSessionId(next, command.messageId));
-      if (owner && command.type !== 'set-message-rating') syncReactionsNote(next, owner);
+      if (owner && command.type !== 'set-message-rating') {
+        // A quick reaction is listed by its fixed emoji, however it was picked.
+        const picked = command.type === 'toggle-message-emoji' ? command.emoji : undefined;
+        const name = command.type === 'toggle-message-reaction' ? command.reaction : quickReactionFor(picked!);
+        const emoji = name ? MESSAGE_REACTIONS.find((reaction) => reaction.name === name)!.emoji : picked!;
+        syncReactionsNote(next, owner, { messageId: command.messageId, emoji, at: now });
+      }
     } catch (error) {
       throw new DomainError(error instanceof Error ? error.message : 'The mark could not be saved.');
     }

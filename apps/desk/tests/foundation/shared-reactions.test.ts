@@ -59,6 +59,24 @@ test('with sharing on, reactions write a visible note at the top of the draft th
   assert.equal(validateState(state).valid, true);
 });
 
+test('each reaction is shared once, even when another one on the same message changes later', () => {
+  const f = fixture();
+  let state = applyCommand(f.state, { type: 'set-reaction-sharing', sessionId: f.sessionId, on: true }, f.options);
+  state = applyCommand(state, { type: 'toggle-message-reaction', messageId: f.reply.id, reaction: 'heart' }, f.options);
+  assert.match(state.drafts[f.sessionId], /^\[My reactions: ❤️ on your reply/);
+  assert.equal(validateState(state).valid, true, 'a pending reaction saves');
+  state = applyCommand(state, { type: 'send-demo', sessionId: f.sessionId }, f.options);
+  assert.equal(state.drafts[f.sessionId], '');
+  // The heart was shared with that Send; adding the idea lists only the idea.
+  state = applyCommand(state, { type: 'toggle-message-reaction', messageId: f.reply.id, reaction: 'idea' }, f.options);
+  assert.match(state.drafts[f.sessionId], /^\[My reactions: 💡 on your reply "[^"]+"\]\n\n$/);
+  // Picking a quick emoji from the full set is the same reaction.
+  state = applyCommand(state, { type: 'toggle-message-emoji', messageId: f.reply.id, emoji: '💡' }, f.options);
+  assert.equal(state.drafts[f.sessionId], '');
+  assert.equal(state.sessions[0].reactionSharing?.added, undefined, 'nothing pending is kept');
+  assert.equal(validateState(state).valid, true);
+});
+
 test('once he edits the note the Desk stops changing it, and says so', () => {
   const f = fixture();
   let state = applyCommand(f.state, { type: 'set-reaction-sharing', sessionId: f.sessionId, on: true }, f.options);
@@ -110,11 +128,14 @@ test('earlier turns holding a note stay out of the context unless sharing is on 
   const run = (runId: string, input: string) => ({ runId, sessionId: f.sessionId, phase: 'completed', inputChunks: [input], outputChunks: ['ok'] }) as unknown as ConversationRun;
   const runs = [run('a', 'plain'), run('b', '[My reactions: ❤️ on your reply "x"]\n\nmore'), run('c', 'plain again')];
   assert.deepEqual(contextRunsFor(runs, session).map((item) => item.runId), ['a', 'c']);
-  assert.equal(reactionsLine(runs, session, 'Invented local model on this Mac'),
+  const all = new Set(['a', 'b', 'c']);
+  assert.equal(reactionsLine(runs, session, 'Invented local model on this Mac', all),
     '1 earlier turn with reactions you shared is left out, because sharing is off for Invented local model.');
+  // A turn the context limit would leave out anyway isn't counted.
+  assert.equal(reactionsLine(runs, session, 'Invented local model on this Mac', new Set(['c'])), undefined);
   const sharing = { ...session, reactionSharing: { participant: { ...local }, since: session.updatedAt } };
   assert.deepEqual(contextRunsFor(runs, sharing).map((item) => item.runId), ['a', 'b', 'c']);
-  assert.equal(reactionsLine(runs, sharing, 'Invented local model on this Mac'),
+  assert.equal(reactionsLine(runs, sharing, 'Invented local model on this Mac', all),
     'Your reactions in this chat go to Invented local model on this Mac with your next message.');
 });
 
@@ -127,6 +148,9 @@ test('a saved switch that is malformed is refused, not repaired', () => {
     { participant: local, since: 'yesterday' },
     { participant: local, since: state.sessions[0].updatedAt, note: 'not a note' },
     { participant: local, since: state.sessions[0].updatedAt, extra: true },
+    { participant: local, since: state.sessions[0].updatedAt, added: [] },
+    { participant: local, since: state.sessions[0].updatedAt, added: [{ messageId: 'x', emoji: '❤️' }] },
+    { participant: local, since: state.sessions[0].updatedAt, added: [{ messageId: 'x', emoji: '❤️', at: '2020-01-01T00:00:00.000Z' }] },
   ]) {
     const broken = structuredClone(state);
     (broken.sessions[0] as unknown as Record<string, unknown>).reactionSharing = bad;

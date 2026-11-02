@@ -614,7 +614,11 @@ export function useConversationRuns(options: RunWorkspace) {
   // Shared reactions: where reactions go, or which earlier turns stay out.
   const reactionsDestination = savedSelection ? isOffMacClaude(savedSelection) ? `${savedSelection.label} (Anthropic)`
     : selectedLocal ? `${savedSelection.label} on this Mac` : savedSelection.label : '';
-  const sharedLine = participantMode ? reactionsLine(options.state?.conversationRuns ?? [], selectedSession, reactionsDestination) : undefined;
+  const unfilteredContext = !participantMode || !selected ? undefined
+    : selectedLocal ? selectLocalContext(options.state?.conversationRuns ?? [], selected, selectedDraft)
+    : isOffMacClaude(savedSelection) ? selectClaudeContext(options.state?.conversationRuns ?? [], selected, selectedDraft, inputLimit) : undefined;
+  const carriedRunIds = new Set(unfilteredContext?.kind === 'ok' ? unfilteredContext.contextRunIds : []);
+  const sharedLine = participantMode ? reactionsLine(options.state?.conversationRuns ?? [], selectedSession, reactionsDestination, carriedRunIds) : undefined;
   const sendDestination = [claudeLine, sharedLine].filter(Boolean).join(' ') || undefined;
   const reactionsHold = participantMode ? reactionsNoteSendHold(selectedSession, selectedDraft) : undefined;
   // Step 3 trial: while this conversation's reply is being written, the
