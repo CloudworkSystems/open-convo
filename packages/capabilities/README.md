@@ -4,8 +4,8 @@ The contract every True Convo capability record (`capability.json`) follows,
 and a validator for it. This is part 1 of
 [docs/plans/media-generation-capability.md](../../docs/plans/media-generation-capability.md).
 It only checks records. It runs nothing, reads no keys, contacts no host and
-spends nothing. The cap and ledger (part 2) and `make_media` (part 3) come
-later in this package.
+spends nothing. Part 2, below, is the signed spending cap and the ledger.
+`make_media` (part 3) comes later in this package.
 
 Node 22 or later. No dependencies.
 
@@ -93,3 +93,177 @@ The tests check every `docs/skills/*/capability.json` (today,
 `first-principles-decision`) and an invented media record in
 `tests/fixtures/make-media.json` with an upload, a local and an own-key
 route. All names, hosts (`example.com`) and prices there are invented.
+
+## Part 2: signed cap and ledger
+
+A spending cap and a ledger the part 3 runner and the Mac app (part 4) call.
+Signing uses ECDSA P-256 and SHA-256 over the canonical JSON of the cap,
+with the signature in X9.62 DER. That is the shape the Mac Secure Enclave
+produces (`ecdsaSignatureMessageX962SHA256`), so part 4's key fits without a
+format change. This package checks signatures. It does not hold a key, read
+the clock, open a network connection or spend anything.
+
+Until part 4 keeps the protected state in the Keychain, the cap is designed,
+not enforced. A test here shows that an edited, missing, unsigned or older
+cap is treated as $0, and that a damaged ledger stops paid runs. It cannot
+show that another process running as the same person is unable to write the
+Keychain item. That proof is part 4.
+
+### Money
+
+An amount is `{ amount, currency }`. `amount` is decimal text such as
+`"0.40"`, up to six decimal places, never a JSON number. `currency` is an
+ISO 4217 code. Sums and comparisons use whole micro-units (`BigInt`,
+millionths of the unit). Two currencies are never added or compared.
+`0.1 + 0.2` is `0.3`.
+
+### Cap record
+
+| Field | Rule |
+|---|---|
+| `revision` | Whole number, 1 or more. A new cap must be a higher revision than the one installed. It does not have to be the next integer. |
+| `currency` | The person's currency. Every level uses it. |
+| `timeZone` | An IANA zone, such as `America/Los_Angeles`. The month is that zone's calendar month. |
+| `perRun`, `monthlyByCapability`, `monthlyAll` | Money in `currency`. Zero is allowed: a signed zero is a real cap, and a paid run does not fit. |
+| `paused` | `true` or `false`. A paused cap checks out, and paid runs stop. |
+| `conversion` | `null`, or the one rate the person signed. See conversion below. |
+
+Unknown fields are refused. The canonical JSON (sorted keys, no extra
+space) is what gets signed and hashed. `verifyCap(record, signature, publicKey, protectedState)`
+accepts the record only when the signature checks out and the revision and
+hash match the protected state. A missing record before any cap is installed
+means "Set a cap first." An edited record, a bad signature, a missing record
+after a cap was installed, or an older validly signed record all come back
+as a $0 cap.
+
+`acceptCap(store, record, signature, publicKey)` installs a higher signed
+revision and clears any tightening. The caller passes the public key. Part
+4 passes the Secure Enclave key. This part does not pin a key of its own.
+
+### Protected state
+
+`{ capRevision, capHash, tightening, ledgerHead, ledgerCount }`. The library
+reads and writes it only through a store: `read()` and `write(next, expected)`.
+`write` returns false when the stored value is no longer `expected`.
+`memoryStore()` and `fileStore(path)` are the doubles for this part. Part 4
+puts the same object in the Keychain.
+
+`tightening` is the string `"none"`, or an object with `perRun`,
+`monthlyByCapability`, `monthlyAll` and `paused`. `"none"` is written only
+by a new signed cap. If the field is missing, damaged, higher than the
+signed cap, or turns a pause off, the effective cap is $0.
+
+`tighten(store, change, record, signature, publicKey)` lowers a level or
+sets `paused` to true. It needs no new signature. The signed record is
+checked first, because the store keeps only the hash. A change that raises
+a level, even one that stays under the signed cap, or that sets `paused`
+to false, is refused. A change that does not lower anything is refused.
+The effective cap is the lower of the signed cap and the tightening.
+
+### Ledger
+
+The ledger file is `entries.jsonl` in the folder the caller names. Each
+line is one entry:
+
+`{ seq, kind, capabilityId, routeId, amount, estimated, jobId, at, prevHash, hash }`
+
+`kind` is `reserve`, `settle`, `release` or `over-bill`. `hash` is the
+SHA-256 of the canonical entry without `hash`, and `prevHash` is the
+previous entry's hash (`null` on the first). The protected state's
+`ledgerHead` and `ledgerCount` must match the file. A missing file (when
+the state expects entries), a broken chain, a symlink in place of the
+file, or a file longer than the head stops paid runs and says the record
+was changed or is missing. A shorter file that still chains says it is an
+older copy. The head is written before the new line. If the two disagree
+after a crash, the next read stops paid runs the same way.
+
+`reserve`, `settle`, `release`, `resetLedger` and `monthSpent` take one
+in-process queue per folder and an exclusive lock file (`ledger.lock`), so
+two processes cannot both fit a run into the same remaining budget. A lock
+that is already held is not taken. The run is refused.
+
+| Call | What it does |
+|---|---|
+| `reserve({ ledgerDir, store, record, signature, publicKey, capabilityId, routeId, max, jobId, now, providerTotal? })` | Holds `max` against all three levels. Refuses a paused cap, a max of zero, a max over the per-run level, or a month that would go over. |
+| `settle({ ...same, jobId, now, actual?, estimated? })` | `estimated: true` keeps the reserved maximum and marks it estimated. An `actual` at or under the reservation settles that figure. An `actual` over it writes `over-bill`, counts the full bill, and returns `routeOff: true`. |
+| `release({ ...same, jobId, now })` | Drops an open reservation. The job id is never reused. |
+| `monthSpent({ ...same, now, capabilityId?, providerTotal? })` | `{ reserved, spent, counted }` for that month. `counted` is what the cap uses. |
+| `resetLedger({ ledgerDir, store, record, signature, publicKey })` | Empties the ledger when the caller presents the current signed cap, or a newer one. An older signed cap is refused. The current cap leaves a tightening in place. A newer cap clears it. |
+
+`now` is an ISO time with a zone, such as `2026-11-15T18:00:00.000Z`. The
+library does not call `Date.now()` or `new Date()` without an argument.
+
+A run counts in the calendar month of its reservation, in the cap's time
+zone, even when it is settled in a later month. The month runs from local
+midnight on the first to local midnight on the first of the next month.
+Open reservations and settled amounts both count. A release counts as
+nothing. A settle replaces its reservation, so the two are not added.
+
+When `providerTotal` is passed, it is the provider's own month figure for
+this route's key, in the cap's currency. The check uses the higher of that
+figure and this route's settled total, then adds open reservations and the
+settled totals of other routes. A provider figure below the ledger does not
+lower it. A provider figure in another currency is refused.
+
+### Conversion
+
+A quote in the cap's currency is used as it is. A quote in another currency
+is refused unless the signed cap has a `conversion` for that currency:
+
+| Field | Rule |
+|---|---|
+| `currency` | The foreign currency. It must not be the cap's currency. |
+| `rate` | Cap-currency units for one unit of the foreign currency. Decimal text, up to 12 places, greater than 0. |
+| `margin` | A fraction added on top, such as `"0.02"` for two percent. |
+| `asOf` | When the person signed the rate. An ISO time. |
+
+The cap amount is `quote × rate × (1 + margin)`, rounded up to the next
+micro-unit. The result carries both amounts, for the card. A rate older
+than 24 hours before `now` is refused, and so is a rate dated after `now`.
+A rate that is exactly 24 hours old is still used. A third currency, one
+the cap does not name, is refused.
+
+`convertQuote({ quote, record, signature, publicKey, protectedState, now, rate })`
+reads the rate from the signed cap. The `rate` argument is ignored, so a
+caller cannot pass a friendlier one. `reserve` does not convert. It stores
+the cap-currency maximum the card already showed. A bill in another
+currency is converted the same way at settle; if it cannot be converted,
+the route is marked off and the reservation stays open.
+
+### Command
+
+```sh
+node packages/capabilities/src/cap/show.mjs --ledger <dir> --state <state.json> --now <iso>
+```
+
+It prints the effective cap, what is reserved and spent this month across
+every capability, and whether the ledger checks out. It creates no files
+and takes no lock. The ledger folder may hold `cap.json`, `cap.signature`
+(base64 DER) and `public-key.pem` beside `entries.jsonl`. With no cap file,
+the command says to set a cap first.
+
+### Edge cases
+
+These are the choices the plan does not spell out. Each one has a test in
+`tests/cap.test.mjs`.
+
+- A signed cap of zero is a real cap. A missing or broken cap is $0 for a
+  different reason ("Set a cap first", or the record does not check out).
+- A pause on the signed cap and a pause in a tightening both stop paid
+  runs. Turning paid runs back on, or raising a tightening, needs a new
+  signed cap. Editing a tightening so it sits above the signed cap, or
+  deleting it, gives $0 rather than the higher signed figures.
+- A tightening that names another currency, or that changes nothing, is
+  refused and the stored tightening stays as it was.
+- The reservation's month is the one that is charged. Settling it later
+  does not move the spend.
+- The provider's figure replaces only this route's settled total, and only
+  when it is higher. Open reservations and other routes are added on top.
+- An estimated settle ignores any `actual` sent with it.
+- A job id stays used after release, settle or over-bill.
+- `now` has to be a real ISO instant. `2026-02-31` is refused.
+- A symlink in place of `entries.jsonl` is treated as a changed ledger.
+- The show command's directory listing is unchanged after it runs.
+- Amounts are stored and printed as the shortest decimal that round-trips
+  (`"0.3"`, not a binary fraction). The signed cap keeps the text the
+  person signed; the figures the ledger writes are the shortest form.
