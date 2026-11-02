@@ -8,6 +8,10 @@
 # full text stays here, so no agent can loosen that rule without him.
 /docs/agent-process.md @CloudworkSystems
 /.github/ @CloudworkSystems
+# The scheduled tasks' instructions: each task reads its file from main on
+# every run, so a change here changes what the task is allowed to do
+# (November 2, 2026; docs/scheduled-tasks/README.md).
+/docs/scheduled-tasks/ @CloudworkSystems
 # Claude Code settings and the guard hook that enforces the hard rules.
 /.claude/ @CloudworkSystems
 
