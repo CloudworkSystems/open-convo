@@ -45,6 +45,11 @@ one folder each: `SKILL.md`, a `capability.json` record (actions needing
 approval, install gate, models passed, what it doesn't prove) and its example
 runs. The first is `first-principles-decision` (October 28, draft).
 
+The first capability with paid routes, and the fields a `capability.json`
+gains for routes, costs and caps, is planned in
+[media-generation-capability.md](../plans/media-generation-capability.md)
+(November 2, draft).
+
 ## Rules
 
 - **Tested on the local default.** A capability counts as portable only once

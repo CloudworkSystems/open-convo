@@ -46,6 +46,7 @@ separate yes; Publish never sends or releases without approval.
 | `action_check` (pass, review or deny before an agent acts) | Jeff's local rules | capability-adapter + `tools/action-guard` | Step 6, private side only (see below) |
 | Design: `design_audit`, `design_polish`, `typeset`, layout and color passes | Impeccable (Apache 2.0, includes an anti-pattern detector) | `cloudwork_systems/.claude/skills/impeccable` v4.0.4 | Site Engine |
 | Scroll: scroll-driven pages, layered heroes, video scrubbing | ScrollCraft by Nate Herk (MIT, `github.com/nateherkai/scroll-craft`, pinned at `0b81622`) | `cloudwork_systems/true_convo/tca_brain/brain/skills/portable/scroll-craft` (local adaptation 0.3.0-tca.1) | Site Engine |
+| `make_media` (images and short video) | The person's pick: upload their own clip, a free local model (Wan, LTX-Video), their own key, or a provider sign-in where its terms allow; paid routes capped at $0 until the owner sets a cap | New, [media-generation-capability.md](../plans/media-generation-capability.md) (draft, November 2) | Open decision in that plan |
 
 Later capabilities come from the modules: voice (Convo Engine), visibility
 checks (Visibility Agent).
