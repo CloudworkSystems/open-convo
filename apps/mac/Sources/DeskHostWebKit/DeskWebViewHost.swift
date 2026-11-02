@@ -917,6 +917,31 @@ public final class DeskWebViewHost: NSObject {
         }
     }
 
+    /// Whether the live page is still saving the reply text it started
+    /// saving when the unsaved-work question reached it (step 3 trial, F11):
+    /// true while the document carries `data-desk-runs-saving`, false once
+    /// it doesn't, nil with no answer (closed, locked, no page, a script
+    /// error, or no answer within `unsavedWorkCheckTimeout`). Read from the
+    /// host's own script world; the attribute is the page's only signal.
+    public func pageIsSavingRuns() async -> Bool? {
+        guard !isClosed, !isLocked, livePageHoldsCurrentConnection, webView.url != nil else { return nil }
+        let answer = FirstAnswer<Bool?>()
+        return await withCheckedContinuation { continuation in
+            answer.continuation = continuation
+            webView.evaluateJavaScript(Self.runsSavingCheck, in: nil, in: .defaultClient) { result in
+                guard case .success(let value) = result, let flag = value as? NSNumber,
+                      CFGetTypeID(flag) == CFBooleanGetTypeID() else { answer.give(nil); return }
+                answer.give(flag.boolValue)
+            }
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: Self.unsavedWorkCheckTimeout)
+                answer.give(nil)
+            }
+        }
+    }
+
+    static let runsSavingCheck = "document.documentElement.hasAttribute('data-desk-runs-saving')"
+
     /// Asks the live page, from the host's own script world, whether it
     /// cancels a `beforeunload` event (`beforeUnloadCheck`). No page in the
     /// view counts as clean: there is nothing to lose, and evaluating would

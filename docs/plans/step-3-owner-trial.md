@@ -154,10 +154,12 @@ has answered its question.
   every quit), the page saves every reply's text so far at once, instead of
   waiting for its next timed save.
 - While a reply is owed and the page says it holds unsaved work, the quit
-  waits one second (`desk.terminate.save-wait limit=1s` in the log) before
-  closing the Desk, inside the existing 17-second limit. After the menu's
-  Quit, the page is asked once more at that point, because only then has
-  the last of the reply arrived.
+  waits for the page to confirm those saves landed (the page marks the
+  Desk while they are under way) before closing the Desk, for at most ten
+  seconds and inside the existing 17-second limit. The log says how it
+  ended: `desk.terminate.save-wait outcome=saved`, `outcome=no-answer` or
+  `outcome=limit`. After the menu's Quit, the page is asked once more at
+  that point, because only then has the last of the reply arrived.
 - On reopen, the Mac's record of the stop comes right after the saved text,
   so the reply reads "Stopped on this Mac. The reply so far is kept.", with
   that text, and Retry only refills the message box. If a few words reached
@@ -166,10 +168,13 @@ has answered its question.
   with everything before them.
 
 A Desk browser test plays the whole sequence (text after the last timed
-save, the Mac's question, reopen) and fails without the fix. A Mac test
-checks the wait, and that a quit with nothing owed or a clean page never
-waits.
+save, the Mac's question, the saving mark clearing, reopen) and fails
+without the fix. Mac tests check that the Desk closes only after the page
+says its save landed, that a page that never finishes or can't say holds
+the quit no longer than the limit, and that a quit with nothing owed or a
+clean page never waits.
 
 Re-check: check 8 on a fresh True Convo Test build, quitting both from the
 menu and with `osascript -e 'tell application "True Convo Test" to quit'`.
-The run log should show `desk.terminate.save-wait` before `desk.closed`.
+The run log should show `desk.terminate.save-wait outcome=saved` before
+`desk.closed`.

@@ -694,11 +694,12 @@ final class DeskSessionParticipantTests: XCTestCase {
         XCTAssertEqual(replies, [true], "exactly one yes")
     }
 
-    /// Step 3 trial, F11: a quit mid-reply asks the page (which saves the
-    /// reply so far when asked) and, while a reply is owed and the page says
-    /// it holds unsaved work, waits `quitSaveWait` before the Desk closes,
-    /// within the one participant bound. Asked even after the menu's Quit.
-    func testAQuitMidReplyGivesThePagesSaveAMomentBeforeTheDeskCloses() async throws {
+    /// Step 3 trial, F11: a quit mid-reply asks the page (which starts saving
+    /// the reply so far when asked) and, while a reply is owed and the page
+    /// says it holds unsaved work, closes the Desk only once the page says
+    /// its saves landed, within the one participant bound. Asked even after
+    /// the menu's Quit.
+    func testAQuitMidReplyClosesTheDeskOnlyOnceThePageSaysItsSaveLanded() async throws {
         for pageAlreadyAsked in [false, true] {
             let folder = try DeskTestFolder()
             defer { folder.clean() }
@@ -707,12 +708,14 @@ final class DeskSessionParticipantTests: XCTestCase {
             let session = try await open(folder, lane: lane, logs: logs)
             var asked = 0
             session.unsavedWorkCheck = { asked += 1; return .unsaved }
+            let savedAt = Date().addingTimeInterval(0.4)
+            var looks = 0
+            session.runSavesCheck = { looks += 1; return Date() < savedAt }
             lane.owedOnceQuitBegan = Self.oneLiveRun
             var replies: [Bool] = []
-            let started = Date()
             var closedAt: Date?
             let answer = DeskTermination.reply(for: session, pageAlreadyAsked: pageAlreadyAsked, timeout: 0.2, participantTimeout: 5,
-                                               quitSaveWait: 0.5, replyToApplication: { replies.append($0) })
+                                               replyToApplication: { replies.append($0) })
             XCTAssertEqual(answer, .terminateLater)
             try await waitUntil("the Desk to close", timeout: 6) {
                 if closedAt == nil, lane.journal.contains("finishShutdown quitting=true") { closedAt = Date() }
@@ -721,10 +724,35 @@ final class DeskSessionParticipantTests: XCTestCase {
             try await waitUntil("the reply", timeout: 6) { !replies.isEmpty }
             XCTAssertEqual(replies, [true])
             XCTAssertEqual(asked, 1, "asked once, pageAlreadyAsked=\(pageAlreadyAsked)")
-            XCTAssertGreaterThanOrEqual(try XCTUnwrap(closedAt).timeIntervalSince(started), 0.45, "the close waited for the page's save")
-            XCTAssertTrue(logs.all.contains("desk.terminate.save-wait limit=0.5s"), "\(logs.all)")
+            XCTAssertGreaterThan(looks, 1, "looked again until the save landed")
+            XCTAssertGreaterThanOrEqual(try XCTUnwrap(closedAt).timeIntervalSince(savedAt), 0, "closed only after the page's save landed")
+            XCTAssertTrue(logs.all.contains { $0.hasPrefix("desk.terminate.save-wait outcome=saved ") }, "\(logs.all)")
             XCTAssertEqual(logs.all.contains("desk.terminate.not-asked page=unsaved-work"), !pageAlreadyAsked, "\(logs.all)")
             XCTAssertFalse(logs.all.contains { $0.hasPrefix("desk.terminate.cap-reached") }, "\(logs.all)")
+        }
+    }
+
+    /// A page that never finishes saving, or can't say, never holds the
+    /// quit past `quitSaveWait`, and the log says which.
+    func testAQuitMidReplyWaitsNoLongerThanItsLimitForThePagesSave() async throws {
+        let cases: [(Bool?, String)] = [(true, "limit"), (nil, "no-answer")]
+        for (saving, outcome) in cases {
+            let folder = try DeskTestFolder()
+            defer { folder.clean() }
+            let lane = FakeDeskLane()
+            let logs = DeskLogCollector()
+            let session = try await open(folder, lane: lane, logs: logs)
+            session.unsavedWorkCheck = { .unsaved }
+            session.runSavesCheck = { saving }
+            lane.owedOnceQuitBegan = Self.oneLiveRun
+            var replies: [Bool] = []
+            let started = Date()
+            _ = DeskTermination.reply(for: session, timeout: 0.2, participantTimeout: 5, quitSaveWait: 0.5,
+                                      replyToApplication: { replies.append($0) })
+            try await waitUntil("the Desk to close", timeout: 6) { session.state == .closed }
+            try await waitUntil("the reply", timeout: 6) { !replies.isEmpty }
+            XCTAssertLessThan(Date().timeIntervalSince(started), 3, "\(outcome): well inside the participant bound")
+            XCTAssertTrue(logs.all.contains { $0.hasPrefix("desk.terminate.save-wait outcome=\(outcome) ") }, "\(logs.all)")
         }
     }
 
@@ -738,6 +766,7 @@ final class DeskSessionParticipantTests: XCTestCase {
             let logs = DeskLogCollector()
             let session = try await open(folder, lane: lane, logs: logs)
             session.unsavedWorkCheck = { page }
+            session.runSavesCheck = { true }
             lane.owedOnceQuitBegan = owed
             var replies: [Bool] = []
             _ = DeskTermination.reply(for: session, timeout: 2, participantTimeout: 5, quitSaveWait: 3,

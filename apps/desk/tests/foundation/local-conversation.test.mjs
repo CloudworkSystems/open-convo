@@ -402,12 +402,16 @@ test('step 3 trial F11: a quit mid-reply saves the text so far when the Mac asks
     // The Mac's quit: it asks the page about unsaved work (a beforeunload
     // event), and its pushes have already ended, so the stop's terminal
     // never reaches this page.
-    const cancelled = await page.evaluate(() => {
+    const [cancelled, markedSaving] = await page.evaluate(() => {
       const event = document.createEvent('BeforeUnloadEvent');
       event.initEvent('beforeunload', false, true);
-      return !window.dispatchEvent(event);
+      return [!window.dispatchEvent(event), document.documentElement.hasAttribute('data-desk-runs-saving')];
     });
     assert.equal(cancelled, true, 'a reply still coming in counts as unsaved work');
+    assert.equal(markedSaving, true, 'the Mac can see the save is under way');
+    // The Mac closes the Desk once the mark is gone; by then the text is saved.
+    await expect.poll(() => page.evaluate(() => document.documentElement.hasAttribute('data-desk-runs-saving')), { timeout: 1000 }).toBe(false);
+    assert.equal((await f.stored()).conversationRuns.at(-1).outputChunks.join(''), 'Invented first part. Invented second part.');
     // At once, as the Mac closes the Desk a moment later: never the next timed save.
     await expect.poll(async () => (await f.stored()).conversationRuns.at(-1).outputChunks.join(''), { timeout: 1000 })
       .toBe('Invented first part. Invented second part.');

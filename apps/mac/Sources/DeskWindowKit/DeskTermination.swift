@@ -24,10 +24,11 @@ public enum DeskTermination {
     /// (Codex Q33): `ParticipantLimits.shutdownMillis`, 17 s, from the
     /// quit's own `beginShutdown(quitting: true)`.
     nonisolated public static let participantTimeout: TimeInterval = TimeInterval(ParticipantLimits.shutdownMillis) / 1000
-    /// How long a quit with a reply still owed waits, after asking the page,
-    /// before the Desk closes, so the page can save the reply so far (step 3
-    /// trial, F11). Inside `participantTimeout`, never added to it.
-    nonisolated public static let quitSaveWait: TimeInterval = 1
+    /// The longest a quit with a reply still owed waits, after asking the
+    /// page, for the page to confirm it saved the reply so far before the
+    /// Desk closes (step 3 trial, F11). Inside `participantTimeout`, never
+    /// added to it: the quit's one limit still replies to the app at 17 s.
+    nonisolated public static let quitSaveWait: TimeInterval = 10
 
     /// `capReached` runs once, just before the reply, only when the time
     /// limit replies before `close` has finished.
@@ -162,16 +163,22 @@ public enum DeskTermination {
             // reopened with none of it. While a reply is owed and the page
             // says it holds unsaved work, give its save a moment first.
             if answer == .unsaved, quitSaveWait > 0 {
-                var owedNow = owed.isEmpty
                 let asked = Date()
+                var owedNow = owed.isEmpty
                 while owedNow == nil, Date().timeIntervalSince(asked) < quitSaveWait {
                     try? await Task.sleep(nanoseconds: 20_000_000)
                     owedNow = owed.isEmpty
                 }
                 if owedNow == false {
-                    let left = max(0, quitSaveWait - Date().timeIntervalSince(asked))
-                    session.log("desk.terminate.save-wait", "limit=\(String(format: "%g", quitSaveWait))s")
-                    try? await Task.sleep(nanoseconds: UInt64(left * 1_000_000_000))
+                    // Until the page confirms its saves landed (or can't say),
+                    // looked at every 50 ms, for at most `quitSaveWait`.
+                    var saving = await session.pageIsSavingRuns()
+                    while saving == true, Date().timeIntervalSince(asked) < quitSaveWait {
+                        try? await Task.sleep(nanoseconds: 50_000_000)
+                        saving = await session.pageIsSavingRuns()
+                    }
+                    let outcome = saving == false ? "saved" : saving == nil ? "no-answer" : "limit"
+                    session.log("desk.terminate.save-wait", "outcome=\(outcome) waited=\(String(format: "%.1f", Date().timeIntervalSince(asked)))s")
                 }
             }
             await session.close(quitting: true)
