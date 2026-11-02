@@ -342,7 +342,8 @@ function endOfLabel(text, start) {
       if (depth === 0) return i;
       continue;
     }
-    if (text[i] === '\n') return -1;
+    // A soft line break stays inside the label. A blank line ends it.
+    if (text[i] === '\n' && text[i + 1] === '\n') return -1;
   }
   return -1;
 }
