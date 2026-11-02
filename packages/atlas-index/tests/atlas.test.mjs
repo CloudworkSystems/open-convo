@@ -201,6 +201,16 @@ test('encoded link targets round-trip, including #, spaces, and parentheses', ()
   assert.match(index, /\(two%20words\.md\)/);
   assert.equal(kinds(result, 'broken-link').some(item => item.path === 'garden/linker.md'), false);
   assert.equal(kinds(result, 'broken-link').some(item => item.detail.includes('%')), false);
+
+  const balanced = buildAtlas([
+    note('a (draft).md', '# Draft\n'),
+    note('see.md', 'Open [draft](a%20(draft).md) and [gone](missing%20(draft).md).\n'),
+  ]);
+  assert.equal(kinds(balanced, 'orphan').some(item => item.path === 'a (draft).md'), false);
+  assert.deepEqual(
+    kinds(balanced, 'broken-link').filter(item => item.path === 'see.md').map(item => item.detail),
+    ['missing%20(draft).md'],
+  );
 });
 
 test('link labels escape markdown characters', () => {

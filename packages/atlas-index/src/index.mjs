@@ -349,6 +349,7 @@ function readDestination(text, start) {
     return { value: text.slice(i + 1, end).trim(), end: close };
   }
   let value = '';
+  let depth = 0;
   let j = i;
   while (j < text.length) {
     const ch = text[j];
@@ -357,12 +358,25 @@ function readDestination(text, start) {
       j += 2;
       continue;
     }
-    if (ch === ' ' || ch === '\t' || ch === '\n' || ch === ')') break;
+    if (ch === ' ' || ch === '\t' || ch === '\n') break;
+    if (ch === '(') {
+      depth += 1;
+      value += ch;
+      j += 1;
+      continue;
+    }
+    if (ch === ')') {
+      if (depth === 0) break;
+      depth -= 1;
+      value += ch;
+      j += 1;
+      continue;
+    }
     value += ch;
     j += 1;
   }
-  if (!value) return null;
-  const close = text.indexOf(')', j);
+  if (!value || depth !== 0) return null;
+  const close = text[j] === ')' ? j : text.indexOf(')', j);
   if (close < 0) return null;
   return { value, end: close };
 }
