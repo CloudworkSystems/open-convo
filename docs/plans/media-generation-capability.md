@@ -298,8 +298,12 @@ takes it as an argument (`now`, an ISO time from the caller).
   caller passes a conversion the person turned on: a dated rate and a
   safety margin, rounded up, with both amounts in the result for the card.
 - **The cap record.** `{ revision, currency, perRun, monthlyByCapability,
-  monthlyAll, paused }`, signed with Ed25519 (`node:crypto`) over canonical
-  JSON. `verifyCap(record, signature, publicKey, protectedState)` accepts
+  monthlyAll, paused }`, signed with ECDSA P-256 and SHA-256 (`node:crypto`,
+  DER-encoded signature) over canonical JSON. That is the one algorithm the
+  Mac's Secure Enclave signs with (Apple's
+  `ecdsaSignatureMessageX962SHA256`), so part 4's key fits without a format
+  change. A test vector signed the way part 4 will sign (P-256, X9.62 DER)
+  must verify. `verifyCap(record, signature, publicKey, protectedState)` accepts
   it only when the signature checks out and its revision and hash match the
   ones in `protectedState`. A missing, broken, unsigned or replayed record
   (an older one with a valid signature) means a $0 cap.
@@ -329,9 +333,12 @@ takes it as an argument (`now`, an ISO time from the caller).
   month, until `resetLedger` is called with a fresh signed cap (part 4 adds
   the password prompt).
 - **Reserve and settle.** `reserve({ capabilityId, routeId, max, jobId,
-  now })` checks all three levels (per run, this capability's month, the
-  month across all paid capabilities) against reservations plus settled
-  costs. The check and the write are one step under a single lock: an
+  now, providerTotal? })` checks all three levels (per run, this
+  capability's month, the month across all paid capabilities) against
+  reservations plus settled costs. When the caller passes the provider's
+  own month figure for the key, the check inside the lock uses the higher
+  of that figure and the ledger's settled total for that route's spend, so
+  use elsewhere on the same key still counts. The check and the write are one step under a single lock: an
   in-process queue plus an exclusive lock file in the ledger folder, so
   two processes can't both fit into the same budget. `settle({ jobId,
   actual, estimated, now })` records the real cost, or keeps the reserved
@@ -362,7 +369,9 @@ Part 2 tests (all with invented amounts and a test key made in the test):
    each stop paid runs and say why.
 6. An over-bill counts in full and returns `routeOff: true`; an estimated
    settle stays marked estimated.
-7. The provider's figure is used when it is higher.
+7. The provider's figure is used when it is higher, both in `monthSpent`
+   and inside `reserve`: a $10 cap with $9 reported by the provider and $2
+   in the ledger refuses a $2 reservation.
 8. A quote in another currency is refused without a conversion, and with
    one is rounded up after the margin and shows both amounts.
 9. `0.1 + 0.2` style sums are exact; no amount ever passes through a
@@ -400,7 +409,10 @@ checks it with part 1's validator first.
   media folder, and writes the receipt with "made by AI". An `AbortSignal`
   cancels it: the runner asks ComfyUI to interrupt and marks the run
   stopped. A server that isn't running gives "ComfyUI isn't running on this
-  Mac" and how to start it. Nothing is retried in the background.
+  Mac" and how to start it. Nothing is retried in the background. The
+  runner never follows a redirect: every request is made with redirects
+  off, and any redirect answer fails the run before anything else is sent
+  or fetched.
 - **Receipt.** JSON beside each file: route, provider and model, the
   prompt, `leaves_machine` (`nothing` for both routes), cost `free`, the
   time from the caller, and the AI label as above.
@@ -423,7 +435,9 @@ inside the test, and invented files only):
 4. A local run against the fake server returns a file and a receipt that
    says "made by AI" and "nothing" left the machine.
 5. A non-loopback server address (`192.168.1.5`, `example.com`, a
-   name such as `localhost`) is refused before any connection.
+   name such as `localhost`) is refused before any connection, and a fake
+   server that answers with a redirect to another address fails the run
+   without the runner contacting that address.
 6. Cancelling mid-run sends the interrupt and marks the run stopped.
 7. A server that isn't running gives the plain message and no retry.
 8. Hostile prompt text (quotes, script tags, right-to-left marks, line
