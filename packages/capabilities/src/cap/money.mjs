@@ -9,6 +9,10 @@ const RATE = /^(0|[1-9]\d{0,8})(\.\d{1,12})?$/;
 const CURRENCY = /^[A-Z]{3}$/;
 const SCALE = 6;
 const MICRO = 10n ** BigInt(SCALE);
+// The largest amount the ledger format can store and read back: nine digits
+// and six decimal places. A larger figure is not written, because the next
+// read would treat the file as edited.
+export const MAX_AMOUNT_MICROS = (10n ** 9n - 1n) * MICRO + (MICRO - 1n);
 const RATE_SCALE = 12;
 const RATE_MICRO = 10n ** BigInt(RATE_SCALE);
 const MARGIN_MICRO = MICRO;
@@ -48,6 +52,12 @@ export function parseMoney(value) {
 
 export function moneyFromMicros(currency, micros) {
   return { amount: formatMicros(micros), currency };
+}
+
+/** The largest amount the ledger can store, when `micros` does not fit. */
+export function clampAmountMicros(micros) {
+  if (micros > MAX_AMOUNT_MICROS) return MAX_AMOUNT_MICROS;
+  return micros;
 }
 
 /**

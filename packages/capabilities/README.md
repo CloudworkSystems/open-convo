@@ -252,9 +252,13 @@ including when paid routes are paused and including when the rate is more
 than a day old, because the run already started. A newer signed rate does
 not change a bill for a run that was already reserved. A rate older than a
 day, or dated after `now`, refuses the reservation itself, and nothing is
-written. A new quote is refused for the same reason. If the bill cannot be
+written. A new quote is refused for the same reason. A converted amount
+above `999999999.999999` is recorded as that largest figure, the route is
+switched off, and the ledger stays readable. If the bill cannot be
 converted, the route is marked off and the reservation stays open. A pause
-still refuses a new reservation.
+still refuses a new reservation. A missing, edited or unsigned cap stops a
+new reservation. It does not stop the bill, including an over-bill, or the
+release for a run that already started.
 
 ### Command
 
@@ -311,7 +315,12 @@ These are the choices the plan does not spell out. Each one has a test in
   Advancing the clock past a day, or signing a new rate, does not change
   that bill. A reservation under a rate that is already more than a day
   old is refused, and the ledger is left untouched. A new quote still
-  refuses a rate older than a day.
+  refuses a rate older than a day. A converted bill above the largest
+  amount the ledger can store (`999999999.999999`) is recorded as that
+  amount, the route is switched off, and later reads still check out.
+- A bill or a release for a run that already started is recorded even when
+  the cap record is missing, edited or unsigned. A new reservation still
+  needs a cap that checks out.
 - Amounts are stored and printed as the shortest decimal that round-trips
   (`"0.3"`, not a binary fraction). The signed cap keeps the text the
   person signed; the figures the ledger writes are the shortest form.

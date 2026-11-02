@@ -16,7 +16,7 @@ import { resolve } from 'node:path';
 import { canonicalJson, isPlainObject, own, sameText, sha256Hex } from './json.mjs';
 import { atomicWrite, fileKind, readNoFollow } from './files.mjs';
 import { inProcess, withFileLock } from './lock.mjs';
-import { convertMicros, isCurrency, moneyFromMicros, parseDecimal, parseMoney } from './money.mjs';
+import { clampAmountMicros, convertMicros, formatMicros, isCurrency, MAX_AMOUNT_MICROS, moneyFromMicros, parseDecimal, parseMoney } from './money.mjs';
 import { REASONS } from './reasons.mjs';
 import { signedCap, verifyCap } from './record.mjs';
 import { DAY_MS, calendarMonth, instantText, rateAge } from './time.mjs';
@@ -47,11 +47,11 @@ export async function reserve(args) {
 }
 
 export async function settle(args) {
-  return transact(args, (dir) => mutate(dir, args, (loaded) => settleEntry(loaded, args)));
+  return transact(args, (dir) => mutate(dir, args, (loaded) => settleEntry(loaded, args), { bookkeeping: true }));
 }
 
 export async function release(args) {
-  return transact(args, (dir) => mutate(dir, args, (loaded) => releaseEntry(loaded, args)));
+  return transact(args, (dir) => mutate(dir, args, (loaded) => releaseEntry(loaded, args), { bookkeeping: true }));
 }
 
 export async function resetLedger(args) {
@@ -108,13 +108,14 @@ async function transact(args, fn) {
   });
 }
 
-function mutate(dir, args, build) {
-  const loaded = loadForWrite(dir, args);
+function mutate(dir, args, build, { bookkeeping = false } = {}) {
+  const loaded = loadForWrite(dir, args, { bookkeeping });
   if (!loaded.ok) return loaded;
   const built = build(loaded);
   if (!built.ok) return built;
-  const month = calendarMonth(loaded.now, loaded.cap.timeZone);
-  const compacted = month ? compactClosedMonths(loaded.ledger.entries, month, loaded.cap.timeZone) : null;
+  const zone = loaded.cap?.timeZone;
+  const month = zone ? calendarMonth(loaded.now, zone) : null;
+  const compacted = month ? compactClosedMonths(loaded.ledger.entries, month, zone) : null;
   const prior = compacted ?? loaded.ledger.entries;
   const entry = compacted
     ? makeEntry({ ledgerHead: prior.at(-1)?.hash ?? null, ledgerCount: prior.length }, fieldsOf(built.entry))
@@ -126,6 +127,9 @@ function mutate(dir, args, build) {
   // line for every reservation already open. Settle and release use that room,
   // so a run that has started can still be recorded.
   if (!roomFor(entries, entry.kind)) return { ok: false, reason: REASONS.ledgerFull };
+  // Never save a line the next read cannot parse. That would look like an
+  // edit and drop the charge out of later totals.
+  if (parseDecimal(entry.amount.amount) === null) return { ok: false, reason: REASONS.badAmount, routeOff: true };
   const saved = persist(dir, args.store, loaded.state, entries, entry);
   if (!saved.ok) {
     return saved.consistent
@@ -135,14 +139,18 @@ function mutate(dir, args, build) {
   return built.result;
 }
 
-function loadForWrite(dir, args) {
+function loadForWrite(dir, args, { bookkeeping = false } = {}) {
   const state = args.store.read();
   if (state.broken) return { ok: false, reason: REASONS.protectedBroken, fullySpent: true };
-  const cap = verifyCap(args.record, args.signature, args.publicKey, state);
-  if (!cap.ok) return { ok: false, reason: cap.reason };
   const now = instantText(args.now);
   if (!now) return { ok: false, reason: REASONS.badNow };
-  const ledger = judgeLedger(dir, state, cap.currency);
+  const verified = verifyCap(args.record, args.signature, args.publicKey, state);
+  // A missing or broken cap stops a new run. It does not stop the bill or
+  // the release for a run that already started: that bookkeeping is in the
+  // ledger, and the reservation already holds the currency and the rate.
+  if (!verified.ok && !bookkeeping) return { ok: false, reason: verified.reason };
+  const cap = verified.ok ? verified : null;
+  const ledger = judgeLedger(dir, state, cap ? cap.currency : state.currency);
   if (!ledger.ok) return { ok: false, reason: ledger.reason, fullySpent: true };
   return { ok: true, state, cap, now, ledger };
 }
@@ -209,7 +217,8 @@ function settleEntry(loaded, args) {
   const quote = settleAmount(loaded, args, open.job.reserve);
   if (!quote.ok) return quote;
   const over = !quote.estimated && quote.micros > open.job.reserve.micros;
-  const amount = moneyFromMicros(loaded.cap.currency, quote.estimated ? open.job.reserve.micros : quote.micros);
+  const raw = quote.estimated ? open.job.reserve.micros : quote.micros;
+  const amount = moneyFromMicros(open.job.reserve.amount.currency, clampAmountMicros(raw));
   const entry = makeEntry(loaded.state, {
     kind: over ? 'over-bill' : 'settle',
     capabilityId: open.job.reserve.capabilityId,
@@ -242,7 +251,7 @@ function settleAmount(loaded, args, reserve) {
   // that never started is release, not a zero settle. The amount text still
   // has to be real money, so a negative figure is refused.
   if (!actual.ok || actual.micros < 0n) return { ok: false, reason: REASONS.badAmount };
-  if (actual.currency === loaded.cap.currency) return { ok: true, estimated: false, micros: actual.micros };
+  if (actual.currency === reserve.amount.currency) return { ok: true, estimated: false, micros: actual.micros };
   // The rate is the one stored on the reservation, under the hash chain.
   // A bill can arrive after that rate is more than a day old. Freshness is
   // a rule for a new reservation, not for a run that already started. A
@@ -446,17 +455,20 @@ function compactClosedMonths(entries, currentMonth, timeZone) {
     .sort((left, right) => left.month.localeCompare(right.month)
       || left.capabilityId.localeCompare(right.capabilityId)
       || left.routeId.localeCompare(right.routeId))
-    .map((row) => ({
-      kind: 'checkpoint',
-      capabilityId: row.capabilityId,
-      routeId: row.routeId,
-      amount: moneyFromMicros(row.currency, row.micros),
-      estimated: false,
-      jobId: CHECKPOINT_JOB,
-      at: row.at,
-      month: row.month,
-      micros: row.micros,
-    }));
+    .map((row) => {
+      const micros = clampAmountMicros(row.micros);
+      return {
+        kind: 'checkpoint',
+        capabilityId: row.capabilityId,
+        routeId: row.routeId,
+        amount: moneyFromMicros(row.currency, micros),
+        estimated: false,
+        jobId: CHECKPOINT_JOB,
+        at: row.at,
+        month: row.month,
+        micros,
+      };
+    });
   kept.sort((left, right) => left.seq - right.seq);
   return rechain([...checkpoints, ...kept]);
 }
@@ -502,7 +514,7 @@ function rechain(entries) {
 
 // Longest amount the ledger will store, so the reserved closing line is at
 // least as big as any real settle, release or over-bill for that run.
-const CLOSING_AMOUNT = '999999999.999999';
+const CLOSING_AMOUNT = formatMicros(MAX_AMOUNT_MICROS);
 
 function roomFor(entries, kind) {
   if (kind !== 'reserve') return withinLimit(entries);

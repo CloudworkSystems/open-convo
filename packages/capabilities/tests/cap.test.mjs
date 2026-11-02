@@ -1019,6 +1019,77 @@ test('a reservation under a rate more than a day old is refused and writes nothi
   }
 });
 
+test('a converted bill above the ledger maximum is recorded at that maximum', async () => {
+  const record = cap({
+    currency: 'JPY',
+    perRun: { amount: '1000', currency: 'JPY' },
+    monthlyByCapability: { amount: '1000', currency: 'JPY' },
+    monthlyAll: { amount: '1000', currency: 'JPY' },
+    conversion: { currency: 'USD', rate: '25000', margin: '0', asOf: NOW },
+  });
+  const box = world(record);
+  try {
+    assert.equal((await box.reserve({ jobId: 'big', max: { amount: '1', currency: 'JPY' } })).ok, true);
+    const settled = await box.settle({ jobId: 'big', actual: { amount: '40000', currency: 'USD' } });
+    assert.equal(settled.ok, true, settled.reason);
+    assert.equal(settled.routeOff, true);
+    assert.equal(settled.amount.amount, '999999999.999999');
+    assert.equal(settled.amount.currency, 'JPY');
+    assert.equal(settled.bill.amount, '40000');
+    assert.equal(settled.bill.currency, 'USD');
+    const spent = await box.spent();
+    assert.equal(spent.ok, true, spent.reason);
+    assert.equal(spent.spent.amount, '999999999.999999');
+    assert.equal(spent.reserved.amount, '0');
+    const again = await box.reserve({ jobId: 'next', max: { amount: '1', currency: 'JPY' } });
+    assert.equal(again.reason, REASONS.monthCapability);
+  } finally {
+    box.close();
+  }
+});
+
+test('a started run can settle after the cap record is damaged', async () => {
+  const record = cap({
+    perRun: { amount: '10', currency: 'USD' },
+    monthlyByCapability: { amount: '10', currency: 'USD' },
+    monthlyAll: { amount: '10', currency: 'USD' },
+  });
+  const box = world(record);
+  try {
+    assert.equal((await box.reserve({ jobId: 'flight', max: { amount: '1', currency: 'USD' } })).ok, true);
+    assert.equal((await box.reserve({ jobId: 'other', max: { amount: '1', currency: 'USD' } })).ok, true);
+    const settled = await box.settle({
+      record: null,
+      signature: null,
+      jobId: 'flight',
+      actual: { amount: '4', currency: 'USD' },
+    });
+    assert.equal(settled.ok, true, settled.reason);
+    assert.equal(settled.routeOff, true);
+    assert.equal(settled.amount.amount, '4');
+    const released = await box.release({
+      record: box.record,
+      signature: Buffer.alloc(0),
+      jobId: 'other',
+    });
+    assert.equal(released.ok, true, released.reason);
+    const spent = await box.spent();
+    assert.equal(spent.ok, true, spent.reason);
+    assert.equal(spent.spent.amount, '4');
+    assert.equal(spent.reserved.amount, '0');
+    const blocked = await box.reserve({
+      record: null,
+      signature: null,
+      jobId: 'later',
+      max: { amount: '1', currency: 'USD' },
+    });
+    assert.equal(blocked.ok, false);
+    assert.equal(blocked.reason, REASONS.capDoesNotCheck);
+  } finally {
+    box.close();
+  }
+});
+
 test('the show command says why a damaged ledger stopped paid routes', async () => {
   const box = world();
   try {
