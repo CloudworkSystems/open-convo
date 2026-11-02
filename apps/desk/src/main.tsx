@@ -24,11 +24,13 @@ if (import.meta.env.MODE === 'native-proof') {
       const handler = native.webkit?.messageHandlers?.trueConvoHost;
       if (!handler || typeof handler.postMessage !== 'function') throw new Error('Host unavailable');
       const { initializeNativeProof } = await import('./app/native-bootstrap');
+      const { nativeOpenedBefore } = await import('./adapters/fresh-open');
       const initialized = await initializeNativeProof({
         bootstrap: native.trueConvoHostBootstrap,
         postMessage: (envelope) => handler.postMessage(envelope),
         events: window,
-      });
+      // A reload of this window (also the host's crash recovery) keeps its screen; a new window opens blank.
+      }, { keepSavedScreen: nativeOpenedBefore(window) });
       if (initialized.kind !== 'ready') throw new Error('Host unavailable');
       window.addEventListener('pagehide', () => initialized.runtime.revoke(), { once: true });
       renderer.render(<App runtime={initialized.runtime} />);

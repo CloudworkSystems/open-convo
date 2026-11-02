@@ -3,6 +3,7 @@ import test from 'node:test';
 import { applyCommand, DomainError, isViewCommand } from '../../src/domain/commands';
 import { createDemoState } from '../../src/domain/demo';
 import { validateState } from '../../src/domain/validation';
+import { DESK_NATIVE_OPENED_NAME, nativeOpenedBefore } from '../../src/adapters/fresh-open';
 
 const time = '2026-11-02T12:00:00.000Z';
 const later = '2026-11-02T12:05:00.000Z';
@@ -41,4 +42,17 @@ test('typing into a blank session saves it with that first text as its draft', (
   // Without a first text, create-session keeps its old empty draft.
   const plain = applyCommand(state, { type: 'create-session', goalId: null });
   assert.equal(plain.drafts[plain.sessions.at(-1)!.id], '');
+});
+
+test('a Mac window opens blank the first time and keeps its screen on reload', () => {
+  const navigation = (type: string) => ({ getEntriesByType: (kind: string) => kind === 'navigation' ? [{ type }] : [] });
+  const fresh = { name: '', performance: navigation('navigate') };
+  assert.equal(nativeOpenedBefore(fresh), false, 'a new window opens blank');
+  assert.equal(fresh.name, DESK_NATIVE_OPENED_NAME);
+  assert.equal(nativeOpenedBefore(fresh), true, 'the same window loaded again keeps its screen');
+  assert.equal(nativeOpenedBefore({ name: '', performance: navigation('reload') }), true,
+    'a reload keeps its screen even when the name did not survive (a crashed web process)');
+  assert.equal(nativeOpenedBefore({ name: '' }), false, 'no navigation timing: treat as new');
+  const throwing = { name: '', performance: { getEntriesByType: () => { throw new Error('unavailable'); } } };
+  assert.equal(nativeOpenedBefore(throwing), false);
 });

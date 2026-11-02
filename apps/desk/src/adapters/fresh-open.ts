@@ -29,3 +29,26 @@ function readMark(): boolean {
     return false;
   }
 }
+
+/** The Mac window's mark: the browsing context's name, which outlives a reload. */
+export const DESK_NATIVE_OPENED_NAME = 'true-convo-desk-opened';
+
+interface NativeOpenSignals {
+  name: string;
+  readonly performance?: { getEntriesByType(type: string): ArrayLike<object> };
+}
+
+/**
+ * Whether this Mac window's web view has shown the Desk before, so a reload
+ * (including the host's reload after a crashed web process) keeps the screen
+ * while a new window opens blank. Uses only the document's navigation type
+ * and the window's name, never browser storage. Sets the name mark.
+ */
+export function nativeOpenedBefore(win: NativeOpenSignals): boolean {
+  let reloaded = false;
+  try { reloaded = Array.from(win.performance?.getEntriesByType('navigation') ?? []).some((entry) => (entry as { type?: unknown }).type === 'reload'); }
+  catch { reloaded = false; }
+  const named = win.name === DESK_NATIVE_OPENED_NAME;
+  try { win.name = DESK_NATIVE_OPENED_NAME; } catch { /* keep the answer */ }
+  return reloaded || named;
+}

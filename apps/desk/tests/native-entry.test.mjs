@@ -262,3 +262,15 @@ test('a correlated store-locked commit reply clears the compiled App even withou
     await f.check();
   } finally { await f.close(); }
 });
+
+test('compiled native entry opens blank in a new window and keeps the saved screen on reload', async () => {
+  const f = await fixture(); const { page } = f;
+  try {
+    await expect(page.locator('.conversation-heading .navigator-empty')).toBeVisible();
+    await page.reload();
+    // The host's reload (also after a crashed web process) reopens what the workspace last showed.
+    await expect(page.getByLabel('Your message', { exact: true })).toHaveValue('Before 😀 after');
+    await expect(page.locator('.conversation-heading .navigator-empty')).toHaveCount(0);
+    await f.check();
+  } finally { await f.close(); }
+});
