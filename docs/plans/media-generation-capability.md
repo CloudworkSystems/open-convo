@@ -413,7 +413,13 @@ checks it with part 1's validator first.
   Mac" and how to start it. Nothing is retried in the background. The
   runner never follows a redirect: every request is made with redirects
   off, and any redirect answer fails the run before anything else is sent
-  or fetched.
+  or fetched. Before sending, the runner checks every node in the workflow
+  against a fixed allowlist of ComfyUI's built-in local nodes kept in the
+  package (loaders, text encoders, samplers, decoders, image and video
+  save and load nodes). Any other node is refused before anything is sent,
+  including API or Partner nodes (which call outside providers and can
+  spend credits) and custom nodes, so a local run can't send the prompt
+  out or spend money while its receipt says "nothing" and "free".
 - **Receipt.** JSON beside each file: route, provider and model, the
   prompt, `leaves_machine` (`nothing` for both routes), cost `free`, the
   time from the caller, and the AI label as above.
@@ -438,7 +444,8 @@ inside the test, and invented files only):
 5. A non-loopback server address (`192.168.1.5`, `example.com`, a
    name such as `localhost`) is refused before any connection, and a fake
    server that answers with a redirect to another address fails the run
-   without the runner contacting that address.
+   without the runner contacting that address. A workflow with an API or
+   Partner node, or a custom node, is refused before anything is sent.
 6. Cancelling mid-run sends the interrupt and marks the run stopped.
 7. A server that isn't running gives the plain message and no retry.
 8. Hostile prompt text (quotes, script tags, right-to-left marks, line
