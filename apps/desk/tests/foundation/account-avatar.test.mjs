@@ -7,7 +7,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, test } from 'node:test';
 import { chromium, expect } from '@playwright/test';
-import { readRecordRaw } from './browser-persistence.mjs';
+import { readRecordRaw, returningTab } from './browser-persistence.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const workspaceKey = 'true-convo:desk:synthetic:v1';
@@ -63,7 +63,7 @@ before(async () => {
 after(cleanup);
 
 async function isolatedPage(options = {}) {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...options });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...options }); await returningTab(context);
   const outside = [];
   const privateApi = [];
   const errors = [];

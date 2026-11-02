@@ -92,3 +92,24 @@ export function installNativeWriteFailure(context, databaseName = WORKSPACE_DATA
     };
   }, { databaseName, recordStore, flagName });
 }
+
+/**
+ * These tests check a tab returning to its saved screen. A brand-new tab opens
+ * on a blank session instead (owner decision, November 2, 2026), which
+ * blank-session-browser.test.mjs covers; it skips this.
+ */
+export function returningTab(context) {
+  return context.addInitScript(() => { try { sessionStorage.setItem('true-convo:desk:tab-opened:v1', '1'); } catch {} });
+}
+
+/**
+ * "New session" now shows a blank session that is saved only once typing
+ * starts. Tests that need a saved, empty session type one letter and clear it.
+ */
+export async function startBlankSession(page) {
+  const box = page.getByRole('textbox', { name: 'Your message', exact: true });
+  await page.locator('.navigator-empty').waitFor();
+  await box.fill('x');
+  await page.locator('.navigator-empty').waitFor({ state: 'detached' });
+  await box.fill('');
+}

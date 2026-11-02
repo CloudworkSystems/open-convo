@@ -20,7 +20,7 @@ function requireText(value: string, label: string): void {
 
 /** These choices belong to this tab's view, not the shared content revision. */
 export function isViewCommand(command: DeskCommand): boolean {
-  return command.type === 'navigate' || command.type === 'select-goal' || command.type === 'select-session' || command.type === 'select-ungrouped' || command.type === 'set-theme' || command.type === 'set-nexus-view';
+  return command.type === 'navigate' || command.type === 'select-goal' || command.type === 'select-session' || command.type === 'select-ungrouped' || command.type === 'open-blank-session' || command.type === 'set-theme' || command.type === 'set-nexus-view';
 }
 
 function logicalCommandTime(state: DeskState, wallTime: string): string {
@@ -105,7 +105,8 @@ export function applyCommand(state: DeskState, command: DeskCommand, options: Do
       const sessionId = id();
       const title = command.title?.trim() || defaultSessionTitle(now);
       next.sessions.push({ id: sessionId, goalId: command.goalId, title, createdAt: now, updatedAt: now });
-      next.drafts[sessionId] = '';
+      if (command.draft !== undefined && typeof command.draft !== 'string') throw new DomainError('A first message draft must be text.');
+      next.drafts[sessionId] = command.draft ?? '';
       next.selection = { goalId: command.goalId, sessionId, route: 'sessions' };
       next.preferences.nexusView = 'navigator';
       event('created', 'Session created.', command.goalId, sessionId);
@@ -212,6 +213,12 @@ export function applyCommand(state: DeskState, command: DeskCommand, options: Do
     case 'select-session': {
       const target = session(command.sessionId);
       next.selection = { goalId: target.goalId, sessionId: target.id, route: 'sessions' };
+      next.preferences.nexusView = 'navigator';
+      break;
+    }
+    case 'open-blank-session': {
+      if (command.goalId !== null) goal(command.goalId);
+      next.selection = { goalId: command.goalId, sessionId: null, route: 'sessions' };
       next.preferences.nexusView = 'navigator';
       break;
     }

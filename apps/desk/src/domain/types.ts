@@ -191,7 +191,10 @@ export type DeskCommand =
   | { type: 'rename-domain'; domainId: string; title: string }
   | { type: 'set-domain-pinned'; domainId: string; pinned: boolean }
   | { type: 'set-folder-icon'; domainId: string; icon: FolderIconName }
-  | { type: 'create-session'; goalId: string | null; title?: string }
+  /** `draft` is the first text typed into a blank session; the session is saved only then. */
+  | { type: 'create-session'; goalId: string | null; title?: string; draft?: string }
+  /** Shows a blank session in a folder (or ungrouped). A view choice: nothing is saved until typing starts. */
+  | { type: 'open-blank-session'; goalId: string | null }
   | { type: 'create-side-chat'; messageId: string; text: string }
   | { type: 'rename-session'; sessionId: string; title: string; expectedTitle?: string }
   | { type: 'set-session-pinned'; sessionId: string; pinned: boolean }

@@ -8,7 +8,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, test } from 'node:test';
 import { chromium, expect } from '@playwright/test';
-import { readNativeRecord, readNativeRecordRaw } from './browser-persistence.mjs';
+import { readNativeRecord, readNativeRecordRaw, returningTab, startBlankSession } from './browser-persistence.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const storageKey = 'true-convo:desk:synthetic:v1';
@@ -62,7 +62,7 @@ before(async () => {
 after(cleanup);
 
 async function isolatedPage(options = {}) {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...options });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...options }); await returningTab(context);
   const outside = [];
   const privateApi = [];
   const errors = [];
@@ -399,6 +399,9 @@ test('folder plus creates a subordinate session; ellipsis retains nested folder 
     const folder = before.goals[0];
     const create = page.getByRole('button', { name: `Create session in ${folder.title}`, exact: true });
     await create.click();
+    // The plus shows a blank session in the folder; it is saved once typing starts.
+    assert.equal((await stored(page)).sessions.length, before.sessions.length);
+    await startBlankSession(page);
     await saved(page);
     const after = await stored(page);
     assert.deepEqual(after.goals, before.goals);
@@ -468,6 +471,7 @@ test('session drag refiling round trip preserves messages, draft, name history a
     const initial = await stored(page);
     const folder = initial.goals[0];
     await page.getByRole('region', { name: 'Ungrouped sessions', exact: true }).getByRole('button', { name: 'New session', exact: true }).click();
+    await startBlankSession(page);
     await saved(page);
     const id = (await stored(page)).selection.sessionId;
     await page.locator(`.session-link[data-session-id="${id}"]`).press('Shift+F10');

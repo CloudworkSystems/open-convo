@@ -322,7 +322,7 @@ button svg {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 27px 33px 22px;
+  padding: 10px 24px 8px;
   gap: 20px;
 }
 .desk-heading {
@@ -407,7 +407,7 @@ button svg {
   text-decoration: underline;
 }
 .save-status {
-  padding: 9px 33px;
+  padding: 3px 24px;
   display: flex;
   gap: 6px;
   align-items: center;
@@ -415,7 +415,7 @@ button svg {
   border-bottom: 1px solid var(--tca-border-subtle);
   font-size: 10px;
   color: var(--tca-text-muted);
-  min-height: 34px;
+  min-height: 22px;
   flex-shrink: 0;
 }
 .save-status svg {
@@ -457,7 +457,7 @@ button svg {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  padding: 26px 34px 14px;
+  padding: 12px 28px 10px;
 }
 .conversation-heading {
   display: flex;
@@ -465,7 +465,7 @@ button svg {
   flex-wrap: wrap;
   gap: 12px;
   justify-content: space-between;
-  padding-bottom: 14px;
+  padding-bottom: 8px;
 }
 .conversation-heading h2 {
   font-size: 14px;

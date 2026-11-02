@@ -7,7 +7,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, test } from 'node:test';
 import { chromium, expect } from '@playwright/test';
-import { WORKSPACE_DATABASE_NAME, installNativeWriteFailure, readNativeRecord, readNativeRecordRaw, writeNativeRecordRaw } from './browser-persistence.mjs';
+import { WORKSPACE_DATABASE_NAME, installNativeWriteFailure, readNativeRecord, readNativeRecordRaw, writeNativeRecordRaw, returningTab } from './browser-persistence.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 let server; let browser; let origin; let output = '';
@@ -49,7 +49,7 @@ before(async () => {
 after(cleanup);
 
 async function isolatedPage(options = {}) {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, ...options });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, ...options }); await returningTab(context);
   const outside = []; const privateApi = []; const errors = [];
   await context.route('**/*', (route) => {
     const url = new URL(route.request().url());

@@ -8,7 +8,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, test } from 'node:test';
 import { chromium, expect } from '@playwright/test';
-import { readRecordRaw, writeNativeRecordRaw } from './browser-persistence.mjs';
+import { readRecordRaw, writeNativeRecordRaw, returningTab, startBlankSession } from './browser-persistence.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const workspaceKey = 'true-convo:desk:synthetic:v1';
@@ -65,7 +65,7 @@ before(async () => {
 after(cleanup);
 
 async function isolatedPage(options = {}) {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...options });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...options }); await returningTab(context);
   const outside = [];
   const privateApi = [];
   const errors = [];
@@ -127,6 +127,7 @@ test('one Sessions heading and permanent Ungrouped folder preserve null-linked s
     await expect(folder).toBeVisible();
     assert.equal(await folder.getAttribute('data-domain-id'), null);
     await ungrouped.getByRole('button', { name: 'New session', exact: true }).click();
+    await startBlankSession(page);
     await saved(page);
     const created = await stored(page);
     const session = created.sessions.find((item) => item.id === created.selection.sessionId);
@@ -264,6 +265,7 @@ test('Move session opens outside a hidden rail, restores focus and refiles witho
     await enter(page);
     const destination = (await stored(page)).selection.goalId;
     await rail(page).getByRole('region', { name: 'Ungrouped sessions', exact: true }).getByRole('button', { name: 'New session', exact: true }).click();
+    await startBlankSession(page);
     const composer = page.getByRole('textbox', { name: 'Your message', exact: true });
     await composer.fill('Invented message before sidebar refiling.');
     await page.getByRole('button', { name: 'Send demo message', exact: true }).click();
@@ -322,6 +324,7 @@ test('moving a nonselected session reveals collapsed destinations and preserves 
     const destination = (await stored(page)).selection.goalId;
     await rail(page).getByRole('button', { name: 'Collapse Invented collapsed move destination folder', exact: true }).click();
     await rail(page).getByRole('region', { name: 'Ungrouped sessions', exact: true }).getByRole('button', { name: 'New session', exact: true }).click();
+    await startBlankSession(page);
     const composer = page.getByRole('textbox', { name: 'Your message', exact: true });
     await composer.fill('Invented message in the nonselected session.');
     await page.getByRole('button', { name: 'Send demo message', exact: true }).click();
@@ -438,6 +441,7 @@ test('new date-prefixed session aliases can be renamed through the sidebar while
   try {
     await enter(page);
     await rail(page).getByRole('region', { name: 'Ungrouped sessions', exact: true }).getByRole('button', { name: 'New session', exact: true }).click();
+    await startBlankSession(page);
     const composer = page.getByRole('textbox', { name: 'Your message', exact: true });
     await composer.fill('Invented draft carried through a session alias change.');
     await saved(page);

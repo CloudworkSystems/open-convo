@@ -9,7 +9,7 @@ import { dirname, extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, test } from 'node:test';
 import { chromium, expect } from '@playwright/test';
-import { readNativeRecordRaw } from './browser-persistence.mjs';
+import { readNativeRecordRaw, returningTab } from './browser-persistence.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const storageKey = 'true-convo:desk:synthetic:v1';
@@ -84,7 +84,7 @@ before(async () => {
 after(cleanup);
 
 async function isolatedPage({ hosted = false } = {}) {
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } }); await returningTab(context);
   const requests = [];
   let watchingRequests = false;
   const outside = [];

@@ -7,7 +7,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, test } from 'node:test';
 import { chromium, expect } from '@playwright/test';
-import { readNativeRecordRaw } from './browser-persistence.mjs';
+import { readNativeRecordRaw, returningTab } from './browser-persistence.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const workspaceKey = 'true-convo:desk:synthetic:v1';
@@ -62,7 +62,7 @@ before(async () => {
 after(cleanup);
 
 async function isolatedPage(options = {}) {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...options });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...options }); await returningTab(context);
   const outside = [];
   const privateApi = [];
   const errors = [];
@@ -100,7 +100,9 @@ test('Nexus keeps all five subviews together and preserves session and Roadmap d
     const modules = page.getByRole('navigation', { name: 'Modules', exact: true });
     await expect(modules.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true })).toHaveAttribute('aria-current', 'page');
     await expect(modules.getByRole('button', { name: 'Roadmap', exact: true })).toHaveCount(0);
-    assert.deepEqual(await choices(page).getByRole('button').allTextContents(), views);
+    // Full names for screen readers and on hover; short names on screen keep the views to one row.
+    assert.deepEqual(await choices(page).getByRole('button').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label'))), views);
+    assert.deepEqual(await choices(page).getByRole('button').allTextContents(), ['Navigator', 'Canvas', 'Atlas', 'Rail Map', 'Roadmap']);
     await expect(page.locator('.desk-header .primary-module-heading')).toHaveCount(0);
     const sessionDraft = 'Invented session draft retained through Nexus subviews.';
     const cardDraft = 'Invented suggested card draft retained through Nexus subviews.';

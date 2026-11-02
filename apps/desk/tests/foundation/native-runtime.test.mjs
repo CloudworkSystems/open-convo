@@ -101,7 +101,7 @@ const repository = {
     return { kind: 'saved', state: structuredClone(stored) };
   },
 };
-const runtime = createNativeProofRuntime(repository, lifecycle, { createId });
+const runtime = createNativeProofRuntime(repository, lifecycle, { createId, keepSavedScreen: true });
 window.__nativeTest = {
   calls,
   revoke: () => lifecycle.revoke(),

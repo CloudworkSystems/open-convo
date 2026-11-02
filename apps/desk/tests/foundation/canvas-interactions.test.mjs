@@ -9,7 +9,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, test } from 'node:test';
 import { chromium, expect } from '@playwright/test';
-import { installNativeWriteFailure, readNativeRecord, readNativeRecordRaw, writeNativeRecordRaw } from './browser-persistence.mjs';
+import { installNativeWriteFailure, readNativeRecord, readNativeRecordRaw, writeNativeRecordRaw, returningTab } from './browser-persistence.mjs';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const canvasKey = 'true-convo:desk:canvas-layout:v1';
 const workspaceKey = 'true-convo:desk:synthetic:v1';
@@ -37,7 +37,7 @@ after(async () => {
   }
 });
 async function fixture(init) {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } }); if (init) await init(context);
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } }); if (init) await init(context); await returningTab(context);
   const page = await context.newPage(); const errors = []; page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(origin); await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click(); await page.getByRole('button', { name: 'Cloudwork Canvas', exact: true }).click();
   await expect(page.locator('.canvas-save-status')).not.toContainText('Loading');

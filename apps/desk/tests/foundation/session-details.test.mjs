@@ -7,7 +7,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, test } from 'node:test';
 import { chromium, expect } from '@playwright/test';
-import { readNativeRecord, readNativeRecordRaw } from './browser-persistence.mjs';
+import { readNativeRecord, readNativeRecordRaw, returningTab, startBlankSession } from './browser-persistence.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const storageKey = 'true-convo:desk:synthetic:v1';
@@ -61,7 +61,7 @@ before(async () => {
 after(cleanup);
 
 async function isolatedPage(options = {}) {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...options });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...options }); await returningTab(context);
   const outside = [];
   const privateApi = [];
   const errors = [];
@@ -128,6 +128,7 @@ test('folder context and exact session details synchronize through the folder li
     await page.getByRole('textbox', { name: 'Your message', exact: true }).fill('Invented message in the first session.');
     await page.getByRole('button', { name: 'Send demo message', exact: true }).click();
     await page.getByRole('button', { name: `New session in ${folder.title}`, exact: true }).click();
+    await startBlankSession(page);
     const second = await current(page);
     await page.getByRole('textbox', { name: 'Your message', exact: true }).fill('Invented message in the second session.');
     await page.getByRole('button', { name: 'Send demo message', exact: true }).click();
@@ -205,6 +206,7 @@ test('Ungrouped sessions use a factual folder and header rename/pin retain stabl
     const before = await stored(page);
     const ungrouped = page.getByRole('complementary', { name: 'Navigation rail', exact: true }).getByRole('region', { name: 'Ungrouped sessions', exact: true });
     await ungrouped.getByRole('button', { name: 'New session', exact: true }).click();
+    await startBlankSession(page);
     const session = await current(page);
     assert.equal(session.goalId, null);
     assert.match(session.title, /^\d{6} New conversation$/);

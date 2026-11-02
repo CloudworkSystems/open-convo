@@ -40,6 +40,8 @@ export function Conversation({
   participantSendWaitingReason,
   participantSendDestination,
   sideChatAnchor,
+  onStart,
+  startHeading,
 }: {
   goal?: Goal;
   session?: Session;
@@ -70,6 +72,14 @@ export function Conversation({
   participantSendDestination?: string;
   /** For a side chat: the message it is about (null if that text is no longer shown) and the way back. */
   sideChatAnchor?: { parentTitle: string; text: string | null; onBack: () => void };
+  /**
+   * A blank session (no session yet): the first typed text saves the session
+   * with that text as its draft. Until then nothing is saved, so a blank
+   * session that is never typed in leaves no row in the list.
+   */
+  onStart?: (draft: string) => void;
+  /** Shown in place of the conversation title while the session is blank. */
+  startHeading?: ReactNode;
 }) {
   const conversation = useRef<HTMLElement>(null);
   const scrollArea = useRef<HTMLDivElement>(null);
@@ -78,6 +88,11 @@ export function Conversation({
   const composer = useRef<HTMLFormElement>(null);
   const draftField = useRef<HTMLTextAreaElement>(null);
   const composing = useRef(false);
+  // Text typed into a blank session while an input method is still composing it.
+  const [startText, setStartText] = useState('');
+  const starting = !session && onStart !== undefined && !readOnly;
+  const start = (text: string) => { if (starting && text.trim()) onStart(text); };
+  const shownDraft = session ? draft : startText;
   const dictation = useDeskDictationView();
   const reportDraftSelection = (field: HTMLTextAreaElement, focused: boolean) => {
     if (!dictation || !session) return;
@@ -166,13 +181,15 @@ export function Conversation({
     return () => { observer.disconnect(); drag.current = null; };
   }, []);
   useEffect(() => { composing.current = false; drag.current = null; }, [session?.id]);
+  // A blank session starts empty each time it is shown, in any folder.
+  useEffect(() => { if (!session) setStartText(''); }, [session?.id, goal?.id]);
   return (
     <section className="conversation" aria-label="Conversation" ref={conversation}>
       <div className="conversation-heading">
-        <div>
+        {startHeading && !session ? startHeading : <div>
           <span className="eyebrow">CONVERSATION</span>
           <h2>{session?.title ?? 'A fresh start'}</h2>
-        </div>
+        </div>}
         <span className="provider-label" role={onParticipantPickerOpen ? 'status' : undefined}
           aria-live={onParticipantPickerOpen ? 'polite' : undefined} aria-atomic={onParticipantPickerOpen ? 'true' : undefined}>
           <span className="demo-dot" />
@@ -223,24 +240,23 @@ export function Conversation({
             <div className="starter-prompts">
               <button
                 type="button"
-                disabled={readOnly || !session}
-                onClick={() =>
-                  session &&
-                  onDraftChange(
-                    session.id,
-                    `Help me find the first small step for ${goal?.title ?? 'this idea'}.`,
-                  )
-                }
+                disabled={readOnly || !(session || starting)}
+                onClick={() => {
+                  const text = `Help me find the first small step for ${goal?.title ?? 'this idea'}.`;
+                  if (session) onDraftChange(session.id, text);
+                  else start(text);
+                }}
               >
                 Find a first step <Icon name="arrow" size={15} />
               </button>
               <button
                 type="button"
-                disabled={readOnly || !session}
-                onClick={() =>
-                  session &&
-                  onDraftChange(session.id, 'Help me turn this sample idea into a simple plan.')
-                }
+                disabled={readOnly || !(session || starting)}
+                onClick={() => {
+                  const text = 'Help me turn this sample idea into a simple plan.';
+                  if (session) onDraftChange(session.id, text);
+                  else start(text);
+                }}
               >
                 Shape a simple plan <Icon name="arrow" size={15} />
               </button>
@@ -358,19 +374,26 @@ export function Conversation({
         <textarea
           id="message-draft"
           ref={draftField}
-          value={draft}
+          value={shownDraft}
           style={{ height: `${draftHeight}px` }}
-          disabled={!session || readOnly}
+          disabled={!(session || starting) || readOnly}
           placeholder={participantMode ? 'Write an invented message…' : "What's on your mind? Try a sample idea…"}
           rows={3}
           aria-describedby={`${participantSendBlockedReason ? 'message-shortcuts send-blocked-reason'
             : sendWaitingReason ? 'message-shortcuts send-waiting-reason' : 'message-shortcuts'}${participantSendDestination ? ' send-destination' : ''}`}
-          onChange={(event) => session && onDraftChange(session.id, event.target.value)}
+          onChange={(event) => {
+            const value = event.target.value;
+            if (session) onDraftChange(session.id, value);
+            else if (starting) {
+              setStartText(value);
+              if (!composing.current && !(event.nativeEvent as InputEvent).isComposing) start(value);
+            }
+          }}
           onFocus={(event) => reportDraftSelection(event.currentTarget, true)}
           onSelect={(event) => reportDraftSelection(event.currentTarget, document.activeElement === event.currentTarget)}
           onBlur={(event) => reportDraftSelection(event.currentTarget, false)}
           onCompositionStart={() => { composing.current = true; }}
-          onCompositionEnd={() => { composing.current = false; }}
+          onCompositionEnd={(event) => { composing.current = false; if (!session) start(event.currentTarget.value); }}
           onKeyDown={(event) => {
             if (event.key !== 'Enter' || event.nativeEvent.isComposing || composing.current || event.nativeEvent.keyCode === 229) return;
             if (event.altKey) return;

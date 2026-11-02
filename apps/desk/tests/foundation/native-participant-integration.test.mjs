@@ -216,7 +216,7 @@ window.__nativeParticipantFixture = {
   setPin: (pin) => { currentPin = pin; },
   refresh: () => initialized.runtime.refreshParticipants(),
 };
-const initialized = await initializeNativeProof({ bootstrap, postMessage, events: window }, config.shortTimeout ? { timeoutMs: 100 } : {});
+const initialized = await initializeNativeProof({ bootstrap, postMessage, events: window }, { keepSavedScreen: true, ...(config.shortTimeout ? { timeoutMs: 100 } : {}) });
 if (initialized.kind !== 'ready') throw Error('Invented twelve-operation native bootstrap refused');
 ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App, { runtime: initialized.runtime }));
 `;

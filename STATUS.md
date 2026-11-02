@@ -165,6 +165,8 @@ Desk "Followed" view each need a plan revision.
 [docs/plans/desk-message-actions.md](docs/plans/desk-message-actions.md), approved by the owner November 1; PR 2 (action row, Copy, ratings, reactions) merged (#224); PR 3 (Reply) merged (#245); PR 4 (side chat, opens in place) merged (#247); PR 5 (the full emoji set, added on his ask) merged (#248); his trial in True Convo Test is next. Copy,
 thumbs up and down, reactions, reply with a quote, a side chat and any standard emoji on each message; ratings and reactions stay on the Mac. Next: [docs/plans/desk-shared-reactions.md](docs/plans/desk-shared-reactions.md), a draft plan for agents to see his reactions and react back (his pick, November 1), waiting for his yes.
 
+**Desk opens on a blank session** (Desk; owner asked November 2), Claude builds, GrokBot or a fresh Claude reviews; no plan (a small screen change he asked to build directly). A newly opened Desk shows the session list and a fresh blank session in the middle; the session is saved, and gets its row, only when he starts typing. The Nexus view names sit in one compact row, and the details rail starts closed on the blank session so the chat has the room. In review.
+
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:
 [docs/plans/merge-gate.md](docs/plans/merge-gate.md). Switched on for `main`

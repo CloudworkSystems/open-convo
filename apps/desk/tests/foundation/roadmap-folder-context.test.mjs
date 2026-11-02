@@ -7,7 +7,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, test } from 'node:test';
 import { chromium, expect } from '@playwright/test';
-import { readNativeRecord } from './browser-persistence.mjs';
+import { readNativeRecord, returningTab } from './browser-persistence.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 let server;
@@ -59,7 +59,7 @@ before(async () => {
 after(cleanup);
 
 async function isolatedPage() {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } }); await returningTab(context);
   const outside = [];
   const privateApi = [];
   const errors = [];
