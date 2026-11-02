@@ -148,7 +148,12 @@ one Finder step.
 When you've done run 3, say "done" in this thread, and the session starts
 Remote Control again. The script stops watching the moment it sees any
 Claude Code that isn't the app's, so it can't mistake the session's own
-files for the app's; every change it recorded before then counts. The session reads the script's results (differences and
+files for the app's; every change it recorded before then counts. If it
+stops before you've finished run 3, check 3 is unproven and Part 2 is done
+again. Its half-second looks could miss something that appears and goes
+between two looks; that's accepted because Claude Code has no tools here and
+the start check fails closed, but it means this check is strong evidence,
+not complete proof. The session reads the script's results (differences and
 found/not found only), then deletes the canary files, the scratch folder,
 the script and its notes, and stops Remote Control. If any check fails,
 Claude stays out of daily use until it is fixed and the whole of Part 2
