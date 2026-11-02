@@ -945,6 +945,58 @@ test('a foreign bill is recorded even when paid runs are paused', async () => {
   }
 });
 
+test('a foreign bill uses the rate saved on the reservation, even after that rate is a day old', async () => {
+  const record = cap({
+    perRun: { amount: '10', currency: 'USD' },
+    monthlyByCapability: { amount: '10', currency: 'USD' },
+    monthlyAll: { amount: '10', currency: 'USD' },
+    conversion: { currency: 'EUR', rate: '2', margin: '0', asOf: NOW },
+  });
+  const box = world(record);
+  const later = '2026-11-16T19:00:00.000Z';
+  try {
+    assert.equal((await box.reserve({ jobId: 'flight', max: { amount: '1', currency: 'USD' } })).ok, true);
+    const saved = JSON.parse(readFileSync(join(box.dir, 'entries.jsonl'), 'utf8'));
+    assert.deepEqual(saved.rate, { currency: 'EUR', rate: '2', margin: '0', asOf: NOW });
+    const stale = convertQuote({
+      quote: { amount: '1', currency: 'EUR' },
+      record: box.record,
+      signature: box.signature,
+      publicKey: box.publicKey,
+      protectedState: box.store.read(),
+      now: later,
+    });
+    assert.equal(stale.reason, REASONS.rateStale);
+    const next = cap({
+      revision: 2,
+      perRun: { amount: '10', currency: 'USD' },
+      monthlyByCapability: { amount: '10', currency: 'USD' },
+      monthlyAll: { amount: '10', currency: 'USD' },
+      conversion: { currency: 'EUR', rate: '9', margin: '0', asOf: later },
+    });
+    const nextSig = signRecord(next, box.keys.privateKey);
+    assert.equal(acceptCap(box.store, next, nextSig, box.publicKey).ok, true);
+    const settled = await box.settle({
+      record: next,
+      signature: nextSig,
+      jobId: 'flight',
+      now: later,
+      actual: { amount: '1', currency: 'EUR' },
+    });
+    assert.equal(settled.ok, true, settled.reason);
+    assert.equal(settled.routeOff, true);
+    assert.equal(settled.amount.amount, '2');
+    assert.equal(settled.amount.currency, 'USD');
+    assert.equal(settled.bill.amount, '1');
+    assert.equal(settled.bill.currency, 'EUR');
+    const spent = await box.spent({ record: next, signature: nextSig, now: later });
+    assert.equal(spent.spent.amount, '2');
+    assert.equal(spent.reserved.amount, '0');
+  } finally {
+    box.close();
+  }
+});
+
 test('the show command says why a damaged ledger stopped paid routes', async () => {
   const box = world();
   try {

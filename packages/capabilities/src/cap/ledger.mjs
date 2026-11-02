@@ -16,9 +16,9 @@ import { resolve } from 'node:path';
 import { canonicalJson, isPlainObject, own, sameText, sha256Hex } from './json.mjs';
 import { atomicWrite, fileKind, readNoFollow } from './files.mjs';
 import { inProcess, withFileLock } from './lock.mjs';
-import { moneyFromMicros, parseDecimal, parseMoney } from './money.mjs';
+import { convertMicros, isCurrency, moneyFromMicros, parseDecimal, parseMoney } from './money.mjs';
 import { REASONS } from './reasons.mjs';
-import { convertQuote, signedCap, verifyCap } from './record.mjs';
+import { signedCap, verifyCap } from './record.mjs';
 import { calendarMonth, instantText } from './time.mjs';
 
 const LEDGER_FILE = 'entries.jsonl';
@@ -122,7 +122,10 @@ function mutate(dir, args, build) {
   const entries = prior.concat(entry);
   // Refuse before saving. A write that succeeds must leave a ledger the next
   // read can check, never one that is over the ceiling and therefore "edited".
-  if (!withinLimit(entries)) return { ok: false, reason: REASONS.ledgerFull };
+  // A reservation also leaves room for its own closing line, and for a closing
+  // line for every reservation already open. Settle and release use that room,
+  // so a run that has started can still be recorded.
+  if (!roomFor(entries, entry.kind)) return { ok: false, reason: REASONS.ledgerFull };
   const saved = persist(dir, args.store, loaded.state, entries, entry);
   if (!saved.ok) {
     return saved.consistent
@@ -188,6 +191,7 @@ function reserveEntry(loaded, args) {
     jobId: args.jobId,
     at: now,
     month,
+    rate: recordedRate(cap),
   });
   return { ok: true, entry, result: { ok: true, jobId: args.jobId, amount, seq: entry.seq } };
 }
@@ -195,7 +199,7 @@ function reserveEntry(loaded, args) {
 function settleEntry(loaded, args) {
   const open = openJob(loaded, args.jobId);
   if (!open.ok) return open;
-  const quote = settleAmount(loaded, args);
+  const quote = settleAmount(loaded, args, open.job.reserve);
   if (!quote.ok) return quote;
   const over = !quote.estimated && quote.micros > open.job.reserve.micros;
   const amount = moneyFromMicros(loaded.cap.currency, quote.estimated ? open.job.reserve.micros : quote.micros);
@@ -223,7 +227,7 @@ function settleEntry(loaded, args) {
   };
 }
 
-function settleAmount(loaded, args) {
+function settleAmount(loaded, args, reserve) {
   if (args.estimated === true) return { ok: true, estimated: true };
   if (args.actual == null) return { ok: false, reason: REASONS.needFigure };
   const actual = parseMoney(args.actual);
@@ -232,17 +236,29 @@ function settleAmount(loaded, args) {
   // has to be real money, so a negative figure is refused.
   if (!actual.ok || actual.micros < 0n) return { ok: false, reason: REASONS.badAmount };
   if (actual.currency === loaded.cap.currency) return { ok: true, estimated: false, micros: actual.micros };
-  const converted = convertQuote({
-    quote: args.actual,
-    record: args.record,
-    signature: args.signature,
-    publicKey: args.publicKey,
-    protectedState: loaded.state,
-    now: loaded.now,
-    bookkeeping: true,
-  });
-  if (!converted.ok) return { ok: false, reason: converted.reason, routeOff: true };
-  return { ok: true, estimated: false, micros: parseDecimal(converted.capAmount.amount), bill: converted.quote };
+  // The rate is the one stored on the reservation, under the hash chain.
+  // A bill can arrive after that rate is more than a day old. Freshness is
+  // a rule for a new reservation, not for a run that already started. A
+  // pause does not apply here either: the cap was already checked, and this
+  // is the bill for a run that was allowed to start.
+  const recorded = reserve.rate;
+  if (!recorded || recorded.currency !== actual.currency) {
+    return { ok: false, reason: REASONS.currencyOff, routeOff: true };
+  }
+  const micros = convertMicros(actual.micros, recorded.rate, recorded.margin);
+  if (micros === null) return { ok: false, reason: REASONS.rateBad, routeOff: true };
+  return {
+    ok: true,
+    estimated: false,
+    micros,
+    bill: moneyFromMicros(actual.currency, actual.micros),
+  };
+}
+
+function recordedRate(cap) {
+  if (!cap.conversion) return null;
+  const { currency, rate, margin, asOf } = cap.conversion;
+  return { currency, rate, margin, asOf };
 }
 
 function releaseEntry(loaded, args) {
@@ -366,6 +382,7 @@ function makeEntry(state, fields) {
     jobId: fields.jobId,
     at: fields.at,
     month: fields.month,
+    rate: rateField(fields.rate),
     prevHash: state.ledgerHead,
   };
   entry.hash = entryHash(entry);
@@ -383,6 +400,7 @@ function fieldsOf(entry) {
     jobId: entry.jobId,
     at: entry.at,
     month: entry.month,
+    rate: rateField(entry.rate),
   };
 }
 
@@ -462,6 +480,7 @@ function rechain(entries) {
       jobId: entry.jobId,
       at: entry.at,
       month: entry.month,
+      rate: rateField(entry.rate),
       prevHash: previous,
       micros: entry.micros,
     };
@@ -469,6 +488,39 @@ function rechain(entries) {
     previous = next.hash;
     return next;
   });
+}
+
+// Longest amount the ledger will store, so the reserved closing line is at
+// least as big as any real settle, release or over-bill for that run.
+const CLOSING_AMOUNT = '999999999.999999';
+
+function roomFor(entries, kind) {
+  if (kind !== 'reserve') return withinLimit(entries);
+  const jobs = buildJobs(entries);
+  if (!jobs.ok) return false;
+  const padded = entries.slice();
+  for (const job of jobs.jobs.values()) {
+    if (job.terminal) continue;
+    padded.push(closingBudget(job.reserve));
+  }
+  return withinLimit(padded);
+}
+
+function closingBudget(reserve) {
+  return {
+    seq: reserve.seq,
+    kind: 'over-bill',
+    capabilityId: reserve.capabilityId,
+    routeId: reserve.routeId,
+    amount: { amount: CLOSING_AMOUNT, currency: reserve.amount.currency },
+    estimated: false,
+    jobId: reserve.jobId,
+    at: reserve.at,
+    month: reserve.month,
+    rate: null,
+    prevHash: reserve.hash,
+    hash: reserve.hash,
+  };
 }
 
 function withinLimit(entries) {
@@ -498,6 +550,7 @@ function publicEntry(entry) {
     jobId: entry.jobId,
     at: entry.at,
     month: entry.month,
+    rate: rateField(entry.rate),
     prevHash: entry.prevHash,
     hash: entry.hash,
   };
@@ -514,8 +567,19 @@ function entryHash(entry) {
     jobId: entry.jobId,
     at: entry.at,
     month: entry.month,
+    rate: rateField(entry.rate),
     prevHash: entry.prevHash,
   }), 'utf8'));
+}
+
+function rateField(rate) {
+  if (rate == null) return null;
+  return {
+    currency: rate.currency,
+    rate: rate.rate,
+    margin: rate.margin,
+    asOf: rate.asOf,
+  };
 }
 
 function judgeLedger(dir, state, currency) {
@@ -583,7 +647,7 @@ function readEntries(dir) {
 
 function parseStoredEntry(value) {
   if (!isPlainObject(value)) return null;
-  const keys = ['seq', 'kind', 'capabilityId', 'routeId', 'amount', 'estimated', 'jobId', 'at', 'month', 'prevHash', 'hash'];
+  const keys = ['seq', 'kind', 'capabilityId', 'routeId', 'amount', 'estimated', 'jobId', 'at', 'month', 'rate', 'prevHash', 'hash'];
   if (Object.keys(value).length !== keys.length || keys.some((key) => !own(value, key))) return null;
   if (!Number.isSafeInteger(value.seq) || value.seq < 1) return null;
   if (!KINDS.has(value.kind)) return null;
@@ -594,6 +658,8 @@ function parseStoredEntry(value) {
   if ((value.kind === 'reserve' || value.kind === 'release' || value.kind === 'over-bill' || value.kind === 'checkpoint') && value.estimated) return null;
   if (!instantText(value.at)) return null;
   if (typeof value.month !== 'string' || !/^\d{4}-\d{2}$/.test(value.month)) return null;
+  const rate = storedRate(value.rate, value.kind, money.currency);
+  if (!rate.ok) return null;
   if (!(value.prevHash === null || (typeof value.prevHash === 'string' && HEX.test(value.prevHash)))) return null;
   if (typeof value.hash !== 'string' || !HEX.test(value.hash)) return null;
   const entry = {
@@ -606,12 +672,33 @@ function parseStoredEntry(value) {
     jobId: value.jobId,
     at: value.at,
     month: value.month,
+    rate: rate.rate,
     prevHash: value.prevHash,
     hash: value.hash,
     micros: money.micros,
   };
   if (!sameText(entryHash(entry), entry.hash)) return null;
   return entry;
+}
+
+function storedRate(value, kind, capCurrency) {
+  if (value === null) return { ok: true, rate: null };
+  if (kind !== 'reserve' || !isPlainObject(value)) return { ok: false };
+  const fields = ['currency', 'rate', 'margin', 'asOf'];
+  if (Object.keys(value).length !== fields.length || fields.some((key) => !own(value, key))) return { ok: false };
+  if (typeof value.currency !== 'string' || !isCurrency(value.currency) || value.currency === capCurrency) {
+    return { ok: false };
+  }
+  const rate = parseDecimal(value.rate, { rate: true });
+  const margin = parseDecimal(value.margin);
+  if (rate === null || rate <= 0n || margin === null) return { ok: false };
+  if (typeof value.rate !== 'string' || typeof value.margin !== 'string') return { ok: false };
+  const asOf = instantText(value.asOf);
+  if (!asOf || value.asOf !== asOf) return { ok: false };
+  return {
+    ok: true,
+    rate: { currency: value.currency, rate: value.rate, margin: value.margin, asOf },
+  };
 }
 
 function buildJobs(entries) {

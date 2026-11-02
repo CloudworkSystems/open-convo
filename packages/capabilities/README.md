@@ -165,7 +165,7 @@ The effective cap is the lower of the signed cap and the tightening.
 The ledger file is `entries.jsonl` in the folder the caller names. Each
 line is one entry:
 
-`{ seq, kind, capabilityId, routeId, amount, estimated, jobId, at, month, prevHash, hash }`
+`{ seq, kind, capabilityId, routeId, amount, estimated, jobId, at, month, rate, prevHash, hash }`
 
 `kind` is `reserve`, `settle`, `release`, `over-bill` or `checkpoint`. `hash` is the
 SHA-256 of the canonical entry without `hash`, and `prevHash` is the
@@ -186,8 +186,11 @@ fold into one `checkpoint` per capability and route: the settled total for
 that month, covered by the same hash chain. Open runs are kept, so they
 can still settle, and they still count in the month they were reserved.
 The file is also refused, before it is saved, if it would pass 10,000
-entries or 2 MiB. A saved ledger stays readable. The reason is that this
-month's record is full.
+entries or 2 MiB. A reservation is refused when the file would not also
+have room for that run's closing line, and for a closing line for every
+reservation already open. Settling or releasing an open run uses that
+room, so it is not refused for size. A saved ledger stays readable. The
+reason is that this month's record is full.
 
 `reserve`, `settle`, `release`, `resetLedger` and `monthSpent` take one
 in-process queue per folder and an exclusive lock file (`ledger.lock`), so
@@ -242,11 +245,15 @@ the cap does not name, is refused.
 `convertQuote({ quote, record, signature, publicKey, protectedState, now, rate })`
 reads the rate from the signed cap. The `rate` argument is ignored, so a
 caller cannot pass a friendlier one. `reserve` does not convert. It stores
-the cap-currency maximum the card already showed. A bill in another
-currency is converted the same way at settle, including when paid routes are
-paused, because the run already started. If it cannot be converted, the
-route is marked off and the reservation stays open. A pause still refuses
-a new reservation.
+the cap-currency maximum the card already showed, and it stores the signed
+conversion on that line (`currency`, `rate`, `margin`, `asOf`), under the
+hash. A bill in another currency is converted with that recorded rate,
+including when paid routes are paused and including when the rate is more
+than a day old, because the run already started. A newer signed rate does
+not change a bill for a run that was already reserved. A rate older than a
+day still refuses a new quote. If the bill cannot be converted, the route
+is marked off and the reservation stays open. A pause still refuses a new
+reservation.
 
 ### Command
 
@@ -296,6 +303,12 @@ These are the choices the plan does not spell out. Each one has a test in
   Which of those amounts were estimates is not kept. An open run from a
   closed month is kept until it settles or is released. A job id from a
   folded month can be used again.
+- A reservation leaves room for its closing line. Filling the ledger with
+  an open run still lets that run settle, including an over-bill, or be
+  released. A further reservation is refused.
+- A foreign bill is converted with the rate stored on its reservation.
+  Advancing the clock past a day, or signing a new rate, does not change
+  that bill. A new quote still refuses a rate older than a day.
 - Amounts are stored and printed as the shortest decimal that round-trips
   (`"0.3"`, not a binary fraction). The signed cap keeps the text the
   person signed; the figures the ledger writes are the shortest form.

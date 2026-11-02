@@ -56,7 +56,45 @@ async function completed(jobId, amount, now) {
   if (!settled.ok) throw new Error(`${jobId} settle ${settled.reason}`);
 }
 
+async function proveClosingRoom() {
+  // Ceiling of two lines: one reservation fills it, because the closing line
+  // is reserved too. The next reservation is refused. Settling the open run
+  // with an over-bill still fits, and the bill is recorded.
+  setLedgerCeilingForTests(2, 1024 * 1024);
+  const roomDir = mkdtempSync(join(tmpdir(), 'cap-closing-'));
+  const roomStore = memoryStore();
+  acceptCap(roomStore, record, signature, publicKey);
+  const room = { ...base, ledgerDir: roomDir, store: roomStore };
+  const now = '2026-01-15T20:00:00.000Z';
+  try {
+    const reserved = await reserve({ ...room, jobId: 'open', max: { amount: '1', currency: 'USD' }, now });
+    if (!reserved.ok) throw new Error(`closing-room reserve ${reserved.reason}`);
+    const lines = readFileSync(join(roomDir, 'entries.jsonl'), 'utf8').trim().split('\n').length;
+    if (lines !== 1) throw new Error(`expected one open line, saw ${lines}`);
+    const refused = await reserve({ ...room, jobId: 'next', max: { amount: '1', currency: 'USD' }, now });
+    if (refused.ok || refused.reason !== REASONS.ledgerFull) {
+      throw new Error(`expected the next reservation to be refused, got ${JSON.stringify(refused)}`);
+    }
+    const settled = await settle({ ...room, jobId: 'open', actual: { amount: '2', currency: 'USD' }, now });
+    if (!settled.ok || settled.routeOff !== true || settled.amount.amount !== '2') {
+      throw new Error(`expected the over-bill to be recorded, got ${JSON.stringify(settled)}`);
+    }
+    const after = readFileSync(join(roomDir, 'entries.jsonl'), 'utf8').trim().split('\n');
+    if (after.length !== 2 || !after.some((line) => JSON.parse(line).kind === 'over-bill')) {
+      throw new Error(`expected the over-bill on disk, saw ${after.length} lines`);
+    }
+    const spent = await monthSpent({ ...room, now });
+    if (!spent.ok || spent.spent.amount !== '2' || spent.reserved.amount !== '0') {
+      throw new Error(`closing-room total ${spent.spent?.amount} reserved ${spent.reserved?.amount}`);
+    }
+  } finally {
+    rmSync(roomDir, { recursive: true, force: true });
+    setLedgerCeilingForTests(ceiling, 1024 * 1024);
+  }
+}
+
 try {
+  await proveClosingRoom();
   const january = '2026-01-15T20:00:00.000Z';
   // Four completed runs are eight lines, exactly the lowered ceiling.
   for (let index = 0; index < 4; index += 1) await completed(`j-${index}`, '0.1', january);

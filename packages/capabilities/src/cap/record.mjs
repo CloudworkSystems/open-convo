@@ -87,15 +87,13 @@ export function tighten(store, change, record, signature, publicKey) {
   return { ok: true, cap: verifyCap(record, signature, publicKey, store.read()) };
 }
 
-export function convertQuote({ quote, record, signature, publicKey, protectedState, now, rate, bookkeeping = false }) {
+export function convertQuote({ quote, record, signature, publicKey, protectedState, now, rate }) {
   // `rate` is never read. A caller or a model cannot pass a friendlier rate
   // than the one the person signed.
   void rate;
   const cap = verifyCap(record, signature, publicKey, protectedState);
   if (!cap.ok) return { ok: false, reason: cap.reason, rateIgnored: rate !== undefined };
-    // Settlement is bookkeeping for a run that already started, so a pause
-  // blocks a new quote but not recording a bill that is already due.
-  if (cap.paused && !bookkeeping) return { ok: false, reason: REASONS.paused, rateIgnored: rate !== undefined };
+  if (cap.paused) return { ok: false, reason: REASONS.paused, rateIgnored: rate !== undefined };
   const money = parseMoney(quote);
   if (!money.ok) return { ok: false, reason: REASONS.badAmount, rateIgnored: rate !== undefined };
   if (!instantText(now)) return { ok: false, reason: REASONS.badNow, rateIgnored: rate !== undefined };
