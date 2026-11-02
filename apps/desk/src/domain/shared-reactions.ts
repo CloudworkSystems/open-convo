@@ -262,7 +262,13 @@ export function agentReaction(run: Readonly<ConversationRun>): { emoji?: string;
 
 /** Exactly one user-perceived character, so `👍👍` or `🎉🦊` are not one emoji. */
 function singleGrapheme(value: string): boolean {
-  let count = 0;
-  for (const _ of new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(value)) if (++count > 1) return false;
-  return count === 1;
+  // Where the system can't split text into characters, the line stays text.
+  if (typeof Intl === 'undefined' || typeof Intl.Segmenter !== 'function') return false;
+  try {
+    let count = 0;
+    for (const _ of new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(value)) if (++count > 1) return false;
+    return count === 1;
+  } catch {
+    return false;
+  }
 }

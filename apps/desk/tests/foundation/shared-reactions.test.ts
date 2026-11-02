@@ -212,6 +212,12 @@ test('an agent reaction is a complete first line with one standard emoji, after 
   // A side chat about the reply quotes it as shown, without the line.
   const state = { messages: [], conversationRuns: [{ ...run('Reaction: 🎉\n\nGlad it helped.'), userMessageId: 'u', assistantMessageId: 'a' }] } as unknown as Parameters<typeof shownMessageText>[0];
   assert.equal(shownMessageText(state, 'a'), 'Glad it helped.');
+  // Where the system has no character splitter, the reply stays text instead of failing.
+  const segmenter = Intl.Segmenter;
+  try {
+    (Intl as { Segmenter?: unknown }).Segmenter = undefined;
+    assert.equal(agentReaction(run('Reaction: 🎉\nHi')).emoji, undefined);
+  } finally { (Intl as { Segmenter?: unknown }).Segmenter = segmenter; }
   // Without a note in his message, the agent wasn't told how: plain text.
   assert.equal(agentReaction(run('Reaction: 🎉\nHi', 'completed', 'Thanks.')).emoji, undefined);
 });
