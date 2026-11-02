@@ -1715,6 +1715,11 @@ byte counts, exit codes and reasons. One live run per app.
 - Init rule: `model` is the pinned model; `tools` and `mcp_servers` empty;
   `slash_commands`, `skills`, `plugins` and `apiKeySource` equal the values
   recorded in section 16's run. Else `failed` `process-error` at sequence 1.
+  Recorded 2026-11-01 on the owner's Mac (CLI 2.1.283, the argv and
+  environment above, network blocked): `slash_commands` `[]`, `skills` `[]`,
+  `plugins` `[{"name":"agents-md","path":"builtin","source":"agents-md@builtin"}]`,
+  `apiKeySource` `"none"`. `agents-md` is the CLI's built-in, and check 7
+  shows it loads nothing under these flags.
 - Overflow rule: text is held until a rate-limit message shows
   `overageStatus` `rejected` with `isUsingOverage` and `overageInUse` not
   true. The run fails `paid-overflow` on any other `overageStatus` or a true
@@ -2244,6 +2249,12 @@ Participants stay unavailable until all pass, on invented text:
    and no supervisor within 10 s (section 11's mechanism and test).
 5. Stop works while a commit is blocked in fsync.
 6. `claude auth status` makes no network request, or the user approves it.
+7. An invented `AGENTS.md` with a canary line, in the parent of the run's
+   folder, never reaches the request: the canary is absent from what the CLI
+   sends. Shown first on 2026-11-02 outside the app with the same argv and
+   environment and requests caught on a local port (canary absent, the
+   built-in logging that project memory is off); repeated in the app in
+   PR 5.
 
 ## 17. Owner confirmation that paid usage is off (approved direction; built inactive in plan F4, awaiting review)
 
@@ -2432,7 +2443,7 @@ fake, this is that owner; the readings' rules are unchanged.
   which DeskHost's lane tripwire holds), is called by nothing in Sources; `DeskWindowController`'s `paidUsage`
   defaults to nil and the app gives none, so the shipping window shows
   nothing new; the app links neither `ParticipantProcess` nor
-  `ParticipantDeskControls`, and the release path keeps
+  `ParticipantDeskControls` directly, and the release path keeps
   `ShippingAvailability`. F7 composes activation. (The Claude Code
   adapter's PR 4b composes it, in True Convo Test only:
   `ClaudeConversation` in `ParticipantAppWiring`.)

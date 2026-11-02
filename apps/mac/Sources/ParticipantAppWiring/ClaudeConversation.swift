@@ -35,10 +35,17 @@ public final class ClaudeConversation {
     public let paidUsage: any DeskPaidUsageControlling
 
     /// The values Claude Code's first stream line must carry besides the
-    /// model and the empty tool lists (section 11's init rule): recorded in
-    /// section 16's run on the owner's Mac. Nil until then, so there is no
-    /// entry (`make` answers nil) and nothing can be spawned.
-    nonisolated static let recordedInit: ParticipantInitExpectation? = nil
+    /// model and the empty tool lists (section 11's init rule), as recorded
+    /// on the owner's Mac on 2026-11-01 with the pinned CLI, the app's
+    /// flags and the network blocked (section 16's recording). The one
+    /// plugin is the CLI's built-in `agents-md`, shown on 2026-11-02 to load
+    /// no AGENTS.md under those flags (contract section 16); any other
+    /// value at start still stops the run.
+    nonisolated static let recordedInit = ParticipantInitExpectation(
+        model: LocalConversationLane.claudePin.model, slashCommands: [], skills: [],
+        plugins: .array([.object(["name": .string("agents-md"), "path": .string("builtin"),
+                                  "source": .string("agents-md@builtin")])]),
+        apiKeySource: "none")
 
     init(owner: PaidUsageConfirmationOwner, approvals: CurrentStoreApproval, launcher: any ParticipantLaunching,
          signals: PaidUsageEndSignals) {
@@ -50,10 +57,9 @@ public final class ClaudeConversation {
     }
 
     /// True Convo Test's Claude entry, with its end observers started; nil
-    /// for every other identity, the real app included. Nil too, so the
-    /// entry stays never available and out of the picker, as before, until
-    /// section 16's init values are recorded (`recordedInit`): nothing is
-    /// offered that could not run (Codex P1 on #228). And nil if this user's
+    /// for every other identity, the real app included. Nil too without
+    /// recorded init values, so nothing is offered that could not run
+    /// (Codex P1 on #228); the app passes `recordedInit`. And nil if this user's
     /// folders cannot be read or the private participants folder cannot be
     /// made, under the Desk's own invented-data folder (`paths`). The
     /// supervisor is the one bundled beside `executable`.

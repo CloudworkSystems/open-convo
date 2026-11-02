@@ -60,7 +60,11 @@ do for the local model. The real True Convo app is unchanged.
   `docs/design-notes/agent-profiles-and-adapters.md`.
 - Claude through Pi or API credits (step 6).
 - Any tool that reads, writes or runs anything: files, shell, web, MCP
-  servers, slash commands, skills, plugins, hooks.
+  servers, slash commands, skills, plugins, hooks. One exception, on the
+  owner's yes of 2026-11-02: the CLI's built-in `agents-md` plugin, which it
+  reports at start even with these flags. Under the pinned flags it loads no
+  `AGENTS.md` (shown on the owner's Mac, contract section 16), so it is
+  allowed by its exact recorded entry and nothing else.
 - Claude Code sessions saved by the CLI (`--no-session-persistence` stays).
 - Attachments, images, dictation straight to Claude, memory (step 5), the
   "Wait—what?" explainer (it stays local, October 13 decision).
@@ -194,8 +198,9 @@ PR 4b turns anything on. Only section 16's live run waits for PR 5.
   released, overflow signal, tools in init, a provider override, an
   oversize reply, Stop before and after the first piece, lock, supervisor loss.
 - **Tools refused** (PR 3c): a fake CLI that reports any tool, MCP server,
-  skill or plugin at start is stopped before any text is kept, and the
-  argument list always carries the no-tools flags.
+  skill or plugin at start (other than the recorded built-in `agents-md`
+  entry, exactly) is stopped before any text is kept, and the argument list
+  always carries the no-tools flags.
 - **Nothing leaves without consent** (PR 4a, rechecked in 4-proof): no
   spawn happens unless both gates are passed, a revoked approval or an
   ended paid-usage confirmation stops the next spawn, and the CLI never
@@ -203,7 +208,8 @@ PR 4b turns anything on. Only section 16's live run waits for PR 5.
 - **Section 16 acceptance** (PR 5, the one live step), on invented text, with the owner present for
   the one live run: argv and init values, inert `@file` and `/config`
   input, nothing new under `~/.claude`, kill -9 cleanup, Stop during a
-  blocked save.
+  blocked save, and an invented `AGENTS.md` above the participants folder
+  never reaching the request (check 7).
 
 ## Owner Trial Outline
 
