@@ -487,6 +487,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
           saveBlockedReason: problem ? 'Rating, reacting, Reply and Side chat are off until saving works again.' : undefined,
           onRate: (messageId, rating) => dispatch({ type: 'set-message-rating', messageId, rating }),
           onReact: (messageId, reaction) => dispatch({ type: 'toggle-message-reaction', messageId, reaction }),
+          onEmoji: (messageId, emoji) => dispatch({ type: 'toggle-message-emoji', messageId, emoji }),
           onSideChat: (messageId, text) => dispatch({ type: 'create-side-chat', messageId, text }),
           onOpenSession: (sessionId) => dispatch({ type: 'select-session', sessionId }),
           sideChats: state.sessions.reduce((found, session) => {

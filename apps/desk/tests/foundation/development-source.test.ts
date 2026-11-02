@@ -112,3 +112,17 @@ test('destination symlinks cannot redirect copies or overwrite existing outside 
     assert.equal(readFileSync(join(files.outside, 'owner.json'), 'utf8'), 'invented-outside-owner');
   } finally { files.clean(); }
 });
+
+test('every vendored third-party file travels with its license, in the source copy and the build', () => {
+  const vendored: Array<[data: string, license: string, built: string]> = [
+    ['src/content/emoji.json', 'src/content/emoji-LICENSE', 'licenses/MIT-unicode-emoji-json.txt'],
+    ['src/ui/Icon.tsx', 'src/ui/lucide/LICENSE', 'licenses/ISC-lucide.txt'],
+  ];
+  const viteConfig = readFileSync(new URL('../../vite.config.ts', import.meta.url), 'utf8');
+  for (const [data, license, built] of vendored) {
+    assert.ok(DEVELOPMENT_SOURCE_FILES.includes(data), `${data} is in the source copy`);
+    assert.ok(DEVELOPMENT_SOURCE_FILES.includes(license), `${license} travels with ${data}`);
+    const source = license.replace(/^src\//, './src/');
+    assert.ok(viteConfig.includes(`fileName: '${built}'`) && viteConfig.includes(`'${source}'`), `the build emits ${built} from ${license}`);
+  }
+});

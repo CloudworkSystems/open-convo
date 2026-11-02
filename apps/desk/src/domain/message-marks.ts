@@ -15,13 +15,30 @@ export const MESSAGE_REACTIONS: readonly { name: MessageReaction; emoji: string;
   { name: 'idea', emoji: '💡', label: 'Idea' },
 ];
 const reactionOrder = MESSAGE_REACTIONS.map((reaction) => reaction.name);
+/** Most emoji from the full set one message can carry. */
+export const MESSAGE_EMOJI_LIMIT = 20;
+// Only emoji parts, and at least one picture, flag letter or keycap. The `u`
+// flag (not `v` and its RGI_Emoji set) keeps this working in the WebKit of
+// older supported macOS versions; the picker only offers standard emoji.
+const emojiParts = /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|\p{Emoji_Component}|\u200D|\uFE0F|\u20E3)+$/u;
+const emojiPicture = /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20E3/u;
+
+/** True for one emoji such as 🦊, 👍🏽 or 🇨🇦, and false for plain text. */
+export function isStandardEmoji(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 32 && emojiParts.test(value) && emojiPicture.test(value);
+}
+
+/** The quick reaction an emoji stands for, so ❤️ from the full set is the same mark as the heart. */
+export function quickReactionFor(emoji: string): MessageReaction | undefined {
+  return MESSAGE_REACTIONS.find((reaction) => reaction.emoji === emoji)?.name;
+}
 
 export function isMessageReaction(value: unknown): value is MessageReaction {
   return typeof value === 'string' && (reactionOrder as string[]).includes(value);
 }
 
 export function isMessageMarkCommand(command: { type: string }): command is MessageMarkCommand {
-  return command.type === 'set-message-rating' || command.type === 'toggle-message-reaction';
+  return command.type === 'set-message-rating' || command.type === 'toggle-message-reaction' || command.type === 'toggle-message-emoji';
 }
 
 export interface MarkableMessage {
@@ -58,16 +75,27 @@ export function mutateMessageMark(next: DeskState, command: MessageMarkCommand, 
     if (command.rating === null) delete updated.rating;
     else updated.rating = command.rating;
   } else {
-    if (!isMessageReaction(command.reaction)) throw new MessageMarkError('That reaction is not available.');
-    const chosen = new Set(current.reactions ?? []);
-    if (chosen.has(command.reaction)) chosen.delete(command.reaction);
-    else chosen.add(command.reaction);
-    const reactions = reactionOrder.filter((name) => chosen.has(name));
-    if (reactions.length) updated.reactions = reactions;
-    else delete updated.reactions;
+    const named = command.type === 'toggle-message-reaction' ? command.reaction
+      : isStandardEmoji(command.emoji) ? quickReactionFor(command.emoji) : undefined;
+    if (command.type === 'toggle-message-emoji' && !named) {
+      if (!isStandardEmoji(command.emoji)) throw new MessageMarkError('That emoji is not available.');
+      const list = current.emoji ?? [];
+      const emoji = list.includes(command.emoji) ? list.filter((value) => value !== command.emoji) : [...list, command.emoji];
+      if (emoji.length > MESSAGE_EMOJI_LIMIT) throw new MessageMarkError(`A message can hold up to ${MESSAGE_EMOJI_LIMIT} emoji. Remove one first.`);
+      if (emoji.length) updated.emoji = emoji;
+      else delete updated.emoji;
+    } else {
+      if (!isMessageReaction(named)) throw new MessageMarkError('That reaction is not available.');
+      const chosen = new Set(current.reactions ?? []);
+      if (chosen.has(named)) chosen.delete(named);
+      else chosen.add(named);
+      const reactions = reactionOrder.filter((name) => chosen.has(name));
+      if (reactions.length) updated.reactions = reactions;
+      else delete updated.reactions;
+    }
   }
   updated.updatedAt = now;
-  const empty = updated.rating === undefined && updated.reactions === undefined;
+  const empty = updated.rating === undefined && updated.reactions === undefined && updated.emoji === undefined;
   const result = marks.filter((mark) => mark.messageId !== command.messageId);
   if (!empty) result.splice(index >= 0 ? index : result.length, 0, updated);
   if (result.length) next.messageMarks = result;
@@ -84,8 +112,8 @@ export function validMessageMarks(value: unknown, messages: Map<string, Markable
     if (mark === null || typeof mark !== 'object' || Array.isArray(mark)) return false;
     const keys = Object.keys(mark);
     if (!keys.includes('messageId') || !keys.includes('updatedAt')
-      || keys.some((key) => !['messageId', 'rating', 'reactions', 'updatedAt'].includes(key))) return false;
-    const { messageId, rating, reactions, updatedAt } = mark as Record<string, unknown>;
+      || keys.some((key) => !['messageId', 'rating', 'reactions', 'emoji', 'updatedAt'].includes(key))) return false;
+    const { messageId, rating, reactions, emoji, updatedAt } = mark as Record<string, unknown>;
     if (typeof messageId !== 'string' || seen.has(messageId)) return false;
     seen.add(messageId);
     const target = messages.get(messageId);
@@ -96,7 +124,9 @@ export function validMessageMarks(value: unknown, messages: Map<string, Markable
       const ordered = reactionOrder.filter((name) => reactions.includes(name));
       if (ordered.length !== reactions.length || ordered.some((name, i) => reactions[i] !== name)) return false;
     }
-    if (rating === undefined && reactions === undefined) return false;
+    if (emoji !== undefined && (!Array.isArray(emoji) || !emoji.length || emoji.length > MESSAGE_EMOJI_LIMIT
+      || !emoji.every((value) => isStandardEmoji(value) && !quickReactionFor(value)) || new Set(emoji).size !== emoji.length)) return false;
+    if (rating === undefined && reactions === undefined && emoji === undefined) return false;
     if (typeof updatedAt !== 'string' || !Number.isFinite(Date.parse(updatedAt))
       || new Date(Date.parse(updatedAt)).toISOString() !== updatedAt || updatedAt > latest) return false;
   }
