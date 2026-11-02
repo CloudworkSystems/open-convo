@@ -159,6 +159,14 @@ gardening and recipes notebook). At least:
 12. The library imports no `fs`, network or `child_process` module, and
     the command no network or `child_process` module.
 
+## Carried To The Build (Codex, November 2)
+
+- **Link destinations are encoded.** Generated links percent-encode each
+  path segment (spaces, `#`, `?`, parentheses and other characters with a
+  meaning in a link), and the link checker decodes them before looking a
+  file up. Tests cover notes named `plan#1.md`, `a (draft).md` and
+  `two words.md`.
+
 ## Out Of Scope For This Slice
 
 - Steps 3 and 4 (contradictions, the health score), any model, and fixes

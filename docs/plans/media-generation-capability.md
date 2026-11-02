@@ -452,6 +452,25 @@ inside the test, and invented files only):
    breaks) is kept as text in the receipt and never breaks the JSON.
 9. A record that fails part 1's validator is refused before anything runs.
 
+### Carried to the build (Codex, November 2)
+
+These later review findings are requirements for the part 2 and part 3
+pull requests.
+
+- **Part 2: the cap month is the person's calendar month.** The cap record
+  names an IANA time zone (`timeZone`, for example `America/Los_Angeles`).
+  A month runs from local midnight on the first to local midnight on the
+  first of the next month in that zone, worked out with `Intl` from the
+  caller's `now`. Tests cover both sides of a non-UTC month boundary.
+- **Part 2: conversion rates expire.** A rate older than 24 hours before
+  `now` is refused and the paid route stays off (fail closed); a test
+  covers a stale rate.
+- **Part 3: the prompt goes to a named place.** A local workflow marks
+  where the prompt goes with the exact text `{{prompt}}` in one text field.
+  The runner refuses a workflow with no such field or more than one, puts
+  the prompt there (as JSON text, never by splicing strings), and test 4
+  checks that the queued workflow holds the prompt.
+
 ### Rules for the builder
 
 These are rules the builder must follow; the setup does not enforce them, so
