@@ -923,15 +923,14 @@ public final class DeskWebViewHost: NSObject {
     /// it doesn't, nil with no answer (closed, locked, no page, a script
     /// error, or no answer within `unsavedWorkCheckTimeout`). Read from the
     /// host's own script world; the attribute is the page's only signal.
-    public func pageIsSavingRuns() async -> Bool? {
+    public func pageRunSaves() async -> DeskRunSaves? {
         guard !isClosed, !isLocked, livePageHoldsCurrentConnection, webView.url != nil else { return nil }
-        let answer = FirstAnswer<Bool?>()
+        let answer = FirstAnswer<DeskRunSaves?>()
         return await withCheckedContinuation { continuation in
             answer.continuation = continuation
-            webView.evaluateJavaScript(Self.runsSavingCheck, in: nil, in: .defaultClient) { result in
-                guard case .success(let value) = result, let flag = value as? NSNumber,
-                      CFGetTypeID(flag) == CFBooleanGetTypeID() else { answer.give(nil); return }
-                answer.give(flag.boolValue)
+            webView.evaluateJavaScript(Self.runSavesCheck, in: nil, in: .defaultClient) { result in
+                guard case .success(let value) = result, let name = value as? String else { answer.give(nil); return }
+                answer.give(DeskRunSaves(rawValue: name))
             }
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: Self.unsavedWorkCheckTimeout)
@@ -940,7 +939,13 @@ public final class DeskWebViewHost: NSObject {
         }
     }
 
-    static let runsSavingCheck = "document.documentElement.hasAttribute('data-desk-runs-saving')"
+    /// The page's marks: `data-desk-runs-saving` while its saves are under
+    /// way, then `data-desk-runs-save-failed` when any of them did not land.
+    static let runSavesCheck = """
+        (() => { const root = document.documentElement;
+          return root.hasAttribute('data-desk-runs-saving') ? 'saving'
+            : root.hasAttribute('data-desk-runs-save-failed') ? 'failed' : 'saved'; })()
+        """
 
     /// Asks the live page, from the host's own script world, whether it
     /// cancels a `beforeunload` event (`beforeUnloadCheck`). No page in the
@@ -1335,4 +1340,13 @@ private final class FirstAnswer<Value> {
         continuation?.resume(returning: value)
         continuation = nil
     }
+}
+
+/// Where the page's reply saves stand after the Mac asked about unsaved
+/// work before a quit (step 3 trial, F11): still under way, all landed, or
+/// at least one did not land.
+public enum DeskRunSaves: String, Sendable {
+    case saving
+    case saved
+    case failed
 }

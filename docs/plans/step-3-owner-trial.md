@@ -158,9 +158,10 @@ has answered its question.
   Desk while they are under way) before closing the Desk, for at most ten
   seconds and inside the existing 17-second limit. If the reply stopped
   just before that check, so nothing is owed any more, the quit still waits
-  for the save, within the ordinary 3-second quit limit. The log says how it
-  ended: `desk.terminate.save-wait outcome=saved`, `outcome=no-answer` or
-  `outcome=limit`. After the menu's Quit, the page is asked once more at
+  for the save, within the ordinary 3-second quit limit. A save that does
+  not land is retried a few times and, if it still fails, is marked failed,
+  never saved. The log says how it ended: `desk.terminate.save-wait
+  outcome=saved`, `outcome=failed`, `outcome=no-answer` or `outcome=limit`. After the menu's Quit, the page is asked once more at
   that point, because only then has the last of the reply arrived.
 - On reopen, the Mac's record of the stop comes right after the saved text,
   so the reply reads "Stopped on this Mac. The reply so far is kept.", with

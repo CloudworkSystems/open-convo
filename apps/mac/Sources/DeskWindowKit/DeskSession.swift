@@ -200,7 +200,7 @@ public final class DeskSession {
     /// Test seam: stands in for the page's unsaved-work answer (nil: clean).
     var unsavedWorkCheck: (@MainActor () async -> DeskUnsavedWork?)?
     /// Test seam: stands in for `pageIsSavingRuns`'s page read.
-    var runSavesCheck: (@MainActor () async -> Bool?)?
+    var runSavesCheck: (@MainActor () async -> DeskRunSaves?)?
     /// Test seam: awaited while the Desk is still opening, after the store
     /// work and before the close check that would abandon the open, so a
     /// test can close the window at a known point (nil: no wait).
@@ -767,13 +767,13 @@ public final class DeskSession {
         return answer
     }
 
-    /// Whether the open page is still saving the reply text it began saving
-    /// when last asked about unsaved work (step 3 trial, F11). Nil when the
-    /// Desk isn't open or the page can't say.
-    public func pageIsSavingRuns() async -> Bool? {
+    /// Where the reply saves stand that the page began when last asked
+    /// about unsaved work (step 3 trial, F11): under way, landed, or not
+    /// landed. Nil when the Desk isn't open or the page can't say.
+    public func pageRunSaves() async -> DeskRunSaves? {
         guard state == .open, let host else { return nil }
         if let runSavesCheck { return await runSavesCheck() }
-        return await host.pageIsSavingRuns()
+        return await host.pageRunSaves()
     }
 
     // MARK: Plain descriptions

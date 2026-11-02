@@ -113,6 +113,10 @@ const lifecycle = { isActive: () => active,
 const repository = {
   loadLatest: async () => ({ kind: 'ready', state: structuredClone(stored) }),
   save: async (state, revision) => {
+    if (window.__failSaves > 0) {
+      window.__failSaves -= 1;
+      return { kind: 'failed', error: 'Invented failed save.', attemptedState: state };
+    }
     host.saves.push(structuredClone(state));
     if (revision !== stored.revision) return { kind: 'conflict', error: 'Invented conflict.', attemptedState: state, currentState: stored };
     stored = structuredClone(state);
@@ -432,6 +436,31 @@ test('step 3 trial F11: a quit mid-reply saves the text so far when the Mac asks
     assert.equal((await g.host()).starts.length, 0, 'nothing was sent again');
     g.check();
   } finally { await g.close(); }
+});
+
+test('step 3 trial F11: a quit-time save that does not land is marked failed, never saved', async () => {
+  const f = await fixture({ choice: local });
+  try {
+    const { page } = f;
+    await f.send('Invented question to quit during.');
+    await expect.poll(async () => (await f.host()).starts.length).toBe(1);
+    await f.emit('text', { text: 'Invented first part. ' });
+    await expect.poll(async () => (await f.stored()).conversationRuns.at(-1).outputChunks.join('')).toBe('Invented first part. ');
+    await f.emit('text', { text: 'Invented second part.' });
+    await expect(page.locator('[data-run-id]').last()).toContainText('Invented second part.');
+    const marks = () => page.evaluate(() => [document.documentElement.hasAttribute('data-desk-runs-saving'),
+      document.documentElement.hasAttribute('data-desk-runs-save-failed')]);
+    await page.evaluate((count) => {
+      window.__failSaves = count;
+      const event = document.createEvent('BeforeUnloadEvent');
+      event.initEvent('beforeunload', false, true);
+      window.dispatchEvent(event);
+    }, 99);
+    await expect.poll(async () => (await marks())[0], { timeout: 3000 }).toBe(false);
+    assert.deepEqual(await marks(), [false, true], 'never reported as saved');
+    assert.equal((await f.stored()).conversationRuns.at(-1).outputChunks.join(''), 'Invented first part. ');
+    await page.evaluate(() => { window.__failSaves = 0; });
+  } finally { await f.close(); }
 });
 
 test('a reply cut off at the length limit says so plainly and offers Retry', async () => {

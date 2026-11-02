@@ -65,6 +65,10 @@ function focusStatus(button: HTMLButtonElement) {
 }
 
 /** One visit's controllers. All checkpoints use the application's existing save queue. */
+/** Retries for a reply save that did not land when the Mac asked before a quit. */
+const RUN_SAVE_RETRIES = 3;
+const RUN_SAVE_RETRY_DELAY_MS = 200;
+
 export function useConversationRuns(options: RunWorkspace) {
   const latest = useRef(options);
   latest.current = options;
@@ -654,18 +658,31 @@ export function useConversationRuns(options: RunWorkspace) {
    * unsaved work, which it does just before closing the Desk for a quit
    * (step 3 trial, F11: a quit mid-reply reopened with none of the reply).
    * While those saves are in flight the document carries
-   * `data-desk-runs-saving`, which the Mac reads to know when they have
-   * landed (or failed) before it closes the Desk. */
+   * `data-desk-runs-saving`, which the Mac reads to know when they are done
+   * before it closes the Desk. A save that does not land is retried a few
+   * times; if one still has not landed, the document carries
+   * `data-desk-runs-save-failed` instead, so the Mac never takes it as
+   * saved (Codex, 864c4f0). */
   const saveRunsNow = () => {
-    const flushes = [...controllers.current.values()].map((controller) => controller.flush().catch(() => { /* Its own state reports a failed save. */ }));
-    if (!flushes.length) return;
+    const all = [...controllers.current.values()];
+    if (!all.length) return;
     const root = document.documentElement;
+    const flushAll = (list: typeof all) => Promise.allSettled(list.map((controller) => controller.flush()));
+    const notLanded = () => all.filter((controller) => controller.snapshot.checkpointState !== 'saved');
     runSavesInFlight.current += 1;
+    root.removeAttribute('data-desk-runs-save-failed');
     root.setAttribute('data-desk-runs-saving', '');
-    void Promise.allSettled(flushes).then(() => {
+    void (async () => {
+      await flushAll(all);
+      for (let retry = 0; retry < RUN_SAVE_RETRIES && notLanded().length; retry += 1) {
+        await new Promise((resolve) => setTimeout(resolve, RUN_SAVE_RETRY_DELAY_MS));
+        await flushAll(notLanded());
+      }
+      const failed = notLanded().length > 0;
       runSavesInFlight.current -= 1;
+      if (failed) root.setAttribute('data-desk-runs-save-failed', '');
       if (!runSavesInFlight.current) root.removeAttribute('data-desk-runs-saving');
-    });
+    })();
   };
   return { send, refreshAvailability, confirmSaved, content, otherRunControls, hasUnconfirmed, saveRunsNow, canSaveEdits,
     participantLabel: participantMode ? choiceLabel ?? 'Participant unavailable' : undefined,

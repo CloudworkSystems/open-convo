@@ -710,7 +710,7 @@ final class DeskSessionParticipantTests: XCTestCase {
             session.unsavedWorkCheck = { asked += 1; return .unsaved }
             let savedAt = Date().addingTimeInterval(0.4)
             var looks = 0
-            session.runSavesCheck = { looks += 1; return Date() < savedAt }
+            session.runSavesCheck = { looks += 1; return Date() < savedAt ? .saving : .saved }
             lane.owedOnceQuitBegan = Self.oneLiveRun
             var replies: [Bool] = []
             var closedAt: Date?
@@ -733,9 +733,10 @@ final class DeskSessionParticipantTests: XCTestCase {
     }
 
     /// A page that never finishes saving, or can't say, never holds the
-    /// quit past `quitSaveWait`, and the log says which.
+    /// quit past `quitSaveWait`; a save that did not land is never logged
+    /// as saved; and the log says which.
     func testAQuitMidReplyWaitsNoLongerThanItsLimitForThePagesSave() async throws {
-        let cases: [(Bool?, String)] = [(true, "limit"), (nil, "no-answer")]
+        let cases: [(DeskRunSaves?, String)] = [(.saving, "limit"), (nil, "no-answer"), (.failed, "failed")]
         for (saving, outcome) in cases {
             let folder = try DeskTestFolder()
             defer { folder.clean() }
@@ -769,7 +770,7 @@ final class DeskSessionParticipantTests: XCTestCase {
             let session = try await open(folder, lane: lane, logs: logs)
             session.unsavedWorkCheck = { .unsaved }
             let savedAt = Date().addingTimeInterval(savesFor)
-            session.runSavesCheck = { Date() < savedAt }
+            session.runSavesCheck = { Date() < savedAt ? .saving : .saved }
             lane.owedOnceQuitBegan = ParticipantObligations()
             var replies: [Bool] = []
             var closedAt: Date?
@@ -800,7 +801,7 @@ final class DeskSessionParticipantTests: XCTestCase {
             let logs = DeskLogCollector()
             let session = try await open(folder, lane: lane, logs: logs)
             session.unsavedWorkCheck = { nil }
-            session.runSavesCheck = { true }
+            session.runSavesCheck = { .saving }
             lane.owedOnceQuitBegan = owed
             var replies: [Bool] = []
             _ = DeskTermination.reply(for: session, timeout: 2, participantTimeout: 5, quitSaveWait: 3,

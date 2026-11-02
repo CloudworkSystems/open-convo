@@ -1,5 +1,6 @@
 import AppKit
 import DeskHost
+import DeskHostWebKit
 
 /// The app's answer to `applicationShouldTerminate`. With no Desk stack
 /// built it is `.terminateNow`, exactly as before the Desk existed. With
@@ -176,12 +177,19 @@ public enum DeskTermination {
                 let limit = owedNow == false ? quitSaveWait : min(quitSaveWait, timeout)
                 // Until the page confirms its saves landed (or can't say),
                 // looked at every 50 ms, for at most `limit`.
-                var saving = await session.pageIsSavingRuns()
-                while saving == true, Date().timeIntervalSince(asked) < limit {
+                // A save that did not land is logged as such, never as
+                // saved (Codex, 864c4f0); the page has already retried it.
+                var saves = await session.pageRunSaves()
+                while saves == .saving, Date().timeIntervalSince(asked) < limit {
                     try? await Task.sleep(nanoseconds: 50_000_000)
-                    saving = await session.pageIsSavingRuns()
+                    saves = await session.pageRunSaves()
                 }
-                let outcome = saving == false ? "saved" : saving == nil ? "no-answer" : "limit"
+                let outcome = switch saves {
+                case .saved?: "saved"
+                case .failed?: "failed"
+                case .saving?: "limit"
+                case nil: "no-answer"
+                }
                 session.log("desk.terminate.save-wait", "outcome=\(outcome) waited=\(String(format: "%.1f", Date().timeIntervalSince(asked)))s")
             }
             await session.close(quitting: true)
