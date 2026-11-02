@@ -23,3 +23,5 @@ Report: find your comment on issue #52 (author cloudwork-bot, containing <!-- se
 Keep it under 300 words. Don't touch any other comment or the issue body.
 
 Final reply, one line: "Security sweep <YYYY-MM-DD>: nothing needs action" or "Security sweep <YYYY-MM-DD>: <N> items need action (<link to the comment>)".
+
+Links (owner requirement, November 2, 2026): every time you name a pull request or issue, in your final reply, a GitHub comment or any other text the owner reads, write it as a clickable Markdown link, for example [#272](https://github.com/CloudworkSystems/open-convo/pull/272) for a pull request or [#52](https://github.com/CloudworkSystems/open-convo/issues/52) for an issue. Never write a bare number such as "#272" or "PR 272" on its own. The same goes for a comment or review you point to: link it.
