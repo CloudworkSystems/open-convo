@@ -327,12 +327,21 @@ function markdownDestinations(text) {
 }
 
 function endOfLabel(text, start) {
+  let depth = 1;
   for (let i = start; i < text.length; i += 1) {
     if (text[i] === '\\') {
       i += 1;
       continue;
     }
-    if (text[i] === ']') return i;
+    if (text[i] === '[') {
+      depth += 1;
+      continue;
+    }
+    if (text[i] === ']') {
+      depth -= 1;
+      if (depth === 0) return i;
+      continue;
+    }
     if (text[i] === '\n') return -1;
   }
   return -1;

@@ -211,6 +211,16 @@ test('encoded link targets round-trip, including #, spaces, and parentheses', ()
     kinds(balanced, 'broken-link').filter(item => item.path === 'see.md').map(item => item.detail),
     ['missing%20(draft).md'],
   );
+
+  const nested = buildAtlas([
+    note('draft.md', '# Draft\n'),
+    note('see.md', 'Open [the [draft]](draft.md) and [the [gone]](missing.md).\n'),
+  ]);
+  assert.equal(kinds(nested, 'orphan').some(item => item.path === 'draft.md'), false);
+  assert.deepEqual(
+    kinds(nested, 'broken-link').filter(item => item.path === 'see.md').map(item => item.detail),
+    ['missing.md'],
+  );
 });
 
 test('link labels escape markdown characters', () => {
