@@ -89,6 +89,12 @@ CI and for staging, and OpenAPI 3.1 validation. Not live: next come the
 owner's Cloudflare setup, the staging scan, and, at go-live, the docs page
 and the privacy policy section, then his OK to go live.
 
+**Capability contract, cap and media** (Creator, standalone parts 1 to 3),
+built by Claude. Plan:
+[docs/plans/media-generation-capability.md](docs/plans/media-generation-capability.md)
+(#256). Part 1, in review: the `capability.json` contract and validator in
+`packages/capabilities`. Next: part 2, the signed cap and ledger.
+
 **Site Engine, standalone first slice**, built by an outside builder (GrokBot
 builds, Codex reviews). Plan:
 [docs/plans/site-engine-standalone.md](docs/plans/site-engine-standalone.md).

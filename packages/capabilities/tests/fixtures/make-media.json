@@ -1,0 +1,72 @@
+{
+  "id": "make-media",
+  "title": "Make an image or a short clip",
+  "version": "0.1.0",
+  "status": "draft",
+  "created": "2026-11-02",
+  "inputs": {
+    "kind": { "type": "enum", "values": ["image", "video"], "required": true },
+    "prompt": { "type": "string", "max_length": 2000, "required": true },
+    "seconds": { "type": "integer", "min": 1, "max": 10 },
+    "width": { "type": "integer", "min": 64, "max": 4096 },
+    "height": { "type": "integer", "min": 64, "max": 4096 },
+    "reference_files": { "type": "files", "max_items": 2, "max_bytes": 20000000, "types": ["image/png", "image/jpeg"] }
+  },
+  "outputs": {
+    "file": { "type": "file", "folder": "media", "description": "The image or clip." },
+    "receipt": { "type": "receipt", "description": "Route, model, prompt, what left the machine, cost and time." }
+  },
+  "routes": [
+    {
+      "id": "upload",
+      "kind": "upload",
+      "title": "Upload your own file",
+      "hosts": [],
+      "leaves_machine": "nothing",
+      "cost": "free"
+    },
+    {
+      "id": "local-video",
+      "kind": "local",
+      "title": "Make it on this Mac",
+      "provider": "Invented Local Studio",
+      "model": "invented-video-1",
+      "hosts": [],
+      "leaves_machine": "nothing",
+      "cost": "free",
+      "needs": {
+        "memory_gb": 32,
+        "disk_gb": 40,
+        "server": "ComfyUI",
+        "downloads": [{ "what": "invented-video-1 weights", "size_gb": 18.5, "from": "https://models.example.com/invented-video-1" }]
+      },
+      "license": {
+        "name": "Invented Open License 1.0",
+        "url": "https://models.example.com/invented-video-1/license",
+        "checked": "2026-11-02",
+        "allows_intended_use": true
+      }
+    },
+    {
+      "id": "own-key-example",
+      "kind": "own_key",
+      "title": "Your own Example Media key",
+      "provider": "Example Media",
+      "model": "example-clip-2",
+      "hosts": ["https://api.example.com"],
+      "leaves_machine": "your prompt text and the one reference picture you attach",
+      "cost": {
+        "unit": "per_second",
+        "price": { "amount": "0.08", "currency": "USD" },
+        "source": "https://example.com/pricing",
+        "checked": "2026-11-02",
+        "max_per_run": { "amount": "0.80", "currency": "USD" }
+      }
+    }
+  ],
+  "recipe": "SKILL.md",
+  "actions_needing_approval": ["spend money on a paid route"],
+  "install_gate": { "outcome": "not run yet" },
+  "models_passed": [],
+  "not_proven": ["Invented test record; no route here is real."]
+}

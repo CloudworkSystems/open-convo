@@ -1,6 +1,8 @@
 # Media Generation, The First Capability With Paid Routes (PRD)
 
-Status: Draft (Nov 2, 2026): plan only, waiting on the owner's yes; nothing is built.
+Status: In progress (Nov 2, 2026): plan approved; part 1, the
+`capability.json` contract and validator in `packages/capabilities`, is
+built and in review. Parts 2 to 6 are not started.
 
 Written November 2, 2026 by a Claude session (project "261024 OC
 Steering", thread "Plan media generation as a portable capability"), from
