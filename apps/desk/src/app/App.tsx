@@ -8,6 +8,7 @@ import { createDemoState } from '../domain/demo';
 import type { DeskCommand, DeskState } from '../domain/types';
 import { DeskFoundation } from '../features/DeskFoundation';
 import { MessageActionsContext } from '../features/MessageActions';
+import { draftWithReplyQuote } from '../domain/reply-quote';
 import { parsePreviewBuild, retireAnnotationDiagnostics, watchPreviewUpdates } from './preview-updates';
 import type { PreviewUpdateNotice } from './preview-updates';
 import { useConversationRuns, type WorkspaceAttemptResult } from './use-conversation-runs';
@@ -483,9 +484,27 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
           // Plan rule 6: while saving is paused, nothing that changes what is saved is offered.
           // Any save problem, including a definite failure: edits made then
           // are held only in this visit until Retry, so marks wait.
-          saveBlockedReason: problem ? 'Ratings and reactions are off until saving works again.' : undefined,
+          saveBlockedReason: problem ? 'Rating, reacting, Reply and Side chat are off until saving works again.' : undefined,
           onRate: (messageId, rating) => dispatch({ type: 'set-message-rating', messageId, rating }),
           onReact: (messageId, reaction) => dispatch({ type: 'toggle-message-reaction', messageId, reaction }),
+          onEmoji: (messageId, emoji) => dispatch({ type: 'toggle-message-emoji', messageId, emoji }),
+          onSideChat: (messageId, text) => dispatch({ type: 'create-side-chat', messageId, text }),
+          onOpenSession: (sessionId) => dispatch({ type: 'select-session', sessionId }),
+          sideChats: state.sessions.reduce((found, session) => {
+            if (session.sideOf) found.set(session.sideOf.messageId, [...(found.get(session.sideOf.messageId) ?? []), { id: session.id, title: session.title }]);
+            return found;
+          }, new Map<string, { id: string; title: string }[]>()),
+          onReply: (messageId, text) => {
+            const current = stateRef.current;
+            if (!current) return false;
+            // The message's own conversation, never just the selected one.
+            const sessionId = current.messages.find((message) => message.id === messageId)?.sessionId
+              ?? current.conversationRuns?.find((run) => run.userMessageId === messageId || run.assistantMessageId === messageId)?.sessionId;
+            if (!sessionId || !Object.hasOwn(current.drafts, sessionId)) return false;
+            const expectedText = current.drafts[sessionId];
+            dispatch({ type: 'set-draft', sessionId, text: draftWithReplyQuote(expectedText, text), expectedText });
+            return stateRef.current?.drafts[sessionId] !== expectedText;
+          },
         }}>
         <DeskFoundation
           state={state}

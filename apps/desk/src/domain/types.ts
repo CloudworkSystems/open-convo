@@ -50,6 +50,8 @@ export interface Session {
   intentHistory?: SessionTextRevision[];
   /** Separate recoverable form text; absent means the intent form is closed. */
   intentDraft?: string;
+  /** A side chat: the conversation and message it is about. Absent on ordinary sessions. */
+  sideOf?: { sessionId: string; messageId: string };
   createdAt: string;
   updatedAt: string;
 }
@@ -130,11 +132,14 @@ export interface MessageMark {
   rating?: 'up' | 'down';
   /** At least one, unique, in the fixed order. */
   reactions?: MessageReaction[];
+  /** Other standard emoji from the full set, unique, in the order added. */
+  emoji?: string[];
   updatedAt: string;
 }
 export type MessageMarkCommand =
   | { type: 'set-message-rating'; messageId: string; rating: 'up' | 'down' | null }
-  | { type: 'toggle-message-reaction'; messageId: string; reaction: MessageReaction };
+  | { type: 'toggle-message-reaction'; messageId: string; reaction: MessageReaction }
+  | { type: 'toggle-message-emoji'; messageId: string; emoji: string };
 
 export interface Activity {
   id: string;
@@ -187,6 +192,7 @@ export type DeskCommand =
   | { type: 'set-domain-pinned'; domainId: string; pinned: boolean }
   | { type: 'set-folder-icon'; domainId: string; icon: FolderIconName }
   | { type: 'create-session'; goalId: string | null; title?: string }
+  | { type: 'create-side-chat'; messageId: string; text: string }
   | { type: 'rename-session'; sessionId: string; title: string; expectedTitle?: string }
   | { type: 'set-session-pinned'; sessionId: string; pinned: boolean }
   | { type: 'set-participant-choice'; sessionId: string; participant: ParticipantIdentity }

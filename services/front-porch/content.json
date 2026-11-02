@@ -1,0 +1,117 @@
+{
+  "about": {
+    "name": "True Convo",
+    "maker": "Cloudwork Systems",
+    "website": "https://trueconvo.com",
+    "summary": "True Convo is a personal AI app for the Mac. Conversations and memory live on the person's own computer, and nothing goes to an outside AI service unless they approve it.",
+    "availability": "In development. Not available to the public yet."
+  },
+  "features": [
+    {
+      "id": "desk",
+      "name": "The Desk",
+      "description": "A conversation home for talking things through with an AI, with sessions listed on one side and what each session is for on the other.",
+      "status": "in development"
+    },
+    {
+      "id": "chosen-memories",
+      "name": "Chosen memories",
+      "description": "The person decides exactly what True Convo remembers, folder by folder.",
+      "status": "in development"
+    },
+    {
+      "id": "dictation",
+      "name": "Dictation anywhere",
+      "description": "Dictation that works anywhere you can type on the Mac. It runs on the Mac unless the person chooses a cloud dictation service.",
+      "status": "in development"
+    },
+    {
+      "id": "local-models",
+      "name": "Local AI models",
+      "description": "Conversations with an AI model that runs on the Mac itself, so messages never leave the computer.",
+      "status": "in development"
+    },
+    {
+      "id": "cloud-models-with-approval",
+      "name": "Cloud AI models, only with approval",
+      "description": "An optional cloud AI model, used only after the person approves that provider and confirms any paid use.",
+      "status": "in development"
+    },
+    {
+      "id": "front-porch-api",
+      "name": "This public API",
+      "description": "A read-only service that answers questions about True Convo from public text. It holds no personal data.",
+      "status": "in development"
+    }
+  ],
+  "faq": [
+    {
+      "id": "what-is-it",
+      "question": "What is True Convo?",
+      "answer": "A personal AI app for the Mac, made by Cloudwork Systems. It keeps conversations and memory on the person's own computer."
+    },
+    {
+      "id": "can-i-use-it",
+      "question": "Can I use True Convo today?",
+      "answer": "Not yet. It is in development and not available to the public."
+    },
+    {
+      "id": "where-is-my-data",
+      "question": "Where does my data go?",
+      "answer": "It stays on your Mac. Cloudwork Systems does not run servers that collect conversations, memory or recordings, and cannot read them."
+    },
+    {
+      "id": "cloud-ai",
+      "question": "Does True Convo send my messages to a cloud AI service?",
+      "answer": "Only if you choose a cloud AI model or cloud dictation service and approve it first. Then True Convo sends that service only what it needs for what you asked."
+    },
+    {
+      "id": "account",
+      "question": "Do I need an account?",
+      "answer": "No. True Convo does not need an account with Cloudwork Systems, or a ChatGPT or other outside account."
+    },
+    {
+      "id": "ads",
+      "question": "Does True Convo show ads or sell data?",
+      "answer": "No. There are no ads, and Cloudwork Systems does not sell or rent anyone's information."
+    },
+    {
+      "id": "this-api",
+      "question": "What does this API know about me?",
+      "answer": "Nothing. It only answers from public text about True Convo, it has no accounts and stores nothing, and it writes no logs of its own."
+    },
+    {
+      "id": "contact",
+      "question": "How do I contact the makers?",
+      "answer": "Email trueconvo2@gmail.com."
+    }
+  ],
+  "privacy": {
+    "policy_url": "https://trueconvo.com/privacy.html",
+    "promises": [
+      "Local first: conversations and memory stay on the person's Mac.",
+      "Cloud AI models, spending money or sharing anything need the person's approval first.",
+      "No outside sign-in is required.",
+      "No ads, and no selling or renting of information.",
+      "This API holds no personal data, has no accounts and writes no logs of its own."
+    ]
+  },
+  "status": {
+    "stage": "in development",
+    "summary": "The Mac app is being built and tested by its owner with invented data. Encrypted storage on the Mac and conversations with a local AI model are built and in owner testing.",
+    "public_release": "Not yet scheduled.",
+    "updated": "2026-11-01"
+  },
+  "updates": [
+    {
+      "date": "2026-11-01",
+      "title": "Public API planned",
+      "summary": "Work started on this read-only API, so other AI assistants can answer questions about True Convo accurately."
+    },
+    {
+      "date": "2026-10-26",
+      "title": "Website live",
+      "summary": "trueconvo.com went live with a first look at the Desk and a plain-language privacy policy."
+    }
+  ]
+}

@@ -80,6 +80,15 @@ chats only). Scope:
 
 ## Beside The Main Build
 
+**Front porch API** (public, read-only answers about True Convo for Meta's
+connector programs), built by Claude. Plan:
+[docs/plans/front-porch-api.md](docs/plans/front-porch-api.md) (#238).
+PR 1 (#239, merged): the service, its content, OpenAPI and MCP, with tests.
+PR 2, in review: the owner-approved deploy workflow, the OWASP ZAP API scan in
+CI and for staging, and OpenAPI 3.1 validation. Not live: next come the
+owner's Cloudflare setup, the staging scan, and, at go-live, the docs page
+and the privacy policy section, then his OK to go live.
+
 **Site Engine, standalone first slice**, built by an outside builder (GrokBot
 builds, Codex reviews). Plan:
 [docs/plans/site-engine-standalone.md](docs/plans/site-engine-standalone.md).
@@ -135,6 +144,8 @@ reviews. Plan approved (merged as #127 on October 24):
 
 **Time mirror** (Personal, the observability layer's first slice; owner asked October 29 to start it ahead of the core order), Codex team A builds the library and then a Claude building session the Mac command (owner's pick, November 1), GrokBot or a fresh Claude reviews; plan approved by the owner on October 29 (`docs/plans/time-mirror.md`): RescueTime daily totals drawn as habit-grid heat maps on the Mac, nothing new leaving the device.
 
+**Prime agent routing engine** (Personal, step 2 of the prime agent plan), Codex team B builds, GrokBot or a fresh Claude reviews; plan approved by the owner on November 1 (`docs/plans/prime-agent-routing.md`): the wait-for-a-yes and hand-off rules as a standalone package in `packages/prime-routing/`, with no model calls, network or storage. Build issue open.
+
 **Public website (trueconvo.com)**, Claude builds, Codex reviews; a home page (with two Desk preview screenshots) and a plain-language privacy policy in `site/`, published by `.github/workflows/pages.yml` from `main` (#153, October 25). For Meta's developer early-access application and regular visitors. The owner turned on Pages and set the custom domain, and the site is published at trueconvo.com (latest deploy October 26).
 
 **Security** (all work; owner asked October 28): plan
@@ -153,8 +164,8 @@ owner picks. Slice 1, the standalone engine in `packages/followed-sources/`, is 
 Desk "Followed" view each need a plan revision.
 
 **Desk message actions** (Desk; owner asked November 1), Claude builds, GrokBot or a fresh Claude reviews: plan
-[docs/plans/desk-message-actions.md](docs/plans/desk-message-actions.md), approved by the owner November 1; PR 2 (action row, Copy, ratings, reactions) merged (#224). Copy,
-thumbs up and down, reactions, reply with a quote, and a side chat on each message; ratings and reactions stay on the Mac.
+[docs/plans/desk-message-actions.md](docs/plans/desk-message-actions.md), approved by the owner November 1; PR 2 (action row, Copy, ratings, reactions) merged (#224); PR 3 (Reply) merged (#245); PR 4 (side chat, opens in place) merged (#247); PR 5 (the full emoji set, added on his ask) merged (#248); his trial in True Convo Test is next. Copy,
+thumbs up and down, reactions, reply with a quote, a side chat and any standard emoji on each message; ratings and reactions stay on the Mac. Next: [docs/plans/desk-shared-reactions.md](docs/plans/desk-shared-reactions.md), a draft plan for agents to see his reactions and react back (his pick, November 1), waiting for his yes.
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:

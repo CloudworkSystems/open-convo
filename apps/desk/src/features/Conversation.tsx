@@ -39,6 +39,7 @@ export function Conversation({
   participantStop,
   participantSendWaitingReason,
   participantSendDestination,
+  sideChatAnchor,
 }: {
   goal?: Goal;
   session?: Session;
@@ -67,6 +68,8 @@ export function Conversation({
   participantSendWaitingReason?: string;
   /** What Send takes off the Mac, for a participant that isn't on it (safety model item 1). */
   participantSendDestination?: string;
+  /** For a side chat: the message it is about (null if that text is no longer shown) and the way back. */
+  sideChatAnchor?: { parentTitle: string; text: string | null; onBack: () => void };
 }) {
   const conversation = useRef<HTMLElement>(null);
   const scrollArea = useRef<HTMLDivElement>(null);
@@ -195,7 +198,16 @@ export function Conversation({
           followLatest.current = area.scrollHeight - area.scrollTop - area.clientHeight <= 48;
         }}
       >
-        {messages.length === 0 && Children.toArray(runContent).length === 0 && (
+        {sideChatAnchor && <aside className="side-chat-anchor" aria-label="What this side chat is about">
+          <p>Side chat about a message in “{sideChatAnchor.parentTitle}”. Only that message is quoted in your first message; nothing else from that conversation is sent.</p>
+          {sideChatAnchor.text !== null
+            ? <blockquote dir="auto">{sideChatAnchor.text}</blockquote>
+            : <blockquote>That message is no longer shown.</blockquote>}
+          <button type="button" className="secondary-button compact" onClick={sideChatAnchor.onBack}>
+            <Icon name="return" size={14} />Back to the message
+          </button>
+        </aside>}
+        {!sideChatAnchor && messages.length === 0 && Children.toArray(runContent).length === 0 && (
           <div className="conversation-welcome">
             <EmberMark />
             <span className="eyebrow">A LITTLE LESS SCATTERED.</span>

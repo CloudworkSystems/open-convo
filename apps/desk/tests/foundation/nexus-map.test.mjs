@@ -72,3 +72,19 @@ test('Canvas renders existing records as HTML while Atlas clearly reserves the p
   assert.doesNotMatch(atlas, /<svg[^>]+Recorded workspace relationships|Open session|<foreignObject/);
   runtime.revoke();
 });
+
+test('Canvas hangs a side chat from the conversation it is about, in a folder and unassigned', () => {
+  const state = sampleState();
+  state.sessions.push(
+    { id: 'side', goalId: 'parent', title: 'Side chat: invented', sideOf: { sessionId: 'parent', messageId: 'invented-message' }, createdAt: now, updatedAt: now },
+    { id: 'loose-side', goalId: null, title: 'Side chat: loose', sideOf: { sessionId: 'unassigned', messageId: 'invented-message-2' }, createdAt: now, updatedAt: now },
+  );
+  const scene = buildCanvasScene(state);
+  const links = scene.links.map(({ source, target, kind }) => [source, target, kind]);
+  assert.deepEqual(links.filter(([, target]) => target === 'session:side'), [['session:parent', 'session:side', 'side-chat-of']]);
+  assert.deepEqual(links.filter(([, target]) => target === 'session:loose-side'), [['session:unassigned', 'session:loose-side', 'side-chat-of']]);
+  // Each side chat is placed right after its parent.
+  const order = scene.nodes.map((node) => node.id);
+  assert.equal(order.indexOf('session:side'), order.indexOf('session:parent') + 1);
+  assert.equal(order.indexOf('session:loose-side'), order.indexOf('session:unassigned') + 1);
+});

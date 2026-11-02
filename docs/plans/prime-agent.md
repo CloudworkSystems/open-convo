@@ -189,8 +189,9 @@ These already happen in this project, and each slice's checks cover them.
 2. **Next: the routing rules as code.** A small standalone package that
    takes a message plus context and returns the route and a brief skeleton,
    tested against this slice's cases. No model calls in its tests, no app
-   or storage code, so an outside builder could take it. Needs a revision
-   of this plan and the owner's yes.
+   or storage code, so an outside builder could take it. Its plan is
+   [prime-agent-routing.md](prime-agent-routing.md) (owner's yes,
+   November 1); Codex team B builds it.
 3. **Then: in True Convo.** The prime agent becomes the Desk's default
    conversation partner, reading the shared memory from step 5 and handing
    off through the dispatcher and the agent runtime (step 6, Pi Durable;

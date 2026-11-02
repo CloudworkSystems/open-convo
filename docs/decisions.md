@@ -14,6 +14,24 @@ full plan and history are in [PLAN.md](../PLAN.md).
   hold and a gate test of what the app links. Dependabot's GitHub Actions
   updates come grouped, one pull request a month (docs/agent-process.md
   "Rules files merge on the owner's yes").
+- **Nov 1:** The agents' 1Password service account may also save and edit
+  items, still in the "True Convo AI" vault only, so agents can store new
+  keys where they belong. This changes the Oct 31 entry's read-only account:
+  a new account with read and write access to that one vault replaces it,
+  and the old token is revoked once the new one works. It gets no other
+  vault and no sharing. Saving new keys is the write he asked for, but
+  1Password's write access also lets the account edit or delete any item in
+  that vault, including logins he moves in, and nothing in 1Password turns
+  that off. So "agents save the keys they create, change an existing item
+  only when the owner asks and never delete one" is a rule agents follow,
+  not a block; an agent tricked by a page it reads could still break it.
+  1Password keeps each item's history and its recently deleted items, so a
+  bad edit or deletion can be undone afterward, not prevented. To give agents an older login, the owner moves it into the
+  vault himself in the 1Password app (a move, not a copy, so there is one
+  copy to keep current). He never moves in an Apple ID or iCloud password,
+  a bank or payment login, or the email account his password resets go to.
+  A login moved in with its one-time code lets agents pass that two-factor
+  check without him, so he moves such a login only when he wants that.
 - **Oct 31:** On the owner's Mac, the agents that build True Convo (Claude,
   Codex, Gemini and the like) get keys from 1Password, which he already
   pays for. True Convo's own keys, such as its model adapters' keys, stay in
