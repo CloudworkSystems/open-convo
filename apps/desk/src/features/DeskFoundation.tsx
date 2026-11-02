@@ -94,7 +94,8 @@ export function DeskFoundation(props: DeskFoundationProps) {
   const workspace = useRef<HTMLDivElement>(null);
   const [workspaceWidth, setWorkspaceWidth] = useState(() => window.innerWidth);
   const [narrow, setNarrow] = useState(() => window.matchMedia('(max-width: 1199px)').matches);
-  // Opening on a blank session gives the chat the room: details stay tucked away until asked for.
+  // A new tab gives the chat the room: details stay tucked away until asked for. After that the
+  // rail stays as the person leaves it, since a folder's details (its note) live there.
   const [inspectorOpen, setInspectorOpen] = useState(() => !window.matchMedia('(max-width: 1199px)').matches && !runtime.freshOpen());
   const goal = state.goals.find((item) => item.id === state.selection.goalId);
   const session = state.sessions.find((item) => item.id === state.selection.sessionId);
