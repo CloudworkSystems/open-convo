@@ -3,6 +3,11 @@
  * window or tab) opens on a blank session; a reload of
  * the same tab keeps its own screen. The mark is only "1": it holds no work.
  * Native visits never call this: they keep nothing in the browser.
+ *
+ * A tab made with the browser's Duplicate command copies its source's
+ * session storage, so it keeps the source's screen, like the rest of a
+ * duplicate. The Desk itself never opens Desk tabs, and a link opened in a
+ * new tab without an opener starts with empty storage, so it opens blank.
  */
 export const DESK_TAB_OPENED_KEY = 'true-convo:desk:tab-opened:v1';
 

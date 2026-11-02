@@ -284,6 +284,7 @@ test('a new tab opens on a blank session in the middle, and only typing saves it
     // Reloading and switching folders without typing saves nothing.
     await page.reload();
     await expect(box).toBeVisible();
+    await expect(page.locator('.navigator-empty')).toContainText('Ungrouped sessions');
     await page.getByRole('button', { name: 'New session in Shape a useful idea', exact: true }).click();
     await expect(page.locator('.navigator-empty')).toContainText('Shape a useful idea');
     await expect(box).toBeFocused();
@@ -314,6 +315,14 @@ test('reloading the same tab keeps the session it was showing', async () => {
     await expect(page.locator('.conversation-heading h2')).toHaveText('A place to begin');
     await page.reload();
     await expect(page.locator('.conversation-heading h2')).toHaveText('A place to begin');
+    // A second new tab on the same saved workspace opens blank, and stays blank when reloaded before typing.
+    await page.getByRole('textbox', { name: 'Your message', exact: true }).fill('Invented draft that saves the workspace.');
+    await expect(page.getByText('Sample workspace saved in this browser', { exact: true })).toBeVisible();
+    const other = await context.newPage();
+    await other.goto(origin);
+    await expect(other.locator('.navigator-empty')).toContainText('Ungrouped sessions');
+    await other.reload();
+    await expect(other.locator('.navigator-empty')).toContainText('Ungrouped sessions');
     verify();
   } finally { await context.close(); }
 });
