@@ -197,7 +197,7 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
                 aria-describedby={pendingOutput ? pendingLabelId : undefined}>{pendingOutput}</span></>
               : output}
           </div>
-        ) : <p className="run-empty">{emptyOutput}</p>}
+        ) : reaction.emoji ? null : <p className="run-empty">{emptyOutput}</p>}
         <dl className="run-participant">
           <div><dt>Model</dt><dd>{local ? localModelName(run.participant) : run.participant.model}</dd></div>
           <div><dt>{ended ? 'Where it ran' : 'Where it runs'}</dt><dd>{local ? sentLocally ? 'This Mac · stays on this Mac' : 'No reply started' : isOffMacClaude(run.participant) ? CLAUDE_DESTINATION : run.participant.executionHost}</dd></div>

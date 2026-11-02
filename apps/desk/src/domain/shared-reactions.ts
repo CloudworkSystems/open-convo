@@ -251,9 +251,16 @@ export function agentReaction(run: Readonly<ConversationRun>): { emoji?: string;
   if (end < 0 && !ended) return none;
   const line = (end < 0 ? output : output.slice(0, end)).replace(/\r$/, '');
   const match = REACTION_LINE.exec(line);
-  if (!match || !isStandardEmoji(match[1])) return none;
+  if (!match || !isStandardEmoji(match[1]) || !singleGrapheme(match[1])) return none;
   let offset = end < 0 ? output.length : end + 1;
   if (output[offset] === '\r') offset += 1;
   if (output[offset] === '\n') offset += 1;
   return { emoji: match[1], text: output.slice(offset), offset };
+}
+
+/** Exactly one user-perceived character, so `👍👍` or `🎉🦊` are not one emoji. */
+function singleGrapheme(value: string): boolean {
+  let count = 0;
+  for (const _ of new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(value)) if (++count > 1) return false;
+  return count === 1;
 }

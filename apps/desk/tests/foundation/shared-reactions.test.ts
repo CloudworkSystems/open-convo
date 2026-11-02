@@ -8,6 +8,7 @@ import {
 } from '../../src/domain/shared-reactions';
 import { validateState } from '../../src/domain/validation';
 import { draftWithReplyQuote } from '../../src/domain/reply-quote';
+import { shownMessageText } from '../../src/domain/side-chat';
 
 const id = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`;
 const local = { id: 'local-test', label: 'Invented local model', model: 'invented:1', executionHost: 'this-mac' };
@@ -200,9 +201,14 @@ test('an agent reaction is a complete first line with one standard emoji, after 
   assert.equal(agentReaction(run('Reaction: 👍', 'running')).emoji, undefined);
   assert.equal(agentReaction(run('Reaction: 👍\nMore', 'running')).emoji, '👍');
   // Malformed lines stay as text.
-  for (const output of ['Reaction: 👍 👍\nx', 'Reaction: thumbs\nx', 'reaction: 👍\nx', ' Reaction: 👍\nx', 'Reaction:👍\nx', 'Hello\nReaction: 👍']) {
+  for (const output of ['Reaction: 👍 👍\nx', 'Reaction: 👍👍\nx', 'Reaction: 🎉🦊\nx', 'Reaction: thumbs\nx', 'reaction: 👍\nx', ' Reaction: 👍\nx', 'Reaction:👍\nx', 'Hello\nReaction: 👍']) {
     assert.deepEqual(agentReaction(run(output)), { text: output, offset: 0 }, output);
   }
+  // One emoji made of several code points (a flag, a family) is still one.
+  assert.equal(agentReaction(run('Reaction: 🇨🇦\nHi')).emoji, '🇨🇦');
+  // A side chat about the reply quotes it as shown, without the line.
+  const state = { messages: [], conversationRuns: [{ ...run('Reaction: 🎉\n\nGlad it helped.'), userMessageId: 'u', assistantMessageId: 'a' }] } as unknown as Parameters<typeof shownMessageText>[0];
+  assert.equal(shownMessageText(state, 'a'), 'Glad it helped.');
   // Without a note in his message, the agent wasn't told how: plain text.
   assert.equal(agentReaction(run('Reaction: 🎉\nHi', 'completed', 'Thanks.')).emoji, undefined);
 });
