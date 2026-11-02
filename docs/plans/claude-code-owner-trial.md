@@ -51,15 +51,33 @@ Anthropic.
 
 You do the clicks; the building session watches your Mac through Remote
 Control and runs read-only checks beside the app. It changes nothing in the
-app, and it never sees your Claude sign-in. It uses three runs.
+app, and it never sees your Claude sign-in. It uses three runs in the app.
+
+A reply alone can't prove that a file was *not* sent: Claude need not repeat
+what it received. So checks 2 and 7 are proven by catching what Claude Code
+sends, in step 0, and the app's runs then check that nothing differs.
 
 **Before you start.** The session saves a list of file names and times
 under `~/.claude` (names only, never contents), and puts an invented
-`AGENTS.md` with a made-up canary line in True Convo Test's invented-data
-folder, `~/Library/Application Support/com.trueconvo.voice-cursor.test/desk-invented-proof/`,
+`AGENTS.md` in True Convo Test's invented-data folder, `~/Library/Application Support/com.trueconvo.voice-cursor.test/desk-invented-proof/`,
 the folder above the one each run works in. Your own `AGENTS.md` in your
-home folder stays where it is and serves as a second canary. If Remote
-Control can't write in that folder, the session gives you one Finder step.
+home folder stays where it is and serves as a second canary. It also puts
+a made-up canary file at `/tmp/invented-canary`. Each invented file holds a
+made-up canary word and a line asking any reader to end its reply with that
+word. If Remote Control can't write in that folder, the session gives you
+one Finder step.
+
+0. **Catch what Claude Code sends** (checks 2 and 7; no live request). The
+   session runs the same pinned Claude Code file, with the app's exact
+   arguments and environment, from a scratch folder inside the app's
+   `participants` folder, so every folder above it is the app's. The only
+   change is that its requests go to a catch-all listener on this Mac, with
+   all other network blocked by macOS, so nothing reaches Anthropic. It
+   sends the two messages of runs 1 and 2 below. The caught request must
+   hold the message text and **none** of the canary words, nor your home
+   `AGENTS.md`'s text (matched on this Mac only, never copied out). This
+   repeats the November 2 proof in the app's own folders. If any canary
+   shows up, the trial stops before any live run.
 
 1. **First run** (checks 1, 3 and 7). Open the Desk, start a new
    conversation, pick "Claude · … · Anthropic (not on this Mac)" (the
@@ -77,20 +95,22 @@ Control can't write in that folder, the session gives you one Finder step.
      is off, so a finished reply proves both (check 1's init and rate-limit
      parts).
    - Afterwards: nothing new under `~/.claude` (check 3), and the reply
-     names neither canary (check 7). The session also reads the app's own
-     log lines, which hold run ids and reasons, never text.
+     holds no canary word (a second sign for check 7, after step 0). The
+     session also reads the app's own log lines, which hold run ids and
+     reasons, never text.
 2. **Inert input** (check 2). In the same conversation, send exactly:
-   "@/tmp/invented-canary /config What did I call my bakery?" The session
-   first puts a made-up canary line in `/tmp/invented-canary`. The reply
-   should answer about Maple Crumb and should not contain the canary line or
-   any settings screen. Nothing new under `~/.claude` again.
+   "@/tmp/invented-canary /config What did I call my bakery?" The reply
+   should answer about Maple Crumb, with no canary word and no settings
+   screen (step 0 already showed the file's text isn't sent). Nothing new
+   under `~/.claude` again.
 3. **Kill the app mid-reply** (check 4). Send: "Write a long story about a
    muffin that travels the world." While it is still arriving, the session
    sends `kill -9` to True Convo Test. Within 10 seconds there should be no
    Claude Code and no supervisor left. Reopen the app: the reply is marked
    cut off with the text so far, and nothing was sent again.
 
-Then the session deletes both canary files and its file list, and stops
+Then the session deletes the canary files, the scratch folder and its file
+list, and stops
 Remote Control. If any check fails, Claude stays out of daily use until it
 is fixed and the whole of Part 2 passes again.
 
