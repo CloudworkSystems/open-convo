@@ -159,6 +159,91 @@ ran on the Mac and drove the Mac's Chrome. So:
   that list stays empty. It never gets view or control of the owner's
   devices.
 
+## Driving Mac Apps: Lessons From agent-desktop (November 1)
+
+On November 1, 2026 we studied Vercel Labs' open-source `agent-desktop`
+(github.com/vercel-labs/agent-desktop, Apache-2.0), a tool that lets AI agents
+read and operate desktop apps through the macOS accessibility layer, the
+same one VoiceOver uses. We read its design glossary (`CONCEPTS.md`), its
+macOS guide and parts of its macOS code. Nothing was installed or run.
+
+**Owner decision (November 2, 2026, Claude thread "Assess Vercel Labs Agent
+Desktop for TCA"):** we take its ideas and write our own Swift version in the
+Mac app. We don't add it as a dependency and don't copy its code. That keeps
+the owner's open license choice clear, and it keeps the Accessibility grant
+inside TCA, where the ceilings above can be enforced.
+
+### Ideas we adopt
+
+- **Read controls, not pictures.** The agent reads the accessibility tree
+  (buttons, fields, menus and their names), not screenshots. A screenshot
+  needs its own view grant and stays on the device.
+- **Labels tied to one look at the screen.** Each control the agent can act
+  on gets a short label that only works together with the snapshot it came
+  from. Before acting, TCA checks it is still the same control. The app's
+  own identifier and a stable name help find it, but they are hints, never
+  proof on their own: apps reuse them, for example a recycled list row
+  whose "Delete" button now belongs to another item. Right before any
+  change, TCA confirms identity with evidence that can't be recycled: the
+  same live accessibility object it saw (which TCA keeps a hold on), in the
+  same window of the same running app, at the same place in the tree. Text
+  that changes, such as what's typed in a field, never proves identity. If
+  the control is gone, has changed, or can't be confirmed this way, or more
+  than one thing matches, the action is refused, not guessed.
+- **Quiet by default.** Actions go through accessibility calls. They don't
+  move the pointer, take focus, send keystrokes or touch the clipboard. Real
+  mouse and keyboard input is a separate, higher grant. When the quiet path
+  can't do something, the action fails and says why. It never quietly
+  switches to the loud path.
+- **Every action reports whether it landed:** not delivered (safe to retry),
+  delivered but not confirmed, or confirmed. The agent confirms by looking
+  again, because macOS often reports success when nothing happened. "Not
+  delivered" is only for an action that provably never started. A timeout
+  or an "app didn't answer" error counts as maybe delivered, since macOS
+  says the action may still have happened. An action that may have landed
+  is never repeated automatically, so a message, payment or deletion can't
+  happen twice.
+- **"Couldn't tell" means no.** Each check is answered yes, no or unknown.
+  An unknown answer never allows anything, so a permission check that failed
+  to read blocks the action.
+- **Password fields stay blank.** For a secure text field, TCA never shows
+  or logs its value, even after the owner's password manager fills it in.
+  This adds to the Browsers rule: agents still never type passwords.
+- **One agent at a time per app, for the whole change.** agent-desktop locks
+  only the keyboard and pointer. TCA goes further: an agent holds a lock on
+  the app it's changing (on the whole Mac for real keyboard and pointer
+  input) for the whole task step, from the identity check before its first
+  action to the confirmed result of its last one. Filling a message and
+  pressing Send is one step. That covers quiet accessibility actions too,
+  so a second agent can't change a field between the first agent filling
+  it and pressing Send. The owner or the app can still change it, so right
+  before the final action (Send, Pay, Delete) the agent reads back what it
+  filled in and compares it with what the owner approved. If anything
+  differs, it stops and asks. Each
+  agent can show its own labeled cursor, so the owner sees which agent is
+  acting.
+- **A trail the owner can replay.** The action log can keep before and after
+  snapshots of each step. They hold private screen content, so they follow
+  the logging rule above and stay on the Mac.
+- **Test against real apps and write down what macOS actually does.** Mac
+  behavior is measured, recorded and re-checked after macOS updates, rather
+  than assumed.
+
+### Where we go further than agent-desktop
+
+- **TCA holds the Accessibility grant itself.** macOS gives agent-desktop
+  the permission of the app that launches it, such as Terminal. From then on
+  anything running in that terminal can read and drive every app. TCA asks
+  for the grant in its own signed app and enforces the per-app ceilings,
+  per-agent approvals and never-controllable apps (password managers, System
+  Settings, Keychain) on top of it.
+- **"Never" covers using an app, not only quitting it.** agent-desktop
+  refuses to quit core system processes and blocks quit shortcuts. TCA also
+  refuses to read or act in the never-controllable apps.
+- **Screen content stays on the Mac.** agent-desktop's optional helper sends
+  goals and screen text to an outside model service. TCA sends screen
+  content off the device only under the owner's grant.
+
 ## Open Questions for the Owner
 
 1. Is 90 days without use the right point for a remembered site grant to
