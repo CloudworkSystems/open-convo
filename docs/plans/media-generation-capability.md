@@ -160,7 +160,7 @@ comes from what every capability needs: a contract, routes, a cost check, a
 cap and a receipt. Media is the right first capability because it is the
 first with paid routes, which forces the cap and ledger to be real.
 
-When to build it is the owner's call; see "Open Decision" below.
+When to build it: see "When To Build" below.
 
 ## What It Does
 
