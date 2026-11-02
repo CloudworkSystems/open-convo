@@ -166,6 +166,10 @@ gardening and recipes notebook). At least:
   meaning in a link), and the link checker decodes them before looking a
   file up. Tests cover notes named `plan#1.md`, `a (draft).md` and
   `two words.md`.
+- **Link labels are escaped.** The about text inside `[...]` escapes
+  Markdown characters (`\`, `[`, `]`, `(`, `)`, `*`, `_`, `` ` ``, `<`,
+  `>`), so a heading like `# [Project](old.md)` stays text. A test covers
+  brackets and an embedded link in a heading.
 
 ## Out Of Scope For This Slice
 

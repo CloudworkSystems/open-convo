@@ -470,6 +470,14 @@ pull requests.
   The runner refuses a workflow with no such field or more than one, puts
   the prompt there (as JSON text, never by splicing strings), and test 4
   checks that the queued workflow holds the prompt.
+- **Part 3: every request input reaches the workflow.** The same rule
+  holds for `{{seconds}}`, `{{width}}`, `{{height}}` and
+  `{{reference_file}}` when the request gives them: each must appear
+  exactly once (as a number or file name in the right field), or the
+  runner refuses the run rather than letting the template's own value
+  stand. A workflow says which `kind` it makes (`image` or `video`), and a
+  request for the other kind is refused. Test 4 checks each value in the
+  queued workflow.
 
 ### Rules for the builder
 
