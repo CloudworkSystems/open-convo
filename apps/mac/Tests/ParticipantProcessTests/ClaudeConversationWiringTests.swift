@@ -95,6 +95,15 @@ struct ClaudeConversationWiringTests {
         #expect(recorded.plugins == .array([.object(["name": .string("agents-md"), "path": .string("builtin"),
                                                     "source": .string("agents-md@builtin")])]))
         #expect(recorded.apiKeySource == "none")
+        // The reader compares `plugins` as one JSON value, so the line as
+        // recorded matches, and any other plugin list does not.
+        let recordedEntry = #"{"name":"agents-md","path":"builtin","source":"agents-md@builtin"}"#
+        #expect(try JSONValue.decode(Data("[\(recordedEntry)]".utf8)) == recorded.plugins, "the recorded line")
+        for other in ["[]", #"[\#(recordedEntry),{"name":"invented-plugin","path":"builtin","source":"invented-plugin@builtin"}]"#,
+                      #"[{"name":"agents-md","path":"/invented/folder","source":"agents-md@builtin"}]"#,
+                      #"[{"name":"agents-md","path":"builtin","source":"agents-md@builtin","extra":true}]"#] {
+            #expect(try JSONValue.decode(Data(other.utf8)) != recorded.plugins, "\(other)")
+        }
         let root = try Self.folder()
         defer { try? FileManager.default.removeItem(at: root) }
         let entry = try #require(ClaudeConversation.make(for: .test, paths: DeskPaths(applicationSupport: root, identity: .test),

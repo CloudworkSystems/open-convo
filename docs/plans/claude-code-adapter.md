@@ -1,8 +1,9 @@
 # Claude Code Adapter Scope: Claude Joins The Conversation
 
-Status: In progress (Nov 1): scope merged (#75, approved Oct 23); PR 2 through
+Status: In progress (Nov 2): scope merged (#75, approved Oct 23); PR 2 through
 PR 4b merged (PR 2 started early on invented chats only, see "Revision,
-October 28"; PR 4b as #228).
+October 28"; PR 4b as #228); one built-in plugin allowed, see "Revision,
+November 2".
 
 Builder: Claude building sessions. Reviewers: Codex on every pull request,
 plus an independent review (GrokBot with a non-Claude model, or a fresh
@@ -60,11 +61,7 @@ do for the local model. The real True Convo app is unchanged.
   `docs/design-notes/agent-profiles-and-adapters.md`.
 - Claude through Pi or API credits (step 6).
 - Any tool that reads, writes or runs anything: files, shell, web, MCP
-  servers, slash commands, skills, plugins, hooks. One exception, on the
-  owner's yes of 2026-11-02: the CLI's built-in `agents-md` plugin, which it
-  reports at start even with these flags. Under the pinned flags it loads no
-  `AGENTS.md` (shown on the owner's Mac, contract section 16), so it is
-  allowed by its exact recorded entry and nothing else.
+  servers, slash commands, skills, plugins, hooks.
 - Claude Code sessions saved by the CLI (`--no-session-persistence` stays).
 - Attachments, images, dictation straight to Claude, memory (step 5), the
   "Wait—what?" explainer (it stays local, October 13 decision).
@@ -198,9 +195,8 @@ PR 4b turns anything on. Only section 16's live run waits for PR 5.
   released, overflow signal, tools in init, a provider override, an
   oversize reply, Stop before and after the first piece, lock, supervisor loss.
 - **Tools refused** (PR 3c): a fake CLI that reports any tool, MCP server,
-  skill or plugin at start (other than the recorded built-in `agents-md`
-  entry, exactly) is stopped before any text is kept, and the argument list
-  always carries the no-tools flags.
+  skill or plugin at start is stopped before any text is kept, and the
+  argument list always carries the no-tools flags.
 - **Nothing leaves without consent** (PR 4a, rechecked in 4-proof): no
   spawn happens unless both gates are passed, a revoked approval or an
   ended paid-usage confirmation stops the next spawn, and the CLI never
@@ -208,8 +204,7 @@ PR 4b turns anything on. Only section 16's live run waits for PR 5.
 - **Section 16 acceptance** (PR 5, the one live step), on invented text, with the owner present for
   the one live run: argv and init values, inert `@file` and `/config`
   input, nothing new under `~/.claude`, kill -9 cleanup, Stop during a
-  blocked save, and an invented `AGENTS.md` above the participants folder
-  never reaching the request (check 7).
+  blocked save.
 
 ## Owner Trial Outline
 
@@ -299,3 +294,39 @@ chats. [...] Yeah, we can totally start to build that. Yes."
 So building may start now, on invented chats only. Nothing else changes:
 real conversations still wait for both trials (safety model, item 7), and
 PR 4b still waits for every safety proof.
+
+## Revision, November 2: The Built-In `agents-md` Plugin
+
+The Out list above rules out plugins, and "Tools refused" stops a run whose
+start line reports any plugin. Recording section 16's start values on the
+owner's Mac (2026-11-01, the pinned CLI 2.1.283, the app's argv and
+environment, network blocked) showed that this CLI always reports one
+plugin, its built-in `agents-md`, even under `--safe-mode`:
+`[{"name":"agents-md","path":"builtin","source":"agents-md@builtin"}]`.
+Under the original rule, Claude could never run.
+
+On 2026-11-02 a run with the app's exact argv and environment, its requests
+caught on a local port, showed the built-in loads nothing: an invented
+`AGENTS.md` with a canary line sat above the run folder, and neither the
+canary nor the home folder's `AGENTS.md` reached the request; the debug log
+showed the built-in reporting that project memory is off. The CLAUDE.md
+switch-off variable made no difference, so none is added.
+
+In the Claude thread "Build the Claude Code adapter", the owner answered
+"The plan currently says 'refuse any plugin', so I need to change that line
+to allow only this one built-in, proven to be inactive. Step 5 will repeat
+the made-up-file test inside the real app. OK to go ahead with that?" with:
+"yes" (2026-11-02).
+
+So, replacing those two lines where they differ:
+
+- **Out:** plugins stay out, except that one built-in entry, exactly as
+  recorded. Any other plugin, or that one with any other field, is refused.
+- **Tools refused:** a start line reporting any tool, MCP server, skill, or
+  any plugin other than that exact entry is stopped before any text is kept.
+- **Section 16 acceptance (PR 5)** adds check 7 in the contract: an invented
+  `AGENTS.md` above the participants folder never reaches the request, run
+  inside True Convo Test this time. If it does, participants stay
+  unavailable.
+- A new pinned CLI version needs its start values recorded and this check
+  run again before they are pinned.
