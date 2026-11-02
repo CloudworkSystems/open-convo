@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en" data-brand="ember">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API · True Convo</title>
+  <meta name="description" content="The True Convo public API: read-only facts about True Convo over REST and MCP.">
+  <link rel="icon" href="logo.png">
+  <link rel="stylesheet" href="brand/fonts/fonts.css">
+  <link rel="stylesheet" href="brand/tokens.css">
+  <link rel="stylesheet" href="site.css">
+</head>
+<body>
+  <div class="page">
+    <header>
+      <img src="logo.png" alt="" width="56" height="52">
+      <a href="./">True Convo</a>
+    </header>
+
+    <main>
+      <h1>True Convo API</h1>
+      <p class="lead">A small, read-only API that answers questions about True
+        Convo from public text we write and review.</p>
+      <p><span class="status">Beta. Answers can change as True Convo develops.</span></p>
+
+      <p>Base address: <code>https://api.trueconvo.com</code>. It needs no
+        key and no account, holds no personal data and writes no logs of its
+        own. The full description is in
+        <a href="https://api.trueconvo.com/openapi.json">openapi.json</a>
+        (OpenAPI 3.1).</p>
+
+      <h2>REST</h2>
+      <p>Every path answers <code>GET</code> with JSON.</p>
+      <table>
+        <thead><tr><th>Path</th><th>What it returns</th></tr></thead>
+        <tbody>
+          <tr><td><code>/v1/about</code></td><td>What True Convo is, who makes it, and whether it is available.</td></tr>
+          <tr><td><code>/v1/features</code></td><td>The features, each labeled available, in development or planned.</td></tr>
+          <tr><td><code>/v1/faq</code></td><td>Frequently asked questions. Add <code>?q=</code> and some words (up to 200 characters) to get only the entries that contain every word.</td></tr>
+          <tr><td><code>/v1/privacy</code></td><td>Our privacy promises, with a link to the <a href="privacy.html">privacy policy</a>.</td></tr>
+          <tr><td><code>/v1/status</code></td><td>How far along development is.</td></tr>
+          <tr><td><code>/v1/updates</code></td><td>Dated update notes, newest first.</td></tr>
+          <tr><td><code>/openapi.json</code></td><td>The OpenAPI description of this API.</td></tr>
+        </tbody>
+      </table>
+
+      <h2>MCP</h2>
+      <p><code>POST /mcp</code> is a Model Context Protocol server over
+        Streamable HTTP. It is stateless: each request carries one JSON-RPC
+        message and gets one JSON answer. It offers the same answers as
+        read-only tools:</p>
+      <table>
+        <thead><tr><th>Tool</th><th>Arguments</th></tr></thead>
+        <tbody>
+          <tr><td><code>about</code></td><td>None</td></tr>
+          <tr><td><code>features</code></td><td>None</td></tr>
+          <tr><td><code>faq</code></td><td>Optional <code>q</code>: words every returned entry must contain</td></tr>
+          <tr><td><code>privacy</code></td><td>None</td></tr>
+          <tr><td><code>status</code></td><td>None</td></tr>
+          <tr><td><code>updates</code></td><td>None</td></tr>
+        </tbody>
+      </table>
+      <p>Requests over 16 KB are refused.</p>
+
+      <h2>Limits</h2>
+      <p>Each address can send up to 10 requests in 10 seconds. Past that, it
+        is blocked for 10 seconds. The service runs on a free plan with a daily
+        limit, so it may stop answering for the rest of a day if that limit is
+        reached.</p>
+
+      <h2>Contact</h2>
+      <p>Questions or problems? Email
+        <a href="mailto:trueconvo2@gmail.com">trueconvo2@gmail.com</a>.</p>
+    </main>
+
+    <footer>
+      <p><a href="./">Home</a> · <a href="privacy.html">Privacy policy</a>
+        · True Convo is made by Cloudwork Systems.</p>
+    </footer>
+  </div>
+</body>
+</html>

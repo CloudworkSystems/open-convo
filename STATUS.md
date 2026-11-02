@@ -85,10 +85,13 @@ chats only). Scope:
 connector programs), built by Claude. Plan:
 [docs/plans/front-porch-api.md](docs/plans/front-porch-api.md) (#238).
 PR 1 (#239, merged): the service, its content, OpenAPI and MCP, with tests.
-PR 2, in review: the owner-approved deploy workflow, the OWASP ZAP API scan in
-CI and for staging, and OpenAPI 3.1 validation. Not live: next come the
-owner's Cloudflare setup, the staging scan, and, at go-live, the docs page
-and the privacy policy section, then his OK to go live.
+PR 2 (#246, merged): the owner-approved deploy workflow, the OWASP ZAP API
+scan in CI and for staging, and OpenAPI 3.1 validation. Deployed to
+Cloudflare November 2, 2026; the staging scan passed and `workers.dev` is off
+again, so it has no public address yet. PR 3, in review: the API docs page
+(trueconvo.com/api.html) and the privacy policy's API section. Not live: next
+come attaching api.trueconvo.com, the path-only rate limit, and the owner's
+OK to go live.
 
 **Capability contract, cap and media** (Creator, standalone parts 1 to 3),
 built by Claude. Plan:
