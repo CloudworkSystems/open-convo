@@ -2,6 +2,7 @@ import { isFolderIcon } from './folder-icons';
 import { validateMemoryFields } from './memory';
 import { markableMessages, validMessageMarks } from './message-marks';
 import { validSideChatLinks } from './side-chat';
+import { validReactionSharing } from './shared-reactions';
 import { isConversationRunClosed, validateConversationRun } from './conversation-runs';
 import { validParticipantIdentity } from './participant-choices';
 import type { DeskState } from './types';
@@ -75,8 +76,9 @@ export function validateState(input: unknown): StateValidation {
   }
   if (!Array.isArray(input.sessions)) return invalid('Sessions must be a list.');
   for (const value of input.sessions) {
-    if (!record(value) || !withOptional(value, ['id', 'goalId', 'title', 'createdAt', 'updatedAt'], ['pinned', 'titleHistory', 'intent', 'intentHistory', 'intentDraft', 'participantChoice', 'sideOf']) || !addId(value.id) || !(value.goalId === null || (identifier(value.goalId) && goalIds.has(value.goalId))) || !text(value.title) || !value.title.trim() || !updated(value)) return invalid('A session has invalid fields, identity or domain reference.');
+    if (!record(value) || !withOptional(value, ['id', 'goalId', 'title', 'createdAt', 'updatedAt'], ['pinned', 'titleHistory', 'intent', 'intentHistory', 'intentDraft', 'participantChoice', 'sideOf', 'reactionSharing']) || !addId(value.id) || !(value.goalId === null || (identifier(value.goalId) && goalIds.has(value.goalId))) || !text(value.title) || !value.title.trim() || !updated(value)) return invalid('A session has invalid fields, identity or domain reference.');
     if (Object.hasOwn(value, 'participantChoice') && !validParticipantIdentity(value.participantChoice)) return invalid('A saved participant choice is invalid.');
+    if (Object.hasOwn(value, 'reactionSharing') && !validReactionSharing(value.reactionSharing, validParticipantIdentity, value.updatedAt as string)) return invalid('A saved reaction-sharing choice is invalid.');
     if (!(value.pinned === undefined || typeof value.pinned === 'boolean')
       || !(value.intent === undefined || (text(value.intent) && value.intent.length <= 4000))
       || !(value.intentDraft === undefined || (text(value.intentDraft) && value.intentDraft.length <= 4000))

@@ -52,6 +52,8 @@ export interface Session {
   intentDraft?: string;
   /** A side chat: the conversation and message it is about. Absent on ordinary sessions. */
   sideOf?: { sessionId: string; messageId: string };
+  /** Shared reactions: on only for this exact participant (docs/plans/desk-shared-reactions.md). */
+  reactionSharing?: { participant: ParticipantIdentity; since: string; note?: string };
   createdAt: string;
   updatedAt: string;
 }
@@ -196,6 +198,7 @@ export type DeskCommand =
   | { type: 'rename-session'; sessionId: string; title: string; expectedTitle?: string }
   | { type: 'set-session-pinned'; sessionId: string; pinned: boolean }
   | { type: 'set-participant-choice'; sessionId: string; participant: ParticipantIdentity }
+  | { type: 'set-reaction-sharing'; sessionId: string; on: boolean }
   | { type: 'edit-session-intent'; sessionId: string; intent: string; expectedIntent?: string }
   | { type: 'set-session-intent-draft'; sessionId: string; text: string | null }
   | { type: 'move-session'; sessionId: string; goalId: string | null }

@@ -1969,3 +1969,56 @@ test('a side chat opens as its own linked conversation that quotes only the mess
     await f.check();
   } finally { await f.close(); }
 });
+
+test('shared reactions: the switch puts a visible note in the draft, Send carries exactly that, and turning it off removes it', async () => {
+  const f = await fixture({ participantChoices: [inventedChoice], participantChoice: inventedChoice.identity });
+  try {
+    const box = f.page.getByRole('textbox', { name: 'Your message', exact: true });
+    const sharing = f.page.getByRole('checkbox', { name: 'Share my reactions with Invented participant in this chat', exact: true });
+    await f.send('Invented first question');
+    await expectSavedSequence(f, 1);
+    await f.emit('text', 'Invented first reply');
+    await f.emit('completed');
+    await expect.poll(() => savedRun(f)?.phase).toBe('completed');
+    // Off at first: a reaction stays on the Mac and the draft is untouched.
+    await expect(sharing).not.toBeChecked();
+    const reaction = (name) => replyActions(f.page).last().getByRole('button', { name: 'Add a reaction', exact: true }).click()
+      .then(() => replyActions(f.page).last().getByRole('button', { name, exact: true }).click());
+    await reaction('Question');
+    await expect(box).toHaveValue('');
+    await reaction('Question');
+    // On: the line says where reactions go, and a reaction writes the note.
+    await sharing.check();
+    await expect(f.page.locator('[data-send-destination]')).toContainText('Your reactions in this chat go to Invented participant with your next message.');
+    await expect.poll(() => f.stored.sessions.find((s) => s.id === f.stored.selection.sessionId).reactionSharing?.participant).toEqual(inventedChoice.identity);
+    await reaction('Question');
+    await expect(box).toHaveValue('[My reactions: ❓ on your reply "Invented first reply"]\n\n');
+    await box.press('End');
+    await box.pressSequentially('Thanks.');
+    await f.page.getByRole('button', { name: 'Send message', exact: true }).click();
+    await expect.poll(() => f.calls.starts.length).toBe(2);
+    assert.equal(f.calls.starts[1].input.inputChunks.join(''), '[My reactions: ❓ on your reply "Invented first reply"]\n\nThanks.');
+    await f.emit('text', 'Invented second reply');
+    await f.emit('completed');
+    await expect.poll(() => f.stored.conversationRuns.at(-1).phase).toBe('completed');
+    await expect(box).toHaveValue('');
+    // Editing the note freezes it; turning sharing off removes it, edited or not.
+    await reaction('Love');
+    await expect(box).toHaveValue(/^\[My reactions: ❤️ on your reply "Invented second reply"\]/);
+    await box.fill('[My reactions: ❤️ on that reply]\n\nKeep this.');
+    await expect(f.page.locator('[data-reaction-sharing-notice]')).toHaveText('You edited the reactions note, so new reactions won’t be added to it.');
+    await sharing.uncheck();
+    await expect(box).toHaveValue('Keep this.');
+    // A broken note left while sharing is off holds Send, with the reason.
+    await box.fill('[My reactions: ❤️ on that reply\nKeep this.');
+    await expect(f.page.locator('#send-blocked-reason')).toHaveText('This draft still has a reactions note. Delete it or turn sharing back on.');
+    await expect(f.page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
+    await box.fill('');
+    // Turning it back on and reacting again writes a fresh note; nothing is sent by reacting.
+    await sharing.check();
+    await reaction('Idea');
+    await expect(box).toHaveValue(/^\[My reactions: /);
+    assert.equal(f.calls.starts.length, 2, 'reacting and switching never send anything');
+    await f.check();
+  } finally { await f.close(); }
+});

@@ -9,6 +9,7 @@ import type { DeskCommand, DeskState } from '../domain/types';
 import { DeskFoundation } from '../features/DeskFoundation';
 import { MessageActionsContext } from '../features/MessageActions';
 import { draftWithReplyQuote } from '../domain/reply-quote';
+import { reactionSharingOn, reactionsNoteEdited } from '../domain/shared-reactions';
 import { parsePreviewBuild, retireAnnotationDiagnostics, watchPreviewUpdates } from './preview-updates';
 import type { PreviewUpdateNotice } from './preview-updates';
 import { useConversationRuns, type WorkspaceAttemptResult } from './use-conversation-runs';
@@ -55,6 +56,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
   const [problem, setProblem] = useState<Problem | null>(null);
   const [commandError, setCommandError] = useState('');
   const [participantChoiceError, setParticipantChoiceError] = useState<{ sessionId: string; message: string } | null>(null);
+  const [sharingNotice, setSharingNotice] = useState<{ sessionId: string; text: string } | null>(null);
   const [previewUpdate, setPreviewUpdate] = useState<PreviewUpdateNotice | null>(null);
   const previewWatcher = useRef<ReturnType<typeof watchPreviewUpdates> | null>(null);
   const stateRef = useRef(state);
@@ -542,13 +544,31 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
             };
             reportError('');
             if (runtime.participantChoices?.some((choice) => choice.approved && sameParticipantIdentity(choice.identity, participant))) {
+              const wasSharing = reactionSharingOn(stateRef.current?.sessions.find((item) => item.id === sessionId));
               dispatch({ type: 'set-participant-choice', sessionId, participant }, reportError);
+              if (wasSharing && !reactionSharingOn(stateRef.current?.sessions.find((item) => item.id === sessionId)) && isCurrent()) {
+                setSharingNotice({ sessionId, text: 'Sharing reactions is off because the participant changed.' });
+              }
             } else reportError('This participant is not in the approved participant list.');
           }}
           participantBusy={runs.busy}
           participantSendUnavailable={runs.unavailable}
           participantSendBlockedReason={runs.sendBlockedReason}
           participantStop={runs.composerStop} participantSendWaitingReason={runs.sendWaitingReason} participantSendDestination={runs.sendDestination}
+          reactionSharing={(() => {
+            const selected = state.sessions.find((item) => item.id === state.selection.sessionId);
+            if (runs.participantLabel === undefined || !selected?.participantChoice) return undefined;
+            const on = reactionSharingOn(selected);
+            const notice = on && reactionsNoteEdited(selected, state.drafts[selected.id] ?? '')
+              ? 'You edited the reactions note, so new reactions won’t be added to it.'
+              : sharingNotice?.sessionId === selected.id ? sharingNotice.text : undefined;
+            return { on, label: selected.participantChoice.label, notice,
+              disabledReason: problem ? 'Rating, reacting, Reply and Side chat are off until saving works again.' : undefined,
+              onChange: (sessionId: string, value: boolean) => {
+                setSharingNotice(null);
+                dispatch({ type: 'set-reaction-sharing', sessionId, on: value });
+              } };
+          })()}
           onSend={(sessionId) => {
             if (runs.participantLabel !== undefined) runs.send(sessionId);
             else dispatch({ type: 'send-demo', sessionId, expectedDraft: stateRef.current!.drafts[sessionId] });

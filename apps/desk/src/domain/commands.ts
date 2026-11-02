@@ -4,7 +4,8 @@ import { defaultSessionTitle } from './session-naming';
 import { sameParticipantIdentity, validParticipantIdentity } from './participant-choices';
 import { isMemoryCommand, mutateMemory } from './memory';
 import { isMessageMarkCommand, mutateMessageMark } from './message-marks';
-import { createSideChat, linkedSessionIds } from './side-chat';
+import { createSideChat, linkedSessionIds, messageSessionId } from './side-chat';
+import { reactionSharingOn, stopReactionSharing, syncReactionsNote } from './shared-reactions';
 import type { Activity, DeskCommand, DeskState, DomainOptions, Goal, Session } from './types';
 
 export class DomainError extends Error {
@@ -69,6 +70,9 @@ export function applyCommand(state: DeskState, command: DeskCommand, options: Do
   } else if (isMessageMarkCommand(command)) {
     try {
       if (!mutateMessageMark(next, command, now)) return state;
+      // Shared reactions: a reaction change updates this chat's note in the draft.
+      const owner = next.sessions.find((item) => item.id === messageSessionId(next, command.messageId));
+      if (owner && command.type !== 'set-message-rating') syncReactionsNote(next, owner);
     } catch (error) {
       throw new DomainError(error instanceof Error ? error.message : 'The mark could not be saved.');
     }
@@ -199,8 +203,25 @@ export function applyCommand(state: DeskState, command: DeskCommand, options: Do
       const target = session(command.sessionId);
       if (target.participantChoice && sameParticipantIdentity(target.participantChoice, command.participant)) return state;
       target.participantChoice = { ...command.participant };
+      // Sharing is a choice for one participant: a change turns it off (shared-reactions rule 5).
+      if (target.reactionSharing && !reactionSharingOn(target)) stopReactionSharing(next, target);
       target.updatedAt = now;
       event('edited', 'Participant choice saved for this session.', target.goalId, target.id);
+      break;
+    }
+    case 'set-reaction-sharing': {
+      const target = session(command.sessionId);
+      if (command.on) {
+        if (!target.participantChoice) throw new DomainError('Choose a participant for this chat before sharing reactions.');
+        if (reactionSharingOn(target)) return state;
+        target.reactionSharing = { participant: { ...target.participantChoice }, since: now };
+        event('edited', 'Sharing reactions turned on for this chat.', target.goalId, target.id);
+      } else {
+        if (!target.reactionSharing) return state;
+        stopReactionSharing(next, target);
+        event('edited', 'Sharing reactions turned off for this chat.', target.goalId, target.id);
+      }
+      target.updatedAt = now;
       break;
     }
     case 'select-goal': {
