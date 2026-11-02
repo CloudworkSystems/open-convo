@@ -4,10 +4,11 @@ import { applyCommand, DomainError } from '../../src/domain/commands';
 import { createDemoState } from '../../src/domain/demo';
 import type { ConversationRun } from '../../src/domain/conversation-run-types';
 import {
-  contextRunsFor, reactionsLine, reactionsNoteEdited, reactionsNoteSendHold, reactionSharingOn, splitReactionsNote,
+  agentReaction, contextRunsFor, REACTION_INVITE, reactionsLine, reactionsNoteEdited, reactionsNoteSendHold, reactionSharingOn, splitReactionsNote,
 } from '../../src/domain/shared-reactions';
 import { validateState } from '../../src/domain/validation';
 import { draftWithReplyQuote } from '../../src/domain/reply-quote';
+import { shownMessageText } from '../../src/domain/side-chat';
 
 const id = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`;
 const local = { id: 'local-test', label: 'Invented local model', model: 'invented:1', executionHost: 'this-mac' };
@@ -44,7 +45,7 @@ test('with sharing on, reactions write a visible note at the top of the draft th
   state = applyCommand(state, { type: 'set-draft', sessionId: f.sessionId, text: 'My next words.' }, f.options);
   state = applyCommand(state, { type: 'toggle-message-reaction', messageId: f.reply.id, reaction: 'question' }, f.options);
   const first = state.drafts[f.sessionId];
-  assert.match(first, /^\[My reactions: ❓ on your reply "[^"]+"\]\n\nMy next words\.$/);
+  assert.equal(first, `[My reactions: ❓ on your reply "${splitReactionsNote(first)!.note.match(/"([^"]+)"/)![1]}". ${REACTION_INVITE}]\n\nMy next words.`);
   state = applyCommand(state, { type: 'toggle-message-emoji', messageId: f.mine.id, emoji: '🦊' }, f.options);
   const second = splitReactionsNote(state.drafts[f.sessionId])!;
   assert.ok(second.note.includes('❓ on your reply'));
@@ -70,7 +71,7 @@ test('each reaction is shared once, even when another one on the same message ch
   assert.equal(state.drafts[f.sessionId], '');
   // The heart was shared with that Send; adding the idea lists only the idea.
   state = applyCommand(state, { type: 'toggle-message-reaction', messageId: f.reply.id, reaction: 'idea' }, f.options);
-  assert.match(state.drafts[f.sessionId], /^\[My reactions: 💡 on your reply "[^"]+"\]\n\n$/);
+  assert.match(state.drafts[f.sessionId], /^\[My reactions: 💡 on your reply "[^"]+"\. You can react[^\]]+\]\n\n$/);
   // Picking a quick emoji from the full set is the same reaction.
   state = applyCommand(state, { type: 'toggle-message-emoji', messageId: f.reply.id, emoji: '💡' }, f.options);
   assert.equal(state.drafts[f.sessionId], '');
@@ -188,4 +189,35 @@ test('a saved switch that is malformed is refused, not repaired', () => {
     (broken.sessions[0] as unknown as Record<string, unknown>).reactionSharing = bad;
     assert.equal(validateState(broken).valid, false, JSON.stringify(bad));
   }
+});
+
+test('an agent reaction is a complete first line with one standard emoji, after a message that carried the note', () => {
+  const note = `[My reactions: ❤️ on your reply "x". ${REACTION_INVITE}]\n\nThanks.`;
+  const run = (output: string, phase = 'completed', input = note) =>
+    ({ runId: 'r', sessionId: 's', phase, inputChunks: [input], outputChunks: [output] }) as unknown as ConversationRun;
+  assert.deepEqual(agentReaction(run('Reaction: 🎉\n\nGlad it helped.')), { emoji: '🎉', text: 'Glad it helped.', offset: 14 });
+  assert.deepEqual(agentReaction(run('Reaction: 👍')), { emoji: '👍', text: '', offset: 12 });
+  // Cut off: the first line isn't complete while the reply is still coming.
+  assert.equal(agentReaction(run('Reaction: 👍', 'running')).emoji, undefined);
+  for (const phase of ['stopped', 'failed', 'unknown']) assert.equal(agentReaction(run('Reaction: 👍', phase)).emoji, undefined, phase);
+  const interrupted = { ...run('Reaction: 👍', 'running'), closure: { kind: 'interrupted' } } as unknown as ConversationRun;
+  assert.equal(agentReaction(interrupted).emoji, undefined, 'interrupted');
+  assert.equal(agentReaction(run('Reaction: 👍\nMore', 'running')).emoji, '👍');
+  // Malformed lines stay as text.
+  for (const output of ['Reaction: 👍 👍\nx', 'Reaction: 👍👍\nx', 'Reaction: 🎉🦊\nx', 'Reaction: thumbs\nx', 'reaction: 👍\nx', ' Reaction: 👍\nx', 'Reaction:👍\nx', 'Hello\nReaction: 👍']) {
+    assert.deepEqual(agentReaction(run(output)), { text: output, offset: 0 }, output);
+  }
+  // One emoji made of several code points (a flag, a family) is still one.
+  assert.equal(agentReaction(run('Reaction: 🇨🇦\nHi')).emoji, '🇨🇦');
+  // A side chat about the reply quotes it as shown, without the line.
+  const state = { messages: [], conversationRuns: [{ ...run('Reaction: 🎉\n\nGlad it helped.'), userMessageId: 'u', assistantMessageId: 'a' }] } as unknown as Parameters<typeof shownMessageText>[0];
+  assert.equal(shownMessageText(state, 'a'), 'Glad it helped.');
+  // Where the system has no character splitter, the reply stays text instead of failing.
+  const segmenter = Intl.Segmenter;
+  try {
+    (Intl as { Segmenter?: unknown }).Segmenter = undefined;
+    assert.equal(agentReaction(run('Reaction: 🎉\nHi')).emoji, undefined);
+  } finally { (Intl as { Segmenter?: unknown }).Segmenter = segmenter; }
+  // Without a note in his message, the agent wasn't told how: plain text.
+  assert.equal(agentReaction(run('Reaction: 🎉\nHi', 'completed', 'Thanks.')).emoji, undefined);
 });

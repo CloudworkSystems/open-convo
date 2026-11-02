@@ -1,9 +1,11 @@
-import { useId, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { ConversationRun, ConversationRunPhase, ParticipantStopReason } from '../domain/conversation-run-types';
 import type { ConversationRunStatus, ParticipantCleanupState } from '../adapters/participant-runtime';
 import { isConversationRunClosed } from '../domain/conversation-runs';
 import { CLAUDE_DESTINATION, isOffMacClaude } from '../domain/claude-participant';
 import { isLocalParticipant, localModelName, localRunOutcome, localRunStarted } from '../domain/local-participant';
+import { agentReaction } from '../domain/shared-reactions';
+import { emojiName, loadEmoji } from './EmojiPicker';
 import { MessageActions } from './MessageActions';
 import './run-transcript.css';
 
@@ -77,7 +79,21 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
   const statusId = useId();
   const pendingLabelId = useId();
   const statusTarget = useRef<HTMLParagraphElement>(null);
-  const output = run.outputChunks.join('');
+  const fullOutput = run.outputChunks.join('');
+  // Shared reactions PR 3: a complete first line `Reaction: <emoji>` is the
+  // agent's reaction on his message; the rest is the reply as shown. The run
+  // record keeps the reply exactly as received.
+  const reaction = agentReaction(run);
+  const output = reaction.text;
+  // The emoji's spoken name comes from the full set, loaded on first use.
+  const [, setNamesLoaded] = useState(false);
+  useEffect(() => {
+    if (!reaction.emoji) return;
+    let live = true;
+    void loadEmoji().then(() => { if (live) setNamesLoaded(true); }, () => {});
+    return () => { live = false; };
+  }, [reaction.emoji]);
+  const agentName = isLocalParticipant(run.participant) ? localModelName(run.participant) : run.participant.label;
   const terminal = run.phase === 'completed' || run.phase === 'stopped' || run.phase === 'failed';
   const closed = isConversationRunClosed(run);
   // The details row speaks in the past tense once the reply has ended.
@@ -110,9 +126,10 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
     : stopState === 'confirmed' ? 'Stopped' : 'Stop';
   const sequenceConfirmed = savedSequence !== null && Number.isSafeInteger(savedSequence)
     && savedSequence >= 0 && savedSequence <= run.lastSequence;
-  const prefixMatches = savedOutput !== undefined && output.startsWith(savedOutput);
+  const prefixMatches = savedOutput !== undefined && fullOutput.startsWith(savedOutput);
   const prefixMismatch = savedOutput !== undefined && !prefixMatches;
-  const pendingOutput = prefixMatches ? output.slice(savedOutput!.length) : undefined;
+  const pendingOutput = prefixMatches ? fullOutput.slice(Math.max(savedOutput!.length, reaction.offset)) : undefined;
+  const shownSaved = prefixMatches ? savedOutput!.slice(Math.min(savedOutput!.length, reaction.offset)) : undefined;
   const pending = checkpointPending || !sequenceConfirmed || savedSequence !== run.lastSequence || Boolean(pendingOutput);
   // Plain words for the owner (step 3 trial): the update count stays in
   // data-saved-sequence for checks, never in the visible text.
@@ -140,6 +157,11 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
       <article className="run-message" aria-label="Your message" data-message-id={run.userMessageId}>
         <h3>You</h3>
         <div className="run-message-text" dir="auto">{run.inputChunks.join('')}</div>
+        <p className="run-agent-reaction" aria-live="polite" data-agent-reaction={reaction.emoji}>
+          {reaction.emoji && <span className="run-agent-reaction-chip">
+            {`${agentName} reacted `}<span role="img" aria-label={emojiName(reaction.emoji)}>{reaction.emoji}</span>
+          </span>}
+        </p>
         <MessageActions messageId={run.userMessageId} role="user" text={run.inputChunks.join('')} ended />
       </article>
       <article className="run-message" aria-label={`${local ? `${sentLocally ? 'Local' : 'Ollama'} ${localModelName(run.participant)}` : run.participant.label} response`} data-message-id={run.assistantMessageId}>
@@ -171,11 +193,11 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
         {output ? (
           <div className="run-message-text run-output" dir="auto" aria-live="off">
             {prefixMatches
-              ? <><span data-saved-output="true">{savedOutput}</span><span data-pending-output="true"
+              ? <><span data-saved-output="true">{shownSaved}</span><span data-pending-output="true"
                 aria-describedby={pendingOutput ? pendingLabelId : undefined}>{pendingOutput}</span></>
               : output}
           </div>
-        ) : <p className="run-empty">{emptyOutput}</p>}
+        ) : reaction.emoji ? null : <p className="run-empty">{emptyOutput}</p>}
         <dl className="run-participant">
           <div><dt>Model</dt><dd>{local ? localModelName(run.participant) : run.participant.model}</dd></div>
           <div><dt>{ended ? 'Where it ran' : 'Where it runs'}</dt><dd>{local ? sentLocally ? 'This Mac · stays on this Mac' : 'No reply started' : isOffMacClaude(run.participant) ? CLAUDE_DESTINATION : run.participant.executionHost}</dd></div>

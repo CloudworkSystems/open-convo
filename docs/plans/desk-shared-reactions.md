@@ -1,6 +1,6 @@
 # Desk Shared Reactions
 
-Status: In progress (Nov 2, 2026): approved by the owner November 2, 2026 (#249); PR 2 (agents see his reactions) in review.
+Status: In progress (Nov 2, 2026): approved by the owner November 2, 2026 (#249); PR 2 (agents see his reactions) merged (#250); PR 3 (agents react back) in review.
 
 Written November 2, 2026 by a Claude building session (thread "Add per-message
 actions to the Desk") at the owner's request. On November 1, 2026 he asked:

@@ -1,5 +1,6 @@
 import { markableMessages } from './message-marks';
 import { draftWithReplyQuote } from './reply-quote';
+import { agentReaction } from './shared-reactions';
 import type { DeskState, Session } from './types';
 
 /**
@@ -78,7 +79,8 @@ export function shownMessageText(state: Pick<DeskState, 'messages' | 'conversati
   if (message) return message.body;
   const run = state.conversationRuns?.find((item) => item.userMessageId === messageId || item.assistantMessageId === messageId);
   if (!run) return null;
-  return (run.userMessageId === messageId ? run.inputChunks : run.outputChunks).join('');
+  // A reply shows without an agent's reaction line (shared reactions rule 4).
+  return run.userMessageId === messageId ? run.inputChunks.join('') : agentReaction(run).text;
 }
 
 /**

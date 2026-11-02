@@ -94,3 +94,17 @@
 .other-run-controls li > span { overflow-wrap: anywhere; }
 .other-run-controls [data-other-run-status] { color: var(--tca-text-muted); }
 .other-run-controls .recovery-button { padding: 5px 10px; min-height: 32px; }
+
+/* Shared reactions PR 3: the agent's reaction on his message. */
+.run-transcript .run-agent-reaction { margin-top: 6px; }
+.run-transcript .run-agent-reaction:empty { margin: 0; }
+.run-transcript .run-agent-reaction-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--tca-border-default);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--tca-text-muted);
+}

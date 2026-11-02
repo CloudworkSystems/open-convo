@@ -14,6 +14,9 @@ export const REACTIONS_NOTE_PREFIX = '[My reactions: ';
 const NOTE_MARKER = '[My reactions:';
 const SNIPPET_CHARACTERS = 40;
 export const REACTIONS_NOTE_MAX_CHARACTERS = 4000;
+/** PR 3: the one plain sentence that tells the agent how to react back. */
+export const REACTION_INVITE = 'You can react to this message by starting your reply with a line like `Reaction: 👍`.';
+const REACTION_LINE = /^Reaction: ([^\s]+)$/u;
 
 export interface ReactionSharing {
   /** The exact participant sharing was turned on for (rule 5). */
@@ -89,7 +92,7 @@ function sessionMessages(state: Pick<DeskState, 'messages' | 'conversationRuns'>
   for (const run of state.conversationRuns ?? []) {
     if (run.sessionId !== sessionId) continue;
     shown.push({ id: run.userMessageId, role: 'user', text: run.inputChunks.join('') },
-      { id: run.assistantMessageId, role: 'assistant', text: run.outputChunks.join('') });
+      { id: run.assistantMessageId, role: 'assistant', text: agentReaction(run).text });
   }
   return shown;
 }
@@ -126,10 +129,11 @@ export function reactionsNoteText(state: Pick<DeskState, 'messages' | 'conversat
     parts.push(`${emoji.join(' ')} on ${message.role === 'assistant' ? 'your reply' : 'my message'} "${snippet(message.text)}"`);
   }
   if (!parts.length) return null;
-  let note = `${REACTIONS_NOTE_PREFIX}${parts.join('; ')}]`;
+  const write = () => `${REACTIONS_NOTE_PREFIX}${parts.join('; ')}. ${REACTION_INVITE}]`;
+  let note = write();
   while ([...note].length > REACTIONS_NOTE_MAX_CHARACTERS && parts.length > 1) {
     parts.shift();
-    note = `${REACTIONS_NOTE_PREFIX}${parts.join('; ')}]`;
+    note = write();
   }
   return note;
 }
@@ -229,4 +233,42 @@ function validAdded(entry: unknown): boolean {
   const { messageId, emoji, sends } = entry as Record<string, unknown>;
   return typeof messageId === 'string' && !!messageId && isStandardEmoji(emoji)
     && typeof sends === 'number' && Number.isSafeInteger(sends) && sends >= 0;
+}
+
+/**
+ * PR 3, rule 4: an agent's reaction is read from the saved reply each time it
+ * is shown; nothing is stored. It counts only when his message carried a
+ * reactions note (so the agent was told how), and the reply's first line is
+ * exactly `Reaction: <one standard emoji>` and complete: a line break came
+ * after it, or the reply ended. Otherwise the reply is plain text.
+ */
+export function agentReaction(run: Readonly<ConversationRun>): { emoji?: string; text: string; offset: number } {
+  const output = run.outputChunks.join('');
+  const none = { text: output, offset: 0 };
+  if (!runHoldsReactionsNote(run)) return none;
+  const end = output.indexOf('\n');
+  // Without a line break, only a reply that completed normally finishes the
+  // line: a stopped, failed or interrupted reply was cut off, so it stays text.
+  const completed = run.phase === 'completed' && !run.closure;
+  if (end < 0 && !completed) return none;
+  const line = (end < 0 ? output : output.slice(0, end)).replace(/\r$/, '');
+  const match = REACTION_LINE.exec(line);
+  if (!match || !isStandardEmoji(match[1]) || !singleGrapheme(match[1])) return none;
+  let offset = end < 0 ? output.length : end + 1;
+  if (output[offset] === '\r') offset += 1;
+  if (output[offset] === '\n') offset += 1;
+  return { emoji: match[1], text: output.slice(offset), offset };
+}
+
+/** Exactly one user-perceived character, so `👍👍` or `🎉🦊` are not one emoji. */
+function singleGrapheme(value: string): boolean {
+  // Where the system can't split text into characters, the line stays text.
+  if (typeof Intl === 'undefined' || typeof Intl.Segmenter !== 'function') return false;
+  try {
+    let count = 0;
+    for (const _ of new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(value)) if (++count > 1) return false;
+    return count === 1;
+  } catch {
+    return false;
+  }
 }
