@@ -64,12 +64,13 @@ pass silently and nothing like an "always allow" switch can be slipped in.
 | `hosts` | Required list of bare lower-case host names (`api.example.com`: no scheme, port, path, wildcard or IP address), each once. Empty for `upload` and `local`; at least one for `own_key` and `sign_in`. |
 | `leaves_machine` | Required plain words on exactly what is sent. Exactly `nothing` for `upload` and `local`; never `nothing` for the others. |
 | `cost` | `"free"` for `upload` and `local`. For the others: `unit` (`per_run`, `per_second`, `per_image` or `per_credit`), `price`, `source` (an https link), `checked` (date) and `max_per_run`, plus an optional `note`. |
-| `needs` | Optional: `memory_gb`, `disk_gb`, `server` (such as ComfyUI) and `downloads` (each `what`, `size_gb` and an https `from`). |
+| `needs` | Optional, and never on `upload`: `memory_gb`, `disk_gb`, `server` (such as ComfyUI) and `downloads` (each `what`, `size_gb` and an https `from`). |
 | `terms` | `sign_in` only, and required there: an https `url` to the provider's terms that allow this use, and the date `checked`. No link, no route. |
 | `license` | `local` only, and required there: `name`, `checked` (date), `allows_intended_use` (true or false), optional https `url` and `note`. |
 
 A record with routes has exactly one `upload` route, the floor that always
-works, and so also has a `file` output. A record with a paid route
+works and needs nothing set up (no `needs`), so it also has a `file`
+output. Every record with routes has a `receipt` output too. A record with a paid route
 (`own_key` or `sign_in`) must also have an `upload` or `local` route, so paid
 is never the only way.
 

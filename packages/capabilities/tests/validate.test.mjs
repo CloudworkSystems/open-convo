@@ -180,6 +180,8 @@ test('upload is always present, once, and lands a file', () => {
   assertRefused((r) => { r.routes.push({ ...route(r, 'upload'), id: 'upload-two' }); }, 'routes', /only one upload/);
   assertRefused((r) => delete r.outputs.file, 'outputs', /file output/);
   assertRefused((r) => delete r.outputs, 'outputs', /file output/);
+  assertRefused((r) => delete r.outputs.receipt, 'outputs', /receipt output/);
+  assertRefused((r) => { route(r, 'upload').needs = { server: 'ComfyUI' }; }, 'routes[0].needs', /nothing set up/);
   assert.deepEqual(errorsAfter((r) => { r.routes = r.routes.filter((x) => x.kind === 'upload'); }), []);
 });
 

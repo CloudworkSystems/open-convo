@@ -103,10 +103,14 @@ export function validateCapability(record) {
   if (has(record, 'inputs')) inputs(record.inputs, fail);
   if (has(record, 'outputs')) outputs(record.outputs, fail);
   if (has(record, 'routes') && routes(record.routes, fail)) {
-    // An upload is a file the person picks, so the capability must put out a file.
+    // An upload is a file the person picks, so the capability puts out a file,
+    // and every run keeps a receipt (cost, what left the machine, made by AI).
     const outs = isPlainObject(record.outputs) ? Object.values(record.outputs) : [];
     if (!outs.some((o) => isPlainObject(o) && o.type === 'file')) {
       fail('outputs', 'a capability with an upload route has a file output');
+    }
+    if (!outs.some((o) => isPlainObject(o) && o.type === 'receipt')) {
+      fail('outputs', 'a capability with routes has a receipt output');
     }
   }
 
@@ -262,7 +266,9 @@ function routes(value, fail) {
       }
     }
 
-    if (has(route, 'needs')) needs(route.needs, `${q}.needs`, fail);
+    // Upload is ready with nothing set up, so it needs nothing.
+    if (route.kind === 'upload' && has(route, 'needs')) fail(`${q}.needs`, 'an upload route needs nothing set up');
+    else if (has(route, 'needs')) needs(route.needs, `${q}.needs`, fail);
 
     // Sign-in only where the provider's terms allow it: no link, no route.
     if (route.kind === 'sign_in') {
