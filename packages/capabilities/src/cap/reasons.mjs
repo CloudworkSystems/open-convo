@@ -16,6 +16,7 @@ export const REASONS = {
   ledgerEdited: 'The spending record was changed, so paid routes are stopped until you confirm a reset.',
   ledgerOlder: 'The spending record is an older copy, so paid routes are stopped until you confirm a reset.',
   ledgerBusy: 'The spending record is busy, so this paid run was not started.',
+  ledgerFull: 'The spending record for this month is full, so this paid run was not started.',
   ledgerFolder: 'The spending record folder is missing, so paid routes stay off.',
   currencyOff: 'This price is in another currency, and conversion is off.',
   rateStale: 'The conversion rate is more than a day old, so the paid route stays off.',

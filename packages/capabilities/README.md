@@ -167,7 +167,7 @@ line is one entry:
 
 `{ seq, kind, capabilityId, routeId, amount, estimated, jobId, at, prevHash, hash }`
 
-`kind` is `reserve`, `settle`, `release` or `over-bill`. `hash` is the
+`kind` is `reserve`, `settle`, `release`, `over-bill` or `checkpoint`. `hash` is the
 SHA-256 of the canonical entry without `hash`, and `prevHash` is the
 previous entry's hash (`null` on the first). The protected state's
 `ledgerHead` and `ledgerCount` must match the file. A missing file (when
@@ -176,6 +176,14 @@ file, or a file longer than the head stops paid runs and says the record
 was changed or is missing. A shorter file that still chains says it is an
 older copy. The head is written before the new line. If the two disagree
 after a crash, the next read stops paid runs the same way.
+
+On the first write of a later month, completed runs from earlier months
+fold into one `checkpoint` per capability and route: the settled total for
+that month, covered by the same hash chain. Open runs are kept, so they
+can still settle, and they still count in the month they were reserved.
+The file is also refused, before it is saved, if it would pass 10,000
+entries or 2 MiB. A saved ledger stays readable. The reason is that this
+month's record is full.
 
 `reserve`, `settle`, `release`, `resetLedger` and `monthSpent` take one
 in-process queue per folder and an exclusive lock file (`ledger.lock`), so
@@ -278,6 +286,10 @@ These are the choices the plan does not spell out. Each one has a test in
 - `now` has to be a real ISO instant. `2026-02-31` is refused.
 - A symlink in place of `entries.jsonl` is treated as a changed ledger.
 - The show command's directory listing is unchanged after it runs.
+- A closed month is kept as checkpoint totals, not every settled line.
+  Which of those amounts were estimates is not kept. An open run from a
+  closed month is kept until it settles or is released. A job id from a
+  folded month can be used again.
 - Amounts are stored and printed as the shortest decimal that round-trips
   (`"0.3"`, not a binary fraction). The signed cap keeps the text the
   person signed; the figures the ledger writes are the shortest form.

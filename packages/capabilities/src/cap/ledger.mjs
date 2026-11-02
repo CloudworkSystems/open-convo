@@ -23,13 +23,24 @@ import { calendarMonth, instantText } from './time.mjs';
 
 const LEDGER_FILE = 'entries.jsonl';
 const LOCK_FILE = 'ledger.lock';
-const MAX_LEDGER_BYTES = 2 * 1024 * 1024;
-const MAX_ENTRIES = 10000;
+// A damaged or hostile file must not be read without bound. Ordinary history
+// never reaches these ceilings: closed months are folded into checkpoints
+// first, and a write that would still cross either ceiling is refused
+// before anything is saved.
+let maxLedgerBytes = 2 * 1024 * 1024;
+let maxLedgerEntries = 10000;
+
+/** Test-only. Production callers do not use this. */
+export function setLedgerCeilingForTests(entries, bytes) {
+  maxLedgerEntries = entries;
+  maxLedgerBytes = bytes;
+}
 const MAX_LINE = 4096;
 const HEX = /^[0-9a-f]{64}$/;
 const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const JOB = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
-const KINDS = new Set(['reserve', 'settle', 'release', 'over-bill']);
+const KINDS = new Set(['reserve', 'settle', 'release', 'over-bill', 'checkpoint']);
+const CHECKPOINT_JOB = 'checkpoint';
 
 export async function reserve(args) {
   return transact(args, (dir) => mutate(dir, args, (loaded) => reserveEntry(loaded, args)));
@@ -76,7 +87,7 @@ export function describe({ ledgerDir, store, record, signature, publicKey, now }
   } else if (!ledger.ok) {
     lines.push('Reserved this month: fully spent', 'Spent this month: fully spent');
   } else {
-    const figures = figuresFor(ledger.jobs, calendarMonth(now, cap.timeZone), cap.timeZone, cap.currency);
+    const figures = figuresFor(ledger.jobs, ledger.checkpoints, calendarMonth(now, cap.timeZone), cap.timeZone, cap.currency);
     lines.push(
       `Reserved this month: ${figures.reserved.amount} ${cap.currency}`,
       `Spent this month: ${figures.spent.amount} ${cap.currency}`,
@@ -102,8 +113,17 @@ function mutate(dir, args, build) {
   if (!loaded.ok) return loaded;
   const built = build(loaded);
   if (!built.ok) return built;
-  const entries = loaded.ledger.entries.concat(built.entry);
-  const saved = persist(dir, args.store, loaded.state, entries, built.entry);
+  const month = calendarMonth(loaded.now, loaded.cap.timeZone);
+  const compacted = month ? compactClosedMonths(loaded.ledger.entries, month, loaded.cap.timeZone) : null;
+  const prior = compacted ?? loaded.ledger.entries;
+  const entry = compacted
+    ? makeEntry({ ledgerHead: prior.at(-1)?.hash ?? null, ledgerCount: prior.length }, fieldsOf(built.entry))
+    : built.entry;
+  const entries = prior.concat(entry);
+  // Refuse before saving. A write that succeeds must leave a ledger the next
+  // read can check, never one that is over the ceiling and therefore "edited".
+  if (!withinLimit(entries)) return { ok: false, reason: REASONS.ledgerFull };
+  const saved = persist(dir, args.store, loaded.state, entries, entry);
   if (!saved.ok) {
     return saved.consistent
       ? { ok: false, reason: REASONS.notSaved }
@@ -142,13 +162,13 @@ function reserveEntry(loaded, args) {
   const month = calendarMonth(now, cap.timeZone);
   if (!month) return { ok: false, reason: REASONS.badNow };
   if (max.micros > parseDecimal(cap.perRun.amount)) return { ok: false, reason: REASONS.perRun };
-  const capabilitySpent = counted(ledger.jobs, month, cap.timeZone, {
+  const capabilitySpent = counted(ledger.jobs, ledger.checkpoints, month, cap.timeZone, {
     capabilityFilter: args.capabilityId,
     routeCapability: args.capabilityId,
     routeId: args.routeId,
     provider,
   });
-  const allSpent = counted(ledger.jobs, month, cap.timeZone, {
+  const allSpent = counted(ledger.jobs, ledger.checkpoints, month, cap.timeZone, {
     capabilityFilter: null,
     routeCapability: args.capabilityId,
     routeId: args.routeId,
@@ -296,8 +316,8 @@ function readMonth(dir, args) {
     if (!idOk(args.capabilityId) || !idOk(args.routeId)) return { ok: false, reason: REASONS.providerRoute };
     provider = parsed.micros;
   }
-  const figures = figuresFor(ledger.jobs, month, cap.timeZone, cap.currency, args.capabilityId ?? null);
-  const parts = spendParts(ledger.jobs, month, cap.timeZone, {
+  const figures = figuresFor(ledger.jobs, ledger.checkpoints, month, cap.timeZone, cap.currency, args.capabilityId ?? null);
+  const parts = spendParts(ledger.jobs, ledger.checkpoints, month, cap.timeZone, {
     capabilityFilter: args.capabilityId ?? null,
     routeCapability: args.capabilityId ?? null,
     routeId: args.routeId ?? null,
@@ -343,7 +363,115 @@ function makeEntry(state, fields) {
     prevHash: state.ledgerHead,
   };
   entry.hash = entryHash(entry);
+  entry.micros = parseDecimal(fields.amount.amount);
   return entry;
+}
+
+function fieldsOf(entry) {
+  return {
+    kind: entry.kind,
+    capabilityId: entry.capabilityId,
+    routeId: entry.routeId,
+    amount: entry.amount,
+    estimated: entry.estimated,
+    jobId: entry.jobId,
+    at: entry.at,
+  };
+}
+
+// Fold completed runs from months before `currentMonth` into one checkpoint
+// per capability and route. Open runs stay, so they can still settle. The
+// result is a new chain; null means nothing was folded.
+function compactClosedMonths(entries, currentMonth, timeZone) {
+  const jobs = buildJobs(entries);
+  if (!jobs.ok) return null;
+  let folded = false;
+  const totals = new Map();
+  const kept = [];
+  for (const entry of entries) {
+    if (entry.kind !== 'checkpoint') continue;
+    const month = calendarMonth(entry.at, timeZone);
+    if (!month || month >= currentMonth) {
+      kept.push(entry);
+      continue;
+    }
+    addTotal(totals, month, entry);
+  }
+  for (const job of jobs.jobs.values()) {
+    const month = calendarMonth(job.reserve.at, timeZone);
+    if (!month || month >= currentMonth || !job.terminal) {
+      kept.push(job.reserve);
+      if (job.terminal) kept.push(job.terminal);
+      continue;
+    }
+    folded = true;
+    if (job.terminal.kind !== 'release' && job.terminal.micros > 0n) addTotal(totals, month, job.terminal, job.reserve.at);
+  }
+  if (!folded) return null;
+  const checkpoints = [...totals.values()]
+    .sort((left, right) => left.month.localeCompare(right.month)
+      || left.capabilityId.localeCompare(right.capabilityId)
+      || left.routeId.localeCompare(right.routeId))
+    .map((row) => ({
+      kind: 'checkpoint',
+      capabilityId: row.capabilityId,
+      routeId: row.routeId,
+      amount: moneyFromMicros(row.currency, row.micros),
+      estimated: false,
+      jobId: CHECKPOINT_JOB,
+      at: row.at,
+      micros: row.micros,
+    }));
+  kept.sort((left, right) => left.seq - right.seq);
+  return rechain([...checkpoints, ...kept]);
+}
+
+function addTotal(totals, month, entry, at = entry.at) {
+  const key = `${month}\n${entry.capabilityId}\n${entry.routeId}`;
+  const current = totals.get(key);
+  if (current) current.micros += entry.micros;
+  else {
+    totals.set(key, {
+      month,
+      capabilityId: entry.capabilityId,
+      routeId: entry.routeId,
+      currency: entry.amount.currency,
+      micros: entry.micros,
+      at,
+    });
+  }
+}
+
+function rechain(entries) {
+  let previous = null;
+  return entries.map((entry, index) => {
+    const next = {
+      seq: index + 1,
+      kind: entry.kind,
+      capabilityId: entry.capabilityId,
+      routeId: entry.routeId,
+      amount: { amount: entry.amount.amount, currency: entry.amount.currency },
+      estimated: entry.estimated,
+      jobId: entry.jobId,
+      at: entry.at,
+      prevHash: previous,
+      micros: entry.micros,
+    };
+    next.hash = entryHash(next);
+    previous = next.hash;
+    return next;
+  });
+}
+
+function withinLimit(entries) {
+  if (entries.length > maxLedgerEntries) return false;
+  let bytes = 0;
+  for (const entry of entries) {
+    const line = canonicalJson(publicEntry(entry));
+    if (line.length > MAX_LINE) return false;
+    bytes += Buffer.byteLength(line) + 1;
+  }
+  return bytes <= maxLedgerBytes;
 }
 
 function writeEntries(dir, entries) {
@@ -384,7 +512,9 @@ function judgeLedger(dir, state, currency) {
   const file = readEntries(dir);
   if (!file.ok) return { ok: false, reason: REASONS.ledgerEdited };
   if (file.absent) {
-    if (state.ledgerCount === 0 && state.ledgerHead === null) return { ok: true, entries: [], jobs: new Map() };
+    if (state.ledgerCount === 0 && state.ledgerHead === null) {
+      return { ok: true, entries: [], jobs: new Map(), checkpoints: [] };
+    }
     return { ok: false, reason: REASONS.ledgerMissing };
   }
   const sameLength = file.entries.length === state.ledgerCount;
@@ -397,7 +527,12 @@ function judgeLedger(dir, state, currency) {
     }
     const jobs = buildJobs(file.entries);
     if (!jobs.ok) return { ok: false, reason: REASONS.ledgerEdited };
-    return { ok: true, entries: file.entries, jobs: jobs.jobs };
+    return {
+      ok: true,
+      entries: file.entries,
+      jobs: jobs.jobs,
+      checkpoints: file.entries.filter((entry) => entry.kind === 'checkpoint'),
+    };
   }
   if (file.entries.length < state.ledgerCount) return { ok: false, reason: REASONS.ledgerOlder };
   return { ok: false, reason: REASONS.ledgerEdited };
@@ -410,14 +545,14 @@ function readEntries(dir) {
   if (kind !== 'file') return { ok: false };
   let text;
   try {
-    text = readNoFollow(path, MAX_LEDGER_BYTES);
+    text = readNoFollow(path, maxLedgerBytes);
   } catch {
     return { ok: false };
   }
   if (text === '') return { ok: true, absent: false, entries: [], head: null };
   if (!text.endsWith('\n')) return { ok: false };
   const lines = text.slice(0, -1).split('\n');
-  if (lines.length > MAX_ENTRIES) return { ok: false };
+  if (lines.length > maxLedgerEntries) return { ok: false };
   const entries = [];
   let previous = null;
   for (let index = 0; index < lines.length; index += 1) {
@@ -446,7 +581,7 @@ function parseStoredEntry(value) {
   const money = parseMoney(value.amount);
   if (!money.ok) return null;
   if (typeof value.estimated !== 'boolean') return null;
-  if ((value.kind === 'reserve' || value.kind === 'release' || value.kind === 'over-bill') && value.estimated) return null;
+  if ((value.kind === 'reserve' || value.kind === 'release' || value.kind === 'over-bill' || value.kind === 'checkpoint') && value.estimated) return null;
   if (!instantText(value.at)) return null;
   if (!(value.prevHash === null || (typeof value.prevHash === 'string' && HEX.test(value.prevHash)))) return null;
   if (typeof value.hash !== 'string' || !HEX.test(value.hash)) return null;
@@ -470,6 +605,7 @@ function parseStoredEntry(value) {
 function buildJobs(entries) {
   const jobs = new Map();
   for (const entry of entries) {
+    if (entry.kind === 'checkpoint') continue;
     if (entry.kind === 'reserve') {
       if (jobs.has(entry.jobId)) return { ok: false };
       jobs.set(entry.jobId, { reserve: entry, terminal: null });
@@ -484,13 +620,13 @@ function buildJobs(entries) {
   return { ok: true, jobs };
 }
 
-function counted(jobs, month, timeZone, options) {
-  const parts = spendParts(jobs, month, timeZone, options);
+function counted(jobs, checkpoints, month, timeZone, options) {
+  const parts = spendParts(jobs, checkpoints, month, timeZone, options);
   const settled = options.provider === null ? parts.settledThis : max(parts.settledThis, options.provider);
   return parts.reserved + parts.settledOther + settled;
 }
 
-function spendParts(jobs, month, timeZone, { capabilityFilter, routeCapability, routeId }) {
+function spendParts(jobs, checkpoints, month, timeZone, { capabilityFilter, routeCapability, routeId }) {
   let reserved = 0n;
   let settledThis = 0n;
   let settledOther = 0n;
@@ -503,10 +639,14 @@ function spendParts(jobs, month, timeZone, { capabilityFilter, routeCapability, 
     else if (sameRoute) settledThis += job.terminal.micros;
     else settledOther += job.terminal.micros;
   }
+  for (const checkpoint of checkpoints) addCheckpoint(checkpoint, month, timeZone, capabilityFilter, routeCapability, routeId, (same, micros) => {
+    if (same) settledThis += micros;
+    else settledOther += micros;
+  });
   return { reserved, settledThis, settledOther };
 }
 
-function figuresFor(jobs, month, timeZone, currency, capabilityId = null) {
+function figuresFor(jobs, checkpoints, month, timeZone, currency, capabilityId = null) {
   let reservedMicros = 0n;
   let spentMicros = 0n;
   for (const job of jobs.values()) {
@@ -515,12 +655,24 @@ function figuresFor(jobs, month, timeZone, currency, capabilityId = null) {
     if (!job.terminal) reservedMicros += job.reserve.micros;
     else if (job.terminal.kind !== 'release') spentMicros += job.terminal.micros;
   }
+  for (const checkpoint of checkpoints) {
+    if (capabilityId && checkpoint.capabilityId !== capabilityId) continue;
+    if (calendarMonth(checkpoint.at, timeZone) !== month) continue;
+    spentMicros += checkpoint.micros;
+  }
   return {
     reservedMicros,
     spentMicros,
     reserved: moneyFromMicros(currency, reservedMicros),
     spent: moneyFromMicros(currency, spentMicros),
   };
+}
+
+function addCheckpoint(checkpoint, month, timeZone, capabilityFilter, routeCapability, routeId, add) {
+  if (capabilityFilter && checkpoint.capabilityId !== capabilityFilter) return;
+  if (calendarMonth(checkpoint.at, timeZone) !== month) return;
+  const same = checkpoint.capabilityId === routeCapability && checkpoint.routeId === routeId;
+  add(same, checkpoint.micros);
 }
 
 function max(left, right) {
