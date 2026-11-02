@@ -340,8 +340,19 @@ test('deleting, editing and restoring an older ledger each stop paid runs and sa
     const older = await box.reserve({ jobId: 'five', max: { amount: '0.2', currency: 'USD' } });
     assert.equal(older.reason, REASONS.ledgerOlder);
 
-    assert.equal((await resetLedger({ ...box, record: box.record, signature: box.signature, publicKey: box.publicKey })).ok, true);
-    const after = await box.reserve({ jobId: 'six', max: { amount: '0.2', currency: 'USD' } });
+    const stored = await resetLedger(box);
+    assert.equal(stored.ok, false);
+    assert.equal(stored.reason, REASONS.resetNeedsFresh);
+    assert.equal((await box.reserve({ jobId: 'still', max: { amount: '0.2', currency: 'USD' } })).reason, REASONS.ledgerOlder);
+    const fresh = { ...box.record, revision: box.record.revision + 1 };
+    const freshSig = signRecord(fresh, box.keys.privateKey);
+    assert.equal((await resetLedger({ ...box, record: fresh, signature: freshSig })).ok, true);
+    const after = await box.reserve({
+      jobId: 'six',
+      record: fresh,
+      signature: freshSig,
+      max: { amount: '0.2', currency: 'USD' },
+    });
     assert.equal(after.ok, true, after.reason);
   } finally {
     box.close();
@@ -359,9 +370,48 @@ test('deleting, editing and restoring an older ledger each stop paid runs and sa
     acceptCap(store, high, highSig, keys.publicKey);
     const args = { ledgerDir: dir, store, record: low, signature: lowSig, publicKey: keys.publicKey };
     assert.equal((await resetLedger(args)).reason, REASONS.capOlder);
-    assert.equal((await resetLedger({ ...args, record: high, signature: highSig })).ok, true);
+    assert.equal((await resetLedger({ ...args, record: high, signature: highSig })).reason, REASONS.resetNeedsFresh);
+    const newer = cap({ revision: 3, monthlyAll: { amount: '8', currency: 'USD' } });
+    const newerSig = signRecord(newer, keys.privateKey);
+    assert.equal((await resetLedger({ ...args, record: newer, signature: newerSig })).ok, true);
+    assert.equal((await resetLedger({ ...args, record: newer, signature: newerSig })).reason, REASONS.resetNeedsFresh);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a reset with the stored cap is refused until a new cap is signed', async () => {
+  const box = world(cap({
+    perRun: { amount: '5', currency: 'USD' },
+    monthlyByCapability: { amount: '10', currency: 'USD' },
+    monthlyAll: { amount: '10', currency: 'USD' },
+  }));
+  try {
+    await box.reserve({ jobId: 'a', max: { amount: '5', currency: 'USD' } });
+    await box.settle({ jobId: 'a', actual: { amount: '5', currency: 'USD' } });
+    await box.reserve({ jobId: 'b', max: { amount: '5', currency: 'USD' } });
+    await box.settle({ jobId: 'b', actual: { amount: '5', currency: 'USD' } });
+    assert.equal((await box.reserve({ jobId: 'c', max: { amount: '5', currency: 'USD' } })).reason, REASONS.monthCapability);
+
+    const healthy = await resetLedger(box);
+    assert.equal(healthy.ok, false);
+    assert.equal(healthy.reason, REASONS.resetNeedsFresh);
+    assert.equal((await box.spent()).counted.amount, '10');
+    assert.equal((await box.reserve({ jobId: 'd', max: { amount: '5', currency: 'USD' } })).reason, REASONS.monthCapability);
+
+    const fresh = { ...box.record, revision: box.record.revision + 1 };
+    const freshSig = signRecord(fresh, box.keys.privateKey);
+    assert.equal((await resetLedger({ ...box, record: fresh, signature: freshSig })).ok, true);
+    assert.equal((await box.spent({ record: fresh, signature: freshSig })).counted.amount, '0');
+    assert.equal((await box.reserve({
+      jobId: 'e',
+      record: fresh,
+      signature: freshSig,
+      max: { amount: '5', currency: 'USD' },
+    })).ok, true);
+    assert.equal((await resetLedger({ ...box, record: fresh, signature: freshSig })).reason, REASONS.resetNeedsFresh);
+  } finally {
+    box.close();
   }
 });
 
@@ -717,7 +767,7 @@ test('choices the plan leaves open', async () => {
   try {
     assert.equal(tighten(box.store, {}, box.record, box.signature, box.publicKey).reason, REASONS.tightenNoChange);
     assert.equal(tighten(box.store, { perRun: { amount: '0.5', currency: 'USD' } }, box.record, box.signature, box.publicKey).ok, true);
-    assert.equal((await resetLedger(box)).ok, true);
+    assert.equal((await resetLedger(box)).reason, REASONS.resetNeedsFresh);
     assert.equal(verifyCap(box.record, box.signature, box.publicKey, box.store.read()).perRun.amount, '0.5');
     assert.equal(tighten(box.store, { perRun: { amount: '1', currency: 'EUR' } }, box.record, box.signature, box.publicKey).reason, REASONS.currencyOff);
     assert.equal((await box.reserve({ now: '2026-02-31T00:00:00.000Z' })).reason, REASONS.badNow);

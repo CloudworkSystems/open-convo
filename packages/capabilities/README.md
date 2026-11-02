@@ -188,7 +188,7 @@ that is already held is not taken. The run is refused.
 | `settle({ ...same, jobId, now, actual?, estimated? })` | `estimated: true` keeps the reserved maximum and marks it estimated. An `actual` at or under the reservation, including zero, settles that figure. An `actual` over it writes `over-bill`, counts the full bill, and returns `routeOff: true`. |
 | `release({ ...same, jobId, now })` | Drops an open reservation. The job id is never reused. |
 | `monthSpent({ ...same, now, capabilityId?, routeId?, providerTotal? })` | `{ reserved, spent, counted }` for that month. `counted` is what the cap uses. A `providerTotal` also needs `capabilityId` and `routeId`, the route that key belongs to. |
-| `resetLedger({ ledgerDir, store, record, signature, publicKey })` | Empties the ledger when the caller presents the current signed cap, or a newer one. An older signed cap is refused. The current cap leaves a tightening in place. A newer cap clears it. |
+| `resetLedger({ ledgerDir, store, record, signature, publicKey })` | Empties the ledger only when the caller presents a new signed cap, one with a higher revision than the cap already stored. The stored cap is refused, on a healthy ledger and on a damaged one. An older signed cap is refused. The new cap clears a tightening. |
 
 `now` is an ISO time with a zone, such as `2026-11-15T18:00:00.000Z`. The
 library does not call `Date.now()` or `new Date()` without an argument.
@@ -260,7 +260,15 @@ These are the choices the plan does not spell out. Each one has a test in
 - A tightening that names another currency, or that changes nothing, is
   refused and the stored tightening stays as it was.
 - The reservation's month is the one that is charged. Settling it later
-  does not move the spend.
+  does not move the spend. An over-bill that arrives in a later month
+  still counts, in full, in the reservation's month. It does not reduce
+  the next month's room.
+- A `ledger.lock` left behind after a crash is not removed. Paid runs stay
+  refused until that file is deleted. The lock is not taken over while it
+  is held.
+- The show command reads without the lock, so a read in the moment between
+  writing the ledger head and writing the line can say the ledger does not
+  check out. The next read, after the write finishes, checks out.
 - The provider's figure replaces only this route's settled total, and only
   when it is higher. Open reservations and other routes are added on top.
 - An estimated settle ignores any `actual` sent with it. A real bill of

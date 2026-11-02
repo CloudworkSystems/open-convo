@@ -1,7 +1,8 @@
 // The spending ledger. Each entry is chained to the one before by SHA-256,
 // and the protected state keeps the head and the count. A missing, edited,
 // or older file counts as fully spent: paid runs stop until resetLedger is
-// called with a signed cap. Reservations take one in-process queue and one
+// called with a new signed cap, a higher revision than the one already
+// stored. Reservations take one in-process queue and one
 // exclusive lock file, so two runs cannot share the last of a budget.
 //
 // A run counts in the calendar month of its reservation, in the cap's time
@@ -248,19 +249,21 @@ function resetEntries(dir, args) {
   if (state.broken) return { ok: false, reason: REASONS.protectedBroken };
   const signed = signedCap(args.record, args.signature, args.publicKey);
   if (!signed.ok) return { ok: false, reason: signed.reason };
-  if (signed.revision < state.capRevision) return { ok: false, reason: REASONS.capOlder };
-  if (signed.revision === state.capRevision && !sameText(signed.hash, state.capHash)) {
-    return { ok: false, reason: REASONS.capOlder };
+  // The cap already in the protected state is not a fresh signature. Reusing
+  // it would empty the month without the same approval a raise needs.
+  if (signed.revision <= state.capRevision) {
+    return {
+      ok: false,
+      reason: signed.revision < state.capRevision ? REASONS.capOlder : REASONS.resetNeedsFresh,
+    };
   }
-  const same = signed.revision === state.capRevision;
   const next = {
     capRevision: signed.revision,
     capHash: signed.hash,
-    tightening: same ? state.core.tightening : 'none',
+    tightening: 'none',
     ledgerHead: null,
     ledgerCount: 0,
   };
-  if (same && state.tighteningBroken) return { ok: false, reason: REASONS.tighteningBroken };
   // Confirm the new head before erasing the file. A lost compare-and-swap
   // leaves the history where it was.
   if (!args.store.write(next, state.core)) return { ok: false, reason: REASONS.notSaved };

@@ -25,6 +25,7 @@ export const REASONS = {
   tightenUnpause: 'Turning paid routes back on needs a new signed cap.',
   tightenNoChange: 'A tightening has to lower a limit or pause paid routes.',
   notNewer: 'A new signed cap has to be a higher revision than the current one.',
+  resetNeedsFresh: 'Resetting the spending record needs a new signed cap.',
   jobUnknown: 'That run is not an open reservation.',
   jobDuplicate: 'That run is already in the spending record.',
   needFigure: 'A settle needs the real cost, or estimated set to true.',
