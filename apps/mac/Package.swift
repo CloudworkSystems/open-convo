@@ -169,7 +169,11 @@ let package = Package(
         // proof's app, so the Sources gates still cover all product code.
         .executableTarget(
             name: "ClaudeConversationProofHost",
-            dependencies: ["DeskHost", "ParticipantAppWiring", "ParticipantCoordinator", "ParticipantProcess"],
+            // DeskHostWebKit, DeskWindowKit and TrueConvoIdentity for the real
+            // quit path's mode (PR 5): the app's Desk session, its page host
+            // and True Convo Test's identity, under the real NSApp.terminate.
+            dependencies: ["DeskHost", "DeskHostWebKit", "DeskWindowKit", "ParticipantAppWiring", "ParticipantCoordinator",
+                           "ParticipantProcess", "TrueConvoIdentity"],
             path: "Tests/ClaudeConversationProofHost"
         ),
         // Prints the shipping availability answer, run by a test with invented

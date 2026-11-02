@@ -22,6 +22,8 @@ import Foundation
 //
 //   ClaudeConversationProofHost <store-folder> <keys-folder> <supervisor> <cli> <run-folder>
 //
+// (`--real-quit` runs the real quit path's AppKit app instead: RealQuit.swift.)
+//
 // Prints `ready` once the Desk is open. Commands, one per line on stdin:
 //   approve            approves Anthropic in the store (section 21.4):
 //                      `approved <true|false>`
@@ -44,6 +46,12 @@ import Foundation
 //                      `retry refused <not-retryable|busy>`, or a new
 //                      prepared run with new ids and the same message, then
 //                      its start: `prepared <newRunId>`, `start <outcome> <reason|->`
+//   stop <runId>       the owner's Stop: `stop <reply JSON>`
+//   block              holds the store's next write before its fsync
+//                      (contract section 16, check 5): `armed`, then
+//                      `blocked` once a write is held there
+//   release            lets the held write go on: `released timeout=<bool>`
+//                      (true only if the 10 s cap freed it first)
 //   quit               the app's quit, as the Desk session does it:
 //                      `quit reachedBound=<bool>`, then exit 0
 // And on its own, after each pushed event's save has returned:
@@ -58,6 +66,8 @@ import Foundation
 @testable import ParticipantAppWiring
 import ParticipantCoordinator
 @testable import ParticipantProcess
+// The store's test entry, which takes the fsync hold below.
+@testable import DeskHost
 
 let outputLock = NSLock()
 func say(_ line: String) {
@@ -117,6 +127,34 @@ struct InventedPassingChecks: ClaudeLocalChecking {
 
     func evaluate() async -> ClaudeLocalCheckResult { Self.result }
     func evaluateFresh() async -> ClaudeLocalCheckResult { Self.result }
+}
+
+/// Contract section 16, check 5: holds the store's next write just before
+/// its fsync, inside the store's lock, until `release` (at most 10 s, so a
+/// broken proof cannot hang). Test-only, armed only by the `block` command.
+final class SyncHold: AtomicWriteFaults, @unchecked Sendable {
+    private let lock = NSLock()
+    private var armed = false
+    let release = DispatchSemaphore(value: 0)
+
+    func arm() {
+        lock.lock()
+        defer { lock.unlock() }
+        armed = true
+    }
+
+    func fault(before stage: AtomicWriteStage, target: URL) -> Int32? {
+        guard stage == .sync else { return nil }
+        lock.lock()
+        let holds = armed
+        armed = false
+        lock.unlock()
+        guard holds else { return nil }
+        say("blocked")
+        let timedOut = release.wait(timeout: .now() + 10) == .timedOut
+        say("released timeout=\(timedOut)")
+        return nil
+    }
 }
 
 /// macOS's owner check as an invented yes, answered at once.
@@ -370,6 +408,12 @@ actor Page {
         return await ask(.participantStart, payload)
     }
 
+    /// The owner's Stop, as the page sends it.
+    func stop(_ runId: String) async -> HostResponse {
+        await ask(.participantStop, ["workspaceHandle": .string(handle), "runId": .string(runId),
+                                     "sessionId": .string(Invented.sessionId)])
+    }
+
     func status(_ runId: String) async -> HostResponse {
         await ask(.participantStatus, ["workspaceHandle": .string(handle), "runId": .string(runId),
                                        "sessionId": .string(Invented.sessionId)])
@@ -432,6 +476,9 @@ func commandLines() -> AsyncStream<String> {
 }
 
 let arguments = CommandLine.arguments
+// The real quit path's AppKit app (RealQuit.swift): another mode of this
+// test-only program, so the proof's shared invented parts stay in one place.
+if arguments.count > 1, arguments[1] == "--real-quit" { runRealQuitProof(arguments) }
 guard arguments.count == 6 else { fail("usage: <store-folder> <keys-folder> <supervisor> <cli> <run-folder>") }
 let folder = URL(fileURLWithPath: arguments[1], isDirectory: true)
 let keys = InventedFileKeys(folder: URL(fileURLWithPath: arguments[2], isDirectory: true))
@@ -443,8 +490,12 @@ do { parent = try ParticipantsFolder.prepare(in: URL(fileURLWithPath: arguments[
 // pass of owed writes, any dispatch recovery, then the page's document and
 // connection. Section 17's owner reads section 21.4's approval from this
 // store, as `PaidUsageConfirmationOwner(checks:store:)` does in the app.
+let hold = SyncHold()
 let store: ProofStore
-do { store = try ProofStore(directory: folder, keys: keys, seed: .inventedRevisionZero()) } catch { fail("open: \(error)") }
+do {
+    store = try ProofStore(directory: folder, keys: keys, seed: .inventedRevisionZero(),
+                           ledgerCapacity: ProofStore.defaultLedgerCapacity, fileManager: .default, faults: hold)
+} catch { fail("open: \(error)") }
 let owner = PaidUsageConfirmationOwner(checks: InventedPassingChecks(), approval: store, authentication: InventedOwnerYes())
 let launcher = ProcessParticipantLauncher(supervisorPath: arguments[3], cliPath: arguments[4], workingParent: parent,
                                           expectedInit: Invented.expectedInit)
@@ -505,6 +556,13 @@ Task {
             do { say("prepared \(try await page.prepare())") } catch { fail("prepare: \(error)") }
         case ("start"?, 2):
             say(startLine(await page.start(words[1])))
+        case ("stop"?, 2):
+            say("stop " + String(decoding: await page.stop(words[1]).canonicalData(), as: UTF8.self))
+        case ("block"?, 1):
+            hold.arm()
+            say("armed")
+        case ("release"?, 1):
+            hold.release.signal()
         case ("status"?, 2):
             say("status " + String(decoding: await page.status(words[1]).canonicalData(), as: UTF8.self))
         case ("record"?, 1):
