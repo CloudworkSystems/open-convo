@@ -165,11 +165,15 @@ The effective cap is the lower of the signed cap and the tightening.
 The ledger file is `entries.jsonl` in the folder the caller names. Each
 line is one entry:
 
-`{ seq, kind, capabilityId, routeId, amount, estimated, jobId, at, prevHash, hash }`
+`{ seq, kind, capabilityId, routeId, amount, estimated, jobId, at, month, prevHash, hash }`
 
 `kind` is `reserve`, `settle`, `release`, `over-bill` or `checkpoint`. `hash` is the
 SHA-256 of the canonical entry without `hash`, and `prevHash` is the
-previous entry's hash (`null` on the first). The protected state's
+previous entry's hash (`null` on the first). `month` is the cap's calendar
+month when the entry was written (`YYYY-MM`). A later cap with another time
+zone does not move that month. Changing currency while the ledger has
+entries is refused; `resetLedger` with the new currency clears the record
+and installs that cap. The protected state's
 `ledgerHead` and `ledgerCount` must match the file. A missing file (when
 the state expects entries), a broken chain, a symlink in place of the
 file, or a file longer than the head stops paid runs and says the record
@@ -239,8 +243,10 @@ the cap does not name, is refused.
 reads the rate from the signed cap. The `rate` argument is ignored, so a
 caller cannot pass a friendlier one. `reserve` does not convert. It stores
 the cap-currency maximum the card already showed. A bill in another
-currency is converted the same way at settle; if it cannot be converted,
-the route is marked off and the reservation stays open.
+currency is converted the same way at settle, including when paid routes are
+paused, because the run already started. If it cannot be converted, the
+route is marked off and the reservation stays open. A pause still refuses
+a new reservation.
 
 ### Command
 

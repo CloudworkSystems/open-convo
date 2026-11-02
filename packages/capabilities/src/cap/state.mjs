@@ -4,7 +4,7 @@
 
 import { canonicalJson, isPlainObject, own } from './json.mjs';
 import { withSyncLock } from './lock.mjs';
-import { parseMoney } from './money.mjs';
+import { isCurrency, parseMoney } from './money.mjs';
 import { atomicWrite, fileKind, readNoFollow } from './files.mjs';
 
 const HEX = /^[0-9a-f]{64}$/;
@@ -17,6 +17,7 @@ export const EMPTY_CORE = {
   tightening: 'none',
   ledgerHead: null,
   ledgerCount: 0,
+  currency: null,
 };
 
 export function memoryStore(initial = EMPTY_CORE) {
@@ -108,7 +109,7 @@ function interpret(core, tighteningBroken = false) {
 /** @returns {{ core: object, tighteningBroken: boolean } | null} */
 function normalizeRead(parsed) {
   if (!isPlainObject(parsed)) return null;
-  const allowed = new Set(['capRevision', 'capHash', 'tightening', 'ledgerHead', 'ledgerCount']);
+  const allowed = new Set(['capRevision', 'capHash', 'tightening', 'ledgerHead', 'ledgerCount', 'currency']);
   for (const key of Object.keys(parsed)) {
     if (!allowed.has(key)) return null;
   }
@@ -127,6 +128,10 @@ function normalizeRead(parsed) {
     ledgerHead: parsed.ledgerHead,
     ledgerCount: parsed.ledgerCount,
   };
+  if (own(parsed, 'currency')) {
+    if (!(parsed.currency === null || isCurrency(parsed.currency))) return null;
+    core.currency = parsed.currency;
+  }
   const hasTightening = own(parsed, 'tightening');
   if (hasTightening) core.tightening = parsed.tightening;
   return { core, tighteningBroken: !hasTightening || tighteningShape(parsed.tightening) === 'broken' };

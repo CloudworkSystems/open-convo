@@ -19,6 +19,7 @@ export const REASONS = {
   ledgerFull: 'The spending record for this month is full, so this paid run was not started.',
   ledgerFolder: 'The spending record folder is missing, so paid routes stay off.',
   currencyOff: 'This price is in another currency, and conversion is off.',
+  currencyReset: 'Changing currency needs a reset of the spending record.',
   rateStale: 'The conversion rate is more than a day old, so the paid route stays off.',
   rateBad: 'The conversion rate does not check out, so the paid route stays off.',
   overBill: 'The bill was higher than the approved maximum, so this route is off until you look.',

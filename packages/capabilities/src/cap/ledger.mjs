@@ -187,6 +187,7 @@ function reserveEntry(loaded, args) {
     estimated: false,
     jobId: args.jobId,
     at: now,
+    month,
   });
   return { ok: true, entry, result: { ok: true, jobId: args.jobId, amount, seq: entry.seq } };
 }
@@ -206,6 +207,7 @@ function settleEntry(loaded, args) {
     estimated: quote.estimated,
     jobId: args.jobId,
     at: loaded.now,
+    month: open.job.reserve.month,
   });
   return {
     ok: true,
@@ -237,6 +239,7 @@ function settleAmount(loaded, args) {
     publicKey: args.publicKey,
     protectedState: loaded.state,
     now: loaded.now,
+    bookkeeping: true,
   });
   if (!converted.ok) return { ok: false, reason: converted.reason, routeOff: true };
   return { ok: true, estimated: false, micros: parseDecimal(converted.capAmount.amount), bill: converted.quote };
@@ -253,6 +256,7 @@ function releaseEntry(loaded, args) {
     estimated: false,
     jobId: args.jobId,
     at: loaded.now,
+    month: open.job.reserve.month,
   });
   return { ok: true, entry, result: { ok: true, jobId: args.jobId, amount: entry.amount } };
 }
@@ -283,6 +287,7 @@ function resetEntries(dir, args) {
     tightening: 'none',
     ledgerHead: null,
     ledgerCount: 0,
+    currency: signed.cap.currency,
   };
   // Confirm the new head before erasing the file. A lost compare-and-swap
   // leaves the history where it was.
@@ -360,6 +365,7 @@ function makeEntry(state, fields) {
     estimated: fields.estimated,
     jobId: fields.jobId,
     at: fields.at,
+    month: fields.month,
     prevHash: state.ledgerHead,
   };
   entry.hash = entryHash(entry);
@@ -376,6 +382,7 @@ function fieldsOf(entry) {
     estimated: entry.estimated,
     jobId: entry.jobId,
     at: entry.at,
+    month: entry.month,
   };
 }
 
@@ -390,15 +397,14 @@ function compactClosedMonths(entries, currentMonth, timeZone) {
   const kept = [];
   for (const entry of entries) {
     if (entry.kind !== 'checkpoint') continue;
-    const month = calendarMonth(entry.at, timeZone);
-    if (!month || month >= currentMonth) {
+    if (!entry.month || entry.month >= currentMonth) {
       kept.push(entry);
       continue;
     }
-    addTotal(totals, month, entry);
+    addTotal(totals, entry.month, entry);
   }
   for (const job of jobs.jobs.values()) {
-    const month = calendarMonth(job.reserve.at, timeZone);
+    const month = job.reserve.month;
     if (!month || month >= currentMonth || !job.terminal) {
       kept.push(job.reserve);
       if (job.terminal) kept.push(job.terminal);
@@ -420,6 +426,7 @@ function compactClosedMonths(entries, currentMonth, timeZone) {
       estimated: false,
       jobId: CHECKPOINT_JOB,
       at: row.at,
+      month: row.month,
       micros: row.micros,
     }));
   kept.sort((left, right) => left.seq - right.seq);
@@ -454,6 +461,7 @@ function rechain(entries) {
       estimated: entry.estimated,
       jobId: entry.jobId,
       at: entry.at,
+      month: entry.month,
       prevHash: previous,
       micros: entry.micros,
     };
@@ -489,6 +497,7 @@ function publicEntry(entry) {
     estimated: entry.estimated,
     jobId: entry.jobId,
     at: entry.at,
+    month: entry.month,
     prevHash: entry.prevHash,
     hash: entry.hash,
   };
@@ -504,6 +513,7 @@ function entryHash(entry) {
     estimated: entry.estimated,
     jobId: entry.jobId,
     at: entry.at,
+    month: entry.month,
     prevHash: entry.prevHash,
   }), 'utf8'));
 }
@@ -573,7 +583,7 @@ function readEntries(dir) {
 
 function parseStoredEntry(value) {
   if (!isPlainObject(value)) return null;
-  const keys = ['seq', 'kind', 'capabilityId', 'routeId', 'amount', 'estimated', 'jobId', 'at', 'prevHash', 'hash'];
+  const keys = ['seq', 'kind', 'capabilityId', 'routeId', 'amount', 'estimated', 'jobId', 'at', 'month', 'prevHash', 'hash'];
   if (Object.keys(value).length !== keys.length || keys.some((key) => !own(value, key))) return null;
   if (!Number.isSafeInteger(value.seq) || value.seq < 1) return null;
   if (!KINDS.has(value.kind)) return null;
@@ -583,6 +593,7 @@ function parseStoredEntry(value) {
   if (typeof value.estimated !== 'boolean') return null;
   if ((value.kind === 'reserve' || value.kind === 'release' || value.kind === 'over-bill' || value.kind === 'checkpoint') && value.estimated) return null;
   if (!instantText(value.at)) return null;
+  if (typeof value.month !== 'string' || !/^\d{4}-\d{2}$/.test(value.month)) return null;
   if (!(value.prevHash === null || (typeof value.prevHash === 'string' && HEX.test(value.prevHash)))) return null;
   if (typeof value.hash !== 'string' || !HEX.test(value.hash)) return null;
   const entry = {
@@ -594,6 +605,7 @@ function parseStoredEntry(value) {
     estimated: value.estimated,
     jobId: value.jobId,
     at: value.at,
+    month: value.month,
     prevHash: value.prevHash,
     hash: value.hash,
     micros: money.micros,
@@ -632,7 +644,7 @@ function spendParts(jobs, checkpoints, month, timeZone, { capabilityFilter, rout
   let settledOther = 0n;
   for (const job of jobs.values()) {
     if (capabilityFilter && job.reserve.capabilityId !== capabilityFilter) continue;
-    if (calendarMonth(job.reserve.at, timeZone) !== month) continue;
+    if (job.reserve.month !== month) continue;
     const sameRoute = job.reserve.capabilityId === routeCapability && job.reserve.routeId === routeId;
     if (!job.terminal) reserved += job.reserve.micros;
     else if (job.terminal.kind === 'release') continue;
@@ -651,13 +663,13 @@ function figuresFor(jobs, checkpoints, month, timeZone, currency, capabilityId =
   let spentMicros = 0n;
   for (const job of jobs.values()) {
     if (capabilityId && job.reserve.capabilityId !== capabilityId) continue;
-    if (calendarMonth(job.reserve.at, timeZone) !== month) continue;
+    if (job.reserve.month !== month) continue;
     if (!job.terminal) reservedMicros += job.reserve.micros;
     else if (job.terminal.kind !== 'release') spentMicros += job.terminal.micros;
   }
   for (const checkpoint of checkpoints) {
     if (capabilityId && checkpoint.capabilityId !== capabilityId) continue;
-    if (calendarMonth(checkpoint.at, timeZone) !== month) continue;
+    if (checkpoint.month !== month) continue;
     spentMicros += checkpoint.micros;
   }
   return {
@@ -670,7 +682,7 @@ function figuresFor(jobs, checkpoints, month, timeZone, currency, capabilityId =
 
 function addCheckpoint(checkpoint, month, timeZone, capabilityFilter, routeCapability, routeId, add) {
   if (capabilityFilter && checkpoint.capabilityId !== capabilityFilter) return;
-  if (calendarMonth(checkpoint.at, timeZone) !== month) return;
+  if (checkpoint.month !== month) return;
   const same = checkpoint.capabilityId === routeCapability && checkpoint.routeId === routeId;
   add(same, checkpoint.micros);
 }

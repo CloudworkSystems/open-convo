@@ -866,6 +866,85 @@ test('a write that would make the ledger unreadable is refused before it is save
   assert.equal(result.ok, true, result.error);
 });
 
+test('a new time zone does not move spend, and a currency change can still be reset', async () => {
+  const utc = cap({
+    timeZone: 'UTC',
+    perRun: { amount: '10', currency: 'USD' },
+    monthlyByCapability: { amount: '100', currency: 'USD' },
+    monthlyAll: { amount: '10', currency: 'USD' },
+  });
+  const box = world(utc);
+  try {
+    const booked = '2026-11-01T00:30:00.000Z';
+    assert.equal((await box.reserve({ jobId: 'nov', max: { amount: '10', currency: 'USD' }, now: booked })).ok, true);
+    const la = { ...utc, revision: 2, timeZone: 'America/Los_Angeles' };
+    const laSig = signRecord(la, box.keys.privateKey);
+    assert.equal(acceptCap(box.store, la, laSig, box.publicKey).ok, true);
+    const november = '2026-11-15T20:00:00.000Z';
+    const spent = await box.spent({ record: la, signature: laSig, now: november });
+    assert.equal(spent.ok, true, spent.reason);
+    assert.equal(spent.counted.amount, '10');
+    const again = await box.reserve({
+      record: la,
+      signature: laSig,
+      jobId: 'again',
+      max: { amount: '10', currency: 'USD' },
+      now: november,
+    });
+    assert.equal(again.reason, REASONS.monthAll);
+
+    const eur = {
+      ...la,
+      revision: 3,
+      currency: 'EUR',
+      perRun: { amount: '10', currency: 'EUR' },
+      monthlyByCapability: { amount: '100', currency: 'EUR' },
+      monthlyAll: { amount: '10', currency: 'EUR' },
+    };
+    const eurSig = signRecord(eur, box.keys.privateKey);
+    assert.equal(acceptCap(box.store, eur, eurSig, box.publicKey).reason, REASONS.currencyReset);
+    assert.equal((await box.spent({ record: la, signature: laSig, now: november })).counted.amount, '10');
+    assert.equal((await resetLedger({ ...box, record: eur, signature: eurSig })).ok, true);
+    const cleared = await box.spent({ record: eur, signature: eurSig, now: november });
+    assert.equal(cleared.ok, true, cleared.reason);
+    assert.equal(cleared.counted.amount, '0');
+    assert.equal((await box.reserve({
+      record: eur,
+      signature: eurSig,
+      jobId: 'fresh',
+      max: { amount: '1', currency: 'EUR' },
+      now: november,
+    })).ok, true);
+  } finally {
+    box.close();
+  }
+});
+
+test('a foreign bill is recorded even when paid runs are paused', async () => {
+  const record = cap({
+    perRun: { amount: '10', currency: 'USD' },
+    monthlyByCapability: { amount: '10', currency: 'USD' },
+    monthlyAll: { amount: '10', currency: 'USD' },
+    conversion: { currency: 'EUR', rate: '1', margin: '0', asOf: NOW },
+  });
+  const box = world(record);
+  try {
+    assert.equal((await box.reserve({ jobId: 'flight', max: { amount: '1', currency: 'USD' } })).ok, true);
+    assert.equal(tighten(box.store, { paused: true }, box.record, box.signature, box.publicKey).ok, true);
+    assert.equal((await box.reserve({ jobId: 'later', max: { amount: '1', currency: 'USD' } })).reason, REASONS.paused);
+    const settled = await box.settle({ jobId: 'flight', actual: { amount: '2', currency: 'EUR' } });
+    assert.equal(settled.ok, true, settled.reason);
+    assert.equal(settled.routeOff, true);
+    assert.equal(settled.amount.amount, '2');
+    assert.equal(settled.amount.currency, 'USD');
+    const spent = await box.spent();
+    assert.equal(spent.spent.amount, '2');
+    assert.equal(spent.reserved.amount, '0');
+  } finally {
+    box.close();
+  }
+});
+
 test('the show command says why a damaged ledger stopped paid routes', async () => {
   const box = world();
   try {

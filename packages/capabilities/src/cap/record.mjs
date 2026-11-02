@@ -49,12 +49,20 @@ export function acceptCap(store, record, signature, publicKey) {
   const signed = signedCap(record, signature, publicKey);
   if (!signed.ok) return signed;
   if (signed.revision <= state.capRevision) return { ok: false, reason: REASONS.notNewer };
+  // A currency change would make the existing entries fail their check, and
+  // this revision would then be too old to reset them. Refuse it here so the
+  // current cap keeps working. resetLedger installs the new currency and
+  // clears the ledger in one step.
+  if (state.ledgerCount > 0 && state.core.currency && signed.cap.currency !== state.core.currency) {
+    return { ok: false, reason: REASONS.currencyReset };
+  }
   const next = {
     capRevision: signed.revision,
     capHash: signed.hash,
     tightening: 'none',
     ledgerHead: state.ledgerHead,
     ledgerCount: state.ledgerCount,
+    currency: signed.cap.currency,
   };
   if (!store.write(next, state.core)) return { ok: false, reason: REASONS.protectedBroken };
   return { ok: true, cap: verifyCap(record, signature, publicKey, store.read()) };
@@ -79,13 +87,15 @@ export function tighten(store, change, record, signature, publicKey) {
   return { ok: true, cap: verifyCap(record, signature, publicKey, store.read()) };
 }
 
-export function convertQuote({ quote, record, signature, publicKey, protectedState, now, rate }) {
+export function convertQuote({ quote, record, signature, publicKey, protectedState, now, rate, bookkeeping = false }) {
   // `rate` is never read. A caller or a model cannot pass a friendlier rate
   // than the one the person signed.
   void rate;
   const cap = verifyCap(record, signature, publicKey, protectedState);
   if (!cap.ok) return { ok: false, reason: cap.reason, rateIgnored: rate !== undefined };
-  if (cap.paused) return { ok: false, reason: REASONS.paused, rateIgnored: rate !== undefined };
+    // Settlement is bookkeeping for a run that already started, so a pause
+  // blocks a new quote but not recording a bill that is already due.
+  if (cap.paused && !bookkeeping) return { ok: false, reason: REASONS.paused, rateIgnored: rate !== undefined };
   const money = parseMoney(quote);
   if (!money.ok) return { ok: false, reason: REASONS.badAmount, rateIgnored: rate !== undefined };
   if (!instantText(now)) return { ok: false, reason: REASONS.badNow, rateIgnored: rate !== undefined };
