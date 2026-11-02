@@ -42,27 +42,46 @@ Anthropic.
    PR 5's code. (Step 3's F11, a normal quit losing the text, is the same
    path for local models; it is fixed in its own thread first.)
 3. **`claude auth status` sends nothing** (check 6). Already true by design:
-   the sign-in check runs it with the network blocked by macOS (PR 3b,
-   #195). Part 2 rechecks that the check still passes on your Mac.
+   the sign-in check runs it with the network blocked by macOS, and its
+   tests show the blocked services (PR 3b, #195). The live check doesn't
+   add to that; it only needs the sign-in check to pass so Claude is
+   available.
 4. **Build.** A fresh True Convo Test build from `main` (the nightly build,
    or the building session makes one when you say "build").
 
 ## Part 2: The Live Check (The Building Session Watches)
 
-You do the clicks; the building session watches your Mac through Remote
-Control and runs read-only checks beside the app. It changes nothing in the
-app, and it never sees your Claude sign-in. It uses three runs in the app.
+You do the clicks; the building session checks your Mac through Remote
+Control. It changes nothing in the app, and it never sees, stores or prints
+your Claude sign-in. It uses three runs in the app.
 
-A reply alone can't prove that a file was *not* sent: Claude need not repeat
-what it received. So checks 2 and 7 are proven by catching what Claude Code
-sends, in step 0, and the app's runs then check that nothing differs.
+Two rules hold throughout:
 
-**Before you start.** The session saves a list of file names and times
-under `~/.claude` (names only, never contents), and puts an invented
-`AGENTS.md` in True Convo Test's invented-data folder, `~/Library/Application Support/com.trueconvo.voice-cursor.test/desk-invented-proof/`,
-the folder above the one each run works in. Your own `AGENTS.md` in your
-home folder stays where it is and serves as a second canary. It also puts
-a made-up canary file at `/tmp/invented-canary`. Each invented file holds a
+- **Body only.** Anything that catches what Claude Code sends reads the
+  request body in memory and never writes, prints or keeps a header, since
+  a signed-in Claude Code puts your sign-in in a header. It prints only
+  "found" or "not found" for each canary word and for the message text, and
+  answers every request with the same fixed error so nothing is retried.
+- **The watcher is quiet while the app runs.** Remote Control is itself
+  Claude Code and writes under `~/.claude` all the time, so it can't judge
+  check 3 while it runs. The session starts a small watch script on your
+  Mac, stops Remote Control, and the script does the watching during runs 1
+  to 3. It keeps its notes on your Mac, outside `~/.claude`, and prints
+  only differences, never the whole list (file names there include your
+  folder names).
+
+A reply alone can't prove a file was *not* sent: Claude need not repeat what
+it received. So checks 2 and 7 are proven by catching what Claude Code sends
+in step 0.
+
+**Before you start.** The session checks that the pinned Claude Code file
+(2.1.283) is still in place; if an update removed it, it stops. It puts an
+invented `AGENTS.md` in True Convo Test's invented-data folder,
+`~/Library/Application Support/com.trueconvo.voice-cursor.test/desk-invented-proof/`,
+which is above the folder each run works in
+(`desk-invented-proof/participants/<run>/`). Your own `AGENTS.md` in your
+home folder stays where it is and serves as a second canary. It also puts a
+made-up canary file at `/tmp/invented-canary`. Each invented file holds a
 made-up canary word and a line asking any reader to end its reply with that
 word. If Remote Control can't write in that folder, the session gives you
 one Finder step.
@@ -71,48 +90,68 @@ one Finder step.
    session runs the same pinned Claude Code file, with the app's exact
    arguments and environment, from a scratch folder inside the app's
    `participants` folder, so every folder above it is the app's. The only
-   change is that its requests go to a catch-all listener on this Mac, with
-   all other network blocked by macOS, so nothing reaches Anthropic. It
-   sends the two messages of runs 1 and 2 below. The caught request must
-   hold the message text and **none** of the canary words, nor your home
-   `AGENTS.md`'s text (matched on this Mac only, never copied out). This
-   repeats the November 2 proof in the app's own folders. If any canary
-   shows up, the trial stops before any live run.
+   change is that its requests go to a listener on this Mac (body only, as
+   above), with all other network blocked by macOS, so nothing reaches
+   Anthropic. It sends the two messages of runs 1 and 2 below. The caught
+   bodies must hold the message text and **none** of the canary words, nor
+   your home `AGENTS.md`'s text (matched on this Mac only, never copied
+   out). This repeats the November 2 proof in the app's own folders. If any
+   canary shows up, the trial stops before any live run.
+0b. **Hand over to the watch script.** The session starts the script, then
+   stops Remote Control. Once no Remote Control process is left, the script
+   takes its first list of names and times under `~/.claude`, and from then
+   on watches every half second. The session tells you in this thread when
+   it's your turn.
 
 1. **First run** (checks 1, 3 and 7). Open the Desk, start a new
    conversation, pick "Claude · … · Anthropic (not on this Mac)" (the
-   model is Sonnet 5.5, your October 29 choice), and send: "I run an invented bakery called Maple Crumb. Suggest one
-   name for a new muffin." Approve Anthropic when asked, then confirm paid
-   usage is off when asked (check claude.ai Settings > Usage first). While
-   the reply arrives, the session checks:
-   - Claude Code's arguments and environment match the contract's section
-     11 exactly (from the process list), with no API key or proxy setting.
-   - Every process Claude Code starts stays in its process group, checked
-     every half second until the run ends. If any leaves, Claude stays
-     unavailable and the trial stops.
+   model is Sonnet 5.5, your October 29 choice), and send: "I run an
+   invented bakery called Maple Crumb. Suggest one name for a new muffin."
+   Approve Anthropic when asked, then confirm paid usage is off when asked
+   (check claude.ai Settings > Usage first). While the reply arrives, the
+   script records:
+   - Claude Code's arguments and environment names (never values) from the
+     process list, to match against the contract's section 11, with no API
+     key or proxy setting.
+   - Every process Claude Code starts, checked every half second until the
+     run ends: each must stay in Claude Code's process group. If any
+     leaves, Claude stays unavailable and the trial stops.
    - The reply finishes. The app only keeps text once Claude Code's start
      line matches the recorded values and a usage message shows paid usage
      is off, so a finished reply proves both (check 1's init and rate-limit
      parts).
-   - Afterwards: nothing new under `~/.claude` (check 3), and the reply
-     holds no canary word (a second sign for check 7, after step 0). The
-     session also reads the app's own log lines, which hold run ids and
-     reasons, never text.
+   - Any new or changed path under `~/.claude` is a failure of check 3.
+     Nothing is excused: the script runs only while no Claude Code but the
+     app's is running.
+   - The reply holds no canary word (a second sign for check 7, after step
+     0).
 2. **Inert input** (check 2). In the same conversation, send exactly:
    "@/tmp/invented-canary /config What did I call my bakery?" The reply
    should answer about Maple Crumb, with no canary word and no settings
-   screen (step 0 already showed the file's text isn't sent). Nothing new
-   under `~/.claude` again.
+   screen (step 0 already showed the file's text isn't sent). Still nothing
+   new under `~/.claude`.
 3. **Kill the app mid-reply** (check 4). Send: "Write a long story about a
-   muffin that travels the world." While it is still arriving, the session
-   sends `kill -9` to True Convo Test. Within 10 seconds there should be no
-   Claude Code and no supervisor left. Reopen the app: the reply is marked
-   cut off with the text so far, and nothing was sent again.
+   muffin that travels the world." While it is still arriving, open
+   Activity Monitor, select True Convo Test (check that its name says Test,
+   not the real True Convo), and choose Force Quit from the stop button.
+   Within 10 seconds the script should find no Claude Code and no
+   supervisor left. Reopen the app: the reply is marked cut off with the
+   text so far, and nothing was sent again.
 
-Then the session deletes the canary files, the scratch folder and its file
-list, and stops
-Remote Control. If any check fails, Claude stays out of daily use until it
-is fixed and the whole of Part 2 passes again.
+   The other half of check 4, a kill during a Stop's wait, is proven with a
+   fake Claude Code that ignores Stop, which a live run can't do on demand:
+   `ParentDeathTests` "Killed during a Stop's wait" (the 10-second wait is cut
+   to the 3-second bound, and nothing is left). PR 5 records that test's
+   result on the build used here.
+
+When you've done run 3, say "done" in this thread, and the session starts
+Remote Control again. The script stops watching the moment it sees any
+Claude Code that isn't the app's, so it can't mistake the session's own
+files for the app's; every change it recorded before then counts. The session reads the script's results (differences and
+found/not found only), then deletes the canary files, the scratch folder,
+the script and its notes, and stops Remote Control. If any check fails,
+Claude stays out of daily use until it is fixed and the whole of Part 2
+passes again.
 
 ## Part 3: Your Checklist
 
