@@ -172,17 +172,21 @@ Vendor harnesses are used only where a subscription requires its own program.
 
 ## Foreign Agents Start at Zero Trust (Owner, October 25 and 30)
 
-A **foreign agent** is an agent the owner hasn't taken on as one of his own:
-it lives in another company's agent product, with that product's own memory,
-tools and loop, which True Convo neither runs nor can inspect. Meta's Muse is
-the first case: the owner's Muse agent, Cam. Using another company's model is
-not enough to make an agent foreign. The trusted builders in AGENTS.md "Who
-Does What" (Claude, Codex, GrokBot) run on outside models too, but they work
-under the build and review loop there, and the work below goes to them.
-Profiles the owner sets up in True Convo also start with nothing, and get
-only what he grants (`computer-use.md`). The owner's rule (October 25): zero trust is the starting baseline
-for any unknown foreign model or agent inside True Convo. Other notes point
-here for it (`security.md`, `prime-agent.md`, `computer-use.md`,
+A **trusted builder** is an agent listed in AGENTS.md "Who Does What": it was
+added there through a pull request the owner approved, and every change it
+makes goes through the build and review loop. Today that is Claude, Codex and
+GrokBot. A **foreign agent** is any other agent that lives in another
+company's agent product, with that product's own memory, tools and loop, which
+True Convo neither runs nor can inspect, even one the owner set up himself.
+Meta's Muse is the first case: the owner's Muse agent, Cam. The test is the
+listing, not the model: trusted builders run on outside models too, and an
+agent becomes one only through that same approved pull request. The zero-trust
+baseline and the no-code rule below apply to foreign agents, never to trusted
+builders, and the work below goes to the trusted builders. Profiles the owner
+sets up in True Convo also start with nothing, and get only what he grants
+(`computer-use.md`). The owner's rule (October 25): zero trust is the starting
+baseline for any unknown foreign model or agent inside True Convo. Other notes
+point here for it (`security.md`, `prime-agent.md`, `computer-use.md`,
 `verified-owner-yes.md`, `back-end-and-agent-hosts.md`).
 
 The baseline:
@@ -270,7 +274,7 @@ parallel, as Claude Code does.
   From Scion"), with its own space and caps. Helpers started inside a Pi run
   appear in neither. Several local helpers at once would also overload an 8 to
   16 GB Mac. So they stay off. A helper that can't be seen and stopped there
-doesn't run.
+  doesn't run.
 - Both are third-party code running inside Pi, so each passes the install
   gate and the action check in `portable-capability-layer.md` first.
 
