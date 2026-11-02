@@ -80,8 +80,14 @@ test('off means off: turning sharing off removes the note, edited or not, and a 
   assert.equal(off.drafts[f.sessionId], 'Keep this.');
   assert.equal(off.sessions[0].reactionSharing, undefined);
   assert.equal(reactionsNoteSendHold(off.sessions[0], off.drafts[f.sessionId]), undefined);
+  // Edits to the start of the note, or a line break inside it, still let Off remove it.
+  for (const text of ['[My reactions:❤️ on that reply]\n\nKeep this.', '[My reactions: ❤️ on\nthat reply]\n\nKeep this.']) {
+    const changed = applyCommand(state, { type: 'set-draft', sessionId: f.sessionId, text }, f.options);
+    const changedOff = applyCommand(changed, { type: 'set-reaction-sharing', sessionId: f.sessionId, on: false }, f.options);
+    assert.equal(changedOff.drafts[f.sessionId], 'Keep this.', text);
+  }
   // A note whose closing bracket was deleted can't be found whole: Send is held.
-  const broken = applyCommand(state, { type: 'set-draft', sessionId: f.sessionId, text: '[My reactions: ❤️ on your reply\nKeep this.' }, f.options);
+  const broken = applyCommand(state, { type: 'set-draft', sessionId: f.sessionId, text: '[My reactions: ❤️ on your reply\nKeep this' }, f.options);
   const brokenOff = applyCommand(broken, { type: 'set-reaction-sharing', sessionId: f.sessionId, on: false }, f.options);
   assert.equal(reactionsNoteSendHold(brokenOff.sessions[0], brokenOff.drafts[f.sessionId]),
     'This draft still has a reactions note. Delete it or turn sharing back on.');

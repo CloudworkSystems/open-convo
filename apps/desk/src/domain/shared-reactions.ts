@@ -32,10 +32,12 @@ export function reactionSharingOn(session: Pick<Session, 'participantChoice' | '
 
 /** The note block at the top of a draft: the block, then the rest. Null when there is none or it is broken. */
 export function splitReactionsNote(draft: string): { note: string; rest: string } | null {
-  if (!draft.startsWith(REACTIONS_NOTE_PREFIX)) return null;
-  const end = draft.indexOf(']', REACTIONS_NOTE_PREFIX.length);
-  const newline = draft.indexOf('\n');
-  if (end < 0 || (newline >= 0 && newline < end)) return null;
+  // Any closed block at the top that starts with the marker, however he
+  // edited it inside, so Off still removes it (rule 8). Only an unclosed
+  // block can't be found whole.
+  if (!draft.startsWith(NOTE_MARKER)) return null;
+  const end = draft.indexOf(']', NOTE_MARKER.length);
+  if (end < 0) return null;
   const note = draft.slice(0, end + 1);
   return { note, rest: draft.slice(end + 1).replace(/^\n{1,2}/, '') };
 }
