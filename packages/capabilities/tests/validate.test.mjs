@@ -222,5 +222,5 @@ test('a route host is written so the risk review holds it for the owner', async 
   route(record, 'own-key-example').hosts = ['https://api.example.com', 'https://upload.example.com'];
   assert.deepEqual(validateCapability(record), { ok: true, errors: [] });
   const found = JSON.stringify(record, null, 2).split('\n').flatMap((line) => readHosts(line).hosts);
-  assert.ok(found.includes('api.example.com') && found.includes('upload.example.com'), JSON.stringify(found));
+  assert.deepEqual([...new Set(found)].filter((h) => h.startsWith('api.') || h.startsWith('upload.')).sort(), ['api.example.com', 'upload.example.com']);
 });
