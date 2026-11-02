@@ -9,7 +9,8 @@
   },
   "scripts": {
     "test": "node --test test/*.test.js",
-    "start": "node src/node-server.js"
+    "start": "node src/node-server.js",
+    "docs": "node scripts/docs-page.mjs"
   },
   "devDependencies": {
     "@seriousme/openapi-schema-validator": "2.11.0",

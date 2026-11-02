@@ -25,6 +25,9 @@ separate OK (the plan's "Before It Goes Live").
   for the one staging scan. Neither sets routes or custom domains.
 - `scan/`: the OWASP ZAP API scan (`zap-scan.mjs`, needs Docker) and its ZAP
   hooks, which add the recorded MCP exchange.
+- `scripts/docs-page.mjs`: generates the REST and MCP tables on the public
+  docs page, `site/api.html`, from `openapi.json` and the server's tools.
+  After changing either, run `npm run docs`; a test fails until you do.
 
 ## Run it
 
@@ -34,6 +37,7 @@ OpenAPI validator) are pinned in `package-lock.json`.
 ```sh
 npm ci --ignore-scripts
 npm test
+npm run docs   # regenerate the tables in site/api.html
 npm start   # http://127.0.0.1:8787/v1/about
 node scan/zap-scan.mjs http://127.0.0.1:8787   # with the server running
 ```
