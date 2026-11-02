@@ -12,7 +12,7 @@ import { Navigation, type SessionRevealRequest } from './Navigation';
 import type { ParticipantChoice } from '../domain/participant-choices';
 import type { ParticipantIdentity } from '../domain/conversation-run-types';
 import type { LocalCatalogView } from '../domain/local-participant';
-import { Conversation, type ComposerStop } from './Conversation';
+import { Conversation, type ComposerStop, type ReactionSharingControl } from './Conversation';
 import { GoalPanel } from './GoalPanel';
 import { Canvas, Atlas } from './NexusViews';
 import { RailMap } from './RailMap';
@@ -58,6 +58,7 @@ export interface DeskFoundationProps {
   onParticipantSelect?: (sessionId: string, participant: ParticipantIdentity) => void;
   participantBusy?: boolean; participantSendUnavailable?: boolean; participantSendBlockedReason?: string;
   participantStop?: ComposerStop; participantSendWaitingReason?: string; participantSendDestination?: string;
+  reactionSharing?: ReactionSharingControl;
   onDomainPurposeChange: (goalId: string, purpose: string, expectedPurpose?: string) => void;
   onGoalDraftChange: (goalId: string, field: GoalDraftField, value: string | null) => void;
   onWorkCreate: (goalId: string, title: string) => void;
@@ -422,6 +423,7 @@ export function DeskFoundation(props: DeskFoundationProps) {
                 participantStop={props.participantStop} participantSendWaitingReason={props.participantSendWaitingReason}
                 participantSendDestination={props.participantSendDestination} sideChatAnchor={sideChatAnchor}
                 onStart={session ? undefined : (draft) => props.onSessionStart(goal?.id ?? null, draft)}
+                reactionSharing={props.reactionSharing}
                 startHeading={session ? undefined : <div className="navigator-empty">
                   <span className="eyebrow">NEW SESSION IN</span>
                   <div className="navigator-domain-heading"><FolderIcon name={goal?.icon} size={16} /><h2>{goal?.title ?? 'Ungrouped sessions'}</h2>

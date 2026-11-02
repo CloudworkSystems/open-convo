@@ -147,3 +147,26 @@
   opacity: 0.6;
   cursor: default;
 }
+
+/* Shared reactions: the per-chat switch above the message box. */
+.adjustable-composer .composer-reaction-sharing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 2px 5px;
+  color: var(--tca-text-body);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.adjustable-composer .composer-reaction-sharing label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.adjustable-composer .composer-reaction-sharing-reason,
+.adjustable-composer .composer-reaction-sharing-notice:not(:empty) {
+  color: var(--tca-text-muted, var(--tca-text-body));
+}

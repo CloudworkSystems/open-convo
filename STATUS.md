@@ -89,6 +89,12 @@ CI and for staging, and OpenAPI 3.1 validation. Not live: next come the
 owner's Cloudflare setup, the staging scan, and, at go-live, the docs page
 and the privacy policy section, then his OK to go live.
 
+**Capability contract, cap and media** (Creator, standalone parts 1 to 3),
+built by Claude. Plan:
+[docs/plans/media-generation-capability.md](docs/plans/media-generation-capability.md)
+(#256). Part 1, in review: the `capability.json` contract and validator in
+`packages/capabilities`. Next: part 2, the signed cap and ledger.
+
 **Site Engine, standalone first slice**, built by an outside builder (GrokBot
 builds, Codex reviews). Plan:
 [docs/plans/site-engine-standalone.md](docs/plans/site-engine-standalone.md).
@@ -144,6 +150,8 @@ reviews. Plan approved (merged as #127 on October 24):
 
 **Time mirror** (Personal, the observability layer's first slice; owner asked October 29 to start it ahead of the core order), Codex team A builds the library and then a Claude building session the Mac command (owner's pick, November 1), GrokBot or a fresh Claude reviews; plan approved by the owner on October 29 (`docs/plans/time-mirror.md`): RescueTime daily totals drawn as habit-grid heat maps on the Mac, nothing new leaving the device.
 
+**Prime agent routing engine** (Personal, step 2 of the prime agent plan), Codex team B builds, GrokBot or a fresh Claude reviews; plan approved by the owner on November 1 (`docs/plans/prime-agent-routing.md`): the wait-for-a-yes and hand-off rules as a standalone package in `packages/prime-routing/`, with no model calls, network or storage. Build issue open.
+
 **Public website (trueconvo.com)**, Claude builds, Codex reviews; a home page (with two Desk preview screenshots) and a plain-language privacy policy in `site/`, published by `.github/workflows/pages.yml` from `main` (#153, October 25). For Meta's developer early-access application and regular visitors. The owner turned on Pages and set the custom domain, and the site is published at trueconvo.com (latest deploy October 26).
 
 **Security** (all work; owner asked October 28): plan
@@ -163,7 +171,7 @@ Desk "Followed" view each need a plan revision.
 
 **Desk message actions** (Desk; owner asked November 1), Claude builds, GrokBot or a fresh Claude reviews: plan
 [docs/plans/desk-message-actions.md](docs/plans/desk-message-actions.md), approved by the owner November 1; PR 2 (action row, Copy, ratings, reactions) merged (#224); PR 3 (Reply) merged (#245); PR 4 (side chat, opens in place) merged (#247); PR 5 (the full emoji set, added on his ask) merged (#248); his trial in True Convo Test is next. Copy,
-thumbs up and down, reactions, reply with a quote, a side chat and any standard emoji on each message; ratings and reactions stay on the Mac. Next: [docs/plans/desk-shared-reactions.md](docs/plans/desk-shared-reactions.md), a draft plan for agents to see his reactions and react back (his pick, November 1), waiting for his yes.
+thumbs up and down, reactions, reply with a quote, a side chat and any standard emoji on each message; ratings and reactions stay on the Mac. Next: [docs/plans/desk-shared-reactions.md](docs/plans/desk-shared-reactions.md), approved November 2 (#249): agents see his reactions, with a per-chat switch, and react back. PR 2 (the switch and the reactions note) in review; PR 3 (agents react back) next.
 
 **Desk opens on a blank session** (Desk; owner asked November 2), Claude builds, GrokBot or a fresh Claude reviews; no plan (a small screen change he asked to build directly). A newly opened Desk shows the session list (unless he has chosen to hide it) and a fresh blank session in the middle; the session is saved, and gets its row, only when he starts typing. The Nexus view names sit in one compact row, and the details rail starts closed when a new tab opens, so the chat has the room (after that it stays as he leaves it). Known gap: Mac dictation needs a saved session to aim at, so on a blank session it works once the first word is typed; the box says so. Letting dictation start a session needs a change in the Mac app and is a follow-up. In review.
 

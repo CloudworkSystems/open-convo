@@ -9,6 +9,7 @@ import type { DeskCommand, DeskState } from '../domain/types';
 import { DeskFoundation } from '../features/DeskFoundation';
 import { MessageActionsContext } from '../features/MessageActions';
 import { draftWithReplyQuote } from '../domain/reply-quote';
+import { reactionSharingOn, reactionsNoteEdited, splitReactionsNote } from '../domain/shared-reactions';
 import { parsePreviewBuild, retireAnnotationDiagnostics, watchPreviewUpdates } from './preview-updates';
 import type { PreviewUpdateNotice } from './preview-updates';
 import { useConversationRuns, type WorkspaceAttemptResult } from './use-conversation-runs';
@@ -55,6 +56,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
   const [problem, setProblem] = useState<Problem | null>(null);
   const [commandError, setCommandError] = useState('');
   const [participantChoiceError, setParticipantChoiceError] = useState<{ sessionId: string; message: string } | null>(null);
+  const [sharingNotice, setSharingNotice] = useState<{ sessionId: string; text: string } | null>(null);
   const [previewUpdate, setPreviewUpdate] = useState<PreviewUpdateNotice | null>(null);
   const previewWatcher = useRef<ReturnType<typeof watchPreviewUpdates> | null>(null);
   const stateRef = useRef(state);
@@ -176,6 +178,20 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
   // catalog lists it as local and usable. Otherwise nothing is picked and the
   // composer says why. Tried once per session per visit, so a choice the
   // owner clears or a failed save is never fought over.
+  // Shared reactions rule 6: say when the Desk adds, changes or removes the
+  // reactions note in the draft, since that text goes with the next Send.
+  const announcedNote = useRef<{ sessionId: string; note?: string } | null>(null);
+  const noteSession = state?.sessions.find((item) => item.id === state.selection.sessionId);
+  const noteInDraft = noteSession && reactionSharingOn(noteSession) ? splitReactionsNote(state?.drafts[noteSession.id] ?? '')?.note : undefined;
+  useEffect(() => {
+    const previous = announcedNote.current;
+    announcedNote.current = noteSession ? { sessionId: noteSession.id, note: noteInDraft } : null;
+    if (!noteSession || previous?.sessionId !== noteSession.id || previous.note === noteInDraft || !reactionSharingOn(noteSession)) return;
+    const generated = noteSession.reactionSharing?.note;
+    const text = noteInDraft && noteInDraft === generated ? previous.note ? 'Reactions note updated in your message.' : 'Reactions note added to your message.'
+      : !noteInDraft && generated === undefined ? 'Reactions note removed from your message.' : undefined;
+    if (text) setSharingNotice({ sessionId: noteSession.id, text });
+  }, [noteSession?.id, noteInDraft]);
   const defaultTried = useRef(new Set<string>());
   useEffect(() => {
     const sessionId = state?.selection.sessionId;
@@ -550,13 +566,32 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
             };
             reportError('');
             if (runtime.participantChoices?.some((choice) => choice.approved && sameParticipantIdentity(choice.identity, participant))) {
+              const wasSharing = reactionSharingOn(stateRef.current?.sessions.find((item) => item.id === sessionId));
               dispatch({ type: 'set-participant-choice', sessionId, participant }, reportError);
+              if (wasSharing && !reactionSharingOn(stateRef.current?.sessions.find((item) => item.id === sessionId)) && isCurrent()) {
+                setSharingNotice({ sessionId, text: 'Sharing reactions is off because the participant changed.' });
+              }
             } else reportError('This participant is not in the approved participant list.');
           }}
           participantBusy={runs.busy}
           participantSendUnavailable={runs.unavailable}
           participantSendBlockedReason={runs.sendBlockedReason}
           participantStop={runs.composerStop} participantSendWaitingReason={runs.sendWaitingReason} participantSendDestination={runs.sendDestination}
+          reactionSharing={(() => {
+            const selected = state.sessions.find((item) => item.id === state.selection.sessionId);
+            if (runs.participantLabel === undefined || !selected?.participantChoice) return undefined;
+            // While saving is blocked the switch shows off, with the shared reason (plan rule 5).
+            const on = reactionSharingOn(selected) && !problem;
+            const notice = on && reactionsNoteEdited(selected, state.drafts[selected.id] ?? '')
+              ? 'You edited the reactions note, so new reactions won’t be added to it.'
+              : sharingNotice?.sessionId === selected.id ? sharingNotice.text : undefined;
+            return { on, label: selected.participantChoice.label, notice,
+              disabledReason: problem ? 'Rating, reacting, Reply and Side chat are off until saving works again.' : undefined,
+              onChange: (sessionId: string, value: boolean) => {
+                setSharingNotice(null);
+                dispatch({ type: 'set-reaction-sharing', sessionId, on: value });
+              } };
+          })()}
           onSend={(sessionId) => {
             if (runs.participantLabel !== undefined) runs.send(sessionId);
             else dispatch({ type: 'send-demo', sessionId, expectedDraft: stateRef.current!.drafts[sessionId] });

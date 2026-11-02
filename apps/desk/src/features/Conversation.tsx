@@ -19,6 +19,17 @@ export interface ComposerStop {
   stop: () => void;
 }
 
+export interface ReactionSharingControl {
+  on: boolean;
+  /** The participant's name, as in the switch's label. */
+  label: string;
+  /** Why the switch can't change now (saving is blocked). */
+  disabledReason?: string;
+  /** A change to announce: the note was edited, or a participant change turned sharing off. */
+  notice?: string;
+  onChange: (sessionId: string, on: boolean) => void;
+}
+
 export function Conversation({
   goal,
   session,
@@ -42,6 +53,7 @@ export function Conversation({
   sideChatAnchor,
   onStart,
   startHeading,
+  reactionSharing,
 }: {
   goal?: Goal;
   session?: Session;
@@ -80,6 +92,8 @@ export function Conversation({
   onStart?: (draft: string) => void;
   /** Shown in place of the conversation title while the session is blank. */
   startHeading?: ReactNode;
+  /** Shared reactions (docs/plans/desk-shared-reactions.md): the per-chat switch. */
+  reactionSharing?: ReactionSharingControl;
 }) {
   const conversation = useRef<HTMLElement>(null);
   const scrollArea = useRef<HTMLDivElement>(null);
@@ -387,6 +401,16 @@ export function Conversation({
             : sendWaitingReason && <p className="composer-wait" id="send-waiting-reason">{sendWaitingReason}</p>}
         </div>
         {participantSendDestination && <p className="composer-destination" id="send-destination" data-send-destination>{participantSendDestination}</p>}
+        {reactionSharing && session && <div className="composer-reaction-sharing" data-reaction-sharing>
+          <label>
+            <input type="checkbox" checked={reactionSharing.on} disabled={readOnly || !!reactionSharing.disabledReason}
+              aria-describedby={reactionSharing.disabledReason ? 'reaction-sharing-reason' : undefined}
+              onChange={(event) => reactionSharing.onChange(session.id, event.target.checked)} />
+            {` Share my reactions with ${reactionSharing.label} in this chat`}
+          </label>
+          {reactionSharing.disabledReason && <span className="composer-reaction-sharing-reason" id="reaction-sharing-reason">{reactionSharing.disabledReason}</span>}
+          <span aria-live="polite" className="composer-reaction-sharing-notice" data-reaction-sharing-notice>{reactionSharing.notice ?? ''}</span>
+        </div>}
         <label className="sr-only" htmlFor="message-draft">
           Your message
         </label>
