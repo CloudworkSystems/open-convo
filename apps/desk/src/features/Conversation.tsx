@@ -92,10 +92,10 @@ export function Conversation({
   const [startText, setStartText] = useState('');
   const starting = !session && onStart !== undefined && !readOnly;
   // Held dictation that is starting the session, dismissed once the session exists.
-  const startedFrom = useRef<string | null>(null);
+  const startedFrom = useRef<{ deliveryId: string; text: string } | null>(null);
   const startSession = (text: string, deliveryId: string | null = null) => {
     if (!starting || !text.trim()) return;
-    startedFrom.current = deliveryId;
+    startedFrom.current = deliveryId ? { deliveryId, text } : null;
     onStart(text);
   };
   const shownDraft = session ? draft : startText;
@@ -120,11 +120,12 @@ export function Conversation({
     dictation?.dismiss(deliveryId);
     requestAnimationFrame(() => { if (field.isConnected && field === draftField.current) field.setSelectionRange(start + text.length, start + text.length); });
   };
-  // Dismiss held words once the session they started exists.
+  // Dismiss held words only once the session they started exists with them as its
+  // draft. A refused start followed by opening another session keeps them held.
   useEffect(() => {
-    const deliveryId = startedFrom.current;
+    const started = startedFrom.current;
     startedFrom.current = null;
-    if (deliveryId && session) dictation?.dismiss(deliveryId);
+    if (started && session && draft === started.text) dictation?.dismiss(started.deliveryId);
   }, [session?.id]);
   // Put the caret after text that dictation just placed in this draft.
   useEffect(() => {
