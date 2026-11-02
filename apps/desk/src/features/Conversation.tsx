@@ -91,7 +91,13 @@ export function Conversation({
   // Text typed into a blank session while an input method is still composing it.
   const [startText, setStartText] = useState('');
   const starting = !session && onStart !== undefined && !readOnly;
-  const startSession = (text: string) => { if (starting && text.trim()) onStart(text); };
+  // Held dictation that is starting the session, dismissed once the session exists.
+  const startedFrom = useRef<string | null>(null);
+  const startSession = (text: string, deliveryId: string | null = null) => {
+    if (!starting || !text.trim()) return;
+    startedFrom.current = deliveryId;
+    onStart(text);
+  };
   const shownDraft = session ? draft : startText;
   const dictation = useDeskDictationView();
   const reportDraftSelection = (field: HTMLTextAreaElement, focused: boolean) => {
@@ -102,9 +108,9 @@ export function Conversation({
   const insertDictated = (deliveryId: string, text: string) => {
     const field = draftField.current;
     if (field && !session && starting && text.trim()) {
-      // A blank session: dictated words start it, just like typed ones.
-      startSession(field.value + text);
-      dictation?.dismiss(deliveryId);
+      // A blank session: held words start it, just like typed ones. The held
+      // copy stays until the session exists, so a refused start loses nothing.
+      startSession(field.value + text, deliveryId);
       return;
     }
     if (!field || !session || readOnly) return;
@@ -114,13 +120,12 @@ export function Conversation({
     dictation?.dismiss(deliveryId);
     requestAnimationFrame(() => { if (field.isConnected && field === draftField.current) field.setSelectionRange(start + text.length, start + text.length); });
   };
-  // Dictation has no saved session to aim at in a blank session, so its words arrive unplaced.
-  // While the blank box has focus, they start the session as if typed.
-  const firstUnplaced = unplaced.find((item) => item.state === 'not-placed');
+  // Dismiss held words once the session they started exists.
   useEffect(() => {
-    if (!firstUnplaced || session || !starting || document.activeElement !== draftField.current) return;
-    insertDictated(firstUnplaced.deliveryId, firstUnplaced.text);
-  }, [firstUnplaced?.deliveryId]);
+    const deliveryId = startedFrom.current;
+    startedFrom.current = null;
+    if (deliveryId && session) dictation?.dismiss(deliveryId);
+  }, [session?.id]);
   // Put the caret after text that dictation just placed in this draft.
   useEffect(() => {
     const caret = dictation?.caret;
@@ -426,7 +431,10 @@ export function Conversation({
         />
         <div className="composer-actions">
           <span className="composer-hint shortcut-hint" id="message-shortcuts">Enter to send · Ctrl / ⌘ / Shift + Enter for a new line
-            {dictation?.status === 'ready' && <span className="dictation-ready"> · Dictation ready</span>}</span>
+            {dictation?.status === 'ready' && <span className="dictation-ready"> · Dictation ready</span>}
+            {/* Mac dictation aims at a saved session, and a blank one has none yet. */}
+            {starting && dictation && dictation.status !== 'none' && dictation.status !== 'unavailable'
+              && <span className="dictation-after-start"> · Dictation works after the first word</span>}</span>
           <>{participantChoices !== undefined || session?.participantChoice ? <ParticipantPicker key={session?.id}
             choices={participantChoices ?? []} selected={session?.participantChoice}
             error={participantChoiceError} confirmation={participantConfirmation}

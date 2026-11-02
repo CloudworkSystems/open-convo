@@ -16,6 +16,13 @@ const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   '.woff2': 'font/woff2', '.woff': 'font/woff', '.png': 'image/png', '.svg': 'image/svg+xml', '.txt': 'text/plain' };
 let server; let browser; let origin;
 
+/** The Mac app opens on a blank session; open the saved one from the rail without saving anything. */
+async function openSavedSession(page) {
+  await expect(page.locator('.conversation-heading .navigator-empty')).toBeVisible();
+  await expect(page.getByLabel('Your message', { exact: true })).toHaveValue('');
+  await page.locator(`.session-link[data-session-id="${sessionId}"]`).click();
+}
+
 async function cleanup() {
   try { await browser?.close(); } finally {
     browser = undefined;
@@ -164,6 +171,7 @@ async function fixture(mode = 'ready') {
 test('compiled native entry negotiates, loads, edits and commits through the full App; a lock event clears it', async () => {
   const f = await fixture(); const { page } = f;
   try {
+    await openSavedSession(page);
     const draft = page.getByLabel('Your message', { exact: true });
     await expect(draft).toHaveValue('Before 😀 after');
     await expect(page.getByText('Native join proof · invented data only', { exact: true })).toBeVisible();
@@ -206,6 +214,7 @@ test('compiled native entry without a host refuses to open and never seeds brows
 test('compiled native entry keeps saving a 300-character sequence beyond the request retention limit', async () => {
   const f = await fixture(); const { page } = f;
   try {
+    await openSavedSession(page);
     const draft = page.getByLabel('Your message', { exact: true });
     await expect(draft).toHaveValue('Before 😀 after');
     const text = 'Invented sequential edit 0123456789. '.repeat(9).slice(0, 300);
@@ -239,6 +248,7 @@ test('compiled native entry keeps saving a 300-character sequence beyond the req
 test('a correlated store-locked commit reply clears the compiled App even without a lock event', async () => {
   const f = await fixture('lock-on-commit'); const { page } = f;
   try {
+    await openSavedSession(page);
     const draft = page.getByLabel('Your message', { exact: true });
     await expect(draft).toHaveValue('Before 😀 after');
     await draft.fill('Invented edit refused after the proof store locked.');
