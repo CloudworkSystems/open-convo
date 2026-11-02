@@ -25,12 +25,14 @@ jobs:
       front_porch: ${{ steps.diff.outputs.front_porch }}
       # JSON list of the other packages/* folders to test (see the packages job).
       packages: ${{ steps.diff.outputs.packages }}
+      # JSON list of folders with a package-lock.json to audit (see the audit job).
+      audit: ${{ steps.diff.outputs.audit }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
       - id: diff
@@ -43,6 +45,7 @@ jobs:
             for part in clarity desk mac gate sync_core front_porch; do echo "$part=true" >> "$GITHUB_OUTPUT"; done
             packages=$(node .github/scripts/package-changes.mjs --all)
             echo "packages=$packages" >> "$GITHUB_OUTPUT"
+            echo "audit=$(node .github/scripts/npm-audit.mjs --folders --all)" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           # --no-renames lists both sides of a rename, so moving a file out of a
@@ -68,6 +71,11 @@ jobs:
           packages=$(echo "$files" | node .github/scripts/package-changes.mjs)
           echo "Packages to test: $packages"
           echo "packages=$packages" >> "$GITHUB_OUTPUT"
+          # Folders with a lockfile that this change touches (all of them when
+          # .github/ changes), for npm audit.
+          audit=$(echo "$files" | node .github/scripts/npm-audit.mjs --folders)
+          echo "Folders to audit: $audit"
+          echo "audit=$audit" >> "$GITHUB_OUTPUT"
 
   clarity:
     needs: changes
@@ -75,10 +83,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
       - run: npm test
@@ -90,10 +98,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -117,7 +125,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -140,7 +148,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
       - run: |
@@ -158,10 +166,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
       - run: node --test .github/scripts/tests/*.test.mjs
@@ -175,7 +183,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
       # Before the sync core merges, the folder doesn't exist yet on a
@@ -195,10 +203,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
       # npm ci installs only the pinned, lockfile-checked dev tools (the
@@ -223,10 +231,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
       - name: Start the Node entry point
@@ -238,7 +246,7 @@ jobs:
       - run: node scan/zap-scan.mjs http://127.0.0.1:8787
         working-directory: services/front-porch
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: front-porch-zap-report
           path: services/front-porch/scan/out/report.*
@@ -260,10 +268,10 @@ jobs:
       run:
         working-directory: packages/${{ matrix.package }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
       # npm ci needs a lockfile. A package with no dependencies has nothing to
@@ -280,10 +288,31 @@ jobs:
           fi
       - run: npm test
 
+  # npm audit of each touched folder with a lockfile (docs/plans/security.md,
+  # section 1). High and critical advisories in runtime dependencies fail;
+  # development-only and lower ones show as warnings. Exceptions need the
+  # owner's yes in .github/accepted-risks.json. Reads only the lockfile and
+  # asks the npm registry: nothing is installed and no package script runs.
+  audit:
+    needs: changes
+    if: needs.changes.outputs.audit != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - env:
+          FOLDERS: ${{ needs.changes.outputs.audit }}
+        run: node .github/scripts/npm-audit.mjs $(node -e 'console.log(JSON.parse(process.env.FOLDERS).join(" "))')
+
   # The one check branch protection requires. Passes only if every part that
   # ran passed; parts with no changes are skipped.
   tests:
-    needs: [changes, clarity, desk, mac, fixtures, gate, sync-core, front-porch, front-porch-scan, packages]
+    needs: [changes, clarity, desk, mac, fixtures, gate, sync-core, front-porch, front-porch-scan, packages, audit]
     if: always()
     runs-on: ubuntu-latest
     steps:
