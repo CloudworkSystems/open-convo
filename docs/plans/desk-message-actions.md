@@ -1,6 +1,6 @@
 # Desk Message Actions
 
-Status: In progress (Nov 1): approved by the owner November 1, 2026; PR 2 (action row, Copy, ratings, reactions) merged as #224; PR 3 (Reply) merged as #245; PR 4 (Side chat) merged as #247; PR 5 (the full emoji set) in review.
+Status: In progress (Nov 2): approved by the owner November 1, 2026; PR 2 (action row, Copy, ratings, reactions) merged as #224; PR 3 (Reply) merged as #245; PR 4 (Side chat) merged as #247; PR 5 (the full emoji set) merged as #248; the owner trial is next.
 
 Written November 1, 2026 by a Claude session (project "261024 OC Steering")
 at the owner's request that day: every message in a Desk conversation gets
@@ -206,7 +206,8 @@ picker; pick ❤️ from the full list and see it become the quick heart.
 The owner also chose (decision card, November 1, 2026) to have a follow-up
 plan in which agents can see his reactions in a conversation, with a line
 saying so, and can react back. That changes rule 1, so it is a separate plan
-and nothing here sends a reaction anywhere.
+([desk-shared-reactions.md](desk-shared-reactions.md)) and nothing here
+sends a reaction anywhere.
 
 ## Later, Not In This Plan
 
