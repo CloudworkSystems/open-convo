@@ -70,7 +70,7 @@ Each route declares:
 | `provider`, `model` | Who runs it, and which model |
 | `hosts` | Every outside host it contacts. Empty for `upload` and `local`. A host here is held by the risk review like any other ([risk-review.md](risk-review.md)). |
 | `leaves_machine` | Plain words on exactly what is sent (for example "your prompt text and the one reference picture you attach"). `nothing` for `upload` and `local`. |
-| `cost` | How the price is worked out (per second, per image, per credit), the price used, its source and the date it was checked, and a `max_per_run` the code computes before running. `free` for `upload` and `local`. A route whose price can't be worked out before the run is never offered as a paid route. |
+| `cost` | How the price is worked out (per second, per image, per credit), the price used, its source and the date it was checked, and a `max_per_run` the code computes before running. The recorded price is only for showing a rough figure in settings; it never authorizes a run (see "The price is checked again" below). `free` for `upload` and `local`. |
 | `needs` | What the machine needs (memory, disk, model files to download, a local server such as ComfyUI) |
 | `terms` | For `sign_in` only: a link to the provider's terms that allow third-party apps to use the sign-in this way, and the date checked. No link, no route. |
 | `license` | For `local` only: the model's license, checked before adoption, and whether it allows the person's intended use |
@@ -110,8 +110,20 @@ reads the record and refuses any cap whose signature doesn't check out. So:
   can sign a raise too, using the same check.
 
 This is called *enforced* only once part 2 ships a test showing that an
-agent running as the same user can't raise the cap (principle 12). Until
-then it is described as designed, not enforced.
+agent running as the same user can't raise the cap, and can't reset the
+ledger below (principle 12). Until then it is described as designed, not
+enforced.
+
+**The price is checked again just before each paid run.** A price recorded
+in the route can go stale. So a paid route runs only when, immediately
+before sending, the runner can get a maximum that holds for this request
+from the provider itself: a quote for this exact request, or a request
+field that tells the provider to refuse or stop anything above a set amount.
+That maximum is what the card shows, what the ledger reserves, and what is
+sent with the request. If the runner can't get one, the route isn't offered
+for paid runs. If a provider later bills more than the approved maximum, the
+receipt says so in plain words, the route is switched off until the person
+looks, and the extra counts against the cap.
 
 **The ledger.** Before each paid run the runner reserves the run's maximum
 against the caps, and refuses if it doesn't fit. After the run it records
@@ -119,6 +131,17 @@ the actual cost when the provider reports it, or keeps the estimate marked
 "estimated" when it doesn't. Unknown stays unknown on screen (principle 2).
 The ledger and caps live on the device, travel with export, and never depend
 on GitHub or any True Convo server.
+
+**The ledger can't be wound back.** Each entry is chained to the one before
+by a hash, and the latest chain head and entry count are kept in a Keychain
+item that only the signed capability runner may change (the Keychain's
+per-app access list). A ledger that is missing, edited, or older than that
+head is treated as fully spent for the month: paid routes stop and the
+person is told why, until they confirm a reset with the same Mac password
+prompt used to raise a cap. Part 2's bypass test covers deleting, editing
+and restoring an older ledger, as well as editing the cap. Where the
+provider reports usage for the key, the runner also compares the month's
+total with it and takes the higher figure.
 
 **A second wall at the provider.** Key setup recommends the provider's own
 protection: prepaid credit with auto-reload off, or the provider's spending
@@ -255,6 +278,20 @@ In True Convo Test, with invented prompts:
 7. Quit mid-run on a paid clip; the next launch says what came back and what
    was charged, and doesn't charge twice.
 8. Turn the network off; the paid route says so and offers the free ones.
+9. With the local server not running, the local route names it and says how
+   to start it.
+10. Quit mid-run on a local clip; the next launch marks it stopped.
+11. With nothing set up (a fresh test profile), the picker shows Upload as
+    ready and the two set-up choices, and the paid route says "Set a cap
+    first".
+12. Start raising the cap and cancel the password prompt; the old cap stays
+    and the screen closes normally.
+13. Reach the cap; the card says how much is used, offers the free routes,
+    and says raising it needs your Mac password.
+14. Use a refused key (an invented one); the message says what happened,
+    "Nothing was charged", and the next step.
+15. Replace the ledger file with an older copy; paid routes stop and say
+    why.
 
 ## When To Build
 
