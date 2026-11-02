@@ -95,6 +95,19 @@ test('a Reply quote above the note leaves it followed, and Off still removes it'
   assert.equal(reactionsNoteSendHold(off.sessions[0], off.drafts[f.sessionId]), undefined);
 });
 
+test('equal saved times never hide a new reaction (a clock that is behind)', () => {
+  const f = fixture();
+  // Every later command gets the same logical time, as when the Mac's clock is behind the saved one.
+  const frozen = { ...f.options, now: () => '2020-01-01T00:00:00.000Z' };
+  let state = applyCommand(f.state, { type: 'set-reaction-sharing', sessionId: f.sessionId, on: true }, frozen);
+  state = applyCommand(state, { type: 'toggle-message-reaction', messageId: f.reply.id, reaction: 'heart' }, frozen);
+  assert.match(state.drafts[f.sessionId], /^\[My reactions: ❤️ on your reply/);
+  state = applyCommand(state, { type: 'send-demo', sessionId: f.sessionId }, frozen);
+  state = applyCommand(state, { type: 'toggle-message-reaction', messageId: f.reply.id, reaction: 'idea' }, frozen);
+  assert.match(state.drafts[f.sessionId], /^\[My reactions: 💡 on your reply/);
+  assert.equal(validateState(state).valid, true);
+});
+
 test('once he edits the note the Desk stops changing it, and says so', () => {
   const f = fixture();
   let state = applyCommand(f.state, { type: 'set-reaction-sharing', sessionId: f.sessionId, on: true }, f.options);
@@ -168,7 +181,8 @@ test('a saved switch that is malformed is refused, not repaired', () => {
     { participant: local, since: state.sessions[0].updatedAt, extra: true },
     { participant: local, since: state.sessions[0].updatedAt, added: [] },
     { participant: local, since: state.sessions[0].updatedAt, added: [{ messageId: 'x', emoji: '❤️' }] },
-    { participant: local, since: state.sessions[0].updatedAt, added: [{ messageId: 'x', emoji: '❤️', at: '2020-01-01T00:00:00.000Z' }] },
+    { participant: local, since: state.sessions[0].updatedAt, added: [{ messageId: 'x', emoji: '❤️', sends: -1 }] },
+    { participant: local, since: state.sessions[0].updatedAt, added: [{ messageId: 'x', emoji: 'heart', sends: 1 }] },
   ]) {
     const broken = structuredClone(state);
     (broken.sessions[0] as unknown as Record<string, unknown>).reactionSharing = bad;

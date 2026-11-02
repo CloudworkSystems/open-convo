@@ -57,8 +57,8 @@ export interface Session {
     participant: ParticipantIdentity;
     since: string;
     note?: string;
-    /** Reactions added while sharing is on; only those after the latest Send are listed. */
-    added?: { messageId: string; emoji: string; at: string }[];
+    /** Reactions added while sharing is on, with his send count then; only those since the latest Send are listed. */
+    added?: { messageId: string; emoji: string; sends: number }[];
   };
   createdAt: string;
   updatedAt: string;

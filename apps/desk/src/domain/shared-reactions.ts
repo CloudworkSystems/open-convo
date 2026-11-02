@@ -1,5 +1,5 @@
 import type { ConversationRun, ParticipantIdentity } from './conversation-run-types';
-import { MESSAGE_REACTIONS } from './message-marks';
+import { isStandardEmoji, MESSAGE_REACTIONS } from './message-marks';
 import { sameParticipantIdentity } from './participant-choices';
 import type { DeskState, MessageMark, Session } from './types';
 
@@ -23,14 +23,16 @@ export interface ReactionSharing {
   /** The note as the Desk last wrote it; a different note in the draft means he edited it. */
   note?: string;
   /**
-   * Each reaction added while sharing is on, with when. Only the ones added
-   * after the latest Send go in the note, so each is shared once (rule 3),
-   * even when another reaction on the same message changes later.
+   * Each reaction added while sharing is on, with the number of messages he
+   * had sent in this chat at that moment. Only the ones added since the
+   * latest Send go in the note, so each is shared once (rule 3), even when
+   * another reaction on the same message changes later. A count, not a
+   * time, so equal saved times can never hide a new reaction.
    */
   added?: SharedReactionAdded[];
 }
 
-export interface SharedReactionAdded { messageId: string; emoji: string; at: string }
+export interface SharedReactionAdded { messageId: string; emoji: string; sends: number }
 
 /** On only while the stored participant is the conversation's current choice. */
 export function reactionSharingOn(session: Pick<Session, 'participantChoice' | 'reactionSharing'> | undefined): boolean {
@@ -98,21 +100,19 @@ export function markEmoji(mark: MessageMark | undefined): string[] {
   return [...quick, ...(mark.emoji ?? [])];
 }
 
-/** When reactions start counting as new: sharing turned on, or the latest Send, whichever is later. */
-function pendingSince(state: Pick<DeskState, 'messages' | 'conversationRuns'>, sessionId: string, sharing: ReactionSharing): string {
-  let since = sharing.since;
-  for (const run of state.conversationRuns ?? []) if (run.sessionId === sessionId && run.createdAt > since) since = run.createdAt;
-  for (const message of state.messages) if (message.sessionId === sessionId && message.role === 'user' && message.createdAt > since) since = message.createdAt;
-  return since;
+/** How many messages he has sent in this chat: each Send adds one run or one message. */
+function sendCount(state: Pick<DeskState, 'messages' | 'conversationRuns'>, sessionId: string): number {
+  return (state.conversationRuns ?? []).filter((run) => run.sessionId === sessionId).length
+    + state.messages.filter((message) => message.sessionId === sessionId && message.role === 'user').length;
 }
 
 /** The reactions added since the latest Send that are still on their message. */
 function pendingReactions(state: Pick<DeskState, 'messages' | 'conversationRuns' | 'messageMarks'>, session: Session): SharedReactionAdded[] {
   const sharing = session.reactionSharing;
   if (!sharing) return [];
-  const since = pendingSince(state, session.id, sharing);
+  const sends = sendCount(state, session.id);
   const marks = new Map((state.messageMarks ?? []).map((mark) => [mark.messageId, mark]));
-  return (sharing.added ?? []).filter((entry) => entry.at > since && markEmoji(marks.get(entry.messageId)).includes(entry.emoji));
+  return (sharing.added ?? []).filter((entry) => entry.sends === sends && markEmoji(marks.get(entry.messageId)).includes(entry.emoji));
 }
 
 /** The note for the reactions not yet shared in this conversation, or null when there are none. */
@@ -147,13 +147,13 @@ export function reactionsNoteEdited(session: Session | undefined, draft: string)
  * then keeps the draft's note in step with his reactions until he edits it
  * (rule 3). Entries already shared, or no longer on their message, are dropped.
  */
-export function syncReactionsNote(next: DeskState, session: Session, change?: { messageId: string; emoji: string; at: string }): void {
+export function syncReactionsNote(next: DeskState, session: Session, change?: { messageId: string; emoji: string }): void {
   if (!reactionSharingOn(session)) return;
   const sharing = session.reactionSharing!;
   if (change) {
     const list = (sharing.added ?? []).filter((entry) => !(entry.messageId === change.messageId && entry.emoji === change.emoji));
     const mark = (next.messageMarks ?? []).find((item) => item.messageId === change.messageId);
-    if (markEmoji(mark).includes(change.emoji)) list.push({ ...change });
+    if (markEmoji(mark).includes(change.emoji)) list.push({ ...change, sends: sendCount(next, session.id) });
     sharing.added = list;
   }
   const kept = pendingReactions(next, session);
@@ -218,21 +218,15 @@ export function validReactionSharing(value: unknown, validIdentity: (value: unkn
   if (!validIdentity(participant)) return false;
   if (typeof since !== 'string' || !Number.isFinite(Date.parse(since)) || new Date(Date.parse(since)).toISOString() !== since || since > latest) return false;
   if (note !== undefined && (typeof note !== 'string' || splitReactionsNote(note)?.note !== note || [...note].length > REACTIONS_NOTE_MAX_CHARACTERS)) return false;
-  if (added !== undefined && (!Array.isArray(added) || !added.length || !added.every((entry) => validAdded(entry, since)))) return false;
+  if (added !== undefined && (!Array.isArray(added) || !added.length || !added.every(validAdded))) return false;
   return true;
 }
 
-function isoTime(value: unknown): value is string {
-  return typeof value === 'string' && Number.isFinite(Date.parse(value)) && new Date(Date.parse(value)).toISOString() === value;
-}
-
-// A reaction doesn't touch the session's own time, so an entry is bounded
-// below by the switch's time only.
-function validAdded(entry: unknown, since: string): boolean {
+function validAdded(entry: unknown): boolean {
   if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) return false;
   const keys = Object.keys(entry);
-  if (keys.length !== 3 || !['messageId', 'emoji', 'at'].every((key) => keys.includes(key))) return false;
-  const { messageId, emoji, at } = entry as Record<string, unknown>;
-  return typeof messageId === 'string' && !!messageId && typeof emoji === 'string' && !!emoji
-    && isoTime(at) && at >= since;
+  if (keys.length !== 3 || !['messageId', 'emoji', 'sends'].every((key) => keys.includes(key))) return false;
+  const { messageId, emoji, sends } = entry as Record<string, unknown>;
+  return typeof messageId === 'string' && !!messageId && isStandardEmoji(emoji)
+    && typeof sends === 'number' && Number.isSafeInteger(sends) && sends >= 0;
 }

@@ -572,7 +572,8 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
           reactionSharing={(() => {
             const selected = state.sessions.find((item) => item.id === state.selection.sessionId);
             if (runs.participantLabel === undefined || !selected?.participantChoice) return undefined;
-            const on = reactionSharingOn(selected);
+            // While saving is blocked the switch shows off, with the shared reason (plan rule 5).
+            const on = reactionSharingOn(selected) && !problem;
             const notice = on && reactionsNoteEdited(selected, state.drafts[selected.id] ?? '')
               ? 'You edited the reactions note, so new reactions won’t be added to it.'
               : sharingNotice?.sessionId === selected.id ? sharingNotice.text : undefined;

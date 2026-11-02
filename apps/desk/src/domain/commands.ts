@@ -77,7 +77,7 @@ export function applyCommand(state: DeskState, command: DeskCommand, options: Do
         const picked = command.type === 'toggle-message-emoji' ? command.emoji : undefined;
         const name = command.type === 'toggle-message-reaction' ? command.reaction : quickReactionFor(picked!);
         const emoji = name ? MESSAGE_REACTIONS.find((reaction) => reaction.name === name)!.emoji : picked!;
-        syncReactionsNote(next, owner, { messageId: command.messageId, emoji, at: now });
+        syncReactionsNote(next, owner, { messageId: command.messageId, emoji });
       }
     } catch (error) {
       throw new DomainError(error instanceof Error ? error.message : 'The mark could not be saved.');
