@@ -41,6 +41,10 @@ import Testing
 //   completes and leaves the closed old run exactly as it was.
 // A graceful quit mid-reply is checked the same way: it records `stopped`,
 // leaves no process, and the fake was spawned once.
+// Stop while the page's save is held in fsync (contract section 16, check
+// 5; docs/plans/claude-code-owner-trial.md, Part 1): Stop answers, from
+// this Mac's memory, while the store's write is still held; once the save
+// returns, the run ends `stopped` with exactly the text saved so far.
 // And the plan's "Nothing leaves without consent" is rechecked through the
 // same app (Codex P1s on #223): a start before the approval, before the
 // confirmation, after the approval is withdrawn and after the confirmation
@@ -415,6 +419,56 @@ struct ClaudeKillMidReplyProofTests {
         #expect(try await app.next("quit ") == "reachedBound=false")
         #expect(try await app.waitForExit() == 0)
         #expect(world.spawns.count == 1)
+    }
+
+    @Test("Stop works while a commit is blocked in fsync (contract section 16, check 5): Stop answers exited, stopped local-stop with the group cleared while the page's save is still held; once it returns, the run ends stopped with exactly the text saved so far, and the fake was spawned once")
+    func stopDuringBlockedSave() async throws {
+        for round in 1...Self.rounds {
+            let label = "round \(round)"
+            let world = try ClaudeProofWorld()
+            defer { world.clean() }
+            let (app, runId) = try await startTurn(world)
+            let spawned = try await world.processes()
+            let acknowledged = try await play(world, app, runId: runId, pieces: 2)
+
+            // The page's save of the third piece is held just before its
+            // fsync, inside the store's lock.
+            app.send("block")
+            try await app.next("armed")
+            world.release(3)
+            try await app.next("blocked")
+            let held = acknowledged + ClaudeProofWorld.pieces[2]
+
+            let stop = try await app.json("stop \(runId)", "stop").objectValue ?? [:]
+            #expect(!app.lines.contains { $0.hasPrefix("released") }, "\(label): Stop answered while the save was still held")
+            #expect(!app.lines.contains { $0.hasPrefix("ended \(runId)") }, "\(label): nothing after the held save was saved yet")
+            #expect(stop["outcome"] == .string("ok"), "\(label): \(stop)")
+            #expect(stop["state"] == .string("exited"), "\(label): \(stop)")
+            let terminal = stop["terminal"]?.objectValue
+            #expect(terminal?["type"] == .string("stopped"), "\(label): \(stop)")
+            #expect(terminal?["reason"] == .string("local-stop"), "\(label): \(stop)")
+            #expect(stop["groupCleared"] == .bool(true), "\(label): \(stop)")
+            try await ClaudeProofWorld.gone(spawned.cli, spawned.supervisor, label)
+
+            // The held save goes on; then the ending is saved after it.
+            app.send("release")
+            #expect(try await app.next("released timeout=") == "false", "\(label): released by the proof, not by the cap")
+            try await app.saved(runId, "text", chars: held.count)
+            #expect(try await app.next("ended \(runId) ") == "stopped local-stop", label)
+            let status = try await app.json("status \(runId)", "status").objectValue ?? [:]
+            #expect(status["state"] == .string("exited"), "\(label): \(status)")
+            #expect(status["terminal"]?.objectValue?["type"] == .string("stopped"), "\(label): \(status)")
+            let record = try await app.json("record", "record")
+            let run = Self.run(record, runId)
+            #expect(run?["phase"] == .string("stopped"), "\(label)")
+            #expect(Self.text(run) == held, "\(label): the text saved so far, nothing lost or doubled")
+            #expect(world.spawns.count == 1, "\(label): one spawn for the run")
+
+            app.send("quit")
+            #expect(try await app.next("quit ") == "reachedBound=false", label)
+            #expect(try await app.waitForExit() == 0, label)
+            #expect(world.spawns.count == 1, "\(label): nothing spawned again")
+        }
     }
 
     @Test("A graceful quit mid-reply records stopped, not cut off: nothing is left running, the saved text stays, and the fake was spawned once")
