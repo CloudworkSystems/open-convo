@@ -821,8 +821,12 @@ enum SavedCorrections {
     }
 
     /// The saved lessons, or nil when the lessons file can't be opened.
+    /// For the menu bar menu, which opens them while it is shown: nil
+    /// unless the archive's key is already open, so opening the menu never
+    /// raises a Keychain prompt (step 2 trial, F2).
     static func lessonsForMenu() -> [CorrectionLesson]? {
-        withStore { $0.lessons }
+        guard Archive.sealIsOpen else { return nil }
+        return withStore { $0.lessons }
     }
 
     @discardableResult
@@ -1500,6 +1504,25 @@ enum Archive {
         case .keyMissing: return "key-missing"
         case .unavailable(let problem): return problem.rawValue
         }
+    }
+
+    /// Whether the archive's key is already open, read without the Keychain.
+    static var sealIsOpen: Bool {
+        protectionLock.lock()
+        defer { protectionLock.unlock() }
+        return protectionStatus?.seal != nil
+    }
+
+    /// Whether the last look at the archive's key found it missing from
+    /// this Mac's Keychain. Reads only what `currentSeal()` already found,
+    /// never the Keychain, so the menu bar menu can ask it while it opens:
+    /// a Keychain prompt raised while that menu opens takes no typing and
+    /// leaves the menu unreachable (step 2 trial, F2 and F3).
+    static var keyFoundMissing: Bool {
+        protectionLock.lock()
+        defer { protectionLock.unlock() }
+        if case .keyMissing = protectionStatus { return true }
+        return false
     }
 
     /// Why new words can't be saved right now, in the owner's words, or nil.
@@ -9054,6 +9077,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.refreshDeskSwitchIfTrustChanged()
         }
         buildMenu()
+        buildAppMenu()
+        DispatchQueue.main.async { [weak self] in self?.refreshArchiveMenuItems() }
         controller.onStatus = { [weak self] text in
             DispatchQueue.main.async {
                 self?.updateStatus(text)
@@ -9955,6 +9980,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refreshMenuState()
     }
 
+    /// A menu for when one of the app's own windows (the Desk, Archive
+    /// History) is in front. The app lives in the menu bar, so macOS never
+    /// shows this menu, but its shortcuts work: Command-Q quits the same way
+    /// as the menu bar menu's Quit, and Command-Shift-H opens Archive
+    /// History, so neither depends on the menu bar icon (step 2 trial, F3).
+    private func buildAppMenu() {
+        let bar = NSMenu()
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu()
+        let history = NSMenuItem(title: "Archive History…", action: #selector(openArchiveHistory), keyEquivalent: "h")
+        history.keyEquivalentModifierMask = [.command, .shift]
+        history.target = self
+        appMenu.addItem(history)
+        appMenu.addItem(NSMenuItem.separator())
+        let quitItem = NSMenuItem(title: "Quit \(AppIdentity.current.isTest ? "True Convo Test" : "True Convo")",
+                                  action: #selector(quit), keyEquivalent: "q")
+        quitItem.target = self
+        appMenu.addItem(quitItem)
+        appItem.submenu = appMenu
+        bar.addItem(appItem)
+        NSApp.mainMenu = bar
+    }
+
     @objc private func toggle() {
         if Settings.pillBehavior == .persistent {
             togglePersistentPill()
@@ -10413,10 +10461,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refreshDictationControls()
     }
 
+    /// Nothing here may touch the Keychain or read sealed files: a Keychain
+    /// prompt raised while the menu bar menu opens takes no typing, and the
+    /// menu never appears, so Quit and Archive History can't be reached
+    /// (step 2 trial, F2 and F3). Those reads happen at launch instead
+    /// (`refreshArchiveMenuItems`).
     func menuWillOpen(_ menu: NSMenu) {
         guard menu === mainMenu else { return }
-        refreshLastDictationMenuItem()
-        restoreArchiveMenuItem?.isHidden = !Archive.recovery.keyIsMissing
+        refreshLastDictationMenuItem(readingHistory: false)
+        restoreArchiveMenuItem?.isHidden = !Archive.keyFoundMissing
         refreshOpenAtLoginMenuItem()
         refreshDeskMenuItems()
         refreshDeskSwitchMenuTitle()
@@ -10433,9 +10486,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         switchDeskMenuItem.title = "Switch Desk and Pill (\(label))"
     }
 
-    private func refreshLastDictationMenuItem() {
+    /// The menu items that depend on dictation history, read at launch,
+    /// where a Keychain prompt takes typing, so the menu never has to.
+    private func refreshArchiveMenuItems() {
+        refreshLastDictationMenuItem(readingHistory: true)
+        restoreArchiveMenuItem?.isHidden = !Archive.keyFoundMissing
+    }
+
+    /// `readingHistory` false (the menu opening): only the saved date, never
+    /// the sealed history, which needs the archive's key.
+    private func refreshLastDictationMenuItem(readingHistory: Bool) {
         let saved = Settings.lastDictationAt
-        guard let date = saved ?? Archive.lastDictationDateFromHistory() else {
+        guard let date = saved ?? (readingHistory ? Archive.lastDictationDateFromHistory() : nil) else {
             lastDictationMenuItem.title = "Last dictation: none yet"
             return
         }
@@ -10934,6 +10996,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         _ = Archive.currentSeal()
+        refreshArchiveMenuItems()
         updateStatus(message)
     }
 

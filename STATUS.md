@@ -17,7 +17,7 @@ plan is in [PLAN.md](PLAN.md).
 | PR 4b: Dictation archive key under the same recovery key | Merged (#32) |
 | PR 4c: Kept recordings sealed | Merged (#34, #35) |
 | PR 5: Scripted kill-and-reopen proof | Merged (#36) |
-| PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-2-owner-trial.md)) | First run October 31: the Desk passed all five checks and dictations are sealed on disk; Archive History was blocked by a bug. Waiting on fixes F1 to F3, then a short re-check |
+| PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-2-owner-trial.md)) | First run October 31: the Desk passed all five checks and dictations are sealed on disk; Archive History was blocked by a bug. Fixes for F1 to F3 built November 2 (in review); then a short re-check |
 
 Until the owner's trial passes, the installed Desk is for invented data only.
 

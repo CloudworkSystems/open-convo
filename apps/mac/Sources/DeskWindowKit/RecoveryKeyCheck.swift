@@ -29,6 +29,16 @@ public struct RecoveryKeyCheck: Equatable, Sendable {
         "Type group \(asked[0] + 1) and group \(asked[1] + 1) of your recovery key."
     }
 
+    /// How many characters each group has (5 for every key made today).
+    public var groupLength: Int { groups[asked[0]].count }
+
+    /// The code-entry boxes' progress line for one box: how many of the
+    /// group's characters are typed, counting as `matches` does (spaces and
+    /// dashes don't count), e.g. "3 of 5". Never says whether they match.
+    public func progress(_ typed: String) -> String {
+        "\(Self.normalized(typed).count) of \(groupLength)"
+    }
+
     /// Whether the typed groups match, forgiving case, spaces and dashes and
     /// reading O, I and L as 0, 1 and 1, as the key itself does.
     public func matches(_ first: String, _ second: String) -> Bool {

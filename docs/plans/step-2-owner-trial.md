@@ -1,7 +1,8 @@
 # Step 2: The Owner's Trial
 
-Status: In progress (Oct 31): first trial run done. The Desk passed; Archive
-History was blocked by a bug. Waiting on fixes F1 to F3, then a short re-check.
+Status: In progress (Nov 2): first trial run done. The Desk passed; Archive
+History was blocked by a bug. Fixes for F1 to F3 are built (see "Fixes Built"
+below); waiting on the short re-check.
 
 The last part of step 2 (PR 5). The scripted proof checks the stores in a
 test folder; this trial checks the real True Convo Test app on your Mac.
@@ -20,8 +21,12 @@ Use **invented words only** until every box below is ticked.
 Do each one, then reopen True Convo Test and check that the Desk draft and
 the dictation (in Archive History) are both still there.
 
-1. **Quit:** True Convo Test menu, Quit.
-2. **Force quit:** Option-Command-Escape, pick True Convo Test, Force Quit.
+1. **Quit:** True Convo Test menu, Quit. (With the Desk or Archive History
+   in front, Command-Q quits too. If neither works, quit from Terminal:
+   `osascript -e 'tell application "True Convo Test" to quit'`.)
+2. **Force quit:** Option-Command-Escape doesn't list menu bar apps, so use
+   Activity Monitor (search "True Convo Test", Stop, Force Quit), or
+   Terminal: `killall -KILL "True Convo Test"`.
 3. **Sleep:** Apple menu, Sleep. Wake the Mac. The Desk should be locked;
    unlock it.
 4. **Lock:** Control-Command-Q. Log back in. The Desk should be locked;
@@ -105,3 +110,28 @@ Keychain prompt and sees today's dictations listed and readable (F2, F3).
 - **F6. Old dictations are still plain text.** Fourteen invented test
   transcripts from October 13 to 15, written before sealing landed, are
   unsealed. Decide whether old files get sealed or removed before real use.
+
+### Fixes Built (November 2, 2026)
+
+Built by Claude in thread "Fix trial issues so Patrick can dogfood".
+
+- **F1.** "Check Your Recovery Key" now draws two outlined boxes, each
+  labeled with the group it asks for, with a line under each that counts the
+  characters typed ("3 of 5") and the rule: "Type each group's 5 characters.
+  Spaces, dashes and capital letters don't matter." The old boxes were laid
+  out with no width, so they were never drawn and typing never reached them.
+  Tab moves between the boxes, and the Desk comes to the front first.
+- **F2.** Opening the menu bar menu no longer reads the Keychain or sealed
+  history. Before, it checked the archive key and the last dictation's date
+  while the menu opened; on a new build that raised the Keychain prompt in
+  the middle of opening the menu, where it took no typing and the menu never
+  appeared. Those reads now happen at launch, where the prompt takes typing,
+  and the saved fixes list shows "unavailable" rather than asking.
+- **F3.** With the menu bar menu working again, Quit and Archive History are
+  reachable from it. As a second way in, Command-Q quits and
+  Command-Shift-H opens Archive History whenever one of the app's windows
+  (the Desk, Archive History) is in front. The trial steps above now give
+  the Terminal fallbacks.
+
+Re-check: the two short checks in "Roles for the remaining work" above, on
+a fresh True Convo Test build.

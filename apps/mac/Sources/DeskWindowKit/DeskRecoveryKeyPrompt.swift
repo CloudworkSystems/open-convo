@@ -102,18 +102,21 @@ public final class SheetRecoveryKeyPrompt: DeskRecoveryKeyPrompting {
         let alert = NSAlert()
         alert.messageText = DeskRecoveryWording.checkTitle
         alert.informativeText = check.prompt + (retry ? "\n\n" + DeskRecoveryWording.checkRetry : "")
-        let first = Self.field("Group \(check.asked[0] + 1)", width: 120)
-        let second = Self.field("Group \(check.asked[1] + 1)", width: 120)
-        let row = NSStackView(views: [first, second])
-        row.orientation = .horizontal
-        row.frame = NSRect(x: 0, y: 0, width: 260, height: 24)
-        alert.accessoryView = row
+        let entry = RecoveryGroupEntry(check: check)
+        alert.accessoryView = entry.view
         alert.addButton(withTitle: DeskRecoveryWording.check)
         alert.addButton(withTitle: DeskRecoveryWording.showAgain)
         alert.addButton(withTitle: DeskRecoveryWording.cancel)
-        alert.window.initialFirstResponder = first
-        switch await run(alert, in: window, cancel: .alertThirdButtonReturn) {
-        case .alertFirstButtonReturn: return .typed(first.stringValue, second.stringValue)
+        alert.window.initialFirstResponder = entry.first
+        // The app lives in the menu bar: bring it and the Desk forward so
+        // the sheet takes the keyboard.
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        let answer = await run(alert, in: window, cancel: .alertThirdButtonReturn)
+        let typed = (entry.first.stringValue, entry.second.stringValue)
+        entry.clear()
+        switch answer {
+        case .alertFirstButtonReturn: return .typed(typed.0, typed.1)
         case .alertSecondButtonReturn: return .showAgain
         default: return .cancel
         }
@@ -129,5 +132,92 @@ public final class SheetRecoveryKeyPrompt: DeskRecoveryKeyPrompting {
         alert.addButton(withTitle: DeskRecoveryWording.cancel)
         alert.window.initialFirstResponder = field
         return await run(alert, in: window, cancel: .alertSecondButtonReturn) == .alertFirstButtonReturn ? field.stringValue : nil
+    }
+}
+
+/// The recovery key check's code entry (step 2 trial, F1): two visible
+/// boxes, each labeled with the group it asks for, a line under each that
+/// counts the characters typed ("3 of 5"), and the rule about spaces.
+/// Laid out with plain frames: in a stack view the boxes had no width, so
+/// they were never drawn and typing never reached them.
+@MainActor
+final class RecoveryGroupEntry: NSObject, NSTextFieldDelegate {
+    static func rule(_ length: Int) -> String {
+        "Type each group's \(length) characters. Spaces, dashes and capital letters don't matter."
+    }
+
+    let view: NSView
+    let first: NSTextField
+    let second: NSTextField
+    let firstProgress: NSTextField
+    let secondProgress: NSTextField
+    private let check: RecoveryKeyCheck
+
+    init(check: RecoveryKeyCheck) {
+        self.check = check
+        let width: CGFloat = 340, box: CGFloat = 150, gap: CGFloat = 40
+        view = NSView(frame: NSRect(x: 0, y: 0, width: width, height: 112))
+        first = Self.box(frame: NSRect(x: 0, y: 46, width: box, height: 30))
+        second = Self.box(frame: NSRect(x: box + gap, y: 46, width: box, height: 30))
+        firstProgress = Self.small(frame: NSRect(x: 0, y: 26, width: box, height: 16))
+        secondProgress = Self.small(frame: NSRect(x: box + gap, y: 26, width: box, height: 16))
+        super.init()
+        let firstLabel = Self.label("Group \(check.asked[0] + 1)", frame: NSRect(x: 0, y: 80, width: box, height: 18))
+        let secondLabel = Self.label("Group \(check.asked[1] + 1)", frame: NSRect(x: box + gap, y: 80, width: box, height: 18))
+        let rule = Self.small(frame: NSRect(x: 0, y: 0, width: width, height: 18))
+        rule.stringValue = Self.rule(check.groupLength)
+        for field in [first, second] {
+            field.delegate = self
+            field.setAccessibilityLabel(field === first ? firstLabel.stringValue : secondLabel.stringValue)
+        }
+        first.nextKeyView = second
+        second.nextKeyView = first
+        for subview in [firstLabel, secondLabel, first, second, firstProgress, secondProgress, rule] { view.addSubview(subview) }
+        update()
+    }
+
+    /// The progress lines, from what is typed now.
+    func update() {
+        firstProgress.stringValue = check.progress(first.stringValue)
+        secondProgress.stringValue = check.progress(second.stringValue)
+    }
+
+    /// Forgets what was typed, once it has been read.
+    func clear() {
+        first.stringValue = ""
+        second.stringValue = ""
+        update()
+    }
+
+    func controlTextDidChange(_ notification: Notification) { update() }
+
+    private static func box(frame: NSRect) -> NSTextField {
+        let field = NSTextField(frame: frame)
+        field.isEditable = true
+        field.isSelectable = true
+        field.isBezeled = true
+        field.bezelStyle = .roundedBezel
+        field.drawsBackground = true
+        field.alignment = .center
+        field.font = .monospacedSystemFont(ofSize: 18, weight: .medium)
+        field.placeholderString = "•••••"
+        field.usesSingleLineMode = true
+        field.cell?.isScrollable = true
+        return field
+    }
+
+    private static func label(_ text: String, frame: NSRect) -> NSTextField {
+        let label = NSTextField(labelWithString: text)
+        label.frame = frame
+        label.font = .systemFont(ofSize: 12, weight: .semibold)
+        return label
+    }
+
+    private static func small(frame: NSRect) -> NSTextField {
+        let label = NSTextField(labelWithString: "")
+        label.frame = frame
+        label.font = .systemFont(ofSize: 11)
+        label.textColor = .secondaryLabelColor
+        return label
     }
 }
