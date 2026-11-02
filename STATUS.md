@@ -171,7 +171,7 @@ Desk "Followed" view each need a plan revision.
 
 **Desk message actions** (Desk; owner asked November 1), Claude builds, GrokBot or a fresh Claude reviews: plan
 [docs/plans/desk-message-actions.md](docs/plans/desk-message-actions.md), approved by the owner November 1; PR 2 (action row, Copy, ratings, reactions) merged (#224); PR 3 (Reply) merged (#245); PR 4 (side chat, opens in place) merged (#247); PR 5 (the full emoji set, added on his ask) merged (#248); his trial in True Convo Test is next. Copy,
-thumbs up and down, reactions, reply with a quote, a side chat and any standard emoji on each message; ratings and reactions stay on the Mac. Next: [docs/plans/desk-shared-reactions.md](docs/plans/desk-shared-reactions.md), a draft plan for agents to see his reactions and react back (his pick, November 1), waiting for his yes.
+thumbs up and down, reactions, reply with a quote, a side chat and any standard emoji on each message; ratings and reactions stay on the Mac. Next: [docs/plans/desk-shared-reactions.md](docs/plans/desk-shared-reactions.md), approved November 2 (#249): agents see his reactions, with a per-chat switch, and react back. PR 2 (the switch and the reactions note) in review; PR 3 (agents react back) next.
 
 **Merge gate**: pull requests merge themselves once tests pass and Codex's
 review is clean; protected paths still need the owner. Plan:

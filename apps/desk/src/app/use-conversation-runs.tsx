@@ -10,6 +10,7 @@ import { RunTranscript } from '../features/RunTranscript';
 import { canRetryLocalRun, isLocalParticipant, localChoiceProblem, localModelName, noLocalChoiceMessage, ollamaChoiceTitle, localStartRefusalMessage,
   selectLocalContext } from '../domain/local-participant';
 import { canRetryClaudeRun, claudeSendLine, isOffMacClaude, selectClaudeContext } from '../domain/claude-participant';
+import { contextRunsFor, reactionsLine, reactionsNoteSendHold } from '../domain/shared-reactions';
 import type { DeskRuntime } from './runtime';
 
 export type WorkspaceAttemptResult = WorkspaceSaveResult | { kind: 'blocked'; error: string };
@@ -375,8 +376,13 @@ export function useConversationRuns(options: RunWorkspace) {
         // Section 21.2: an off-Mac Claude run is sent them too, within the
         // first-trial bound over context and message together.
         const offMac = isOffMacClaude(participant.identity);
-        const context = local ? selectLocalContext(state.conversationRuns ?? [], sessionId, input)
-          : offMac ? selectClaudeContext(state.conversationRuns ?? [], sessionId, input, access.runtime.participantInputLimit) : undefined;
+        // Shared reactions rule 9: turns holding a reactions note stay out
+        // unless sharing is on for this participant.
+        const sessionRecord = state.sessions.find((item) => item.id === sessionId);
+        if (reactionsNoteSendHold(sessionRecord, input)) return;
+        const contextRuns = contextRunsFor(state.conversationRuns ?? [], sessionRecord);
+        const context = local ? selectLocalContext(contextRuns, sessionId, input)
+          : offMac ? selectClaudeContext(contextRuns, sessionId, input, access.runtime.participantInputLimit) : undefined;
         if (offMac && context?.kind === 'too-large') {
           access.error('This message is too long for the current trial. Shorten it before sending. Your full draft is kept; nothing was sent.');
           return;
@@ -602,8 +608,22 @@ export function useConversationRuns(options: RunWorkspace) {
   const participantMode = options.runtime.participantChoices !== undefined || !!selectedSession?.participantChoice
     || !!options.runtime.participant || options.state?.schemaVersion === 2;
   // Safety model item 1: what Send would take off the Mac, before Send.
-  const sendDestination = participantMode && selected && isOffMacClaude(savedSelection)
-    ? claudeSendLine(options.state?.conversationRuns ?? [], selected, options.state?.drafts[selected] ?? '', inputLimit) ?? undefined : undefined;
+  const selectedDraft = options.state?.drafts[selected ?? ''] ?? '';
+  // While saving is blocked, sharing reads as off (plan rule 5) in both
+  // halves of the line, so it never says reactions will go.
+  const sharingSession = selectedSession && options.blocked() ? { ...selectedSession, reactionSharing: undefined } : selectedSession;
+  const claudeLine = participantMode && selected && isOffMacClaude(savedSelection)
+    ? claudeSendLine(contextRunsFor(options.state?.conversationRuns ?? [], sharingSession), selected, selectedDraft, inputLimit) ?? undefined : undefined;
+  // Shared reactions: where reactions go, or which earlier turns stay out.
+  const reactionsDestination = savedSelection ? isOffMacClaude(savedSelection) ? `${savedSelection.label} (Anthropic)`
+    : selectedLocal ? `${savedSelection.label} on this Mac` : savedSelection.label : '';
+  const unfilteredContext = !participantMode || !selected ? undefined
+    : selectedLocal ? selectLocalContext(options.state?.conversationRuns ?? [], selected, selectedDraft)
+    : isOffMacClaude(savedSelection) ? selectClaudeContext(options.state?.conversationRuns ?? [], selected, selectedDraft, inputLimit) : undefined;
+  const carriedRunIds = new Set(unfilteredContext?.kind === 'ok' ? unfilteredContext.contextRunIds : []);
+  const sharedLine = participantMode ? reactionsLine(options.state?.conversationRuns ?? [], sharingSession, reactionsDestination, carriedRunIds) : undefined;
+  const sendDestination = [claudeLine, sharedLine].filter(Boolean).join(' ') || undefined;
+  const reactionsHold = participantMode ? reactionsNoteSendHold(selectedSession, selectedDraft) : undefined;
   // Step 3 trial: while this conversation's reply is being written, the
   // composer's Send becomes Stop, wired to the same controller.stop() as the
   // transcript's own Stop. Recovery states (Retry Stop, cleanup) stay in the
@@ -632,11 +652,12 @@ export function useConversationRuns(options: RunWorkspace) {
     participantLabel: participantMode ? choiceLabel ?? 'Participant unavailable' : undefined,
     selectedLocalProblem: selectedLocal && savedSelection && !options.runtime.participantAvailabilityChecking ? catalogBlock(savedSelection) : undefined,
     busy: selectedBusy, composerStop, sendWaitingReason, sendDestination,
-    unavailable: participantMode && (!(selectedLocal ? options.runtime.participantForRun : options.runtime.participant) || options.blocked() || cleanupPending() || !!selectionBlock || inputTooLarge),
+    unavailable: participantMode && (!(selectedLocal ? options.runtime.participantForRun : options.runtime.participant) || options.blocked() || cleanupPending() || !!selectionBlock || inputTooLarge || !!reactionsHold),
     sendBlockedReason: participantMode && options.blocked()
       ? 'Sending is paused until the workspace save is resolved. Your draft is retained.'
       : selectionBlock ? selectionBlock
       : participantMode && !(selectedLocal ? options.runtime.participantForRun : options.runtime.participant) ? 'Connect a participant before sending. Your draft remains editable.'
+      : reactionsHold ? reactionsHold
       : participantMode && cleanupPending() ? `Cleanup for ${cleanupTitle ?? 'a saved session'}${cleanupRun ? ` (run ${cleanupRun.runId})` : ''} is not confirmed. Use the available recovery controls for that response before sending another message.` : inputBlock,
   };
 }
