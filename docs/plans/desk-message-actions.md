@@ -36,7 +36,7 @@ reply:
 | Thumbs up / thumbs down | No | Yes | His rating of the reply. One at a time; pressing it again clears it. |
 | React | Yes | Yes | A fixed set of six reactions (for example 👍 ❤️ 🎉 👀 ✅ ❓) to tag a message for himself. |
 | Reply | Yes | Yes | Starts a new message in the main box that quotes this message. |
-| Side chat | Yes | Yes | Opens a separate chat about this one message in place of the main one, with a link back (revision, November 1). |
+| Side chat | Yes | Yes | Opens a side panel with a separate chat about this one message. |
 
 "Copy as Markdown" is left out for now: the Desk shows a reply's text
 exactly as received, so plain copy and Markdown copy would give the same
@@ -92,7 +92,7 @@ text. It arrives with Markdown rendering, if the Desk ever renders it.
    input limit, and browser tests that the sent text is exactly what the box
    showed.
 4. **Side chat.** A linked session (`sideOf`: parent session id and message
-   id), opened in place of the main conversation with its own message box, the quote as its first
+   id), the side panel with its own message box, the quote as its first
    message, its own participant line, and a way back to the message it came
    from. Side chats are listed under their parent, not as separate top-level
    conversations.
@@ -110,7 +110,51 @@ replaces the main conversation in the same view, a note at the top says
 what message it is about (quoted), and "Back to the message" returns to the
 main conversation at that message. Side chats are listed under their parent
 in the sidebar, and each message lists links to its side chats. Rules 3, 4
-and 6 are unchanged.
+and 6 are unchanged. This replaces the side panel named in the table under
+"What The Owner Gets" and in PR 4 above; that wording stays as approved.
+
+Every list of conversations (the sidebar, a folder's session list and the
+Canvas) shows a side chat under the conversation it is about, and moving a
+conversation to another folder moves its side chats with it.
+
+### When It Goes Wrong (Side Chat)
+
+The five questions of [when-it-goes-wrong.md](when-it-goes-wrong.md), for
+the side chat screen:
+
+1. **No connection.** Starting a side chat needs no connection: it is saved
+   on the Mac with its quoted draft. Sending from it works like any
+   conversation, so when its participant isn't available the line above the
+   message box says so and the draft is kept.
+2. **Interrupted.** The side chat and its draft are saved when it is
+   created. After a quit, crash or sleep it is still listed under its
+   parent with the quote in its draft. A reply cut off inside it is handled
+   like a reply cut off in any conversation.
+3. **Empty or first run.** A new side chat opens with the note "Side chat
+   about a message in …", the quoted message, and the quote already in its
+   message box, so the first step is to type a question and send. If the
+   message it is about is gone, the note says "That message is no longer
+   shown." and the side chat still works.
+4. **Denied or stuck.** There is no prompt to refuse. "Back to the message"
+   always returns to the main conversation; if that message is gone, it
+   lands at the conversation. If the main conversation itself is gone, the
+   side chat is listed on its own. While the Desk can't save, Side chat is
+   off with the reason shown, and the owner can still read and go back.
+5. **The error message.** The only new message is that reason, shared with
+   the other actions and shown on the button: "Rating, reacting, Reply and
+   Side chat are off until saving works again." A side chat started from a
+   reply still being written is refused the same way: "Wait until this
+   reply has ended to rate, react or reply to it."
+
+
+**Owner trial checks** (added to the Desk trial for this feature):
+
+- Start a side chat from a reply; the note, the quote and the quoted draft
+  show, and it is listed under its conversation.
+- Quit and reopen the Desk; the side chat and its draft are still there.
+- Use "Back to the message"; the main conversation opens at that message.
+- Move the main conversation to another folder; its side chats move too.
+- While saving is blocked, Side chat is off and says why; going back works.
 
 ## Later, Not In This Plan
 

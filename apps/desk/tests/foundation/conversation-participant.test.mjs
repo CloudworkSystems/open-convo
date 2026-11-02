@@ -1788,9 +1788,9 @@ test('while the Desk cannot save, ratings and reactions are off and Copy still w
     for (const name of ['Good reply', 'Bad reply', 'Add a reaction']) {
       const button = replyActions(f.page).getByRole('button', { name, exact: true });
       await expect(button).toBeDisabled();
-      await expect(button).toHaveAttribute('title', 'Ratings and reactions are off until saving works again.');
+      await expect(button).toHaveAttribute('title', 'Rating, reacting, Reply and Side chat are off until saving works again.');
     }
-    await expect(replyActions(f.page)).toContainText('Ratings and reactions are off until saving works again.');
+    await expect(replyActions(f.page)).toContainText('Rating, reacting, Reply and Side chat are off until saving works again.');
     await replyActions(f.page).getByRole('button', { name: 'Copy reply', exact: true }).click();
     assert.deepEqual(await f.page.evaluate(() => window.__copied), ['Reply kept while saving is blocked']);
     await f.check();
