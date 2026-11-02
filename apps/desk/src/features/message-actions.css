@@ -188,7 +188,7 @@
 }
 /* Navigation: a side chat sits indented under the conversation it came from. */
 .session-row-side {
-  padding-left: 14px;
+  padding-left: calc(14px * var(--side-chat-depth, 1));
 }
 .session-row-side .session-mark {
   border-radius: 2px;

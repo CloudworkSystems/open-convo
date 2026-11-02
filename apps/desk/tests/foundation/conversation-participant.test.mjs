@@ -1878,6 +1878,15 @@ test('a side chat opens as its own linked conversation that quotes only the mess
     await expect(replyActions(f.page).getByRole('button', { name: side.title, exact: true })).toBeVisible();
     await replyActions(f.page).getByRole('button', { name: side.title, exact: true }).click();
     await expect(anchor).toBeVisible();
+    // A side chat started inside a side chat is indented one level further.
+    await replyActions(f.page).getByRole('button', { name: 'Start a side chat about reply', exact: true }).click();
+    await expect.poll(() => f.stored.sessions.at(-1)?.sideOf?.sessionId).toBe(side.id);
+    const nested = f.stored.sessions.at(-1);
+    await expect(f.page.locator('[data-side-chat-depth="1"]').getByRole('button', { name: side.title, exact: true })).toBeVisible();
+    await expect(f.page.locator('[data-side-chat-depth="2"]').getByRole('button', { name: nested.title, exact: true })).toBeVisible();
+    const indent = async (title) => f.page.locator('.session-row-side').filter({ has: f.page.getByRole('button', { name: title, exact: true }) })
+      .evaluate((row) => parseFloat(getComputedStyle(row).paddingLeft));
+    assert.ok(await indent(nested.title) > await indent(side.title));
     await f.check();
   } finally { await f.close(); }
 });
