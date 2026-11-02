@@ -52,11 +52,12 @@ struct ClaudeConversationWiringTests {
         #expect(ClaudeConversation.make(for: .test, paths: testPaths, executable: nil, log: { _, _ in },
                                         expectedInit: Self.invented) == nil)
         // Codex P1 on #228: nothing is offered that could not run.
-        #expect(ClaudeConversation.recordedInit == nil, "not recorded until section 16's run")
         let logs = LockedLines()
         #expect(ClaudeConversation.make(for: .test, paths: testPaths, executable: Self.executable,
-                                        log: { logs.append("\($0) \($1)") }) == nil, "the app's call, before the recording")
+                                        log: { logs.append("\($0) \($1)") }, expectedInit: nil) == nil, "without recorded values")
         #expect(logs.lines == ["claude.wiring.off reason=init-unrecorded"])
+        #expect(ClaudeConversation.make(for: .release, paths: paths, executable: Self.executable, log: { _, _ in }) == nil,
+                "the app's call, for the real app")
         #expect(try FileManager.default.contentsOfDirectory(atPath: root.path).isEmpty, "no folder made for any of them")
     }
 
@@ -83,6 +84,33 @@ struct ClaudeConversationWiringTests {
         #expect(launcher.expectedInit == Self.invented)
         #expect(entry.signals.isRunning, "the end observers run from launch")
         #expect(logs.lines == ["claude.wiring.on "])
+    }
+
+    @Test("The app's call checks the values recorded on the owner's Mac: the pinned model, no slash commands or skills, only the built-in agents-md plugin, and no key source")
+    @MainActor
+    func recordedValues() throws {
+        let recorded = ClaudeConversation.recordedInit
+        #expect(recorded.model == "claude-sonnet-5-5" && recorded.model == LocalConversationLane.claudePin.model)
+        #expect(recorded.slashCommands.isEmpty && recorded.skills.isEmpty)
+        #expect(recorded.plugins == .array([.object(["name": .string("agents-md"), "path": .string("builtin"),
+                                                    "source": .string("agents-md@builtin")])]))
+        #expect(recorded.apiKeySource == "none")
+        // The reader compares `plugins` as one JSON value, so the line as
+        // recorded matches, and any other plugin list does not.
+        let recordedEntry = #"{"name":"agents-md","path":"builtin","source":"agents-md@builtin"}"#
+        #expect(try JSONValue.decode(Data("[\(recordedEntry)]".utf8)) == recorded.plugins, "the recorded line")
+        for other in ["[]", #"[\#(recordedEntry),{"name":"invented-plugin","path":"builtin","source":"invented-plugin@builtin"}]"#,
+                      #"[{"name":"agents-md","path":"/invented/folder","source":"agents-md@builtin"}]"#,
+                      #"[{"name":"agents-md","path":"builtin","source":"agents-md@builtin","extra":true}]"#] {
+            #expect(try JSONValue.decode(Data(other.utf8)) != recorded.plugins, "\(other)")
+        }
+        let root = try Self.folder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let entry = try #require(ClaudeConversation.make(for: .test, paths: DeskPaths(applicationSupport: root, identity: .test),
+                                                         executable: Self.executable, log: { _, _ in }))
+        defer { entry.stopObserving() }
+        let launcher = try #require(entry.launcher as? ProcessParticipantLauncher)
+        #expect(launcher.expectedInit == recorded, "the app's call passes the recorded values")
     }
 
     @Test("With the entry, the lane's Claude side is section 17's owner, with the first-trial bound and the entry's launcher; the local route is unchanged")
