@@ -100,6 +100,17 @@ switch on.
    deleted, so the block can't be found whole), Send is held with the reason
    "This draft still has a reactions note. Delete it or turn sharing back
    on." and nothing is sent.
+9. **A sent note is part of that message, and earlier turns say so.** Once
+   sent, a note is part of that run's message, so it follows the Desk's
+   existing rule for earlier turns: a later run in the same conversation,
+   to any participant, may carry it as context, and only when the line
+   above the box counts that turn. When any earlier turn the next Send would
+   carry holds a reactions note, and the switch is off or was turned on for
+   a different participant, the line adds "including reactions you shared
+   earlier" and names who they now go to, and the Desk leaves those turns
+   out of the context unless he turns the switch on for this participant.
+   So reactions never reach a participant he didn't turn sharing on for,
+   not even as history.
 
 ## Proposed Pull Requests, In Order
 
@@ -110,7 +121,9 @@ switch on.
    updated, frozen once edited, cleared on Send), unit tests for the note
    text and limits, and browser tests that the sent text is exactly what the
    box showed, that nothing is sent with the switch off (edited note
-   included), and that a participant change turns the switch off.
+   included), that a participant change turns the switch off, and that
+   earlier turns holding a note are left out of a new participant's
+   context (rule 9).
 3. **Agents react back.** The instruction sentence in the note, reading a
    first `Reaction:` line from the reply, the agent reaction chip, Copy
    without the line, and tests for complete, cut-off and malformed lines.
@@ -145,7 +158,9 @@ change; react and see the note appear; edit the note and see that a new
 reaction no longer changes it; send and see the agent answer the reaction;
 see an agent reaction chip on his message; quit and reopen with an unsent
 note and see it kept; turn the switch off and see the note go away, both
-unedited and after editing it; with the switch on for a local model, pick
+unedited and after editing it; share a reaction with a local model, switch the
+chat to Claude, and see the earlier turn with the note left out of what is
+sent until he turns sharing on for Claude; with the switch on for a local model, pick
 Claude and see the switch turn off and the note go away; delete the note's
 closing bracket, turn the switch off, and see Send held with the reason;
 confirm a chat with the switch off sends no note.
