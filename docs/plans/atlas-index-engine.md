@@ -166,6 +166,10 @@ gardening and recipes notebook). At least:
   meaning in a link), and the link checker decodes them before looking a
   file up. Tests cover notes named `plan#1.md`, `a (draft).md` and
   `two words.md`.
+- **Removals check against the scan too.** Just before deleting a file in
+  `removes`, the command compares it byte for byte with what it read in
+  the scan and skips it (reported under `conflicts`) if it changed, so an
+  overlapping rebuild's newer index is never deleted. A test covers it.
 - **Link labels are escaped.** The about text inside `[...]` escapes
   Markdown characters (`\`, `[`, `]`, `(`, `)`, `*`, `_`, `` ` ``, `<`,
   `>`), so a heading like `# [Project](old.md)` stays text. A test covers

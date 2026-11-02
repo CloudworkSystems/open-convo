@@ -465,6 +465,11 @@ pull requests.
 - **Part 2: conversion rates expire.** A rate older than 24 hours before
   `now` is refused and the paid route stays off (fail closed); a test
   covers a stale rate.
+- **Part 2: conversion rates come only from a protected record.** The
+  rate is never an argument a caller or model passes. It is read from the
+  signed cap record (set by the person on the signed path, with its date),
+  so a forged rate can't make a run fit. A test passes a fresh, favorable
+  rate as an argument and shows it is ignored.
 - **Part 3: the prompt goes to a named place.** A local workflow marks
   where the prompt goes with the exact text `{{prompt}}` in one text field.
   The runner refuses a workflow with no such field or more than one, puts
