@@ -131,7 +131,7 @@ function validate(input, record) {
     }
   }
 
-  exactFields(record, "record", ["message", "space", "jobId", "recipient", "recipientTrust", "offerMade", "offerAccepted", "approvals", "usedApprovals", "usedAcceptances", "memory"], ["offeredRequest", "acceptanceId"]);
+  exactFields(record, "record", ["message", "space", "jobId", "recipient", "recipientTrust", "offerMade", "offerAccepted", "approvals", "usedApprovals", "usedAcceptances"], ["memory", "offeredRequest", "acceptanceId"]);
   exactFields(record.message, "record.message", ["text", "from"]);
   string(record.message.text, "record.message.text", { nonempty: false, maxBytes: MAX_TEXT_BYTES });
   enumValue(record.message.from, "record.message.from", FROM_VALUES);
@@ -143,19 +143,20 @@ function validate(input, record) {
     if (!Object.hasOwn(record, "offeredRequest")) fail("record.offeredRequest", "is required when offerAccepted is true");
     if (!Object.hasOwn(record, "acceptanceId")) fail("record.acceptanceId", "is required when offerAccepted is true");
   }
-  if (Object.hasOwn(record, "offeredRequest")) string(record.offeredRequest, "record.offeredRequest", { nonempty: false, maxBytes: MAX_TEXT_BYTES });
+  if (Object.hasOwn(record, "offeredRequest")) string(record.offeredRequest, "record.offeredRequest", { maxBytes: MAX_TEXT_BYTES });
   if (Object.hasOwn(record, "acceptanceId")) string(record.acceptanceId, "record.acceptanceId");
-  for (const name of ["approvals", "usedApprovals", "usedAcceptances", "memory"]) list(record[name], `record.${name}`);
+  for (const name of ["approvals", "usedApprovals", "usedAcceptances"]) list(record[name], `record.${name}`);
+  if (record.memory !== undefined) list(record.memory, "record.memory");
   record.approvals.forEach(validateApproval);
   record.usedApprovals.forEach((id, index) => string(id, `record.usedApprovals[${index}]`));
   record.usedAcceptances.forEach((id, index) => string(id, `record.usedAcceptances[${index}]`));
-  record.memory.forEach(validateGrant);
+  (record.memory ?? []).forEach(validateGrant);
   const approvalIds = record.approvals.map(({ approvalId }) => approvalId);
   if (new Set(approvalIds).size !== approvalIds.length) fail("record.approvals.approvalId", "must not repeat");
 }
 
 function sorted(items, key) {
-  return [...items].sort((a, b) => canonical(key(a)).localeCompare(canonical(key(b))));
+  return [...items].sort((a, b) => canonical(key(a)) < canonical(key(b)) ? -1 : canonical(key(a)) > canonical(key(b)) ? 1 : 0);
 }
 
 function ignored(approval, reason) {
@@ -164,6 +165,7 @@ function ignored(approval, reason) {
 
 export function routeMessage(input, record) {
   validate(input, record);
+  const memory = record.memory ?? [];
   const actions = sorted(input.facts.outsideActions, ({ id }) => id);
   const approvals = sorted(record.approvals, ({ approvalId }) => approvalId);
   const usedApprovals = new Set(record.usedApprovals);
@@ -199,7 +201,7 @@ export function routeMessage(input, record) {
   const offer = main === "talk-it-through" && input.facts.steps > quickSteps && !record.offerMade;
   const droppedGrants = [];
   const memoryPackage = [];
-  for (const grant of sorted(record.memory, (item) => item)) {
+  for (const grant of sorted(memory, (item) => item)) {
     let reason = null;
     if (grant.jobId !== record.jobId) reason = "grant is for another job";
     else if (grant.recipient !== record.recipient) reason = "grant is for another recipient";
@@ -239,7 +241,7 @@ export function routeMessage(input, record) {
       outsideActions: actions.length,
       countingApprovals: approvedActions.length,
       ignoredApprovals: ignoredApprovals.length,
-      memoryGrants: record.memory.length,
+      memoryGrants: memory.length,
       droppedGrants: droppedGrants.length
     }
   };
@@ -247,5 +249,5 @@ export function routeMessage(input, record) {
 
 export function oneLineSummary(result) {
   const waiting = result.waitFor.map(({ id }) => id).join(", ") || "none";
-  return `Main: ${result.main}; routes: ${result.routes.join(", ")}; waiting for: ${waiting}`.replace(/[\r\n\u2028\u2029]/gu, " ");
+  return `Main: ${result.main}; routes: ${result.routes.join(", ")}; waiting for: ${waiting}`.replace(/[\r\n\u061c\u200e\u200f\u2028-\u202e\u2066-\u2069]/gu, " ");
 }

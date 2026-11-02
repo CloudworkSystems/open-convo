@@ -131,6 +131,15 @@ test("memory grants are limited by job, recipient, space, sharing and recipient 
   assert.ok(outside.droppedGrants.some(({ file }) => file === "same-space.txt"));
 });
 
+test("an omitted memory list is empty while an invalid memory value is refused", () => {
+  const { memory: omitted, ...recordWithoutMemory } = baseRecord();
+  assert.equal(omitted.length, 0);
+  const result = routeMessage(input(), recordWithoutMemory);
+  assert.deepEqual(result.brief.memoryPackage, []);
+  assert.equal(result.counts.memoryGrants, 0);
+  assert.throws(() => routeMessage(input(), baseRecord({ memory: {} })), /record\.memory/u);
+});
+
 test("offers are shown once and accepted offers are used once without approving outside actions", () => {
   const thinking = input({ asks: "thinking", steps: 8 });
   assert.equal(routeMessage(thinking, baseRecord()).offer, true);
@@ -150,6 +159,7 @@ test("offers are shown once and accepted offers are used once without approving 
 
   const used = routeMessage(thinking, { ...accepted, usedAcceptances: ["accept-1"] });
   assert.equal(used.main, "talk-it-through");
+  assert.throws(() => routeMessage(thinking, { ...accepted, offeredRequest: "" }), /record\.offeredRequest/u);
 });
 
 test("model-filled input cannot carry host record fields and used approvals cannot count", () => {
@@ -181,6 +191,7 @@ test("hostile valid text is preserved in a brief and cannot add a summary line",
   const result = routeMessage(input(), baseRecord({ message: { text, from: "person" } }));
   assert.equal(result.brief.personsWords, text);
   assert.equal(oneLineSummary(result).split(/\r?\n/u).length, 1);
+  assert.doesNotMatch(oneLineSummary(routeMessage(input({ outsideActions: [action("\u202eaction")] }), baseRecord())), /\u202e/u);
 });
 
 test("output is deterministic across shuffled lists and does not read the clock", () => {
@@ -198,6 +209,8 @@ test("output is deterministic across shuffled lists and does not read the clock"
   try {
     const after = JSON.stringify(routeMessage(input({ outsideActions: [a, b] }), baseRecord({ approvals: [...approvals].reverse(), memory: [...memory].reverse() })));
     assert.equal(after, before);
+    const unicodeActions = [action("é"), action("e\u0301")];
+    assert.equal(JSON.stringify(routeMessage(input({ outsideActions: unicodeActions }), baseRecord())), JSON.stringify(routeMessage(input({ outsideActions: [...unicodeActions].reverse() }), baseRecord())));
   } finally {
     global.Date = originalDate;
   }
