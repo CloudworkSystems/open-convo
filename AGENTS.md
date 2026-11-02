@@ -185,6 +185,11 @@ looping for 8 to 17 rounds on ever-narrower edge cases, so:
   raise that finding again on every round until the judge rates it or the
   code fixes it, so the judge sees it on the latest commit.
 - Give all findings for a commit in one round, most severe first.
+- When a plan's "When it goes wrong" section promises a behavior and the
+  code leaves it out, that is a broken promise (P1). A failure state the plan
+  never mentions is P3 at most, unless it meets the P0 or P1 definitions
+  above on its own (data loss, a privacy or security hole, money spent)
+  ([docs/plans/when-it-goes-wrong.md](docs/plans/when-it-goes-wrong.md)).
 - A pull request that adds an outside host, a dependency, a Mac permission
   or a key name is held for the owner by `codex-approved` (the risk hold),
   and the triage judge always rates findings about privacy, secrets or
@@ -246,8 +251,9 @@ or task gets a row here first.
 
 - Write every file as if this repo were public: no secrets, keys, private records,
   raw chats or personal details. Secrets belong in Keychain or the owner's
-  "True Convo AI" vault in 1Password, read only through its own
-  service account (docs/decisions.md, October 31), never in files or logs.
+  "True Convo AI" vault in 1Password, reached only through its own
+  service account (docs/decisions.md, October 31 and November 1), never in
+  files or logs.
 - Keep build output, downloads, model files and private data out of Git.
 - No public release, deployment, publication, spending, account or credential
   change, or service that outlives the session without the owner's approval.

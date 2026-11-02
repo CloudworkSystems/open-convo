@@ -20,7 +20,7 @@ export type IconName =
   | 'spark'
   | 'return' | 'folder' | 'user' | 'help' | 'monitor' | 'rail-open' | 'rail-closed'
   | 'canvas' | 'atlas' | 'railmap' | 'pin' | 'pin-filled' | 'ellipsis'
-  | 'copy' | 'thumb-up' | 'thumb-down' | 'smile';
+  | 'copy' | 'thumb-up' | 'thumb-down' | 'smile' | 'reply' | 'side-chat';
 // These controls are interface symbols, separate from the recovered brand mark.
 
 const paths: Record<IconName, ReactNode> = {
@@ -28,6 +28,8 @@ const paths: Record<IconName, ReactNode> = {
   copy: <><rect x="8" y="8" width="14" height="14" rx="2" /><path d="M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2" /></>,
   'thumb-up': <><path d="M7 10v12" /><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" /></>,
   'thumb-down': <g transform="rotate(180 12 12)"><path d="M7 10v12" /><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" /></g>,
+  reply: <><path d="m9 17-5-5 5-5" /><path d="M20 18v-2a4 4 0 0 0-4-4H4" /></>,
+  'side-chat': <><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z" /><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1" /></>,
   smile: <><circle cx="12" cy="12" r="10" /><path d="M8 14s1.5 2 4 2 4-2 4-2" /><path d="M9 9h.01M15 9h.01" /></>,
   ellipsis: <><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none" /></>,
   pin: <g transform="rotate(40 12 12)"><path d="M8 3h8v2h-1v5l3 3v2H6v-2l3-3V5H8V3Z" /><path d="M12 15v7" /></g>,

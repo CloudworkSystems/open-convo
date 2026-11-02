@@ -1,6 +1,6 @@
 # Tasks And Reminders Engine (PRD)
 
-Status: In progress (Oct 29): merged in #138; GrokBot team A building (#141, #146);
+Status: Built (Oct 29): merged in #138; GrokBot team A built it (issue #141), merged as #146;
 scope narrowed October 29 ("Revision: Narrowed Scope" at the end).
 
 Written October 24, 2026 by a Claude session (project "261024 OC Steering")

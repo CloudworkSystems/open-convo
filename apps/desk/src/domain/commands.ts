@@ -4,6 +4,7 @@ import { defaultSessionTitle } from './session-naming';
 import { sameParticipantIdentity, validParticipantIdentity } from './participant-choices';
 import { isMemoryCommand, mutateMemory } from './memory';
 import { isMessageMarkCommand, mutateMessageMark } from './message-marks';
+import { createSideChat, linkedSessionIds } from './side-chat';
 import type { Activity, DeskCommand, DeskState, DomainOptions, Goal, Session } from './types';
 
 export class DomainError extends Error {
@@ -110,6 +111,15 @@ export function applyCommand(state: DeskState, command: DeskCommand, options: Do
       event('created', 'Session created.', command.goalId, sessionId);
       break;
     }
+    case 'create-side-chat': {
+      try {
+        const created = createSideChat(next, command.messageId, command.text, id(), now);
+        event('created', 'Side chat created.', created.goalId, created.id);
+      } catch (error) {
+        throw new DomainError(error instanceof Error ? error.message : 'The side chat could not be created.');
+      }
+      break;
+    }
     case 'set-domain-pinned': {
       const target = goal(command.domainId);
       if (typeof command.pinned !== 'boolean') throw new DomainError('A domain pin setting must be true or false.');
@@ -213,10 +223,16 @@ export function applyCommand(state: DeskState, command: DeskCommand, options: Do
     case 'move-session': {
       const target = session(command.sessionId);
       if (command.goalId !== null) goal(command.goalId);
-      if (target.goalId === command.goalId) return state;
-      target.goalId = command.goalId;
-      target.updatedAt = now;
-      if (next.selection.sessionId === target.id) next.selection.goalId = command.goalId;
+      // A conversation moves with its side chats, so the folder and the
+      // sidebar, which lists side chats under their parent, always agree.
+      const group = linkedSessionIds(next, target.id).map(session);
+      if (group.every((member) => member.goalId === command.goalId)) return state;
+      for (const member of group) {
+        if (member.goalId === command.goalId) continue;
+        member.goalId = command.goalId;
+        member.updatedAt = now;
+      }
+      if (group.some((member) => member.id === next.selection.sessionId)) next.selection.goalId = command.goalId;
       event('edited', command.goalId === null ? 'Session returned to unassigned sessions.' : 'Session placed in a domain.', command.goalId, target.id);
       break;
     }

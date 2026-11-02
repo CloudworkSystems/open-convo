@@ -1,0 +1,25 @@
+# Cloudflare Workers settings for the front porch (docs/plans/front-porch-api.md).
+# Deploys run only from the front-porch-deploy workflow, behind the owner's
+# approval of each run.
+name = "front-porch"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+
+# Production, used by every ordinary deploy: no workers.dev address and no
+# preview URLs, so the Worker answers only at api.trueconvo.com, behind the
+# zone's rate limit. With workers_dev off and no route or routes key, Wrangler
+# leaves the routes and custom domain the owner set in the dashboard alone.
+workers_dev = false
+preview_urls = false
+
+# No routes or custom domains here, on purpose. The one-Worker token can't
+# manage them, and the owner attaches api.trueconvo.com in the dashboard.
+
+# Staging, only for the one ZAP scan before api.trueconvo.com is attached:
+# the same Worker with its workers.dev address on. The workflow runs it only
+# while api.trueconvo.com doesn't exist yet, and deploys the production
+# settings again in the same run, after the scan.
+[env.staging]
+name = "front-porch"
+workers_dev = true
+preview_urls = false

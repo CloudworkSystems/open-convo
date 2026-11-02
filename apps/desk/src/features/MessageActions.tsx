@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useId, useRef, useState } from 'react';
-import { MESSAGE_REACTIONS } from '../domain/message-marks';
+import { MESSAGE_REACTIONS, quickReactionFor } from '../domain/message-marks';
 import type { MessageMark, MessageReaction } from '../domain/types';
 import { Icon } from '../ui/Icon';
+import { EmojiPicker, emojiName } from './EmojiPicker';
 import './message-actions.css';
 
 /**
@@ -14,6 +15,15 @@ export interface MessageActionsValue {
   saveBlockedReason?: string;
   onRate: (messageId: string, rating: 'up' | 'down' | null) => void;
   onReact: (messageId: string, reaction: MessageReaction) => void;
+  /** Toggles any standard emoji from the full set. */
+  onEmoji?: (messageId: string, emoji: string) => void;
+  /** Quotes this message at the top of its conversation's draft. Returns false when it couldn't. */
+  onReply?: (messageId: string, text: string) => boolean;
+  /** Starts a side chat about this message and opens it. */
+  onSideChat?: (messageId: string, text: string) => void;
+  /** Side chats already started about each message, oldest first. */
+  sideChats?: ReadonlyMap<string, readonly { id: string; title: string }[]>;
+  onOpenSession?: (sessionId: string) => void;
 }
 
 export const MessageActionsContext = createContext<MessageActionsValue | null>(null);
@@ -35,6 +45,7 @@ export function MessageActions({ messageId, role, text, ended, latest = false }:
   const context = useContext(MessageActionsContext);
   const [copy, setCopy] = useState<CopyState>('idle');
   const [picking, setPicking] = useState(false);
+  const [more, setMore] = useState(false);
   const pickerId = useId();
   const statusId = useId();
   const pickerButton = useRef<HTMLButtonElement>(null);
@@ -59,8 +70,10 @@ export function MessageActions({ messageId, role, text, ended, latest = false }:
   }, [mark]);
   const rate = (rating: 'up' | 'down' | null) => { expecting.current = mark; context?.onRate(messageId, rating); };
   const react = (reaction: MessageReaction) => { expecting.current = mark; context?.onReact(messageId, reaction); };
+  const toggleEmoji = (emoji: string) => { expecting.current = mark; context?.onEmoji?.(messageId, emoji); };
+  const closePicker = () => { setPicking(false); setMore(false); pickerButton.current?.focus(); };
   const reply = role === 'assistant';
-  const blocked = context?.saveBlockedReason ?? (ended ? undefined : 'Wait until this reply has ended to rate or react to it.');
+  const blocked = context?.saveBlockedReason ?? (ended ? undefined : 'Wait until this reply has ended to rate, react or reply to it.');
   const markDisabled = blocked !== undefined;
   const copyText = async () => {
     clearTimeout(reset.current);
@@ -75,10 +88,13 @@ export function MessageActions({ messageId, role, text, ended, latest = false }:
   };
   const label = reply ? 'reply' : 'your message';
   const chosen = new Set(mark?.reactions ?? []);
+  const chosenEmoji = new Set([...(mark?.emoji ?? []),
+    ...MESSAGE_REACTIONS.filter((reaction) => chosen.has(reaction.name)).map((reaction) => reaction.emoji)]);
+  const sideChats = context?.sideChats?.get(messageId) ?? [];
   return (
     <div className={`message-actions${latest ? ' message-actions-latest' : ''}${reply ? '' : ' message-actions-user'}`} role="group" aria-label={`Actions for ${label}`}
       data-message-actions={messageId} onKeyDown={(event) => {
-        if (event.key === 'Escape' && picking) { event.stopPropagation(); setPicking(false); pickerButton.current?.focus(); }
+        if (event.key === 'Escape' && picking) { event.stopPropagation(); closePicker(); }
       }}>
       <div className="message-actions-row">
         <button type="button" className="message-action" onClick={() => void copyText()} aria-label={`Copy ${label}`} title="Copy">
@@ -96,8 +112,26 @@ export function MessageActions({ messageId, role, text, ended, latest = false }:
             <Icon name="thumb-down" size={15} />
           </button>
         </>}
+        {context?.onReply && <button type="button" className="message-action" disabled={markDisabled}
+          aria-label={`Reply to ${label}`} title={blocked ?? 'Reply with a quote'} data-reply
+          onClick={() => {
+            if (context.onReply?.(messageId, text)) {
+              const field = document.getElementById('message-draft');
+              if (field instanceof HTMLTextAreaElement) requestAnimationFrame(() => {
+                field.focus();
+                field.setSelectionRange(field.value.length, field.value.length);
+              });
+            }
+          }}>
+          <Icon name="reply" size={15} />
+        </button>}
+        {context?.onSideChat && <button type="button" className="message-action" disabled={markDisabled}
+          aria-label={`Start a side chat about ${label}`} title={blocked ?? 'Side chat about this message'} data-side-chat
+          onClick={() => context.onSideChat?.(messageId, text)}>
+          <Icon name="side-chat" size={15} />
+        </button>}
         {context && <button type="button" ref={pickerButton} className="message-action" aria-expanded={picking} aria-controls={pickerId}
-          disabled={markDisabled} aria-label="Add a reaction" title={blocked ?? 'Add a reaction'} onClick={() => setPicking(!picking)}>
+          disabled={markDisabled} aria-label="Add a reaction" title={blocked ?? 'Add a reaction'} onClick={() => { setPicking(!picking); setMore(false); }}>
           <Icon name="smile" size={15} />
         </button>}
         <span id={statusId} className="message-action-status" aria-live="polite">
@@ -108,11 +142,19 @@ export function MessageActions({ messageId, role, text, ended, latest = false }:
       {context && picking && !markDisabled && <div id={pickerId} className="message-reaction-picker" role="group" aria-label="Reactions">
         {MESSAGE_REACTIONS.map((reaction) => <button key={reaction.name} type="button" className="message-reaction-choice"
           aria-pressed={chosen.has(reaction.name)} aria-label={reaction.label} title={reaction.label}
-          onClick={() => { react(reaction.name); setPicking(false); pickerButton.current?.focus(); }}>
+          onClick={() => { react(reaction.name); closePicker(); }}>
           <span aria-hidden="true">{reaction.emoji}</span>
         </button>)}
+        {context.onEmoji && !more && <button type="button" className="message-reaction-more" aria-expanded={false}
+          onClick={() => setMore(true)}>More emoji</button>}
+        {context.onEmoji && more && <EmojiPicker chosen={chosenEmoji} onPick={(emoji) => {
+          const named = quickReactionFor(emoji);
+          if (named) react(named);
+          else toggleEmoji(emoji);
+          closePicker();
+        }} />}
       </div>}
-      {context && (mark?.reactions?.length || mark?.rating) ? <div className="message-marks" aria-label="Your marks">
+      {context && (mark?.reactions?.length || mark?.emoji?.length || mark?.rating) ? <div className="message-marks" aria-label="Your marks">
         {mark?.rating && <span className="message-mark-rating" data-mark-rating={mark.rating}>{mark.rating === 'up' ? 'Rated good' : 'Rated bad'}</span>}
         {MESSAGE_REACTIONS.filter((reaction) => chosen.has(reaction.name)).map((reaction) =>
           <button key={reaction.name} type="button" className="message-mark-chip" disabled={markDisabled}
@@ -120,7 +162,19 @@ export function MessageActions({ messageId, role, text, ended, latest = false }:
             onClick={() => { react(reaction.name); pickerButton.current?.focus(); }}>
             <span aria-hidden="true">{reaction.emoji}</span>
           </button>)}
+        {(mark?.emoji ?? []).map((emoji) =>
+          <button key={emoji} type="button" className="message-mark-chip" disabled={markDisabled}
+            aria-label={`Remove reaction: ${emojiName(emoji)}`} title={blocked ?? `Remove ${emojiName(emoji)}`}
+            onClick={() => { toggleEmoji(emoji); pickerButton.current?.focus(); }}>
+            <span aria-hidden="true">{emoji}</span>
+          </button>)}
       </div> : null}
+      {context?.onOpenSession && sideChats.length > 0 && <div className="message-side-chats">
+        {sideChats.map((chat) => <button key={chat.id} type="button" className="message-side-chat-link"
+          onClick={() => context.onOpenSession?.(chat.id)}>
+          <Icon name="side-chat" size={13} /><span>{chat.title}</span>
+        </button>)}
+      </div>}
       {context?.saveBlockedReason && mark && <p className="message-actions-note">{context.saveBlockedReason}</p>}
     </div>
   );
@@ -136,5 +190,9 @@ export function markChangeNotice(before: MessageMark | undefined, after: Message
   const now = new Set(after?.reactions ?? []);
   for (const name of now) if (!was.has(name)) parts.push(`Added reaction: ${reactionLabel(name)}`);
   for (const name of was) if (!now.has(name)) parts.push(`Removed reaction: ${reactionLabel(name)}`);
+  const hadEmoji = new Set(before?.emoji ?? []);
+  const hasEmoji = new Set(after?.emoji ?? []);
+  for (const emoji of hasEmoji) if (!hadEmoji.has(emoji)) parts.push(`Added reaction: ${emojiName(emoji)}`);
+  for (const emoji of hadEmoji) if (!hasEmoji.has(emoji)) parts.push(`Removed reaction: ${emojiName(emoji)}`);
   return parts.join('. ');
 }

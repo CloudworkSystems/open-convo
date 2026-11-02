@@ -134,3 +134,136 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+.message-side-chats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.message-side-chat-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 9px;
+  border: 1px solid var(--tca-border-default);
+  border-radius: 999px;
+  background: var(--tca-surface-1);
+  color: var(--tca-text-body);
+  font-size: 12px;
+  cursor: pointer;
+}
+.message-side-chat-link span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.message-side-chat-link:hover {
+  border-color: var(--tca-border-strong);
+}
+.message-side-chat-link:focus-visible {
+  outline: 2px solid var(--tca-focus-ring);
+  outline-offset: 1px;
+}
+/* The top of a side chat: what it is about, and the way back. */
+.side-chat-anchor {
+  margin: 4px 0 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--tca-border-default);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: var(--tca-surface-1);
+}
+.side-chat-anchor p {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--tca-text-muted);
+}
+.side-chat-anchor blockquote {
+  margin: 0 0 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 9.6em;
+  overflow: auto;
+  color: var(--tca-text-body);
+}
+/* Navigation: a side chat sits indented under the conversation it came from. */
+.session-row-side {
+  padding-left: calc(14px * var(--side-chat-depth, 1));
+}
+.session-row-side .session-mark {
+  border-radius: 2px;
+}
+/* The full emoji set. On the Mac these draw with Apple's own emoji font. */
+.message-reaction-choice,
+.message-mark-chip,
+.emoji-picker-choice,
+.emoji-picker-group {
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+}
+.message-reaction-more {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--tca-border-default);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tca-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.emoji-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-basis: 100%;
+  width: min(340px, 80vw);
+}
+.emoji-picker-search {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--tca-border-default);
+  border-radius: 6px;
+  background: var(--tca-surface-0);
+  color: var(--tca-text-primary);
+  font: inherit;
+  font-size: 13px;
+}
+.emoji-picker-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.emoji-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(32px, 1fr));
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.emoji-picker-choice,
+.emoji-picker-group {
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.emoji-picker-group { font-size: 15px; height: 28px; min-width: 28px; }
+.emoji-picker-choice[aria-pressed='true'],
+.emoji-picker-group[aria-pressed='true'] {
+  background: var(--tca-surface-2);
+  border-color: var(--tca-border-strong);
+}
+.message-reaction-more:focus-visible,
+.emoji-picker-search:focus-visible,
+.emoji-picker-choice:focus-visible,
+.emoji-picker-group:focus-visible {
+  outline: 2px solid var(--tca-focus-ring);
+  outline-offset: 1px;
+}
+.emoji-picker-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tca-text-muted);
+}

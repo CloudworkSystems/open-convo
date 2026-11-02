@@ -2296,3 +2296,61 @@ test('an empty check-in edit does not restore a deleted check-in', () => {
   engine.editCheckIn(id, 'glass', { value: 9 });
   assert.equal(engine.view(id).checkIns.find(item => item.id === 'glass').value, 9);
 });
+
+test('logCheckIns writes a batch in one change, all or nothing', () => {
+  const one = fixed('batch');
+  const id = one.createPerson('River', { id: 'river' });
+  one.addTracker(id, { name: 'Minutes', kind: 'count', unit: 'minutes' }, { trackerId: 'minutes' });
+  one.addTracker(id, { name: 'Walk', kind: 'done' }, { trackerId: 'walk' });
+  const ids = one.logCheckIns(id, [
+    { trackerId: 'minutes', date: '2026-03-01', value: 30, checkInId: 'm1' },
+    { trackerId: 'walk', date: '2026-03-01', checkInId: 'w1' },
+  ]);
+  assert.deepEqual(ids, ['m1', 'w1']);
+
+  const two = fixed('single');
+  two.createPerson('River', { id: 'river' });
+  two.addTracker(id, { name: 'Minutes', kind: 'count', unit: 'minutes' }, { trackerId: 'minutes' });
+  two.addTracker(id, { name: 'Walk', kind: 'done' }, { trackerId: 'walk' });
+  two.logCheckIn(id, 'minutes', { date: '2026-03-01', value: 30, checkInId: 'm1' });
+  two.logCheckIn(id, 'walk', { date: '2026-03-01', checkInId: 'w1' });
+  const shape = engine => engine.getPerson(id).checkIns.map(record => [record.id, Object.fromEntries(
+    Object.entries(record.fields).map(([key, field]) => [key, field.value]))]);
+  assert.deepEqual(shape(one), shape(two));
+  assert.deepEqual(one.grid(id, 'minutes', { start: '2026-03-01', end: '2026-03-07' }).squares,
+    two.grid(id, 'minutes', { start: '2026-03-01', end: '2026-03-07' }).squares);
+
+  const before = one.save(id);
+  for (const bad of [
+    [{ trackerId: 'minutes', date: '2026-03-02', value: 5, checkInId: 'ok' }, { trackerId: 'minutes', date: '2026-03-03', checkInId: 'no-value' }],
+    [{ trackerId: 'minutes', date: '2026-03-02', value: 5, checkInId: 'dup' }, { trackerId: 'minutes', date: '2026-03-03', value: 5, checkInId: 'dup' }],
+    [{ trackerId: 'minutes', date: '2026-03-02', value: 5, checkInId: 'm1' }],
+    [{ trackerId: 'missing', date: '2026-03-02', value: 5 }],
+    [{ trackerId: 'minutes', date: 'not-a-date', value: 5 }],
+    [{ trackerId: 'minutes', date: '2026-03-02', value: -1 }],
+    [{ trackerId: 'minutes', date: '2026-03-02', value: 5, source: 'automatic' }],
+    [null],
+  ]) {
+    assert.throws(() => one.logCheckIns(id, bad));
+    assert.equal(one.save(id), before);
+  }
+  assert.throws(() => one.logCheckIns(id, 'nope'), /must be a list/);
+  assert.deepEqual(one.logCheckIns(id, []), []);
+  assert.equal(one.save(id), before);
+});
+
+test('logCheckIns logs a year for several trackers quickly', () => {
+  const engine = fixed('year');
+  const id = engine.createPerson('River', { id: 'river' });
+  const trackers = ['a', 'b', 'c', 'd', 'e'];
+  for (const trackerId of trackers) engine.addTracker(id, { name: trackerId, kind: 'count', unit: 'minutes' }, { trackerId });
+  const entries = [];
+  for (let day = 0; day < 365; day += 1) {
+    const date = new Date(at('2025-03-19') + day * 86_400_000).toISOString().slice(0, 10);
+    for (const trackerId of trackers) entries.push({ trackerId, date, value: day % 90 });
+  }
+  const started = performance.now();
+  assert.equal(engine.logCheckIns(id, entries).length, 1825);
+  assert.ok(performance.now() - started < 2000, 'a year of check-ins should take well under two seconds');
+  assert.equal(engine.getPerson(id).checkIns.length, 1825);
+});

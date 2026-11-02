@@ -6,6 +6,7 @@ import { appendParticipantEvent, createConversationRun } from '../../src/domain/
 import { createDemoState } from '../../src/domain/demo';
 import type { DeskState } from '../../src/domain/types';
 import { validateState } from '../../src/domain/validation';
+import { isStandardEmoji, MESSAGE_EMOJI_LIMIT } from '../../src/domain/message-marks';
 
 const time = '2026-11-01T10:00:00.000Z';
 const later = '2026-11-01T10:01:00.000Z';
@@ -125,4 +126,50 @@ test('saved marks that are corrupt or point nowhere are refused, never repaired'
     { ...good, messageMarks: {} },
   ];
   for (const state of bad) assert.equal(validateState(state).valid, false, JSON.stringify((state as DeskState).messageMarks));
+});
+
+test('any standard emoji can be added from the full set, and the quick ones stay one mark', async () => {
+  const f = fixture();
+  let state = applyCommand(f.state, { type: 'toggle-message-emoji', messageId: f.reply.id, emoji: '🦊' }, f.options);
+  state = applyCommand(state, { type: 'toggle-message-emoji', messageId: f.user.id, emoji: '👍🏽' }, f.options);
+  state = applyCommand(state, { type: 'toggle-message-emoji', messageId: f.reply.id, emoji: '🇨🇦' }, f.options);
+  assert.deepEqual(state.messageMarks?.find((mark) => mark.messageId === f.reply.id)?.emoji, ['🦊', '🇨🇦']);
+  assert.equal(validateState(state).valid, true);
+  // ❤️ from the full set is the same mark as the quick heart.
+  state = applyCommand(state, { type: 'toggle-message-emoji', messageId: f.reply.id, emoji: '❤️' }, f.options);
+  const reply = state.messageMarks?.find((mark) => mark.messageId === f.reply.id);
+  assert.deepEqual(reply?.reactions, ['heart']);
+  assert.deepEqual(reply?.emoji, ['🦊', '🇨🇦']);
+  state = applyCommand(state, { type: 'toggle-message-emoji', messageId: f.reply.id, emoji: '🦊' }, f.options);
+  state = applyCommand(state, { type: 'toggle-message-emoji', messageId: f.reply.id, emoji: '🇨🇦' }, f.options);
+  assert.equal(Object.hasOwn(state.messageMarks!.find((mark) => mark.messageId === f.reply.id)!, 'emoji'), false);
+  for (const text of ['a', 'hi 🙂', '12', '#', '']) {
+    refuses(() => applyCommand(f.state, { type: 'toggle-message-emoji', messageId: f.reply.id, emoji: text }, f.options), 'That emoji is not available.');
+  }
+  const { default: data } = await import('../../src/content/emoji.json', { with: { type: 'json' } });
+  const every = (data as { groups: { emoji: string[][] }[] }).groups.flatMap((group) => group.emoji);
+  assert.equal(every.length, 1914);
+  for (const [emoji] of every) assert.equal(isStandardEmoji(emoji), true, emoji);
+});
+
+test('a message holds at most the stated number of emoji, and corrupt emoji lists are refused', () => {
+  const f = fixture();
+  let state = f.state;
+  const many = ['🦊', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🐤', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴'];
+  assert.equal(many.length, MESSAGE_EMOJI_LIMIT);
+  for (const emoji of many) state = applyCommand(state, { type: 'toggle-message-emoji', messageId: f.reply.id, emoji }, f.options);
+  assert.equal(validateState(state).valid, true);
+  refuses(() => applyCommand(state, { type: 'toggle-message-emoji', messageId: f.reply.id, emoji: '🦄' }, f.options),
+    `A message can hold up to ${MESSAGE_EMOJI_LIMIT} emoji. Remove one first.`);
+  const good = applyCommand(f.state, { type: 'toggle-message-emoji', messageId: f.reply.id, emoji: '🦊' }, f.options);
+  const mark = good.messageMarks![0];
+  const bad: unknown[] = [
+    { ...good, messageMarks: [{ ...mark, emoji: [] }] },
+    { ...good, messageMarks: [{ ...mark, emoji: ['🦊', '🦊'] }] },
+    { ...good, messageMarks: [{ ...mark, emoji: ['fox'] }] },
+    { ...good, messageMarks: [{ ...mark, emoji: ['❤️'] }] },
+    { ...good, messageMarks: [{ ...mark, emoji: [...many, '🦄'] }] },
+    { ...good, messageMarks: [{ ...mark, emoji: '🦊' }] },
+  ];
+  for (const value of bad) assert.equal(validateState(value).valid, false, JSON.stringify((value as DeskState).messageMarks));
 });

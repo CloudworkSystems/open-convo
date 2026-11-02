@@ -73,6 +73,7 @@ export default defineConfig(({ command, mode }) => {
           this.emitFile({ type: 'asset', fileName: `licenses/${name}`, source: readFileSync(new URL(`./brand/fonts/${name}`, import.meta.url), 'utf8') });
         }
         this.emitFile({ type: 'asset', fileName: 'licenses/ISC-lucide.txt', source: readFileSync(new URL('./src/ui/lucide/LICENSE', import.meta.url), 'utf8') });
+        this.emitFile({ type: 'asset', fileName: 'licenses/MIT-unicode-emoji-json.txt', source: readFileSync(new URL('./src/content/emoji-LICENSE', import.meta.url), 'utf8') });
       },
     },
     {

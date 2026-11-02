@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Activity, Goal, Session } from '../domain/types';
 import { SESSION_CREATION_TIME_ZONE } from '../domain/session-naming';
+import { withSideChatsNested } from '../domain/side-chat';
 import { Icon } from '../ui/Icon';
 import './domain-note.css';
 
@@ -151,7 +152,8 @@ export function GoalPanel({
         </details>
       </section> : <section className="folder-session-list" aria-label="Sessions in this folder">
         <h3>Sessions</h3>
-        {folderSessions.length ? <ul>{folderSessions.map((item) => <li key={item.id}>
+        {folderSessions.length ? <ul>{withSideChatsNested(folderSessions).map(({ session: item, depth }) => <li key={item.id}
+          className={depth ? 'folder-session-side' : undefined} style={depth ? { paddingLeft: `${depth * 16}px` } : undefined}>
           <button type="button" data-details-session-id={item.id} onClick={() => onSessionSelect(item.id)}>{item.title}</button>
         </li>)}</ul> : <p className="muted small">No sessions in this folder.</p>}
       </section>}

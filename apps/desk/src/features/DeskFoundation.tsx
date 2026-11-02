@@ -23,6 +23,7 @@ import { HistoryReader } from './HistoryReader';
 import { MemoryPage } from './MemoryPage';
 import './workspace-layout.css';
 import { useDeskRuntime } from '../app/runtime';
+import { shownMessageText } from '../domain/side-chat';
 
 export interface DeskFoundationProps {
   state: DeskState; saveStatus: SaveStatus; theme: 'light' | 'dark'; readOnly?: boolean;
@@ -95,6 +96,25 @@ export function DeskFoundation(props: DeskFoundationProps) {
   // Labels expose the recorded ancestry; option values remain the original IDs.
   const folderOptions = buildFolderOptions(state.goals);
   const messages = state.messages.filter((item) => item.sessionId === session?.id);
+  // A side chat's way back: open its conversation, then bring the message into view.
+  const [revealMessage, setRevealMessage] = useState<string | null>(null);
+  const sideParent = session?.sideOf ? state.sessions.find((item) => item.id === session.sideOf!.sessionId) : undefined;
+  const sideChatAnchor = session?.sideOf && sideParent ? {
+    parentTitle: sideParent.title,
+    text: shownMessageText(state, session.sideOf.messageId),
+    onBack: () => { setRevealMessage(session.sideOf!.messageId); props.onSessionSelect(sideParent.id); },
+  } : undefined;
+  useEffect(() => {
+    if (!revealMessage) return;
+    const frame = requestAnimationFrame(() => {
+      const target = document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(revealMessage)}"]`);
+      if (!target) return;
+      setRevealMessage(null);
+      target.scrollIntoView({ block: 'center' });
+      target.querySelector<HTMLElement>('[data-side-chat]')?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  });
   const purposeDraft = goal ? (state.goalDrafts[goal.id]?.purpose ?? null) : null;
   // Earlier tab choices saved Roadmap as a separate module. Read that choice
   // inside Nexus without repairing or rewriting the saved workspace.
@@ -388,7 +408,7 @@ export function DeskFoundation(props: DeskFoundationProps) {
                 participantBusy={props.participantBusy} participantSendUnavailable={props.participantSendUnavailable}
                 participantSendBlockedReason={props.participantSendBlockedReason}
                 participantStop={props.participantStop} participantSendWaitingReason={props.participantSendWaitingReason}
-                participantSendDestination={props.participantSendDestination} />
+                participantSendDestination={props.participantSendDestination} sideChatAnchor={sideChatAnchor} />
                 : <section className="navigator-empty"><FolderIcon name={goal?.icon} size={32} /><span className="eyebrow">SESSION FOLDER</span>
                   <div className="navigator-domain-heading"><h2>{goal?.title ?? 'Ungrouped sessions'}</h2>
                     {goal && <button type="button" className="icon-button domain-title-rename" aria-label="Rename folder" title="Rename folder" disabled={readOnly}
