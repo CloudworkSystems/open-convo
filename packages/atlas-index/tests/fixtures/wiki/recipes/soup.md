@@ -1,0 +1,3 @@
+# Summer soup
+
+Uses [[tomato]].
