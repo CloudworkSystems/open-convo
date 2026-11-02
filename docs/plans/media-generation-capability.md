@@ -277,9 +277,10 @@ findings are requirements for the code pull requests named.
   by me", with no AI provenance in the file, counts as not AI. Site Engine's
   honesty gate treats "not sure" as AI.
 
-## Parts 2 And 3 For An Outside Builder (GrokBot Team C)
+## Revision, November 2, 2026: Parts 2 And 3 For GrokBot Team C
 
-Parts 2 and 3 go to GrokBot team C, one after the other in
+This revision adds detail for parts 2 and 3 and changes no requirement
+above; it only names the builder. Parts 2 and 3 go to GrokBot team C, one after the other in
 `packages/capabilities`, the package part 1 created. Part 2 starts when part
 1 has merged and the coordinator's build issue names it. Part 3 starts when
 part 2 has merged. Everything in "Requirements Carried To The Build" for

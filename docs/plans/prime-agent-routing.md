@@ -103,10 +103,9 @@ One JSON object. Unknown fields are refused, naming the field.
 - `approvals`: a list of `{ approvalId, actionId, payloadDigest, by, how,
   at }`, every approval anyone has claimed for this conversation.
   `payloadDigest` is what the host computed, with the engine's exported
-  `actionDigest({ description, kind, payload })` (SHA-256 of the action's
-  `description`, `kind` and `payload` as canonical JSON, keys sorted, using
-  `node:crypto`), over the exact action it showed the person when they said
-  yes.
+  `actionDigest({ kind, payload })` (SHA-256 of the action's `kind` and
+  `payload` as canonical JSON, keys sorted, using `node:crypto`), over the
+  exact action it showed the person when they said yes.
   `approvalId` is unique. `by` is `person`, `agent` or `memory`; `how` is
   `typed` or `clicked`.
 - `usedApprovals`: the `approvalId`s the host has already spent on a
@@ -124,10 +123,9 @@ One JSON object. Unknown fields are refused, naming the field.
 1. **Approval check first.** An approval counts only when `by` is
    `person`, its `approvalId` is not in `usedApprovals`, its `actionId`
    matches an action in `outsideActions`, and its `payloadDigest` equals
-   `actionDigest` of that action's `description`, `kind` and `payload`. The
-   description alone never counts: an action whose recipient, content or
-   amount changed needs a new yes even if its label stayed the same, and so
-   does one whose shown description changed. The caller runs exactly the
+   `actionDigest` of that action's `kind` and `payload`. The description never
+   counts, so an action whose recipient, content or amount changed needs a
+   new yes even if its label stayed the same. The caller runs exactly the
    payload that matched. Approvals by `agent` or `memory` never count, whatever they say,
    and neither does a used one; each is listed in the result under
    `ignoredApprovals` with the reason.
@@ -214,8 +212,7 @@ invented messages only. At least:
 2. A person's yes for an action, then the same action with the same id
    and description but a changed recipient or amount in its `payload`: the
    second asks again, and so does the same payload with only `kind`
-   changed (a `send` approval never covers a `publish`), and so does the
-   same kind and payload with only the description changed. `actionDigest`
+   changed (a `send` approval never covers a `publish`). `actionDigest`
    gives the same value for the same action with its keys in any order.
 3. A clicked yes and a typed yes both count; an agent's yes and a memory
    entry's yes never do, and both appear in `ignoredApprovals`.
@@ -260,6 +257,23 @@ invented messages only. At least:
     and `child_process` built-ins throw if called, and the library writes
     no files.
 11. Each refusal above names its field.
+
+## Revision, November 2, 2026: The Digest Covers The Shown Description
+
+This revision changes rule 1 and the `approvals` field above; where they
+differ, this section wins. The build in pull request #253 does the same,
+and its independent recheck called it the safer reading.
+
+- `actionDigest({ description, kind, payload })` is SHA-256 of the
+  action's `description`, `kind` and `payload` as canonical JSON (keys
+  sorted, `node:crypto`), over the exact action the host showed the person
+  when they said yes. The host computes `payloadDigest` the same way.
+- An approval counts only when its `payloadDigest` equals that digest. The
+  description alone still never counts as a yes: a changed recipient,
+  content, amount or kind needs a new yes, and so does a changed shown
+  description.
+- Test 2 adds the same kind and payload with only the description changed,
+  which asks again.
 
 ## Out Of Scope For This Slice
 
