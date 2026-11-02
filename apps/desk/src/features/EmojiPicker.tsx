@@ -47,7 +47,10 @@ export function EmojiPicker({ chosen, onPick }: EmojiPickerProps) {
   const found = useMemo(() => {
     if (!groups || !words.length) return null;
     const all = groups.flatMap((entry) => entry.emoji);
-    return all.filter(([, name]) => words.every((word) => name.includes(word)));
+    return all.filter(([, name]) => {
+      const lower = name.toLowerCase();
+      return words.every((word) => lower.includes(word));
+    });
   }, [groups, words.join(' ')]);
   if (failed) return <p className="emoji-picker-note">The emoji list couldn’t load. Reload the Desk to try again.</p>;
   if (!groups) return <p className="emoji-picker-note" aria-live="polite">Loading emoji…</p>;

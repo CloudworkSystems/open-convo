@@ -1788,6 +1788,11 @@ test('More emoji offers every standard emoji with search; a pick is saved, annou
     await expect(actions.getByRole('group', { name: 'Emoji groups', exact: true }).getByRole('button')).toHaveCount(9);
     await actions.getByRole('button', { name: 'Animals & Nature', exact: true }).click();
     await expect(actions.getByRole('group', { name: 'Animals & Nature', exact: true }).getByRole('button', { name: 'fox', exact: true })).toBeVisible();
+    // Names with capitals match whatever case is typed.
+    await search.fill('canada');
+    await expect(actions.getByRole('group', { name: 'Search results', exact: true }).getByRole('button', { name: 'flag Canada', exact: true })).toBeVisible();
+    await search.fill('OK HAND');
+    await expect(actions.getByRole('group', { name: 'Search results', exact: true }).getByRole('button', { name: 'OK hand', exact: true })).toBeVisible();
     await search.fill('fox');
     await expect(actions.getByText('1 found.')).toBeVisible();
     await actions.getByRole('group', { name: 'Search results', exact: true }).getByRole('button', { name: 'fox', exact: true }).click();
