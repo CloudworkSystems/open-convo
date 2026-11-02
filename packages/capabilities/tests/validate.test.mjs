@@ -20,9 +20,8 @@ function errorsAfter(change) {
 
 function assertRefused(change, path, words) {
   const errors = errorsAfter(change);
-  const hit = errors.find((e) => e.path === path);
-  assert.ok(hit, `expected a problem at ${path}, got:\n${formatErrors(errors) || '(none)'}`);
-  if (words) assert.match(hit.message, words);
+  const hit = errors.find((e) => e.path === path && (!words || words.test(e.message)));
+  assert.ok(hit, `expected a problem at ${path}${words ? ` matching ${words}` : ''}, got:\n${formatErrors(errors) || '(none)'}`);
 }
 
 const route = (record, id) => record.routes.find((r) => r.id === id);
@@ -174,7 +173,14 @@ test('a sign-in route needs a link to terms that allow it', () => {
 
 test('paid is never mandatory: a paid route needs a free one beside it', () => {
   assertRefused((r) => { r.routes = r.routes.filter((x) => x.kind === 'own_key'); }, 'routes', /upload or local/);
-  assert.deepEqual(errorsAfter((r) => { r.routes = r.routes.filter((x) => x.kind !== 'upload'); }), []);
+});
+
+test('upload is always present, once, and lands a file', () => {
+  assertRefused((r) => { r.routes = r.routes.filter((x) => x.kind !== 'upload'); }, 'routes', /always has an upload/);
+  assertRefused((r) => { r.routes.push({ ...route(r, 'upload'), id: 'upload-two' }); }, 'routes', /only one upload/);
+  assertRefused((r) => delete r.outputs.file, 'outputs', /file output/);
+  assertRefused((r) => delete r.outputs, 'outputs', /file output/);
+  assert.deepEqual(errorsAfter((r) => { r.routes = r.routes.filter((x) => x.kind === 'upload'); }), []);
 });
 
 test('route ids are unique and kinds are known', () => {

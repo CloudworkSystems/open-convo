@@ -68,8 +68,10 @@ pass silently and nothing like an "always allow" switch can be slipped in.
 | `terms` | `sign_in` only, and required there: an https `url` to the provider's terms that allow this use, and the date `checked`. No link, no route. |
 | `license` | `local` only, and required there: `name`, `checked` (date), `allows_intended_use` (true or false), optional https `url` and `note`. |
 
-A record with a paid route (`own_key` or `sign_in`) must also have an
-`upload` or `local` route, so paid is never the only way.
+A record with routes has exactly one `upload` route, the floor that always
+works, and so also has a `file` output. A record with a paid route
+(`own_key` or `sign_in`) must also have an `upload` or `local` route, so paid
+is never the only way.
 
 **Money.** Every amount is an object with `amount` as decimal text (`"0.40"`,
 up to six decimal places, never a JSON number, so sums don't drift) and an

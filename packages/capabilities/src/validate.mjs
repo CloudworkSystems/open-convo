@@ -102,7 +102,13 @@ export function validateCapability(record) {
 
   if (has(record, 'inputs')) inputs(record.inputs, fail);
   if (has(record, 'outputs')) outputs(record.outputs, fail);
-  if (has(record, 'routes')) routes(record.routes, fail);
+  if (has(record, 'routes') && routes(record.routes, fail)) {
+    // An upload is a file the person picks, so the capability must put out a file.
+    const outs = isPlainObject(record.outputs) ? Object.values(record.outputs) : [];
+    if (!outs.some((o) => isPlainObject(o) && o.type === 'file')) {
+      fail('outputs', 'a capability with an upload route has a file output');
+    }
+  }
 
   return { ok: errors.length === 0, errors };
 }
@@ -213,6 +219,7 @@ function routes(value, fail) {
   const ids = new Set();
   let free = 0;
   let paid = 0;
+  let uploads = 0;
   value.forEach((route, i) => {
     const q = `${p}[${i}]`;
     if (!isPlainObject(route)) return fail(q, 'must be an object');
@@ -226,6 +233,7 @@ function routes(value, fail) {
     const isFree = FREE_KINDS.includes(route.kind);
     if (isFree) free += 1;
     else paid += 1;
+    if (route.kind === 'upload') uploads += 1;
 
     // Who runs it. An upload is the person's own file, so it names nobody.
     const needsProvider = route.kind !== 'upload';
@@ -266,8 +274,13 @@ function routes(value, fail) {
       if (required(route, 'license', q, fail)) license(route.license, `${q}.license`, fail);
     } else if (has(route, 'license')) fail(`${q}.license`, 'only a local route has a license');
   });
+  // Upload is always present and always works: the floor that makes paid
+  // routes optional in fact (the plan, "Each route declares").
+  if (uploads === 0) fail(p, 'a capability with routes always has an upload route');
+  if (uploads > 1) fail(p, 'only one upload route');
   // Paid media is never mandatory: a paid route always sits beside a free one.
   if (paid > 0 && free === 0) fail(p, 'a capability with a paid route also needs an upload or local route');
+  return uploads > 0;
 }
 
 function paidCost(cost, p, fail) {
