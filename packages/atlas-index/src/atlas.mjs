@@ -363,10 +363,34 @@ function finish(result, extra, droppedWrites, droppedRemoves) {
   return { writes, removes, unchanged: result.unchanged, conflicts, health, counts };
 }
 
+function plannedCaseConflicts(existingPaths, plannedPaths) {
+  const conflicts = [];
+  for (const planned of plannedPaths) {
+    const key = planned.toLowerCase();
+    const others = existingPaths.filter(path => path !== planned && path.toLowerCase() === key).sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+    if (!others.length) continue;
+    conflicts.push({
+      path: planned,
+      detail: `This name differs only by case from ${others.join(' and ')}, so nothing was written.`,
+    });
+  }
+  return conflicts;
+}
+
 /** Apply writes and removes. A file that changed since the scan is left in place. */
-export function applyPlan(root, scanned, result, fileSystem = fs) {
+export function applyPlan(root, scanned, result, fileSystem = fs, options = {}) {
   refuseWorkspace(root, fileSystem);
   assertPlanPaths(result);
+  const caseFold = options.caseFold ?? process.platform === 'darwin';
+  if (caseFold) {
+    const conflicts = plannedCaseConflicts(
+      [...scanned.bytes.keys()],
+      [...result.writes.map(item => item.path), ...result.removes],
+    );
+    if (conflicts.length) {
+      return finish(result, conflicts, result.writes.map(item => item.path), result.removes);
+    }
+  }
   const extra = [];
   const droppedWrites = [];
   const droppedRemoves = [];

@@ -224,6 +224,36 @@ test('hidden folders and symbolic links are skipped, and a hidden note is read',
   }
 });
 
+test('a planned index that differs only by case writes nothing', () => {
+  const dir = join(tmpdir(), `atlas-case-${process.pid}-${Math.random().toString(16).slice(2)}`);
+  try {
+    mkdirSync(join(dir, 'garden'), { recursive: true });
+    for (let i = 0; i < 5; i += 1) writeFileSync(join(dir, 'garden', `n${i}.md`), `# N${i}\n`);
+    writeFileSync(join(dir, 'garden', 'index.md'), '# Kept\n');
+    const before = snapshot(dir);
+    const scanned = scanDirectory(dir);
+    const planned = buildAtlas(scanned.notes);
+    assert.equal(planned.writes.some(item => item.path === 'garden/INDEX.md'), true);
+    assert.equal(planned.writes.some(item => item.path === 'MAP.md'), true);
+    const blocked = applyPlan(dir, scanned, planned, fs, { caseFold: true });
+    assert.deepEqual(blocked.writes, []);
+    assert.deepEqual(blocked.removes, []);
+    assert.equal(blocked.conflicts.some(item => item.path === 'garden/INDEX.md' && /garden\/index\.md/.test(item.detail) && /nothing was written/.test(item.detail)), true);
+    assert.equal(statExists(join(dir, 'MAP.md')), false);
+    assert.equal(statExists(join(dir, 'garden', 'INDEX.md')), false);
+    assert.equal(readFileSync(join(dir, 'garden', 'index.md'), 'utf8'), '# Kept\n');
+    assert.deepEqual(snapshot(dir), before);
+    if (process.platform !== 'darwin') {
+      const allowed = applyPlan(dir, scanned, planned);
+      assert.equal(statExists(join(dir, 'garden', 'INDEX.md')), true);
+      assert.equal(readFileSync(join(dir, 'garden', 'index.md'), 'utf8'), '# Kept\n');
+      assert.equal(allowed.conflicts.some(item => item.path === 'garden/INDEX.md'), false);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('linux keeps two markdown paths that differ only by case', () => {
   assert.equal(process.platform === 'darwin' || process.platform === 'linux', true);
   if (process.platform === 'darwin') return;
