@@ -300,6 +300,37 @@ test('a new index is private and a replacement keeps the mode it already has', (
   }
 });
 
+test('a map with bytes that are not UTF-8 keeps that prefix', () => {
+  const dir = join(tmpdir(), `atlas-bytes-${process.pid}-${Math.random().toString(16).slice(2)}`);
+  const marker = Buffer.from('<!-- atlas-index:start -->');
+  try {
+    mkdirSync(dir);
+    writeFileSync(join(dir, 'pantry.md'), '# Pantry\n');
+    const prefix = Buffer.concat([Buffer.from('Intro '), Buffer.from([0xe9]), Buffer.from('\n\n')]);
+    const raw = Buffer.concat([prefix, marker, Buffer.from('\n- stale\n')]);
+    writeFileSync(join(dir, 'MAP.md'), raw);
+    const wrote = capture(['--dir', dir, '--write']);
+    assert.equal(wrote.code, 0, wrote.err);
+    const after = readFileSync(join(dir, 'MAP.md'));
+    const at = after.indexOf(marker);
+    assert.deepEqual(after.subarray(0, at), prefix);
+    assert.equal(after.includes(Buffer.from([0xef, 0xbf, 0xbd])), false);
+    assert.match(after.subarray(at).toString('utf8'), /pantry\.md/);
+
+    const bare = Buffer.concat([Buffer.from('Bare '), Buffer.from([0xe9])]);
+    writeFileSync(join(dir, 'MAP.md'), bare);
+    const again = capture(['--dir', dir, '--write']);
+    assert.equal(again.code, 0, again.err);
+    const next = readFileSync(join(dir, 'MAP.md'));
+    assert.deepEqual(next.subarray(0, bare.length), bare);
+    assert.equal(next[bare.length], 0x0a);
+    assert.match(next.subarray(bare.length).toString('utf8'), /<!-- atlas-index:start -->/);
+    assert.equal(next.includes(Buffer.from([0xef, 0xbf, 0xbd])), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('a note name with several control characters is escaped on every one', () => {
   const dir = join(tmpdir(), `atlas-controls-${process.pid}-${Math.random().toString(16).slice(2)}`);
   const name = 'a\n\u001b[2J.md';

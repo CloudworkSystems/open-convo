@@ -14,6 +14,7 @@ import {
   AtlasError,
   DEFAULT_INDEX_NAME,
   DEFAULT_ROOT_MAP_NAME,
+  MAP_MARKER,
   buildAtlas,
   caseFoldClash,
   isGeneratedIndex,
@@ -270,6 +271,24 @@ const LEFT_ALONE = 'This file changed after the scan, so it was left as it is.';
 const NOT_REMOVED = 'This file changed after the scan, so it was not removed.';
 const HEADER_GONE = 'This file no longer starts with the generated header, so it was not removed.';
 
+function utf8RoundTrip(bytes) {
+  return Buffer.from(bytes.toString('utf8'), 'utf8').equals(bytes);
+}
+
+// The library reads text. A map whose prefix is not valid UTF-8 would otherwise
+// be written back with U+FFFD in place of those bytes. Keep the original prefix.
+function mapBytes(item, previous) {
+  if (item.path !== DEFAULT_ROOT_MAP_NAME || !previous || utf8RoundTrip(previous)) return item.text;
+  const markerAt = item.text.indexOf(MAP_MARKER);
+  if (markerAt < 0) return null;
+  const generated = Buffer.from(item.text.slice(markerAt), 'utf8');
+  const marker = Buffer.from(MAP_MARKER, 'utf8');
+  const at = previous.indexOf(marker);
+  if (at >= 0) return Buffer.concat([previous.subarray(0, at), generated]);
+  if (previous.length === 0 || previous[previous.length - 1] === 0x0a) return Buffer.concat([previous, generated]);
+  return Buffer.concat([previous, Buffer.from('\n'), generated]);
+}
+
 function writeOne(root, scanned, item, fileSystem) {
   const target = locate(root, item.path, fileSystem);
   const previous = scanned.bytes.get(item.path);
@@ -277,9 +296,11 @@ function writeOne(root, scanned, item, fileSystem) {
   if (!unchangedSinceScan(previous, seen)) {
     return { conflict: { path: item.path, detail: LEFT_ALONE } };
   }
+  const body = mapBytes(item, previous);
+  if (body === null) return { conflict: { path: item.path, detail: LEFT_ALONE } };
   let tmp;
   try {
-    tmp = writeAtomic(fileSystem, target, item.text, seen.mode ?? NEW_FILE_MODE);
+    tmp = writeAtomic(fileSystem, target, body, seen.mode ?? NEW_FILE_MODE);
   } catch {
     fail(`Could not write "${item.path}".`);
   }
