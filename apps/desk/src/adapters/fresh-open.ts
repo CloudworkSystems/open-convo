@@ -48,7 +48,31 @@ export function nativeOpenedBefore(win: NativeOpenSignals): boolean {
   let reloaded = false;
   try { reloaded = Array.from(win.performance?.getEntriesByType('navigation') ?? []).some((entry) => (entry as { type?: unknown }).type === 'reload'); }
   catch { reloaded = false; }
-  const named = win.name === DESK_NATIVE_OPENED_NAME;
-  try { win.name = DESK_NATIVE_OPENED_NAME; } catch { /* keep the answer */ }
+  let named = false;
+  try {
+    named = win.name === DESK_NATIVE_OPENED_NAME || win.name.startsWith(`${DESK_NATIVE_OPENED_NAME}\n`);
+    if (!named) win.name = DESK_NATIVE_OPENED_NAME;
+  } catch { /* keep the answer */ }
   return reloaded || named;
+}
+
+/**
+ * Carries the Mac window's screen (the tab view: which folder, session and
+ * view were showing, never any text) across a reload in the window's name,
+ * the way the browser preview keeps it in the tab's session storage. Only the
+ * tab view's own key is kept; anything else is refused. The name lasts only
+ * as long as the window.
+ */
+export function windowNameViewCarry(win: { name: string }, key: string) {
+  const prefix = `${DESK_NATIVE_OPENED_NAME}\n`;
+  return {
+    getItem(asked: string): string | null {
+      if (asked !== key) return null;
+      return win.name.startsWith(prefix) ? win.name.slice(prefix.length) : null;
+    },
+    setItem(asked: string, value: string): void {
+      if (asked !== key) throw new Error('Only the screen is carried across a reload.');
+      win.name = prefix + value;
+    },
+  };
 }

@@ -1,3 +1,4 @@
+import type { StorageLike } from '../adapters/browser-repository';
 import { NativeHostClient, type NativeHostTransport } from '../adapters/native-host-client';
 import { NativeProofCodec, NATIVE_PROOF_LIMITS, NATIVE_PROOF_OPERATIONS, type NativeProofRequest, type NativeProofResult } from '../adapters/native-host-codec';
 import { NativeProofRepository } from '../adapters/native-proof-repository';
@@ -41,7 +42,9 @@ export async function initializeNativeProof(
   environment: NativeProofEnvironment,
   options: { requestId?: () => string; timeoutMs?: number; maxRetainedRequests?: number;
     /** The host is reopening a screen it already showed (see createNativeProofRuntime). */
-    keepSavedScreen?: boolean } = {},
+    keepSavedScreen?: boolean;
+    /** Carries the window's screen (never its text) across a reload. */
+    viewCarry?: StorageLike } = {},
 ): Promise<NativeInitialization> {
   const unavailable = (): NativeInitialization => ({ kind: 'unavailable',
     message: 'The native proof could not open. Reopen it from the Mac app. Existing work was not replaced.' });
@@ -163,7 +166,7 @@ export async function initializeNativeProof(
     // passed). Only a host with a participant lane sends one, and only True
     // Convo Test has a lane; the real app's Desk has no participants at all.
     const runtime = createNativeProofRuntime(repository, lifecycle, { createId: requestId, nativeParticipants: participants,
-      dictation, offerClaude: true, keepSavedScreen: options.keepSavedScreen });
+      dictation, offerClaude: true, keepSavedScreen: options.keepSavedScreen, viewCarry: options.viewCarry });
     if (!active || !runtime.isActive()) { runtime.revoke(); return unavailable(); }
     // Availability must not delay opening saved work. Later checks are tied to
     // focus/visibility, Send, picker actions and explicit Start, never an idle page timer.

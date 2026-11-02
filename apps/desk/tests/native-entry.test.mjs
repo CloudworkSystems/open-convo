@@ -263,14 +263,23 @@ test('a correlated store-locked commit reply clears the compiled App even withou
   } finally { await f.close(); }
 });
 
-test('compiled native entry opens blank in a new window and keeps the saved screen on reload', async () => {
+test('compiled native entry opens blank in a new window and keeps the shown screen on reload', async () => {
   const f = await fixture(); const { page } = f;
   try {
-    await expect(page.locator('.conversation-heading .navigator-empty')).toBeVisible();
+    const blank = page.locator('.conversation-heading .navigator-empty');
+    const draft = page.getByLabel('Your message', { exact: true });
+    await expect(blank).toBeVisible();
+    // The host's reload (also after a crashed web process) shows what this window showed.
     await page.reload();
-    // The host's reload (also after a crashed web process) reopens what the workspace last showed.
-    await expect(page.getByLabel('Your message', { exact: true })).toHaveValue('Before 😀 after');
-    await expect(page.locator('.conversation-heading .navigator-empty')).toHaveCount(0);
+    await expect(blank).toBeVisible();
+    await expect(draft).toHaveValue('');
+    await openSavedSession(page);
+    await expect(draft).toHaveValue('Before 😀 after');
+    await page.reload();
+    await expect(draft).toHaveValue('Before 😀 after');
+    await expect(blank).toHaveCount(0);
+    // The window carries only which screen was showing, never any text.
+    assert.equal(await page.evaluate(() => window.name.includes('Before')), false);
     await f.check();
   } finally { await f.close(); }
 });

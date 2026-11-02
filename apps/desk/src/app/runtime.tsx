@@ -145,7 +145,7 @@ function captureParticipantCatalog(value: readonly ParticipantChoice[] | undefin
   } catch { throw new Error('Invalid participant catalog.'); }
 }
 
-function createRuntime(mode: DeskRuntime['mode'], workspace: WorkspaceRepository, host?: RuntimeLifecycle, createId?: () => string, participant?: ParticipantPort, participantChoices?: readonly ParticipantChoice[], nativeParticipants?: NativeParticipantConnection, dictation?: NativeDictationLane, offerClaude = false, keepSavedScreen = false): DeskRuntime {
+function createRuntime(mode: DeskRuntime['mode'], workspace: WorkspaceRepository, host?: RuntimeLifecycle, createId?: () => string, participant?: ParticipantPort, participantChoices?: readonly ParticipantChoice[], nativeParticipants?: NativeParticipantConnection, dictation?: NativeDictationLane, offerClaude = false, keepSavedScreen = false, viewCarry?: StorageLike): DeskRuntime {
   const choices = captureParticipantCatalog(participantChoices)?.map((choice) => {
     const connected = !!participant && sameParticipantIdentity(participant.identity, choice.identity);
     return Object.freeze({ ...choice, identity: Object.freeze({ ...choice.identity }),
@@ -276,7 +276,11 @@ function createRuntime(mode: DeskRuntime['mode'], workspace: WorkspaceRepository
     participantInputLimit: nativeParticipants ? 4096 : undefined,
     subscribeParticipants: nativeParticipants ? (listener) => nativeParticipants.subscribeChanges(listener) : undefined,
     refreshParticipants: nativeParticipants ? () => nativeParticipants.refreshAvailability() : undefined,
-    tabView: new BrowserTabView(memory ?? undefined),
+    // The Mac window carries its screen across a reload when the host provides a carrier; nothing else outlives the visit.
+    tabView: new BrowserTabView(memory && viewCarry ? {
+      getItem: (key) => { if (!isActive()) throw new Error('Runtime unavailable.'); return viewCarry.getItem(key); },
+      setItem: (key, value) => { if (!isActive()) throw new Error('Runtime unavailable.'); viewCarry.setItem(key, value); },
+    } : memory ?? undefined),
     identity: identityRecord && memory ? new BrowserIdentityStore(identityRecord, memory) : new BrowserIdentityStore(),
     canvas: new BrowserCanvas(canvasRecord ?? undefined),
     roadmap: memory ? new BrowserRoadmap(memory, withVisitLock) : new BrowserRoadmap(),
@@ -324,8 +328,8 @@ export function createNativeProofRuntime(workspace: WorkspaceRepository, lifecyc
   /** Lists the host's Claude entry beside its local models. No integration passes it before the adapter's PR 4b. */
   offerClaude?: boolean;
   /** The host is reopening a screen it already showed, so keep the saved selection instead of a blank session. */
-  keepSavedScreen?: boolean } = {}): DeskRuntime {
-  return createRuntime('native-proof', workspace, lifecycle, options.createId, options.participant, options.participantChoices, options.nativeParticipants, options.dictation, options.offerClaude, options.keepSavedScreen);
+  keepSavedScreen?: boolean; viewCarry?: StorageLike } = {}): DeskRuntime {
+  return createRuntime('native-proof', workspace, lifecycle, options.createId, options.participant, options.participantChoices, options.nativeParticipants, options.dictation, options.offerClaude, options.keepSavedScreen, options.viewCarry);
 }
 
 const availabilityCheckFailed = 'The Mac app could not confirm participant availability. Your draft is kept. Check availability again in the participant picker.';
