@@ -279,6 +279,263 @@ findings are requirements for the code pull requests named.
   by me", with no AI provenance in the file, counts as not AI. Site Engine's
   honesty gate treats "not sure" as AI.
 
+## Revision, November 2, 2026: Parts 2 And 3 For GrokBot Team C
+
+This revision adds detail for parts 2 and 3 and changes no requirement
+above; it only names the builder. Parts 2 and 3 go to GrokBot team C, one after the other in
+`packages/capabilities`, the package part 1 created. Part 2 starts when part
+1 has merged and the coordinator's build issue names it. Part 3 starts when
+part 2 has merged. Everything in "Requirements Carried To The Build" for
+these parts is part of the job.
+
+### Part 2: what to build
+
+A library in `packages/capabilities/src/cap/` that the part 3 runner and the
+Mac (part 4) call. It reads no clock: every call that needs the date or time
+takes it as an argument (`now`, an ISO time from the caller).
+
+- **Money.** Amounts as in part 1: decimal text plus an ISO 4217 currency.
+  Sums and comparisons use whole-number micro-units (`BigInt`), never
+  floating point. Amounts in different currencies are never added or
+  compared. A quote in another currency than the cap is refused unless the
+  caller passes a conversion the person turned on: a dated rate and a
+  safety margin, rounded up, with both amounts in the result for the card.
+- **The cap record.** `{ revision, currency, perRun, monthlyByCapability,
+  monthlyAll, paused }`, signed with ECDSA P-256 and SHA-256 (`node:crypto`,
+  DER-encoded signature) over canonical JSON. That is the one algorithm the
+  Mac's Secure Enclave signs with (Apple's
+  `ecdsaSignatureMessageX962SHA256`), so part 4's key fits without a format
+  change. A test vector signed the way part 4 will sign (P-256, X9.62 DER)
+  must verify. `verifyCap(record, signature, publicKey, protectedState)` accepts
+  it only when the signature checks out and its revision and hash match the
+  ones in `protectedState`. A missing, broken, unsigned or replayed record
+  (an older one with a valid signature) means a $0 cap.
+- **The protected state.** One small object `{ capRevision, capHash,
+  tightening, ledgerHead, ledgerCount }` in a store the caller supplies;
+  the library reads and changes it only through that store. In this part it lives in
+  an in-memory test double. In part 4 the Mac keeps it in the Keychain item
+  only the signed runner may change. Its interface is `read()` and
+  `write(next, expected)`, where `write` fails if the stored value isn't
+  `expected` (compare and swap).
+- **Tightenings.** `tighten(protectedState, change)` lowers a level or
+  pauses, with no signature. It refuses anything that raises a level or
+  un-pauses: those go through a new signed cap. The effective cap is always
+  the lower of the signed cap and the tightening. The protected state
+  always carries the `tightening` field, set to `none` only by a signed
+  cap; a protected state whose `tightening` field is missing or broken
+  gives a $0 cap, so deleting a tightening never brings back the higher
+  signed cap. Only a new signed cap clears a tightening.
+- **The ledger.** Entries `{ seq, kind, capabilityId, routeId, amount,
+  estimated, jobId, at, prevHash, hash }`, where `kind` is `reserve`,
+  `settle`, `release` or `over-bill`, each chained to the one before by
+  SHA-256. `ledgerHead` and `ledgerCount` in the protected state must match
+  the file's last entry. Each reservation writes the ledger entry and the
+  new head under the lock; a crash between the two leaves them unequal,
+  which fails closed like an edit. A ledger that is missing, edited, broken in the
+  chain or shorter than the protected head counts as fully spent for the
+  month, until `resetLedger` is called with a fresh signed cap (part 4 adds
+  the password prompt).
+- **Reserve and settle.** `reserve({ capabilityId, routeId, max, jobId,
+  now, providerTotal? })` checks all three levels (per run, this
+  capability's month, the month across all paid capabilities) against
+  reservations plus settled costs. When the caller passes the provider's
+  own month figure for the key, the check inside the lock uses the higher
+  of that figure and the ledger's settled total for that route's spend, so
+  use elsewhere on the same key still counts. The check and the write are one step under a single lock: an
+  in-process queue plus an exclusive lock file in the ledger folder, so
+  two processes can't both fit into the same budget. `settle({ jobId,
+  actual, estimated, now })` records the real cost, or keeps the reserved
+  maximum marked estimated when no figure comes back. A bill above the
+  approved maximum writes an `over-bill` entry, counts in full against the
+  cap, and returns `routeOff: true` for the caller to switch the route off.
+  `release` frees a reservation for a run that never started.
+- **Month totals.** `monthSpent({ capabilityId?, now, providerTotal? })`
+  returns the month's total; when the caller passes the provider's own
+  figure for the key, it takes the higher one.
+- **Command.** `node packages/capabilities/src/cap/show.mjs --ledger <dir>
+  --state <state.json> --now <iso>` prints the effective cap, what is
+  reserved and spent this month, and whether the ledger checks out. It
+  changes nothing.
+
+Part 2 tests (all with invented amounts and a test key made in the test):
+
+1. A signed cap verifies. An edited one, an unsigned one, a missing one and
+   an older validly signed one (replay) all give $0.
+2. A tightening lowers and pauses at once with no signature. A tightening
+   that raises or un-pauses is refused. Deleting or breaking a tightening
+   gives $0, and only a new signed cap clears it.
+3. Each level refuses a reservation that doesn't fit: per run, this
+   capability's month, the month across all.
+4. Twenty reservations started together (in this process and from two
+   `worker_threads`) never add up past any level.
+5. Deleting, editing (one byte) and restoring an older copy of the ledger
+   each stop paid runs and say why.
+6. An over-bill counts in full and returns `routeOff: true`; an estimated
+   settle stays marked estimated.
+7. The provider's figure is used when it is higher, both in `monthSpent`
+   and inside `reserve`: a $10 cap with $9 reported by the provider and $2
+   in the ledger refuses a $2 reservation.
+8. A quote in another currency is refused without a conversion, and with
+   one is rounded up after the margin and shows both amounts.
+9. `0.1 + 0.2` style sums are exact; no amount ever passes through a
+   JavaScript number.
+10. Determinism and no clock: the library never calls `Date.now()` or
+    `new Date()` without an argument.
+
+The bypass test above covers what this package can show. Part 4's test adds
+the proof that a process running as the same user can't write the Keychain
+item; until part 4 passes, the cap is "designed", not "enforced".
+
+### Part 3: what to build
+
+The runner for `make_media` in `packages/capabilities/src/media/`, with
+the `upload` and `local` routes only. It reads the capability record and
+checks it with part 1's validator first.
+
+- **Route list.** With no `route`, `listRoutes(record, setUp)` returns the
+  routes the person has set up, free ones first. `own_key` and `sign_in`
+  routes come back as "not available yet" (parts 4 and 5), never offered.
+- **Upload.** Checks the file's type and size against the record's inputs,
+  copies it into the media folder the caller names under a new name, and
+  writes the receipt beside it. The receipt asks how the file was made
+  (`filmed-or-drawn-by-me`, `made-with-ai` or `not-sure`, from the
+  caller). It scans the file's bytes for AI provenance (the IPTC
+  `trainedAlgorithmicMedia` or `compositeWithTrainedAlgorithmicMedia`
+  source type, which C2PA manifests and XMP both use). Only the person's
+  own "filmed or drawn by me" with no AI provenance found counts as not
+  AI; "not sure" is kept as "not sure", which Site Engine treats as AI.
+- **Local.** Sends the job to ComfyUI's HTTP API at a loopback address the
+  caller gives (`127.0.0.1` or `::1` only; anything else is refused before
+  any connection). It queues the workflow, reports progress through a
+  callback, gives a time estimate from progress so far and the elapsed
+  time (the caller passes a `now()` function), fetches the output into the
+  media folder, and writes the receipt with "made by AI". An `AbortSignal`
+  cancels it: the runner asks ComfyUI to interrupt and marks the run
+  stopped. A server that isn't running gives "ComfyUI isn't running on this
+  Mac" and how to start it. Nothing is retried in the background. The
+  runner never follows a redirect: every request is made with redirects
+  off, and any redirect answer fails the run before anything else is sent
+  or fetched. Before sending, the runner checks every node in the workflow
+  against a fixed allowlist of ComfyUI's built-in local nodes kept in the
+  package (loaders, text encoders, samplers, decoders, image and video
+  save and load nodes). Any other node is refused before anything is sent,
+  including API or Partner nodes (which call outside providers and can
+  spend credits) and custom nodes, so a local run can't send the prompt
+  out or spend money while its receipt says "nothing" and "free".
+- **Receipt.** JSON beside each file: route, provider and model, the
+  prompt, `leaves_machine` (`nothing` for both routes), cost `free`, the
+  time from the caller, and the AI label as above.
+- **Command.** `node packages/capabilities/src/media/make.mjs --record
+  <capability.json> --route upload --file <path> --made-how <answer>
+  --media <dir>` for upload, and `--route local --server
+  http://127.0.0.1:<port> --workflow <file.json> --prompt <text>` for
+  local.
+
+Part 3 tests (a fake ComfyUI server made with `node:http` on `127.0.0.1`
+inside the test, and invented files only):
+
+1. With no route, upload and local come first and paid routes are never
+   offered.
+2. An upload of the wrong type or over the size limit is refused and
+   nothing is copied.
+3. An upload with "filmed or drawn by me" and no provenance is not AI; the
+   same answer on a file carrying `trainedAlgorithmicMedia` is AI; "not
+   sure" stays "not sure".
+4. A local run against the fake server returns a file and a receipt that
+   says "made by AI" and "nothing" left the machine.
+5. A non-loopback server address (`192.168.1.5`, `example.com`, a
+   name such as `localhost`) is refused before any connection, and a fake
+   server that answers with a redirect to another address fails the run
+   without the runner contacting that address. A workflow with an API or
+   Partner node, or a custom node, is refused before anything is sent.
+6. Cancelling mid-run sends the interrupt and marks the run stopped.
+7. A server that isn't running gives the plain message and no retry.
+8. Hostile prompt text (quotes, script tags, right-to-left marks, line
+   breaks) is kept as text in the receipt and never breaks the JSON.
+9. A record that fails part 1's validator is refused before anything runs.
+
+### Carried to the build (Codex, November 2)
+
+These later review findings are requirements for the part 2 and part 3
+pull requests.
+
+- **Part 2: the cap month is the person's calendar month.** The cap record
+  names an IANA time zone (`timeZone`, for example `America/Los_Angeles`).
+  A month runs from local midnight on the first to local midnight on the
+  first of the next month in that zone, worked out with `Intl` from the
+  caller's `now`. Tests cover both sides of a non-UTC month boundary.
+- **Part 2: conversion rates expire.** A rate older than 24 hours before
+  `now` is refused and the paid route stays off (fail closed); a test
+  covers a stale rate.
+- **Part 2: conversion rates come only from a protected record.** The
+  rate is never an argument a caller or model passes. It is read from the
+  signed cap record (set by the person on the signed path, with its date),
+  so a forged rate can't make a run fit. A test passes a fresh, favorable
+  rate as an argument and shows it is ignored.
+- **Part 3: the prompt goes to a named place.** A local workflow marks
+  where the prompt goes with the exact text `{{prompt}}` in one text field.
+  The runner refuses a workflow with no such field or more than one, puts
+  the prompt there (as JSON text, never by splicing strings), and test 4
+  checks that the queued workflow holds the prompt.
+- **Part 3: every request input reaches the workflow.** The same rule
+  holds for `{{seconds}}`, `{{width}}`, `{{height}}` and
+  `{{reference_file}}` when the request gives them: each must appear
+  exactly once (as a number or file name in the right field), or the
+  runner refuses the run rather than letting the template's own value
+  stand. A workflow says which `kind` it makes (`image` or `video`), and a
+  request for the other kind is refused. Test 4 checks each value in the
+  queued workflow.
+
+### Rules for the builder
+
+These are rules the builder must follow; the setup does not enforce them, so
+breaking one is a stop-and-report event.
+
+- Start only when the coordinator's build issue names the part. Work in a
+  checkout of this repo, through Cursor, signed in as `cloudwork-bot`, on
+  the branch `OC-261102-media-cap` (part 2) or `OC-261102-media-runner`
+  (part 3). Open a pull request into `main` with auto-merge off and the
+  label `agent: grokbot`. Never push to `main` directly, and never switch
+  on auto-merge.
+- Mark the work as AGENTS.md "Accounts And Provenance" says: `Cursor Agent`
+  as commit author, and `— GrokBot team C, <branch name>` as the last line
+  of the pull request description and every comment.
+- Run **no commands on the owner's Mac** for this job.
+- Touch no keys, tokens, passwords, accounts, real Keychain, iCloud or
+  private files. Signing keys are made inside the tests and thrown away.
+  Invented data only.
+- Change files only under `packages/capabilities/`, and leave part 1's
+  validator as it is unless a test shows it wrong (say so in the pull
+  request). Nothing else, not even `STATUS.md` or this plan (the
+  coordinator updates them). Import nothing from `apps/` or another
+  package.
+- JavaScript modules (`.mjs`), Node 22 or later, tests with `node --test`
+  through the package's existing `npm test`.
+- No outside network, no AI, no paid services, no `child_process`, in the
+  code or the tests. Part 3 may open connections to loopback addresses
+  only; part 2 opens none. `node:crypto` and `worker_threads` are allowed.
+- No new dependencies. Add no license file and no `license` field.
+- Keep each part small: the library, its command, the tests and a README
+  section with the inputs, the rules, the outputs and the command.
+  Finishable in one to two days each.
+- The pull request says what was built, how to run the tests, what was not
+  done, and anything unsure.
+- Supported setups are macOS and the Linux CI runners on Node 22 (AGENTS.md
+  "Review Guidelines"); don't add Windows-specific code.
+- Edge cases this plan doesn't name: write each choice in the README's
+  "Edge cases" section with a test.
+
+### Review and finish line
+
+Codex reviews each part as code until it gives a 👍. GrokBot fixes every P1
+and P2 or explains in the pull request why one doesn't apply. The
+coordinator checks it against this plan and posts the check as a comment.
+Part 2 also gets an independent review from a fresh Claude review, because
+it guards the owner's money. A part is done when its tests pass with one
+command, Codex has no open P1 or P2 on the latest commit (or the Codex
+triage judge passes it, [codex-triage.md](codex-triage.md)), and the plan
+check finds nothing missing.
+
 ## When It Goes Wrong
 
 The screens are the route picker, the cost card and the cap settings

@@ -258,6 +258,23 @@ invented messages only. At least:
     no files.
 11. Each refusal above names its field.
 
+## Revision, November 2, 2026: The Digest Covers The Shown Description
+
+This revision changes rule 1 and the `approvals` field above; where they
+differ, this section wins. The build in pull request #253 does the same,
+and its independent recheck called it the safer reading.
+
+- `actionDigest({ description, kind, payload })` is SHA-256 of the
+  action's `description`, `kind` and `payload` as canonical JSON (keys
+  sorted, `node:crypto`), over the exact action the host showed the person
+  when they said yes. The host computes `payloadDigest` the same way.
+- An approval counts only when its `payloadDigest` equals that digest. The
+  description alone still never counts as a yes: a changed recipient,
+  content, amount or kind needs a new yes, and so does a changed shown
+  description.
+- Test 2 adds the same kind and payload with only the description changed,
+  which asks again.
+
 ## Out Of Scope For This Slice
 
 - Reading language, calling a model, or deciding `facts`: the caller does.
