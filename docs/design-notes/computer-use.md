@@ -197,9 +197,12 @@ inside TCA, where the ceilings above can be enforced.
   switches to the loud path.
 - **Every action reports whether it landed:** not delivered (safe to retry),
   delivered but not confirmed, or confirmed. The agent confirms by looking
-  again, because macOS often reports success when nothing happened. An
-  action that may have landed is never repeated automatically, so a message,
-  payment or deletion can't happen twice.
+  again, because macOS often reports success when nothing happened. "Not
+  delivered" is only for an action that provably never started. A timeout
+  or an "app didn't answer" error counts as maybe delivered, since macOS
+  says the action may still have happened. An action that may have landed
+  is never repeated automatically, so a message, payment or deletion can't
+  happen twice.
 - **"Couldn't tell" means no.** Each check is answered yes, no or unknown.
   An unknown answer never allows anything, so a permission check that failed
   to read blocks the action.
@@ -213,7 +216,10 @@ inside TCA, where the ceilings above can be enforced.
   action to the confirmed result of its last one. Filling a message and
   pressing Send is one step. That covers quiet accessibility actions too,
   so a second agent can't change a field between the first agent filling
-  it and pressing Send. Each
+  it and pressing Send. The owner or the app can still change it, so right
+  before the final action (Send, Pay, Delete) the agent reads back what it
+  filled in and compares it with what the owner approved. If anything
+  differs, it stops and asks. Each
   agent can show its own labeled cursor, so the owner sees which agent is
   acting.
 - **A trail the owner can replay.** The action log can keep before and after
