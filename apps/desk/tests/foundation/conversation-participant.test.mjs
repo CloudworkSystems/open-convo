@@ -1993,6 +1993,11 @@ test('shared reactions: the switch puts a visible note in the draft, Send carrie
     await expect.poll(() => f.stored.sessions.find((s) => s.id === f.stored.selection.sessionId).reactionSharing?.participant).toEqual(inventedChoice.identity);
     await reaction('Question');
     await expect(box).toHaveValue('[My reactions: ❓ on your reply "Invented first reply"]\n\n');
+    await expect(f.page.locator('[data-reaction-sharing-notice]')).toHaveText('Reactions note added to your message.');
+    await reaction('Idea');
+    await expect(f.page.locator('[data-reaction-sharing-notice]')).toHaveText('Reactions note updated in your message.');
+    await reaction('Idea');
+    await expect(box).toHaveValue('[My reactions: ❓ on your reply "Invented first reply"]\n\n');
     await box.press('End');
     await box.pressSequentially('Thanks.');
     await f.page.getByRole('button', { name: 'Send message', exact: true }).click();

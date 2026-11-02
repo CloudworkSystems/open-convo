@@ -9,7 +9,7 @@ import type { DeskCommand, DeskState } from '../domain/types';
 import { DeskFoundation } from '../features/DeskFoundation';
 import { MessageActionsContext } from '../features/MessageActions';
 import { draftWithReplyQuote } from '../domain/reply-quote';
-import { reactionSharingOn, reactionsNoteEdited } from '../domain/shared-reactions';
+import { reactionSharingOn, reactionsNoteEdited, splitReactionsNote } from '../domain/shared-reactions';
 import { parsePreviewBuild, retireAnnotationDiagnostics, watchPreviewUpdates } from './preview-updates';
 import type { PreviewUpdateNotice } from './preview-updates';
 import { useConversationRuns, type WorkspaceAttemptResult } from './use-conversation-runs';
@@ -178,6 +178,20 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
   // catalog lists it as local and usable. Otherwise nothing is picked and the
   // composer says why. Tried once per session per visit, so a choice the
   // owner clears or a failed save is never fought over.
+  // Shared reactions rule 6: say when the Desk adds, changes or removes the
+  // reactions note in the draft, since that text goes with the next Send.
+  const announcedNote = useRef<{ sessionId: string; note?: string } | null>(null);
+  const noteSession = state?.sessions.find((item) => item.id === state.selection.sessionId);
+  const noteInDraft = noteSession && reactionSharingOn(noteSession) ? splitReactionsNote(state?.drafts[noteSession.id] ?? '')?.note : undefined;
+  useEffect(() => {
+    const previous = announcedNote.current;
+    announcedNote.current = noteSession ? { sessionId: noteSession.id, note: noteInDraft } : null;
+    if (!noteSession || previous?.sessionId !== noteSession.id || previous.note === noteInDraft || !reactionSharingOn(noteSession)) return;
+    const generated = noteSession.reactionSharing?.note;
+    const text = noteInDraft && noteInDraft === generated ? previous.note ? 'Reactions note updated in your message.' : 'Reactions note added to your message.'
+      : !noteInDraft && generated === undefined ? 'Reactions note removed from your message.' : undefined;
+    if (text) setSharingNotice({ sessionId: noteSession.id, text });
+  }, [noteSession?.id, noteInDraft]);
   const defaultTried = useRef(new Set<string>());
   useEffect(() => {
     const sessionId = state?.selection.sessionId;
