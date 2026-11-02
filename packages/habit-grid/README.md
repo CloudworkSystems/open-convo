@@ -81,6 +81,12 @@ daylight-saving change cannot skip or repeat a day.
   use them; this slice does not record voice or automatic data. A done
   check-in defaults to 1. Count and amount check-ins require a value. The
   engine does not invent one.
+- `logCheckIns(personId, [{ trackerId, date, value, source, checkInId }, ...])`
+  logs many check-ins as one change and returns their IDs in order. Each entry
+  is checked exactly like `logCheckIn`. All or nothing: one bad entry, or two
+  entries with the same ID, refuses the whole list and nothing is written. An
+  empty list writes nothing. Use it for imports, where one `logCheckIn` per
+  day would copy and check the whole person each time.
 - `editCheckIn(personId, checkInId, fields)` updates only the supplied fields.
   `deleteCheckIn` moves it to Trash. `restoreCheckIn` brings it back.
   Editing a recoverable deleted check-in with a supplied field also restores it.
