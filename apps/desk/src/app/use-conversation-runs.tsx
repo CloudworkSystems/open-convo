@@ -609,8 +609,11 @@ export function useConversationRuns(options: RunWorkspace) {
     || !!options.runtime.participant || options.state?.schemaVersion === 2;
   // Safety model item 1: what Send would take off the Mac, before Send.
   const selectedDraft = options.state?.drafts[selected ?? ''] ?? '';
+  // While saving is blocked, sharing reads as off (plan rule 5) in both
+  // halves of the line, so it never says reactions will go.
+  const sharingSession = selectedSession && options.blocked() ? { ...selectedSession, reactionSharing: undefined } : selectedSession;
   const claudeLine = participantMode && selected && isOffMacClaude(savedSelection)
-    ? claudeSendLine(contextRunsFor(options.state?.conversationRuns ?? [], selectedSession), selected, selectedDraft, inputLimit) ?? undefined : undefined;
+    ? claudeSendLine(contextRunsFor(options.state?.conversationRuns ?? [], sharingSession), selected, selectedDraft, inputLimit) ?? undefined : undefined;
   // Shared reactions: where reactions go, or which earlier turns stay out.
   const reactionsDestination = savedSelection ? isOffMacClaude(savedSelection) ? `${savedSelection.label} (Anthropic)`
     : selectedLocal ? `${savedSelection.label} on this Mac` : savedSelection.label : '';
@@ -618,8 +621,6 @@ export function useConversationRuns(options: RunWorkspace) {
     : selectedLocal ? selectLocalContext(options.state?.conversationRuns ?? [], selected, selectedDraft)
     : isOffMacClaude(savedSelection) ? selectClaudeContext(options.state?.conversationRuns ?? [], selected, selectedDraft, inputLimit) : undefined;
   const carriedRunIds = new Set(unfilteredContext?.kind === 'ok' ? unfilteredContext.contextRunIds : []);
-  // While saving is blocked, sharing reads as off (plan rule 5), so the line never says reactions will go.
-  const sharingSession = selectedSession && options.blocked() ? { ...selectedSession, reactionSharing: undefined } : selectedSession;
   const sharedLine = participantMode ? reactionsLine(options.state?.conversationRuns ?? [], sharingSession, reactionsDestination, carriedRunIds) : undefined;
   const sendDestination = [claudeLine, sharedLine].filter(Boolean).join(' ') || undefined;
   const reactionsHold = participantMode ? reactionsNoteSendHold(selectedSession, selectedDraft) : undefined;
