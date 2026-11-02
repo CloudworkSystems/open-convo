@@ -96,7 +96,7 @@ export function installNativeWriteFailure(context, databaseName = WORKSPACE_DATA
 /**
  * These tests check a tab returning to its saved screen. A brand-new tab opens
  * on a blank session instead (owner decision, November 2, 2026), which
- * blank-session-browser.test.mjs covers; it skips this.
+ * the blank-session tests in navigation-review.test.mjs cover; it skips this.
  */
 export function returningTab(context) {
   return context.addInitScript(() => { try { sessionStorage.setItem('true-convo:desk:tab-opened:v1', '1'); } catch {} });
