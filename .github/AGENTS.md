@@ -12,5 +12,10 @@ loosen it. This folder is the merge gate itself (plan:
   check is wrong, fix it in its own pull request and say why.
 - A new workflow, action, permission, secret name or outside host trips the
   risk hold ([docs/plans/risk-review.md](../docs/plans/risk-review.md)). Pin
-  actions to a version.
+  actions to a full commit hash with the version in a comment
+  (`owner/repo@<hash> # v1.2.3`), and keep every `pull_request_target`
+  workflow on the default branch's code; `workflow-guards.test.mjs` checks
+  both.
+- An npm advisory that doesn't apply goes in `accepted-risks.json` only with
+  the owner's yes, quoted with its date and thread.
 - `pages.yml` publishes the public website. See [site/AGENTS.md](../site/AGENTS.md).

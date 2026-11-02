@@ -1,0 +1,4 @@
+{
+  "_about": "npm advisories that don't apply here, each with the owner's yes (docs/plans/security.md, section 1). An entry needs: advisory (GHSA id), folder, package, reason, ownerYes (the date and thread of his yes) and date (YYYY-MM-DD, added). The weekly sweep flags entries older than 90 days. .github/scripts/npm-audit.mjs reads this file.",
+  "accepted": []
+}
