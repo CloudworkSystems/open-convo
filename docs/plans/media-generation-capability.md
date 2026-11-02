@@ -211,7 +211,8 @@ make_media(kind, prompt, seconds?, width?, height?, reference_files?, route?)
 
 **The receipt**, saved beside each file: route, provider and model, the
 prompt, what left the machine, the cost (actual or estimated), the time, and
-"made by AI" for every route except upload. Site Engine's honesty gate reads
+"made by AI" for every route except upload (uploads: see the requirements
+carried to the build). Site Engine's honesty gate reads
 that label, so AI footage on a person's site is never passed off as filmed.
 
 ## Not In This Plan
@@ -241,6 +242,29 @@ that label, so AI footage on a person's site is never passed off as filmed.
    starts. Adds an outside host, so the risk review holds it for the owner.
    Off until the person sets a cap.
 6. **Owner trial** (below).
+
+## Requirements Carried To The Build (Codex Round 3)
+
+The plan review stops after two Codex rounds (AGENTS.md); these later
+findings are requirements for the code pull requests named.
+
+- **Part 2: an old signed cap can't be replayed.** The protected Keychain
+  item also holds the current cap record's revision number and hash. The
+  runner accepts only the record that matches, so restoring an older,
+  validly signed, higher cap fails like an edit. The bypass test covers
+  restoring an earlier valid cap.
+- **Parts 1 and 2: every amount names its currency.** Each price, quote,
+  cap and ledger entry carries an ISO currency code. When a provider's
+  quote or bill is in another currency than the cap, the runner refuses
+  the paid route unless the person has turned on conversion, which uses a
+  dated rate plus a safety margin, rounds up, and shows both amounts on the
+  card.
+- **Part 3: uploads don't claim to be filmed.** An upload's receipt asks
+  the person how it was made (filmed or drawn by me, made with AI, or not
+  sure) and reads any provenance data in the file (such as C2PA). "Made by
+  AI" or "not sure" is kept as such; only the person's own "filmed or drawn
+  by me", with no AI provenance in the file, counts as not AI. Site Engine's
+  honesty gate treats "not sure" as AI.
 
 ## When It Goes Wrong
 
