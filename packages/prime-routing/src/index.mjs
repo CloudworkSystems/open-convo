@@ -71,10 +71,11 @@ function canonical(value) {
 }
 
 export function actionDigest(action) {
-  exactFields(action, "action", ["kind", "payload"]);
+  exactFields(action, "action", ["description", "kind", "payload"]);
+  string(action.description, "action.description");
   enumValue(action.kind, "action.kind", ACTION_KINDS);
   plainJson(action.payload, "action.payload");
-  return createHash("sha256").update(canonical({ kind: action.kind, payload: action.payload })).digest("hex");
+  return createHash("sha256").update(canonical({ description: action.description, kind: action.kind, payload: action.payload })).digest("hex");
 }
 
 function validateAction(action, index) {
@@ -176,7 +177,7 @@ export function routeMessage(input, record) {
     if (approval.by !== "person") reason = `approval by ${approval.by} never counts`;
     else if (usedApprovals.has(approval.approvalId)) reason = "approval was already used";
     else if (!action) reason = "action is not present";
-    else if (approval.payloadDigest !== actionDigest({ kind: action.kind, payload: action.payload })) reason = "action kind or payload changed";
+    else if (approval.payloadDigest !== actionDigest({ description: action.description, kind: action.kind, payload: action.payload })) reason = "action description, kind, or payload changed";
     else if (claimedActions.has(action.id)) reason = "action already has a counting approval";
     if (reason) ignoredApprovals.push(ignored(approval, reason));
     else {

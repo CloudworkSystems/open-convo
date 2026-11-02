@@ -10,11 +10,11 @@ Before an approved outside action starts, the caller must save its returned `app
 
 `input.facts` contains `asks`, `steps`, and `outsideActions`. Each outside action has an `id`, `kind`, human-readable `description`, and exact JSON `payload`. `input.limits.quickSteps` is optional and defaults to 3. The input is refused if it carries host-owned record fields.
 
-`record` contains the host-owned message and space, the proposed job and recipient, offer state, approvals and their used ids, and memory grants. An approval contains a digest from `actionDigest({ kind, payload })`. A memory grant names its space, job, file, label, text, reason, recipient, freshness, and allowed use.
+`record` contains the host-owned message and space, the proposed job and recipient, offer state, approvals and their used ids, and memory grants. An approval contains a digest from `actionDigest({ description, kind, payload })`, covering both the description shown to the person and the exact action to run. A memory grant names its space, job, file, label, text, reason, recipient, freshness, and allowed use.
 
 ## Rules
 
-Only an unused approval recorded as coming from the person counts, and only for the matching action id, kind, and exact payload. Every unapproved outside action adds `wait-for-yes` with `Yes` and `Not now` choices. A small question or task is answered, thinking or an unclear request is discussed, and larger requests or a newly accepted offer are handed off. Agent and system messages never start a hand-off.
+Only an unused approval recorded as coming from the person counts, and only for the matching action id, shown description, kind, and exact payload. Every unapproved outside action adds `wait-for-yes` with `Yes` and `Not now` choices. A small question or task is answered, thinking or an unclear request is discussed, and larger requests or a newly accepted offer are handed off. Agent and system messages never start a hand-off.
 
 Hand-off memory is limited to the recorded job and recipient. A file from another space must have `sharedByPerson: true`. Every file sent to an outside recipient must also have `sharedByPerson: true`.
 

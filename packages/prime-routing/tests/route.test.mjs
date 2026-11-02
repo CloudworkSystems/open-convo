@@ -32,7 +32,7 @@ function approval(actionValue, approvalId, how = "typed", by = "person") {
   return {
     approvalId,
     actionId: actionValue.id,
-    payloadDigest: actionDigest({ kind: actionValue.kind, payload: actionValue.payload }),
+    payloadDigest: actionDigest({ description: actionValue.description, kind: actionValue.kind, payload: actionValue.payload }),
     by,
     how,
     at: "2026-01-01T00:00:00Z"
@@ -71,12 +71,12 @@ test("all 24 invented routing cases", async (t) => {
   }
 });
 
-test("action digests cover kind and canonical payload, not the description", () => {
+test("action digests cover the shown description, kind, and canonical payload", () => {
   const first = action("send-1", "send", { content: "Hello", recipient: "a@example.test" });
   const reordered = action("send-1", "send", { recipient: "a@example.test", content: "Hello" });
   assert.equal(
-    actionDigest({ kind: first.kind, payload: first.payload }),
-    actionDigest({ kind: reordered.kind, payload: reordered.payload })
+    actionDigest({ description: first.description, kind: first.kind, payload: first.payload }),
+    actionDigest({ description: reordered.description, kind: reordered.kind, payload: reordered.payload })
   );
 
   const approved = approval(first, "approval-1");
@@ -87,6 +87,9 @@ test("action digests cover kind and canonical payload, not the description", () 
 
   const changedKind = { ...first, kind: "publish" };
   assert.deepEqual(routeMessage(input({ outsideActions: [changedKind] }), baseRecord({ approvals: [approved] })).waitFor.map(({ id }) => id), ["send-1"]);
+
+  const changedDescription = { ...first, description: "Send the same message under a changed description" };
+  assert.deepEqual(routeMessage(input({ outsideActions: [changedDescription] }), baseRecord({ approvals: [approved] })).waitFor.map(({ id }) => id), ["send-1"]);
 });
 
 test("clicked and typed person approvals count once; agent and memory approvals are ignored", () => {
