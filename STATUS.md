@@ -146,6 +146,10 @@ reviews. Plan approved (merged as #127 on October 24):
 
 **Prime agent routing engine** (Personal, step 2 of the prime agent plan), Codex team B builds, GrokBot or a fresh Claude reviews; plan approved by the owner on November 1 (`docs/plans/prime-agent-routing.md`): the wait-for-a-yes and hand-off rules as a standalone package in `packages/prime-routing/`, with no model calls, network or storage. Build issue open.
 
+**Atlas index engine** (Personal, the Atlas wiki's index rebuild and link checker), GrokBot team A builds, Codex reviews and the coordinator checks it against the plan; plan approved by the owner on November 2 (`docs/plans/atlas-index-engine.md`): rebuilds a notes folder's index and map and lists broken links, orphans, duplicates and conflicts, as a standalone package in `packages/atlas-index/`, dry run by default. Build issue to open.
+
+**Revisit reminders engine** (Personal, "revisit when" reminders), GrokBot team B builds, Codex reviews and the coordinator checks it against the plan; plan approved by the owner on November 2 (`docs/plans/revisit-reminders-engine.md`): list, add, snooze and finish dated reminders on saved items, as a standalone package in `packages/revisit-reminders/`, with no clock reads, network or writes (the command only reads the file it is given). Build issue to open.
+
 **Public website (trueconvo.com)**, Claude builds, Codex reviews; a home page (with two Desk preview screenshots) and a plain-language privacy policy in `site/`, published by `.github/workflows/pages.yml` from `main` (#153, October 25). For Meta's developer early-access application and regular visitors. The owner turned on Pages and set the custom domain, and the site is published at trueconvo.com (latest deploy October 26).
 
 **Security** (all work; owner asked October 28): plan
