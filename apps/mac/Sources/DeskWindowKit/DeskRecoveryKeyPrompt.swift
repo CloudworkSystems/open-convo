@@ -151,21 +151,30 @@ final class RecoveryGroupEntry: NSObject, NSTextFieldDelegate {
     let second: NSTextField
     let firstProgress: NSTextField
     let secondProgress: NSTextField
+    /// The typing rule, under the boxes.
+    let rule: NSTextField
     private let check: RecoveryKeyCheck
 
     init(check: RecoveryKeyCheck) {
         self.check = check
         let width: CGFloat = 340, box: CGFloat = 150, gap: CGFloat = 40
-        view = NSView(frame: NSRect(x: 0, y: 0, width: width, height: 112))
-        first = Self.box(frame: NSRect(x: 0, y: 46, width: box, height: 30))
-        second = Self.box(frame: NSRect(x: box + gap, y: 46, width: box, height: 30))
-        firstProgress = Self.small(frame: NSRect(x: 0, y: 26, width: box, height: 16))
-        secondProgress = Self.small(frame: NSRect(x: box + gap, y: 26, width: box, height: 16))
+        view = NSView(frame: NSRect(x: 0, y: 0, width: width, height: 128))
+        first = Self.box(frame: NSRect(x: 0, y: 62, width: box, height: 30))
+        second = Self.box(frame: NSRect(x: box + gap, y: 62, width: box, height: 30))
+        firstProgress = Self.small(frame: NSRect(x: 0, y: 42, width: box, height: 16))
+        secondProgress = Self.small(frame: NSRect(x: box + gap, y: 42, width: box, height: 16))
+        // Two lines, wrapped: on one 11-point line the sentence ran past
+        // the dialog and its end was cut off (GrokBot review, ca1a0fd).
+        rule = Self.small(frame: NSRect(x: 0, y: 0, width: width, height: 34))
         super.init()
-        let firstLabel = Self.label("Group \(check.asked[0] + 1)", frame: NSRect(x: 0, y: 80, width: box, height: 18))
-        let secondLabel = Self.label("Group \(check.asked[1] + 1)", frame: NSRect(x: box + gap, y: 80, width: box, height: 18))
-        let rule = Self.small(frame: NSRect(x: 0, y: 0, width: width, height: 18))
         rule.stringValue = Self.rule(check.groupLength)
+        rule.lineBreakMode = .byWordWrapping
+        rule.maximumNumberOfLines = 2
+        rule.preferredMaxLayoutWidth = width
+        rule.cell?.wraps = true
+        rule.cell?.truncatesLastVisibleLine = false
+        let firstLabel = Self.label("Group \(check.asked[0] + 1)", frame: NSRect(x: 0, y: 96, width: box, height: 18))
+        let secondLabel = Self.label("Group \(check.asked[1] + 1)", frame: NSRect(x: box + gap, y: 96, width: box, height: 18))
         for field in [first, second] {
             field.delegate = self
             field.setAccessibilityLabel(field === first ? firstLabel.stringValue : secondLabel.stringValue)

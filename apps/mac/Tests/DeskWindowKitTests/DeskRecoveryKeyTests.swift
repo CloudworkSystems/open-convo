@@ -133,6 +133,11 @@ final class DeskRecoveryKeyTests: XCTestCase {
         let rule = entry.view.subviews.compactMap { ($0 as? NSTextField)?.stringValue }
         XCTAssertTrue(rule.contains(RecoveryGroupEntry.rule(5)))
         XCTAssertTrue(rule.contains("Group 3") && rule.contains("Group 8"))
+        let needed = try XCTUnwrap(entry.rule.cell).cellSize(forBounds: NSRect(x: 0, y: 0, width: entry.rule.frame.width,
+                                                                               height: .greatestFiniteMagnitude))
+        XCTAssertLessThanOrEqual(needed.height, entry.rule.frame.height, "the whole rule shows, wrapped, nothing cut off")
+        XCTAssertTrue(entry.view.bounds.contains(entry.rule.frame))
+        XCTAssertFalse(entry.rule.frame.intersects(entry.firstProgress.frame))
         entry.clear()
         XCTAssertEqual(entry.first.stringValue, "")
         XCTAssertEqual(entry.second.stringValue, "")
