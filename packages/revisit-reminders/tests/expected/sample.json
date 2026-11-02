@@ -1,0 +1,78 @@
+{
+  "overdue": [
+    {
+      "id": "garden-plan",
+      "itemId": "session-garden",
+      "itemKind": "session",
+      "title": "Come back to the garden plan session",
+      "when": {
+        "on": "2026-10-20"
+      },
+      "note": "Check the bean rows.",
+      "createdOn": "2026-10-01",
+      "dueOn": "2026-10-20",
+      "daysOverdue": 13
+    }
+  ],
+  "dueToday": [
+    {
+      "id": "fence-note",
+      "itemId": "note-fence",
+      "itemKind": "note",
+      "title": "Come back to the fence note",
+      "when": {
+        "on": "2026-10-01"
+      },
+      "createdOn": "2026-09-15",
+      "snoozedUntil": "2026-11-02",
+      "dueOn": "2026-11-02"
+    },
+    {
+      "id": "seed-list",
+      "itemId": "note-seeds",
+      "itemKind": "note",
+      "title": "Come back to the seed note",
+      "when": {
+        "afterDays": 14,
+        "from": "2026-10-19"
+      },
+      "createdOn": "2026-10-19",
+      "dueOn": "2026-11-02"
+    }
+  ],
+  "comingUp": [
+    {
+      "id": "path-link",
+      "itemId": "link-path",
+      "itemKind": "link",
+      "title": "Come back to the path link",
+      "when": {
+        "on": "2026-11-16"
+      },
+      "createdOn": "2026-10-02",
+      "dueOn": "2026-11-16"
+    }
+  ],
+  "missingItem": [],
+  "done": [
+    {
+      "id": "porch-done",
+      "itemId": "note-porch",
+      "itemKind": "note",
+      "title": "Come back to the porch note",
+      "when": {
+        "on": "2026-09-01"
+      },
+      "createdOn": "2026-08-01",
+      "doneOn": "2026-09-02",
+      "dueOn": "2026-09-01"
+    }
+  ],
+  "counts": {
+    "overdue": 1,
+    "dueToday": 2,
+    "comingUp": 1,
+    "missingItem": 0,
+    "done": 1
+  }
+}
