@@ -22,7 +22,7 @@ export const DEVELOPMENT_SOURCE_FILES = Object.freeze([
   'src/features/AvatarCrop.tsx', 'src/features/avatar-crop.ts', 'src/features/user-options.css',
   'src/content/nexus-primitives.ts', 'src/features/NexusPrimitives.tsx', 'src/features/nexus-primitives.css',
   'src/domain/commands.ts', 'src/domain/demo.ts', 'src/domain/validation.ts', 'src/domain/session-naming.ts',
-  'src/domain/history-reader.ts', 'src/domain/memory.ts', 'src/domain/message-marks.ts', 'src/domain/reply-quote.ts',
+  'src/domain/history-reader.ts', 'src/domain/memory.ts', 'src/domain/message-marks.ts', 'src/domain/reply-quote.ts', 'src/domain/side-chat.ts',
   'src/features/MessageActions.tsx', 'src/features/message-actions.css',
   'src/features/Conversation.tsx', 'src/features/DeskFoundation.tsx',
   'src/features/GoalPanel.tsx', 'src/features/Modules.tsx',

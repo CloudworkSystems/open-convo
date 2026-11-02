@@ -134,3 +134,62 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+.message-side-chats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.message-side-chat-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 9px;
+  border: 1px solid var(--tca-border-default);
+  border-radius: 999px;
+  background: var(--tca-surface-1);
+  color: var(--tca-text-body);
+  font-size: 12px;
+  cursor: pointer;
+}
+.message-side-chat-link span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.message-side-chat-link:hover {
+  border-color: var(--tca-border-strong);
+}
+.message-side-chat-link:focus-visible {
+  outline: 2px solid var(--tca-focus-ring);
+  outline-offset: 1px;
+}
+/* The top of a side chat: what it is about, and the way back. */
+.side-chat-anchor {
+  margin: 4px 0 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--tca-border-default);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: var(--tca-surface-1);
+}
+.side-chat-anchor p {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--tca-text-muted);
+}
+.side-chat-anchor blockquote {
+  margin: 0 0 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 9.6em;
+  overflow: auto;
+  color: var(--tca-text-body);
+}
+/* Navigation: a side chat sits indented under the conversation it came from. */
+.session-row-side {
+  padding-left: calc(14px * var(--side-chat-depth, 1));
+}
+.session-row-side .session-mark {
+  border-radius: 2px;
+}

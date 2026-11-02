@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, MouseEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { FolderIcon } from '../ui/FolderIcon';
 import type { DeskState } from '../domain/types';
+import { withSideChatsNested } from '../domain/side-chat';
 import { useDeskRuntime, type TemporaryCanvas } from '../app/runtime';
 import { canvasConnectorPath, emptyCanvasLayout, nodeAnchor, roundedNodePath, shapeBounds, zoomCanvasView, type CanvasLayoutRecord, type CanvasNodeLayout, type CanvasNodeShape, type CanvasView } from '../domain/canvas-layout';
 
@@ -21,7 +22,14 @@ interface CanvasNode extends CanvasNodeLayout {
   title: string;
   status?: string;
 }
-interface CanvasLink { source: string; target: string; kind: 'inside' | 'belongs-to' }
+interface CanvasLink { source: string; target: string; kind: 'inside' | 'belongs-to' | 'side-chat-of' }
+
+/** Sessions of one folder in list order, each side chat with the canvas node of its parent when that parent is listed too. */
+function canvasSessions(sessions: DeskState['sessions']) {
+  return withSideChatsNested(sessions).map(({ session, depth }) => ({
+    session, parent: depth > 0 && session.sideOf ? `session:${session.sideOf.sessionId}` : undefined,
+  }));
+}
 
 /** A view of saved records, with no inferred relationships or new stored identities. */
 export function buildCanvasScene(state: DeskState, layout = emptyCanvasLayout()): { nodes: CanvasNode[]; links: CanvasLink[]; width: number; height: number } {
@@ -34,13 +42,14 @@ export function buildCanvasScene(state: DeskState, layout = emptyCanvasLayout())
     nodes.push(domainNode);
     const records = [
       ...(domain.nextStep ? [{ id: `next-step:${domain.id}`, recordId: domain.id, kind: 'next-step' as const, title: domain.nextStep }] : []),
-      ...state.sessions.filter((session) => session.goalId === domain.id).map((session) => ({ id: `session:${session.id}`, recordId: session.id, kind: 'session' as const, title: session.title })),
+      ...canvasSessions(state.sessions.filter((session) => session.goalId === domain.id)).map(({ session, parent }) => ({ id: `session:${session.id}`, recordId: session.id, kind: 'session' as const, title: session.title, parent })),
       ...state.workItems.filter((item) => item.goalId === domain.id).map((item) => ({ id: `work:${item.id}`, recordId: item.id, kind: 'work' as const, title: item.title, status: item.status })),
       ...state.notes.filter((note) => note.goalId === domain.id).map((note) => ({ id: `note:${note.id}`, recordId: note.id, kind: 'note' as const, title: note.body })),
     ];
-    for (const record of records) {
-      nodes.push({ ...defaults, ...record, x: 440, y: nextY, width: 325 });
-      links.push({ source: domainNode.id, target: record.id, kind: 'belongs-to' });
+    for (const { parent, ...record } of records as (typeof records[number] & { parent?: string })[]) {
+      nodes.push({ ...defaults, ...record, x: parent ? 500 : 440, y: nextY, width: parent ? 265 : 325 });
+      // A side chat hangs from the conversation it is about, not the folder.
+      links.push(parent ? { source: parent, target: record.id, kind: 'side-chat-of' } : { source: domainNode.id, target: record.id, kind: 'belongs-to' });
       nextY += 116;
     }
     nextY += records.length ? 24 : 120;
@@ -50,8 +59,9 @@ export function buildCanvasScene(state: DeskState, layout = emptyCanvasLayout())
       links.push({ source: `domain:${domain.parentId}`, target: `domain:${domain.id}`, kind: 'inside' });
     }
   }
-  for (const session of state.sessions.filter((item) => item.goalId === null)) {
-    nodes.push({ ...defaults, id: `session:${session.id}`, recordId: session.id, kind: 'session', title: session.title, status: 'ungrouped', x: 440, y: nextY, width: 325 });
+  for (const { session, parent } of canvasSessions(state.sessions.filter((item) => item.goalId === null))) {
+    nodes.push({ ...defaults, id: `session:${session.id}`, recordId: session.id, kind: 'session', title: session.title, status: 'ungrouped', x: parent ? 500 : 440, y: nextY, width: parent ? 265 : 325 });
+    if (parent) links.push({ source: parent, target: `session:${session.id}`, kind: 'side-chat-of' });
     nextY += 116;
   }
   const placed = nodes.map((node) => ({ ...node, ...layout.nodes[node.id] }));

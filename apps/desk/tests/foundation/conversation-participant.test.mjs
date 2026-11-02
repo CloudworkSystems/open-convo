@@ -213,6 +213,7 @@ async function fixture(config = {}) {
         stored.sessions.find((session) => session.id === stored.selection.sessionId).participantChoice = structuredClone(config.participantChoice);
       }
       if (config.theme) stored.preferences.theme = config.theme;
+      config.mutateSeed?.(stored);
       if (config.workspaceBytes) {
         const otherSession = stored.sessions.find((session) => session.id !== stored.selection.sessionId);
         const chunks = (text) => Array.from({ length: Math.ceil(text.length / 16_384) }, (_, index) => text.slice(index * 16_384, (index + 1) * 16_384));
@@ -1788,9 +1789,9 @@ test('while the Desk cannot save, ratings and reactions are off and Copy still w
     for (const name of ['Good reply', 'Bad reply', 'Add a reaction']) {
       const button = replyActions(f.page).getByRole('button', { name, exact: true });
       await expect(button).toBeDisabled();
-      await expect(button).toHaveAttribute('title', 'Ratings and reactions are off until saving works again.');
+      await expect(button).toHaveAttribute('title', 'Rating, reacting, Reply and Side chat are off until saving works again.');
     }
-    await expect(replyActions(f.page)).toContainText('Ratings and reactions are off until saving works again.');
+    await expect(replyActions(f.page)).toContainText('Rating, reacting, Reply and Side chat are off until saving works again.');
     await replyActions(f.page).getByRole('button', { name: 'Copy reply', exact: true }).click();
     assert.deepEqual(await f.page.evaluate(() => window.__copied), ['Reply kept while saving is blocked']);
     await f.check();
@@ -1840,6 +1841,83 @@ test('Reply quotes the message into the draft, and Send sends exactly the box te
     await f.page.getByRole('button', { name: 'Send message', exact: true }).click();
     await expect.poll(() => f.calls.starts.length).toBe(2);
     await expect.poll(() => f.stored.conversationRuns?.at(-1)?.inputChunks.join('')).toBe('> with two lines\n\nWhy two?');
+    await f.check();
+  } finally { await f.close(); }
+});
+
+test('a side chat whose message or conversation is gone still opens, says so, and is listed on its own', async () => {
+  const f = await fixture({ mutateSeed: (stored) => {
+    const parent = stored.sessions.find((session) => session.id === stored.selection.sessionId);
+    const at = parent.createdAt;
+    const lost = { id: '20000000-0000-4000-8000-000000000001', goalId: parent.goalId, title: 'Side chat: invented lost message',
+      sideOf: { sessionId: parent.id, messageId: '20000000-0000-4000-8000-0000000000aa' }, createdAt: at, updatedAt: at };
+    const orphan = { id: '20000000-0000-4000-8000-000000000002', goalId: parent.goalId, title: 'Side chat: invented orphan',
+      sideOf: { sessionId: '20000000-0000-4000-8000-0000000000bb', messageId: '20000000-0000-4000-8000-0000000000cc' }, createdAt: at, updatedAt: at };
+    stored.sessions.push(lost, orphan);
+    stored.drafts[lost.id] = '';
+    stored.drafts[orphan.id] = '';
+    stored.selection.sessionId = lost.id;
+  } });
+  try {
+    const anchor = f.page.getByRole('complementary', { name: 'What this side chat is about', exact: true });
+    await expect(anchor.locator('blockquote')).toHaveText('That message is no longer shown.');
+    await expect(f.page.getByRole('textbox', { name: 'Your message', exact: true })).toBeEditable();
+    // Its conversation is still there, so it stays listed under it; the orphan is listed on its own.
+    await expect(f.page.locator('[data-side-chat-depth="1"]').getByRole('button', { name: 'Side chat: invented lost message', exact: true })).toBeVisible();
+    const orphanRow = f.page.locator('.session-row').filter({ has: f.page.getByRole('button', { name: 'Side chat: invented orphan', exact: true }) });
+    await expect(orphanRow).toBeVisible();
+    await expect(orphanRow).not.toHaveClass(/session-row-side/);
+    await anchor.getByRole('button', { name: 'Back to the message', exact: true }).click();
+    await expect(anchor).toHaveCount(0);
+    await f.page.getByRole('button', { name: 'Side chat: invented orphan', exact: true }).click();
+    await expect(f.page.getByRole('complementary', { name: 'What this side chat is about', exact: true })).toHaveCount(0);
+    await f.check();
+  } finally { await f.close(); }
+});
+
+test('a side chat opens as its own linked conversation that quotes only the message, and leads back to it', async () => {
+  const f = await fixture();
+  try {
+    await f.send('Invented main question');
+    await expectSavedSequence(f, 1);
+    await f.emit('text', 'Invented main reply');
+    await expect(replyActions(f.page).getByRole('button', { name: 'Start a side chat about reply', exact: true })).toBeDisabled();
+    await f.emit('completed');
+    await expect.poll(() => savedRun(f)?.phase).toBe('completed');
+    const main = savedRun(f);
+    await replyActions(f.page).getByRole('button', { name: 'Start a side chat about reply', exact: true }).click();
+    const anchor = f.page.getByRole('complementary', { name: 'What this side chat is about', exact: true });
+    await expect(anchor.locator('blockquote')).toHaveText('Invented main reply');
+    const field = f.page.getByRole('textbox', { name: 'Your message', exact: true });
+    await expect(field).toHaveValue('> Invented main reply\n\n');
+    await expect.poll(() => f.stored.sessions.at(-1)?.sideOf).toEqual({ sessionId: main.sessionId, messageId: main.assistantMessageId });
+    const side = f.stored.sessions.at(-1);
+    await expect(f.page.locator('.session-row-side').getByRole('button', { name: side.title, exact: true })).toBeVisible();
+    // Sending in the side chat sends the box text and nothing from the main conversation.
+    await field.fill('> Invented main reply\n\nWhat does that mean?');
+    await f.page.getByRole('button', { name: 'Send message', exact: true }).click();
+    await expect.poll(() => f.calls.starts.length).toBe(2);
+    await expect.poll(() => f.stored.conversationRuns?.at(-1)?.sessionId).toBe(side.id);
+    const sideRun = f.stored.conversationRuns.at(-1);
+    assert.equal(sideRun.inputChunks.join(''), '> Invented main reply\n\nWhat does that mean?');
+    assert.ok(!sideRun.contextRunIds?.includes(main.runId));
+    await f.emit('completed');
+    await expect.poll(() => f.stored.conversationRuns?.at(-1)?.phase).toBe('completed');
+    await anchor.getByRole('button', { name: 'Back to the message', exact: true }).click();
+    await expect(f.page.locator(`[data-run-id="${main.runId}"]`)).toBeVisible();
+    await expect(replyActions(f.page).getByRole('button', { name: 'Start a side chat about reply', exact: true })).toBeFocused();
+    await expect(replyActions(f.page).getByRole('button', { name: side.title, exact: true })).toBeVisible();
+    await replyActions(f.page).getByRole('button', { name: side.title, exact: true }).click();
+    await expect(anchor).toBeVisible();
+    // A side chat started inside a side chat is indented one level further.
+    await replyActions(f.page).getByRole('button', { name: 'Start a side chat about reply', exact: true }).click();
+    await expect.poll(() => f.stored.sessions.at(-1)?.sideOf?.sessionId).toBe(side.id);
+    const nested = f.stored.sessions.at(-1);
+    await expect(f.page.locator('[data-side-chat-depth="1"]').getByRole('button', { name: side.title, exact: true })).toBeVisible();
+    await expect(f.page.locator('[data-side-chat-depth="2"]').getByRole('button', { name: nested.title, exact: true })).toBeVisible();
+    const indent = async (title) => f.page.locator('.session-row-side').filter({ has: f.page.getByRole('button', { name: title, exact: true }) })
+      .evaluate((row) => parseFloat(getComputedStyle(row).paddingLeft));
+    assert.ok(await indent(nested.title) > await indent(side.title));
     await f.check();
   } finally { await f.close(); }
 });

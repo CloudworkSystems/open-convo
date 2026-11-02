@@ -484,9 +484,15 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
           // Plan rule 6: while saving is paused, nothing that changes what is saved is offered.
           // Any save problem, including a definite failure: edits made then
           // are held only in this visit until Retry, so marks wait.
-          saveBlockedReason: problem ? 'Ratings and reactions are off until saving works again.' : undefined,
+          saveBlockedReason: problem ? 'Rating, reacting, Reply and Side chat are off until saving works again.' : undefined,
           onRate: (messageId, rating) => dispatch({ type: 'set-message-rating', messageId, rating }),
           onReact: (messageId, reaction) => dispatch({ type: 'toggle-message-reaction', messageId, reaction }),
+          onSideChat: (messageId, text) => dispatch({ type: 'create-side-chat', messageId, text }),
+          onOpenSession: (sessionId) => dispatch({ type: 'select-session', sessionId }),
+          sideChats: state.sessions.reduce((found, session) => {
+            if (session.sideOf) found.set(session.sideOf.messageId, [...(found.get(session.sideOf.messageId) ?? []), { id: session.id, title: session.title }]);
+            return found;
+          }, new Map<string, { id: string; title: string }[]>()),
           onReply: (messageId, text) => {
             const current = stateRef.current;
             if (!current) return false;

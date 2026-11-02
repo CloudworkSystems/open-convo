@@ -1,6 +1,7 @@
 import { isFolderIcon } from './folder-icons';
 import { validateMemoryFields } from './memory';
 import { markableMessages, validMessageMarks } from './message-marks';
+import { validSideChatLinks } from './side-chat';
 import { isConversationRunClosed, validateConversationRun } from './conversation-runs';
 import { validParticipantIdentity } from './participant-choices';
 import type { DeskState } from './types';
@@ -74,7 +75,7 @@ export function validateState(input: unknown): StateValidation {
   }
   if (!Array.isArray(input.sessions)) return invalid('Sessions must be a list.');
   for (const value of input.sessions) {
-    if (!record(value) || !withOptional(value, ['id', 'goalId', 'title', 'createdAt', 'updatedAt'], ['pinned', 'titleHistory', 'intent', 'intentHistory', 'intentDraft', 'participantChoice']) || !addId(value.id) || !(value.goalId === null || (identifier(value.goalId) && goalIds.has(value.goalId))) || !text(value.title) || !value.title.trim() || !updated(value)) return invalid('A session has invalid fields, identity or domain reference.');
+    if (!record(value) || !withOptional(value, ['id', 'goalId', 'title', 'createdAt', 'updatedAt'], ['pinned', 'titleHistory', 'intent', 'intentHistory', 'intentDraft', 'participantChoice', 'sideOf']) || !addId(value.id) || !(value.goalId === null || (identifier(value.goalId) && goalIds.has(value.goalId))) || !text(value.title) || !value.title.trim() || !updated(value)) return invalid('A session has invalid fields, identity or domain reference.');
     if (Object.hasOwn(value, 'participantChoice') && !validParticipantIdentity(value.participantChoice)) return invalid('A saved participant choice is invalid.');
     if (!(value.pinned === undefined || typeof value.pinned === 'boolean')
       || !(value.intent === undefined || (text(value.intent) && value.intent.length <= 4000))
@@ -125,6 +126,7 @@ export function validateState(input: unknown): StateValidation {
       }
     }
   }
+  if (!validSideChatLinks({ sessions: input.sessions, messages: input.messages, conversationRuns: input.schemaVersion === 2 ? input.conversationRuns as DeskState['conversationRuns'] : undefined })) return invalid('A side chat points at a missing conversation or message.');
   if (!validMessageMarks(input.messageMarks, markableMessages({ messages: input.messages, conversationRuns: input.schemaVersion === 2 ? input.conversationRuns as DeskState['conversationRuns'] : undefined }), input.updatedAt as string)) return invalid('A message rating or reaction has invalid fields or a message reference.');
   if (!record(input.selection) || !exact(input.selection, ['goalId', 'sessionId', 'route']) || !(input.selection.goalId === null || (identifier(input.selection.goalId) && goalIds.has(input.selection.goalId))) || !(input.selection.sessionId === null || (identifier(input.selection.sessionId) && sessionGoals.has(input.selection.sessionId) && sessionGoals.get(input.selection.sessionId) === input.selection.goalId)) || !oneOf(input.selection.route, ['setup', 'sessions', 'work', 'memory', 'data'])) return invalid('The selected session, domain or route is invalid.');
   if (!record(input.preferences) || !withOptional(input.preferences, ['theme'], ['nexusView']) || !oneOf(input.preferences.theme, ['system', 'light', 'dark']) || !(input.preferences.nexusView === undefined || oneOf(input.preferences.nexusView, ['navigator', 'canvas', 'atlas', 'railmap', 'roadmap']))) return invalid('A view preference is invalid.');

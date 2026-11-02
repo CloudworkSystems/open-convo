@@ -1,6 +1,6 @@
 # Desk Message Actions
 
-Status: In progress (Nov 1): approved by the owner November 1, 2026; PR 2 (action row, Copy, ratings, reactions) merged as #224; PR 3 (Reply) in review.
+Status: In progress (Nov 1): approved by the owner November 1, 2026; PR 2 (action row, Copy, ratings, reactions) merged as #224; PR 3 (Reply) merged as #245; PR 4 (Side chat) in review.
 
 Written November 1, 2026 by a Claude session (project "261024 OC Steering")
 at the owner's request that day: every message in a Desk conversation gets
@@ -98,6 +98,63 @@ text. It arrives with Markdown rendering, if the Desk ever renders it.
    conversations.
 
 Each pull request updates STATUS.md.
+
+## Revision, November 1, 2026: Side Chat Opens In Place
+
+PR 4 first planned a side panel beside the conversation. The Desk shows the
+runs of one selected conversation at a time, so a panel would mean showing
+two conversations' runs at once, a much larger change. The owner chose on
+November 1, 2026, in the Claude thread "Add per-message actions to the
+Desk", to open a side chat **in its place, with a back link**: the side chat
+replaces the main conversation in the same view, a note at the top says
+what message it is about (quoted), and "Back to the message" returns to the
+main conversation at that message. Side chats are listed under their parent
+in the sidebar, and each message lists links to its side chats. Rules 3, 4
+and 6 are unchanged. This replaces the side panel named in the table under
+"What The Owner Gets" and in PR 4 above; that wording stays as approved.
+
+Every list of conversations (the sidebar, a folder's session list and the
+Canvas) shows a side chat under the conversation it is about, and moving a
+conversation to another folder moves its side chats with it.
+
+### When It Goes Wrong (Side Chat)
+
+The five questions of [when-it-goes-wrong.md](when-it-goes-wrong.md), for
+the side chat screen:
+
+1. **No connection.** Starting a side chat needs no connection: it is saved
+   on the Mac with its quoted draft. Sending from it works like any
+   conversation, so when its participant isn't available the line above the
+   message box says so and the draft is kept.
+2. **Interrupted.** The side chat and its draft are saved when it is
+   created. After a quit, crash or sleep it is still listed under its
+   parent with the quote in its draft. A reply cut off inside it is handled
+   like a reply cut off in any conversation.
+3. **Empty or first run.** A new side chat opens with the note "Side chat
+   about a message in …", the quoted message, and the quote already in its
+   message box, so the first step is to type a question and send. If the
+   message it is about is gone, the note says "That message is no longer
+   shown." and the side chat still works.
+4. **Denied or stuck.** There is no prompt to refuse. "Back to the message"
+   always returns to the main conversation; if that message is gone, it
+   lands at the conversation. If the main conversation itself is gone, the
+   side chat is listed on its own. While the Desk can't save, Side chat is
+   off with the reason shown, and the owner can still read and go back.
+5. **The error message.** The only new message is that reason, shared with
+   the other actions and shown on the button: "Rating, reacting, Reply and
+   Side chat are off until saving works again." A side chat started from a
+   reply still being written is refused the same way: "Wait until this
+   reply has ended to rate, react or reply to it."
+
+
+**Owner trial checks** (added to the Desk trial for this feature):
+
+- Start a side chat from a reply; the note, the quote and the quoted draft
+  show, and it is listed under its conversation.
+- Quit and reopen the Desk; the side chat and its draft are still there.
+- Use "Back to the message"; the main conversation opens at that message.
+- Move the main conversation to another folder; its side chats move too.
+- While saving is blocked, Side chat is off and says why; going back works.
 
 ## Later, Not In This Plan
 
