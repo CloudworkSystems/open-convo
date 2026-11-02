@@ -20,12 +20,39 @@ separate OK (the plan's "Before It Goes Live").
   read-only.
 - `src/worker.js`: the Cloudflare Workers entry point.
 - `src/node-server.js`: a Node 22 entry point running the same handler.
+- `wrangler.toml`: the Worker's settings. Ordinary deploys use the
+  production settings (workers.dev off); `[env.staging]` turns workers.dev on
+  for the one staging scan. Neither sets routes or custom domains.
+- `scan/`: the OWASP ZAP API scan (`zap-scan.mjs`, needs Docker) and its ZAP
+  hooks, which add the recorded MCP exchange.
 
 ## Run it
 
-Needs Node 22 and nothing else (no dependencies).
+The service has no dependencies. The dev tools (the Wrangler bundler and the
+OpenAPI validator) are pinned in `package-lock.json`.
 
 ```sh
+npm ci --ignore-scripts
 npm test
 npm start   # http://127.0.0.1:8787/v1/about
+node scan/zap-scan.mjs http://127.0.0.1:8787   # with the server running
 ```
+
+## Deploying
+
+Only `.github/workflows/front-porch-deploy.yml` deploys, from `main`, and each
+run waits for the owner's approval in the `front-porch-production`
+environment. It needs, in that environment:
+
+- the owner as required reviewer (the job checks and refuses without it),
+- the secret `FRONT_PORCH_CLOUDFLARE_TOKEN`: an API token with Edit access to
+  the `front-porch` Worker only, created after the empty Worker exists,
+- the variable `FRONT_PORCH_CLOUDFLARE_ACCOUNT_ID`.
+
+A manual run with `staging_url` set to the Worker's workers.dev address
+deploys the staging settings, runs the ZAP scan against that address, and
+then deploys the production settings again in the same run, whatever the scan
+found, so the workers.dev address is off when the run ends. It runs only while
+`api.trueconvo.com` doesn't exist in DNS; any other answer, a timeout or an
+error refuses it. The owner attaches `api.trueconvo.com` in the Cloudflare
+dashboard only after that scan passes.
