@@ -259,6 +259,11 @@ findings are requirements for the code pull requests named.
   uses the lower of the signed cap and any tightening. A tightening can
   only lower; going back up, or removing a pause, is a raise and needs the
   signed path. The bypass test covers deleting a tightening.
+- **Part 4: Macs without a Secure Enclave.** On a supported Intel Mac with
+  no T2 chip, the signing key is a Keychain key whose access control asks
+  for the Mac password (user presence) on every signature. If no such key
+  can be made, paid routes stay off and the picker says why ("This Mac
+  can't protect a spending limit"), while upload and local keep working.
 - **Parts 1 and 2: every amount names its currency.** Each price, quote,
   cap and ledger entry carries an ISO currency code. When a provider's
   quote or bill is in another currency than the cap, the runner refuses
