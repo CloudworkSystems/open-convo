@@ -25,6 +25,10 @@ function inventedFetch(calls, replacements = {}) {
   };
 }
 
+function isoDay(offset) {
+  return new Date(Date.UTC(2025, 0, 1 + offset)).toISOString().slice(0, 10);
+}
+
 test('builds only the two allowed daily requests and never asks for site or app detail', async () => {
   const calls = [];
   await buildTimeMirror({ start: '2026-10-01', end: '2026-10-04', fetchRows: inventedFetch(calls) });
@@ -115,6 +119,29 @@ test('page is self-contained and contains no URL or outside resource', async () 
   assert.doesNotMatch(result.html, /Very Productive|Distracting|General/);
   assert.match(result.html, /productive/);
   assert.match(result.html, /2026-10-01 to 2026-10-04/);
+});
+
+test('builds a 365-day page with mapped tags in under two seconds', async t => {
+  const productivity = [HEADERS];
+  const categories = [HEADERS];
+  for (let day = 0; day < 365; day += 1) {
+    const date = isoDay(day);
+    productivity.push([date, 3600, 1, day % 5 - 2, 'Summary', 'General']);
+    categories.push([date, 1200, 1, 0, 'First', 'Category One']);
+    categories.push([date, 900, 1, 0, 'Second', 'Category Two']);
+    categories.push([date, 600, 1, 0, 'Third', 'Category Three']);
+  }
+  const started = performance.now();
+  const result = await buildTimeMirror({
+    start: isoDay(0),
+    end: isoDay(364),
+    fetchRows: inventedFetch([], { productivity, category: categories }),
+    categoryTags: { 'Category One': 'coding', 'Category Two': 'reading', 'Category Three': 'planning' },
+  });
+  const elapsed = performance.now() - started;
+  t.diagnostic(`365-day build: ${elapsed.toFixed(1)} ms`);
+  assert.equal(result.trackers.length, 7);
+  assert.ok(elapsed < 2000, `365-day build took ${elapsed.toFixed(1)} ms`);
 });
 
 test('library source has no forbidden import, fetch call, or clock read', async () => {

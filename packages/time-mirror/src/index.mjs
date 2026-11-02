@@ -118,6 +118,36 @@ function uniqueTagIds(tags) {
   }));
 }
 
+function stamped(value, stamp) {
+  return { value, stamp: { ...stamp } };
+}
+
+function importDailyTotals(engine, personId, tags, ids, totals) {
+  const snapshot = engine.getPerson(personId);
+  const stamp = { counter: tags.length + 2, time: 0, device: 'time-mirror' };
+  for (const tag of tags) {
+    const trackerId = ids.get(tag);
+    for (const [date, minutes] of totals.get(tag)) {
+      if (minutes <= 0) continue;
+      snapshot.checkIns.push({
+        id: `${trackerId}-${date}`,
+        life: stamped(true, stamp),
+        purge: null,
+        fields: {
+          trackerId: stamped(trackerId, stamp),
+          date: stamped(date, stamp),
+          value: stamped(minutes, stamp),
+          source: stamped('manual', stamp),
+        },
+      });
+    }
+  }
+  snapshot.life = stamped(true, stamp);
+  const imported = new HabitGrid({ deviceId: 'time-mirror-render', now: () => 0, timeZone: 'UTC' });
+  imported.importPerson(snapshot);
+  return imported;
+}
+
 function buildTrackers(totals, start, end) {
   const orderedTags = ['productive', 'neutral', 'distracting', 'total', ...[...totals.keys()]
     .filter(tag => !['productive', 'neutral', 'distracting', 'total'].includes(tag))
@@ -127,7 +157,7 @@ function buildTrackers(totals, start, end) {
   const engine = new HabitGrid({ deviceId: 'time-mirror', now: () => 0, timeZone: 'UTC' });
   const personId = engine.createPerson('Time Mirror', { id: 'time-mirror' });
 
-  return tags.map(tag => {
+  for (const tag of tags) {
     const trackerId = ids.get(tag);
     engine.addTracker(personId, {
       name: tag,
@@ -137,10 +167,11 @@ function buildTrackers(totals, start, end) {
       color: COLORS[tag] ?? 'coral',
       startedOn: start,
     }, { trackerId });
-    for (const [date, minutes] of totals.get(tag)) {
-      if (minutes > 0) engine.logCheckIn(personId, trackerId, { date, value: minutes, checkInId: `${trackerId}-${date}` });
-    }
-    const grid = engine.grid(personId, trackerId, { start, end, today: end });
+  }
+  const imported = importDailyTotals(engine, personId, tags, ids, totals);
+  return tags.map(tag => {
+    const trackerId = ids.get(tag);
+    const grid = imported.grid(personId, trackerId, { start, end, today: end });
     return { tag, trackerId, grid, svg: renderSvg(grid) };
   });
 }
