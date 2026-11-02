@@ -1,7 +1,8 @@
 # Step 3: The Owner's Trial
 
-Status: In progress (Nov 1): first trial run done. Ten checks passed; quit
-mid-reply (8) failed. Waiting on the F11 fix, then a re-check of check 8.
+Status: In progress (Nov 2): first trial run done. Ten checks passed; quit
+mid-reply (8) failed. The F11 fix is built (see "F11 Fix Built" below);
+waiting on a re-check of check 8.
 
 The last part of step 3 (PR 5). The scripted proof checks the local route
 with a fake Ollama and a test store. This trial checks the real True Convo
@@ -133,3 +134,50 @@ Numbered after step 2's F1 to F6.
   words instead of run, prefix, participant and unknown, and a line saying to
   close the unfinished reply before Retry. The checklist's check 10 should
   name that step too.
+
+### F11 Fix Built (November 2, 2026)
+
+Built by Claude in thread "Fix trial issues so Patrick can dogfood".
+
+**What the Mac's log showed.** Both October 31 quits mid-reply logged that a
+reply was still owed (`desk.terminate.participants owed=true limit=17s`) and
+that the page held unsaved work (`desk.terminate.not-asked
+page=unsaved-work`), then closed the Desk in the same second. The page saves
+a reply's text on a timer, and the quit also ends the Mac's pushes to the
+page, so the stop never reached it. The text since the last save was lost,
+and the reopened reply was marked cut off. The quit was an ordinary quit
+(`osascript`), which takes the same path as the menu's Quit once the owner
+has answered its question.
+
+**The fix.**
+- When the Mac asks the page whether it holds unsaved work (it does so on
+  every quit), the page saves every reply's text so far at once, instead of
+  waiting for its next timed save.
+- While a reply is owed and the page says it holds unsaved work, the quit
+  waits for the page to confirm those saves landed (the page marks the
+  Desk while they are under way) before closing the Desk, for at most ten
+  seconds and inside the existing 17-second limit. If the reply stopped
+  just before that check, so nothing is owed any more, the quit still waits
+  for the save, within the ordinary 3-second quit limit. A save that does
+  not land is retried a few times and, if it still fails, is marked failed,
+  never saved. The log says how it ended: `desk.terminate.save-wait
+  outcome=saved`, `outcome=failed`, `outcome=no-answer` or `outcome=limit`. After the menu's Quit, the page is asked once more at
+  that point, because only then has the last of the reply arrived.
+- On reopen, the Mac's record of the stop comes right after the saved text,
+  so the reply reads "Stopped on this Mac. The reply so far is kept.", with
+  that text, and Retry only refills the message box. If a few words reached
+  the Mac after its pushes ended but before the stop took hold, they can't
+  be shown; the reply then reads "Reply cut off. The text so far is kept."
+  with everything before them.
+
+A Desk browser test plays the whole sequence (text after the last timed
+save, the Mac's question, the saving mark clearing, reopen) and fails
+without the fix. Mac tests check that the Desk closes only after the page
+says its save landed, that a page that never finishes or can't say holds
+the quit no longer than the limit, and that a quit with nothing owed or a
+clean page never waits.
+
+Re-check: check 8 on a fresh True Convo Test build, quitting both from the
+menu and with `osascript -e 'tell application "True Convo Test" to quit'`.
+The run log should show `desk.terminate.save-wait outcome=saved` before
+`desk.closed`.

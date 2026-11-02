@@ -17,7 +17,7 @@ plan is in [PLAN.md](PLAN.md).
 | PR 4b: Dictation archive key under the same recovery key | Merged (#32) |
 | PR 4c: Kept recordings sealed | Merged (#34, #35) |
 | PR 5: Scripted kill-and-reopen proof | Merged (#36) |
-| PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-2-owner-trial.md)) | First run October 31: the Desk passed all five checks and dictations are sealed on disk; Archive History was blocked by a bug. Waiting on fixes F1 to F3, then a short re-check |
+| PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-2-owner-trial.md)) | First run October 31: the Desk passed all five checks and dictations are sealed on disk; Archive History was blocked by a bug. Fixes for F1 to F3 built November 2 (in review); then a short re-check |
 
 Until the owner's trial passes, the installed Desk is for invented data only.
 
@@ -36,7 +36,7 @@ invented chats only, while the step 2 trial is pending. Scope:
 | PR 4b: Turn on the local route in the Mac app (True Convo Test only), default `qwen3:8b` | Merged (#61) |
 | PR 4c: Fake-Ollama host cases in the shared local vectors (26 cases, both sides) | Merged (#62) |
 | PR 5: Scripted kill-mid-reply proof | Merged (#65) |
-| PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-3-owner-trial.md)) | First run October 31: ten of eleven checks passed; quitting mid-reply loses the text (F11). Waiting on that fix, then a re-check of check 8 |
+| PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-3-owner-trial.md)) | First run October 31: ten of eleven checks passed; quitting mid-reply loses the text (F11). Fix built November 2 (in review); then a re-check of check 8 |
 | Trial fixes (Stop, Ollama notice) | Merged (#76) |
 
 **Next build: the Claude Code adapter** (right after step 3; invented

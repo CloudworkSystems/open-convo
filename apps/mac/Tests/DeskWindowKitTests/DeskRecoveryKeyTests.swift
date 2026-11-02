@@ -103,6 +103,46 @@ final class DeskRecoveryKeyTests: XCTestCase {
         }
     }
 
+    /// Step 2 trial, F1: the check's boxes are drawn with real size, take
+    /// typing, and count each group's characters as the check does.
+    func testTheCodeEntryShowsTwoSizedBoxesAndCountsProgress() throws {
+        let text = try RecoveryKey.generate().displayText
+        let groups = text.split(separator: "-").map(String.init)
+        let check = RecoveryKeyCheck(displayText: text, pick: { _ in [7, 2] })
+        XCTAssertEqual(check.groupLength, 5)
+        XCTAssertEqual(check.progress(""), "0 of 5")
+        XCTAssertEqual(check.progress(" ab-c "), "3 of 5", "spaces and dashes don't count")
+        XCTAssertEqual(check.progress(groups[2]), "5 of 5")
+
+        let entry = RecoveryGroupEntry(check: check)
+        for field in [entry.first, entry.second] {
+            XCTAssertGreaterThanOrEqual(field.frame.width, 120, "a box wide enough to see and click")
+            XCTAssertGreaterThanOrEqual(field.frame.height, 24)
+            XCTAssertTrue(field.isEditable)
+            XCTAssertTrue(field.isBezeled, "an outline, so the box shows in dark mode")
+            XCTAssertTrue(entry.view.bounds.contains(field.frame), "inside the dialog's area")
+        }
+        XCTAssertFalse(entry.first.frame.intersects(entry.second.frame))
+        XCTAssertTrue(entry.first.nextKeyView === entry.second, "Tab moves to the second box")
+        XCTAssertEqual(entry.firstProgress.stringValue, "0 of 5")
+        entry.first.stringValue = groups[2].prefix(2).lowercased()
+        entry.second.stringValue = groups[7]
+        entry.update()
+        XCTAssertEqual(entry.firstProgress.stringValue, "2 of 5")
+        XCTAssertEqual(entry.secondProgress.stringValue, "5 of 5")
+        let rule = entry.view.subviews.compactMap { ($0 as? NSTextField)?.stringValue }
+        XCTAssertTrue(rule.contains(RecoveryGroupEntry.rule(5)))
+        XCTAssertTrue(rule.contains("Group 3") && rule.contains("Group 8"))
+        let needed = try XCTUnwrap(entry.rule.cell).cellSize(forBounds: NSRect(x: 0, y: 0, width: entry.rule.frame.width,
+                                                                               height: .greatestFiniteMagnitude))
+        XCTAssertLessThanOrEqual(needed.height, entry.rule.frame.height, "the whole rule shows, wrapped, nothing cut off")
+        XCTAssertTrue(entry.view.bounds.contains(entry.rule.frame))
+        XCTAssertFalse(entry.rule.frame.intersects(entry.firstProgress.frame))
+        entry.clear()
+        XCTAssertEqual(entry.first.stringValue, "")
+        XCTAssertEqual(entry.second.stringValue, "")
+    }
+
     // MARK: The session
 
     func testAnOpenKeptDeskAsksUntilAKeyIsConfirmedAndAgainAfterANewOne() async throws {

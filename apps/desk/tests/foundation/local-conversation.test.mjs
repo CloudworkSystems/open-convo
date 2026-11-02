@@ -97,6 +97,14 @@ if (options.restored) {
   stored.conversationRuns = [earlier, cut];
   host.runs.set(cut.runId, { runId: cut.runId, sessionId, sequence: 2, events: [], terminal: null, crashed: true });
 }
+// A conversation reopened after a normal quit (step 3 trial, F11): the
+// page's saved workspace as the quit left it, and the host's record of each
+// run as the Mac keeps it across the restart: the stop's terminal, with the
+// text events the quit dropped answered as lost.
+if (options.reopened) {
+  stored = options.reopened.stored;
+  for (const run of options.reopened.hostRuns) host.runs.set(run.runId, run);
+}
 let active = true;
 const invalidations = new Set();
 const lifecycle = { isActive: () => active,
@@ -105,6 +113,10 @@ const lifecycle = { isActive: () => active,
 const repository = {
   loadLatest: async () => ({ kind: 'ready', state: structuredClone(stored) }),
   save: async (state, revision) => {
+    if (window.__failSaves > 0) {
+      window.__failSaves -= 1;
+      return { kind: 'failed', error: 'Invented failed save.', attemptedState: state };
+    }
     host.saves.push(structuredClone(state));
     if (revision !== stored.revision) return { kind: 'conflict', error: 'Invented conflict.', attemptedState: state, currentState: stored };
     stored = structuredClone(state);
@@ -152,6 +164,12 @@ function answer(request) {
       const after = payload.afterSequence;
       if (run.crashed) return { outcome: 'ok', runId: run.runId, events: [], more: false, lastSequence: null,
         lost: { fromSequence: after + 1, throughSequence: null, reason: 'restarted' }, terminal: null };
+      if (run.quit && after < run.terminal.sequence) {
+        if (after + 1 === run.terminal.sequence) return { outcome: 'ok', runId: run.runId, events: [run.terminal], more: false,
+          lastSequence: run.terminal.sequence, lost: null, terminal: null };
+        return { outcome: 'ok', runId: run.runId, events: [], more: false, lastSequence: run.terminal.sequence,
+          lost: { fromSequence: after + 1, throughSequence: run.terminal.sequence - 1, reason: 'restarted' }, terminal: run.terminal };
+      }
       const list = run.events.filter((event) => event.sequence > after).slice(0, payload.maxEvents);
       const last = list.length ? list.at(-1).sequence : after;
       return { outcome: 'ok', runId: run.runId, events: list, more: last < run.sequence, lastSequence: run.sequence, lost: null, terminal: null };
@@ -189,12 +207,12 @@ const ready = { outcome: 'ok', participants: [claude,
 routes: [{ route: 'ollama-local', state: 'ready', reason: null }] };
 const down = (reason) => ({ outcome: 'ok', participants: [claude], routes: [{ route: 'ollama-local', state: 'unavailable', reason }] });
 
-async function fixture({ availability = ready, choice, refuseStart, holdStarted, restored, offerClaude } = {}) {
+async function fixture({ availability = ready, choice, refuseStart, holdStarted, restored, offerClaude, reopened } = {}) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
   const errors = []; const outside = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.addInitScript((value) => { window.__localOptions = value; }, { availability, choice, refuseStart, holdStarted, restored, offerClaude });
+  await page.addInitScript((value) => { window.__localOptions = value; }, { availability, choice, refuseStart, holdStarted, restored, offerClaude, reopened });
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
     if (url.origin !== origin) { outside.push(url.origin); return route.abort(); }
@@ -369,6 +387,79 @@ test('a reply cut off by a crash: the reopened Desk holds Send and Retry until C
     assert.deepEqual((await f.stored()).conversationRuns.find((run) => run.runId === restored.cut[0]), closed, 'the old run stays as it was');
     assert.equal((await f.host()).starts.length, 1, 'exactly one new start');
     f.check();
+  } finally { await f.close(); }
+});
+
+test('step 3 trial F11: a quit mid-reply saves the text so far when the Mac asks, and reopens as stopped on this Mac with it', async () => {
+  const f = await fixture({ choice: local });
+  let reopened;
+  try {
+    const { page } = f;
+    await f.send('Invented question to quit during.');
+    await expect.poll(async () => (await f.host()).starts.length).toBe(1);
+    await f.emit('text', { text: 'Invented first part. ' });
+    await expect.poll(async () => (await f.stored()).conversationRuns.at(-1).outputChunks.join('')).toBe('Invented first part. ');
+    // Arrives inside the five-second wait between timed saves.
+    await f.emit('text', { text: 'Invented second part.' });
+    await expect(page.locator('[data-run-id]').last()).toContainText('Invented second part.');
+    assert.equal((await f.stored()).conversationRuns.at(-1).outputChunks.join(''), 'Invented first part. ', 'not saved yet');
+    // The Mac's quit: it asks the page about unsaved work (a beforeunload
+    // event), and its pushes have already ended, so the stop's terminal
+    // never reaches this page.
+    const [cancelled, markedSaving] = await page.evaluate(() => {
+      const event = document.createEvent('BeforeUnloadEvent');
+      event.initEvent('beforeunload', false, true);
+      return [!window.dispatchEvent(event), document.documentElement.hasAttribute('data-desk-runs-saving')];
+    });
+    assert.equal(cancelled, true, 'a reply still coming in counts as unsaved work');
+    assert.equal(markedSaving, true, 'the Mac can see the save is under way');
+    // The Mac closes the Desk once the mark is gone; by then the text is saved.
+    await expect.poll(() => page.evaluate(() => document.documentElement.hasAttribute('data-desk-runs-saving')), { timeout: 1000 }).toBe(false);
+    assert.equal((await f.stored()).conversationRuns.at(-1).outputChunks.join(''), 'Invented first part. Invented second part.');
+    // At once, as the Mac closes the Desk a moment later: never the next timed save.
+    await expect.poll(async () => (await f.stored()).conversationRuns.at(-1).outputChunks.join(''), { timeout: 1000 })
+      .toBe('Invented first part. Invented second part.');
+    const saved = await f.stored();
+    const run = saved.conversationRuns.at(-1);
+    const terminal = { runId: run.runId, sessionId: run.sessionId, sequence: run.lastSequence + 1,
+      at: new Date(Date.parse(run.updatedAt) + 1000).toISOString(), type: 'stopped', reason: 'local-stop' };
+    reopened = { stored: saved, hostRuns: [{ runId: run.runId, sessionId: run.sessionId, sequence: terminal.sequence, events: [], terminal, quit: true }] };
+    f.check();
+  } finally { await f.close(); }
+  const g = await fixture({ choice: local, reopened });
+  try {
+    const reply = g.page.locator('[data-run-id]').last();
+    await expect(reply).toContainText('Stopped on this Mac. The reply so far is kept.');
+    await expect(reply).toContainText('Invented first part. Invented second part.');
+    await expect(reply).not.toContainText('could not be verified');
+    await expect(g.page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
+    assert.equal((await g.host()).starts.length, 0, 'nothing was sent again');
+    g.check();
+  } finally { await g.close(); }
+});
+
+test('step 3 trial F11: a quit-time save that does not land is marked failed, never saved', async () => {
+  const f = await fixture({ choice: local });
+  try {
+    const { page } = f;
+    await f.send('Invented question to quit during.');
+    await expect.poll(async () => (await f.host()).starts.length).toBe(1);
+    await f.emit('text', { text: 'Invented first part. ' });
+    await expect.poll(async () => (await f.stored()).conversationRuns.at(-1).outputChunks.join('')).toBe('Invented first part. ');
+    await f.emit('text', { text: 'Invented second part.' });
+    await expect(page.locator('[data-run-id]').last()).toContainText('Invented second part.');
+    const marks = () => page.evaluate(() => [document.documentElement.hasAttribute('data-desk-runs-saving'),
+      document.documentElement.hasAttribute('data-desk-runs-save-failed')]);
+    await page.evaluate((count) => {
+      window.__failSaves = count;
+      const event = document.createEvent('BeforeUnloadEvent');
+      event.initEvent('beforeunload', false, true);
+      window.dispatchEvent(event);
+    }, 99);
+    await expect.poll(async () => (await marks())[0], { timeout: 3000 }).toBe(false);
+    assert.deepEqual(await marks(), [false, true], 'never reported as saved');
+    assert.equal((await f.stored()).conversationRuns.at(-1).outputChunks.join(''), 'Invented first part. ');
+    await page.evaluate(() => { window.__failSaves = 0; });
   } finally { await f.close(); }
 });
 
