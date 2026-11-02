@@ -180,11 +180,16 @@ inside TCA, where the ceilings above can be enforced.
   needs its own view grant and stays on the device.
 - **Labels tied to one look at the screen.** Each control the agent can act
   on gets a short label that only works together with the snapshot it came
-  from. Before acting, TCA checks it is still the same control, using the
-  app's own identifier first and then a stable name. Text that changes, such
-  as what's typed in a field, never proves identity. If the control is gone,
-  has changed, or matches more than one thing, the action is refused, not
-  guessed.
+  from. Before acting, TCA checks it is still the same control. The app's
+  own identifier and a stable name help find it, but they are hints, never
+  proof on their own: apps reuse them, for example a recycled list row
+  whose "Delete" button now belongs to another item. Right before any
+  change, TCA confirms identity with evidence that can't be recycled: the
+  same live accessibility object it saw (which TCA keeps a hold on), in the
+  same window of the same running app, at the same place in the tree. Text
+  that changes, such as what's typed in a field, never proves identity. If
+  the control is gone, has changed, or can't be confirmed this way, or more
+  than one thing matches, the action is refused, not guessed.
 - **Quiet by default.** Actions go through accessibility calls. They don't
   move the pointer, take focus, send keystrokes or touch the clipboard. Real
   mouse and keyboard input is a separate, higher grant. When the quiet path
