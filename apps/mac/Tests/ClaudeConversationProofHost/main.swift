@@ -22,6 +22,8 @@ import Foundation
 //
 //   ClaudeConversationProofHost <store-folder> <keys-folder> <supervisor> <cli> <run-folder>
 //
+// (`--real-quit` runs the real quit path's AppKit app instead: RealQuit.swift.)
+//
 // Prints `ready` once the Desk is open. Commands, one per line on stdin:
 //   approve            approves Anthropic in the store (section 21.4):
 //                      `approved <true|false>`
@@ -474,6 +476,9 @@ func commandLines() -> AsyncStream<String> {
 }
 
 let arguments = CommandLine.arguments
+// The real quit path's AppKit app (RealQuit.swift): another mode of this
+// test-only program, so the proof's shared invented parts stay in one place.
+if arguments.count > 1, arguments[1] == "--real-quit" { runRealQuitProof(arguments) }
 guard arguments.count == 6 else { fail("usage: <store-folder> <keys-folder> <supervisor> <cli> <run-folder>") }
 let folder = URL(fileURLWithPath: arguments[1], isDirectory: true)
 let keys = InventedFileKeys(folder: URL(fileURLWithPath: arguments[2], isDirectory: true))

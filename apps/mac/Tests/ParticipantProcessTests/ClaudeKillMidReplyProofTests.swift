@@ -41,6 +41,12 @@ import Testing
 //   completes and leaves the closed old run exactly as it was.
 // A graceful quit mid-reply is checked the same way: it records `stopped`,
 // leaves no process, and the fake was spawned once.
+// The real quit path (the contract's F0 answer 22; the trial plan's Part
+// 1, item 2): the same program's `--real-quit` mode is a real AppKit app
+// with the app's own Desk session, lane and `ClaudeConversation`, quit by
+// the app's menu path through `NSApp.terminate` while a reply arrives; the
+// run ends `stopped`, nothing is left running, and the next launch reads
+// it so, spawned once.
 // Stop while the page's save is held in fsync (contract section 16, check
 // 5; docs/plans/claude-code-owner-trial.md, Part 1): Stop answers, from
 // this Mac's memory, while the store's write is still held; once the save
@@ -469,6 +475,69 @@ struct ClaudeKillMidReplyProofTests {
             #expect(try await app.waitForExit() == 0, label)
             #expect(world.spawns.count == 1, "\(label): nothing spawned again")
         }
+    }
+
+    @Test("The real quit path (contract F0 answer 22): with a Claude reply arriving, the app's own Quit, through the Desk session, DeskTermination and the real NSApplication.terminate, takes the participant bound, ends with one yes inside it, leaves no fake CLI or supervisor, and the next launch reads the run as stopped local-stop, spawned once")
+    func realTerminateMidReply() async throws {
+        let world = try ClaudeProofWorld()
+        defer { world.clean() }
+        let support = world.fake.root.appendingPathComponent("support", isDirectory: true)
+        try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        let app = try ProofApp(path: ClaudeProofWorld.path,
+                               arguments: ["--real-quit", support.path, world.keys.path, Products.supervisor, world.fake.cliPath],
+                               environment: world.fake.environment)
+        let store = try await app.next("store ", seconds: 40)
+        try await app.next("ready", seconds: 40)
+        app.send("approve")
+        #expect(try await app.next("approved ") == "true")
+        app.send("confirm")
+        #expect(try await app.next("confirm ") == "confirmed")
+        app.send("prepare")
+        let runId = try await app.next("prepared ")
+        app.send("start \(runId)")
+        #expect(try await app.next("start ") == "ok -")
+        let spawned = try await world.processes()
+        #expect(world.spawns.count == 1)
+
+        // The reply is arriving: its first piece has been pushed to the page.
+        world.release(0)
+        world.release(1)
+        let pushed = { app.lines.filter { $0.hasPrefix("log desk.host.event type=participant.event ") }.count }
+        let deadline = Date().addingTimeInterval(20)
+        while pushed() < 2 {
+            guard Date() < deadline else { throw ProofAppError.noLine("two participant events pushed", app.detail) }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        // The app's Quit, into NSApp.terminate's own nested wait.
+        let began = Date()
+        app.send("quit")
+        try await app.next("terminating")
+        #expect(try await app.next("log desk.terminate.participants ") == "owed=true limit=17s", "a reply was owed")
+        try await app.next("will-terminate", seconds: 25)
+        #expect(try await app.waitForExit() == 0, "AppKit ended the app")
+        #expect(Date().timeIntervalSince(began) < 17, "the one yes came inside the participant bound")
+        #expect(!app.lines.contains { $0.hasPrefix("log desk.terminate.cap-reached") }, "\(app.detail)")
+        #expect(!app.lines.contains { $0.hasPrefix("kept ") }, "the quit went ahead")
+        try await ClaudeProofWorld.gone(spawned.cli, spawned.supervisor, "the real quit")
+        #expect(world.spawns.count == 1, "one spawn for the run")
+
+        // The next launch over the same store reads the run as stopped.
+        let second = try ProofApp(path: ClaudeProofWorld.path,
+                                  arguments: [store, world.keys.path, Products.supervisor, world.fake.cliPath, world.runFolder.path],
+                                  environment: world.fake.environment)
+        try await second.next("ready")
+        let status = try await second.json("status \(runId)", "status").objectValue ?? [:]
+        #expect(status["state"] == .string("exited"), "\(status)")
+        #expect(status["unknownReason"] == .null, "\(status)")
+        let terminal = status["terminal"]?.objectValue
+        #expect(terminal?["type"] == .string("stopped"), "\(status)")
+        #expect(terminal?["reason"] == .string("local-stop"), "\(status)")
+        #expect(status["groupCleared"] == .bool(true), "\(status)")
+        second.send("quit")
+        #expect(try await second.next("quit ") == "reachedBound=false")
+        #expect(try await second.waitForExit() == 0)
+        #expect(world.spawns.count == 1, "nothing spawned again")
     }
 
     @Test("A graceful quit mid-reply records stopped, not cut off: nothing is left running, the saved text stays, and the fake was spawned once")
