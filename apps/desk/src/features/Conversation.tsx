@@ -91,7 +91,7 @@ export function Conversation({
   // Text typed into a blank session while an input method is still composing it.
   const [startText, setStartText] = useState('');
   const starting = !session && onStart !== undefined && !readOnly;
-  const start = (text: string) => { if (starting && text.trim()) onStart(text); };
+  const startSession = (text: string) => { if (starting && text.trim()) onStart(text); };
   const shownDraft = session ? draft : startText;
   const dictation = useDeskDictationView();
   const reportDraftSelection = (field: HTMLTextAreaElement, focused: boolean) => {
@@ -101,6 +101,12 @@ export function Conversation({
   const unplaced = dictation?.retained.filter((item) => item.state !== 'saving') ?? [];
   const insertDictated = (deliveryId: string, text: string) => {
     const field = draftField.current;
+    if (field && !session && starting && text.trim()) {
+      // A blank session: dictated words start it, just like typed ones.
+      startSession(field.value + text);
+      dictation?.dismiss(deliveryId);
+      return;
+    }
     if (!field || !session || readOnly) return;
     const start = field.selectionStart;
     const value = field.value.slice(0, start) + text + field.value.slice(field.selectionEnd);
@@ -108,6 +114,13 @@ export function Conversation({
     dictation?.dismiss(deliveryId);
     requestAnimationFrame(() => { if (field.isConnected && field === draftField.current) field.setSelectionRange(start + text.length, start + text.length); });
   };
+  // Dictation has no saved session to aim at in a blank session, so its words arrive unplaced.
+  // While the blank box has focus, they start the session as if typed.
+  const firstUnplaced = unplaced.find((item) => item.state === 'not-placed');
+  useEffect(() => {
+    if (!firstUnplaced || session || !starting || document.activeElement !== draftField.current) return;
+    insertDictated(firstUnplaced.deliveryId, firstUnplaced.text);
+  }, [firstUnplaced?.deliveryId]);
   // Put the caret after text that dictation just placed in this draft.
   useEffect(() => {
     const caret = dictation?.caret;
@@ -244,7 +257,7 @@ export function Conversation({
                 onClick={() => {
                   const text = `Help me find the first small step for ${goal?.title ?? 'this idea'}.`;
                   if (session) onDraftChange(session.id, text);
-                  else start(text);
+                  else startSession(text);
                 }}
               >
                 Find a first step <Icon name="arrow" size={15} />
@@ -255,7 +268,7 @@ export function Conversation({
                 onClick={() => {
                   const text = 'Help me turn this sample idea into a simple plan.';
                   if (session) onDraftChange(session.id, text);
-                  else start(text);
+                  else startSession(text);
                 }}
               >
                 Shape a simple plan <Icon name="arrow" size={15} />
@@ -353,7 +366,7 @@ export function Conversation({
             <div className="dictation-held-actions">
               <button type="button" className="secondary-button" onClick={() => { void navigator.clipboard?.writeText(item.text).catch(() => {}); }}>Copy</button>
               {/* Already in the draft after a failed save: inserting again would duplicate it. */}
-              {item.state === 'not-placed' && <button type="button" className="secondary-button" disabled={readOnly || !session}
+              {item.state === 'not-placed' && <button type="button" className="secondary-button" disabled={readOnly || !(session || starting)}
                 onClick={() => insertDictated(item.deliveryId, item.text)}>Insert at cursor</button>}
               <button type="button" className="secondary-button" onClick={() => dictation?.dismiss(item.deliveryId)}>Dismiss</button>
             </div>
@@ -389,14 +402,14 @@ export function Conversation({
               // straight into a saved session; if saving it is refused, the box stays empty like
               // any refused draft edit, so nothing is shown that isn't kept.
               if (composing.current || (event.nativeEvent as InputEvent).isComposing) setStartText(value);
-              else start(value);
+              else startSession(value);
             }
           }}
           onFocus={(event) => reportDraftSelection(event.currentTarget, true)}
           onSelect={(event) => reportDraftSelection(event.currentTarget, document.activeElement === event.currentTarget)}
           onBlur={(event) => reportDraftSelection(event.currentTarget, false)}
           onCompositionStart={() => { composing.current = true; }}
-          onCompositionEnd={(event) => { composing.current = false; if (!session) { start(event.currentTarget.value); setStartText(''); } }}
+          onCompositionEnd={(event) => { composing.current = false; if (!session) { startSession(event.currentTarget.value); setStartText(''); } }}
           onKeyDown={(event) => {
             if (event.key !== 'Enter' || event.nativeEvent.isComposing || composing.current || event.nativeEvent.keyCode === 229) return;
             if (event.altKey) return;
