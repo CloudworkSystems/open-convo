@@ -28,7 +28,12 @@ kind, with a reaction on his message instead of only words.
 - **A switch per conversation: "Share my reactions with <participant> in
   this chat."** It sits with the participant line above the message box. It
   is off in every conversation until he turns it on, so nothing he reacted
-  to before this plan is shared without his choosing. When it is on, the
+  to before this plan is shared without his choosing. It is a choice for
+  that one participant: when he picks a different participant for the
+  conversation (another local model, or Claude instead of a local model),
+  the switch turns itself off, the reactions note is removed as when he
+  turns it off, and the Desk says "Sharing reactions is off because the
+  participant changed." When it is on, the
   line above the message box says so: "Your reactions in this chat go to
   Claude (Anthropic) with your next message." or, for a local model, "...
   go to <model> on this Mac with your next message."
@@ -76,7 +81,10 @@ switch on.
    The line is read only once it is complete (a line break arrived or the
    reply ended), so a reply that is cut off shows what arrived as text.
 5. **The switch is saved with the conversation** in the Desk store, off by
-   default, checked on load (refused, not repaired, when malformed). It
+   default, together with the exact participant it was turned on for, and
+   checked on load (refused, not repaired, when malformed). It counts as on
+   only while that stored participant equals the conversation's current
+   participant choice; any change of participant turns it off. It
    needs the same save rules as the other marks: while the Desk can't save,
    the switch is off with the shared reason, and the note isn't changed.
 6. **Every part works from the keyboard,** with plain labels, and changes are
@@ -84,15 +92,25 @@ switch on.
    reaction arriving).
 7. **Invented data only** until step 2's owner trial passes, as for the rest
    of the Desk.
+8. **Off means off.** Turning the switch off, or a participant change
+   turning it off, removes the whole reactions note from the draft, edited
+   or not. The note is the block that starts with `[My reactions:` at the
+   top of the draft and runs to its closing `]`. If a draft still holds that
+   marker while the switch is off (for example the closing bracket was
+   deleted, so the block can't be found whole), Send is held with the reason
+   "This draft still has a reactions note. Delete it or turn sharing back
+   on." and nothing is sent.
 
 ## Proposed Pull Requests, In Order
 
 1. **Plan** (this document).
 2. **Agents see his reactions.** The per-conversation switch and its saved
-   field, the line above the box, the reactions note in the draft (added,
+   field (with the participant it was turned on for, off on any participant
+   change), the off-means-off removal and Send hold of rule 8, the line above the box, the reactions note in the draft (added,
    updated, frozen once edited, cleared on Send), unit tests for the note
    text and limits, and browser tests that the sent text is exactly what the
-   box showed and that nothing is sent with the switch off.
+   box showed, that nothing is sent with the switch off (edited note
+   included), and that a participant change turns the switch off.
 3. **Agents react back.** The instruction sentence in the note, reading a
    first `Reaction:` line from the reply, the agent reaction chip, Copy
    without the line, and tests for complete, cut-off and malformed lines.
@@ -115,8 +133,8 @@ The five questions of [when-it-goes-wrong.md](when-it-goes-wrong.md):
    on. With the switch on and no reactions yet, there is no note.
 4. **Denied or stuck.** There is no prompt. If he deletes the note, nothing
    about reactions is sent with that message and the Desk doesn't add it
-   back until he reacts again. Turning the switch off removes an unedited
-   note from the draft and leaves an edited one for him to keep or delete.
+   back until he reacts again. Turning the switch off, or changing the
+   participant, removes the note from the draft, edited or not (rule 8).
 5. **The error message.** While saving is blocked, the switch is off with
    the shared reason ("Rating, reacting, Reply and Side chat are off until
    saving works again."). A reply whose first line looks like a reaction but
@@ -126,7 +144,10 @@ The five questions of [when-it-goes-wrong.md](when-it-goes-wrong.md):
 change; react and see the note appear; edit the note and see that a new
 reaction no longer changes it; send and see the agent answer the reaction;
 see an agent reaction chip on his message; quit and reopen with an unsent
-note and see it kept; turn the switch off and see an unedited note go away;
+note and see it kept; turn the switch off and see the note go away, both
+unedited and after editing it; with the switch on for a local model, pick
+Claude and see the switch turn off and the note go away; delete the note's
+closing bracket, turn the switch off, and see Send held with the reason;
 confirm a chat with the switch off sends no note.
 
 ## Later, Not In This Plan
