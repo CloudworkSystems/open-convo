@@ -74,7 +74,9 @@ test('unknown fields are refused at every level', () => {
   assertRefused((r) => { route(r, 'upload').auto_approve = true; }, 'routes[0].auto_approve', /unknown/);
   assertRefused((r) => { route(r, 'own-key-example').cost.always_allow = true; }, 'routes[2].cost.always_allow', /unknown/);
   // JSON.parse keeps "__proto__" as an ordinary own key; it is refused as unknown.
-  const withProto = JSON.parse(readFileSync(mediaPath, 'utf8').replace('{', '{"__proto__": {"x": 1},'));
+  const raw = readFileSync(mediaPath, 'utf8').trimStart();
+  assert.equal(raw[0], '{');
+  const withProto = JSON.parse(`{"__proto__": {"x": 1},${raw.slice(1)}`);
   const result = validateCapability(withProto);
   assert.ok(result.errors.some((e) => e.path === '__proto__' && /unknown/.test(e.message)), formatErrors(result.errors));
 });
