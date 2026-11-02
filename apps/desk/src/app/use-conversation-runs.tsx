@@ -648,7 +648,14 @@ export function useConversationRuns(options: RunWorkspace) {
     const snapshot = controller.snapshot;
     return !isConversationRunClosed(snapshot.run) || snapshot.checkpointState !== 'saved' || snapshot.cleanupPending;
   });
-  return { send, refreshAvailability, confirmSaved, content, otherRunControls, hasUnconfirmed, canSaveEdits,
+  /** Saves every reply's text so far at once, without waiting for the
+   * next timed save. The page calls it when the Mac asks whether it holds
+   * unsaved work, which it does just before closing the Desk for a quit
+   * (step 3 trial, F11: a quit mid-reply reopened with none of the reply). */
+  const saveRunsNow = () => {
+    for (const controller of controllers.current.values()) void controller.flush().catch(() => { /* Its own state reports a failed save. */ });
+  };
+  return { send, refreshAvailability, confirmSaved, content, otherRunControls, hasUnconfirmed, saveRunsNow, canSaveEdits,
     participantLabel: participantMode ? choiceLabel ?? 'Participant unavailable' : undefined,
     selectedLocalProblem: selectedLocal && savedSelection && !options.runtime.participantAvailabilityChecking ? catalogBlock(savedSelection) : undefined,
     busy: selectedBusy, composerStop, sendWaitingReason, sendDestination,

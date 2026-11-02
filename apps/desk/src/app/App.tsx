@@ -281,6 +281,7 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
       // Valid legacy bytes are read-only until a deliberate content save.
     })();
     const leaving = (event: BeforeUnloadEvent) => {
+      runs.saveRunsNow();
       if (writeProblem.current || pending.current > 0 || runs.hasUnconfirmed() || keptDictation.current) {
         event.preventDefault();
         event.returnValue = '';

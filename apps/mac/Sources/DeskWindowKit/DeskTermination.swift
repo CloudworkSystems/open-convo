@@ -24,6 +24,10 @@ public enum DeskTermination {
     /// (Codex Q33): `ParticipantLimits.shutdownMillis`, 17 s, from the
     /// quit's own `beginShutdown(quitting: true)`.
     nonisolated public static let participantTimeout: TimeInterval = TimeInterval(ParticipantLimits.shutdownMillis) / 1000
+    /// How long a quit with a reply still owed waits, after asking the page,
+    /// before the Desk closes, so the page can save the reply so far (step 3
+    /// trial, F11). Inside `participantTimeout`, never added to it.
+    nonisolated public static let quitSaveWait: TimeInterval = 1
 
     /// `capReached` runs once, just before the reply, only when the time
     /// limit replies before `close` has finished.
@@ -75,12 +79,14 @@ public enum DeskTermination {
                              pageAlreadyAsked: Bool = false,
                              timeout: TimeInterval = closeTimeout,
                              participantTimeout: TimeInterval = DeskTermination.participantTimeout,
+                             quitSaveWait: TimeInterval = DeskTermination.quitSaveWait,
                              replyToApplication: @escaping @MainActor (Bool) -> Void = { NSApplication.shared.reply(toApplicationShouldTerminate: $0) })
         -> NSApplication.TerminateReply {
         guard let session else { return .terminateNow }
         if let lane = session.participantLane {
             return replyWithParticipants(session: session, lane: lane, pageAlreadyAsked: pageAlreadyAsked, timeout: timeout,
-                                         participantTimeout: participantTimeout, replyToApplication: replyToApplication)
+                                         participantTimeout: participantTimeout, quitSaveWait: quitSaveWait,
+                                         replyToApplication: replyToApplication)
         }
         guard session.hasStack else { return .terminateNow }
         let page = PageAnswer(pageAlreadyAsked ? "asked-before-quit" : "no-answer")
@@ -100,7 +106,7 @@ public enum DeskTermination {
 
     /// The quit of a session with a participant lane (Codex Q33).
     private static func replyWithParticipants(session: DeskSession, lane: any DeskParticipantLane, pageAlreadyAsked: Bool,
-                                              timeout: TimeInterval, participantTimeout: TimeInterval,
+                                              timeout: TimeInterval, participantTimeout: TimeInterval, quitSaveWait: TimeInterval,
                                               replyToApplication: @escaping @MainActor (Bool) -> Void) -> NSApplication.TerminateReply {
         lane.beginShutdown(quitting: true)
         let log = session.log
@@ -143,10 +149,30 @@ public enum DeskTermination {
             log("desk.terminate.participants", "owed=\(!obligations.isEmpty) limit=\(String(format: "%g", chosen))s")
         }
         Task { @MainActor in
+            // Asked even after the menu's Quit asked: asking is what tells
+            // the page to save the reply so far, and only now has the last
+            // of it arrived (pushes ended at the quit's begin, above).
+            let answer = await session.holdsUnsavedWork()
             if !pageAlreadyAsked {
-                let answer = await session.holdsUnsavedWork()
                 page.name = answer?.logName ?? "nothing-unsaved"
                 if let answer { session.log("desk.terminate.not-asked", "page=\(answer.logName)") }
+            }
+            // Step 3 trial, F11: a quit mid-reply closed the Desk in the same
+            // second, before the page could save the reply so far, and it
+            // reopened with none of it. While a reply is owed and the page
+            // says it holds unsaved work, give its save a moment first.
+            if answer == .unsaved, quitSaveWait > 0 {
+                var owedNow = owed.isEmpty
+                let asked = Date()
+                while owedNow == nil, Date().timeIntervalSince(asked) < quitSaveWait {
+                    try? await Task.sleep(nanoseconds: 20_000_000)
+                    owedNow = owed.isEmpty
+                }
+                if owedNow == false {
+                    let left = max(0, quitSaveWait - Date().timeIntervalSince(asked))
+                    session.log("desk.terminate.save-wait", "limit=\(String(format: "%g", quitSaveWait))s")
+                    try? await Task.sleep(nanoseconds: UInt64(left * 1_000_000_000))
+                }
             }
             await session.close(quitting: true)
             // The lane's own quit wait: with no window, or after a window
