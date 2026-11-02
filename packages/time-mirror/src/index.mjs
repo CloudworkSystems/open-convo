@@ -14,6 +14,7 @@ const COLORS = Object.freeze({
   distracting: 'magenta',
   total: 'coral',
 });
+const RESERVED_TAGS = new Set(['productive', 'neutral', 'distracting', 'total']);
 
 const fail = message => { throw new Error(message); };
 const own = (object, key) => Object.hasOwn(object, key);
@@ -56,24 +57,42 @@ function columnIndex(headers, accepted) {
   return normalized.findIndex(header => accepted.includes(header));
 }
 
-function parseRows(rows, kind) {
-  if (!Array.isArray(rows) || rows.length === 0 || !Array.isArray(rows[0])) {
+function responseTable(response, kind) {
+  if (Array.isArray(response) && response.length > 0 && Array.isArray(response[0])) {
+    return { headers: response[0], rows: response.slice(1) };
+  }
+  if (response !== null && typeof response === 'object' &&
+      Array.isArray(response.row_headers) && Array.isArray(response.rows)) {
+    return { headers: response.row_headers, rows: response.rows };
+  }
+  fail(`RescueTime returned malformed ${kind} rows.`);
+}
+
+function rowDate(value) {
+  if (typeof value !== 'string') return null;
+  const match = /^(\d{4}-\d{2}-\d{2})(?:T00:00:00)?$/.exec(value);
+  return match && validDate(match[1]) ? match[1] : null;
+}
+
+function parseRows(response, kind) {
+  const { headers, rows } = responseTable(response, kind);
+  if (!Array.isArray(headers)) {
     fail(`RescueTime returned malformed ${kind} rows.`);
   }
-  const headers = rows[0];
   const dateAt = columnIndex(headers, ['date']);
   const secondsAt = columnIndex(headers, ['time spent seconds', 'time spent']);
   const valueAt = columnIndex(headers, kind === 'productivity' ? ['productivity'] : ['category']);
   if (dateAt < 0 || secondsAt < 0 || valueAt < 0) fail(`RescueTime returned malformed ${kind} rows.`);
 
-  return rows.slice(1).map(row => {
-    if (!Array.isArray(row) || !validDate(row[dateAt]) || typeof row[secondsAt] !== 'number' || !Number.isFinite(row[secondsAt]) || row[secondsAt] < 0) {
+  return rows.map(row => {
+    const date = Array.isArray(row) ? rowDate(row[dateAt]) : null;
+    if (!date || typeof row[secondsAt] !== 'number' || !Number.isFinite(row[secondsAt]) || row[secondsAt] < 0) {
       fail(`RescueTime returned malformed ${kind} rows.`);
     }
     const value = row[valueAt];
     if (kind === 'productivity' && !own(PRODUCTIVITY_TAGS, String(value))) fail('RescueTime returned malformed productivity rows.');
     if (kind === 'category' && (typeof value !== 'string' || value.length === 0)) fail('RescueTime returned malformed category rows.');
-    return { date: row[dateAt], seconds: row[secondsAt], value };
+    return { date, seconds: row[secondsAt], value };
   });
 }
 
@@ -151,6 +170,9 @@ export async function buildTimeMirror({ start, end, fetchRows, categoryTags = {}
   assertRange(start, end);
   if (typeof fetchRows !== 'function') fail('fetchRows must be a function.');
   if (categoryTags === null || typeof categoryTags !== 'object' || Array.isArray(categoryTags)) fail('categoryTags must be an object.');
+  for (const tag of Object.values(categoryTags)) {
+    if (RESERVED_TAGS.has(tag)) fail(`Owner tag ${tag} uses a reserved built-in summary name.`);
+  }
 
   const responses = {};
   for (const kind of REQUEST_KINDS) {

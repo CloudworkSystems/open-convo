@@ -57,6 +57,37 @@ test('turns invented rows into targetless count trackers through HabitGrid and r
   assert.deepEqual(result.missingDays, ['2026-10-03']);
 });
 
+test('accepts RescueTime row_headers and rows with midnight timestamps', async () => {
+  const envelope = rows => ({
+    row_headers: rows[0],
+    rows: rows.slice(1).map(row => [`${row[0]}T00:00:00`, ...row.slice(1)]),
+  });
+  const result = await buildTimeMirror({
+    start: '2026-10-01',
+    end: '2026-10-04',
+    fetchRows: inventedFetch([], {
+      productivity: envelope(productivityRows),
+      category: envelope(categoryRows),
+    }),
+    categoryTags: { 'Software Development': 'coding' },
+  });
+  const productive = result.trackers.find(item => item.tag === 'productive');
+  assert.equal(productive.grid.squares.find(day => day.date === '2026-10-01').value, 60);
+  assert.deepEqual(result.missingDays, ['2026-10-03']);
+});
+
+test('rejects owner tag names reserved for built-in summaries', async () => {
+  for (const tag of ['productive', 'neutral', 'distracting', 'total']) {
+    await assert.rejects(
+      buildTimeMirror({
+        start: '2026-10-01', end: '2026-10-04', fetchRows: inventedFetch([]),
+        categoryTags: { 'Software Development': tag },
+      }),
+      /reserved built-in summary name/,
+    );
+  }
+});
+
 test('keeps gaps separate from zero and leaves unmapped category names out of output', async () => {
   const result = await buildTimeMirror({ start: '2026-10-01', end: '2026-10-04', fetchRows: inventedFetch([]) });
   assert.match(result.html, /Days with no data: 2026-10-03/);
