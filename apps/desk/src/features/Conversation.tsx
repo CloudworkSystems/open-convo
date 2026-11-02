@@ -385,15 +385,18 @@ export function Conversation({
             const value = event.target.value;
             if (session) onDraftChange(session.id, value);
             else if (starting) {
-              setStartText(value);
-              if (!composing.current && !(event.nativeEvent as InputEvent).isComposing) start(value);
+              // Held here only while an input method is still composing. Otherwise the text goes
+              // straight into a saved session; if saving it is refused, the box stays empty like
+              // any refused draft edit, so nothing is shown that isn't kept.
+              if (composing.current || (event.nativeEvent as InputEvent).isComposing) setStartText(value);
+              else start(value);
             }
           }}
           onFocus={(event) => reportDraftSelection(event.currentTarget, true)}
           onSelect={(event) => reportDraftSelection(event.currentTarget, document.activeElement === event.currentTarget)}
           onBlur={(event) => reportDraftSelection(event.currentTarget, false)}
           onCompositionStart={() => { composing.current = true; }}
-          onCompositionEnd={(event) => { composing.current = false; if (!session) start(event.currentTarget.value); }}
+          onCompositionEnd={(event) => { composing.current = false; if (!session) { start(event.currentTarget.value); setStartText(''); } }}
           onKeyDown={(event) => {
             if (event.key !== 'Enter' || event.nativeEvent.isComposing || composing.current || event.nativeEvent.keyCode === 229) return;
             if (event.altKey) return;
