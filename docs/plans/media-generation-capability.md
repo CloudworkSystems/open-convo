@@ -253,6 +253,12 @@ findings are requirements for the code pull requests named.
   runner accepts only the record that matches, so restoring an older,
   validly signed, higher cap fails like an edit. The bypass test covers
   restoring an earlier valid cap.
+- **Part 2: lowering or pausing needs no prompt.** A lower cap or a pause
+  is saved as a tightening in the same protected Keychain item, written
+  only by the signed runner, with no signature needed. The runner always
+  uses the lower of the signed cap and any tightening. A tightening can
+  only lower; going back up, or removing a pause, is a raise and needs the
+  signed path. The bypass test covers deleting a tightening.
 - **Parts 1 and 2: every amount names its currency.** Each price, quote,
   cap and ledger entry carries an ISO currency code. When a provider's
   quote or bill is in another currency than the cap, the runner refuses
