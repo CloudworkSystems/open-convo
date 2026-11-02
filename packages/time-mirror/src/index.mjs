@@ -118,34 +118,23 @@ function uniqueTagIds(tags) {
   }));
 }
 
-function stamped(value, stamp) {
-  return { value, stamp: { ...stamp } };
-}
-
 function importDailyTotals(engine, personId, tags, ids, totals) {
-  const snapshot = engine.getPerson(personId);
-  const stamp = { counter: tags.length + 2, time: 0, device: 'time-mirror' };
+  const entries = [];
   for (const tag of tags) {
     const trackerId = ids.get(tag);
     for (const [date, minutes] of totals.get(tag)) {
       if (minutes <= 0) continue;
-      snapshot.checkIns.push({
-        id: `${trackerId}-${date}`,
-        life: stamped(true, stamp),
-        purge: null,
-        fields: {
-          trackerId: stamped(trackerId, stamp),
-          date: stamped(date, stamp),
-          value: stamped(minutes, stamp),
-          source: stamped('manual', stamp),
-        },
+      entries.push({
+        trackerId,
+        date,
+        value: minutes,
+        source: 'manual',
+        checkInId: `${trackerId}-${date}`,
       });
     }
   }
-  snapshot.life = stamped(true, stamp);
-  const imported = new HabitGrid({ deviceId: 'time-mirror-render', now: () => 0, timeZone: 'UTC' });
-  imported.importPerson(snapshot);
-  return imported;
+  engine.logCheckIns(personId, entries);
+  return engine;
 }
 
 function buildTrackers(totals, start, end) {
