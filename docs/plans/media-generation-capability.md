@@ -126,7 +126,11 @@ receipt says so in plain words, the route is switched off until the person
 looks, and the extra counts against the cap.
 
 **The ledger.** Before each paid run the runner reserves the run's maximum
-against the caps, and refuses if it doesn't fit. After the run it records
+against the caps, and refuses if it doesn't fit. The check and the
+reservation are one step: reservations across all capabilities go through a
+single lock, so two runs started together can't both fit into the same
+remaining budget. Part 2 has a test that starts several paid runs at once
+and shows their reservations never add up past any cap. After the run it records
 the actual cost when the provider reports it, or keeps the estimate marked
 "estimated" when it doesn't. Unknown stays unknown on screen (principle 2).
 The ledger and caps live on the device, travel with export, and never depend
@@ -267,12 +271,14 @@ The screens are the route picker, the cost card and the cap settings
 
 In True Convo Test, with invented prompts:
 
-1. Make a short clip by upload; the receipt shows no cost and no AI label.
-2. Make a short clip with a local model; nothing leaves the Mac (checked with
+1. Make a short clip by upload, then an image by upload; each receipt shows
+   no cost and no AI label.
+2. Make a short clip, then an image, with a local model; nothing leaves the Mac (checked with
    the app's network log), and the receipt says "made by AI".
 3. With the cap at $0, the paid route shows "Set a cap first".
-4. Set a $1 monthly cap (the Mac password prompt appears). Make one paid clip:
-   the card shows the most it can cost first, and the receipt shows the cost.
+4. Set a $1 monthly cap (the Mac password prompt appears). Make one paid clip and one paid image:
+   each card shows the most it can cost first, and each receipt shows the
+   cost.
 5. Ask a model in a conversation to raise the cap: it can't, and says why.
 6. A paid run that would go over the cap is refused before anything is sent.
 7. Quit mid-run on a paid clip; the next launch says what came back and what
