@@ -172,22 +172,26 @@ Vendor harnesses are used only where a subscription requires its own program.
 
 ## Foreign Agents Start at Zero Trust (Owner, October 25 and 30)
 
-A **trusted builder** is an agent listed in AGENTS.md "Who Does What": it was
-added there through a pull request the owner approved, and every change it
-makes goes through the build and review loop. Today that is Claude, Codex and
-GrokBot. A **foreign agent** is any other agent that lives in another
-company's agent product, with that product's own memory, tools and loop, which
-True Convo neither runs nor can inspect, even one the owner set up himself.
-Meta's Muse is the first case: the owner's Muse agent, Cam. The test is the
-listing, not the model: trusted builders run on outside models too, and an
-agent becomes one only through that same approved pull request. The zero-trust
-baseline and the no-code rule below apply to foreign agents, never to trusted
-builders, and the work below goes to the trusted builders. Profiles the owner
-sets up in True Convo also start with nothing, and get only what he grants
-(`computer-use.md`). The owner's rule (October 25): zero trust is the starting
-baseline for any unknown foreign model or agent inside True Convo. Other notes
-point here for it (`security.md`, `prime-agent.md`, `computer-use.md`,
-`verified-owner-yes.md`, `back-end-and-agent-hosts.md`).
+A **trusted builder** is an agent that AGENTS.md "Who Does What" names as a
+builder: its row gives it the job of building (Claude building sessions,
+Codex, GrokBot teams), that row was added through a pull request the owner
+approved, and every change it makes goes through the build and review loop.
+Today that is Claude, Codex and GrokBot. A row for any other job (a reviewer,
+a read-only check, a scheduled task, or a foreign agent's standing work) does
+not make an agent a trusted builder. A **foreign agent** is any other agent
+that lives in another company's agent product, with that product's own memory,
+tools and loop, which True Convo neither runs nor can inspect, even one the
+owner set up himself. Meta's Muse is the first case: the owner's Muse agent,
+Cam. The test is a builder row, not the model: trusted builders run on outside
+models too, and an agent becomes one only through an owner-approved pull
+request that names it as a builder. The zero-trust baseline and the no-code
+rule below apply to foreign agents, never to trusted builders, and the work
+below goes to the trusted builders. Profiles the owner sets up in True Convo
+also start with nothing, and get only what he grants (`computer-use.md`). The
+owner's rule (October 25): zero trust is the starting baseline for any unknown
+foreign model or agent inside True Convo. Other notes point here for it
+(`security.md`, `prime-agent.md`, `computer-use.md`, `verified-owner-yes.md`,
+`back-end-and-agent-hosts.md`).
 
 The baseline:
 
