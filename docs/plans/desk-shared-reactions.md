@@ -105,10 +105,11 @@ switch on.
    existing rule for earlier turns: a later run in the same conversation,
    to any participant, may carry it as context, and only when the line
    above the box counts that turn. When any earlier turn the next Send would
-   carry holds a reactions note, and the switch is off or was turned on for
-   a different participant, the line adds "including reactions you shared
-   earlier" and names who they now go to, and the Desk leaves those turns
-   out of the context unless he turns the switch on for this participant.
+   carry holds a reactions note, and the switch isn't on for this
+   participant, the Desk leaves those turns out of the context and the line
+   above the box says so, for example "2 earlier turns with reactions you
+   shared are left out, because sharing is off for Claude." Turning the
+   switch on for this participant brings them back, counted in the line.
    So reactions never reach a participant he didn't turn sharing on for,
    not even as history.
 
