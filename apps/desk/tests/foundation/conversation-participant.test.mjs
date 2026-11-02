@@ -1972,6 +1972,7 @@ test('a side chat opens as its own linked conversation that quotes only the mess
 
 test('shared reactions: the switch puts a visible note in the draft, Send carries exactly that, and turning it off removes it', async () => {
   const f = await fixture({ participantChoices: [inventedChoice], participantChoice: inventedChoice.identity });
+  const invite = 'You can react to this message by starting your reply with a line like `Reaction: 👍`.';
   try {
     const box = f.page.getByRole('textbox', { name: 'Your message', exact: true });
     const sharing = f.page.getByRole('checkbox', { name: 'Share my reactions with Invented participant in this chat', exact: true });
@@ -1992,24 +1993,31 @@ test('shared reactions: the switch puts a visible note in the draft, Send carrie
     await expect(f.page.locator('[data-send-destination]')).toContainText('Your reactions in this chat go to Invented participant with your next message.');
     await expect.poll(() => f.stored.sessions.find((s) => s.id === f.stored.selection.sessionId).reactionSharing?.participant).toEqual(inventedChoice.identity);
     await reaction('Question');
-    await expect(box).toHaveValue('[My reactions: ❓ on your reply "Invented first reply"]\n\n');
+    await expect(box).toHaveValue(`[My reactions: ❓ on your reply "Invented first reply". ${invite}]\n\n`);
     await expect(f.page.locator('[data-reaction-sharing-notice]')).toHaveText('Reactions note added to your message.');
     await reaction('Idea');
     await expect(f.page.locator('[data-reaction-sharing-notice]')).toHaveText('Reactions note updated in your message.');
     await reaction('Idea');
-    await expect(box).toHaveValue('[My reactions: ❓ on your reply "Invented first reply"]\n\n');
+    await expect(box).toHaveValue(`[My reactions: ❓ on your reply "Invented first reply". ${invite}]\n\n`);
     await box.press('End');
     await box.pressSequentially('Thanks.');
     await f.page.getByRole('button', { name: 'Send message', exact: true }).click();
     await expect.poll(() => f.calls.starts.length).toBe(2);
-    assert.equal(f.calls.starts[1].input.inputChunks.join(''), '[My reactions: ❓ on your reply "Invented first reply"]\n\nThanks.');
-    await f.emit('text', 'Invented second reply');
+    assert.equal(f.calls.starts[1].input.inputChunks.join(''), `[My reactions: ❓ on your reply "Invented first reply". ${invite}]\n\nThanks.`);
+    // The agent reacts back: a complete first line becomes a chip on his
+    // message, and the reply shows without it (the run keeps it as received).
+    await f.emit('text', 'Reaction: 🎉\n\nInvented second reply');
     await f.emit('completed');
     await expect.poll(() => f.stored.conversationRuns.at(-1).phase).toBe('completed');
+    const lastRun = f.page.locator('.run-transcript').last();
+    await expect(lastRun.locator('[data-agent-reaction]')).toHaveText('Invented participant reacted 🎉');
+    await expect(lastRun.getByRole('img', { name: 'party popper', exact: true })).toBeVisible();
+    await expect(lastRun.locator('.run-output')).toHaveText('Invented second reply');
+    assert.equal(f.stored.conversationRuns.at(-1).outputChunks.join(''), 'Reaction: 🎉\n\nInvented second reply');
     await expect(box).toHaveValue('');
     // Editing the note freezes it; turning sharing off removes it, edited or not.
     await reaction('Love');
-    await expect(box).toHaveValue(/^\[My reactions: ❤️ on your reply "Invented second reply"\]/);
+    await expect(box).toHaveValue(/^\[My reactions: ❤️ on your reply "Invented second reply"\. You can react/);
     await box.fill('[My reactions: ❤️ on that reply]\n\nKeep this.');
     await expect(f.page.locator('[data-reaction-sharing-notice]')).toHaveText('You edited the reactions note, so new reactions won’t be added to it.');
     await sharing.uncheck();
