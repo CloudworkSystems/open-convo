@@ -756,16 +756,50 @@ final class DeskSessionParticipantTests: XCTestCase {
         }
     }
 
-    /// With nothing owed, or a clean page, the quit never waits for a save.
-    func testAQuitWithNoReplyOwedOrACleanPageNeverWaitsForASave() async throws {
-        let cases: [(ParticipantObligations, DeskUnsavedWork?)] = [(ParticipantObligations(), .unsaved), (Self.oneLiveRun, nil)]
-        for (owed, page) in cases {
+    /// A reply that stopped before the quit's check (nothing owed any more)
+    /// still waits for the save the page's answer started (Codex, 38ccc64),
+    /// but only within the plain limit.
+    func testAQuitJustAfterAReplyStoppedStillWaitsForThePagesSaveWithinThePlainLimit() async throws {
+        let cases: [(TimeInterval, String)] = [(0.4, "saved"), (60, "limit")]
+        for (savesFor, outcome) in cases {
             let folder = try DeskTestFolder()
             defer { folder.clean() }
             let lane = FakeDeskLane()
             let logs = DeskLogCollector()
             let session = try await open(folder, lane: lane, logs: logs)
-            session.unsavedWorkCheck = { page }
+            session.unsavedWorkCheck = { .unsaved }
+            let savedAt = Date().addingTimeInterval(savesFor)
+            session.runSavesCheck = { Date() < savedAt }
+            lane.owedOnceQuitBegan = ParticipantObligations()
+            var replies: [Bool] = []
+            var closedAt: Date?
+            let started = Date()
+            _ = DeskTermination.reply(for: session, timeout: 1, participantTimeout: 5, quitSaveWait: 3,
+                                      replyToApplication: { replies.append($0) })
+            try await waitUntil("the Desk to close", timeout: 6) {
+                if closedAt == nil, lane.journal.contains("finishShutdown quitting=true") { closedAt = Date() }
+                return session.state == .closed
+            }
+            try await waitUntil("the reply", timeout: 6) { !replies.isEmpty }
+            XCTAssertEqual(replies, [true])
+            XCTAssertTrue(logs.all.contains { $0.hasPrefix("desk.terminate.save-wait outcome=\(outcome) ") }, "\(logs.all)")
+            if outcome == "saved" {
+                XCTAssertGreaterThanOrEqual(try XCTUnwrap(closedAt).timeIntervalSince(savedAt), 0, "closed only after the save landed")
+            } else {
+                XCTAssertLessThan(Date().timeIntervalSince(started), 2.5, "the plain limit, not quitSaveWait")
+            }
+        }
+    }
+
+    /// With a clean page, the quit never waits for a save, owed or not.
+    func testAQuitWithACleanPageNeverWaitsForASave() async throws {
+        for owed in [ParticipantObligations(), Self.oneLiveRun] {
+            let folder = try DeskTestFolder()
+            defer { folder.clean() }
+            let lane = FakeDeskLane()
+            let logs = DeskLogCollector()
+            let session = try await open(folder, lane: lane, logs: logs)
+            session.unsavedWorkCheck = { nil }
             session.runSavesCheck = { true }
             lane.owedOnceQuitBegan = owed
             var replies: [Bool] = []

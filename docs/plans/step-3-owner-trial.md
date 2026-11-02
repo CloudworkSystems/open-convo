@@ -156,7 +156,9 @@ has answered its question.
 - While a reply is owed and the page says it holds unsaved work, the quit
   waits for the page to confirm those saves landed (the page marks the
   Desk while they are under way) before closing the Desk, for at most ten
-  seconds and inside the existing 17-second limit. The log says how it
+  seconds and inside the existing 17-second limit. If the reply stopped
+  just before that check, so nothing is owed any more, the quit still waits
+  for the save, within the ordinary 3-second quit limit. The log says how it
   ended: `desk.terminate.save-wait outcome=saved`, `outcome=no-answer` or
   `outcome=limit`. After the menu's Quit, the page is asked once more at
   that point, because only then has the last of the reply arrived.
