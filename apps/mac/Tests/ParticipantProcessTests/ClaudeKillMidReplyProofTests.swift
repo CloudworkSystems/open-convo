@@ -460,7 +460,7 @@ struct ClaudeKillMidReplyProofTests {
             app.send("release")
             #expect(try await app.next("released timeout=") == "false", "\(label): released by the proof, not by the cap")
             try await app.saved(runId, "text", chars: held.count)
-            #expect(try await app.next("ended \(runId) ") == "stopped local-stop", label)
+            #expect(try await app.next("ended \(runId) ") == "stopped local-stop", "\(label)")
             let status = try await app.json("status \(runId)", "status").objectValue ?? [:]
             #expect(status["state"] == .string("exited"), "\(label): \(status)")
             #expect(status["terminal"]?.objectValue?["type"] == .string("stopped"), "\(label): \(status)")
@@ -471,8 +471,8 @@ struct ClaudeKillMidReplyProofTests {
             #expect(world.spawns.count == 1, "\(label): one spawn for the run")
 
             app.send("quit")
-            #expect(try await app.next("quit ") == "reachedBound=false", label)
-            #expect(try await app.waitForExit() == 0, label)
+            #expect(try await app.next("quit ") == "reachedBound=false", "\(label)")
+            #expect(try await app.waitForExit() == 0, "\(label)")
             #expect(world.spawns.count == 1, "\(label): nothing spawned again")
         }
     }
