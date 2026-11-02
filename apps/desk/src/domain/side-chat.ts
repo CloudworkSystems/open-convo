@@ -78,3 +78,24 @@ export function shownMessageText(state: Pick<DeskState, 'messages' | 'conversati
   if (!run) return null;
   return (run.userMessageId === messageId ? run.inputChunks : run.outputChunks).join('');
 }
+
+/**
+ * A conversation and every side chat linked to it, root first. Side chats are
+ * listed under their parent, so moving any of them to a folder moves the group.
+ */
+export function linkedSessionIds(state: Pick<DeskState, 'sessions'>, sessionId: string): string[] {
+  const byId = new Map(state.sessions.map((session) => [session.id, session]));
+  let root = sessionId;
+  const climbed = new Set<string>([root]);
+  for (let parent = byId.get(root)?.sideOf?.sessionId; parent && byId.has(parent) && !climbed.has(parent); parent = byId.get(root)?.sideOf?.sessionId) {
+    root = parent;
+    climbed.add(parent);
+  }
+  const group = [root];
+  for (let index = 0; index < group.length; index++) {
+    for (const session of state.sessions) {
+      if (session.sideOf?.sessionId === group[index] && !group.includes(session.id)) group.push(session.id);
+    }
+  }
+  return group;
+}

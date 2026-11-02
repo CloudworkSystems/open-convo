@@ -4,7 +4,7 @@ import { defaultSessionTitle } from './session-naming';
 import { sameParticipantIdentity, validParticipantIdentity } from './participant-choices';
 import { isMemoryCommand, mutateMemory } from './memory';
 import { isMessageMarkCommand, mutateMessageMark } from './message-marks';
-import { createSideChat } from './side-chat';
+import { createSideChat, linkedSessionIds } from './side-chat';
 import type { Activity, DeskCommand, DeskState, DomainOptions, Goal, Session } from './types';
 
 export class DomainError extends Error {
@@ -223,10 +223,16 @@ export function applyCommand(state: DeskState, command: DeskCommand, options: Do
     case 'move-session': {
       const target = session(command.sessionId);
       if (command.goalId !== null) goal(command.goalId);
-      if (target.goalId === command.goalId) return state;
-      target.goalId = command.goalId;
-      target.updatedAt = now;
-      if (next.selection.sessionId === target.id) next.selection.goalId = command.goalId;
+      // A conversation moves with its side chats, so the folder and the
+      // sidebar, which lists side chats under their parent, always agree.
+      const group = linkedSessionIds(next, target.id).map(session);
+      if (group.every((member) => member.goalId === command.goalId)) return state;
+      for (const member of group) {
+        if (member.goalId === command.goalId) continue;
+        member.goalId = command.goalId;
+        member.updatedAt = now;
+      }
+      if (group.some((member) => member.id === next.selection.sessionId)) next.selection.goalId = command.goalId;
       event('edited', command.goalId === null ? 'Session returned to unassigned sessions.' : 'Session placed in a domain.', command.goalId, target.id);
       break;
     }

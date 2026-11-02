@@ -71,3 +71,33 @@ test('saved links that point nowhere, at the wrong conversation, or in a loop ar
     ? { ...session, sideOf: { sessionId: side.id, messageId: f.reply.id } } : session) };
   assert.equal(validateState(looped).valid, false);
 });
+
+test('moving a conversation or one of its side chats to a folder moves the whole linked group', () => {
+  const f = fixture();
+  let state = applyCommand(f.state, { type: 'create-side-chat', messageId: f.reply.id, text: f.reply.body }, f.options);
+  const side = state.sessions.at(-1)!;
+  // A side chat of the side chat, so the group has three levels.
+  state = applyCommand(state, { type: 'set-draft', sessionId: side.id, text: 'Invented follow-up.' }, f.options);
+  state = applyCommand(state, { type: 'send-demo', sessionId: side.id }, f.options);
+  const nestedReply = state.messages.at(-1)!;
+  state = applyCommand(state, { type: 'create-side-chat', messageId: nestedReply.id, text: nestedReply.body }, f.options);
+  const nested = state.sessions.at(-1)!;
+  const group = [f.sessionId, side.id, nested.id];
+  state = applyCommand(state, { type: 'create-session', goalId: f.state.sessions[0].goalId, title: 'Invented unrelated session' }, f.options);
+  state = applyCommand(state, { type: 'create-goal', title: 'Invented other folder', empty: true }, f.options);
+  const other = state.goals.at(-1)!;
+  state = applyCommand(state, { type: 'select-session', sessionId: nested.id }, f.options);
+  const goalOf = (value: DeskState, sessionId: string) => value.sessions.find((session) => session.id === sessionId)!.goalId;
+  // Moving the nested side chat moves its parent and grandparent too.
+  const moved = applyCommand(state, { type: 'move-session', sessionId: nested.id, goalId: other.id }, f.options);
+  for (const sessionId of group) assert.equal(goalOf(moved, sessionId), other.id);
+  assert.equal(moved.selection.goalId, other.id);
+  assert.equal(validateState(moved).valid, true);
+  // Moving the parent back brings its side chats with it, and nothing else moves.
+  const back = applyCommand(moved, { type: 'move-session', sessionId: f.sessionId, goalId: null }, f.options);
+  for (const sessionId of group) assert.equal(goalOf(back, sessionId), null);
+  for (const session of back.sessions.filter((entry) => !group.includes(entry.id))) {
+    assert.equal(session.goalId, state.sessions.find((entry) => entry.id === session.id)!.goalId);
+  }
+  assert.equal(applyCommand(back, { type: 'move-session', sessionId: side.id, goalId: null }, f.options), back);
+});
