@@ -206,9 +206,14 @@ inside TCA, where the ceilings above can be enforced.
 - **Password fields stay blank.** For a secure text field, TCA never shows
   or logs its value, even after the owner's password manager fills it in.
   This adds to the Browsers rule: agents still never type passwords.
-- **One agent at a time on the keyboard and pointer.** A lock on the Mac
-  stops two agents' input from mixing. Each agent can show its own labeled
-  cursor, so the owner sees which agent is acting.
+- **One agent at a time per app, for the whole change.** agent-desktop locks
+  only the keyboard and pointer. TCA goes further: an agent holds a lock on
+  the app it's changing (on the whole Mac for real keyboard and pointer
+  input) from its final identity check until it has confirmed the result.
+  That covers quiet accessibility actions too, so a second agent can't
+  change a field between the first agent filling it and pressing Send. Each
+  agent can show its own labeled cursor, so the owner sees which agent is
+  acting.
 - **A trail the owner can replay.** The action log can keep before and after
   snapshots of each step. They hold private screen content, so they follow
   the logging rule above and stay on the Mac.
