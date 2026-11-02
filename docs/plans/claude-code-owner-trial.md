@@ -110,9 +110,10 @@ one Finder step.
    Approve Anthropic when asked, then confirm paid usage is off when asked
    (check claude.ai Settings > Usage first). While the reply arrives, the
    script records:
-   - Claude Code's arguments and environment names (never values) from the
-     process list, to match against the contract's section 11, with no API
-     key or proxy setting.
+   - Claude Code's arguments and environment from the process list, matched
+     on the Mac against the contract's section 11: the variable names, and
+     the values of the fixed ones only (never HOME, USER and the like), with
+     no API key or proxy setting.
    - Every process Claude Code starts, checked every half second until the
      run ends: each must stay in Claude Code's process group. If any
      leaves, Claude stays unavailable and the trial stops.
