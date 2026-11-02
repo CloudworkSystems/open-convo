@@ -77,12 +77,14 @@ doneOn }`
    **Edit** replaces `title`, `note` or `when` and re-checks the reminder.
    Each refers to a reminder by `id`; an unknown id is refused.
 6. **Add** refuses a duplicate `id`, and returns a warning (not a refusal)
-   when another open reminder already points to the same `itemId` with the
-   same due date.
+   when another open reminder already points to the same item (the same
+   `itemKind` and `itemId` together) with the same due date. An item is
+   always identified by both, since a note and a session may share an id.
 7. **Missing items.** `listView(reminders, { today, days, knownItems })`
-   takes an optional list of `itemId`s the caller knows still exist; an open
-   reminder whose item isn't in it is listed under `missingItem`, never
-   deleted by the engine.
+   takes an optional list of `{ itemKind, itemId }` pairs the caller knows
+   still exist; an open reminder whose kind-and-id pair isn't in it is
+   listed under `missingItem`, never deleted by the engine. A surviving
+   note never hides a deleted session with the same id.
 
 ### Functions And Output
 
@@ -95,9 +97,13 @@ doneOn }`
 - `parseSaved(text)` and `formatSaved(reminders)`: the saved form is JSON
   with a `version: 1` field and the list. `parseSaved` checks every field
   and refuses the whole file on any error, naming the reminder and the
-  field, so a bad file is never half-read. `formatSaved` sorts by id, so
-  the same list always gives the same text, and `parseSaved(formatSaved(x))`
-  gives back `x`.
+  field, so a bad file is never half-read. The saved form is canonical:
+  `formatSaved` sorts by id, so the same reminders in any order give the
+  same text, and `parseSaved` returns the list sorted by id.
+  `parseSaved(formatSaved(x))` gives back `x` sorted by id (the same
+  reminders, nothing added, lost or changed), and
+  `formatSaved(parseSaved(text))` gives back `text` for any text
+  `formatSaved` wrote.
 
 ### Refusals
 
@@ -125,10 +131,13 @@ session"). At least:
 2. Overdue, due today, coming up inside and outside the window, and done.
 3. Snooze to a later date, snooze by days, and a refused snooze to today.
 4. Add with a duplicate id (refused) and with the same item and day
-   (warning). Edit, done and remove by id; unknown ids refused.
-5. `missingItem` lists a reminder whose item is gone and deletes nothing.
+   (warning); the same id with a different kind gives no warning. Edit,
+   done and remove by id; unknown ids refused.
+5. `missingItem` lists a reminder whose item is gone and deletes nothing,
+   including a deleted session whose id matches a surviving note.
 6. The input list is unchanged after every function (frozen in the test).
-7. Saved form: a round trip gives the same list; a file with one bad
+7. Saved form: a shuffled list round-trips to the same reminders sorted by
+   id, and saved text round-trips byte for byte; a file with one bad
    field is refused as a whole and the error names the reminder and field;
    an unknown `version` is refused.
 8. Refusals: each one above names its field, including `2026-02-30`.
