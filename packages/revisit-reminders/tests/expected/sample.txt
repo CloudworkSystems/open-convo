@@ -1,0 +1,15 @@
+Overdue (1)
+2026-10-20  13 days overdue  Come back to the garden plan session  session session-garden  garden-plan
+
+Due today (2)
+2026-11-02  Come back to the fence note  note note-fence  fence-note
+2026-11-02  Come back to the seed note  note note-seeds  seed-list
+
+Coming up (1)
+2026-11-16  Come back to the path link  link link-path  path-link
+
+Missing item (0)
+(none)
+
+Done (1)
+2026-09-01  Come back to the porch note  note note-porch  porch-done

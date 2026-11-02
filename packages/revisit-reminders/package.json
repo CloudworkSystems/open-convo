@@ -1,0 +1,14 @@
+{
+  "name": "@open-convo/revisit-reminders",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Day reminders to come back to a session, note, link or other item. No network, no clock and no AI.",
+  "exports": "./src/index.mjs",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
