@@ -258,7 +258,14 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
       setInitial(loaded);
       const workspace = loaded.kind === 'ready' ? loaded.state : loaded.kind === 'empty' && !nativeProof ? createDemoState() : null;
       if (workspace) {
-        const view = tabView.load(workspace);
+        const loadedView = tabView.load(workspace);
+        // Owner decision, November 2, 2026: a newly opened Desk shows the
+        // session list and a fresh blank session in the middle. Reloading the
+        // same tab keeps its own screen. Nothing is saved for the blank session.
+        const fresh = runtime.freshOpen();
+        const blankState = fresh ? applyCommand(loadedView.state, { type: 'open-blank-session', goalId: null }) : null;
+        // The blank screen is this tab's view (never the workspace), so a reload before typing keeps it.
+        const view = blankState ? { state: blankState, warning: tabView.save(blankState) ?? loadedView.warning } : loadedView;
         stateRef.current = view.state;
         savedState.current = loaded.kind === 'ready' ? loaded.state : null;
         savedRevision.current = loaded.kind === 'ready' ? loaded.state.revision : null;
@@ -531,7 +538,8 @@ function DeskApplication({ runtime }: { runtime: DeskRuntime }) {
           onGoalSelect={(goalId) => dispatch({ type: 'select-goal', goalId })}
           onUngroupedSelect={() => dispatch({ type: 'select-ungrouped' })}
           onSessionSelect={(sessionId) => dispatch({ type: 'select-session', sessionId })}
-          onSessionCreate={(goalId) => dispatch({ type: 'create-session', goalId })}
+          onSessionCreate={(goalId) => dispatch({ type: 'open-blank-session', goalId })}
+          onSessionStart={(goalId, draft) => dispatch({ type: 'create-session', goalId, draft })}
           onGoalCreate={(title, parentId) => dispatch({ type: 'create-goal', title, parentId, empty: true })}
           onDomainRename={(domainId, title) => dispatch({ type: 'rename-domain', domainId, title })}
           onSessionRename={(sessionId, title, expectedTitle) => dispatch({ type: 'rename-session', sessionId, title, expectedTitle })}

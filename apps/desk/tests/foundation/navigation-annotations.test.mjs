@@ -9,7 +9,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, test } from 'node:test';
 import { chromium, expect } from '@playwright/test';
-import { readNativeRecord, readNativeRecordRaw } from './browser-persistence.mjs';
+import { readNativeRecord, readNativeRecordRaw, returningTab, startBlankSession } from './browser-persistence.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const storageKey = 'true-convo:desk:synthetic:v1';
@@ -72,7 +72,7 @@ before(async () => {
 after(cleanup);
 
 async function isolatedPage(options = {}) {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...options });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...options }); await returningTab(context);
   const outside = [];
   const privateApi = [];
   const errors = [];
@@ -146,7 +146,9 @@ test('domain context menus validate rename and preserve saved domain relationshi
     assert.ok(selectedSession, 'The invented domain must have a saved session to select explicitly.');
     await page.locator(`.domain-link[data-domain-id="${initial.selection.goalId}"]`).click();
     assert.equal((await tabSelection(page)).sessionId, null);
-    await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toHaveCount(0);
+    // With no session chosen, the middle is a blank session that nothing has saved yet.
+    await expect(page.locator('.navigator-empty')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toHaveValue('');
     await page.locator(`.session-link[data-session-id="${selectedSession.id}"]`).click();
     await page.getByRole('textbox', { name: 'Your message', exact: true }).fill('Invented draft held through domain rename.');
     await saved(page);
@@ -336,6 +338,7 @@ test('sidebar refiling preserves a session and sidebar selection returns every m
     const targetId = (await stored(page)).selection.goalId;
     await page.getByRole('button', { name: `Collapse ${parent.title} folder`, exact: true }).click();
     await page.getByRole('region', { name: 'Ungrouped sessions', exact: true }).getByRole('button', { name: 'New session', exact: true }).click();
+    await startBlankSession(page);
     await saved(page);
     const createdSessionId = (await stored(page)).selection.sessionId;
     assert.ok(createdSessionId, 'Creating a session must select its saved identity.');
@@ -445,7 +448,9 @@ test('domain note edits recover after navigation and reload without changing ses
     const initial = await stored(page);
     await page.locator(`.domain-link[data-domain-id="${initial.selection.goalId}"]`).click();
     assert.equal((await tabSelection(page)).sessionId, null);
-    await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toHaveCount(0);
+    // With no session chosen, the middle is a blank session that nothing has saved yet.
+    await expect(page.locator('.navigator-empty')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toHaveValue('');
     const before = await stored(page);
     const id = before.selection.goalId;
     const domain = page.locator(`.domain-link[data-domain-id="${id}"]`);
@@ -487,7 +492,9 @@ test('mobile domain notes retain keyboard focus inside details after Save and Ca
     await drawer.getByRole('button', { name: /^Folder options for / }).first().click();
     await page.getByRole('menuitem', { name: 'Edit folder note…', exact: true }).click();
     assert.equal((await tabSelection(page)).sessionId, null);
-    await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toHaveCount(0);
+    // With no session chosen, the middle is a blank session that nothing has saved yet.
+    await expect(page.locator('.navigator-empty')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toHaveValue('');
     const details = page.getByRole('dialog', { name: 'Session details', exact: true });
     const note = details.getByRole('textbox', { name: 'Domain note', exact: true });
     await expect(note).toBeFocused();

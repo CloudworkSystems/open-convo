@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
 import { BrowserRepository, type StorageLike, type LockRunner } from '../adapters/browser-repository';
 import { BrowserTabView } from '../adapters/browser-tab-view';
+import { openedBefore } from '../adapters/fresh-open';
 import { BrowserCanvas } from '../adapters/browser-canvas';
 import { BrowserRoadmap, type RoadmapMove } from '../adapters/browser-roadmap';
 import { BrowserIdentityStore } from '../adapters/browser-identity';
@@ -63,6 +64,11 @@ export interface DeskRuntime extends RuntimeLifecycle {
   /** Native only: keeps the focused draft bound for Mac dictation. */
   readonly dictation?: NativeDictationLane;
   readonly tabView: Pick<BrowserTabView, 'load' | 'save'>;
+  /**
+   * True when this page has never shown the Desk before, so it opens on a
+   * blank session (owner decision, November 2, 2026). Read once per page.
+   */
+  readonly freshOpen: () => boolean;
   readonly identity: Pick<BrowserIdentityStore, 'load' | 'save' | 'subscribe'>;
   readonly layout: { load(): { preferences: LayoutPreferences; warning: string | null }; save(value: LayoutPreferences): string | null };
   readonly canvas: Pick<BrowserCanvas, 'loadLatest' | 'save' | 'subscribe'>;
@@ -139,7 +145,7 @@ function captureParticipantCatalog(value: readonly ParticipantChoice[] | undefin
   } catch { throw new Error('Invalid participant catalog.'); }
 }
 
-function createRuntime(mode: DeskRuntime['mode'], workspace: WorkspaceRepository, host?: RuntimeLifecycle, createId?: () => string, participant?: ParticipantPort, participantChoices?: readonly ParticipantChoice[], nativeParticipants?: NativeParticipantConnection, dictation?: NativeDictationLane, offerClaude = false): DeskRuntime {
+function createRuntime(mode: DeskRuntime['mode'], workspace: WorkspaceRepository, host?: RuntimeLifecycle, createId?: () => string, participant?: ParticipantPort, participantChoices?: readonly ParticipantChoice[], nativeParticipants?: NativeParticipantConnection, dictation?: NativeDictationLane, offerClaude = false, keepSavedScreen = false, viewCarry?: StorageLike): DeskRuntime {
   const choices = captureParticipantCatalog(participantChoices)?.map((choice) => {
     const connected = !!participant && sameParticipantIdentity(participant.identity, choice.identity);
     return Object.freeze({ ...choice, identity: Object.freeze({ ...choice.identity }),
@@ -197,6 +203,10 @@ function createRuntime(mode: DeskRuntime['mode'], workspace: WorkspaceRepository
   let detachHost: (() => void) | undefined;
   const runtime: DeskRuntime = {
     mode, workspace, isActive, canvasVisit, roadmapVisit, createId, dictation,
+    // A browser tab remembers it has opened (a mark of "1", nothing else). A
+    // native visit keeps nothing in the browser, so each one opens fresh unless
+    // its host says it is reopening a screen it already showed.
+    freshOpen: mode === 'browser' ? () => !openedBefore() : () => !keepSavedScreen,
     get participant() {
       const entry = nativeParticipants?.snapshot.entry;
       return nativeParticipants ? entry && isActive() ? nativeParticipants.portFor({ id: entry.id, label: entry.label, model: entry.model, executionHost: entry.executionHost }) : undefined : participant;
@@ -266,7 +276,11 @@ function createRuntime(mode: DeskRuntime['mode'], workspace: WorkspaceRepository
     participantInputLimit: nativeParticipants ? 4096 : undefined,
     subscribeParticipants: nativeParticipants ? (listener) => nativeParticipants.subscribeChanges(listener) : undefined,
     refreshParticipants: nativeParticipants ? () => nativeParticipants.refreshAvailability() : undefined,
-    tabView: new BrowserTabView(memory ?? undefined),
+    // The Mac window carries its screen across a reload when the host provides a carrier; nothing else outlives the visit.
+    tabView: new BrowserTabView(memory && viewCarry ? {
+      getItem: (key) => { if (!isActive()) throw new Error('Runtime unavailable.'); return viewCarry.getItem(key); },
+      setItem: (key, value) => { if (!isActive()) throw new Error('Runtime unavailable.'); viewCarry.setItem(key, value); },
+    } : memory ?? undefined),
     identity: identityRecord && memory ? new BrowserIdentityStore(identityRecord, memory) : new BrowserIdentityStore(),
     canvas: new BrowserCanvas(canvasRecord ?? undefined),
     roadmap: memory ? new BrowserRoadmap(memory, withVisitLock) : new BrowserRoadmap(),
@@ -312,8 +326,10 @@ export function createBrowserRuntime(): DeskRuntime { return createRuntime('brow
  */
 export function createNativeProofRuntime(workspace: WorkspaceRepository, lifecycle: RuntimeLifecycle, options: { createId?: () => string; participant?: ParticipantPort; participantChoices?: readonly ParticipantChoice[]; nativeParticipants?: NativeParticipantConnection; dictation?: NativeDictationLane;
   /** Lists the host's Claude entry beside its local models. No integration passes it before the adapter's PR 4b. */
-  offerClaude?: boolean } = {}): DeskRuntime {
-  return createRuntime('native-proof', workspace, lifecycle, options.createId, options.participant, options.participantChoices, options.nativeParticipants, options.dictation, options.offerClaude);
+  offerClaude?: boolean;
+  /** The host is reopening a screen it already showed, so keep the saved selection instead of a blank session. */
+  keepSavedScreen?: boolean; viewCarry?: StorageLike } = {}): DeskRuntime {
+  return createRuntime('native-proof', workspace, lifecycle, options.createId, options.participant, options.participantChoices, options.nativeParticipants, options.dictation, options.offerClaude, options.keepSavedScreen, options.viewCarry);
 }
 
 const availabilityCheckFailed = 'The Mac app could not confirm participant availability. Your draft is kept. Check availability again in the participant picker.';

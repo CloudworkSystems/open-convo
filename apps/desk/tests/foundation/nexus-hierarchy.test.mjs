@@ -7,7 +7,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, test } from 'node:test';
 import { chromium, expect } from '@playwright/test';
-import { readNativeRecordRaw } from './browser-persistence.mjs';
+import { readNativeRecordRaw, returningTab } from './browser-persistence.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const workspaceKey = 'true-convo:desk:synthetic:v1';
@@ -62,7 +62,7 @@ before(async () => {
 after(cleanup);
 
 async function isolatedPage(options = {}) {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...options });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...options }); await returningTab(context);
   const outside = [];
   const privateApi = [];
   const errors = [];
@@ -100,7 +100,9 @@ test('Nexus keeps all five subviews together and preserves session and Roadmap d
     const modules = page.getByRole('navigation', { name: 'Modules', exact: true });
     await expect(modules.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true })).toHaveAttribute('aria-current', 'page');
     await expect(modules.getByRole('button', { name: 'Roadmap', exact: true })).toHaveCount(0);
-    assert.deepEqual(await choices(page).getByRole('button').allTextContents(), views);
+    // Full names for screen readers and on hover; short names on screen keep the views to one row.
+    assert.deepEqual(await choices(page).getByRole('button').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label'))), views);
+    assert.deepEqual(await choices(page).getByRole('button').allTextContents(), ['Navigator', 'Canvas', 'Atlas', 'Rail Map', 'Roadmap']);
     await expect(page.locator('.desk-header .primary-module-heading')).toHaveCount(0);
     const sessionDraft = 'Invented session draft retained through Nexus subviews.';
     const cardDraft = 'Invented suggested card draft retained through Nexus subviews.';
@@ -156,6 +158,19 @@ test('a saved legacy Work route opens the Nexus Roadmap without rewriting its wo
     assert.equal(current.selection.route, 'sessions');
     assert.equal(current.preferences.nexusView, 'canvas');
     assert.equal(await readNativeRecordRaw(page), durable);
+    verify();
+  } finally { await context.close(); }
+});
+
+test('the Nexus view names stay in one row when the details rail narrows the middle', async () => {
+  const { context, page, verify } = await isolatedPage({ viewport: { width: 1200, height: 800 } });
+  try {
+    await enter(page);
+    await expect(page.locator('.inspector-column')).toHaveCount(1);
+    const tops = await choices(page).getByRole('button').evaluateAll((buttons) =>
+      [...new Set(buttons.map((button) => Math.round(button.getBoundingClientRect().top)))]);
+    assert.equal(tops.length, 1, 'all five view names share one row');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'the page itself does not scroll sideways');
     verify();
   } finally { await context.close(); }
 });

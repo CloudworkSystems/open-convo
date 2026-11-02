@@ -148,7 +148,7 @@ const port = {
   } } : {}),
 };
 const runtime = createNativeProofRuntime(repository, lifecycle, {
-  createId, ...(fixtureOptions.withoutParticipant ? {} : { participant: port }),
+  createId, keepSavedScreen: true, ...(fixtureOptions.withoutParticipant ? {} : { participant: port }),
   ...(fixtureOptions.participantChoices === undefined ? {} : { participantChoices: fixtureOptions.participantChoices }),
 });
 window.__participantTest = {

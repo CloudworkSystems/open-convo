@@ -9,7 +9,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, test } from 'node:test';
 import { chromium, expect } from '@playwright/test';
-import { installNativeWriteFailure, readNativeRecord, readNativeRecordRaw } from './browser-persistence.mjs';
+import { installNativeWriteFailure, readNativeRecord, readNativeRecordRaw, returningTab, startBlankSession } from './browser-persistence.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const storageKey = 'true-convo:desk:synthetic:v1';
@@ -87,7 +87,7 @@ before(async () => {
 after(cleanup);
 
 async function isolatedPage(options = {}) {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...options });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...options }); await returningTab(context);
   const blocked = [];
   const api = [];
   const errors = [];
@@ -140,6 +140,7 @@ function sessionLink(page, id) {
 async function createSessionInSelectedDomain(page) {
   const title = await selectedDomain(page).textContent();
   await page.getByRole('button', { name: `New session in ${title}`, exact: true }).click();
+  await startBlankSession(page);
 }
 async function setAppearance(page, theme) {
   await page.getByRole('button', { name: 'Appearance options', exact: true }).click();
@@ -229,7 +230,7 @@ test('desktop foundation creates goals, preserves drafts and keeps demo messages
     await expect(dialog).toBeVisible();
     await dialog.getByRole('textbox', { name: 'Folder name' }).fill('Make one useful sample worksheet');
     await dialog.getByRole('button', { name: 'Create folder', exact: true }).click();
-    await page.getByRole('main').getByRole('button', { name: 'New session', exact: true }).click();
+    await startBlankSession(page);
     await expect(dialog).not.toBeVisible();
     await expect(selectedDomain(page)).toHaveText('Make one useful sample worksheet');
     await page.getByRole('button', { name: 'Edit domain note', exact: true }).click();
@@ -407,7 +408,7 @@ test('domain-scoped Work and intent drafts survive switches, panel changes and r
     const dialog = page.getByRole('dialog', { name: 'Create folder' });
     await dialog.getByRole('textbox', { name: 'Folder name' }).fill('Second invented goal');
     await dialog.getByRole('button', { name: 'Create folder', exact: true }).click();
-    await page.getByRole('main').getByRole('button', { name: 'New session', exact: true }).click();
+    await startBlankSession(page);
     const secondGoal = await goals.inputValue();
     await goals.selectOption(firstGoal);
     await openRoadmap(page);
@@ -444,7 +445,9 @@ test('domain-scoped Work and intent drafts survive switches, panel changes and r
     await page.getByRole('button', { name: 'CLOUDWORK NEXUS', exact: true }).click();
   await page.getByRole('navigation', { name: 'Nexus views', exact: true }).getByRole('button', { name: 'Nexus Navigator', exact: true }).click();
     await expect(page.locator('.session-link[aria-current="true"]')).toHaveCount(0);
-    await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toHaveCount(0);
+    // With no session chosen, the middle is a blank session that nothing has saved yet.
+    await expect(page.locator('.navigator-empty')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toHaveValue('');
     await page.getByRole('button', { name: 'Edit domain note', exact: true }).click();
     const intent = page.getByRole('textbox', { name: 'Domain note', exact: true });
     await intent.fill('Unsubmitted grouping intent for the first domain.');
@@ -480,7 +483,7 @@ test('per-tab navigation, appearance and selection preserve shared work and each
     const dialog = page.getByRole('dialog', { name: 'Create folder' });
     await dialog.getByRole('textbox', { name: 'Folder name' }).fill('Another invented goal for separate views');
     await dialog.getByRole('button', { name: 'Create folder', exact: true }).click();
-    await page.getByRole('main').getByRole('button', { name: 'New session', exact: true }).click();
+    await startBlankSession(page);
     const secondGoal = await domainPicker(page).inputValue();
     const secondGoalInitialSessionId = await selectedSessionId(page);
     await createSessionInSelectedDomain(page);
@@ -506,7 +509,9 @@ test('per-tab navigation, appearance and selection preserve shared work and each
     await domainPicker(page).selectOption(firstGoal);
     await assertViewsOnly();
     await expect(page.locator('.session-link[aria-current="true"]')).toHaveCount(0);
-    await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toHaveCount(0);
+    // With no session chosen, the middle is a blank session that nothing has saved yet.
+    await expect(page.locator('.navigator-empty')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toHaveValue('');
     await sessionLink(page, firstGoalSessionId).click();
     await assertViewsOnly();
     await setAppearance(page, 'light');
@@ -518,7 +523,9 @@ test('per-tab navigation, appearance and selection preserve shared work and each
     await domainPicker(other).selectOption(secondGoal);
     await assertViewsOnly();
     await expect(other.locator('.session-link[aria-current="true"]')).toHaveCount(0);
-    await expect(other.getByRole('textbox', { name: 'Your message', exact: true })).toHaveCount(0);
+    // With no session chosen, the middle is a blank session that nothing has saved yet.
+    await expect(other.locator('.navigator-empty')).toBeVisible();
+    await expect(other.getByRole('textbox', { name: 'Your message', exact: true })).toHaveValue('');
     await sessionLink(other, secondGoalNewSessionId).click();
     await sessionLink(other, secondGoalInitialSessionId).click();
     await assertViewsOnly();
@@ -837,6 +844,7 @@ test('empty nested domains and unassigned sessions share their saved identities 
     await expect(page.locator(`.domain-row:has(.domain-link[data-domain-id="${rootId}"]) + .domain-contents`).getByRole('button', { name: 'Invented writing ideas', exact: true })).toBeVisible();
     const sessionsRail = page.getByRole('region', { name: 'Ungrouped sessions', exact: true });
     await sessionsRail.getByRole('button', { name: 'New session', exact: true }).click();
+    await startBlankSession(page);
     const composer = page.getByRole('textbox', { name: 'Your message', exact: true });
     await composer.fill('Invented unassigned discussion.');
     await page.getByRole('button', { name: 'Send demo message', exact: true }).click();

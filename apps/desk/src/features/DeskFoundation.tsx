@@ -29,7 +29,11 @@ export interface DeskFoundationProps {
   state: DeskState; saveStatus: SaveStatus; theme: 'light' | 'dark'; readOnly?: boolean;
   onRouteChange: (route: DeskRoute) => void; onGoalSelect: (id: string) => void;
   onUngroupedSelect: () => void;
-  onSessionSelect: (id: string) => void; onSessionCreate: (goalId: string | null) => void;
+  onSessionSelect: (id: string) => void;
+  /** Shows a blank session in a folder; nothing is saved until typing starts. */
+  onSessionCreate: (goalId: string | null) => void;
+  /** Saves a blank session the moment its first text is typed. */
+  onSessionStart: (goalId: string | null, draft: string) => void;
   onGoalCreate: (title: string, parentId: string | null) => void;
   onDomainRename: (domainId: string, title: string) => void;
   onSessionRename: (sessionId: string, title: string, expectedTitle?: string) => void;
@@ -91,7 +95,9 @@ export function DeskFoundation(props: DeskFoundationProps) {
   const workspace = useRef<HTMLDivElement>(null);
   const [workspaceWidth, setWorkspaceWidth] = useState(() => window.innerWidth);
   const [narrow, setNarrow] = useState(() => window.matchMedia('(max-width: 1199px)').matches);
-  const [inspectorOpen, setInspectorOpen] = useState(() => !window.matchMedia('(max-width: 1199px)').matches);
+  // A new tab gives the chat the room: details stay tucked away until asked for. After that the
+  // rail stays as the person leaves it, since a folder's details (its note) live there.
+  const [inspectorOpen, setInspectorOpen] = useState(() => !window.matchMedia('(max-width: 1199px)').matches && !runtime.freshOpen());
   const goal = state.goals.find((item) => item.id === state.selection.goalId);
   const session = state.sessions.find((item) => item.id === state.selection.sessionId);
   // Labels expose the recorded ancestry; option values remain the original IDs.
@@ -282,6 +288,8 @@ export function DeskFoundation(props: DeskFoundationProps) {
     document.addEventListener('pointermove', pointerMoved, true);
     return () => document.removeEventListener('pointermove', pointerMoved, true);
   }, [layout.mode, layout.railWidth, railRevealed]);
+  // A new session opens as the blank message box in the middle, ready to type in.
+  const focusComposer = () => requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById('message-draft')?.focus()));
   const navigationProps = {
     state, readOnly,
     onRouteChange: (route: DeskRoute) => {
@@ -292,7 +300,7 @@ export function DeskFoundation(props: DeskFoundationProps) {
     onGoalSelect: (id: string) => { props.onGoalSelect(id); setNavigationOpen(false); },
     onUngroupedSelect: () => { props.onUngroupedSelect(); setNavigationOpen(false); },
     onSessionSelect: (id: string) => { props.onSessionSelect(id); setNavigationOpen(false); },
-    onSessionCreate: (goalId: string | null) => { props.onSessionCreate(goalId); setNavigationOpen(false); },
+    onSessionCreate: (goalId: string | null) => { props.onSessionCreate(goalId); setNavigationOpen(false); focusComposer(); },
     onDomainRenameRequest: openRename,
     onFolderIconRequest: (domainId: string, origin: HTMLElement) => {
       const item = state.goals.find((value) => value.id === domainId);
@@ -372,11 +380,15 @@ export function DeskFoundation(props: DeskFoundationProps) {
               <div>{!nexusActive && <span className="primary-module-heading">{moduleTitle}</span>}
                 <h1 className="sr-only">{routeTitle}</h1>
                 {nexusActive && <nav className="nexus-view-tabs" aria-label="Nexus views">
-                  {(['navigator', 'canvas', 'atlas', 'railmap', 'roadmap'] as const).map((view) => <button type="button" key={view} aria-current={view === nexusView ? 'page' : undefined}
-                    className={view === nexusView ? 'selected' : ''} onClick={() => props.onNexusViewChange(view)}>
-                    <Icon name={view === 'navigator' ? 'folder' : view === 'roadmap' ? 'work' : view} size={20} />
-                    {view === 'navigator' ? 'Nexus Navigator' : view === 'canvas' ? 'Cloudwork Canvas' : view === 'atlas' ? 'Cloudwork Atlas' : view === 'railmap' ? 'Cloudwork Rail Map' : 'Roadmap'}
-                  </button>)}
+                  {(['navigator', 'canvas', 'atlas', 'railmap', 'roadmap'] as const).map((view) => {
+                    // Short names on screen keep the views to one row; the full names stay for screen readers and on hover.
+                    const name = view === 'navigator' ? 'Nexus Navigator' : view === 'canvas' ? 'Cloudwork Canvas' : view === 'atlas' ? 'Cloudwork Atlas' : view === 'railmap' ? 'Cloudwork Rail Map' : 'Roadmap';
+                    return <button type="button" key={view} aria-current={view === nexusView ? 'page' : undefined} aria-label={name} title={name}
+                      className={view === nexusView ? 'selected' : ''} onClick={() => props.onNexusViewChange(view)}>
+                      <Icon name={view === 'navigator' ? 'folder' : view === 'roadmap' ? 'work' : view} size={16} />
+                      {name.replace(/^(Nexus|Cloudwork) /, '')}
+                    </button>;
+                  })}
                 </nav>}
               </div>
             </div>
@@ -396,7 +408,7 @@ export function DeskFoundation(props: DeskFoundationProps) {
           {layoutWarning && <p role="status" className="layout-warning">{layoutWarning}</p>}
           <main id="desk-main" tabIndex={-1} className={`desk-main route-${state.selection.route}`}>
             {state.selection.route === 'sessions' && nexusView === 'navigator' && <div className="conversation-layout">
-              {session ? <Conversation goal={goal} session={session} messages={messages} draft={state.drafts[session.id] ?? ''}
+              <Conversation goal={goal} session={session} messages={messages} draft={session ? state.drafts[session.id] ?? '' : ''}
                 onDraftChange={props.onDraftChange} onSend={props.onSend} readOnly={readOnly}
                 runContent={props.runContent} participantLabel={props.participantLabel}
                 participantChoices={props.participantChoices} onParticipantSelect={props.onParticipantSelect}
@@ -410,15 +422,15 @@ export function DeskFoundation(props: DeskFoundationProps) {
                 participantSendBlockedReason={props.participantSendBlockedReason}
                 participantStop={props.participantStop} participantSendWaitingReason={props.participantSendWaitingReason}
                 participantSendDestination={props.participantSendDestination} sideChatAnchor={sideChatAnchor}
-                reactionSharing={props.reactionSharing} />
-                : <section className="navigator-empty"><FolderIcon name={goal?.icon} size={32} /><span className="eyebrow">SESSION FOLDER</span>
-                  <div className="navigator-domain-heading"><h2>{goal?.title ?? 'Ungrouped sessions'}</h2>
+                onStart={session ? undefined : (draft) => props.onSessionStart(goal?.id ?? null, draft)}
+                reactionSharing={props.reactionSharing}
+                startHeading={session ? undefined : <div className="navigator-empty">
+                  <span className="eyebrow">NEW SESSION IN</span>
+                  <div className="navigator-domain-heading"><FolderIcon name={goal?.icon} size={16} /><h2>{goal?.title ?? 'Ungrouped sessions'}</h2>
                     {goal && <button type="button" className="icon-button domain-title-rename" aria-label="Rename folder" title="Rename folder" disabled={readOnly}
-                      onClick={(event) => openRename(goal.id, event.currentTarget)}><Icon name="edit" size={19} /></button>}
+                      onClick={(event) => openRename(goal.id, event.currentTarget)}><Icon name="edit" size={15} /></button>}
                   </div>
-                  <p>A folder can hold a goal, a topic, or a group of ideas. Start its first session when you are ready.</p>
-                  <button type="button" className="primary-button" disabled={readOnly} onClick={() => props.onSessionCreate(goal?.id ?? null)}><Icon name="plus" size={16} />New session</button>
-                </section>}
+                </div>} />
             </div>}
             {state.selection.route === 'sessions' && nexusView === 'canvas' && <Canvas state={state} onDomain={openDomain} onSession={props.onSessionSelect}
               onDomainRenameRequest={openRename} onSessionRenameRequest={openSessionRename} />}

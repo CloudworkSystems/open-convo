@@ -173,7 +173,7 @@ const requestId = () => '30000000-0000-4000-8000-' + String(++seq).padStart(12, 
 const codec = new NativeProofCodec(context, 256);
 const client = new NativeHostClient(transport, codec, { ...context, maxWireBytes: NATIVE_PROOF_LIMITS.envelopeBytes, maxRetainedRequests: 256, timeoutMs: 5000 });
 const connection = new NativeParticipantConnection({ client, context, workspaceHandle: 'invented-workspace', events, requestId });
-const runtime = createNativeProofRuntime(repository, lifecycle, { createId, nativeParticipants: connection, offerClaude: !!options.offerClaude });
+const runtime = createNativeProofRuntime(repository, lifecycle, { createId, nativeParticipants: connection, offerClaude: !!options.offerClaude, keepSavedScreen: true });
 void connection.refreshAvailability();
 window.__stored = () => structuredClone(stored);
 ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App, { runtime }));

@@ -86,8 +86,10 @@
 .inspector-column { min-width: 0; min-height: 0; position: relative; }
 .inspector-column .resize-handle { left: -4px; right: auto; }
 .inspector-column .goal-panel { height: 100%; }
-.nexus-view-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 7px; }
-.nexus-view-tabs button { border: 1px solid transparent; display: flex; align-items: center; gap: 8px; border-radius: 7px; background: transparent; padding: 6px 10px; font-size: 23px; font-weight: 500; letter-spacing: -.04em; line-height: 1.25; color: var(--tca-text-muted); }
+/* One compact row (owner, November 2, 2026): the chat gets the room, the view names stay readable. */
+.nexus-view-tabs { display: flex; gap: 2px; flex-wrap: nowrap; min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.nexus-view-tabs button { flex: none; white-space: nowrap; }
+.nexus-view-tabs button { border: 1px solid transparent; display: flex; align-items: center; gap: 6px; border-radius: 7px; background: transparent; padding: 4px 9px; font-size: 16px; font-weight: 500; letter-spacing: -.02em; line-height: 1.25; color: var(--tca-text-muted); }
 .nexus-view-tabs button.selected { color: var(--tca-text-primary); background: var(--tca-accent-gradient-soft); border-color: var(--tca-border-subtle); }
 .nexus-view-tabs button:hover { background: var(--tca-surface-2); }
 .work-module-mount { height: 100%; }
@@ -96,6 +98,11 @@
 .model-harness-slot:disabled { opacity: 1; }
 .composer-actions .shortcut-hint { margin-left: auto; }
 .navigator-empty { padding: 40px; align-self: start; display: flex; align-items: flex-start; flex-direction: column; gap: 16px; }
+/* The blank session's heading: which folder the new session will be saved in. */
+.conversation-heading .navigator-empty { padding: 0; gap: 2px; }
+.conversation-heading .navigator-empty .navigator-domain-heading { display: flex; align-items: center; gap: 6px; }
+.conversation-heading .navigator-empty h2 { font-size: 14px; font-weight: 500; padding-top: 0; }
+.conversation-heading .navigator-empty .domain-title-rename { flex-basis: 28px; width: 28px; height: 28px; }
 .navigator-empty h2 { font-size: 28px; }
 .navigator-domain-heading { display: flex; align-items: center; gap: 10px; max-width: 100%; min-width: 0; }
 .navigator-domain-heading h2 { min-width: 0; overflow-wrap: anywhere; }

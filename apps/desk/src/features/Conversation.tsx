@@ -51,6 +51,8 @@ export function Conversation({
   participantSendWaitingReason,
   participantSendDestination,
   sideChatAnchor,
+  onStart,
+  startHeading,
   reactionSharing,
 }: {
   goal?: Goal;
@@ -82,6 +84,14 @@ export function Conversation({
   participantSendDestination?: string;
   /** For a side chat: the message it is about (null if that text is no longer shown) and the way back. */
   sideChatAnchor?: { parentTitle: string; text: string | null; onBack: () => void };
+  /**
+   * A blank session (no session yet): the first typed text saves the session
+   * with that text as its draft. Until then nothing is saved, so a blank
+   * session that is never typed in leaves no row in the list.
+   */
+  onStart?: (draft: string) => void;
+  /** Shown in place of the conversation title while the session is blank. */
+  startHeading?: ReactNode;
   /** Shared reactions (docs/plans/desk-shared-reactions.md): the per-chat switch. */
   reactionSharing?: ReactionSharingControl;
 }) {
@@ -92,6 +102,17 @@ export function Conversation({
   const composer = useRef<HTMLFormElement>(null);
   const draftField = useRef<HTMLTextAreaElement>(null);
   const composing = useRef(false);
+  // Text typed into a blank session while an input method is still composing it.
+  const [startText, setStartText] = useState('');
+  const starting = !session && onStart !== undefined && !readOnly;
+  // Held dictation that is starting the session, dismissed once the session exists.
+  const startedFrom = useRef<{ deliveryId: string; text: string } | null>(null);
+  const startSession = (text: string, deliveryId: string | null = null) => {
+    if (!starting || !text.trim()) return;
+    startedFrom.current = deliveryId ? { deliveryId, text } : null;
+    onStart(text);
+  };
+  const shownDraft = session ? draft : startText;
   const dictation = useDeskDictationView();
   const reportDraftSelection = (field: HTMLTextAreaElement, focused: boolean) => {
     if (!dictation || !session) return;
@@ -100,6 +121,12 @@ export function Conversation({
   const unplaced = dictation?.retained.filter((item) => item.state !== 'saving') ?? [];
   const insertDictated = (deliveryId: string, text: string) => {
     const field = draftField.current;
+    if (field && !session && starting && text.trim()) {
+      // A blank session: held words start it, just like typed ones. The held
+      // copy stays until the session exists, so a refused start loses nothing.
+      startSession(field.value + text, deliveryId);
+      return;
+    }
     if (!field || !session || readOnly) return;
     const start = field.selectionStart;
     const value = field.value.slice(0, start) + text + field.value.slice(field.selectionEnd);
@@ -107,6 +134,13 @@ export function Conversation({
     dictation?.dismiss(deliveryId);
     requestAnimationFrame(() => { if (field.isConnected && field === draftField.current) field.setSelectionRange(start + text.length, start + text.length); });
   };
+  // Dismiss held words only once the session they started exists with them as its
+  // draft. A refused start followed by opening another session keeps them held.
+  useEffect(() => {
+    const started = startedFrom.current;
+    startedFrom.current = null;
+    if (started && session && draft === started.text) dictation?.dismiss(started.deliveryId);
+  }, [session?.id]);
   // Put the caret after text that dictation just placed in this draft.
   useEffect(() => {
     const caret = dictation?.caret;
@@ -180,13 +214,15 @@ export function Conversation({
     return () => { observer.disconnect(); drag.current = null; };
   }, []);
   useEffect(() => { composing.current = false; drag.current = null; }, [session?.id]);
+  // A blank session starts empty each time it is shown, in any folder.
+  useEffect(() => { if (!session) setStartText(''); }, [session?.id, goal?.id]);
   return (
     <section className="conversation" aria-label="Conversation" ref={conversation}>
       <div className="conversation-heading">
-        <div>
+        {startHeading && !session ? startHeading : <div>
           <span className="eyebrow">CONVERSATION</span>
           <h2>{session?.title ?? 'A fresh start'}</h2>
-        </div>
+        </div>}
         <span className="provider-label" role={onParticipantPickerOpen ? 'status' : undefined}
           aria-live={onParticipantPickerOpen ? 'polite' : undefined} aria-atomic={onParticipantPickerOpen ? 'true' : undefined}>
           <span className="demo-dot" />
@@ -237,24 +273,23 @@ export function Conversation({
             <div className="starter-prompts">
               <button
                 type="button"
-                disabled={readOnly || !session}
-                onClick={() =>
-                  session &&
-                  onDraftChange(
-                    session.id,
-                    `Help me find the first small step for ${goal?.title ?? 'this idea'}.`,
-                  )
-                }
+                disabled={readOnly || !(session || starting)}
+                onClick={() => {
+                  const text = `Help me find the first small step for ${goal?.title ?? 'this idea'}.`;
+                  if (session) onDraftChange(session.id, text);
+                  else startSession(text);
+                }}
               >
                 Find a first step <Icon name="arrow" size={15} />
               </button>
               <button
                 type="button"
-                disabled={readOnly || !session}
-                onClick={() =>
-                  session &&
-                  onDraftChange(session.id, 'Help me turn this sample idea into a simple plan.')
-                }
+                disabled={readOnly || !(session || starting)}
+                onClick={() => {
+                  const text = 'Help me turn this sample idea into a simple plan.';
+                  if (session) onDraftChange(session.id, text);
+                  else startSession(text);
+                }}
               >
                 Shape a simple plan <Icon name="arrow" size={15} />
               </button>
@@ -351,7 +386,7 @@ export function Conversation({
             <div className="dictation-held-actions">
               <button type="button" className="secondary-button" onClick={() => { void navigator.clipboard?.writeText(item.text).catch(() => {}); }}>Copy</button>
               {/* Already in the draft after a failed save: inserting again would duplicate it. */}
-              {item.state === 'not-placed' && <button type="button" className="secondary-button" disabled={readOnly || !session}
+              {item.state === 'not-placed' && <button type="button" className="secondary-button" disabled={readOnly || !(session || starting)}
                 onClick={() => insertDictated(item.deliveryId, item.text)}>Insert at cursor</button>}
               <button type="button" className="secondary-button" onClick={() => dictation?.dismiss(item.deliveryId)}>Dismiss</button>
             </div>
@@ -382,19 +417,29 @@ export function Conversation({
         <textarea
           id="message-draft"
           ref={draftField}
-          value={draft}
+          value={shownDraft}
           style={{ height: `${draftHeight}px` }}
-          disabled={!session || readOnly}
+          disabled={!(session || starting) || readOnly}
           placeholder={participantMode ? 'Write an invented message…' : "What's on your mind? Try a sample idea…"}
           rows={3}
           aria-describedby={`${participantSendBlockedReason ? 'message-shortcuts send-blocked-reason'
             : sendWaitingReason ? 'message-shortcuts send-waiting-reason' : 'message-shortcuts'}${participantSendDestination ? ' send-destination' : ''}`}
-          onChange={(event) => session && onDraftChange(session.id, event.target.value)}
+          onChange={(event) => {
+            const value = event.target.value;
+            if (session) onDraftChange(session.id, value);
+            else if (starting) {
+              // Held here only while an input method is still composing. Otherwise the text goes
+              // straight into a saved session; if saving it is refused, the box stays empty like
+              // any refused draft edit, so nothing is shown that isn't kept.
+              if (composing.current || (event.nativeEvent as InputEvent).isComposing) setStartText(value);
+              else startSession(value);
+            }
+          }}
           onFocus={(event) => reportDraftSelection(event.currentTarget, true)}
           onSelect={(event) => reportDraftSelection(event.currentTarget, document.activeElement === event.currentTarget)}
           onBlur={(event) => reportDraftSelection(event.currentTarget, false)}
           onCompositionStart={() => { composing.current = true; }}
-          onCompositionEnd={() => { composing.current = false; }}
+          onCompositionEnd={(event) => { composing.current = false; if (!session) { startSession(event.currentTarget.value); setStartText(''); } }}
           onKeyDown={(event) => {
             if (event.key !== 'Enter' || event.nativeEvent.isComposing || composing.current || event.nativeEvent.keyCode === 229) return;
             if (event.altKey) return;
@@ -411,7 +456,10 @@ export function Conversation({
         />
         <div className="composer-actions">
           <span className="composer-hint shortcut-hint" id="message-shortcuts">Enter to send · Ctrl / ⌘ / Shift + Enter for a new line
-            {dictation?.status === 'ready' && <span className="dictation-ready"> · Dictation ready</span>}</span>
+            {dictation?.status === 'ready' && <span className="dictation-ready"> · Dictation ready</span>}
+            {/* Mac dictation aims at a saved session, and a blank one has none yet. */}
+            {starting && dictation && dictation.status !== 'none' && dictation.status !== 'unavailable'
+              && <span className="dictation-after-start"> · Dictation works after the first word</span>}</span>
           <>{participantChoices !== undefined || session?.participantChoice ? <ParticipantPicker key={session?.id}
             choices={participantChoices ?? []} selected={session?.participantChoice}
             error={participantChoiceError} confirmation={participantConfirmation}
