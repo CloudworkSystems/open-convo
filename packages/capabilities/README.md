@@ -194,7 +194,7 @@ that is already held is not taken. The run is refused.
 |---|---|
 | `reserve({ ledgerDir, store, record, signature, publicKey, capabilityId, routeId, max, jobId, now, providerTotal? })` | Holds `max` against all three levels. Refuses a paused cap, a max of zero, a max over the per-run level, or a month that would go over. |
 | `settle({ ...same, jobId, now, actual?, estimated? })` | `estimated: true` keeps the reserved maximum and marks it estimated. An `actual` at or under the reservation, including zero, settles that figure. An `actual` over it writes `over-bill`, counts the full bill, and returns `routeOff: true`. |
-| `release({ ...same, jobId, now })` | Drops an open reservation. The job id is never reused. |
+| `release({ ...same, jobId, now })` | Drops an open reservation. The job id stays used while that run is still in the ledger. After the month is folded, the id can be used again. |
 | `monthSpent({ ...same, now, capabilityId?, routeId?, providerTotal? })` | `{ reserved, spent, counted }` for that month. `counted` is what the cap uses. A `providerTotal` also needs `capabilityId` and `routeId`, the route that key belongs to. |
 | `resetLedger({ ledgerDir, store, record, signature, publicKey })` | Empties the ledger only when the caller presents a new signed cap, one with a higher revision than the cap already stored. The stored cap is refused, on a healthy ledger and on a damaged one. An older signed cap is refused. The new cap clears a tightening. |
 
@@ -282,7 +282,7 @@ These are the choices the plan does not spell out. Each one has a test in
 - An estimated settle ignores any `actual` sent with it. A real bill of
   zero closes the run and stops the reservation counting. `release` is
   only for a run that never started.
-- A job id stays used after release, settle or over-bill.
+- A job id stays used after release, settle or over-bill, until that month is folded.
 - `now` has to be a real ISO instant. `2026-02-31` is refused.
 - A symlink in place of `entries.jsonl` is treated as a changed ledger.
 - The show command's directory listing is unchanged after it runs.
