@@ -247,8 +247,10 @@ export function agentReaction(run: Readonly<ConversationRun>): { emoji?: string;
   const none = { text: output, offset: 0 };
   if (!runHoldsReactionsNote(run)) return none;
   const end = output.indexOf('\n');
-  const ended = run.phase === 'completed' || run.phase === 'stopped' || run.phase === 'failed' || !!run.closure;
-  if (end < 0 && !ended) return none;
+  // Without a line break, only a reply that completed normally finishes the
+  // line: a stopped, failed or interrupted reply was cut off, so it stays text.
+  const completed = run.phase === 'completed' && !run.closure;
+  if (end < 0 && !completed) return none;
   const line = (end < 0 ? output : output.slice(0, end)).replace(/\r$/, '');
   const match = REACTION_LINE.exec(line);
   if (!match || !isStandardEmoji(match[1]) || !singleGrapheme(match[1])) return none;

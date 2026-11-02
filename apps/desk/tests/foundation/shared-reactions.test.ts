@@ -199,6 +199,9 @@ test('an agent reaction is a complete first line with one standard emoji, after 
   assert.deepEqual(agentReaction(run('Reaction: 👍')), { emoji: '👍', text: '', offset: 12 });
   // Cut off: the first line isn't complete while the reply is still coming.
   assert.equal(agentReaction(run('Reaction: 👍', 'running')).emoji, undefined);
+  for (const phase of ['stopped', 'failed', 'unknown']) assert.equal(agentReaction(run('Reaction: 👍', phase)).emoji, undefined, phase);
+  const interrupted = { ...run('Reaction: 👍', 'running'), closure: { kind: 'interrupted' } } as unknown as ConversationRun;
+  assert.equal(agentReaction(interrupted).emoji, undefined, 'interrupted');
   assert.equal(agentReaction(run('Reaction: 👍\nMore', 'running')).emoji, '👍');
   // Malformed lines stay as text.
   for (const output of ['Reaction: 👍 👍\nx', 'Reaction: 👍👍\nx', 'Reaction: 🎉🦊\nx', 'Reaction: thumbs\nx', 'reaction: 👍\nx', ' Reaction: 👍\nx', 'Reaction:👍\nx', 'Hello\nReaction: 👍']) {
