@@ -13,7 +13,7 @@ Tools: the GitHub MCP tools (load them with ToolSearch, e.g. "select:mcp__github
 3. Update from main, only when a PR is blocked on it: auto-merge is on, mergeable_state is "behind", and `tests` and `codex-approved` succeeded on the head. Then call update_pull_request_branch with expectedHeadSha. ("Require branches to be up to date" is off since Oct 29, so this should be rare.) Never update a PR from main after the owner posted an `owner-accepts-findings` line for its head.
 
 4. Restart hung Codex reviews (at most 3 per run). Read Codex's summary comment (author chatgpt-codex-connector[bot], body contains "codex-pull-request-review-summary"). From its `codex-review-state:v1` JSON take code_review.commit_sha and status. The review is hung if any of:
-   - commit_sha is the head and status is "running", and the comment was last updated 20 or more minutes ago;
+   - commit_sha is the head and status is "running", "in_progress" or any other value except "completed" and "failed", and the comment was last updated 20 or more minutes ago;
    - commit_sha is the head and status is "failed"; or
    - Codex shows nothing for the head (or only an older commit, in any status), the head commit is 20 or more minutes old (get_commit, committer date), and `codex-approved` on the head isn't success.
    If a comment from cloudwork-bot starting with "@codex review" was posted after the head commit's committer date, don't restart again; report "Codex silent on #N after a restart". Otherwise post one comment with add_issue_comment:
