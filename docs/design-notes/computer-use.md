@@ -209,9 +209,11 @@ inside TCA, where the ceilings above can be enforced.
 - **One agent at a time per app, for the whole change.** agent-desktop locks
   only the keyboard and pointer. TCA goes further: an agent holds a lock on
   the app it's changing (on the whole Mac for real keyboard and pointer
-  input) from its final identity check until it has confirmed the result.
-  That covers quiet accessibility actions too, so a second agent can't
-  change a field between the first agent filling it and pressing Send. Each
+  input) for the whole task step, from the identity check before its first
+  action to the confirmed result of its last one. Filling a message and
+  pressing Send is one step. That covers quiet accessibility actions too,
+  so a second agent can't change a field between the first agent filling
+  it and pressing Send. Each
   agent can show its own labeled cursor, so the owner sees which agent is
   acting.
 - **A trail the owner can replay.** The action log can keep before and after
