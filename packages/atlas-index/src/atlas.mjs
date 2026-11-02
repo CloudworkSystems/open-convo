@@ -226,7 +226,7 @@ function inspect(fileSystem, target) {
   }
   if (!stat.isFile()) return { blocked: true };
   try {
-    return { bytes: fileSystem.readFileSync(target) };
+    return { bytes: fileSystem.readFileSync(target), mode: stat.mode & 0o777 };
   } catch {
     return { error: true };
   }
@@ -239,14 +239,18 @@ function unchangedSinceScan(previous, seen) {
   return previous.equals(seen.bytes);
 }
 
-function writeAtomic(fileSystem, target, text) {
+const NEW_FILE_MODE = 0o600;
+
+function writeAtomic(fileSystem, target, text, mode) {
   const tmp = path.join(
     path.dirname(target),
     `.${path.basename(target)}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`,
   );
-  const fd = fileSystem.openSync(tmp, 'wx', 0o644);
+  const fd = fileSystem.openSync(tmp, 'wx', mode);
   try {
     fileSystem.writeFileSync(fd, text);
+    // open() still applies the process umask, so set the mode again.
+    fileSystem.fchmodSync(fd, mode);
     fileSystem.fsyncSync(fd);
   } catch (error) {
     try { fileSystem.closeSync(fd); } catch { /* closing a failed write */ }
@@ -269,12 +273,13 @@ const HEADER_GONE = 'This file no longer starts with the generated header, so it
 function writeOne(root, scanned, item, fileSystem) {
   const target = locate(root, item.path, fileSystem);
   const previous = scanned.bytes.get(item.path);
-  if (!unchangedSinceScan(previous, inspect(fileSystem, target))) {
+  const seen = inspect(fileSystem, target);
+  if (!unchangedSinceScan(previous, seen)) {
     return { conflict: { path: item.path, detail: LEFT_ALONE } };
   }
   let tmp;
   try {
-    tmp = writeAtomic(fileSystem, target, item.text);
+    tmp = writeAtomic(fileSystem, target, item.text, seen.mode ?? NEW_FILE_MODE);
   } catch {
     fail(`Could not write "${item.path}".`);
   }

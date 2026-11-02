@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs, {
+  chmodSync,
   cpSync,
   lstatSync,
   mkdirSync,
@@ -249,6 +250,51 @@ test('a failed rename stops the run and leaves the folder unchanged', () => {
     assert.throws(() => applyPlan(dir, scanned, buildAtlas(scanned.notes), failing), /Could not write/);
     assert.deepEqual(snapshot(dir), before);
     assert.equal(readdirSync(dir, { recursive: true }).some(name => String(name).includes('.tmp')), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a decomposed folder name is written with the spelling on disk', () => {
+  const dir = join(tmpdir(), `atlas-nfd-${process.pid}-${Math.random().toString(16).slice(2)}`);
+  const folder = 'café'.normalize('NFD');
+  try {
+    mkdirSync(join(dir, folder), { recursive: true });
+    for (let i = 0; i < 6; i += 1) writeFileSync(join(dir, folder, `n${i}.md`), `# N${i}\n`);
+    const wrote = capture(['--dir', dir, '--write']);
+    assert.equal(wrote.code, 0, wrote.err);
+    const listed = readdirSync(dir).find(name => name.normalize('NFC') === folder.normalize('NFC'));
+    assert.equal(statSync(join(dir, listed, 'INDEX.md')).isFile(), true);
+    const map = readFileSync(join(dir, 'MAP.md'), 'utf8');
+    const linked = /\(([^)]+INDEX\.md)\)/.exec(map);
+    assert.equal(linked[1].split('/').map(part => decodeURIComponent(part)).join('/'), `${listed}/INDEX.md`);
+    if (process.platform !== 'darwin' && listed !== folder.normalize('NFC')) {
+      assert.equal(statExists(join(dir, folder.normalize('NFC'))), false);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a new index is private and a replacement keeps the mode it already has', () => {
+  const dir = copyWiki();
+  try {
+    rmSync(join(dir, 'MAP.md'));
+    assert.equal(capture(['--dir', dir, '--write']).code, 0);
+    const map = join(dir, 'MAP.md');
+    const index = join(dir, 'garden', 'INDEX.md');
+    assert.equal(statSync(map).mode & 0o777, 0o600);
+    assert.equal(statSync(index).mode & 0o777, 0o600);
+    chmodSync(map, 0o640);
+    chmodSync(index, 0o604);
+    writeFileSync(join(dir, 'pantry.md'), '# Larder\n\nFlour.\n');
+    writeFileSync(join(dir, 'garden', 'basil.md'), '# Window basil\n');
+    const again = capture(['--dir', dir, '--write']);
+    assert.equal(again.code, 0, again.err);
+    assert.equal(statSync(map).mode & 0o777, 0o640);
+    assert.equal(statSync(index).mode & 0o777, 0o604);
+    assert.match(readFileSync(map, 'utf8'), /Larder/);
+    assert.match(readFileSync(index, 'utf8'), /Window basil/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

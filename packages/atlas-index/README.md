@@ -84,14 +84,14 @@ Lists are in a fixed order. The same notes produce byte-identical JSON. `counts.
 
 ## Writes
 
-With `--write`, each file in `writes` is written inside `--dir` by a temporary file in the same folder and a rename. Just before the rename, the command reads the target again. If it appeared, disappeared, or its bytes changed since the scan, that file stays as it is and is reported under `conflicts` (and leaves `writes`). A removal is skipped, and reported, if the bytes changed or the file no longer starts with the generated header. Notes are never edited or deleted. A `--dir` that contains `.git`, or that is this repository's root, is refused.
+With `--write`, each file in `writes` is written inside `--dir` by a temporary file in the same folder and a rename. A new file is mode `0600`. Replacing one keeps the mode it already has. Just before the rename, the command reads the target again. If it appeared, disappeared, or its bytes changed since the scan, that file stays as it is and is reported under `conflicts` (and leaves `writes`). A removal is skipped, and reported, if the bytes changed or the file no longer starts with the generated header. Notes are never edited or deleted. A `--dir` that contains `.git`, or that is this repository's root, is refused.
 
 ## Edge cases
 
 Each of these is covered by a test.
 
 - A path is refused when it is empty, longer than 4096 characters, contains a backslash, starts with `/`, does not end in `.md`, has an empty or `.` segment, uses `..` as a segment, or has no file name (`.md`). A `..` inside a file name, such as `notes..draft.md`, is allowed. Control characters are U+0000–U+001F, U+007F–U+009F, and the line and paragraph separators. The message names the path, with controls shown as `\u` escapes.
-- Two paths that are the same after Unicode NFC are refused. Output paths use NFC. Comparison does not use a locale.
+- Paths keep the spelling they were given, including a decomposed letter such as `é`. Planned indexes and links use that spelling, so they name the file on disk. Two paths that are the same after Unicode NFC are still refused. A link in the other spelling still resolves. Comparison does not use a locale. A new index or map is created as mode `0600`. Replacing one keeps its mode, including a private `0600` or a group-readable `0640`.
 - `indexName` and `rootMapName` must be different single `.md` file names. Unknown options are refused. `indexThreshold` and `maxLines` are whole numbers from 0 to 1000000. The function does not change the notes it was given.
 - Only notes directly in a folder count toward the threshold. Notes in subfolders do not. The root index heading is `Notes`. Any other index heading is that folder's own name.
 - A folder with no index is expanded in the parent list. Links are relative to the file that contains the list, not to the subfolder. Paths sort by UTF-16 code units, so `B.md` comes before `a.md`.

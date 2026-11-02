@@ -150,16 +150,17 @@ function pathProblem(notePath) {
 
 function fileNameOption(value, label) {
   if (typeof value !== 'string') fail(`${label} must be text.`);
-  const name = value.normalize('NFC');
-  if (
-    !name.endsWith('.md')
-    || name.length === 3
-    || name.includes('/')
-    || name.includes('\\')
-    || name.includes('..')
-    || CONTROL.test(name)
-  ) fail(`${label} must be a single .md file name.`);
-  return name;
+  for (const name of [value, value.normalize('NFC')]) {
+    if (
+      !name.endsWith('.md')
+      || name.length === 3
+      || name.includes('/')
+      || name.includes('\\')
+      || name.includes('..')
+      || CONTROL.test(name)
+    ) fail(`${label} must be a single .md file name.`);
+  }
+  return value;
 }
 
 function wholeOption(value, label) {
@@ -177,7 +178,7 @@ function readOptions(options) {
   }
   const indexName = options.indexName === undefined ? DEFAULT_INDEX_NAME : fileNameOption(options.indexName, 'indexName');
   const rootMapName = options.rootMapName === undefined ? DEFAULT_ROOT_MAP_NAME : fileNameOption(options.rootMapName, 'rootMapName');
-  if (indexName === rootMapName) fail('indexName and rootMapName must be different files.');
+  if (indexName.normalize('NFC') === rootMapName.normalize('NFC')) fail('indexName and rootMapName must be different files.');
   const indexThreshold = options.indexThreshold === undefined
     ? DEFAULT_INDEX_THRESHOLD
     : wholeOption(options.indexThreshold, 'indexThreshold');
@@ -194,13 +195,14 @@ function copyNotes(notes) {
     if (typeof note.text !== 'string') fail(`Refusing path "${show(note.path)}" because its text is not text.`);
     const problem = pathProblem(note.path);
     if (problem) fail(`Refusing path "${show(note.path)}" because ${problem}.`);
-    copies.push({ path: note.path.normalize('NFC'), text: note.text });
+    copies.push({ path: note.path, text: note.text });
   }
   copies.sort((a, b) => compareText(a.path, b.path));
   const seen = new Set();
   for (const note of copies) {
-    if (seen.has(note.path)) fail(`Refusing path "${show(note.path)}" because it is listed twice.`);
-    seen.add(note.path);
+    const key = note.path.normalize('NFC');
+    if (seen.has(key)) fail(`Refusing path "${show(note.path)}" because it is listed twice.`);
+    seen.add(key);
   }
   return copies;
 }
@@ -388,7 +390,7 @@ function parseRelative(dest) {
     if (part !== '' && part !== '.') {
       let decoded;
       try {
-        decoded = decodeURIComponent(part).normalize('NFC');
+        decoded = decodeURIComponent(part);
       } catch {
         return { broken: true };
       }
@@ -574,6 +576,11 @@ export function buildAtlas(notes, options) {
   const files = new Map(copies.map(note => [note.path, note.text]));
   for (const notePath of removes) files.delete(notePath);
   for (const item of writes) files.set(item.path, item.text);
+  // Links may use either Unicode spelling. The stored path stays the one we
+  // were given, which is the spelling on disk when the command scanned it.
+  const storedPath = new Map();
+  for (const notePath of files.keys()) storedPath.set(notePath.normalize('NFC'), notePath);
+  const resolveStored = target => files.has(target) ? target : storedPath.get(target.normalize('NFC'));
 
   const wikiNames = new Map();
   const addName = (name, notePath) => {
@@ -607,8 +614,9 @@ export function buildAtlas(notes, options) {
         else if (countsAsLinker) for (const target of matches) if (target !== notePath) incoming.add(target);
         continue;
       }
-      if (!files.has(point.target)) pushBroken(health, seenBroken, notePath, point.detail);
-      else if (countsAsLinker && point.target !== notePath) incoming.add(point.target);
+      const stored = resolveStored(point.target);
+      if (!stored) pushBroken(health, seenBroken, notePath, point.detail);
+      else if (countsAsLinker && stored !== notePath) incoming.add(stored);
     }
   }
 

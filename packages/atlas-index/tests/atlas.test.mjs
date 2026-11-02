@@ -356,6 +356,16 @@ test('edge cases named in the readme', () => {
     () => buildAtlas([note('café.md'.normalize('NFC'), 'a'), note('café.md'.normalize('NFD'), 'b')]),
     /listed twice/,
   );
+  const accented = 'café'.normalize('NFD');
+  const decomposed = Array.from({ length: 6 }, (_, i) => note(`${accented}/n${i}.md`, `# N${i}\n`));
+  decomposed.push(note('root.md', `See [bed](${encodeURIComponent(accented.normalize('NFC'))}/n0.md).\n`));
+  const spelled = buildAtlas(decomposed);
+  const spelledIndex = spelled.writes.find(item => item.path.endsWith('/INDEX.md'));
+  assert.equal(spelledIndex.path, `${accented}/INDEX.md`);
+  const spelledMap = textOf(spelled, [], 'MAP.md');
+  const spelledLink = /\(([^)]+INDEX\.md)\)/.exec(spelledMap);
+  assert.equal(spelledLink[1].split('/').map(part => decodeURIComponent(part)).join('/'), `${accented}/INDEX.md`);
+  assert.equal(kinds(spelled, 'broken-link').some(item => item.path === 'root.md'), false);
   assert.throws(() => buildAtlas([note('a.md', 'a'), note('a.md', 'b')]), /listed twice/);
   assert.throws(() => buildAtlas('nope'), /Notes must be a list/);
   assert.throws(() => buildAtlas([note('a.md', 'a')], { extra: true }), /Unknown option/);
