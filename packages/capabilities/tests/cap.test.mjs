@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign, verify } from 'node:crypto';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, unlinkSync, copyFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -992,6 +992,28 @@ test('a foreign bill uses the rate saved on the reservation, even after that rat
     const spent = await box.spent({ record: next, signature: nextSig, now: later });
     assert.equal(spent.spent.amount, '2');
     assert.equal(spent.reserved.amount, '0');
+  } finally {
+    box.close();
+  }
+});
+
+test('a reservation under a rate more than a day old is refused and writes nothing', async () => {
+  const record = cap({
+    perRun: { amount: '10', currency: 'USD' },
+    monthlyByCapability: { amount: '10', currency: 'USD' },
+    monthlyAll: { amount: '10', currency: 'USD' },
+    conversion: { currency: 'EUR', rate: '1', margin: '0', asOf: '2026-06-01T00:00:00.000Z' },
+  });
+  const box = world(record);
+  try {
+    const reserved = await box.reserve({ jobId: 'stale', max: { amount: '10', currency: 'USD' }, now: NOW });
+    assert.equal(reserved.ok, false);
+    assert.equal(reserved.reason, REASONS.rateStale);
+    assert.equal(existsSync(join(box.dir, 'entries.jsonl')), false);
+    assert.equal(box.store.read().core.ledgerCount, 0);
+    const spent = await box.spent();
+    assert.equal(spent.ok, true, spent.reason);
+    assert.equal(spent.counted.amount, '0');
   } finally {
     box.close();
   }

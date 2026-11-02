@@ -19,7 +19,7 @@ import { inProcess, withFileLock } from './lock.mjs';
 import { convertMicros, isCurrency, moneyFromMicros, parseDecimal, parseMoney } from './money.mjs';
 import { REASONS } from './reasons.mjs';
 import { signedCap, verifyCap } from './record.mjs';
-import { calendarMonth, instantText } from './time.mjs';
+import { DAY_MS, calendarMonth, instantText, rateAge } from './time.mjs';
 
 const LEDGER_FILE = 'entries.jsonl';
 const LOCK_FILE = 'ledger.lock';
@@ -181,6 +181,13 @@ function reserveEntry(loaded, args) {
     return { ok: false, reason: REASONS.monthCapability };
   }
   if (allSpent + max.micros > parseDecimal(cap.monthlyAll.amount)) return { ok: false, reason: REASONS.monthAll };
+  // The rate copied onto this line is what a later foreign bill will use,
+  // with no further age check. A rate that is already more than a day old,
+  // or dated after now, must not be copied. The reservation is refused and
+  // nothing is written. A rate that was fresh at reservation time can still
+  // settle after it ages.
+  const rate = freshRate(cap, now);
+  if (!rate.ok) return rate;
   const amount = moneyFromMicros(cap.currency, max.micros);
   const entry = makeEntry(loaded.state, {
     kind: 'reserve',
@@ -191,7 +198,7 @@ function reserveEntry(loaded, args) {
     jobId: args.jobId,
     at: now,
     month,
-    rate: recordedRate(cap),
+    rate: rate.rate,
   });
   return { ok: true, entry, result: { ok: true, jobId: args.jobId, amount, seq: entry.seq } };
 }
@@ -255,10 +262,13 @@ function settleAmount(loaded, args, reserve) {
   };
 }
 
-function recordedRate(cap) {
-  if (!cap.conversion) return null;
+function freshRate(cap, now) {
+  if (!cap.conversion) return { ok: true, rate: null };
+  const age = rateAge(cap.conversion.asOf, now);
+  if (age === null || age < 0n) return { ok: false, reason: REASONS.rateBad };
+  if (age > DAY_MS) return { ok: false, reason: REASONS.rateStale };
   const { currency, rate, margin, asOf } = cap.conversion;
-  return { currency, rate, margin, asOf };
+  return { ok: true, rate: { currency, rate, margin, asOf } };
 }
 
 function releaseEntry(loaded, args) {
