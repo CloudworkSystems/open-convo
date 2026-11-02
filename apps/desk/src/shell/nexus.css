@@ -87,7 +87,8 @@
 .inspector-column .resize-handle { left: -4px; right: auto; }
 .inspector-column .goal-panel { height: 100%; }
 /* One compact row (owner, November 2, 2026): the chat gets the room, the view names stay readable. */
-.nexus-view-tabs { display: flex; gap: 2px; flex-wrap: wrap; }
+.nexus-view-tabs { display: flex; gap: 2px; flex-wrap: nowrap; min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.nexus-view-tabs button { flex: none; white-space: nowrap; }
 .nexus-view-tabs button { border: 1px solid transparent; display: flex; align-items: center; gap: 6px; border-radius: 7px; background: transparent; padding: 4px 9px; font-size: 16px; font-weight: 500; letter-spacing: -.02em; line-height: 1.25; color: var(--tca-text-muted); }
 .nexus-view-tabs button.selected { color: var(--tca-text-primary); background: var(--tca-accent-gradient-soft); border-color: var(--tca-border-subtle); }
 .nexus-view-tabs button:hover { background: var(--tca-surface-2); }

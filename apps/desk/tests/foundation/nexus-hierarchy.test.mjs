@@ -161,3 +161,16 @@ test('a saved legacy Work route opens the Nexus Roadmap without rewriting its wo
     verify();
   } finally { await context.close(); }
 });
+
+test('the Nexus view names stay in one row when the details rail narrows the middle', async () => {
+  const { context, page, verify } = await isolatedPage({ viewport: { width: 1200, height: 800 } });
+  try {
+    await enter(page);
+    await expect(page.locator('.inspector-column')).toHaveCount(1);
+    const tops = await choices(page).getByRole('button').evaluateAll((buttons) =>
+      [...new Set(buttons.map((button) => Math.round(button.getBoundingClientRect().top)))]);
+    assert.equal(tops.length, 1, 'all five view names share one row');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'the page itself does not scroll sideways');
+    verify();
+  } finally { await context.close(); }
+});
