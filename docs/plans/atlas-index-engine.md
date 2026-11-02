@@ -119,7 +119,10 @@ order, so the same input gives byte-identical JSON.
   (or the JSON).
 - **Dry run by default.** Without `--write` it writes nothing. With
   `--write` it writes only the files in `writes`, each one inside `--dir`,
-  each by writing a temporary file in the same folder and renaming it, and
+  each by writing a temporary file in the same folder and renaming it. Just
+  before each rename it reads the target again and refuses that file (and
+  reports it under `conflicts`) if it changed since the scan, so a map or
+  index edited or created meanwhile is never overwritten. It
   deletes only the files in `removes`, after checking again that each still
   starts with the generated-file header. It never deletes, moves or edits a
   note.
@@ -134,7 +137,8 @@ gardening and recipes notebook). At least:
 
 1. A folder with 6 notes gets an index; a folder with 5 doesn't. When a
    note is deleted from the 6-note folder, its generated index is in
-   `removes`; a hand-made index in the same case is not.
+   `removes`; a hand-made index in the same case is not. A map edited
+   between the scan and `--write` is left as edited and reported.
 2. About lines: heading, first line, front matter `description:`, and a
    very long first line cut on a word boundary.
 3. The root map keeps its hand-written part above the marker byte for byte;
