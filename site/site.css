@@ -61,3 +61,13 @@ footer {
   color: var(--tca-text-muted);
 }
 footer a { color: var(--tca-text-body); }
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  color: var(--tca-text-primary);
+}
+table { width: 100%; border-collapse: collapse; margin: 1rem 0 1.5rem; font-size: 1rem; }
+th, td { text-align: left; vertical-align: top; padding: 0.5rem 0.75rem 0.5rem 0; border-bottom: 1px solid var(--tca-border-subtle); }
+th { color: var(--tca-text-primary); font-family: var(--tca-font-display); }
+td { overflow-wrap: anywhere; }
