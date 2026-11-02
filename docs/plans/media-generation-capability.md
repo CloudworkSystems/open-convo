@@ -313,8 +313,11 @@ takes it as an argument (`now`, an ISO time from the caller).
 - **Tightenings.** `tighten(protectedState, change)` lowers a level or
   pauses, with no signature. It refuses anything that raises a level or
   un-pauses: those go through a new signed cap. The effective cap is always
-  the lower of the signed cap and the tightening. A deleted tightening
-  falls back to the signed cap, never above it.
+  the lower of the signed cap and the tightening. The protected state
+  always carries the `tightening` field, set to `none` only by a signed
+  cap; a protected state whose `tightening` field is missing or broken
+  gives a $0 cap, so deleting a tightening never brings back the higher
+  signed cap. Only a new signed cap clears a tightening.
 - **The ledger.** Entries `{ seq, kind, capabilityId, routeId, amount,
   estimated, jobId, at, prevHash, hash }`, where `kind` is `reserve`,
   `settle`, `release` or `over-bill`, each chained to the one before by
@@ -349,8 +352,8 @@ Part 2 tests (all with invented amounts and a test key made in the test):
 1. A signed cap verifies. An edited one, an unsigned one, a missing one and
    an older validly signed one (replay) all give $0.
 2. A tightening lowers and pauses at once with no signature. A tightening
-   that raises or un-pauses is refused. Deleting a tightening never gives
-   more than the signed cap.
+   that raises or un-pauses is refused. Deleting or breaking a tightening
+   gives $0, and only a new signed cap clears it.
 3. Each level refuses a reservation that doesn't fit: per run, this
    capability's month, the month across all.
 4. Twenty reservations started together (in this process and from two
