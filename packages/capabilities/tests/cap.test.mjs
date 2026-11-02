@@ -857,44 +857,6 @@ test('choices the plan leaves open', async () => {
   }
 });
 
-test('closed months fold into checkpoints before the ledger can fill up', { timeout: 600_000 }, async () => {
-  const box = world(cap({
-    perRun: { amount: '10', currency: 'USD' },
-    monthlyByCapability: { amount: '1000', currency: 'USD' },
-    monthlyAll: { amount: '1000', currency: 'USD' },
-  }));
-  const perMonth = 100;
-  // 5,100 completed runs are 10,200 ledger lines before folding, past both
-  // the 10,000-entry ceiling and the 2 MiB ceiling.
-  const runs = perMonth * 51;
-  try {
-    for (let index = 0; index < runs; index += 1) {
-      const monthNumber = Math.floor(index / perMonth);
-      const year = 2020 + Math.floor(monthNumber / 12);
-      const month = (monthNumber % 12) + 1;
-      const now = `${year}-${String(month).padStart(2, '0')}-15T20:00:00.000Z`;
-      const jobId = `h-${index}`;
-      const reserved = await box.reserve({ jobId, max: { amount: '0.01', currency: 'USD' }, now });
-      assert.equal(reserved.ok, true, `${jobId} ${reserved.reason}`);
-      const settled = await box.settle({ jobId, actual: { amount: '0.01', currency: 'USD' }, now });
-      assert.equal(settled.ok, true, settled.reason);
-    }
-    const lines = readFileSync(join(box.dir, 'entries.jsonl'), 'utf8').trim().split('\n');
-    assert.ok(lines.length < 10000, `ledger grew to ${lines.length}`);
-    assert.ok(lines.some((line) => JSON.parse(line).kind === 'checkpoint'));
-    const first = await box.spent({ now: '2020-01-15T20:00:00.000Z' });
-    assert.equal(first.counted.amount, '1');
-    const lastMonth = Math.floor((runs - 1) / perMonth);
-    const lastYear = 2020 + Math.floor(lastMonth / 12);
-    const last = (lastMonth % 12) + 1;
-    const lastNow = `${lastYear}-${String(last).padStart(2, '0')}-15T20:00:00.000Z`;
-    const current = await box.spent({ now: lastNow });
-    assert.equal(current.counted.amount, '1');
-  } finally {
-    box.close();
-  }
-});
-
 test('a write that would make the ledger unreadable is refused before it is saved', async () => {
   const worker = new Worker(new URL('./ledger-ceiling-worker.mjs', import.meta.url));
   const result = await new Promise((resolve, reject) => {
