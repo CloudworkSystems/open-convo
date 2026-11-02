@@ -65,7 +65,9 @@ jobs:
           # and so does the Mac package manifest's guard.
           echo "gate=$([ "$all" = true ] && echo true || has '(\.md$|^\.claude/|^apps/mac/Package\.swift$)')" >> "$GITHUB_OUTPUT"
           echo "sync_core=$([ "$all" = true ] && echo true || has '^packages/sync-core/')" >> "$GITHUB_OUTPUT"
-          echo "front_porch=$([ "$all" = true ] && echo true || has '^services/front-porch/')" >> "$GITHUB_OUTPUT"
+          # The API's docs page and the privacy policy are checked against
+          # the API by its tests, so a change to either page runs them too.
+          echo "front_porch=$([ "$all" = true ] && echo true || has '^(services/front-porch/|site/api\.html$|site/privacy\.html$)')" >> "$GITHUB_OUTPUT"
           # Every other package with a package.json, found by folder, so new
           # packages are covered without editing this file.
           packages=$(echo "$files" | node .github/scripts/package-changes.mjs)
