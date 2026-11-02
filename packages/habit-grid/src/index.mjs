@@ -1394,10 +1394,10 @@ export class HabitGrid {
       person.life = { value: true, stamp };
     });
   }
-  logCheckIn(personId, trackerId, { date, value, source = 'manual', checkInId = randomUUID() } = {}) {
+  #checkInEntry(person, trackerId, { date, value, source = 'manual', checkInId = randomUUID() } = {}) {
     identity(checkInId, 'Check-in ID');
     if (source !== 'manual') fail('Only manual check-ins can be written in this version.');
-    const tracker = active(this.#get(personId).trackers, trackerId, 'Tracker', RECORD_KEYS.tracker);
+    const tracker = active(person.trackers, trackerId, 'Tracker', RECORD_KEYS.tracker);
     const day = date ?? this.#today();
     if (!validDate(day)) fail('Invalid date.');
     let amount = value;
@@ -1406,26 +1406,55 @@ export class HabitGrid {
       amount = 1;
     }
     if (!nonNegative(amount)) fail('Check-in value must be zero or greater.');
-    this.#change(personId, (person, stamp) => {
-      const index = person.checkIns.findIndex(record => record.id === checkInId);
-      if (index >= 0 && fieldsPresent(person.checkIns[index].fields, RECORD_KEYS.checkIn)) fail('Check-in ID already exists.');
-      const previous = index >= 0 ? person.checkIns[index] : null;
-      const purge = previous ? previous.purge : null;
-      const emptied = previous && validStamp(previous.emptied) ? previous.emptied : null;
-      const fenced = previous && validStamp(previous.fenced) ? previous.fenced : null;
-      if (index >= 0) person.checkIns.splice(index, 1);
+    return { checkInId, trackerId, day, amount };
+  }
+  #writeCheckIns(person, entries, stamp) {
+    const kept = new Map();
+    person.checkIns.forEach((record, index) => { if (!kept.has(record.id)) kept.set(record.id, index); });
+    const replaced = new Set();
+    const added = [];
+    for (const { checkInId, trackerId, day, amount } of entries) {
+      const index = kept.get(checkInId);
+      if (index !== undefined && fieldsPresent(person.checkIns[index].fields, RECORD_KEYS.checkIn)) fail('Check-in ID already exists.');
+      const previous = index !== undefined ? person.checkIns[index] : null;
       const created = {
         id: checkInId,
         life: { value: true, stamp },
-        purge,
+        purge: previous ? previous.purge : null,
         fields: stampedFields([['trackerId', trackerId], ['date', day], ['value', amount], ['source', 'manual']], stamp),
       };
-      if (emptied) created.emptied = emptied;
-      if (fenced) created.fenced = fenced;
-      person.checkIns.push(created);
-      person.life = { value: true, stamp };
+      if (previous && validStamp(previous.emptied)) created.emptied = previous.emptied;
+      if (previous && validStamp(previous.fenced)) created.fenced = previous.fenced;
+      if (index !== undefined) replaced.add(index);
+      added.push(created);
+    }
+    person.checkIns = person.checkIns.filter((record, index) => !replaced.has(index)).concat(added);
+    person.life = { value: true, stamp };
+  }
+  logCheckIn(personId, trackerId, input = {}) {
+    const entry = this.#checkInEntry(this.#get(personId), trackerId, input);
+    this.#change(personId, (person, stamp) => this.#writeCheckIns(person, [entry], stamp));
+    return entry.checkInId;
+  }
+  /**
+   * Logs many check-ins as one change: each entry is checked like logCheckIn,
+   * and the person is cloned and validated once, so a year of history stays fast.
+   * All or nothing: one bad entry refuses the whole batch and nothing changes.
+   */
+  logCheckIns(personId, entries) {
+    if (!Array.isArray(entries)) fail('Check-ins must be a list.');
+    const person = this.#get(personId);
+    const seen = new Set();
+    const ready = entries.map(item => {
+      if (!object(item)) fail('Each check-in must be an object.');
+      const { trackerId, ...input } = item;
+      const entry = this.#checkInEntry(person, trackerId, input);
+      if (seen.has(entry.checkInId)) fail('Check-in ID already exists.');
+      seen.add(entry.checkInId);
+      return entry;
     });
-    return checkInId;
+    if (ready.length) this.#change(personId, (draft, stamp) => this.#writeCheckIns(draft, ready, stamp));
+    return ready.map(entry => entry.checkInId);
   }
   editCheckIn(personId, checkInId, input = {}) {
     if (!object(input) || Object.keys(input).length === 0) fail('Check-in changes are empty.');
