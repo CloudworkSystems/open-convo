@@ -185,9 +185,9 @@ that is already held is not taken. The run is refused.
 | Call | What it does |
 |---|---|
 | `reserve({ ledgerDir, store, record, signature, publicKey, capabilityId, routeId, max, jobId, now, providerTotal? })` | Holds `max` against all three levels. Refuses a paused cap, a max of zero, a max over the per-run level, or a month that would go over. |
-| `settle({ ...same, jobId, now, actual?, estimated? })` | `estimated: true` keeps the reserved maximum and marks it estimated. An `actual` at or under the reservation settles that figure. An `actual` over it writes `over-bill`, counts the full bill, and returns `routeOff: true`. |
+| `settle({ ...same, jobId, now, actual?, estimated? })` | `estimated: true` keeps the reserved maximum and marks it estimated. An `actual` at or under the reservation, including zero, settles that figure. An `actual` over it writes `over-bill`, counts the full bill, and returns `routeOff: true`. |
 | `release({ ...same, jobId, now })` | Drops an open reservation. The job id is never reused. |
-| `monthSpent({ ...same, now, capabilityId?, providerTotal? })` | `{ reserved, spent, counted }` for that month. `counted` is what the cap uses. |
+| `monthSpent({ ...same, now, capabilityId?, routeId?, providerTotal? })` | `{ reserved, spent, counted }` for that month. `counted` is what the cap uses. A `providerTotal` also needs `capabilityId` and `routeId`, the route that key belongs to. |
 | `resetLedger({ ledgerDir, store, record, signature, publicKey })` | Empties the ledger when the caller presents the current signed cap, or a newer one. An older signed cap is refused. The current cap leaves a tightening in place. A newer cap clears it. |
 
 `now` is an ISO time with a zone, such as `2026-11-15T18:00:00.000Z`. The
@@ -200,10 +200,14 @@ Open reservations and settled amounts both count. A release counts as
 nothing. A settle replaces its reservation, so the two are not added.
 
 When `providerTotal` is passed, it is the provider's own month figure for
-this route's key, in the cap's currency. The check uses the higher of that
-figure and this route's settled total, then adds open reservations and the
-settled totals of other routes. A provider figure below the ledger does not
-lower it. A provider figure in another currency is refused.
+one route's key, in the cap's currency. `reserve` already knows the route.
+`monthSpent` needs `capabilityId` and `routeId` too, and refuses the call
+without them. The check uses the higher of that figure and the settled
+total on that route only, then adds open reservations and the settled
+totals of the other routes. Comparing the figure with every route at once
+would hide those other routes. A provider figure below that route's own
+settled total does not lower it. A provider figure in another currency is
+refused.
 
 ### Conversion
 
@@ -259,7 +263,9 @@ These are the choices the plan does not spell out. Each one has a test in
   does not move the spend.
 - The provider's figure replaces only this route's settled total, and only
   when it is higher. Open reservations and other routes are added on top.
-- An estimated settle ignores any `actual` sent with it.
+- An estimated settle ignores any `actual` sent with it. A real bill of
+  zero closes the run and stops the reservation counting. `release` is
+  only for a run that never started.
 - A job id stays used after release, settle or over-bill.
 - `now` has to be a real ISO instant. `2026-02-31` is refused.
 - A symlink in place of `entries.jsonl` is treated as a changed ledger.

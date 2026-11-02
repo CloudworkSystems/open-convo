@@ -1,6 +1,6 @@
 # Status
 
-Updated November 1, 2026. The short version of where the build is. The full
+Updated November 2, 2026. The short version of where the build is. The full
 plan is in [PLAN.md](PLAN.md).
 
 ## Now
@@ -89,11 +89,12 @@ CI and for staging, and OpenAPI 3.1 validation. Not live: next come the
 owner's Cloudflare setup, the staging scan, and, at go-live, the docs page
 and the privacy policy section, then his OK to go live.
 
-**Capability contract, cap and media** (Creator, standalone parts 1 to 3),
-built by Claude. Plan:
+**Capability contract, cap and media** (Creator, standalone parts 1 to 3).
+Plan:
 [docs/plans/media-generation-capability.md](docs/plans/media-generation-capability.md)
-(#256). Part 1, in review: the `capability.json` contract and validator in
-`packages/capabilities`. Next: part 2, the signed cap and ledger.
+(#256). Part 1, merged (#258): the `capability.json` contract and validator
+in `packages/capabilities`. Part 2, built and in review (#269): the signed
+cap and ledger (GrokBot team C). Next: part 3, `make_media`.
 
 **Site Engine, standalone first slice**, built by an outside builder (GrokBot
 builds, Codex reviews). Plan:

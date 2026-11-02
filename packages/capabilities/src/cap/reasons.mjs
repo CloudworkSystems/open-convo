@@ -29,6 +29,7 @@ export const REASONS = {
   jobDuplicate: 'That run is already in the spending record.',
   needFigure: 'A settle needs the real cost, or estimated set to true.',
   badAmount: 'The amount does not check out.',
+  providerRoute: 'Name the capability and route this provider figure belongs to.',
   badNow: 'The time does not check out.',
   badChange: 'That change to the spending limit does not check out.',
   notSaved: 'The spending record could not be saved, so this paid run was not started.',

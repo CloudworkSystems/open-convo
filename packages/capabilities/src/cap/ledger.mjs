@@ -204,7 +204,10 @@ function settleAmount(loaded, args) {
   if (args.estimated === true) return { ok: true, estimated: true };
   if (args.actual == null) return { ok: false, reason: REASONS.needFigure };
   const actual = parseMoney(args.actual);
-  if (!actual.ok || actual.micros <= 0n) return { ok: false, reason: REASONS.badAmount };
+  // A started run may finish with no bill. Zero counts as nothing. A run
+  // that never started is release, not a zero settle. The amount text still
+  // has to be real money, so a negative figure is refused.
+  if (!actual.ok || actual.micros < 0n) return { ok: false, reason: REASONS.badAmount };
   if (actual.currency === loaded.cap.currency) return { ok: true, estimated: false, micros: actual.micros };
   const converted = convertQuote({
     quote: args.actual,
@@ -285,17 +288,28 @@ function readMonth(dir, args) {
     const parsed = parseMoney(args.providerTotal);
     if (!parsed.ok) return { ok: false, reason: REASONS.badAmount };
     if (parsed.currency !== cap.currency) return { ok: false, reason: REASONS.currencyOff };
+    // The figure belongs to one route's key. Without that route, comparing
+    // it with every route's settled total would hide the other routes.
+    if (!idOk(args.capabilityId) || !idOk(args.routeId)) return { ok: false, reason: REASONS.providerRoute };
     provider = parsed.micros;
   }
   const figures = figuresFor(ledger.jobs, month, cap.timeZone, cap.currency, args.capabilityId ?? null);
-  const countedMicros = figures.reservedMicros + (provider === null ? figures.spentMicros : max(figures.spentMicros, provider));
+  const parts = spendParts(ledger.jobs, month, cap.timeZone, {
+    capabilityFilter: args.capabilityId ?? null,
+    routeCapability: args.capabilityId ?? null,
+    routeId: args.routeId ?? null,
+  });
+  const routeSettled = provider === null ? figures.spentMicros : max(parts.settledThis, provider);
+  const countedMicros = provider === null
+    ? figures.reservedMicros + figures.spentMicros
+    : parts.reserved + parts.settledOther + routeSettled;
   return {
     ok: true,
     currency: cap.currency,
     reserved: figures.reserved,
     spent: figures.spent,
     counted: moneyFromMicros(cap.currency, countedMicros),
-    providerUsed: provider !== null && provider > figures.spentMicros,
+    providerUsed: provider !== null && provider > parts.settledThis,
   };
 }
 
@@ -467,7 +481,13 @@ function buildJobs(entries) {
   return { ok: true, jobs };
 }
 
-function counted(jobs, month, timeZone, { capabilityFilter, routeCapability, routeId, provider }) {
+function counted(jobs, month, timeZone, options) {
+  const parts = spendParts(jobs, month, timeZone, options);
+  const settled = options.provider === null ? parts.settledThis : max(parts.settledThis, options.provider);
+  return parts.reserved + parts.settledOther + settled;
+}
+
+function spendParts(jobs, month, timeZone, { capabilityFilter, routeCapability, routeId }) {
   let reserved = 0n;
   let settledThis = 0n;
   let settledOther = 0n;
@@ -480,8 +500,7 @@ function counted(jobs, month, timeZone, { capabilityFilter, routeCapability, rou
     else if (sameRoute) settledThis += job.terminal.micros;
     else settledOther += job.terminal.micros;
   }
-  const settled = provider === null ? settledThis : max(settledThis, provider);
-  return reserved + settledOther + settled;
+  return { reserved, settledThis, settledOther };
 }
 
 function figuresFor(jobs, month, timeZone, currency, capabilityId = null) {

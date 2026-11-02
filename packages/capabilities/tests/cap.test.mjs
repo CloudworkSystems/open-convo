@@ -391,6 +391,14 @@ test('an over-bill counts in full and an estimated settle stays estimated', asyn
     const line = readFileSync(join(box.dir, 'entries.jsonl'), 'utf8').trim().split('\n').pop();
     assert.equal(JSON.parse(line).estimated, true);
     assert.equal(JSON.parse(line).kind, 'settle');
+
+    await box.reserve({ jobId: 'free', max: { amount: '0.1', currency: 'USD' } });
+    const zeroBill = await box.settle({ jobId: 'free', actual: { amount: '0', currency: 'USD' } });
+    assert.equal(zeroBill.ok, true, zeroBill.reason);
+    assert.equal(zeroBill.routeOff, false);
+    assert.equal(zeroBill.amount.amount, '0');
+    const afterZero = await box.spent();
+    assert.equal(afterZero.reserved.amount, '0');
   } finally {
     box.close();
   }
@@ -405,11 +413,13 @@ test("the provider's higher figure counts in monthSpent and inside reserve", asy
   try {
     await box.reserve({ jobId: 'spent', max: { amount: '2', currency: 'USD' } });
     await box.settle({ jobId: 'spent', actual: { amount: '2', currency: 'USD' } });
-    const higher = await box.spent({ providerTotal: { amount: '9', currency: 'USD' } });
+    const provider = { capabilityId: 'make-media', routeId: 'own-key' };
+    assert.equal((await box.spent({ providerTotal: { amount: '9', currency: 'USD' } })).reason, REASONS.providerRoute);
+    const higher = await box.spent({ ...provider, providerTotal: { amount: '9', currency: 'USD' } });
     assert.equal(higher.counted.amount, '9');
     assert.equal(higher.providerUsed, true);
     assert.equal(higher.spent.amount, '2');
-    const lower = await box.spent({ providerTotal: { amount: '1', currency: 'USD' } });
+    const lower = await box.spent({ ...provider, providerTotal: { amount: '1', currency: 'USD' } });
     assert.equal(lower.counted.amount, '2');
     assert.equal(lower.providerUsed, false);
     const refused = await box.reserve({
@@ -758,8 +768,42 @@ test('choices the plan leaves open', async () => {
     });
     // Other routes stay in the total: 3 + max(2, 9) + 1 = 13, over the $12 cap.
     assert.equal(refused.reason, REASONS.monthAll);
+    const shown = await routes.spent({
+      capabilityId: 'make-media',
+      routeId: 'own-key',
+      providerTotal: { amount: '9', currency: 'USD' },
+    });
+    // Settled on this route is $2, on the other route $8 would be separate.
+    // Here the other route is $3, so counted is max(2, 9) + 3 = 12, not max(5, 9).
+    assert.equal(shown.counted.amount, '12');
+    assert.equal(shown.spent.amount, '5');
+    assert.equal(shown.providerUsed, true);
   } finally {
     routes.close();
+  }
+
+  const split = world(cap({
+    perRun: { amount: '10', currency: 'USD' },
+    monthlyByCapability: { amount: '20', currency: 'USD' },
+    monthlyAll: { amount: '20', currency: 'USD' },
+  }));
+  try {
+    await split.reserve({ jobId: 'this-route', routeId: 'own-key', max: { amount: '2', currency: 'USD' } });
+    await split.settle({ jobId: 'this-route', actual: { amount: '2', currency: 'USD' } });
+    await split.reserve({ jobId: 'other-route', routeId: 'other-key', max: { amount: '8', currency: 'USD' } });
+    await split.settle({ jobId: 'other-route', actual: { amount: '8', currency: 'USD' } });
+    const total = await split.spent({
+      capabilityId: 'make-media',
+      routeId: 'own-key',
+      providerTotal: { amount: '9', currency: 'USD' },
+    });
+    // $9 replaces this route's $2, then the other route's $8 is added: 17.
+    // Comparing $9 with the combined $10 would have reported 10.
+    assert.equal(total.counted.amount, '17');
+    assert.equal(total.spent.amount, '10');
+    assert.equal(total.providerUsed, true);
+  } finally {
+    split.close();
   }
 });
 
