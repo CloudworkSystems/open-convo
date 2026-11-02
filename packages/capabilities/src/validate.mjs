@@ -365,22 +365,31 @@ function license(value, p, fail) {
   text(value, 'note', p, fail, { max: 400 });
 }
 
-// Bare host names only: lower case, no scheme, port, path or wildcard.
+// Each host is written as its https origin, "https://api.example.com": lower
+// case, no port, path, wildcard or IP address. The https:// form is what the
+// risk review reads (.github/scripts/risk-check.mjs), so a host named here is
+// held for the owner like any other new host.
 function hostList(value, p, fail) {
   if (!Array.isArray(value)) {
-    fail(p, 'must be a list of host names');
+    fail(p, 'must be a list of hosts like https://api.example.com');
     return false;
   }
   if (value.length > 20) fail(p, 'at most 20 hosts');
   if (new Set(value).size !== value.length) fail(p, 'each host appears once');
   let ok = true;
   value.forEach((host, i) => {
-    if (!isHostName(host)) {
-      fail(`${p}[${i}]`, 'must be a bare lower-case host name like api.example.com');
+    if (!isHostOrigin(host)) {
+      fail(`${p}[${i}]`, 'must be a lower-case https host like https://api.example.com, with no port or path');
       ok = false;
     }
   });
   return ok;
+}
+
+function isHostOrigin(value) {
+  if (typeof value !== 'string' || !value.startsWith('https://')) return false;
+  const host = value.slice('https://'.length);
+  return isHostName(host) && value === `https://${host}`;
 }
 
 function isHostName(host) {

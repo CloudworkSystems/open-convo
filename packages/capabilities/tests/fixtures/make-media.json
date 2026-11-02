@@ -53,7 +53,7 @@
       "title": "Your own Example Media key",
       "provider": "Example Media",
       "model": "example-clip-2",
-      "hosts": ["api.example.com"],
+      "hosts": ["https://api.example.com"],
       "leaves_machine": "your prompt text and the one reference picture you attach",
       "cost": {
         "unit": "per_second",

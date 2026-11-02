@@ -61,7 +61,7 @@ pass silently and nothing like an "always allow" switch can be slipped in.
 | `kind` | Required: `upload`, `local`, `own_key` or `sign_in`. |
 | `title` | Optional text. |
 | `provider`, `model` | Required for every kind except `upload`. |
-| `hosts` | Required list of bare lower-case host names (`api.example.com`: no scheme, port, path, wildcard or IP address), each once. Empty for `upload` and `local`; at least one for `own_key` and `sign_in`. |
+| `hosts` | Required list of every outside host, each written as its https origin (`https://api.example.com`: lower case, no port, path, wildcard or IP address), each once. Empty for `upload` and `local`; at least one for `own_key` and `sign_in`. |
 | `leaves_machine` | Required plain words on exactly what is sent. Exactly `nothing` for `upload` and `local`; never `nothing` for the others. |
 | `cost` | `"free"` for `upload` and `local`. For the others: `unit` (`per_run`, `per_second`, `per_image` or `per_credit`), `price`, `source` (an https link), `checked` (date) and `max_per_run`, plus an optional `note`. |
 | `needs` | Optional, and never on `upload`: `memory_gb`, `disk_gb`, `server` (such as ComfyUI) and `downloads` (each `what`, `size_gb` and an https `from`). |
@@ -82,8 +82,10 @@ rough figure; it never authorizes a run (the plan's "The price is checked
 again").
 
 A route's `hosts` are what the risk review holds for the owner
-([docs/plans/risk-review.md](../../docs/plans/risk-review.md)). This package
-lists them; it never contacts them.
+([docs/plans/risk-review.md](../../docs/plans/risk-review.md)). They are
+written as `https://` origins because that is the form the risk check reads,
+so a real host in any record holds the pull request for the owner; a test
+checks this. This package lists them; it never contacts them.
 
 ## Tests
 

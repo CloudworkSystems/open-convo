@@ -115,8 +115,8 @@ test('a file output lands in a named app folder, not a path', () => {
 });
 
 test('upload and local routes contact nobody, send nothing and are free', () => {
-  assertRefused((r) => { route(r, 'upload').hosts = ['api.example.com']; }, 'routes[0].hosts', /empty/);
-  assertRefused((r) => { route(r, 'local-video').hosts = ['api.example.com']; }, 'routes[1].hosts', /empty/);
+  assertRefused((r) => { route(r, 'upload').hosts = ['https://api.example.com']; }, 'routes[0].hosts', /empty/);
+  assertRefused((r) => { route(r, 'local-video').hosts = ['https://api.example.com']; }, 'routes[1].hosts', /empty/);
   assertRefused((r) => { route(r, 'upload').leaves_machine = 'your file'; }, 'routes[0].leaves_machine', /nothing/);
   assertRefused((r) => { route(r, 'local-video').cost = route(r, 'own-key-example').cost; }, 'routes[1].cost', /free/);
   assertRefused((r) => delete route(r, 'upload').hosts, 'routes[0].hosts', /required/);
@@ -134,10 +134,10 @@ test('a local route names its model and its checked license', () => {
 
 test('a paid route names its hosts and exactly what leaves the machine', () => {
   assertRefused((r) => { route(r, 'own-key-example').hosts = []; }, 'routes[2].hosts', /names every host/);
-  for (const host of ['https://api.example.com', 'api.example.com:443', 'API.example.com', '*.example.com', 'localhost', '10.0.0.1', 'api.example.com/v1']) {
+  for (const host of ['api.example.com', 'http://api.example.com', 'https://api.example.com/', 'https://api.example.com:443', 'https://API.example.com', '*.example.com', 'https://localhost', 'https://127.0.0.1', 'https://api.example.com/v1', 'https://user@api.example.com']) {
     assertRefused((r) => { route(r, 'own-key-example').hosts = [host]; }, 'routes[2].hosts[0]');
   }
-  assertRefused((r) => { route(r, 'own-key-example').hosts = ['api.example.com', 'api.example.com']; }, 'routes[2].hosts', /once/);
+  assertRefused((r) => { route(r, 'own-key-example').hosts = ['https://api.example.com', 'https://api.example.com']; }, 'routes[2].hosts', /once/);
   assertRefused((r) => { route(r, 'own-key-example').leaves_machine = 'Nothing'; }, 'routes[2].leaves_machine', /exactly/);
   assertRefused((r) => delete route(r, 'own-key-example').leaves_machine, 'routes[2].leaves_machine', /required/);
 });
@@ -211,4 +211,16 @@ test('the command checks files and sets the exit code', () => {
   assert.equal(missing.code, 1);
   assert.match(missing.lines.join('\n'), /could not be read/);
   assert.equal(run([]).code, 1);
+});
+
+test('a route host is written so the risk review holds it for the owner', async () => {
+  // The risk check (.github/scripts/risk-check.mjs) reads hosts from added
+  // lines; this shows a host in a valid record is one it reads.
+  const { readHosts } = await import('../../../.github/scripts/risk-check.mjs');
+  // Its invented-host rule then skips example.com; a real host would be held.
+  const record = media();
+  route(record, 'own-key-example').hosts = ['https://api.example.com', 'https://upload.example.com'];
+  assert.deepEqual(validateCapability(record), { ok: true, errors: [] });
+  const found = JSON.stringify(record, null, 2).split('\n').flatMap((line) => readHosts(line).hosts);
+  assert.ok(found.includes('api.example.com') && found.includes('upload.example.com'), JSON.stringify(found));
 });
