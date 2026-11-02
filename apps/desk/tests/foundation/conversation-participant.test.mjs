@@ -213,6 +213,7 @@ async function fixture(config = {}) {
         stored.sessions.find((session) => session.id === stored.selection.sessionId).participantChoice = structuredClone(config.participantChoice);
       }
       if (config.theme) stored.preferences.theme = config.theme;
+      config.mutateSeed?.(stored);
       if (config.workspaceBytes) {
         const otherSession = stored.sessions.find((session) => session.id !== stored.selection.sessionId);
         const chunks = (text) => Array.from({ length: Math.ceil(text.length / 16_384) }, (_, index) => text.slice(index * 16_384, (index + 1) * 16_384));
@@ -1840,6 +1841,36 @@ test('Reply quotes the message into the draft, and Send sends exactly the box te
     await f.page.getByRole('button', { name: 'Send message', exact: true }).click();
     await expect.poll(() => f.calls.starts.length).toBe(2);
     await expect.poll(() => f.stored.conversationRuns?.at(-1)?.inputChunks.join('')).toBe('> with two lines\n\nWhy two?');
+    await f.check();
+  } finally { await f.close(); }
+});
+
+test('a side chat whose message or conversation is gone still opens, says so, and is listed on its own', async () => {
+  const f = await fixture({ mutateSeed: (stored) => {
+    const parent = stored.sessions.find((session) => session.id === stored.selection.sessionId);
+    const at = parent.createdAt;
+    const lost = { id: '20000000-0000-4000-8000-000000000001', goalId: parent.goalId, title: 'Side chat: invented lost message',
+      sideOf: { sessionId: parent.id, messageId: '20000000-0000-4000-8000-0000000000aa' }, createdAt: at, updatedAt: at };
+    const orphan = { id: '20000000-0000-4000-8000-000000000002', goalId: parent.goalId, title: 'Side chat: invented orphan',
+      sideOf: { sessionId: '20000000-0000-4000-8000-0000000000bb', messageId: '20000000-0000-4000-8000-0000000000cc' }, createdAt: at, updatedAt: at };
+    stored.sessions.push(lost, orphan);
+    stored.drafts[lost.id] = '';
+    stored.drafts[orphan.id] = '';
+    stored.selection.sessionId = lost.id;
+  } });
+  try {
+    const anchor = f.page.getByRole('complementary', { name: 'What this side chat is about', exact: true });
+    await expect(anchor.locator('blockquote')).toHaveText('That message is no longer shown.');
+    await expect(f.page.getByRole('textbox', { name: 'Your message', exact: true })).toBeEditable();
+    // Its conversation is still there, so it stays listed under it; the orphan is listed on its own.
+    await expect(f.page.locator('[data-side-chat-depth="1"]').getByRole('button', { name: 'Side chat: invented lost message', exact: true })).toBeVisible();
+    const orphanRow = f.page.locator('.session-row').filter({ has: f.page.getByRole('button', { name: 'Side chat: invented orphan', exact: true }) });
+    await expect(orphanRow).toBeVisible();
+    await expect(orphanRow).not.toHaveClass(/session-row-side/);
+    await anchor.getByRole('button', { name: 'Back to the message', exact: true }).click();
+    await expect(anchor).toHaveCount(0);
+    await f.page.getByRole('button', { name: 'Side chat: invented orphan', exact: true }).click();
+    await expect(f.page.getByRole('complementary', { name: 'What this side chat is about', exact: true })).toHaveCount(0);
     await f.check();
   } finally { await f.close(); }
 });

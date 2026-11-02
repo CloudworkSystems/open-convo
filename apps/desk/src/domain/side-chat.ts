@@ -46,7 +46,6 @@ export function createSideChat(next: DeskState, messageId: string, text: string,
 
 /** Each link points at another saved conversation and a message in it. */
 export function validSideChatLinks(state: Pick<DeskState, 'sessions' | 'messages' | 'conversationRuns'>): boolean {
-  const sessions = new Set(state.sessions.map((session) => session.id));
   const shown = markableMessages(state);
   for (const session of state.sessions) {
     const link = (session as { sideOf?: unknown }).sideOf;
@@ -55,8 +54,11 @@ export function validSideChatLinks(state: Pick<DeskState, 'sessions' | 'messages
     const keys = Object.keys(link);
     if (keys.length !== 2 || !keys.includes('sessionId') || !keys.includes('messageId')) return false;
     const { sessionId, messageId } = link as Record<string, unknown>;
-    if (typeof sessionId !== 'string' || typeof messageId !== 'string' || sessionId === session.id || !sessions.has(sessionId)) return false;
-    if (!shown.has(messageId) || messageSessionId(state, messageId) !== sessionId) return false;
+    if (typeof sessionId !== 'string' || typeof messageId !== 'string' || !sessionId || !messageId || sessionId === session.id) return false;
+    // The message or the conversation it came from may be gone; the side chat
+    // then says so and still works (plan: When It Goes Wrong). A message that
+    // is still shown must belong to the linked conversation.
+    if (shown.has(messageId) && messageSessionId(state, messageId) !== sessionId) return false;
   }
   // No loops: following the links from any side chat reaches an ordinary conversation.
   const parentOf = new Map(state.sessions.map((session) => [session.id, session.sideOf?.sessionId]));

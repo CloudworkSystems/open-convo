@@ -55,14 +55,17 @@ test('titles are one short line', () => {
   assert.equal(sideChatTitle('   '), 'Side chat: a message');
 });
 
-test('saved links that point nowhere, at the wrong conversation, or in a loop are refused', () => {
+test('saved links that are malformed, point at the wrong conversation, or loop are refused; a missing anchor is kept', () => {
   const f = fixture();
   const next = applyCommand(f.state, { type: 'create-side-chat', messageId: f.reply.id, text: 'x' }, f.options);
   const side = next.sessions.at(-1)!;
   const withLink = (sideOf: unknown, extra: Partial<DeskState> = {}) => ({ ...next, ...extra,
     sessions: next.sessions.map((session) => session.id === side.id ? { ...session, sideOf } : session) });
   assert.equal(validateState(withLink({ sessionId: id(999), messageId: f.reply.id })).valid, false);
-  assert.equal(validateState(withLink({ sessionId: f.sessionId, messageId: id(999) })).valid, false);
+  // The message, or the message and its conversation, may be gone: the side chat survives.
+  assert.equal(validateState(withLink({ sessionId: f.sessionId, messageId: id(999) })).valid, true);
+  assert.equal(validateState(withLink({ sessionId: id(998), messageId: id(999) })).valid, true);
+  assert.equal(validateState(withLink({ sessionId: '', messageId: id(999) })).valid, false);
   assert.equal(validateState(withLink({ sessionId: side.id, messageId: f.reply.id })).valid, false);
   assert.equal(validateState(withLink({ sessionId: f.sessionId, messageId: f.reply.id, extra: 1 })).valid, false);
   assert.equal(validateState(withLink(null)).valid, false);
