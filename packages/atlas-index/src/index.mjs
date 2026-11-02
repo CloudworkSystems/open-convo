@@ -548,8 +548,28 @@ export function buildAtlas(notes, options) {
     return `${GENERATED_HEADER}\n# ${heading}\n\n${list}`;
   }
 
+  function folderHasNotes(dir) {
+    const prefix = `${dir}/`;
+    return content.some(note => note.path.startsWith(prefix));
+  }
+
+  // The root map is one line per root note and one line per top-level folder.
+  // A folder index may still expand a subfolder that has no index of its own.
+  function rootMapLines() {
+    const lines = [];
+    const rootNotes = (notesByDir.get('') || []).slice().sort((a, b) => compareText(a.path, b.path));
+    for (const note of rootNotes) lines.push(linkLine(aboutNote(note), relativePath('', note.path)));
+    for (const child of childDirs('')) {
+      if (!keptIndex(child) && !folderHasNotes(child)) continue;
+      const label = child.split('/').pop();
+      const target = keptIndex(child) ? indexPath(child, indexName) : `${child}/`;
+      lines.push(linkLine(label, relativePath('', target)));
+    }
+    return lines;
+  }
+
   function renderMap(existing) {
-    const lines = listingLines('', '');
+    const lines = rootMapLines();
     const generated = lines.length ? `${MAP_MARKER}\n${lines.join('\n')}\n` : `${MAP_MARKER}\n`;
     if (existing === undefined) return generated;
     const markerAt = existing.indexOf(MAP_MARKER);

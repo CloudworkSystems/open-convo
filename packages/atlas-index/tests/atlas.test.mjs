@@ -63,7 +63,8 @@ test('a folder with 6 notes gets an index and a folder with 5 does not', () => {
   assert.equal(five.writes.some(item => item.path.endsWith('/INDEX.md') || item.path === 'INDEX.md'), false);
   assert.equal(five.counts.indexesWritten, 0);
   const map = five.writes.find(item => item.path === 'MAP.md').text;
-  assert.match(map, /- \[Note 0\]\(garden\/n0\.md\)/);
+  assert.match(map, /- \[garden\]\(garden\/\)/);
+  assert.doesNotMatch(map, /n0\.md/);
   assert.doesNotMatch(map, /INDEX\.md/);
 });
 
@@ -98,8 +99,8 @@ test('about lines use description, then a heading, then the first line, then the
   assert.match(textOf(unclosed, [], 'MAP.md'), /- \[Real title\]\(bed\.md\)/);
   assert.doesNotMatch(textOf(unclosed, [], 'MAP.md'), /nope/);
 
-  const blank = buildAtlas([note('garden/bed.md', '\n\n')]);
-  assert.match(textOf(blank, [], 'MAP.md'), /- \[bed\]\(garden\/bed\.md\)/);
+  const blank = buildAtlas([note('bed.md', '\n\n')]);
+  assert.match(textOf(blank, [], 'MAP.md'), /- \[bed\]\(bed\.md\)/);
 
   const longLine = `${'a'.repeat(50)} ${'b'.repeat(50)} ${'c'.repeat(50)}`;
   const cut = buildAtlas([note('bed.md', `${longLine}\n`)]);
@@ -360,8 +361,9 @@ test('edge cases named in the readme', () => {
   const under = buildAtlas(nested);
   assert.equal(under.writes.some(item => item.path.includes('INDEX.md')), false);
   const map = textOf(under, [], 'MAP.md');
-  assert.match(map, /garden\/herbs\/thyme\.md/);
-  assert.match(map, /garden\/n0\.md/);
+  assert.match(map, /- \[garden\]\(garden\/\)/);
+  assert.doesNotMatch(map, /thyme\.md/);
+  assert.doesNotMatch(map, /n0\.md/);
 
   const over = buildAtlas([...garden(6), note('garden/herbs/thyme.md', '# Thyme\n')]);
   const index = over.writes.find(item => item.path === 'garden/INDEX.md').text;
