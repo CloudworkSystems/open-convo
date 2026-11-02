@@ -38,16 +38,22 @@ export function reactionSharingOn(session: Pick<Session, 'participantChoice' | '
     && sameParticipantIdentity(session.reactionSharing.participant, session.participantChoice);
 }
 
-/** The note block at the top of a draft: the block, then the rest. Null when there is none or it is broken. */
-export function splitReactionsNote(draft: string): { note: string; rest: string } | null {
-  // Any closed block at the top that starts with the marker, however he
-  // edited it inside, so Off still removes it (rule 8). Only an unclosed
-  // block can't be found whole.
-  if (!draft.startsWith(NOTE_MARKER)) return null;
-  const end = draft.indexOf(']', NOTE_MARKER.length);
+/**
+ * The note block in a draft: the text before it, the block, and the text
+ * after it. The block starts a line (usually the first; Reply puts its quote
+ * above it). Null when there is none or it is broken.
+ */
+export function splitReactionsNote(draft: string): { before: string; note: string; after: string; rest: string } | null {
+  // Any closed block that starts with the marker, however he edited it
+  // inside, so Off still removes it (rule 8). Only an unclosed block can't be
+  // found whole.
+  const start = draft.startsWith(NOTE_MARKER) ? 0 : draft.indexOf(`\n${NOTE_MARKER}`) + 1;
+  if (start === 0 && !draft.startsWith(NOTE_MARKER)) return null;
+  const end = draft.indexOf(']', start + NOTE_MARKER.length);
   if (end < 0) return null;
-  const note = draft.slice(0, end + 1);
-  return { note, rest: draft.slice(end + 1).replace(/^\n{1,2}/, '') };
+  const before = draft.slice(0, start);
+  const after = draft.slice(end + 1).replace(/^\n{1,2}/, '');
+  return { before, note: draft.slice(start, end + 1), after, rest: before + after };
 }
 
 /** True when the text still holds a reactions note, whole or broken. */
@@ -157,8 +163,10 @@ export function syncReactionsNote(next: DeskState, session: Session, change?: { 
   const split = splitReactionsNote(draft);
   if (split ? split.note !== sharing.note : holdsReactionsNote(draft)) return;
   const note = reactionsNoteText(next, session);
-  const rest = split ? split.rest : draft;
-  next.drafts[session.id] = note ? (rest ? `${note}\n\n${rest}` : `${note}\n\n`) : rest;
+  // A new note goes at the top; an existing one is replaced where it is.
+  const before = split ? split.before : '';
+  const after = split ? split.after : draft;
+  next.drafts[session.id] = note ? `${before}${note}\n\n${after}` : before + after;
   if (note) sharing.note = note;
   else delete sharing.note;
 }

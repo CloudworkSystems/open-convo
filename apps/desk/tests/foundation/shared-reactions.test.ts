@@ -7,6 +7,7 @@ import {
   contextRunsFor, reactionsLine, reactionsNoteEdited, reactionsNoteSendHold, reactionSharingOn, splitReactionsNote,
 } from '../../src/domain/shared-reactions';
 import { validateState } from '../../src/domain/validation';
+import { draftWithReplyQuote } from '../../src/domain/reply-quote';
 
 const id = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`;
 const local = { id: 'local-test', label: 'Invented local model', model: 'invented:1', executionHost: 'this-mac' };
@@ -75,6 +76,23 @@ test('each reaction is shared once, even when another one on the same message ch
   assert.equal(state.drafts[f.sessionId], '');
   assert.equal(state.sessions[0].reactionSharing?.added, undefined, 'nothing pending is kept');
   assert.equal(validateState(state).valid, true);
+});
+
+test('a Reply quote above the note leaves it followed, and Off still removes it', () => {
+  const f = fixture();
+  let state = applyCommand(f.state, { type: 'set-reaction-sharing', sessionId: f.sessionId, on: true }, f.options);
+  state = applyCommand(state, { type: 'toggle-message-reaction', messageId: f.reply.id, reaction: 'heart' }, f.options);
+  const quoted = draftWithReplyQuote(state.drafts[f.sessionId], 'Invented quoted line');
+  state = applyCommand(state, { type: 'set-draft', sessionId: f.sessionId, text: `${quoted}My words.` }, f.options);
+  assert.equal(reactionsNoteEdited(state.sessions[0], state.drafts[f.sessionId]), false, 'a quote above is not an edit');
+  state = applyCommand(state, { type: 'toggle-message-reaction', messageId: f.reply.id, reaction: 'idea' }, f.options);
+  const split = splitReactionsNote(state.drafts[f.sessionId])!;
+  assert.equal(split.before, '> Invented quoted line\n\n');
+  assert.ok(split.note.includes('❤️ 💡 on your reply'));
+  assert.equal(split.after, 'My words.');
+  const off = applyCommand(state, { type: 'set-reaction-sharing', sessionId: f.sessionId, on: false }, f.options);
+  assert.equal(off.drafts[f.sessionId], '> Invented quoted line\n\nMy words.');
+  assert.equal(reactionsNoteSendHold(off.sessions[0], off.drafts[f.sessionId]), undefined);
 });
 
 test('once he edits the note the Desk stops changing it, and says so', () => {
