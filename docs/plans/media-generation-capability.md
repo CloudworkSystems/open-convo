@@ -256,9 +256,11 @@ In True Convo Test, with invented prompts:
    was charged, and doesn't charge twice.
 8. Turn the network off; the paid route says so and offers the free ones.
 
-## Open Decision
+## When To Build
 
-When to build parts 1 to 3. They stand on their own, so they could start
-now beside the main build, but PLAN.md places the capability adapter with
-step 6, so starting early is a PLAN.md change the owner approves on GitHub.
-Parts 4 to 6 wait for the Mac work in step 6 either way.
+Parts 1 to 3 stand on their own and start now, beside the main build. Step 6
+is still several steps away (steps 2 and 3 are in their owner trials, then
+the Claude Code adapter, Canvas, steps 4 and 5), and the cap and ledger are
+needed by step 6's paid judge anyway. The owner leaned this way on November
+2 in this thread; the PLAN.md line in this pull request records it and
+needs his approval on GitHub. Parts 4 to 6 wait for the Mac work in step 6.

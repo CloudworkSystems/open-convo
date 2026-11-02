@@ -229,6 +229,12 @@ built in parallel by an outside builder under AGENTS.md "Outside Builders":
   follow the iPhone app on the parallel sync line. Built by a Claude
   building session, not an outside builder. Plan (approved):
   [docs/plans/skin-check.md](docs/plans/skin-check.md).
+- **Capability contract, cap and media, standalone parts** (owner,
+  November 2): parts 1 to 3 of
+  [docs/plans/media-generation-capability.md](docs/plans/media-generation-capability.md),
+  the `capability.json` contract and validator, the signed cap and ledger,
+  and `make_media` with upload and local routes only. No app, storage or
+  outside host; the Mac screens and any paid route still wait for step 6.
 - **Merge gate** (first piece of the Code umbrella): automatic merging once
   tests pass and Codex's review is clean, with protected paths still needing
   the owner. Plan:
