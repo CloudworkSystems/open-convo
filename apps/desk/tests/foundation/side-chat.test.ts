@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { applyCommand, DomainError } from '../../src/domain/commands';
 import { createDemoState } from '../../src/domain/demo';
-import { sideChatTitle } from '../../src/domain/side-chat';
+import { sideChatTitle, withSideChatsNested } from '../../src/domain/side-chat';
 import type { DeskState } from '../../src/domain/types';
 import { validateState } from '../../src/domain/validation';
 
@@ -100,4 +100,13 @@ test('moving a conversation or one of its side chats to a folder moves the whole
     assert.equal(session.goalId, state.sessions.find((entry) => entry.id === session.id)!.goalId);
   }
   assert.equal(applyCommand(back, { type: 'move-session', sessionId: side.id, goalId: null }, f.options), back);
+});
+
+test('every conversation list puts each side chat right after its parent, and an orphan on its own', () => {
+  const at = '2026-11-01T10:00:00.000Z';
+  const s = (sid: string, parent?: string) => ({ id: sid, sideOf: parent ? { sessionId: parent, messageId: `m-${sid}` } : undefined, goalId: null, title: sid, createdAt: at, updatedAt: at });
+  const listed = withSideChatsNested([s('b-side', 'a'), s('a'), s('c'), s('b-side-side', 'b-side'), s('orphan', 'gone'), s('a-second', 'a')]);
+  assert.deepEqual(listed.map(({ session, depth }) => [session.id, depth]), [
+    ['a', 0], ['b-side', 1], ['b-side-side', 2], ['a-second', 1], ['c', 0], ['orphan', 0],
+  ]);
 });

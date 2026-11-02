@@ -99,3 +99,23 @@ export function linkedSessionIds(state: Pick<DeskState, 'sessions'>, sessionId: 
   }
   return group;
 }
+
+/**
+ * Sessions in list order, each side chat right after its parent (oldest
+ * first) with its depth. A side chat whose parent is not in `sessions` is
+ * listed on its own at depth 0. Every list of conversations uses this, so a
+ * side chat never shows as a separate top-level conversation.
+ */
+export function withSideChatsNested<T extends Pick<DeskState['sessions'][number], 'id' | 'sideOf'>>(sessions: readonly T[]): { session: T; depth: number }[] {
+  const ids = new Set(sessions.map((session) => session.id));
+  const out: { session: T; depth: number }[] = [];
+  const seen = new Set<string>();
+  const visit = (session: T, depth: number) => {
+    if (seen.has(session.id)) return;
+    seen.add(session.id);
+    out.push({ session, depth });
+    for (const child of sessions) if (child.sideOf?.sessionId === session.id) visit(child, depth + 1);
+  };
+  for (const session of sessions) if (!session.sideOf || !ids.has(session.sideOf.sessionId)) visit(session, 0);
+  return out;
+}
