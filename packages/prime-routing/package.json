@@ -4,6 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --require ./tests/deny-builtins.cjs --test"
+    "test": "node --require ./tests/deny-builtins.cjs --experimental-loader ./tests/deny-builtins.mjs --test"
   }
 }
