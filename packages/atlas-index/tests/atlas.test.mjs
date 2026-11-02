@@ -306,6 +306,13 @@ test('refused paths name the path', () => {
     );
   }
   assert.throws(() => buildAtlas([note('a\nb.md', 'x')]), /\\u000a/);
+  assert.throws(
+    () => buildAtlas([note('a\n\u001b[2J.md', 'x')]),
+    error => error instanceof AtlasError
+      && error.message.includes('\\u000a\\u001b[2J.md')
+      && !error.message.includes('\u001b')
+      && !error.message.includes('\n'),
+  );
   assert.equal(buildAtlas([note('notes..draft.md', '# Draft\n')]).counts.notes, 1);
 });
 

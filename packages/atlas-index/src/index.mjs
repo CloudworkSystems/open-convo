@@ -34,7 +34,9 @@ const compareText = (a, b) => a < b ? -1 : a > b ? 1 : 0;
 const plainObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 function show(value) {
-  return String(value).replace(CONTROL, ch => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`);
+  // A fresh global pattern so every control is escaped. CONTROL itself stays
+  // non-global because a shared /g pattern would remember its last match.
+  return String(value).replace(new RegExp(CONTROL.source, 'g'), ch => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`);
 }
 
 /** A generated index starts with the header. A leading byte-order mark still counts. */

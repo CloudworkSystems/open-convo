@@ -300,6 +300,23 @@ test('a new index is private and a replacement keeps the mode it already has', (
   }
 });
 
+test('a note name with several control characters is escaped on every one', () => {
+  const dir = join(tmpdir(), `atlas-controls-${process.pid}-${Math.random().toString(16).slice(2)}`);
+  const name = 'a\n\u001b[2J.md';
+  try {
+    mkdirSync(dir);
+    writeFileSync(join(dir, name), '# Unusual\n');
+    const refused = capture(['--dir', dir]);
+    assert.equal(refused.code, 1);
+    assert.equal(refused.out, '');
+    assert.match(refused.err, /\\u000a\\u001b\[2J\.md/);
+    assert.equal(refused.err.includes('\u001b'), false);
+    assert.equal(refused.err.split('\n').length, 2);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('the command refuses a missing folder and unknown arguments', () => {
   const missingDir = join(tmpdir(), 'atlas-does-not-exist');
   const missing = capture(['--dir', missingDir]);
