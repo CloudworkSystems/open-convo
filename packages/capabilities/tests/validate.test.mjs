@@ -126,6 +126,7 @@ test('a local route names its model and its checked license', () => {
   assertRefused((r) => delete route(r, 'local-video').license, 'routes[1].license', /required/);
   assertRefused((r) => delete route(r, 'local-video').license.checked, 'routes[1].license.checked');
   assertRefused((r) => { route(r, 'local-video').license.allows_intended_use = 'yes'; }, 'routes[1].license.allows_intended_use');
+  assertRefused((r) => { route(r, 'local-video').license.allows_intended_use = false; }, 'routes[1].license.allows_intended_use', /not offered/);
   assertRefused((r) => delete route(r, 'local-video').model, 'routes[1].model', /required/);
   assertRefused((r) => { route(r, 'upload').license = route(r, 'local-video').license; }, 'routes[0].license', /only a local/);
   assertRefused((r) => { route(r, 'local-video').needs.downloads[0].from = 'http://models.example.com/x'; }, 'routes[1].needs.downloads[0].from', /https/);

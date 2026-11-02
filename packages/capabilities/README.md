@@ -66,7 +66,7 @@ pass silently and nothing like an "always allow" switch can be slipped in.
 | `cost` | `"free"` for `upload` and `local`. For the others: `unit` (`per_run`, `per_second`, `per_image` or `per_credit`), `price`, `source` (an https link), `checked` (date) and `max_per_run`, plus an optional `note`. |
 | `needs` | Optional, and never on `upload`: `memory_gb`, `disk_gb`, `server` (such as ComfyUI) and `downloads` (each `what`, `size_gb` and an https `from`). |
 | `terms` | `sign_in` only, and required there: an https `url` to the provider's terms that allow this use, and the date `checked`. No link, no route. |
-| `license` | `local` only, and required there: `name`, `checked` (date), `allows_intended_use` (true or false), optional https `url` and `note`. |
+| `license` | `local` only, and required there: `name`, `checked` (date), `allows_intended_use` (must be `true`: a model whose license doesn't allow the use isn't offered as a route), optional https `url` and `note`. |
 
 A record with routes has exactly one `upload` route, the floor that always
 works and needs nothing set up (no `needs`), so it also has a `file`

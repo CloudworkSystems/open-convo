@@ -359,8 +359,9 @@ function license(value, p, fail) {
   text(value, 'name', p, fail, { required: true, max: 120 });
   if (has(value, 'url')) httpsUrl(value.url, `${p}.url`, fail);
   if (required(value, 'checked', p, fail)) date(value.checked, `${p}.checked`, fail);
-  if (required(value, 'allows_intended_use', p, fail) && typeof value.allows_intended_use !== 'boolean') {
-    fail(`${p}.allows_intended_use`, 'must be true or false');
+  // A model whose license doesn't allow the intended use is never a route.
+  if (required(value, 'allows_intended_use', p, fail) && value.allows_intended_use !== true) {
+    fail(`${p}.allows_intended_use`, 'must be true: a model whose license does not allow this use is not offered as a route');
   }
   text(value, 'note', p, fail, { max: 400 });
 }
