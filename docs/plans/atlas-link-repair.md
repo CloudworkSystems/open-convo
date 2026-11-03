@@ -82,8 +82,10 @@ without regard to letter case with every note's file name without `.md`.
 - **Exactly one note matches, and the snapshot shows a move:** propose a
   repair. A move means all three of these: the snapshot is present; the
   old target was a note in the snapshot and is gone now (for a markdown
-  link, its resolved path; for a wiki link, a snapshot path whose file name
-  matches the same way); and the one matching note's path is **not** in the
+  link and a path-qualified wiki link such as `[[old/Seeds]]`, its exact
+  resolved old path; for a bare wiki link such as `[[Seeds]]`, the one
+  snapshot path whose file name matches the same way, and only if exactly
+  one did); and the one matching note's path is **not** in the
   snapshot, so it appeared since the last run. A note that was already
   there before is never a move target. A markdown link's
   target becomes the relative path from the linking note's folder to that
@@ -187,7 +189,9 @@ in `tests/fixtures/` (invented notes only).
 5. Two notes with the same name: no repair, one `needsYou` entry with both
    paths. A deleted note: `needsYou` with no candidates. A deleted
    `old/Seeds.md` while `archive/Seeds.md` was already in the snapshot: no
-   repair, `needsYou` with that candidate. No snapshot: every broken link
+   repair, `needsYou` with that candidate. `[[old/Seeds]]` when the
+   snapshot held `other/Seeds.md`, not `old/Seeds.md`, and that note moved
+   to `archive/Seeds.md`: no repair. No snapshot: every broken link
    is in `needsYou`, none repaired. `--record`, then a move, then `--write`:
    repaired.
 6. Links in fenced code blocks and inline code are not touched; external
