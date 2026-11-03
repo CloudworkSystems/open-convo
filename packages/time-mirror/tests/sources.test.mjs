@@ -192,7 +192,8 @@ test('reads 400 days one day at a time and splits capped chunks without changing
   const result = await awDays({ from: '2025-01-01', to: '2026-02-04', timeZone: 'UTC', host: 'test-mac', appTags: { Editor: 'coding' }, fetchJson });
   assert.equal(Object.keys(result.days).length, 400);
   assert.equal(result.days['2025-06-01'].coding, 2);
-  assert.equal(calls.filter(path => path.includes('/events?')).length, 804);
+  // 804 day/split reads plus 16 context reads at this fixture's outer edges.
+  assert.equal(calls.filter(path => path.includes('/events?')).length, 820);
   assert.doesNotMatch(JSON.stringify(result), /PRIVATE-MARKER/);
 });
 
@@ -249,4 +250,26 @@ test('merged B history gives identical totals across capped splits and midnight'
   assert.deepEqual((await run(midnight, true, '2026-10-01', '2026-10-02')).days, acrossDays.days);
   assert.equal(acrossDays.days['2026-10-02'].b, 1 / 60);
   assert.equal(acrossDays.days['2026-10-02'].a, 12 / 60);
+});
+
+test('outer flood history preserves day totals with previous or next day included', async () => {
+  async function run(rows, from, to) {
+    return awDays({ from, to, timeZone: 'UTC', host: 'test-mac', appTags: { A: 'a', B: 'b' }, fetchJson: async path => {
+      if (path === '/api/0/buckets/') return buckets;
+      const query = new URLSearchParams(path.split('?')[1]);
+      const start = Date.parse(query.get('start'));
+      const end = Date.parse(query.get('end'));
+      const events = path.includes('window') ? rows : [event('2026-10-01T00:00:00Z', 172800, { status: 'not-afk' })];
+      return events.filter(row => Date.parse(row.timestamp) <= end && Date.parse(row.timestamp) + row.duration * 1000 >= start);
+    } });
+  }
+  const edge = Date.parse('2026-10-02T00:00:00Z');
+  const e = (offset, duration, app) => event(new Date(edge + offset * 1000).toISOString(), duration, { app });
+  const leading = [e(-20, 6, 'B'), e(-13, 10, 'B'), e(1, 12, 'A')];
+  const alone = await run(leading, '2026-10-02', '2026-10-02');
+  assert.deepEqual(alone.days['2026-10-02'], (await run(leading, '2026-10-01', '2026-10-02')).days['2026-10-02']);
+  assert.equal(alone.days['2026-10-02'].b, 1 / 60);
+  const trailing = [e(-10, 8, 'A'), e(1, 10, 'B'), e(12, 6, 'B')];
+  assert.deepEqual((await run(trailing, '2026-10-01', '2026-10-01')).days['2026-10-01'],
+    (await run(trailing, '2026-10-01', '2026-10-02')).days['2026-10-01']);
 });

@@ -267,13 +267,30 @@ export async function awDays({ from, to, timeZone, appTags = {}, host, fetchJson
   // Flood once across the complete range so merged durations survive both
   // response splits and civil-day edges. Duplicate padding events count once.
   const collected = [new Map(), new Map()];
+  const accept = parsed => parsed.forEach((result, index) => {
+    skipped += result.skipped;
+    for (const event of result.events) collected[index].set(JSON.stringify([event.start, event.end, event.value]), event);
+  });
   for (const date of dates) {
-    await readSpan(fetchJson, [windowBucket, idleBucket], civilStart(date, timeZone), civilStart(addDays(date, 1), timeZone), parsed => {
-      parsed.forEach((result, index) => {
-        skipped += result.skipped;
-        for (const event of result.events) collected[index].set(JSON.stringify([event.start, event.end, event.value]), event);
-      });
-    });
+    await readSpan(fetchJson, [windowBucket, idleBucket], civilStart(date, timeZone), civilStart(addDays(date, 1), timeZone), accept);
+  }
+  const rangeStart = civilStart(from, timeZone);
+  const rangeEnd = civilStart(addDays(to, 1), timeZone);
+  const touches = edge => collected.some(events => [...events.values()].some(event => event.start <= edge + PULSE_MS && event.end >= edge - PULSE_MS));
+  for (const direction of [-1, 1]) {
+    const edge = direction < 0 ? rangeStart : rangeEnd;
+    const limit = direction < 0 ? civilStart(addDays(from, -1), timeZone) : civilStart(addDays(to, 2), timeZone);
+    let frontier = edge;
+    let step = 10 * 60_000;
+    // Stop at a separating gap or the neighbouring civil day's far edge.
+    // A full neighbouring day of uninterrupted flood history is not realistic;
+    // that explicit cap limits how much context a requested range can read.
+    while (frontier !== limit && touches(frontier)) {
+      const next = direction < 0 ? Math.max(limit, frontier - step) : Math.min(limit, frontier + step);
+      await readSpan(fetchJson, [windowBucket, idleBucket], Math.min(frontier, next), Math.max(frontier, next), accept);
+      frontier = next;
+      step *= 2;
+    }
   }
   const floodedWindows = flood([...collected[0].values()]);
   const floodedIdle = flood([...collected[1].values()]);

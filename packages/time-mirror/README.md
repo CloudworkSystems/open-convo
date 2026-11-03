@@ -90,6 +90,12 @@ the number of distinct parsed events in the range (at most 400 days), rather
 than retaining response bodies, titles or URLs. This preserves merged-event
 history across both capped-response splits and midnight.
 
+At each outer edge, context reads start with ten minutes and double until a
+gap longer than five seconds separates the flood history, or the neighbouring
+civil day's far edge is reached. That full-day limit assumes uninterrupted
+flood history does not realistically extend farther. Context outside the
+requested days affects flooding only and is never counted in the output.
+
 Gaps up to and including five seconds go to the longer neighbouring event,
 or the earlier event on a tie. Equal app/status values merge during flooding,
 and zero-duration leftovers are dropped, following `aw_transform/flood.py`.
