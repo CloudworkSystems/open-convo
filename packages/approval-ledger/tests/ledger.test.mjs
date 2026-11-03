@@ -68,6 +68,46 @@ test("restoring an older ledger folder preserves an id found only in the current
   assert.equal((await f.ledger.claim({ requestId: "lost-id", actionId: action.actionId, digest, now: t.claim })).ok, false);
 });
 
+test("journal recovers crashes after journal, ledger, and store publication", async (context) => {
+  for (const stage of ["journal", "ledger", "store"]) {
+    for (const next of ["write", "reset"]) {
+      const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true }));
+      await ask(f.ledger);
+      const file = join(f.ledgerDir, "ledger.json");
+      const previousText = await readFile(file, "utf8");
+      const before = JSON.parse(await readFile(f.storePath, "utf8"));
+      await yes(f.ledger);
+      const entries = JSON.parse(await readFile(file, "utf8"));
+      const store = JSON.parse(await readFile(f.storePath, "utf8"));
+      await writeFile(file, stage === "journal" ? previousText : JSON.stringify(entries));
+      await writeFile(f.storePath, JSON.stringify(stage === "store" ? store : before));
+      const journal = `${f.storePath}.journal.json`;
+      await writeFile(journal, JSON.stringify({ before, previousText, entries, store }));
+      const unchanged = await readFile(journal, "utf8");
+      assert.equal((await f.ledger.verify()).ok, true);
+      assert.equal((await f.ledger.status("r1")).status, "yes");
+      assert.equal((await f.ledger.pending(t.yes)).ok, true);
+      assert.equal((await f.ledger.history()).ok, true);
+      assert.equal(await readFile(journal, "utf8"), unchanged);
+      assert.equal((next === "reset" ? await f.ledger.reset() : await ask(f.ledger, "r2")).ok, true);
+      await assert.rejects(lstat(journal), { code: "ENOENT" });
+      assert.equal((await f.ledger.verify()).ok, true);
+    }
+  }
+});
+
+test("tampered journal is refused by reads, writes, and reset", async (context) => {
+  const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true })); await ask(f.ledger);
+  const file = join(f.ledgerDir, "ledger.json");
+  const previousText = await readFile(file, "utf8"); const before = JSON.parse(await readFile(f.storePath, "utf8"));
+  await yes(f.ledger);
+  const entries = JSON.parse(await readFile(file, "utf8")); const store = JSON.parse(await readFile(f.storePath, "utf8"));
+  await writeFile(file, previousText); await writeFile(f.storePath, JSON.stringify(before));
+  entries.at(-1).answer = "no";
+  await writeFile(`${f.storePath}.journal.json`, JSON.stringify({ before, previousText, entries, store }));
+  for (const result of [await f.ledger.verify(), await ask(f.ledger, "r2"), await f.ledger.reset()]) assert.match(result.reason, /changed outside True Convo/);
+});
+
 test("reading missing nested locations creates nothing", async (context) => {
   const root = await mkdtemp(join(tmpdir(), "approval-missing-"));
   context.after(() => rm(root, { recursive: true, force: true }));

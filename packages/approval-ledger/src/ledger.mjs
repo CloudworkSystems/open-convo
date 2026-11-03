@@ -162,8 +162,65 @@ async function withQueue(key, operation) {
 export async function openApprovalLedger({ ledgerDir, storePath }) {
   text(ledgerDir, "ledgerDir"); text(storePath, "storePath");
   const paths = await safeLocations(ledgerDir, storePath);
+  const journalPath = `${paths.store}.journal.json`;
+
+  function validPair(entries, store) {
+    const checked = verifyEntries(entries);
+    const ids = Array.isArray(entries) ? chainRequestIds(entries) : null;
+    return checked.ok && ids && store && store.head === checked.head && store.count === checked.count && Array.isArray(store.usedRequestIds) && ids.every((id) => store.usedRequestIds.includes(id));
+  }
+
+  async function journalSnapshot() {
+    const journal = await readJson(journalPath, null);
+    if (!journal) return null;
+    const { before, entries, store, previousText } = journal;
+    if (!validPair(entries, store) || !before || !Array.isArray(before.usedRequestIds) || !before.usedRequestIds.every((id) => store.usedRequestIds.includes(id))) throw new Error(DAMAGE);
+    const currentStore = await readJson(paths.store, null);
+    // Missing state is never reconstructed from an untrusted journal.
+    if (!currentStore || (canonical(currentStore) !== canonical(before) && canonical(currentStore) !== canonical(store))) throw new Error(DAMAGE);
+    const reset = entries.length === 1 && entries[0].type === "reset";
+    if (reset) {
+      if (entries[0].oldHead !== before.head) throw new Error(DAMAGE);
+    } else {
+      const prefix = entries.slice(0, before.count);
+      if (!validPair(prefix, before) || entries.length !== before.count + 1) throw new Error(DAMAGE);
+    }
+    let currentText;
+    try { await assertNoSymlink(paths.file); currentText = await readFile(paths.file, "utf8"); }
+    catch (error) { if (error.code !== "ENOENT") throw error; currentText = null; }
+    let isNew = false;
+    try { isNew = canonical(JSON.parse(currentText)) === canonical(entries); } catch {}
+    if (!isNew && currentText !== previousText) throw new Error(DAMAGE);
+    return { entries, store, damaged: false };
+  }
+
+  async function recover() {
+    try {
+      const pending = await journalSnapshot();
+      if (pending) {
+        await atomicJson(paths.file, pending.entries);
+        await atomicJson(paths.store, pending.store);
+        await rm(journalPath);
+      }
+      return success();
+    } catch { return refusal(DAMAGE); }
+  }
+
+  async function commit(entries, store, before) {
+    let previousText;
+    try { previousText = await readFile(paths.file, "utf8"); }
+    catch (error) { if (error.code !== "ENOENT") throw error; previousText = null; }
+    // Initialize the empty protected state before publishing the first journal.
+    if (!(await exists(paths.store))) await atomicJson(paths.store, before);
+    await atomicJson(journalPath, { before, previousText, entries, store });
+    await atomicJson(paths.file, entries);
+    await atomicJson(paths.store, store);
+    await rm(journalPath);
+  }
 
   async function load({ tolerateDamage = false } = {}) {
+    try { const pending = await journalSnapshot(); if (pending) return pending; }
+    catch { return { refusal: refusal(DAMAGE), retryable: true }; }
     let entries;
     let store;
     let damaged = false;
@@ -196,6 +253,8 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
         throw error;
       }
       try {
+        const recovered = await recover();
+        if (!recovered.ok) return recovered;
         const loaded = await load();
         if (loaded.refusal) return loaded.refusal;
         const checked = validate(loaded.entries, loaded.store);
@@ -203,8 +262,7 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
         const entries = append(loaded.entries, kind, { ...data, ...checked.data });
         const usedRequestIds = [...new Set([...loaded.store.usedRequestIds, ...(checked.usedRequestIds ?? [])])].sort();
         const nextStore = { head: entries.at(-1).hash, count: entries.length, usedRequestIds };
-        await atomicJson(paths.file, entries);
-        await atomicJson(paths.store, nextStore);
+        await commit(entries, nextStore, loaded.store);
         return success(checked.result ?? {});
       } finally {
         await handle?.close();
@@ -301,15 +359,17 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
         try { handle = await openFile(paths.lock, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600); }
         catch (error) { if (error.code === "EEXIST") return refusal(`Another approval is being recorded. If nothing is running, remove ${paths.lock}.`); throw error; }
         try {
+          const recovered = await recover();
+          if (!recovered.ok) return recovered;
           const loaded = await load({ tolerateDamage: true });
+          if (loaded.refusal) return loaded.refusal;
           const readableIds = chainRequestIds(loaded.entries);
           const protectedIds = Array.isArray(loaded.store?.usedRequestIds) ? loaded.store.usedRequestIds : [];
           if (readableIds === null || (loaded.damaged && !Array.isArray(loaded.store?.usedRequestIds))) return refusal(DAMAGE);
           const usedRequestIds = [...new Set([...protectedIds, ...readableIds])].sort();
           const oldHead = typeof loaded.store?.head === "string" ? loaded.store.head : EMPTY_HEAD;
           const entries = append([], "reset", { oldHead, usedRequestIds });
-          await atomicJson(paths.file, entries);
-          await atomicJson(paths.store, { head: entries[0].hash, count: 1, usedRequestIds });
+          await commit(entries, { head: entries[0].hash, count: 1, usedRequestIds }, loaded.store);
           return success({ usedRequestIds });
         } finally { await handle?.close(); await rm(paths.lock, { force: true }); }
       });

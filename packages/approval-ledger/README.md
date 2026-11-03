@@ -43,6 +43,8 @@ The first claim succeeds and the second says the yes was already used. The other
 
 ## Edge cases
 
+- Interrupted saves use `<storePath>.journal.json` beside the store: reads validate its consistent pair without writing, and the next write or reset finishes it under the lock. Restoring the ledger folder alone cannot restore this journal or the store, so their checks still catch an older ledger.
+
 - Used ids include both individual request entries and the lists inside reset entries. Verification requires the store to contain all of those ids. Reset preserves both sources, and refuses malformed reset lists or an unreadable ledger with no readable store.
 
 - A missing store beside a nonempty ledger is damage. Reset refuses rather than replacing the protected used-id list with an empty list. Only an empty ledger can initialize a missing store.
