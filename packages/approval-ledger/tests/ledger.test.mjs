@@ -1,0 +1,88 @@
+import assert from "node:assert/strict";
+import { readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { test } from "node:test";
+import { mkdtemp } from "node:fs/promises";
+import { Worker } from "node:worker_threads";
+import { actionDigest, openApprovalLedger } from "../src/index.mjs";
+
+const action = { actionId: "send-invented", description: "Send an invented note", kind: "send", payload: { to: "Robin", body: "Hello" } };
+const digest = actionDigest({ description: action.description, kind: action.kind, payload: action.payload });
+const t = { ask: "2030-01-01T00:00:00.000Z", yes: "2030-01-01T00:01:00.000Z", claim: "2030-01-01T00:02:00.000Z", finish: "2030-01-01T00:03:00.000Z" };
+
+async function fixture() {
+  const root = await mkdtemp(join(tmpdir(), "approval-ledger-"));
+  const ledgerDir = join(root, "ledger"); const storePath = join(root, "state", "head.json");
+  const ledger = await openApprovalLedger({ ledgerDir, storePath });
+  return { root, ledgerDir, storePath, ledger };
+}
+async function ask(ledger, requestId = "r1", extra = {}) { return ledger.ask({ requestId, actionId: action.actionId, digest, description: action.description, kind: action.kind, askedAt: t.ask, ...extra }); }
+async function yes(ledger, requestId = "r1", source = "person") { return ledger.answer({ requestId, answer: "yes", answeredAt: t.yes, source }); }
+
+test("person yes is claimed and finished exactly once", async (context) => {
+  const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true }));
+  assert.equal((await ask(f.ledger)).ok, true); const answered = await yes(f.ledger); assert.equal(answered.ok, true, JSON.stringify(answered));
+  const claimed = await f.ledger.claim({ requestId: "r1", actionId: action.actionId, digest, now: t.claim }); assert.equal(claimed.ok, true);
+  assert.equal((await f.ledger.finish({ requestId: "r1", claimId: claimed.claimId, outcome: "done", finishedAt: t.finish })).ok, true);
+  assert.equal((await f.ledger.claim({ requestId: "r1", actionId: action.actionId, digest, now: t.claim })).reason, "This yes was already used");
+});
+
+test("agent and system answers never count", async (context) => {
+  for (const source of ["agent", "system"]) { const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true })); await ask(f.ledger); await yes(f.ledger, "r1", source); assert.match((await f.ledger.claim({ requestId: "r1", actionId: action.actionId, digest, now: t.claim })).reason, /person/); }
+});
+
+test("changed digest or action id is refused", async (context) => {
+  const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true })); await ask(f.ledger); await yes(f.ledger);
+  for (const changed of [
+    actionDigest({ description: `${action.description}!`, kind: action.kind, payload: action.payload }),
+    actionDigest({ description: action.description, kind: "publish", payload: action.payload }),
+    actionDigest({ description: action.description, kind: action.kind, payload: { ...action.payload, body: "Hellp" } })
+  ]) assert.match((await f.ledger.claim({ requestId: "r1", actionId: action.actionId, digest: changed, now: t.claim })).reason, /different action/);
+  assert.match((await f.ledger.claim({ requestId: "r1", actionId: "other", digest, now: t.claim })).reason, /different action/);
+});
+
+test("expiry, answers, withdrawal, and unknown ids", async (context) => {
+  const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true }));
+  assert.equal((await ask(f.ledger, "too-long", { expiresAt: "2030-01-02T00:00:01.000Z" })).ok, false);
+  assert.equal((await f.ledger.answer({ requestId: "missing", answer: "yes", answeredAt: t.yes, source: "person" })).ok, false);
+  await ask(f.ledger, "expired", { expiresAt: "2030-01-01T00:01:00.000Z" }); await yes(f.ledger, "expired");
+  assert.match((await f.ledger.claim({ requestId: "expired", actionId: action.actionId, digest, now: "2030-01-01T00:01:01.000Z" })).reason, /expired/);
+  await ask(f.ledger); await yes(f.ledger); await f.ledger.answer({ requestId: "r1", answer: "no", answeredAt: t.claim, source: "person" });
+  assert.equal((await f.ledger.claim({ requestId: "r1", actionId: action.actionId, digest, now: t.claim })).ok, false);
+  await f.ledger.answer({ requestId: "r1", answer: "yes", answeredAt: t.claim, source: "person" }); assert.equal((await f.ledger.claim({ requestId: "r1", actionId: action.actionId, digest, now: t.claim })).ok, true);
+  assert.equal((await f.ledger.answer({ requestId: "r1", answer: "no", answeredAt: t.finish, source: "person" })).ok, false);
+  await ask(f.ledger, "withdraw"); await yes(f.ledger, "withdraw"); assert.equal((await f.ledger.withdraw({ requestId: "withdraw", withdrawnAt: t.claim })).ok, true); assert.equal((await f.ledger.claim({ requestId: "withdraw", actionId: action.actionId, digest, now: t.claim })).ok, false);
+});
+
+test("twenty worker claims produce one success", async (context) => {
+  const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true })); await ask(f.ledger); await yes(f.ledger);
+  const workerSource = `import { parentPort, workerData } from 'node:worker_threads'; import { openApprovalLedger } from ${JSON.stringify(new URL("../src/index.mjs", import.meta.url).href)}; const l=await openApprovalLedger(workerData.paths); parentPort.postMessage(await l.claim(workerData.claim));`;
+  const results = await Promise.all(Array.from({ length: 20 }, () => new Promise((resolvePromise, reject) => { const worker = new Worker(workerSource, { eval: true, type: "module", workerData: { paths: { ledgerDir: f.ledgerDir, storePath: f.storePath }, claim: { requestId: "r1", actionId: action.actionId, digest, now: t.claim } } }); worker.once("message", resolvePromise); worker.once("error", reject); })));
+  assert.equal(results.filter((result) => result.ok).length, 1);
+});
+
+test("unfinished claim is in flight and cannot be reused", async (context) => {
+  const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true })); await ask(f.ledger); await yes(f.ledger); await f.ledger.claim({ requestId: "r1", actionId: action.actionId, digest, now: t.claim });
+  assert.equal((await f.ledger.status("r1")).status, "inFlight"); assert.equal((await f.ledger.claim({ requestId: "r1", actionId: action.actionId, digest, now: t.claim })).ok, false);
+});
+
+test("damage fails closed, reset preserves every protected request id", async (context) => {
+  const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true })); await ask(f.ledger); await yes(f.ledger);
+  const path = join(f.ledgerDir, "ledger.json"); const original = await readFile(path, "utf8"); const entries = JSON.parse(original);
+  for (const damaged of [entries.slice(1), [{ ...entries[0], description: "edited" }, ...entries.slice(1)], [...entries].reverse()]) {
+    await writeFile(path, JSON.stringify(damaged)); assert.equal((await f.ledger.verify()).ok, false); await writeFile(path, original);
+  }
+  await writeFile(path, JSON.stringify(entries.slice(0, 1))); assert.equal((await f.ledger.verify()).ok, false);
+  assert.equal((await f.ledger.reset()).ok, true); assert.equal((await ask(f.ledger)).ok, false); assert.equal((await f.ledger.answer({ requestId: "r1", answer: "yes", answeredAt: t.yes, source: "person" })).ok, false);
+});
+
+test("symlinks, inside stores, and stale locks are refused", async (context) => {
+  const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true })); await ask(f.ledger); const path = join(f.ledgerDir, "ledger.json"); const target = join(f.root, "copy.json"); await writeFile(target, await readFile(path)); await rm(path); await symlink(target, path); assert.equal((await f.ledger.verify()).ok, false); assert.equal((await f.ledger.reset()).ok, true); assert.equal((await ask(f.ledger)).ok, false);
+  await assert.rejects(() => openApprovalLedger({ ledgerDir: join(f.root, "inside"), storePath: join(f.root, "inside", "head.json") }), /outside/);
+  const g = await fixture(); context.after(() => rm(g.root, { recursive: true, force: true })); await writeFile(join(g.ledgerDir, ".lock"), "stale"); const result = await ask(g.ledger); assert.match(result.reason, /remove/); assert.ok((await readdir(g.ledgerDir)).includes(".lock"));
+});
+
+test("pending and history use supplied times", async (context) => {
+  const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true })); assert.match((await f.ledger.pending(t.ask)).message, /Nothing/); await ask(f.ledger); assert.deepEqual((await f.ledger.pending(t.yes)).requests, ["r1"]); assert.equal((await f.ledger.history()).entries.length, 1);
+});
