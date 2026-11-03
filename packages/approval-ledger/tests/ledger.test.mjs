@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { readFile, readdir, rm, symlink, writeFile, mkdir, lstat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -10,6 +10,28 @@ import { actionDigest, openApprovalLedger } from "../src/index.mjs";
 const action = { actionId: "send-invented", description: "Send an invented note", kind: "send", payload: { to: "Robin", body: "Hello" } };
 const digest = actionDigest({ description: action.description, kind: action.kind, payload: action.payload });
 const t = { ask: "2030-01-01T00:00:00.000Z", yes: "2030-01-01T00:01:00.000Z", claim: "2030-01-01T00:02:00.000Z", finish: "2030-01-01T00:03:00.000Z" };
+
+test("reading missing nested locations creates nothing", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "approval-missing-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const ledger = await openApprovalLedger({ ledgerDir: join(root, "missing", "ledger"), storePath: join(root, "state", "head.json") });
+  assert.equal((await ledger.status("never-asked")).reason, "This request was never asked");
+  assert.deepEqual((await ledger.pending(t.ask)).requests, []);
+  assert.deepEqual((await ledger.history()).entries, []);
+  assert.equal((await ledger.verify()).count, 0);
+  assert.deepEqual(await readdir(root), []);
+  await assert.rejects(lstat(join(root, "missing")), { code: "ENOENT" });
+});
+
+test("first write creates deeply missing ledger and store parents", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "approval-nested-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const ledgerDir = join(root, "a", "b", "c", "ledger");
+  const ledger = await openApprovalLedger({ ledgerDir, storePath: join(root, "state", "nested", "head.json") });
+  assert.equal((await ask(ledger)).ok, true);
+  assert.equal((await ledger.verify()).count, 1);
+  assert.equal((await lstat(ledgerDir)).isDirectory(), true);
+});
 
 test("approval views ignore agent and system answers, including after a person answers", async (context) => {
   const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true }));
@@ -65,6 +87,8 @@ async function fixture() {
   const root = await mkdtemp(join(tmpdir(), "approval-ledger-"));
   const ledgerDir = join(root, "ledger"); const storePath = join(root, "state", "head.json");
   const ledger = await openApprovalLedger({ ledgerDir, storePath });
+  // Most fixtures exercise existing folders. Missing-folder behavior has its own tests.
+  await mkdir(ledgerDir, { recursive: true });
   return { root, ledgerDir, storePath, ledger };
 }
 async function ask(ledger, requestId = "r1", extra = {}) { return ledger.ask({ requestId, actionId: action.actionId, digest, description: action.description, kind: action.kind, askedAt: t.ask, ...extra }); }

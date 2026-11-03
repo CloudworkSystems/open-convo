@@ -64,6 +64,12 @@ function isWithin(child, parent) {
   return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 }
 
+async function resolveExistingAncestor(path) {
+  let ancestor = path;
+  while (!(await exists(ancestor))) ancestor = dirname(ancestor);
+  return resolve(await realpath(ancestor), relative(ancestor, path));
+}
+
 async function safeLocations(ledgerDir, storePath) {
   const ledger = resolve(ledgerDir);
   const store = resolve(storePath);
@@ -71,10 +77,8 @@ async function safeLocations(ledgerDir, storePath) {
   await assertNoSymlink(ledger);
   await assertNoSymlink(dirname(store));
   await assertNoSymlink(store);
-  const ledgerBase = await realpath((await exists(ledger)) ? ledger : dirname(ledger));
-  const storeBase = await realpath((await exists(dirname(store))) ? dirname(store) : dirname(dirname(store)));
-  const effectiveLedger = (await exists(ledger)) ? ledgerBase : join(ledgerBase, ledger.split("/").at(-1));
-  const effectiveStore = join(storeBase, store.split("/").at(-1));
+  const effectiveLedger = await resolveExistingAncestor(ledger);
+  const effectiveStore = await resolveExistingAncestor(store);
   if (isWithin(effectiveStore, effectiveLedger)) throw new Error("storePath must be outside ledgerDir");
   return { ledger, store, file: join(ledger, "ledger.json"), lock: join(ledger, ".lock") };
 }
@@ -146,13 +150,12 @@ async function withQueue(key, operation) {
 export async function openApprovalLedger({ ledgerDir, storePath }) {
   text(ledgerDir, "ledgerDir"); text(storePath, "storePath");
   const paths = await safeLocations(ledgerDir, storePath);
-  await mkdir(paths.ledger, { recursive: true, mode: 0o700 });
 
   async function load({ tolerateDamage = false } = {}) {
     let entries;
     let store;
     let damaged = false;
-    try { await assertNoSymlink(paths.ledger, false); entries = await readJson(paths.file, []); } catch { if (!tolerateDamage) return { refusal: refusal(DAMAGE) }; entries = []; damaged = true; }
+    try { await assertNoSymlink(paths.ledger); entries = await readJson(paths.file, []); } catch { if (!tolerateDamage) return { refusal: refusal(DAMAGE) }; entries = []; damaged = true; }
     try { await assertNoSymlink(dirname(paths.store)); store = await readJson(paths.store, { head: EMPTY_HEAD, count: 0, usedRequestIds: [] }); } catch { if (!tolerateDamage) return { refusal: refusal(DAMAGE) }; store = null; damaged = true; }
     const checked = verifyEntries(entries);
     const validStore = store && checked.ok && store.head === checked.head && store.count === checked.count && Array.isArray(store.usedRequestIds);
@@ -165,6 +168,8 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
 
   async function write(kind, data, validate) {
     return withQueue(paths.lock, async () => {
+      await assertNoSymlink(paths.ledger);
+      await mkdir(paths.ledger, { recursive: true, mode: 0o700 });
       let handle;
       try {
         handle = await openFile(paths.lock, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
@@ -272,6 +277,8 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
     async verify() { return readSnapshot((loaded) => success({ head: loaded.store.head, count: loaded.store.count })); },
     async reset() {
       return withQueue(paths.lock, async () => {
+        await assertNoSymlink(paths.ledger);
+        await mkdir(paths.ledger, { recursive: true, mode: 0o700 });
         let handle;
         try { handle = await openFile(paths.lock, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600); }
         catch (error) { if (error.code === "EEXIST") return refusal(`Another approval is being recorded. If nothing is running, remove ${paths.lock}.`); throw error; }
