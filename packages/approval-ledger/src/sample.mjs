@@ -26,6 +26,8 @@ export async function runSample(rootValue, verb) {
   else if (verb === "yes" || verb === "no") result = await ledger.answer({ requestId, answer: verb, answeredAt: TIMES.answered, source: "person" });
   else if (verb === "withdraw") result = await ledger.withdraw({ requestId, withdrawnAt: TIMES.answered });
   else if (verb === "claim") result = await ledger.claim({ requestId, actionId: ACTION.actionId, digest: DIGEST, now: TIMES.claim });
+  else if (verb === "claim-late") result = await ledger.claim({ requestId, actionId: ACTION.actionId, digest: DIGEST, now: "2030-01-01T12:30:01.000Z" });
+  else if (verb === "claim-changed") result = await ledger.claim({ requestId, actionId: ACTION.actionId, digest: actionDigest({ description: "Send the different invented note to Robin", kind: ACTION.kind, payload: ACTION.payload }), now: TIMES.claim });
   else if (verb === "finish") {
     const status = await ledger.status(requestId); result = await ledger.finish({ requestId, claimId: status.claim?.claimId ?? "missing", outcome: "done", finishedAt: TIMES.finish });
   } else if (verb === "reset") result = await ledger.reset();
@@ -36,7 +38,7 @@ export async function runSample(rootValue, verb) {
 
 async function main() {
   const args = process.argv.slice(2); const at = args.indexOf("--dir");
-  if (at < 0 || !args[at + 1]) throw new Error("Usage: sample.mjs --dir <folder> <ask|yes|no|withdraw|claim|finish|reset|lock>");
+  if (at < 0 || !args[at + 1]) throw new Error("Usage: sample.mjs --dir <folder> <ask|yes|no|withdraw|claim|claim-late|claim-changed|finish|reset|lock>");
   const operands = args.filter((value, index) => index !== at && index !== at + 1 && !value.startsWith("--"));
   if (operands.length !== 1) throw new Error("The sample accepts one fixed verb and no action text");
   process.stdout.write(`${JSON.stringify(await runSample(args[at + 1], operands[0]), null, 2)}\n`);

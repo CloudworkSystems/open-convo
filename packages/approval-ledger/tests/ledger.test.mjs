@@ -138,6 +138,26 @@ test("protected symlinks and changed ledger path components refuse", async (cont
   assert.deepEqual(await readdir(replacement), []);
 });
 
+test("invalid protected ids refuse verification, claims, and reset without poisoning the chain", async (context) => {
+  for (const bad of [null, "", 42, "r1"]) {
+    const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true }));
+    await ask(f.ledger); await yes(f.ledger);
+    const original = await readFile(f.storePath, "utf8");
+    const store = JSON.parse(original); store.usedRequestIds.push(bad);
+    await writeFile(f.storePath, JSON.stringify(store));
+    const log = await readFile(join(f.ledgerDir, "ledger.json"), "utf8");
+    assert.equal((await f.ledger.verify()).ok, false);
+    assert.equal((await f.ledger.claim({ requestId: "r1", actionId: action.actionId, digest, now: t.claim })).ok, false);
+    assert.match((await f.ledger.reset()).reason, /changed outside True Convo/);
+    assert.equal(await readFile(join(f.ledgerDir, "ledger.json"), "utf8"), log);
+    await writeFile(f.storePath, original);
+    assert.equal((await f.ledger.verify()).ok, true);
+    assert.equal((await f.ledger.reset()).ok, true);
+    assert.equal((await f.ledger.verify()).ok, true);
+    assert.equal((await f.ledger.reset()).ok, true);
+  }
+});
+
 test("reading missing nested locations creates nothing", async (context) => {
   const root = await mkdtemp(join(tmpdir(), "approval-missing-"));
   context.after(() => rm(root, { recursive: true, force: true }));

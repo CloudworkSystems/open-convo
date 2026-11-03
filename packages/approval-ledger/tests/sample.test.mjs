@@ -26,3 +26,16 @@ test("sample refuses unmarked folders and accepts no action text", async (contex
   const valid = await command(["--dir", join(root, "sample"), "ask"]);
   assert.equal(valid.code, 0); assert.equal(JSON.parse(valid.stdout).ok, true);
 });
+
+test("fixed late and changed sample commands print the approval refusals", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "approval-scenarios-")); context.after(() => rm(root, { recursive: true, force: true }));
+  for (const [verb, reason] of [["claim-late", "This yes expired at 2030-01-01T12:30:00.000Z"], ["claim-changed", "This yes was for a different action"]]) {
+    const folder = join(root, verb);
+    for (const step of ["ask", "yes"]) assert.equal(JSON.parse((await command(["--dir", folder, step])).stdout).ok, true);
+    const result = await command(["--dir", folder, verb]);
+    assert.equal(result.code, 0);
+    assert.deepEqual(JSON.parse(result.stdout), { ok: false, reason });
+    const extra = await command(["--dir", folder, verb, "free-form action"]);
+    assert.equal(extra.code, 1);
+  }
+});

@@ -39,9 +39,39 @@ node src/sample.mjs --dir /tmp/approval-ledger-sample claim
 node src/sample.mjs --dir /tmp/approval-ledger-sample claim
 ```
 
-The first claim succeeds and the second says the yes was already used. The other verbs are `no`, `withdraw`, `finish`, `reset`, and `lock`. Use a fresh sample folder for each scenario. `lock` leaves the lock in place to demonstrate the crash message. To test rollback detection, copy `ledger/`, add another entry, restore only that older `ledger/`, then run the read-only `verify` command. To test editing, change an entry in `ledger/ledger.json`, verify that claims stop, then run `reset`. After reset, the old request id remains unusable.
+The first claim succeeds and the second says the yes was already used. The other verbs are `no`, `withdraw`, `finish`, `reset`, `lock`, `claim-late`, and `claim-changed`. Use a fresh sample folder for each scenario. `lock` leaves the lock in place to demonstrate the crash message. To test rollback detection, copy `ledger/`, add another entry, restore only that older `ledger/`, then run the read-only `verify` command. To test editing, change an entry in `ledger/ledger.json`, verify that claims stop, then run `reset`. After reset, the old request id remains unusable.
+
+For the expiry trial, run these commands in order. `ask` and `yes` each print `{"ok": true}` (with formatting). The last command prints `ok: false` and the exact reason `This yes expired at 2030-01-01T12:30:00.000Z`. Ask again with a new request before attempting the action.
+
+```sh
+node src/sample.mjs --dir /tmp/approval-ledger-late ask
+```
+
+```sh
+node src/sample.mjs --dir /tmp/approval-ledger-late yes
+```
+
+```sh
+node src/sample.mjs --dir /tmp/approval-ledger-late claim-late
+```
+
+For the changed-action trial, run these commands in order. The last command prints `ok: false` and the exact reason `This yes was for a different action`. The changed action needs a new request and the person's yes.
+
+```sh
+node src/sample.mjs --dir /tmp/approval-ledger-changed ask
+```
+
+```sh
+node src/sample.mjs --dir /tmp/approval-ledger-changed yes
+```
+
+```sh
+node src/sample.mjs --dir /tmp/approval-ledger-changed claim-changed
+```
 
 ## Edge cases
+
+- Protected request-id lists contain unique, non-empty strings, matching the identifiers accepted by `ask`. An invalid store or journal list is damage, and reset refuses rather than copying invalid values into the chain.
 
 - Ancestor aliases such as macOS `/tmp` are resolved once, and all later file operations use those real locations, so swapping an alias cannot redirect saves. Symlinks in the ledger tree or at the store, journal, or lock cause refusal, including during reset.
 

@@ -138,12 +138,16 @@ function requestState(entries, requestId) {
   };
 }
 
+function validRequestIds(ids) {
+  return Array.isArray(ids) && ids.every((id) => typeof id === "string" && id.length > 0) && new Set(ids).size === ids.length;
+}
+
 function chainRequestIds(entries) {
   const ids = new Set();
   for (const entry of entries) {
     if (typeof entry?.requestId === "string") ids.add(entry.requestId);
     if (entry?.type === "reset") {
-      if (!Array.isArray(entry.usedRequestIds) || entry.usedRequestIds.some((id) => typeof id !== "string" || id.length === 0)) return null;
+      if (!validRequestIds(entry.usedRequestIds)) return null;
       for (const id of entry.usedRequestIds) ids.add(id);
     }
   }
@@ -189,7 +193,7 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
   function validPair(entries, store) {
     const checked = verifyEntries(entries);
     const ids = Array.isArray(entries) ? chainRequestIds(entries) : null;
-    return checked.ok && ids && store && store.head === checked.head && store.count === checked.count && Array.isArray(store.usedRequestIds) && ids.every((id) => store.usedRequestIds.includes(id));
+    return checked.ok && ids && store && store.head === checked.head && store.count === checked.count && validRequestIds(store.usedRequestIds) && ids.every((id) => store.usedRequestIds.includes(id));
   }
 
   async function journalSnapshot() {
@@ -197,7 +201,7 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
     const journal = await readJson(journalPath, null);
     if (!journal) return null;
     const { before, entries, store, previousText } = journal;
-    if (!validPair(entries, store) || !before || !Array.isArray(before.usedRequestIds) || !before.usedRequestIds.every((id) => store.usedRequestIds.includes(id))) throw new Error(DAMAGE);
+    if (!validPair(entries, store) || !before || !validRequestIds(before.usedRequestIds) || !before.usedRequestIds.every((id) => store.usedRequestIds.includes(id))) throw new Error(DAMAGE);
     const currentStore = await readJson(paths.store, null);
     // Missing state is never reconstructed from an untrusted journal.
     if (!currentStore || (canonical(currentStore) !== canonical(before) && canonical(currentStore) !== canonical(store))) throw new Error(DAMAGE);
@@ -256,7 +260,7 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
     }
     const checked = verifyEntries(entries);
     const chainIds = Array.isArray(entries) ? chainRequestIds(entries) : null;
-    const validStore = store && checked.ok && chainIds && store.head === checked.head && store.count === checked.count && Array.isArray(store.usedRequestIds) && chainIds.every((id) => store.usedRequestIds.includes(id));
+    const validStore = store && checked.ok && chainIds && store.head === checked.head && store.count === checked.count && validRequestIds(store.usedRequestIds) && chainIds.every((id) => store.usedRequestIds.includes(id));
     if (damaged || !checked.ok || !validStore) {
       if (tolerateDamage) return { entries: Array.isArray(entries) ? entries : [], store, damaged: true };
       return { refusal: refusal(DAMAGE), retryable: !damaged && checked.ok && Array.isArray(store?.usedRequestIds) };
@@ -388,7 +392,7 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
           if (loaded.refusal) return loaded.refusal;
           const readableIds = chainRequestIds(loaded.entries);
           const protectedIds = Array.isArray(loaded.store?.usedRequestIds) ? loaded.store.usedRequestIds : [];
-          if (readableIds === null || (loaded.damaged && !Array.isArray(loaded.store?.usedRequestIds))) return refusal(DAMAGE);
+          if (readableIds === null || !validRequestIds(loaded.store?.usedRequestIds)) return refusal(DAMAGE);
           const usedRequestIds = [...new Set([...protectedIds, ...readableIds])].sort();
           const oldHead = typeof loaded.store?.head === "string" ? loaded.store.head : EMPTY_HEAD;
           const entries = append([], "reset", { oldHead, usedRequestIds });
