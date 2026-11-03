@@ -69,7 +69,7 @@ rules follow the Atlas note's table, mapped as shown.
 | 1 | Blocked | Stuck | A "silent on" line in the PR keeper's latest "Not working" comment on #52, written by `cloudwork-bot`, names this pull request. Only those missed-deadline lines count: the comment's "Waiting on someone" section and its "not set up" lines never make a pull request Blocked |
 | 2 | Returned | Being fixed | The builder owes the next move: a draft; `tests` red on the latest commit; a merge conflict; Codex findings on the latest commit while `codex-approved` is not passing there and the triage judge isn't due (below); an independent review of the latest commit with an open P1 or P2 (P3s don't block, as in `docs/agent-process.md`); or a plan check of the latest commit that lists something missing |
 | 3 | Needs You | Waiting on you | Only the owner can move it: a protected path without his approval on the latest commit, or a `needs-owner: risk-escalate` label with no owner approval of the latest commit submitted after the escalating review (once he has approved it, only the coordinator's label removal is left, so the row is Under Way, waiting on the coordinator); or a pull request the PR keeper's latest "Not working" comment lists as waiting on the owner ("plan waiting on the owner's yes", "rules change waiting on the owner's yes", "site change waiting on the owner's yes", "risk escalation waiting on the owner", "Dependabot waiting on the owner"). The keeper already decides whether a quoted yes covers the latest commit, so the feed reads its verdict instead of judging the quote again |
-| 4 | Under Way | In review | Someone other than the builder or the owner has it: Codex hasn't reviewed the latest commit yet; the triage judge is due (below); the independent review of the latest commit hasn't arrived; an outside module's plan check of the latest commit hasn't been posted; or the keeper's comment lists it as waiting on the coordinator or on the thread that asked the owner |
+| 4 | Under Way | In review | Someone other than the builder or the owner has it: Codex hasn't reviewed the latest commit yet and `codex-approved` isn't passing there; the triage judge is due (below); the independent review of the latest commit hasn't arrived; an outside module's plan check of the latest commit hasn't been posted; or the keeper's comment lists it as waiting on the coordinator or on the thread that asked the owner |
 | 5 | Checked | Ready to merge | `tests` and `codex-approved` pass on the latest commit, the owner's approval is there where a protected path needs it, an independent review of that commit with no open P1 or P2 is there where the rules ask for one (P3-only counts as clean; only a review the PR keeper's step D would count, as below), and for an outside module (an `agent: grokbot` or `agent: codex` pull request that changes `packages/`) a `cloudwork-bot` comment says "Plan check" of that commit "passed". Auto-merge being on is shown, never required |
 | 6 | Unknown | Unknown | None of the above |
 
@@ -171,6 +171,19 @@ code pull requests build them and their tests cover them:
    review. After that approval the row is Under Way, waiting on the
    coordinator to remove the label (`docs/agent-process.md`, risk-escalate).
    Tests cover both sides of that approval.
+3. Checked needs the privacy and security checklist block on the counted
+   independent review (and on the plan check, for an outside module), as
+   the keeper's step F does. A clean review without it is Under Way.
+4. A passing `codex-approved` on the latest commit satisfies every Codex
+   condition, including the owner's hung-review override, so such a row is
+   never Under Way for want of a Codex review.
+5. A review of an earlier commit still counts when the keeper's step D would
+   reuse it: the pull request's own changes against `main` are identical
+   (its "SAME" comparison, with the same 300-file limit), so an update from
+   `main` doesn't send a ready row back to Under Way.
+6. Where these rules and the PR keeper's steps D to F disagree about whether
+   a pull request is ready, the keeper's file wins and the feed is the bug.
+   The state module's tests include one case per condition of step F.
 
 ## Not In Scope
 
