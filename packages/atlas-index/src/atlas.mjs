@@ -388,7 +388,19 @@ export function applyPlan(root, scanned, result, fileSystem = fs, options = {}) 
       [...result.writes.map(item => item.path), ...result.removes],
     );
     if (conflicts.length) {
-      return finish(result, conflicts, result.writes.map(item => item.path), result.removes);
+      const stored = buildAtlas(scanned.notes, { healthAsStored: true });
+      const asStored = {
+        ...result,
+        health: stored.health,
+        counts: {
+          ...result.counts,
+          'broken-link': stored.counts['broken-link'],
+          duplicate: stored.counts.duplicate,
+          orphan: stored.counts.orphan,
+          'too-long': stored.counts['too-long'],
+        },
+      };
+      return finish(asStored, conflicts, result.writes.map(item => item.path), result.removes);
     }
   }
   const extra = [];

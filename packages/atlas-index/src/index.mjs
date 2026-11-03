@@ -14,7 +14,7 @@ export const DEFAULT_INDEX_THRESHOLD = 5;
 export const DEFAULT_MAX_LINES = 400;
 export const ROOT_INDEX_HEADING = 'Notes';
 
-const OPTION_KEYS = new Set(['indexName', 'rootMapName', 'indexThreshold', 'maxLines']);
+const OPTION_KEYS = new Set(['indexName', 'rootMapName', 'indexThreshold', 'maxLines', 'healthAsStored']);
 const CONTROL = /[\u0000-\u001F\u007F-\u009F\u2028\u2029]/;
 const LABEL_CHARS = /[\\[\]()*_`<>]/g;
 
@@ -185,7 +185,10 @@ function readOptions(options) {
     ? DEFAULT_INDEX_THRESHOLD
     : wholeOption(options.indexThreshold, 'indexThreshold');
   const maxLines = options.maxLines === undefined ? DEFAULT_MAX_LINES : wholeOption(options.maxLines, 'maxLines');
-  return { indexName, rootMapName, indexThreshold, maxLines };
+  if (options.healthAsStored !== undefined && typeof options.healthAsStored !== 'boolean') {
+    fail('healthAsStored must be true or false.');
+  }
+  return { indexName, rootMapName, indexThreshold, maxLines, healthAsStored: options.healthAsStored === true };
 }
 
 function copyNotes(notes) {
@@ -482,7 +485,7 @@ function refsIn(notePath, text) {
 export function buildAtlas(notes, options) {
   const settings = readOptions(options);
   const copies = copyNotes(notes);
-  const { indexName, rootMapName, indexThreshold, maxLines } = settings;
+  const { indexName, rootMapName, indexThreshold, maxLines, healthAsStored } = settings;
   const byPath = new Map(copies.map(note => [note.path, note]));
   const isIndex = notePath => baseName(notePath) === indexName;
   const isMap = notePath => notePath === rootMapName;
@@ -620,8 +623,12 @@ export function buildAtlas(notes, options) {
   conflicts.sort((a, b) => compareText(a.path, b.path) || compareText(a.detail, b.detail));
 
   const files = new Map(copies.map(note => [note.path, note.text]));
-  for (const notePath of removes) files.delete(notePath);
-  for (const item of writes) files.set(item.path, item.text);
+  // healthAsStored reports the notes as given. The command uses it when a
+  // case collision leaves every planned write and removal unapplied.
+  if (!healthAsStored) {
+    for (const notePath of removes) files.delete(notePath);
+    for (const item of writes) files.set(item.path, item.text);
+  }
   // Links may use either Unicode spelling. The stored path stays the one we
   // were given, which is the spelling on disk when the command scanned it.
   const storedPath = new Map();
