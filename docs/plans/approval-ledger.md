@@ -90,7 +90,8 @@ person saw.
    chain, a symlink, or a ledger whose head and count don't match the
    protected state (below) makes every claim refuse with a plain reason
    until the person resets it. A reset writes a new chain that starts with
-   a `reset` entry naming the old head; nothing from the old chain can be
+   a `reset` entry naming the old head and listing every request id the
+   readable part of the old chain used (so none can be asked again); nothing from the old chain can be
    claimed afterwards.
 8. **Protected state.** The ledger's head hash and count are also kept
    through a store interface `{ read(), write(next, expected) }` (compare
