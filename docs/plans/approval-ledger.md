@@ -62,9 +62,10 @@ kinds:
    `agent` or `system`. Only `person` with `yes` can be claimed. An
    `agent` or `system` answer is stored (so it shows in the history) and
    never counts.
-2. **One yes, one action.** `claim({ requestId, digest, now })` succeeds
-   only if the request has a person's yes, the digest matches the one
-   asked about exactly, the yes hasn't expired, been withdrawn or been
+2. **One yes, one action.** `claim({ requestId, actionId, digest, now })`
+   succeeds only if the request has a person's yes, the `actionId` and the
+   digest both match the ones asked about exactly (the digest leaves out
+   the action id, so both are checked), the yes hasn't expired, been withdrawn or been
    claimed, and no `no` came later. It writes `claimed` and returns a
    `claimId`. Every later claim of the same request is refused.
 3. **Claim before acting, under one lock.** Every write runs under an
@@ -159,7 +160,8 @@ the Desk will later show, so this answers the five questions in
    refused.
 2. An agent's yes and a system yes are kept but never claimable.
 3. A claim with a digest that differs in only the description, only the
-   kind, or one payload byte is refused.
+   kind, or one payload byte is refused, and so is a claim with the same
+   digest but another action's `actionId`.
 4. Expiry: a claim one second after `expiresAt` is refused; `expiresAt`
    more than 24 hours out is refused when asking.
 5. No after yes cancels; yes after no restores; answers after a claim are

@@ -68,7 +68,10 @@ trackers, grids and page are reused unchanged.
   intersection are right across day edges (the overlap is trimmed after).
   If one day's response is stopped at the 2 MB cap, that day is asked again in
   halves, down to one hour; an hour still over the cap is refused with a
-  plain message naming the hour. Only the parsed fields of each chunk are
+  plain message naming the hour. Every chunk, at every split level, is
+  widened by the pulse time on both sides, then trimmed to its own span
+  with overlapping events counted once, so the result never depends on
+  how a day was split. Only the parsed fields of each chunk are
   kept, so memory stays small for a 400-day range.
 - **Tags.** `appTags` maps an app name to one of the owner's tag names (the
   same rules as slice 1's `categoryTags`, including the reserved names).
@@ -135,7 +138,9 @@ only):
 7. Malformed events are skipped and counted.
 8. A 400-day range of invented events totalling well over 2 MB is read
    day by day and gives the same minutes as one big read; a 3 MB day is
-   split and still counted; events flooded across a day edge count once.
+   split and still counted; events flooded across a day edge count once;
+   a floodable gap across a half-day or hour split gives the same minutes
+   as the unsplit day.
 9. The command refuses any base other than `127.0.0.1:5600`, refuses a
    redirect, times out, and caps the response size (with a local test
    server on loopback).
