@@ -262,6 +262,31 @@ test('a planned index that differs only by case writes nothing', () => {
   }
 });
 
+test('an INDEX.MD file blocks the planned index before any write', () => {
+  const dir = join(tmpdir(), `atlas-md-${process.pid}-${Math.random().toString(16).slice(2)}`);
+  try {
+    mkdirSync(join(dir, 'garden'), { recursive: true });
+    for (let i = 0; i < 6; i += 1) writeFileSync(join(dir, 'garden', `n${i}.md`), `# N${i}\n`);
+    writeFileSync(join(dir, 'garden', 'INDEX.MD'), '# Unrelated\n');
+    const before = snapshot(dir);
+    const scanned = scanDirectory(dir);
+    assert.equal(scanned.notes.some(item => item.path.toLowerCase() === 'garden/index.md'), false);
+    assert.equal(scanned.skipped.includes('garden/INDEX.MD'), true);
+    const planned = buildAtlas(scanned.notes);
+    assert.equal(planned.writes.some(item => item.path === 'garden/INDEX.md'), true);
+    assert.equal(planned.writes.some(item => item.path === 'MAP.md'), true);
+    const blocked = applyPlan(dir, scanned, planned, fs, { caseFold: true });
+    assert.deepEqual(blocked.writes, []);
+    assert.equal(blocked.conflicts.some(item => item.path === 'garden/INDEX.md' && /INDEX\.MD/.test(item.detail)), true);
+    assert.equal(statExists(join(dir, 'MAP.md')), false);
+    assert.equal(statExists(join(dir, 'garden', 'INDEX.md')), false);
+    assert.equal(readFileSync(join(dir, 'garden', 'INDEX.MD'), 'utf8'), '# Unrelated\n');
+    assert.deepEqual(snapshot(dir), before);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('linux keeps two markdown paths that differ only by case', () => {
   assert.equal(process.platform === 'darwin' || process.platform === 'linux', true);
   if (process.platform === 'darwin') return;

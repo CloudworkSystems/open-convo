@@ -117,7 +117,7 @@ function toNotePath(root, full) {
   return rel.split(path.sep).join('/');
 }
 
-function walk(root, dir, fileSystem, found) {
+function walk(root, dir, fileSystem, found, skipped) {
   let entries;
   try {
     entries = fileSystem.readdirSync(dir, { withFileTypes: true });
@@ -129,10 +129,15 @@ function walk(root, dir, fileSystem, found) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       if (entry.name.startsWith('.')) continue;
-      walk(root, full, fileSystem, found);
+      walk(root, full, fileSystem, found, skipped);
       continue;
     }
-    if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
+    // A name such as INDEX.MD is not a note, but on a case-insensitive volume
+    // it is the same file as the index we would write. Remember it for that check.
+    if (!entry.isFile() || !entry.name.endsWith('.md')) {
+      skipped.push(toNotePath(root, full));
+      continue;
+    }
     const notePath = toNotePath(root, full);
     let bytes;
     try {
@@ -148,8 +153,10 @@ function walk(root, dir, fileSystem, found) {
 export function scanDirectory(root, fileSystem = fs) {
   refuseWorkspace(root, fileSystem);
   const found = [];
-  walk(root, root, fileSystem, found);
+  const skipped = [];
+  walk(root, root, fileSystem, found, skipped);
   found.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+  skipped.sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
   if (process.platform === 'darwin') {
     const clashes = caseFoldClash(found.map(item => item.path));
     if (clashes.length) {
@@ -160,6 +167,7 @@ export function scanDirectory(root, fileSystem = fs) {
     root,
     notes: found.map(item => ({ path: item.path, text: item.text })),
     bytes: new Map(found.map(item => [item.path, item.bytes])),
+    skipped,
   };
 }
 
@@ -384,7 +392,7 @@ export function applyPlan(root, scanned, result, fileSystem = fs, options = {}) 
   const caseFold = options.caseFold ?? process.platform === 'darwin';
   if (caseFold) {
     const conflicts = plannedCaseConflicts(
-      [...scanned.bytes.keys()],
+      [...scanned.bytes.keys(), ...(scanned.skipped ?? [])],
       [...result.writes.map(item => item.path), ...result.removes],
     );
     if (conflicts.length) {
