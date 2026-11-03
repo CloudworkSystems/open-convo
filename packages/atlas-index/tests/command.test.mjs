@@ -316,6 +316,32 @@ test('a symlink named INDEX.md blocks the rebuild before any write', () => {
   }
 });
 
+test('a directory named INDEX.md blocks the rebuild before any write', () => {
+  const dir = join(tmpdir(), `atlas-dir-${process.pid}-${Math.random().toString(16).slice(2)}`);
+  try {
+    mkdirSync(join(dir, 'garden', 'INDEX.md'), { recursive: true });
+    mkdirSync(join(dir, 'MAP.md'));
+    for (let i = 0; i < 6; i += 1) writeFileSync(join(dir, 'garden', `n${i}.md`), `# N${i}\n`);
+    writeFileSync(join(dir, 'note.md'), '# Note\n');
+    const before = snapshot(dir);
+    const scanned = scanDirectory(dir);
+    assert.equal(scanned.skipped.includes('garden/INDEX.md'), true);
+    assert.equal(scanned.skipped.includes('MAP.md'), true);
+    const planned = buildAtlas(scanned.notes);
+    assert.equal(planned.writes.some(item => item.path === 'garden/INDEX.md'), true);
+    assert.equal(planned.writes.some(item => item.path === 'MAP.md'), true);
+    const blocked = applyPlan(dir, scanned, planned);
+    assert.deepEqual(blocked.writes, []);
+    assert.equal(blocked.conflicts.some(item => item.path === 'garden/INDEX.md' && /nothing was written/.test(item.detail)), true);
+    assert.equal(blocked.conflicts.some(item => item.path === 'MAP.md' && /nothing was written/.test(item.detail)), true);
+    assert.equal(lstatSync(join(dir, 'MAP.md')).isDirectory(), true);
+    assert.equal(lstatSync(join(dir, 'garden', 'INDEX.md')).isDirectory(), true);
+    assert.deepEqual(snapshot(dir), before);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('linux keeps two markdown paths that differ only by case', () => {
   assert.equal(process.platform === 'darwin' || process.platform === 'linux', true);
   if (process.platform === 'darwin') return;

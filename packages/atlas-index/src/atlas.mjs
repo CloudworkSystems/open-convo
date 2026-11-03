@@ -131,6 +131,8 @@ function walk(root, dir, fileSystem, found, skipped) {
       continue;
     }
     if (entry.isDirectory()) {
+      // A directory named INDEX.md or MAP.md occupies the file we would write.
+      skipped.push(toNotePath(root, full));
       if (entry.name.startsWith('.')) continue;
       walk(root, full, fileSystem, found, skipped);
       continue;
