@@ -5,7 +5,7 @@ and a validator for it. This is part 1 of
 [docs/plans/media-generation-capability.md](../../docs/plans/media-generation-capability.md).
 It only checks records. It runs nothing, reads no keys, contacts no host and
 spends nothing. Part 2, below, is the signed spending cap and the ledger.
-`make_media` (part 3) comes later in this package.
+Part 3, further down, is `make_media` for an upload or a local ComfyUI run.
 
 Node 22 or later. No dependencies.
 
@@ -346,3 +346,160 @@ These are the choices the plan does not spell out. Each one has a test in
 - Amounts are stored and printed as the shortest decimal that round-trips
   (`"0.3"`, not a binary fraction). The signed cap keeps the text the
   person signed; the figures the ledger writes are the shortest form.
+
+## Part 3: make_media, upload and local
+
+The runner for `make_media`. It checks the capability record with part 1
+first. Upload and local are free, so this part does not reserve or settle
+on the cap. `own_key` and `sign_in` come back as "not available yet" and
+are never run. A paid run waits for parts 4 and 5.
+
+The caller passes the time as `now()`, a function that returns an ISO time.
+The library does not read the clock. The command is the caller, so when
+`--now` is left off it uses the machine clock.
+
+### Route list
+
+`listRoutes(record, setUp)` returns `{ offered, setup, unavailable }`.
+`setUp` is the route ids the person has ready (an array or a `Set`).
+Upload is always offered. A local route is offered when its id is in
+`setUp`, and otherwise it is a set-up choice. Free routes come first.
+Paid routes are only in `unavailable`, even if their id was passed in
+`setUp`.
+
+### Upload
+
+The file is checked against the record's `files` inputs: the bytes have to
+match a type that input allows, and the size has to fit that same input.
+The type comes from the bytes, not the name. A symlink is not followed.
+The copy gets a new name in the media folder, and the receipt is
+`<file>.receipt.json` beside it.
+
+`madeHow` is `filmed-or-drawn-by-me`, `made-with-ai` or `not-sure`. The
+receipt's `ai_label` is `made by AI`, `not sure`, or left off. It is left
+off only for "filmed or drawn by me" when the bytes do not contain the IPTC
+markers `trainedAlgorithmicMedia` or `compositeWithTrainedAlgorithmicMedia`
+(UTF-8 or UTF-16). "Not sure" stays "not sure" even when a marker is there.
+Site Engine treats "not sure" as AI.
+
+### Local
+
+The server URL has to be `http://127.0.0.1` or `http://[::1]`, with a port
+and no path, user or name. `localhost`, any other address, and `https` are
+refused before a connection. Every request is made with redirects off. A
+3xx stops the run before anything else is sent or fetched.
+
+The workflow file is `{ "kind": "image" or "video", "prompt": { ... } }`.
+`prompt` is the ComfyUI graph. `kind` has to match the request. Exactly one
+input is the whole text `{{prompt}}`. When the request sets `seconds`,
+`width`, `height` or one reference file, that placeholder has to appear
+exactly once too, and a placeholder with no value is refused. The value is
+written into the parsed object (a number, or the file name) and then the
+object is serialised. The prompt is never spliced into the JSON text.
+
+Before anything is sent, every node's `class_type` has to be in
+`src/media/nodes.mjs`: ComfyUI's built-in loaders, text encoders, samplers,
+decoders, image and video save and load, and the local Wan, LTX, Hunyuan,
+Mochi and Cosmos builders. An API node, a Partner node, a custom node, and
+a built-in that is not in that list (such as the webcam) are refused.
+
+A reference picture is uploaded to that same ComfyUI first (`/upload/image`),
+and the name it returns is what goes in `{{reference_file}}`. The graph is
+then posted to `/prompt`. Progress comes from ComfyUI's progress socket on
+that same address. The estimate is the remaining time from progress so far
+and the elapsed time. If the socket is not there, the run still finishes
+and the estimate stays unknown. Nothing is retried. A server that is not
+running says `ComfyUI isn't running on this Mac` and how to open it.
+
+Cancel uses that run's prompt id. A waiting job is removed from the queue
+by that id. An interrupt is sent only when that id is the one running, and
+the body names the id. Another job that is running is left alone. A queue
+that cannot be read does not get an interrupt. The run is marked stopped
+and no file is written.
+
+The output is fetched from `/view` into the media folder under a new name.
+The receipt says `made by AI`, `leaves_machine` `nothing`, and cost `free`.
+
+### Receipt
+
+| Field | What it is |
+|---|---|
+| `route` | The route id |
+| `provider`, `model` | From the route. Both null for an upload |
+| `prompt` | The prompt text, or null for an upload |
+| `leaves_machine` | `nothing` |
+| `cost` | `free` |
+| `time` | An ISO time from `now()` |
+| `ai_label` | `made by AI`, `not sure`, or absent when it counts as not AI |
+| `file` | The new file name, not a path |
+
+### Command
+
+From the repo root:
+
+```sh
+node packages/capabilities/src/media/make.mjs --record <capability.json> --route upload --file <path> --made-how <answer> --media <dir>
+node packages/capabilities/src/media/make.mjs --record <capability.json> --route local --server http://127.0.0.1:<port> --workflow <file.json> --prompt <text> --media <dir>
+```
+
+`--route upload` or `--route local` picks the one route of that kind.
+`--kind`, `--seconds`, `--width`, `--height`, `--reference-file` and
+`--now` are optional. Without `--kind`, a local run uses the workflow's
+kind. The media folder has to exist already. The command prints the file
+path and the receipt path.
+
+### Edge cases
+
+Each of these is covered in `tests/media.test.mjs`.
+
+- Upload is offered even when nothing is set up. A local route that is not
+  set up is a set-up choice, not a run. A paid route stays unavailable
+  even if its id is listed as ready. Free routes stay first when the record
+  lists a paid route above them.
+- The upload type is sniffed from the bytes. A `.png` name full of text is
+  refused. A file one byte over the record's limit is refused and not
+  copied. The source file is left where it was. The saved name is new.
+- "Filmed or drawn by me" with no marker has no `ai_label`. The same answer
+  on `trainedAlgorithmicMedia` or `compositeWithTrainedAlgorithmicMedia`,
+  including UTF-16, is `made by AI`. "Not sure" stays `not sure` even with
+  a marker. "Made with AI" is `made by AI` with no marker.
+- A symlink source or a symlink media folder is refused.
+- A record with no `files` input cannot accept an upload, because there is
+  no limit to check.
+- `localhost`, `127.0.0.2`, an IPv4-mapped address, a name, a user in the
+  URL, a path, and `https` are refused before a connection. `::1` is
+  accepted. A redirect on the prompt, on the reference upload, on the
+  progress socket, or on the file fetch stops the run, and the address in
+  `Location` is not contacted. A redirect to a machine that is not this one
+  stops the same way.
+- A workflow kind that is not the request's kind is refused. `{{prompt}}`
+  has to be the whole of exactly one field. The same token inside a longer
+  sentence does not count. Two prompt fields are refused. A placeholder
+  with no value is refused, and a value with no placeholder is refused
+  rather than keeping the template's number. The person's prompt is placed
+  as a JSON value, so quotes, script tags, line breaks and right-to-left
+  marks stay inside that one field. A prompt whose text is `{{prompt}}` is
+  stored as that text and is not expanded again.
+- A node id of `__proto__` is refused. Seconds, width and height have to be
+  whole numbers inside the record's limits.
+- Cancelling before the run has contacted the server sends nothing. Cancelling
+  while that first connection is still opening stops the run and does not
+  send the prompt. Cancelling
+  a waiting job deletes that prompt id and does not interrupt a different
+  running job. Cancelling the running job sends an interrupt that names
+  that id, and a different waiting job stays queued. If the queue cannot be
+  read, no interrupt is sent. The run is still marked stopped.
+- A job ComfyUI has already finished does not emit progress. While it is
+  running, progress is a fraction `value / max` from the progress socket,
+  and the remaining time is `elapsed * (1 - progress) / progress`. A
+  progress callback that throws does not stop the run. If the socket never
+  opens, the file still comes back.
+- ComfyUI answering with an error, or not answering, does not submit the
+  prompt again. An output name that is not a plain file name is not
+  fetched. A file over the output limit (64 MiB, or a lower limit the
+  caller passes) is not saved. A reference upload that returns a path is
+  not used, and the prompt is not sent.
+- A video workflow saves a video extension. The receipt still says made by AI.
+- The library files other than the command do not call `Date.now()` or
+  `new Date()` without an argument. A `now()` that does not return an ISO
+  time is refused before a connection.
