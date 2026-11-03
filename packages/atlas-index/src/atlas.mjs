@@ -125,8 +125,11 @@ function walk(root, dir, fileSystem, found, skipped) {
     fail('Could not read this folder.');
   }
   for (const entry of entries) {
-    if (entry.isSymbolicLink()) continue;
     const full = path.join(dir, entry.name);
+    if (entry.isSymbolicLink()) {
+      skipped.push(toNotePath(root, full));
+      continue;
+    }
     if (entry.isDirectory()) {
       if (entry.name.startsWith('.')) continue;
       walk(root, full, fileSystem, found, skipped);
@@ -371,6 +374,19 @@ function finish(result, extra, droppedWrites, droppedRemoves) {
   return { writes, removes, unchanged: result.unchanged, conflicts, health, counts };
 }
 
+function occupiedConflicts(skipped, plannedPaths) {
+  const names = new Set(skipped ?? []);
+  const conflicts = [];
+  for (const planned of plannedPaths) {
+    if (!names.has(planned)) continue;
+    conflicts.push({
+      path: planned,
+      detail: 'A symbolic link or other unread entry already occupies this name, so nothing was written.',
+    });
+  }
+  return conflicts;
+}
+
 function plannedCaseConflicts(existingPaths, plannedPaths) {
   const conflicts = [];
   for (const planned of plannedPaths) {
@@ -390,26 +406,28 @@ export function applyPlan(root, scanned, result, fileSystem = fs, options = {}) 
   refuseWorkspace(root, fileSystem);
   assertPlanPaths(result);
   const caseFold = options.caseFold ?? process.platform === 'darwin';
+  const plannedPaths = [...result.writes.map(item => item.path), ...result.removes];
+  const conflicts = occupiedConflicts(scanned.skipped, plannedPaths);
   if (caseFold) {
-    const conflicts = plannedCaseConflicts(
+    conflicts.push(...plannedCaseConflicts(
       [...scanned.bytes.keys(), ...(scanned.skipped ?? [])],
-      [...result.writes.map(item => item.path), ...result.removes],
-    );
-    if (conflicts.length) {
-      const stored = buildAtlas(scanned.notes, { healthAsStored: true });
-      const asStored = {
-        ...result,
-        health: stored.health,
-        counts: {
-          ...result.counts,
-          'broken-link': stored.counts['broken-link'],
-          duplicate: stored.counts.duplicate,
-          orphan: stored.counts.orphan,
-          'too-long': stored.counts['too-long'],
-        },
-      };
-      return finish(asStored, conflicts, result.writes.map(item => item.path), result.removes);
-    }
+      plannedPaths,
+    ));
+  }
+  if (conflicts.length) {
+    const stored = buildAtlas(scanned.notes, { healthAsStored: true });
+    const asStored = {
+      ...result,
+      health: stored.health,
+      counts: {
+        ...result.counts,
+        'broken-link': stored.counts['broken-link'],
+        duplicate: stored.counts.duplicate,
+        orphan: stored.counts.orphan,
+        'too-long': stored.counts['too-long'],
+      },
+    };
+    return finish(asStored, conflicts, result.writes.map(item => item.path), result.removes);
   }
   const extra = [];
   const droppedWrites = [];
