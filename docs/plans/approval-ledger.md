@@ -205,6 +205,13 @@ from an older copy, each show the "changed outside True Convo" message
 until reset; after reset nothing old can be claimed. He confirms each
 message tells him what to do next.
 
+## Carried To The Build
+
+Codex findings from the plan review's later rounds, which the code pull
+request must meet (docs/agent-process.md "Plans stop after two Codex
+rounds"):
+
+- Used request ids survive any reset, including ids the damaged or rolled-back chain no longer shows: keep the set of used ids (or a counter the host's ids come from) in the protected store, or refuse a reset that can't preserve them, with a test that restores an older ledger folder, resets, and shows the lost id still can't be asked or answered ([thread](https://github.com/CloudworkSystems/open-convo/pull/276#discussion_r4450950238)).
 ## Out Of Scope For This Slice
 
 The Desk's approval screen, notifications, the Face ID or password

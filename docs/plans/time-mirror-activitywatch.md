@@ -197,6 +197,13 @@ old page as it was; stopping a run part-way (Control-C) leaves the old page
 whole; and the finished page shows his week with no titles or addresses
 anywhere in it. He confirms each message tells him what to do next.
 
+## Carried To The Build
+
+Codex findings from the plan review's later rounds, which the code pull
+request must meet (docs/agent-process.md "Plans stop after two Codex
+rounds"):
+
+- `checkSource` caps a day's minutes at that civil day's real length in the given zone (1,380, 1,440 or 1,500), not a fixed 1,440, with a test on a fall-back day ([thread](https://github.com/CloudworkSystems/open-convo/pull/276#discussion_r4450950253)).
 ## Out Of Scope For This Slice
 
 Window titles, browser URLs and the browser watcher; any background service

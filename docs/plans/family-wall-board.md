@@ -201,6 +201,13 @@ part-way (Control-C on a large sample) leaves the old page whole. He
 confirms each message and warning reads clearly from across a room where
 it's on the page.
 
+## Carried To The Build
+
+Codex findings from the plan review's later rounds, which the code pull
+request must meet (docs/agent-process.md "Plans stop after two Codex
+rounds"):
+
+- Sharing matches stable unique ids, not display names: `calendars` and `list:` rules name a calendar or task list id from the agenda, or the board is refused when two calendars or two task lists share a name, with a test where a private calendar has the same name as a shared one and stays "Busy" ([thread](https://github.com/CloudworkSystems/open-convo/pull/276#discussion_r4450950247)).
 ## Out Of Scope For This Slice
 
 Reading engine output from storage, any schedule or refresh, Home
