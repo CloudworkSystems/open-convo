@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { generateKeyPairSync, sign, verify } from 'node:crypto';
 import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -742,9 +741,9 @@ test('a lock that is already held does not get stolen', async () => {
 
 test('a lock left by a finished process is taken, and a live one is not', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'cap-lock-dead-'));
-  const finished = spawnSync(process.execPath, ['-e', 'process.exit(0)']);
-  assert.equal(finished.status, 0);
-  const deadPid = finished.pid;
+  // Above every process id macOS or the Linux runners can assign, so it
+  // cannot be a running process. The test does not start one.
+  const deadPid = 2147483647;
   const token = 'ab'.repeat(16);
   try {
     const ledgerLock = join(dir, 'ledger.lock');
