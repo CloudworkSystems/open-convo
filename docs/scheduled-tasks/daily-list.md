@@ -12,10 +12,10 @@ Tools: `gh` in Bash, signed in as cloudwork-bot. First run `gh api user --jq .lo
 4. Note any trial steps still pending in STATUS.md on origin/main ("Waiting on the owner").
 
 Write it for a busy non-technical owner, in plain words with title-case headings: every PR or issue as a link (see "Links" at the end),
-- "Needs You Today": numbered, one line each with the PR link and what to click. Also put here each line of the keeper's "Waiting on someone" section that waits on the owner's yes (he gives it in the Claude thread that asked him). If nothing needs him, say so in one line.
+- "Needs You Today": numbered, one line each with the PR link and what to click. Also put here each line of the keeper's "Waiting on someone" section that waits on the owner's yes (he gives it in the Claude thread that asked him), and each line of the PR steward's "Stuck" section whose fix is the owner's (for example "needs the owner to ask Codex for these fixes"), for as long as it stays in that section. If nothing needs him, say so in one line.
 - "Not Working": each line of the keeper's comment that names a silent agent, plus "PR keeper silent" if it applies; then one line "Not set up: <agents>" for its "not set up" lines. If nothing is silent, say "Every agent is answering." in that line's place.
 - "Security": one line from the security sweep's comment: "Nothing needs action." or "<N> items need action" with the link to that comment. If its updated_at is more than 8 days before now, or it is missing, say "Security sweep silent" instead.
-- "Waiting On Others": one line with counts, plus any "Codex silent" PR numbers and the keeper's other "Waiting on someone" lines.
+- "Waiting On Others": one line with counts, plus any "Codex silent" PR numbers, the keeper's other "Waiting on someone" lines and the steward's other "Stuck" lines.
 - "When You're At The Mac": the trial steps, if any.
 Keep it under 15 lines. Your final reply is the message he reads, so make it exactly that list and nothing else.
 
