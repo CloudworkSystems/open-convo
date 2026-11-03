@@ -119,7 +119,11 @@ export async function checkSource(source, { from, to, timeZone }) {
   if (!result || typeof result !== 'object' || !result.days || typeof result.days !== 'object' || Array.isArray(result.days) ||
       !Array.isArray(result.missing) || !Number.isInteger(result.skipped) || result.skipped < 0) fail('Activity source returned an invalid result shape.');
   const missing = new Set(result.missing);
+  if (missing.size !== result.missing.length) fail('Activity source listed a missing day more than once.');
   for (const date of missing) if (!dates.includes(date)) fail(`Activity source listed missing day outside the range: ${date}.`);
+  for (const date of dates) {
+    if (!own(result.days, date) && !missing.has(date)) fail(`Activity source omitted ${date}. Return its totals or list it as missing.`);
+  }
   for (const [date, tags] of Object.entries(result.days)) {
     if (!dates.includes(date)) fail(`Activity source returned day outside the range: ${date}.`);
     if (missing.has(date)) fail(`Activity source returned totals for missing day ${date}.`);

@@ -97,6 +97,19 @@ test('contract check rejects broken sources and RescueTime wrapper keeps slice 1
   assert.match(page.html, /productive/);
 });
 
+test('contract check requires each requested date exactly once in days or missing', async () => {
+  const range = { from: '2026-10-01', to: '2026-10-02', timeZone: 'UTC' };
+  const source = result => ({ id: 'example', name: 'Example', days: async () => ({ ...result, skipped: 0 }) });
+  await assert.rejects(checkSource(source({ days: { '2026-10-01': {} }, missing: [] }), range),
+    /omitted 2026-10-02.*totals or list it as missing/);
+  await assert.rejects(checkSource(source({ days: { '2026-10-01': {} }, missing: ['2026-10-01', '2026-10-02'] }), range),
+    /totals for missing day 2026-10-01/);
+  await assert.rejects(checkSource(source({ days: { '2026-10-01': {} }, missing: ['2026-10-02', '2026-10-02'] }), range),
+    /missing day more than once/);
+  const complete = { days: { '2026-10-01': {} }, missing: ['2026-10-02'] };
+  assert.deepEqual(await checkSource(source(complete), range), { ...complete, skipped: 0 });
+});
+
 test('source library has no disk, process, network, fetch, or clock access', async () => {
   const source = await readFile(new URL('../src/sources.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /(?:from\s*|import\s*\()['"](?:node:)?(?:fs|child_process|http|https|net|dns)[/'"]/);
