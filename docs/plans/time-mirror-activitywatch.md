@@ -16,7 +16,7 @@ the risk-review checklist ([risk-review.md](risk-review.md)); the
 coordinator checks it against this plan. **Finish line:** the pull request
 merges with `tests` passing, and the owner runs the command once on his Mac
 against his own ActivityWatch and opens a page of his own time as heat maps,
-with no RescueTime account involved.
+with no RescueTime account involved, and the owner trial below passes.
 
 ## Why
 
@@ -122,6 +122,19 @@ only):
    never reads the clock.
 10. The command refuses to overwrite without `--force`, and a write is a
     temporary file plus rename.
+
+**Owner trial checks** (on his Mac, with his own ActivityWatch, following
+the README's steps; an agent may run the commands for him): with
+ActivityWatch quit, the command prints the "isn't answering" message and
+the last page is unchanged; with it running, `--list-apps` prints app names
+and minutes only, with no window titles or web addresses; with an empty
+tags file everything shows as `untagged` and the command suggests
+`--list-apps`; a range before he installed ActivityWatch shows empty grids
+and says no activity was found; a wrong `--host` prints the bucket message
+naming the host names found; running again without `--force` leaves the
+old page as it was; stopping a run part-way (Control-C) leaves the old page
+whole; and the finished page shows his week with no titles or addresses
+anywhere in it. He confirms each message tells him what to do next.
 
 ## Out Of Scope For This Slice
 

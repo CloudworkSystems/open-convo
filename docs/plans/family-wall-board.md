@@ -13,7 +13,7 @@ under AGENTS.md "Outside Builders", through Cursor and signed in as
 checks the result against this plan. **Finish line:** the package merges with
 `tests` passing, and its command, run on the invented sample family in the
 package, writes one page that opens in a browser with no network and shows
-the family's day.
+the family's day, and the owner trial below passes.
 
 ## Why
 
@@ -167,6 +167,19 @@ only):
    never reads the clock (a test checks the source).
 9. The command refuses to overwrite without `--force`, and a write is a
    temporary file plus rename.
+
+**Owner trial checks** (the owner, or an agent on his Mac for him, runs
+the command on the invented sample boards the README names, and he looks at
+each page): the sample page opens with Wi-Fi off and shows the family's
+day; a board with nobody busy shows "Nothing on today" and no lists strip;
+a board 31 minutes old shows "Not updated since ..." in the warning style,
+and a next-day board shows "This is yesterday's board"; a hidden calendar
+shows "Busy" with no title or place; a board with a repeated color prints
+the plain message naming the section and item and writes no page; running
+again without `--force` leaves the old page as it was; stopping a run
+part-way (Control-C on a large sample) leaves the old page whole. He
+confirms each message and warning reads clearly from across a room where
+it's on the page.
 
 ## Out Of Scope For This Slice
 

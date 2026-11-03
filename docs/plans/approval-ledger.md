@@ -18,7 +18,8 @@ a fresh Claude is the independent review, ending with the risk-review
 checklist ([risk-review.md](risk-review.md)); the coordinator checks it
 against this plan. **Finish line:** the package merges with `tests`
 passing, and its command, run on the invented sample, shows a yes being
-recorded, claimed once, and refused the second time.
+recorded, claimed once, and refused the second time, and the owner
+trial below passes.
 
 ## Why
 
@@ -87,8 +88,17 @@ kinds:
 8. **Protected state.** The ledger's head hash and count are also kept
    through a store interface `{ read(), write(next, expected) }` (compare
    and swap), as in the cap's part 2, so a copy of an older ledger can't be
-   swapped in. In this slice the store is a file; True Convo's protected
-   storage supplies it later.
+   swapped in. In this slice the store is a file, and its path must be
+   outside the ledger folder: `open()` refuses a store path inside it (or a
+   symlink into it), so restoring a backup of the ledger folder alone is
+   caught as damage (rule 7).
+9. **Rollback limit, stated plainly.** A file store can't stop someone
+   restoring an old backup of both the ledger and the store together; then
+   a used yes would look unused. This slice does not claim to stop that.
+   The README says so in its first section, and no host may use this
+   package to start a real outside action until True Convo's protected
+   storage (which keeps a counter outside any backup) supplies the store.
+   That wiring is a later plan and must close this gap before it merges.
 
 ### Functions
 
@@ -144,13 +154,28 @@ the Desk will later show, so this answers the five questions in
 7. Crash between claim and finish: the request is in flight and never
    claimable again.
 8. Damage: a deleted entry, an edited entry, a reordered pair, a symlinked
-   file and an older copy of the ledger each make claims refuse with a
-   reason; `reset()` recovers, and nothing from before it can be claimed.
+   file and an older copy of the ledger folder (store kept current) each
+   make claims refuse with a reason; `reset()` recovers, and nothing from
+   before it can be claimed. A store path inside the ledger folder is
+   refused at `open()`.
 9. A stale lock file makes writes refuse with the plain message and is not
    removed.
 10. The library reads no clock, opens no network, uses no `child_process`,
     and imports `packages/prime-routing/` only through its public API (a
     test checks the source).
+
+**Owner trial checks** (the owner, or an agent on his Mac for him, runs
+the command on throwaway invented folders the README sets up, and he reads
+each message): an empty folder says "Nothing is waiting for your yes."; a
+yes is claimed once and the second claim shows "This yes was already used";
+a claim after expiry shows the expiry time; a claim for a changed action
+shows "This yes was for a different action"; a request claimed with no
+finish shows as "may or may not have happened" and can't be claimed; a
+left-behind lock file gives the plain lock message naming the path and is
+still there afterwards; an edited ledger file, and a ledger folder restored
+from an older copy, each show the "changed outside True Convo" message
+until reset; after reset nothing old can be claimed. He confirms each
+message tells him what to do next.
 
 ## Out Of Scope For This Slice
 
