@@ -200,9 +200,22 @@ export function flood(events) {
 }
 
 function activeSegments(windows, idle, start, end) {
+  // Resolve app ownership before clipping, retaining original start/end priority.
+  const edges = [...new Set(windows.flatMap(event => [event.start, event.end]))].sort((a, b) => a - b);
+  const resolved = [];
+  const priority = (a, b) => b.start - a.start || b.end - a.end || (a.value < b.value ? -1 : a.value > b.value ? 1 : 0);
+  for (let index = 0; index + 1 < edges.length; index += 1) {
+    const left = edges[index];
+    const right = edges[index + 1];
+    const winner = windows.filter(event => event.start <= left && event.end >= right).sort(priority)[0];
+    if (!winner) continue;
+    const previous = resolved.at(-1);
+    if (previous?.value === winner.value && previous.end === left) previous.end = right;
+    else resolved.push({ start: left, end: right, value: winner.value });
+  }
   const active = idle.filter(event => event.value === 'not-afk');
   const segments = [];
-  for (const window of windows) for (const status of active) {
+  for (const window of resolved) for (const status of active) {
     const left = Math.max(window.start, status.start, start);
     const right = Math.min(window.end, status.end, end);
     if (right > left) segments.push({ start: left, end: right, app: window.value });

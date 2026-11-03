@@ -67,6 +67,19 @@ test('floods close heartbeats, leaves longer gaps, and counts malformed events',
   const result = await awDays({ from: '2026-10-01', to: '2026-10-01', timeZone: 'UTC', host: 'test-mac', appTags: { Editor: 'coding' }, fetchJson });
   assert.equal(result.skipped, 1);
   assert.ok(Math.abs(result.days['2026-10-01'].coding - 10 / 60) < 1e-12);
+  const overlapCases = [
+    { windows: [event('2026-10-01T10:00:00Z', 600, { app: 'A' }), event('2026-10-01T10:02:00Z', 120, { app: 'B' })], expected: { a: 8, b: 2 } },
+    { windows: [event('2026-10-01T10:00:00Z', 600, { app: 'A' }), event('2026-10-01T10:00:00Z', 720, { app: 'B' })], expected: { b: 12 } },
+    { windows: [event('2026-10-01T10:00:00Z', 600, { app: 'B' }), event('2026-10-01T10:00:00Z', 600, { app: 'A' })], expected: { a: 10 } },
+    { windows: [event('2026-10-01T10:00:00Z', 600, { app: 'A' }), event('2026-10-01T10:02:00Z', 600, { app: 'A' })], expected: { a: 12 } },
+  ];
+  for (const { windows, expected } of overlapCases) {
+    for (const windowEvents of [windows, windows.toReversed()]) {
+      const overlap = await awDays({ from: '2026-10-01', to: '2026-10-01', timeZone: 'UTC', host: 'test-mac', appTags: { A: 'a', B: 'b' },
+        fetchJson: inventedActivity({ windowEvents, idleEvents: [event('2026-10-01T10:00:00Z', 720, { status: 'not-afk' })] }) });
+      assert.deepEqual(overlap.days['2026-10-01'], expected);
+    }
+  }
 });
 
 test('splits midnight and respects 23-hour and 25-hour civil days', async () => {

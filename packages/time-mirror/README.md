@@ -132,7 +132,9 @@ disk or clock itself.
 ## Edge cases
 
 - If two window events overlap, the later event keeps the overlapping time.
-  The minute is counted once, never under two app tags.
+  If they start together, the one ending later wins, then the app name that
+  sorts first. Each event keeps its time outside the overlap. Same-app
+  overlaps merge. The minute is counted once, never under two app tags.
 - A valid day containing events but no active overlap is present with empty
   totals. A day with no valid window or idle events is listed as missing.
 - Malformed events are skipped one by one. A malformed whole response stops
