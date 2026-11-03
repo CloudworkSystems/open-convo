@@ -167,6 +167,8 @@ reviews. Plan approved (merged as #127 on October 24):
 
 **Approval ledger** (Personal, prime agent step 3's first piece), Codex team B builds, GrokBot or a fresh Claude reviews; plan in review, waiting on the owner's yes (`docs/plans/approval-ledger.md`): the host's hash-chained record of each yes, claimed exactly once before an action starts, as a standalone package in `packages/approval-ledger/`.
 
+**Notes checklist import** (Family and Home, day-one checklists), GrokBot team A builds, Codex reviews and the coordinator checks it against the plan; plan in review, waiting on the owner's yes (`docs/plans/notes-checklist-import.md`): turns a checklist copied out of Apple Notes as plain text into a household list file, as a standalone package in `packages/notes-import/`, with no network, clock or guessing.
+
 **Public website (trueconvo.com)**, Claude builds, Codex reviews; a home page (with two Desk preview screenshots) and a plain-language privacy policy in `site/`, published by `.github/workflows/pages.yml` from `main` (#153, October 25). For Meta's developer early-access application and regular visitors. The owner turned on Pages and set the custom domain, and the site is published at trueconvo.com (latest deploy October 26).
 
 **Security** (all work; owner asked October 28): plan
