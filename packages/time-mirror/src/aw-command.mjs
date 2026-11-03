@@ -31,8 +31,8 @@ export function makeFetchJson(fetchImpl = fetch, timeoutMs = 10_000) {
     if (!/^\/api\/0\/buckets\/(?:$|[^/]+\/events\?start=[^&]+&end=.+$)/.test(path)) fail('Refused an unexpected ActivityWatch path.');
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    try {
     let response;
+    try {
     try {
       response = await fetchImpl(`${BASE}${path}`, { redirect: 'manual', signal: controller.signal });
     } catch (error) {
@@ -50,7 +50,11 @@ export function makeFetchJson(fetchImpl = fetch, timeoutMs = 10_000) {
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > MAX_BYTES) { await reader.cancel(); return { truncated: true }; }
+      if (size > MAX_BYTES) {
+        controller.abort();
+        try { await reader.cancel(); } catch {}
+        return { truncated: true };
+      }
       chunks.push(value);
     }
     const bytes = new Uint8Array(size);
@@ -60,7 +64,12 @@ export function makeFetchJson(fetchImpl = fetch, timeoutMs = 10_000) {
     } catch (error) {
       if (controller.signal.aborted) fail('ActivityWatch took longer than 10 seconds to answer. Open ActivityWatch, then run this again.');
       throw error;
-    } finally { clearTimeout(timeout); }
+    } finally {
+      // Close unread bodies on cap/status/redirect exits before removing the timer.
+      controller.abort();
+      try { await response?.body?.cancel(); } catch {}
+      clearTimeout(timeout);
+    }
   };
 }
 

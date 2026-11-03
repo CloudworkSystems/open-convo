@@ -95,3 +95,29 @@ test('request timeout remains active after headers while the response body stall
     await new Promise(resolve => server.close(resolve));
   }
 });
+
+test('oversized Content-Length closes a stalled loopback response', { timeout: 3000 }, async () => {
+  let markClosed;
+  const closed = new Promise(resolve => { markClosed = resolve; });
+  const server = createServer((_request, response) => {
+    response.on('close', markClosed);
+    response.writeHead(200, { 'content-length': String(2 * 1024 * 1024 + 1) });
+    response.flushHeaders();
+    response.write('[');
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  let deadline;
+  try {
+    const local = new URL('http://127.0.0.1/');
+    local.port = String(server.address().port);
+    const result = await makeFetchJson((_url, options) => fetch(local.href, options), 1000)('/api/0/buckets/');
+    assert.deepEqual(result, { truncated: true });
+    await Promise.race([closed, new Promise((_, reject) => {
+      deadline = setTimeout(() => reject(new Error('Stalled response connection stayed open.')), 1000);
+    })]);
+  } finally {
+    clearTimeout(deadline);
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+  }
+});
