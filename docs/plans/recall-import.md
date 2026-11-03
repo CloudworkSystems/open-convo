@@ -85,6 +85,14 @@ names what it can't read instead of guessing:
 - Path: `sources/recall/<slug>.md`, where the slug comes from the key (a
   folder path inside the export is kept as folders). Two keys giving the
   same slug get `-2`, `-3` in key order, and are named in `warnings`.
+- **Keys must stay inside.** `checkSource` and `toNotes` both refuse a key
+  that is empty, absolute, contains a backslash, a control character or a
+  `.` or `..` segment, or has a segment starting with `.`, naming the key.
+  Each slug segment is limited to letters, digits, `-` and `_` (other
+  characters become `-`), and the finished path is checked to sit under
+  `sources/recall/` before it is returned. Two keys whose slugs differ only
+  by letter case are numbered like a collision, since the Mac's disk
+  ignores case.
 - Front matter: `kind: source`, `source: Recall`, `label: from a source`,
   `status: unchecked`, `imported: <importedAt>`, then `url`, `tags` and
   `created` when present, and `recall:` for the kept fields. The body
@@ -107,6 +115,13 @@ names what it can't read instead of guessing:
   listed as "kept, edited since the last import". A card gone from the
   new export is listed as "no longer in Recall" and not deleted. Files
   not in the manifest are never touched.
+- **Last check before each replace.** Just before renaming a new note over
+  an existing one, the command reads that file again and compares its
+  hash with the manifest. If it changed during the run (the owner edited
+  it while the import was going), the new note is not written, the
+  temporary file is removed, and the note is listed as "kept, edited
+  since the last import". A file that appeared during the run at a path
+  the import meant to create is kept the same way.
 - `--in` must be a folder: a `.zip` is refused with "Unzip the export
   first, then point --in at the folder." (no zip library is added).
 - The command reads nothing outside `--in`, and follows no symlinks.
@@ -156,7 +171,12 @@ questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
 8. An interrupted write (the test stops after a note's rename and before
    the manifest) is finished correctly by the next run.
 9. A `.zip`, a symlink inside the export and a path with `..` are refused
-   or skipped as described.
+   or skipped as described. A source returning keys such as `../x`,
+   `/x`, `a/./b`, `.hidden` or `A` beside `a` is refused or numbered, and
+   no returned path leaves `sources/recall/`.
+12. A note edited after the manifest check and before its rename (the
+    test edits it from a hook between the two steps) is kept and listed,
+    and its temporary file is removed.
 10. A second invented source written only against the README guide passes
     `checkSource` and produces notes through `toNotes` unchanged.
 11. The library never imports `child_process` or a network module and

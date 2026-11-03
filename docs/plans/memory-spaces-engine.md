@@ -49,6 +49,13 @@ no network.
 - `spaces`: 1 to 20, each `{ id, name, kind }` with `kind` `personal`,
   `business` or `family`. Ids are lowercase letters, digits and `-`.
 - `subjects`: per space, files of kept entries, one file per subject.
+  A subject id is one path segment: 1 to 64 lowercase letters, digits and
+  `-`, starting with a letter, not `index` and not starting with `-`. Any
+  other id (a `/`, `..`, a dot, upper case, `INDEX`) is refused, naming
+  it. Because ids are lowercase only, two subjects can't differ by case.
+  Before returning `writes`, the engine checks that every path is one of
+  the layout's paths below and sits inside its own space folder or the
+  dot folders, and refuses the whole call otherwise.
 - `proposed`: candidates, kept apart from every space.
 - `trash`: forgotten entries with the time they were forgotten.
 - `log`: every operation in order, each with an id, so Undo has a target.
@@ -161,7 +168,9 @@ the five questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
 9. The 4 KB limits on subject files and the index, and the generated
    index matches the subject files' first lines.
 10. `writes` match the layout, and the proposed, trash and log files are
-    outside every space folder.
+    outside every space folder. Subject ids such as `../business/client`,
+    `INDEX`, `index`, `Work`, `a.b` and an empty id are refused, and no
+    returned path leaves its space.
 11. The same operations in the same order give the same state and files
     byte for byte, and the library never reads the clock, imports
     `child_process` or a network module, or uses `fs` (a test checks the
