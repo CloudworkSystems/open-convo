@@ -144,7 +144,8 @@ revision and clears any tightening. The caller passes the public key. Part
 
 `{ capRevision, capHash, tightening, ledgerHead, ledgerCount }`. The library
 reads and writes it only through a store: `read()` and `write(next, expected)`.
-`write` returns false when the stored value is no longer `expected`.
+`write` returns false when the stored value is no longer `expected`, or when
+the file cannot be saved.
 `memoryStore()` and `fileStore(path)` are the doubles for this part. Part 4
 puts the same object in the Keychain.
 
@@ -308,7 +309,8 @@ These are the choices the plan does not spell out. Each one has a test in
 - A job id stays used after release, settle or over-bill, until that month is folded.
 - `now` has to be a real ISO instant. `2026-02-31` is refused.
 - A file write that the disk stops accepting is not renamed into place.
-  The previous file stays.
+  The previous file stays. Saving the protected state then reports that
+  the change was not saved, instead of failing with an exception.
 - A reset that saves the new signed cap but cannot replace the ledger can
   be finished with that same cap. Paid runs stay stopped until the retry
   clears the file. Once the ledger is empty, that cap is refused again.

@@ -826,6 +826,50 @@ test('a lock left by a finished process is taken, and a live one is not', async 
   }
 });
 
+test('a protected-state write that the disk rejects is reported as not saved', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cap-state-io-'));
+  const statePath = join(dir, 'state.json');
+  const store = fileStore(statePath);
+  const keys = pair();
+  const record = cap({
+    perRun: { amount: '5', currency: 'USD' },
+    monthlyByCapability: { amount: '10', currency: 'USD' },
+    monthlyAll: { amount: '10', currency: 'USD' },
+  });
+  const signature = signRecord(record, keys.privateKey);
+  const call = {
+    ledgerDir: dir,
+    store,
+    record,
+    signature,
+    publicKey: keys.publicKey,
+    capabilityId: 'make-media',
+    routeId: 'own-key',
+    max: { amount: '1', currency: 'USD' },
+    now: NOW,
+  };
+  try {
+    assert.equal(acceptCap(store, record, signature, keys.publicKey).ok, true);
+    const fresh = { ...record, revision: 2 };
+    const freshSig = signRecord(fresh, keys.privateKey);
+    failNextAtomicWritesForTests(1);
+    const refused = acceptCap(store, fresh, freshSig, keys.publicKey);
+    assert.equal(refused.ok, false);
+    assert.equal(refused.reason, REASONS.protectedBroken);
+    assert.equal(verifyCap(record, signature, keys.publicKey, store.read()).revision, 1);
+
+    failNextAtomicWritesForTests(1);
+    const reserved = await reserve({ ...call, jobId: 'one' });
+    assert.equal(reserved.ok, false);
+    assert.equal(reserved.reason, REASONS.notSaved);
+    assert.equal(existsSync(join(dir, 'entries.jsonl')), false);
+    assert.equal((await reserve({ ...call, jobId: 'one' })).ok, true);
+  } finally {
+    failNextAtomicWritesForTests(0);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('a short write is retried, and a stalled write leaves the previous file', () => {
   const dir = mkdtempSync(join(tmpdir(), 'cap-write-'));
   const path = join(dir, 'entries.jsonl');

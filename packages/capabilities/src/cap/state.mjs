@@ -58,14 +58,21 @@ export function fileStore(path) {
       return interpret(loaded.core, loaded.tighteningBroken);
     },
     write(next, expected) {
-      const locked = withSyncLock(`${path}.lock`, () => {
-        const current = this.read();
-        if (current.broken) return false;
-        if (canonicalJson(current.core) !== canonicalJson(expected)) return false;
-        const written = normalizeWritten(next);
-        if (!written) return false;
-        return atomicWrite(path, `${canonicalJson(written)}\n`);
-      });
+      let locked;
+      try {
+        locked = withSyncLock(`${path}.lock`, () => {
+          const current = this.read();
+          if (current.broken) return false;
+          if (canonicalJson(current.core) !== canonicalJson(expected)) return false;
+          const written = normalizeWritten(next);
+          if (!written) return false;
+          return atomicWrite(path, `${canonicalJson(written)}\n`);
+        });
+      } catch {
+        // A full disk or other I/O error must not escape as an exception.
+        // Callers report their usual "not saved" result when write returns false.
+        return false;
+      }
       return locked.ok ? locked.value : false;
     },
   };
