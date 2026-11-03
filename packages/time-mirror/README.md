@@ -79,9 +79,13 @@ temporary file and rename so an interrupted run leaves the prior page whole.
 
 ActivityWatch events are read one civil day at a time, up to 400 days. A
 response at the 2 MB limit is retried in halves down to one hour. Events are
-flooded using ActivityWatch 0.13.2's five-second default pulse behavior before
+flooded using aw-core v0.5.17's five-second default pulse behavior before
 active time is calculated. Each read is widened by five seconds so flooding
 continues correctly at day and split edges.
+
+Gaps up to and including five seconds go to the longer neighbouring event,
+or the earlier event on a tie. Equal app/status values merge during flooding,
+and zero-duration leftovers are dropped, following `aw_transform/flood.py`.
 
 ## Add your own activity source
 

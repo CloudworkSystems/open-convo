@@ -31,13 +31,14 @@ export function makeFetchJson(fetchImpl = fetch, timeoutMs = 10_000) {
     if (!/^\/api\/0\/buckets\/(?:$|[^/]+\/events\?start=[^&]+&end=.+$)/.test(path)) fail('Refused an unexpected ActivityWatch path.');
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
     let response;
     try {
       response = await fetchImpl(`${BASE}${path}`, { redirect: 'manual', signal: controller.signal });
     } catch (error) {
       if (error?.name === 'AbortError') fail('ActivityWatch took longer than 10 seconds to answer. Open ActivityWatch, then run this again.');
       fail("ActivityWatch isn't answering at 127.0.0.1:5600. Open ActivityWatch, then run this again.");
-    } finally { clearTimeout(timeout); }
+    }
     if (response.status >= 300 && response.status < 400) fail('ActivityWatch tried to redirect the request. Check the local ActivityWatch setup.');
     if (!response.ok) fail(`ActivityWatch answered with HTTP ${response.status}. Open ActivityWatch and try again.`);
     const length = Number(response.headers.get('content-length'));
@@ -56,6 +57,10 @@ export function makeFetchJson(fetchImpl = fetch, timeoutMs = 10_000) {
     let offset = 0;
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
     try { return JSON.parse(new TextDecoder().decode(bytes)); } catch { fail('ActivityWatch returned malformed JSON. Open ActivityWatch and try again.'); }
+    } catch (error) {
+      if (controller.signal.aborted) fail('ActivityWatch took longer than 10 seconds to answer. Open ActivityWatch, then run this again.');
+      throw error;
+    } finally { clearTimeout(timeout); }
   };
 }
 

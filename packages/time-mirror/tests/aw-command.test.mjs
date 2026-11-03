@@ -3,6 +3,7 @@ import { mkdtemp, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { createServer } from 'node:http';
 import { makeFetchJson, run } from '../src/aw-command.mjs';
 
 const marker = 'PRIVATE-WINDOW-MARKER';
@@ -73,3 +74,22 @@ test('request reader refuses redirects, caps responses, and times out', async ()
 });
 
 const BASE = 'http://127.0.0.1:5600/next';
+
+test('request timeout remains active after headers while the response body stalls', async () => {
+  let sentHeaders = false;
+  const server = createServer((_request, response) => {
+    sentHeaders = true;
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.flushHeaders();
+    response.write('[');
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const localFetch = (_url, options) => fetch(`http://127.0.0.1:${server.address().port}/`, options);
+    await assert.rejects(makeFetchJson(localFetch, 100)('/api/0/buckets/'), /longer than 10 seconds/);
+    assert.equal(sentHeaders, true);
+  } finally {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+  }
+});

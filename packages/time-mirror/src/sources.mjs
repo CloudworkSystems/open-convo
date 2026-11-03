@@ -167,20 +167,36 @@ function parseEvents(value, kind) {
   return { events, skipped };
 }
 
-function flood(events) {
-  const sorted = events.toSorted((a, b) => a.start - b.start || a.end - b.end);
-  const out = [];
-  for (const event of sorted) {
-    const current = { ...event };
-    const previous = out.at(-1);
-    if (previous) {
-      if (current.start < previous.end) previous.end = current.start;
-      else if (current.start - previous.end < PULSE_MS) previous.end = current.start;
-      if (previous.end <= previous.start) out.pop();
+// Mirrors aw-core v0.5.17, aw_transform/flood.py, with a five-second pulse.
+// Equality compares only the app/status retained by our privacy parser.
+export function flood(events) {
+  const sorted = events.map(event => ({ ...event })).sort((a, b) => a.start - b.start);
+  let warnedAboutUnsafeOverlap = false;
+  for (let index = 0; index + 1 < sorted.length; index += 1) {
+    const earlier = sorted[index];
+    const later = sorted[index + 1];
+    const gap = later.start - earlier.end;
+    if (gap === 0) continue;
+    if (gap < 0 && earlier.value === later.value) {
+      earlier.end = Math.max(earlier.end, later.end);
+      later.start = earlier.end;
+      later.end = earlier.end;
+    } else if (gap < -100 && !warnedAboutUnsafeOverlap) {
+      // Upstream warns once here. Keep its control flow without logging data.
+      warnedAboutUnsafeOverlap = true;
+    } else if (gap > -100 && gap <= PULSE_MS) {
+      if (earlier.end - earlier.start >= later.end - later.start) {
+        if (earlier.value === later.value) {
+          earlier.end = later.end;
+          later.start = later.end;
+        } else earlier.end = later.start;
+      } else if (earlier.value === later.value) {
+        later.start = earlier.start;
+        earlier.end = earlier.start;
+      } else later.start = earlier.end;
     }
-    out.push(current);
   }
-  return out;
+  return sorted.filter(event => event.end > event.start);
 }
 
 function activeSegments(windows, idle, start, end) {
@@ -240,8 +256,10 @@ export async function awDays({ from, to, timeZone, appTags = {}, host, fetchJson
       const windows = parseEvents(span.responses[0], 'window');
       const idle = parseEvents(span.responses[1], 'idle');
       skipped += windows.skipped + idle.skipped;
-      if (windows.events.length || idle.events.length) sawValid = true;
-      for (const segment of activeSegments(flood(windows.events), flood(idle.events), span.start, span.end)) {
+      const floodedWindows = flood(windows.events);
+      const floodedIdle = flood(idle.events);
+      if ([...floodedWindows, ...floodedIdle].some(event => Math.min(event.end, span.end) > Math.max(event.start, span.start))) sawValid = true;
+      for (const segment of activeSegments(floodedWindows, floodedIdle, span.start, span.end)) {
         if (collectApps) apps[segment.app] = (apps[segment.app] ?? 0) + (segment.end - segment.start) / 60_000;
         const tag = own(appTags, segment.app) ? appTags[segment.app] : 'untagged';
         totals[tag] = (totals[tag] ?? 0) + (segment.end - segment.start) / 60_000;

@@ -1,13 +1,27 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { activityWatchSource, awDays, checkSource, fromSource, rescueTimeSource } from '../src/sources.mjs';
+import { activityWatchSource, awDays, checkSource, flood, fromSource, rescueTimeSource } from '../src/sources.mjs';
 
 const buckets = {
   'aw-watcher-window_test': { type: 'currentwindow', hostname: 'test-mac' },
   'aw-watcher-afk_test': { type: 'afkstatus', hostname: 'test-mac' },
   'aw-watcher-web_test': { type: 'web.tab.current', hostname: 'test-mac' },
 };
+
+test('flood mirrors aw-core v0.5.17 gap attribution, merges, overlaps and zero leftovers', () => {
+  const e = (start, end, value = 'A') => ({ start, end, value });
+  assert.deepEqual(flood([e(0, 1000), e(6000, 7000, 'B')]), [e(0, 6000), e(6000, 7000, 'B')]);
+  assert.deepEqual(flood([e(0, 1000), e(6001, 7001, 'B')]), [e(0, 1000), e(6001, 7001, 'B')]);
+  assert.deepEqual(flood([e(0, 1000), e(5000, 15000, 'B')]), [e(0, 1000), e(1000, 15000, 'B')]);
+  assert.deepEqual(flood([e(0, 2000), e(5000, 7000, 'B')]), [e(0, 5000), e(5000, 7000, 'B')]);
+  assert.deepEqual(flood([e(5000, 15000), e(0, 1000)]), [e(0, 15000)]);
+  assert.deepEqual(flood([e(0, 10000), e(14000, 15000)]), [e(0, 15000)]);
+  assert.deepEqual(flood([e(0, 0), e(6000, 6000)]), []);
+  assert.deepEqual(flood([e(0, 10000), e(5000, 15000)]), [e(0, 15000)]);
+  assert.deepEqual(flood([e(0, 10000), e(5000, 15000, 'B')]), [e(0, 10000), e(5000, 15000, 'B')]);
+  assert.deepEqual(flood([e(0, 1000), e(950, 2950, 'B')]), [e(0, 1000), e(1000, 2950, 'B')]);
+});
 
 function event(timestamp, duration, data) { return { timestamp, duration, data }; }
 
@@ -52,7 +66,7 @@ test('floods close heartbeats, leaves longer gaps, and counts malformed events',
   });
   const result = await awDays({ from: '2026-10-01', to: '2026-10-01', timeZone: 'UTC', host: 'test-mac', appTags: { Editor: 'coding' }, fetchJson });
   assert.equal(result.skipped, 1);
-  assert.equal(result.days['2026-10-01'].coding, 5 / 60);
+  assert.ok(Math.abs(result.days['2026-10-01'].coding - 10 / 60) < 1e-12);
 });
 
 test('splits midnight and respects 23-hour and 25-hour civil days', async () => {
@@ -95,6 +109,18 @@ test('contract check rejects broken sources and RescueTime wrapper keeps slice 1
   assert.deepEqual(checked.days['2026-10-01'], { productive: 60, total: 60, coding: 60 });
   const page = await fromSource(source, { from: '2026-10-01', to: '2026-10-01', timeZone: 'UTC' });
   assert.match(page.html, /productive/);
+});
+
+test('events only in the expansion after midnight do not mark the previous day present', async () => {
+  const result = await awDays({
+    from: '2026-10-01', to: '2026-10-01', timeZone: 'UTC', host: 'test-mac',
+    fetchJson: inventedActivity({
+      windowEvents: [event('2026-10-02T00:00:02Z', 1, { app: 'Editor' })],
+      idleEvents: [event('2026-10-02T00:00:02Z', 1, { status: 'not-afk' })],
+    }),
+  });
+  assert.deepEqual(result.missing, ['2026-10-01']);
+  assert.deepEqual(result.days, {});
 });
 
 test('contract check requires each requested date exactly once in days or missing', async () => {
