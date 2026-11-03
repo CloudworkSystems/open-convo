@@ -1,0 +1,318 @@
+import { buildTimeMirror, renderPage } from './index.mjs';
+import { HabitGrid, renderSvg } from '../../habit-grid/src/index.mjs';
+
+const RESERVED = new Set(['productive', 'neutral', 'distracting', 'total']);
+const PULSE_MS = 5_000;
+const HOUR_MS = 3_600_000;
+const fail = message => { throw new Error(message); };
+const own = (object, key) => Object.hasOwn(object, key);
+
+function validDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+}
+
+function addDays(value, count) {
+  const [y, m, d] = value.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + count)).toISOString().slice(0, 10);
+}
+
+function rangeDates(from, to) {
+  if (!validDate(from) || !validDate(to) || from > to) fail('Invalid date range.');
+  const dates = [];
+  for (let date = from; date <= to; date = addDays(date, 1)) {
+    dates.push(date);
+    if (dates.length > 400) fail('Activity sources accept at most 400 days.');
+  }
+  return dates;
+}
+
+function partsAt(ms, timeZone) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(ms));
+  return Object.fromEntries(parts.filter(part => part.type !== 'literal').map(part => [part.type, Number(part.value)]));
+}
+
+function civilStart(date, timeZone) {
+  let formatter;
+  try { formatter = new Intl.DateTimeFormat('en', { timeZone }); formatter.format(0); } catch { fail(`Unknown time zone: ${timeZone}.`); }
+  const [year, month, day] = date.split('-').map(Number);
+  const wanted = Date.UTC(year, month - 1, day);
+  let guess = wanted;
+  for (let tries = 0; tries < 4; tries += 1) {
+    const got = partsAt(guess, timeZone);
+    const represented = Date.UTC(got.year, got.month - 1, got.day, got.hour, got.minute, got.second);
+    guess += wanted - represented;
+  }
+  return guess;
+}
+
+function dayLengthMinutes(date, timeZone) {
+  return (civilStart(addDays(date, 1), timeZone) - civilStart(date, timeZone)) / 60_000;
+}
+
+function validateTags(tags, label) {
+  if (tags === null || typeof tags !== 'object' || Array.isArray(tags)) fail(`${label} must be an object.`);
+  for (const tag of Object.values(tags)) {
+    if (typeof tag !== 'string' || tag.length === 0) fail(`${label} values must be non-empty tag names.`);
+    if (RESERVED.has(tag)) fail(`Tag ${tag} uses a reserved built-in summary name.`);
+  }
+}
+
+function buildTimeMirrorFromDays({ start, end, days, missingDays }) {
+  const summaries = ['productive', 'neutral', 'distracting', 'total'];
+  const present = new Set(Object.values(days).flatMap(tags => Object.keys(tags)));
+  const tags = [...summaries.filter(tag => present.has(tag)), ...[...present]
+    .filter(tag => !summaries.includes(tag)).sort((left, right) => left.localeCompare(right))];
+  const engine = new HabitGrid({ deviceId: 'time-mirror', now: () => 0, timeZone: 'UTC' });
+  const personId = engine.createPerson('Time Mirror', { id: 'time-mirror' });
+  const used = new Set();
+  const trackers = tags.map(tag => {
+    const stem = tag.normalize('NFKD').replaceAll(/[^a-zA-Z0-9]+/g, '-').replaceAll(/^-|-$/g, '').toLowerCase() || 'tag';
+    let trackerId = stem;
+    for (let suffix = 2; used.has(trackerId); suffix += 1) trackerId = `${stem}-${suffix}`;
+    used.add(trackerId);
+    engine.addTracker(personId, {
+      name: tag, kind: 'count', target: null, unit: 'minutes',
+      color: tag === 'neutral' ? 'amber' : tag === 'distracting' ? 'magenta' : 'coral', startedOn: start,
+    }, { trackerId });
+    engine.logCheckIns(personId, Object.entries(days)
+      .filter(([, totals]) => totals[tag] > 0)
+      .map(([date, totals]) => ({ trackerId, date, value: totals[tag], source: 'manual', checkInId: `${trackerId}-${date}` })));
+    const grid = engine.grid(personId, trackerId, { start, end, today: end });
+    return { tag, trackerId, grid, svg: renderSvg(grid) };
+  });
+  return { start, end, missingDays, trackers, html: renderPage({ start, end, trackers, missingDays }) };
+}
+
+export async function fromSource(source, options) {
+  const checked = await checkSource(source, options);
+  const result = buildTimeMirrorFromDays({ start: options.from, end: options.to, days: checked.days, missingDays: checked.missing });
+  return { ...result, skipped: checked.skipped, source: { id: source.id, name: source.name } };
+}
+
+export function rescueTimeSource({ fetchRows, categoryTags = {} }) {
+  return {
+    id: 'rescuetime', name: 'RescueTime',
+    async days({ from, to }) {
+      const result = await buildTimeMirror({ start: from, end: to, fetchRows, categoryTags });
+      const days = {};
+      const missing = new Set(result.missingDays);
+      for (const date of rangeDates(from, to)) if (!missing.has(date)) days[date] = {};
+      for (const tracker of result.trackers) for (const square of tracker.grid.squares) {
+        if (square.inRange && square.value > 0) (days[square.date] ??= {})[tracker.tag] = square.value;
+      }
+      return { days, missing: result.missingDays, skipped: 0 };
+    },
+  };
+}
+
+export async function checkSource(source, { from, to, timeZone }) {
+  if (!source || typeof source.id !== 'string' || !source.id || typeof source.name !== 'string' || !source.name || typeof source.days !== 'function') {
+    fail('Activity source must have id, name, and a days function.');
+  }
+  const dates = rangeDates(from, to);
+  civilStart(from, timeZone);
+  const result = await source.days({ from, to, timeZone });
+  if (!result || typeof result !== 'object' || !result.days || typeof result.days !== 'object' || Array.isArray(result.days) ||
+      !Array.isArray(result.missing) || !Number.isInteger(result.skipped) || result.skipped < 0) fail('Activity source returned an invalid result shape.');
+  const missing = new Set(result.missing);
+  if (missing.size !== result.missing.length) fail('Activity source listed a missing day more than once.');
+  for (const date of missing) if (!dates.includes(date)) fail(`Activity source listed missing day outside the range: ${date}.`);
+  for (const date of dates) {
+    if (!own(result.days, date) && !missing.has(date)) fail(`Activity source omitted ${date}. Return its totals or list it as missing.`);
+  }
+  for (const [date, tags] of Object.entries(result.days)) {
+    if (!dates.includes(date)) fail(`Activity source returned day outside the range: ${date}.`);
+    if (missing.has(date)) fail(`Activity source returned totals for missing day ${date}.`);
+    if (!tags || typeof tags !== 'object' || Array.isArray(tags)) fail(`Activity source returned invalid tags for ${date}.`);
+    for (const [tag, minutes] of Object.entries(tags)) {
+      if (!tag || typeof minutes !== 'number' || !Number.isFinite(minutes) || minutes < 0) fail(`Activity source returned invalid minutes for ${date}.`);
+      if (minutes > dayLengthMinutes(date, timeZone) + 1e-9) fail(`Activity source returned more minutes than ${date} contains.`);
+    }
+  }
+  return result;
+}
+
+function bucketList(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return Object.entries(value).map(([id, bucket]) => ({ id, ...bucket }));
+  if (Array.isArray(value)) return value;
+  fail('ActivityWatch returned a malformed bucket list.');
+}
+
+function chooseBucket(buckets, type, host) {
+  const matches = buckets.filter(bucket => bucket.type === type && bucket.hostname === host);
+  if (matches.length !== 1) {
+    const found = buckets.map(bucket => `${String(bucket.type)} on ${String(bucket.hostname)}`).join(', ') || 'none';
+    fail(`ActivityWatch needs exactly one ${type} bucket for host ${host}; found ${matches.length}. Available buckets: ${found}. Check --host.`);
+  }
+  return matches[0].id;
+}
+
+function parseEvents(value, kind) {
+  if (!Array.isArray(value)) fail(`ActivityWatch returned malformed ${kind} events.`);
+  const events = [];
+  let skipped = 0;
+  for (const raw of value) {
+    const start = typeof raw?.timestamp === 'string' ? Date.parse(raw.timestamp) : NaN;
+    const duration = raw?.duration;
+    const datum = raw?.data;
+    const wanted = kind === 'window' ? datum?.app : datum?.status;
+    if (!Number.isFinite(start) || typeof duration !== 'number' || !Number.isFinite(duration) || duration < 0 ||
+        typeof wanted !== 'string' || (kind === 'idle' && !['afk', 'not-afk'].includes(wanted))) { skipped += 1; continue; }
+    events.push({ start, end: start + duration * 1000, value: wanted });
+  }
+  return { events, skipped };
+}
+
+// Mirrors aw-core v0.5.17, aw_transform/flood.py, with a five-second pulse.
+// Equality compares only the app/status retained by our privacy parser.
+export function flood(events) {
+  const sorted = events.map(event => ({ ...event })).sort((a, b) => a.start - b.start);
+  let warnedAboutUnsafeOverlap = false;
+  for (let index = 0; index + 1 < sorted.length; index += 1) {
+    const earlier = sorted[index];
+    const later = sorted[index + 1];
+    const gap = later.start - earlier.end;
+    if (gap === 0) continue;
+    if (gap < 0 && earlier.value === later.value) {
+      earlier.end = Math.max(earlier.end, later.end);
+      later.start = earlier.end;
+      later.end = earlier.end;
+    } else if (gap < -100 && !warnedAboutUnsafeOverlap) {
+      // Upstream warns once here. Keep its control flow without logging data.
+      warnedAboutUnsafeOverlap = true;
+    } else if (gap > -100 && gap <= PULSE_MS) {
+      if (earlier.end - earlier.start >= later.end - later.start) {
+        if (earlier.value === later.value) {
+          earlier.end = later.end;
+          later.start = later.end;
+        } else earlier.end = later.start;
+      } else if (earlier.value === later.value) {
+        later.start = earlier.start;
+        earlier.end = earlier.start;
+      } else later.start = earlier.end;
+    }
+  }
+  return sorted.filter(event => event.end > event.start);
+}
+
+function activeSegments(windows, idle, start, end) {
+  // Resolve app ownership before clipping, retaining original start/end priority.
+  const edges = [...new Set(windows.flatMap(event => [event.start, event.end]))].sort((a, b) => a - b);
+  const resolved = [];
+  const priority = (a, b) => b.start - a.start || b.end - a.end || (a.value < b.value ? -1 : a.value > b.value ? 1 : 0);
+  for (let index = 0; index + 1 < edges.length; index += 1) {
+    const left = edges[index];
+    const right = edges[index + 1];
+    const winner = windows.filter(event => event.start <= left && event.end >= right).sort(priority)[0];
+    if (!winner) continue;
+    const previous = resolved.at(-1);
+    if (previous?.value === winner.value && previous.end === left) previous.end = right;
+    else resolved.push({ start: left, end: right, value: winner.value });
+  }
+  const active = idle.filter(event => event.value === 'not-afk');
+  const segments = [];
+  for (const window of resolved) for (const status of active) {
+    const left = Math.max(window.start, status.start, start);
+    const right = Math.min(window.end, status.end, end);
+    if (right > left) segments.push({ start: left, end: right, app: window.value });
+  }
+  segments.sort((a, b) => a.start - b.start || a.end - b.end);
+  const result = [];
+  for (const segment of segments) {
+    const previous = result.at(-1);
+    if (previous && segment.start < previous.end) {
+      if (segment.end > previous.end) result.push({ ...segment, start: previous.end });
+    } else result.push(segment);
+  }
+  return result;
+}
+
+function eventPath(bucket, start, end) {
+  return `/api/0/buckets/${encodeURIComponent(bucket)}/events?start=${encodeURIComponent(new Date(start).toISOString())}&end=${encodeURIComponent(new Date(end).toISOString())}`;
+}
+
+async function readSpan(fetchJson, buckets, start, end, accept, minimum = HOUR_MS) {
+  const expandedStart = start - PULSE_MS;
+  const expandedEnd = end + PULSE_MS;
+  const responses = await Promise.all(buckets.map(bucket => fetchJson(eventPath(bucket, expandedStart, expandedEnd))));
+  if (responses.some(response => response?.truncated === true)) {
+    if (end - start <= minimum) fail(`ActivityWatch returned more than 2 MB for the hour starting ${new Date(start).toISOString()}. Narrow the range or reduce ActivityWatch data.`);
+    const middle = start + Math.floor((end - start) / 2);
+    await readSpan(fetchJson, buckets, start, middle, accept, minimum);
+    await readSpan(fetchJson, buckets, middle, end, accept, minimum);
+    return;
+  }
+  accept(responses.map((response, index) => parseEvents(response, index === 0 ? 'window' : 'idle')));
+}
+
+export async function awDays({ from, to, timeZone, appTags = {}, host, fetchJson, collectApps = false }) {
+  const dates = rangeDates(from, to);
+  validateTags(appTags, 'appTags');
+  if (typeof host !== 'string' || !host) fail('host must be a non-empty name.');
+  if (typeof fetchJson !== 'function') fail('fetchJson must be a function.');
+  const buckets = bucketList(await fetchJson('/api/0/buckets/'));
+  const windowBucket = chooseBucket(buckets, 'currentwindow', host);
+  const idleBucket = chooseBucket(buckets, 'afkstatus', host);
+  const days = {};
+  const missing = [];
+  let skipped = 0;
+  const apps = {};
+  // Keep only parsed timestamp/duration/app-or-status fields across reads.
+  // Flood once across the complete range so merged durations survive both
+  // response splits and civil-day edges. Duplicate padding events count once.
+  const collected = [new Map(), new Map()];
+  const accept = parsed => parsed.forEach((result, index) => {
+    skipped += result.skipped;
+    for (const event of result.events) collected[index].set(JSON.stringify([event.start, event.end, event.value]), event);
+  });
+  for (const date of dates) {
+    await readSpan(fetchJson, [windowBucket, idleBucket], civilStart(date, timeZone), civilStart(addDays(date, 1), timeZone), accept);
+  }
+  const rangeStart = civilStart(from, timeZone);
+  const rangeEnd = civilStart(addDays(to, 1), timeZone);
+  const touches = edge => collected.some(events => [...events.values()].some(event => event.start <= edge + PULSE_MS && event.end >= edge - PULSE_MS));
+  for (const direction of [-1, 1]) {
+    const edge = direction < 0 ? rangeStart : rangeEnd;
+    const limit = direction < 0 ? civilStart(addDays(from, -1), timeZone) : civilStart(addDays(to, 2), timeZone);
+    let frontier = edge;
+    let step = 10 * 60_000;
+    // Stop at a separating gap or the neighbouring civil day's far edge.
+    // A full neighbouring day of uninterrupted flood history is not realistic;
+    // that explicit cap limits how much context a requested range can read.
+    while (frontier !== limit && touches(frontier)) {
+      const next = direction < 0 ? Math.max(limit, frontier - step) : Math.min(limit, frontier + step);
+      await readSpan(fetchJson, [windowBucket, idleBucket], Math.min(frontier, next), Math.max(frontier, next), accept);
+      frontier = next;
+      step *= 2;
+    }
+  }
+  const floodedWindows = flood([...collected[0].values()]);
+  const floodedIdle = flood([...collected[1].values()]);
+  collected.forEach(events => events.clear());
+  for (const date of dates) {
+    const start = civilStart(date, timeZone);
+    const end = civilStart(addDays(date, 1), timeZone);
+    const sawValid = [...floodedWindows, ...floodedIdle].some(event => Math.min(event.end, end) > Math.max(event.start, start));
+    const totals = {};
+      for (const segment of activeSegments(floodedWindows.filter(event => event.end > start && event.start < end), floodedIdle.filter(event => event.end > start && event.start < end), start, end)) {
+        if (collectApps) apps[segment.app] = (apps[segment.app] ?? 0) + (segment.end - segment.start) / 60_000;
+        const tag = own(appTags, segment.app) ? appTags[segment.app] : 'untagged';
+        totals[tag] = (totals[tag] ?? 0) + (segment.end - segment.start) / 60_000;
+      }
+    if (!sawValid) missing.push(date);
+    else days[date] = totals;
+  }
+  return collectApps ? { days, missing, skipped, apps } : { days, missing, skipped };
+}
+
+export function activityWatchSource(options) {
+  return { id: 'activitywatch', name: 'ActivityWatch', days: range => awDays({ ...options, ...range }) };
+}
+
+export { PULSE_MS };
