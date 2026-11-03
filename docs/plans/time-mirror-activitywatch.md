@@ -229,6 +229,17 @@ first" and the flooding cases in test 4. The rest of the plan is unchanged.
   event goes to the longer one. A short not-afk gap at an idle boundary is
   flooded as aw-core v0.5.17's `flood` would. Each case's expected minutes
   match what that `flood` gives on the same events.
+- **Overlaps between different apps.** After flooding, two window events
+  for different apps can still overlap (aw-core leaves such overlaps of
+  0.1 seconds or more in place). The shared time goes to the event that
+  started later, from its start until it ends, because that is the window
+  that most recently took focus. On equal starts it goes to the event that
+  ends later, and then to the app name that sorts first. The earlier event
+  keeps only its time outside the overlap. This replaces "Overlapping
+  window events are merged" under "Active time" for events of different
+  apps; same-app overlaps are still merged. Test 4 adds a differing-app
+  overlap whose minutes follow this rule and come out the same whatever
+  order the events arrive in.
 
 ## Out Of Scope For This Slice
 
