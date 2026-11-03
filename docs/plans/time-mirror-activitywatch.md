@@ -1,6 +1,6 @@
 # Time Mirror Slice 2: Activity Sources, With ActivityWatch On The Mac (PRD)
 
-Status: Draft (Nov 3): waiting on the owner's yes in the Claude thread "Draft next plans for outside builders".
+Status: Approved (Nov 3): the owner approved pull request #276 on GitHub on November 3, 2026.
 
 Written November 3, 2026 by a Claude session (project "261024 OC Steering",
 thread "Draft next plans for outside builders"). Session name:
