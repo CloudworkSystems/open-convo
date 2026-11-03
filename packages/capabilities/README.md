@@ -196,10 +196,14 @@ reason is that this month's record is full.
 `reserve`, `settle`, `release`, `resetLedger` and `monthSpent` take one
 in-process queue per folder and an exclusive lock file (`ledger.lock`), so
 two processes cannot both fit a run into the same remaining budget. The
-lock names the process that holds it. A lock left by a process that has
-exited is removed and the run goes ahead. A lock still held by a running
-process is not taken, and the run is refused. The protected-state file
-uses the same rule.
+lock names the process and the thread that hold it, and stays open while
+that work runs. A lock left by a process that has exited, or by a
+background task in this app that has stopped, is removed and the run goes
+ahead. On Linux the task's thread id is the signal, because a stopped
+task shares the process id with the rest of the app. On macOS the open
+lock file is the signal: it closes when that task stops. A lock that is
+still held is not taken, and the run is refused. The protected-state
+file uses the same rule.
 
 | Call | What it does |
 |---|---|
@@ -295,8 +299,10 @@ These are the choices the plan does not spell out. Each one has a test in
   does not move the spend. An over-bill that arrives in a later month
   still counts, in full, in the reservation's month. It does not reduce
   the next month's room.
-- A `ledger.lock` left by a process that has exited is removed by the next
-  paid run. A lock still held by a running process is not taken. The
+- A `ledger.lock` left by a process that has exited, or by a background
+  task in this app that has stopped, is removed by the next paid run.
+  Stopping one background task does not look like the whole app is still
+  holding the lock. A lock that is still held is not taken. The
   protected-state lock works the same way.
 - The show command reads without the lock, so a read in the moment between
   writing the ledger head and writing the line can say the ledger does not

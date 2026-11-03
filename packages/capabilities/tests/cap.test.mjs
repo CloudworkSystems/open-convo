@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign, verify } from 'node:crypto';
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync, writeSync } from 'node:fs';
+import { closeSync, constants, copyFileSync, existsSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync, writeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { Worker } from 'node:worker_threads';
+import { Worker, threadId } from 'node:worker_threads';
 import { run } from '../src/cap/show.mjs';
 import {
   acceptCap,
@@ -790,14 +790,14 @@ test('a lock left by a finished process is taken, and a live one is not', async 
   const token = 'ab'.repeat(16);
   try {
     const ledgerLock = join(dir, 'ledger.lock');
-    writeFileSync(ledgerLock, `${deadPid}\n${token}\n`);
+    writeFileSync(ledgerLock, `${deadPid}\n0\n0\n0\n${token}\n`);
     const taken = await withFileLock(ledgerLock, () => 'ran', { attempts: 1, waitMs: 1 });
     assert.equal(taken.ok, true);
     assert.equal(taken.value, 'ran');
     assert.equal(existsSync(ledgerLock), false);
 
     const stateLock = join(dir, 'state.lock');
-    writeFileSync(stateLock, `${deadPid}\n${token}\n`);
+    writeFileSync(stateLock, `${deadPid}\n0\n0\n0\n${token}\n`);
     const syncTaken = withSyncLock(stateLock, () => 'ran', { attempts: 1, waitMs: 1 });
     assert.equal(syncTaken.ok, true);
     assert.equal(syncTaken.value, 'ran');
@@ -812,16 +812,47 @@ test('a lock left by a finished process is taken, and a live one is not', async 
     assert.equal(emptySync.ok, true);
     assert.equal(emptySync.value, 'ran');
 
-    writeFileSync(ledgerLock, `${process.pid}\n${token}\n`);
+    const held = openSync(ledgerLock, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW, 0o600);
+    const payload = `${process.pid}\n${threadId}\n0\n${held}\n${token}\n`;
+    writeSync(held, payload);
     const live = await withFileLock(ledgerLock, () => 'ran', { attempts: 2, waitMs: 1 });
     assert.equal(live.ok, false);
-    assert.equal(readFileSync(ledgerLock, 'utf8'), `${process.pid}\n${token}\n`);
-
-    writeFileSync(stateLock, `${process.pid}\n${token}\n`);
-    const liveSync = withSyncLock(stateLock, () => 'ran', { attempts: 2, waitMs: 1 });
-    assert.equal(liveSync.ok, false);
-    assert.equal(readFileSync(stateLock, 'utf8'), `${process.pid}\n${token}\n`);
+    assert.equal(readFileSync(ledgerLock, 'utf8'), payload);
+    closeSync(held);
+    const afterClose = await withFileLock(ledgerLock, () => 'ran', { attempts: 1, waitMs: 1 });
+    assert.equal(afterClose.ok, true);
+    assert.equal(afterClose.value, 'ran');
   } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a lock left by a stopped worker is taken, and a running worker is not', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cap-lock-worker-'));
+  const lockPath = join(dir, 'ledger.lock');
+  // An empty execArgv keeps the test runner's flags off this worker.
+  const worker = new Worker(new URL('./lock-hold-worker.mjs', import.meta.url), {
+    workerData: lockPath,
+    execArgv: [],
+  });
+  try {
+    const message = await new Promise((resolve, reject) => {
+      worker.once('message', resolve);
+      worker.once('error', reject);
+    });
+    assert.equal(message, 'held');
+    const blocked = await withFileLock(lockPath, () => 'ran', { attempts: 2, waitMs: 5 });
+    assert.equal(blocked.ok, false);
+    const blockedSync = withSyncLock(lockPath, () => 'ran', { attempts: 2, waitMs: 1 });
+    assert.equal(blockedSync.ok, false);
+    assert.equal(existsSync(lockPath), true);
+    await worker.terminate();
+    const taken = await withFileLock(lockPath, () => 'ran', { attempts: 20, waitMs: 5 });
+    assert.equal(taken.ok, true);
+    assert.equal(taken.value, 'ran');
+    assert.equal(existsSync(lockPath), false);
+  } finally {
+    await worker.terminate();
     rmSync(dir, { recursive: true, force: true });
   }
 });

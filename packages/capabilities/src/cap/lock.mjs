@@ -1,11 +1,14 @@
 // One in-process queue per ledger folder, plus an exclusive lock file so
 // two processes (or two worker threads) cannot both fit a reservation into
-// the same remaining budget. The lock names the process that holds it. A
-// lock whose process is gone is removed, so a crash does not leave paid
-// runs stopped. A lock whose process is still running is left alone.
+// the same remaining budget. The lock names the process and the thread.
+// A lock is removed when that process has exited, or when the thread that
+// held it is gone. Worker threads share a process id, so the process id
+// alone stays live after a worker is stopped. A lock that is still held
+// is left alone.
 
-import { closeSync, constants, fstatSync, openSync, readFileSync, readSync, statSync, unlinkSync, writeSync } from 'node:fs';
+import { closeSync, constants, fstatSync, openSync, readFileSync, readSync, readlinkSync, statSync, unlinkSync, writeSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
+import { threadId } from 'node:worker_threads';
 
 const pause = new Int32Array(new SharedArrayBuffer(4));
 const tails = new Map();
@@ -35,12 +38,71 @@ function processAlive(pid) {
   }
 }
 
-function classify(text) {
-  const match = /^(\d+)\n([0-9a-f]{32})\n$/.exec(text);
-  if (!match) return 'unknown';
+// Linux publishes each thread under /proc/self/task. The id is recorded
+// when the lock is taken. macOS has no such directory; there the open
+// file itself is the signal, and 0 is stored in this field.
+function currentTid() {
+  if (process.platform !== 'linux') return 0;
+  try {
+    const tid = Number(readlinkSync('/proc/thread-self').split('/').pop());
+    return Number.isSafeInteger(tid) && tid > 0 ? tid : 0;
+  } catch {
+    return 0;
+  }
+}
+
+// null means this system has no thread list, so the caller checks the
+// open file instead. A missing thread is not live. Anything we cannot
+// read is treated as live, so a lock is not taken by mistake.
+function threadAlive(tid) {
+  if (process.platform !== 'linux') return null;
+  if (!Number.isSafeInteger(tid) || tid <= 0) return true;
+  try {
+    return statSync(`/proc/self/task/${tid}`).isDirectory();
+  } catch (error) {
+    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return false;
+    return true;
+  }
+}
+
+function parseOwner(text) {
+  const match = /^(\d+)\n(\d+)\n(\d+)\n(\d+)\n([0-9a-f]{32})\n$/.exec(text);
+  if (!match) return null;
   const pid = Number(match[1]);
-  if (!Number.isSafeInteger(pid) || pid <= 0) return 'unknown';
-  return processAlive(pid) ? 'live' : 'dead';
+  const ownerThread = Number(match[2]);
+  const tid = Number(match[3]);
+  const heldFd = Number(match[4]);
+  if (!Number.isSafeInteger(pid) || pid <= 0) return null;
+  if (!Number.isSafeInteger(ownerThread) || ownerThread < 0) return null;
+  if (!Number.isSafeInteger(tid) || tid < 0) return null;
+  if (!Number.isSafeInteger(heldFd) || heldFd < 0) return null;
+  return { pid, ownerThread, tid, heldFd };
+}
+
+function descriptorMatches(fd, lockDev, lockIno) {
+  try {
+    const info = fstatSync(fd);
+    return info.dev === lockDev && info.ino === lockIno;
+  } catch (error) {
+    // A closed descriptor is not a holder. Any other error is treated as
+    // still held, so the lock is not removed on a transient failure.
+    if (error.code === 'EBADF') return false;
+    return true;
+  }
+}
+
+// A lock from another process is live while that process is. A lock from
+// another thread in this process is live while that thread is. On Linux
+// the thread list is the signal, because a worker's descriptor number is
+// not visible from the thread that is checking. On macOS the descriptor
+// is shared, and it closes when the worker is stopped. This thread's own
+// lock is live only while the file it recorded is still open.
+function ownerLive(owner, lockDev, lockIno) {
+  if (owner.pid !== process.pid) return processAlive(owner.pid);
+  if (owner.ownerThread === threadId) return descriptorMatches(owner.heldFd, lockDev, lockIno);
+  const task = threadAlive(owner.tid);
+  if (task !== null) return task;
+  return descriptorMatches(owner.heldFd, lockDev, lockIno);
 }
 
 function readLock(fd) {
@@ -63,11 +125,21 @@ function reclaim(lockPath, { unknown = false } = {}) {
     if (error.code === 'ELOOP') return false;
     throw error;
   }
+  let opened;
+  let text;
   try {
-    const opened = fstatSync(fd);
-    const kind = classify(readLock(fd));
-    if (kind === 'live') return false;
-    if (kind === 'unknown' && !unknown) return false;
+    opened = fstatSync(fd);
+    text = readLock(fd);
+  } finally {
+    try { closeSync(fd); } catch { /* already closed */ }
+  }
+  const owner = parseOwner(text);
+  if (owner) {
+    if (ownerLive(owner, opened.dev, opened.ino)) return false;
+  } else if (!unknown) {
+    return false;
+  }
+  try {
     let current;
     try {
       current = statSync(lockPath);
@@ -82,12 +154,27 @@ function reclaim(lockPath, { unknown = false } = {}) {
       if (error.code !== 'ENOENT') throw error;
     }
     return true;
-  } finally {
-    try { closeSync(fd); } catch { /* already closed */ }
+  } catch (error) {
+    if (error.code === 'ENOENT') return true;
+    throw error;
   }
 }
 
-function createLock(lockPath, payload) {
+function writeFull(fd, text) {
+  const data = Buffer.from(text);
+  let offset = 0;
+  while (offset < data.length) {
+    const wrote = writeSync(fd, data, offset, data.length - offset);
+    if (!Number.isInteger(wrote) || wrote <= 0 || wrote > data.length - offset) {
+      const error = new Error('incomplete write');
+      error.code = 'EIO';
+      throw error;
+    }
+    offset += wrote;
+  }
+}
+
+function createLock(lockPath, token) {
   let fd;
   try {
     fd = openSync(lockPath, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW, 0o600);
@@ -95,14 +182,15 @@ function createLock(lockPath, payload) {
     if (error.code === 'EEXIST' || error.code === 'ELOOP') return null;
     throw error;
   }
+  const payload = `${process.pid}\n${threadId}\n${currentTid()}\n${fd}\n${token}\n`;
   try {
-    writeSync(fd, payload);
+    writeFull(fd, payload);
   } catch (error) {
     try { closeSync(fd); } catch { /* already closed */ }
     try { unlinkSync(lockPath); } catch { /* already gone */ }
     throw error;
   }
-  return fd;
+  return { fd, payload };
 }
 
 function releaseLock(lockPath, fd, payload) {
@@ -112,29 +200,28 @@ function releaseLock(lockPath, fd, payload) {
   } catch { /* a missing lock is already released */ }
 }
 
-function claim(lockPath, payload) {
-  const fd = createLock(lockPath, payload);
-  if (fd !== null) return fd;
+function claim(lockPath, token) {
+  const created = createLock(lockPath, token);
+  if (created) return created;
   if (!reclaim(lockPath)) return null;
-  return createLock(lockPath, payload);
+  return createLock(lockPath, token);
 }
 
 /** Synchronous exclusive lock for the protected-state file. */
 export function withSyncLock(lockPath, fn, { attempts = 2000, waitMs = 5 } = {}) {
   const token = randomBytes(16).toString('hex');
-  const payload = `${process.pid}\n${token}\n`;
-  let fd = null;
+  let taken = null;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    fd = claim(lockPath, payload);
-    if (fd !== null) break;
+    taken = claim(lockPath, token);
+    if (taken) break;
     if (attempt + 1 < attempts) Atomics.wait(pause, 0, 0, waitMs);
   }
-  if (fd === null && reclaim(lockPath, { unknown: true })) fd = createLock(lockPath, payload);
-  if (fd === null) return { ok: false };
+  if (!taken && reclaim(lockPath, { unknown: true })) taken = createLock(lockPath, token);
+  if (!taken) return { ok: false };
   try {
     return { ok: true, value: fn() };
   } finally {
-    releaseLock(lockPath, fd, payload);
+    releaseLock(lockPath, taken.fd, taken.payload);
   }
 }
 
@@ -145,22 +232,20 @@ export function withSyncLock(lockPath, fn, { attempts = 2000, waitMs = 5 } = {})
  */
 export async function withFileLock(lockPath, fn, { attempts = 2000, waitMs = 5 } = {}) {
   const token = randomBytes(16).toString('hex');
-  const payload = `${process.pid}\n${token}\n`;
-  let fd = null;
+  let taken = null;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    fd = claim(lockPath, payload);
-    if (fd !== null) break;
+    taken = claim(lockPath, token);
+    if (taken) break;
     if (attempt + 1 < attempts) await delay(waitMs);
   }
-  // A crash between creating the file and writing the process id leaves an
+  // A crash between creating the file and writing the owner leaves an
   // empty file. The waits above give a holder time to finish writing. An
-  // empty file is then removed once. A file that names a running process
-  // is not removed.
-  if (fd === null && reclaim(lockPath, { unknown: true })) fd = createLock(lockPath, payload);
-  if (fd === null) return { ok: false };
+  // empty file is then removed once. A file that is still held is not.
+  if (!taken && reclaim(lockPath, { unknown: true })) taken = createLock(lockPath, token);
+  if (!taken) return { ok: false };
   try {
     return { ok: true, value: await fn() };
   } finally {
-    releaseLock(lockPath, fd, payload);
+    releaseLock(lockPath, taken.fd, taken.payload);
   }
 }
