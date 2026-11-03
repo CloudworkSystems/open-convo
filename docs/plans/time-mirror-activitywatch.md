@@ -63,6 +63,13 @@ trackers, grids and page are reused unchanged.
 - **Days.** Time is split at midnight in `timeZone` (an IANA name), so an
   event that crosses midnight counts on both days. Days run from `from` to
   `to`, at most 400.
+- **Read in chunks.** Events are requested one civil day at a time, each
+  window widened by the flood pulse time on both sides so flooding and the
+  intersection are right across day edges (the overlap is trimmed after).
+  If one day's response is stopped at the 2 MB cap, that day is asked again in
+  halves, down to one hour; an hour still over the cap is refused with a
+  plain message naming the hour. Only the parsed fields of each chunk are
+  kept, so memory stays small for a 400-day range.
 - **Tags.** `appTags` maps an app name to one of the owner's tag names (the
   same rules as slice 1's `categoryTags`, including the reserved names).
   Minutes for apps with no tag go into one total named `untagged`; their
@@ -126,12 +133,15 @@ only):
    daylight-saving change day has 23 or 25 hours.
 6. Zero or two matching buckets are refused with the plain message.
 7. Malformed events are skipped and counted.
-8. The command refuses any base other than `127.0.0.1:5600`, refuses a
+8. A 400-day range of invented events totalling well over 2 MB is read
+   day by day and gives the same minutes as one big read; a 3 MB day is
+   split and still counted; events flooded across a day edge count once.
+9. The command refuses any base other than `127.0.0.1:5600`, refuses a
    redirect, times out, and caps the response size (with a local test
    server on loopback).
-9. The library never imports `fs`, `child_process` or a network module and
+10. The library never imports `fs`, `child_process` or a network module and
    never reads the clock.
-10. The command refuses to overwrite without `--force`, and a write is a
+11. The command refuses to overwrite without `--force`, and a write is a
     temporary file plus rename.
 
 **Owner trial checks** (on his Mac, with his own ActivityWatch, following
