@@ -40,7 +40,7 @@ test('ActivityWatch source drops titles and URLs, subtracts idle time, and build
   const calls = [];
   const fetchJson = inventedActivity({ calls,
     windowEvents: [
-      event('2026-10-01T14:00:00Z', 3600, { app: 'Editor', title: marker, url: `https://${marker}` }),
+      event('2026-10-01T14:00:00Z', 3600, { app: 'Editor', title: marker, url: `https://leak.invalid/${marker}` }),
       event('2026-10-01T14:30:00Z', 1200, { app: 'Overlap', title: marker }),
     ],
     idleEvents: [event('2026-10-01T14:00:00Z', 1800, { status: 'not-afk', title: marker }), event('2026-10-01T14:30:00Z', 1800, { status: 'afk' })],

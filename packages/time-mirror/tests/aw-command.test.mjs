@@ -11,7 +11,7 @@ const buckets = {
   window: { type: 'currentwindow', hostname: 'test-mac' },
   idle: { type: 'afkstatus', hostname: 'test-mac' },
 };
-const windows = [{ timestamp: '2026-10-01T10:00:00Z', duration: 60, data: { app: 'Editor', title: marker, url: `https://${marker}` } }];
+const windows = [{ timestamp: '2026-10-01T10:00:00Z', duration: 60, data: { app: 'Editor', title: marker, url: `https://leak.invalid/${marker}` } }];
 const idle = [{ timestamp: '2026-10-01T10:00:00Z', duration: 60, data: { status: 'not-afk', title: marker } }];
 
 function response(value, init) { return new Response(typeof value === 'string' ? value : JSON.stringify(value), init); }
@@ -85,7 +85,9 @@ test('request timeout remains active after headers while the response body stall
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   try {
-    const localFetch = (_url, options) => fetch(`http://127.0.0.1:${server.address().port}/`, options);
+    const local = new URL('http://127.0.0.1/');
+    local.port = String(server.address().port);
+    const localFetch = (_url, options) => fetch(local.href, options);
     await assert.rejects(makeFetchJson(localFetch, 100)('/api/0/buckets/'), /longer than 10 seconds/);
     assert.equal(sentHeaders, true);
   } finally {
