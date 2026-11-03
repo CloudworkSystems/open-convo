@@ -45,10 +45,11 @@ root map `MAP.md`, only the part from the `<!-- atlas-index:start -->`
 marker on is skipped; the hand-written part before it is read and repaired
 like any note, and its bytes after the marker are never changed.
 
-`snapshot` is the list of note paths from the last time the command ran on
-this folder (`{ paths: [...] }`), or `null` when there is none. It is the
-evidence that a note moved rather than was deleted: the current notes
-alone can't tell the two apart.
+`snapshot` records each note from the last time the command ran on this
+folder, as its path and the SHA-256 of its bytes
+(`{ notes: [{ path, sha256 }] }`), or is `null` when there is none. It is
+the evidence that a note moved rather than was deleted and replaced: the
+current notes alone can't tell the two apart.
 
 ### Links It Reads
 
@@ -86,8 +87,11 @@ without regard to letter case with every note's file name without `.md`.
   resolved old path; for a bare wiki link such as `[[Seeds]]`, the one
   snapshot path whose file name matches the same way, and only if exactly
   one did); and the one matching note's path is **not** in the
-  snapshot, so it appeared since the last run. A note that was already
-  there before is never a move target. A markdown link's
+  snapshot, so it appeared since the last run; and that note's SHA-256
+  equals the hash the snapshot recorded for the old path, so it is the same
+  note, moved unchanged. A note that was already there before is never a
+  move target, and a new note with different bytes (an unrelated note, or
+  the moved note edited after the move) is listed, not repaired. A markdown link's
   target becomes the relative path from the linking note's folder to that
   note, each segment percent-encoded the way atlas-index writes links
   (every octet that is not an RFC 3986 unreserved character), keeping any
@@ -144,7 +148,7 @@ with every repair in it applied; a note with none is not in `writes`.
   the hand-written part before the marker; the bytes from the marker on are
   written back unchanged (running atlas-index afterwards rebuilds them).
 - The snapshot lives at `<dir>/.atlas-links/paths.json` and holds only the
-  relative note paths, nothing from inside the notes. `--record` saves it
+  relative note paths and their SHA-256 hashes, no text from the notes. `--record` saves it
   and changes nothing else; `--write` saves it after its repairs. Both
   write it through a temporary file and a rename, mode `0600`, and refuse
   if `.atlas-links` is a symbolic link. A dry run never writes it. A
@@ -191,7 +195,9 @@ in `tests/fixtures/` (invented notes only).
    `old/Seeds.md` while `archive/Seeds.md` was already in the snapshot: no
    repair, `needsYou` with that candidate. `[[old/Seeds]]` when the
    snapshot held `other/Seeds.md`, not `old/Seeds.md`, and that note moved
-   to `archive/Seeds.md`: no repair. No snapshot: every broken link
+   to `archive/Seeds.md`: no repair. `old/Seeds.md` deleted and a new,
+   different `archive/Seeds.md` created: no repair. A moved note edited
+   before the repair run: no repair, listed. No snapshot: every broken link
    is in `needsYou`, none repaired. `--record`, then a move, then `--write`:
    repaired.
 6. Links in fenced code blocks and inline code are not touched; external
