@@ -30,8 +30,8 @@ exists), is listed for the person and left alone.
 
 ## What It Does
 
-`planRepairs(notes)` in `packages/atlas-links/`, plain JavaScript, no
-dependencies. It takes the wiki as data and returns data. It reads and
+`planRepairs(notes, snapshot)` in `packages/atlas-links/`, plain
+JavaScript, no dependencies. It takes the wiki as data and returns data. It reads and
 writes nothing itself.
 
 ### Input
@@ -44,6 +44,11 @@ atlas-index generated header) are skipped: atlas-index rebuilds them. In the
 root map `MAP.md`, only the part from the `<!-- atlas-index:start -->`
 marker on is skipped; the hand-written part before it is read and repaired
 like any note, and its bytes after the marker are never changed.
+
+`snapshot` is the list of note paths from the last time the command ran on
+this folder (`{ paths: [...] }`), or `null` when there is none. It is the
+evidence that a note moved rather than was deleted: the current notes
+alone can't tell the two apart.
 
 ### Links It Reads
 
@@ -74,7 +79,13 @@ names such as `[[old/Seeds]]` alike, or the whole wiki `name` when it has no
 `/`), NFC-normalize it and compare it
 without regard to letter case with every note's file name without `.md`.
 
-- **Exactly one note matches:** propose a repair. A markdown link's
+- **Exactly one note matches, and the snapshot shows a move:** propose a
+  repair. A move means all three of these: the snapshot is present; the
+  old target was a note in the snapshot and is gone now (for a markdown
+  link, its resolved path; for a wiki link, a snapshot path whose file name
+  matches the same way); and the one matching note's path is **not** in the
+  snapshot, so it appeared since the last run. A note that was already
+  there before is never a move target. A markdown link's
   target becomes the relative path from the linking note's folder to that
   note, each segment percent-encoded the way atlas-index writes links
   (every octet that is not an RFC 3986 unreserved character), keeping any
@@ -85,9 +96,11 @@ without regard to letter case with every note's file name without `.md`.
   the note's path without `.md` is used instead, and if that is not unique
   or safe either the link goes to `needsYou`. Only the target text changes;
   the link text, label and every other byte of the note stay as they are.
-- **No note or more than one note matches:** no repair. The link is listed
-  under `needsYou` with the candidate paths (empty for none), so the
-  person decides.
+- **Anything else:** no repair. That covers no match, more than one match,
+  no snapshot (the first run), and one match without move evidence (for
+  example, `old/Seeds.md` deleted while an unrelated `archive/Seeds.md`
+  was already there). The link is listed under `needsYou` with the
+  candidate paths (empty for none) and a `reason`, so the person decides.
 - A link from a note to itself is never proposed.
 
 ### Output
@@ -113,7 +126,7 @@ with every repair in it applied; a note with none is not in `writes`.
 
 ### The Command
 
-`node packages/atlas-links/src/repair.mjs --dir <folder> [--write] [--json]`
+`node packages/atlas-links/src/repair.mjs --dir <folder> [--write | --record] [--json]`
 
 - It reads every `.md` file under `--dir`, skipping hidden folders and
   symbolic links, as atlas-index does. A `--dir` that contains `.git`, or
@@ -128,6 +141,13 @@ with every repair in it applied; a note with none is not in `writes`.
   writes a generated index. In `MAP.md` it may change only link targets in
   the hand-written part before the marker; the bytes from the marker on are
   written back unchanged (running atlas-index afterwards rebuilds them).
+- The snapshot lives at `<dir>/.atlas-links/paths.json` and holds only the
+  relative note paths, nothing from inside the notes. `--record` saves it
+  and changes nothing else; `--write` saves it after its repairs. Both
+  write it through a temporary file and a rename, mode `0600`, and refuse
+  if `.atlas-links` is a symbolic link. A dry run never writes it. A
+  snapshot that is missing is `null`; one that is unreadable or malformed
+  refuses the run.
 - A refusal prints one plain message and exits 1. A result exits 0.
 
 ## When It Goes Wrong
@@ -135,7 +155,10 @@ with every repair in it applied; a note with none is not in `writes`.
 - **Two notes share the name:** no repair; listed under `needsYou` with
   both paths.
 - **The note was deleted, or given a new name:** no repair; listed with
-  no candidates.
+  no candidates, or with any older note of that name as a candidate.
+- **No snapshot yet, or the move happened before it:** no repair; listed
+  for the person. Running `--record` after tidying makes later moves
+  repairable.
 - **The note changed while the command ran:** that note is skipped and
   named; the others are still written.
 - **A write fails halfway:** each note is written whole or not at all (the
@@ -162,7 +185,11 @@ in `tests/fixtures/` (invented notes only).
    A hand-written link in `MAP.md` above the marker is repaired; the bytes
    from the marker on are unchanged.
 5. Two notes with the same name: no repair, one `needsYou` entry with both
-   paths. A deleted note: `needsYou` with no candidates.
+   paths. A deleted note: `needsYou` with no candidates. A deleted
+   `old/Seeds.md` while `archive/Seeds.md` was already in the snapshot: no
+   repair, `needsYou` with that candidate. No snapshot: every broken link
+   is in `needsYou`, none repaired. `--record`, then a move, then `--write`:
+   repaired.
 6. Links in fenced code blocks and inline code are not touched; external
    links and absolute paths are not touched.
 7. Only target text changes: the repaired note matches the original byte
@@ -184,7 +211,8 @@ in `tests/fixtures/` (invented notes only).
 
 On a copy of a small notes folder (never the only copy):
 
-1. Move one note into a new folder.
+1. Run the command with `--record` once, then move one note into a new
+   folder.
 2. Run the command without `--write`: it lists the repairs it would make.
 3. Run it with `--write`, then run atlas-index on the folder: those links
    are no longer broken, and nothing else in the notes changed.
