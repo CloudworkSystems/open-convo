@@ -242,6 +242,7 @@ export function toListFile(parsed, { deviceId, now } = {}) {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || !parsed.list || typeof parsed.list.title !== 'string' || !Array.isArray(parsed.items)) {
     fail('There is no checklist to save.');
   }
+  if (parsed.items.length === 0) fail(EMPTY_NOTE);
   if (typeof deviceId !== 'string' || deviceId.trim() === '') fail('A device id is required.');
   if (typeof now !== 'function') fail('A clock function is required.');
 

@@ -21,6 +21,8 @@ test('the library and the command do not read a clock, a network, or a process',
     assert.equal(library.includes(word), false, `library ${word}`);
   }
   assert.equal(command.includes("from 'node:fs'"), true);
+  assert.equal(command.includes('process.exit('), false);
+  assert.equal(command.includes('process.exitCode'), true);
 });
 
 test('the package has no dependencies and no license field', () => {

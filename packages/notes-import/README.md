@@ -21,7 +21,7 @@ pbpaste | node packages/notes-import/src/import.mjs --in -
 
 Without `--out` it only prints a preview. Nothing is written. `--in -` reads pasted text. `--out` writes the list. An existing file is left as it is unless you add `--force`. The new file is private to you (mode `0600`). A refusal prints one plain message and writes nothing. The exit code is 1 for a refusal and 0 for a preview or a saved list.
 
-`parseChecklist(text, { title })` reads the note. It returns `{ list, items, sections, skipped, warnings }`. `list.title` is the list name. `list.titleFrom` is `note`, `option`, or `fallback`. `toListFile(parsed, { deviceId, now })` returns the JSON string the household lists engine would save. Both throw a plain error and return no list when the note is refused.
+`parseChecklist(text, { title })` reads the note. It returns `{ list, items, sections, skipped, warnings }`. `list.title` is the list name. `list.titleFrom` is `note`, `option`, or `fallback`. `toListFile(parsed, { deviceId, now })` returns the JSON string the household lists engine would save. It refuses an empty checklist, so no empty list is returned. Both throw a plain error and return no list when the note is refused.
 
 ## Marks
 

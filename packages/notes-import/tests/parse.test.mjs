@@ -324,7 +324,19 @@ test('edge cases from the readme', () => {
   assert.match(refusal('- milk\n', { title: ` ${'t'.repeat(501)} ` }).message, /longer than 500/);
   assert.throws(() => toListFile({ items: [] }), /no checklist/);
   assert.throws(() => toListFile(parseChecklist('- milk\n'), { deviceId: 'phone' }), /clock function/);
+  assert.equal(refusalMessage(() => toListFile(parseChecklist(''), { deviceId: 'phone', now: () => 0 })), EMPTY_NOTE);
+  assert.equal(refusalMessage(() => toListFile(parseChecklist('Saturday market\n'), { deviceId: 'phone', now: () => 0 })), EMPTY_NOTE);
 });
+
+function refusalMessage(run) {
+  let message = '';
+  assert.throws(run, error => {
+    assert.ok(error instanceof NotesImportError);
+    message = error.message;
+    return true;
+  });
+  return message;
+}
 
 function signature(items) {
   return items.map(item => `${item.checked}\n${item.section}\n${item.text}`).sort();

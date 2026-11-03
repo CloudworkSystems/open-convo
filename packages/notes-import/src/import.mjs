@@ -214,9 +214,35 @@ function runningAsScript() {
   return import.meta.url === pathToFileURL(entry).href;
 }
 
+/** Resolve when `text` has been handed to the stream, so a pipe keeps the rest. */
+export function writeFlushed(stream, text) {
+  if (!text) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    try {
+      stream.write(text, error => {
+        if (error) reject(error);
+        else resolve();
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+/** Write the command's screen, and resolve with its exit code only after both streams flush. */
+export function publishResult(result, stdout, stderr) {
+  return Promise.all([
+    writeFlushed(stdout, result.stdout),
+    writeFlushed(stderr, result.stderr),
+  ]).then(() => result.code);
+}
+
 if (runningAsScript()) {
   const result = runImport(process.argv.slice(2));
-  if (result.stdout) process.stdout.write(result.stdout);
-  if (result.stderr) process.stderr.write(result.stderr);
-  process.exit(result.code);
+  // Let the pipe finish. Forcing an immediate exit would drop a preview still queued on a pipe.
+  publishResult(result, process.stdout, process.stderr).then(code => {
+    process.exitCode = code;
+  }, () => {
+    process.exitCode = 1;
+  });
 }

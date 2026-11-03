@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Writable } from 'node:stream';
 import { test } from 'node:test';
 import { HouseholdLists } from '../../household-lists/src/index.mjs';
 import { EMPTY_NOTE, IMPORT_DEVICE_ID, IMPORT_TIME, LIMITS, formatReport, parseChecklist } from '../src/index.mjs';
-import { readBounded, runImport, writeListFile } from '../src/import.mjs';
+import { publishResult, readBounded, runImport, writeListFile } from '../src/import.mjs';
 
 const sample = readFileSync(new URL('../samples/grocery.txt', import.meta.url), 'utf8');
 
@@ -219,6 +220,34 @@ test('readBounded stops one byte past the limit', () => {
   assert.equal(bytes.length, LIMITS.bytes);
   assert.throws(() => readBounded(scripted([...Array.from({ length: 16 }, () => chunk), Buffer.from('x')]), LIMITS.bytes), /1,048,576/);
 });
+
+test('a large preview is flushed before the exit code is set', async () => {
+  const stdout = capture();
+  const stderr = capture();
+  const text = `${'row '.repeat(40)}\n`.repeat(2000);
+  let finished = false;
+  const pending = publishResult({ code: 0, stdout: text, stderr: 'kept\n' }, stdout.stream, stderr.stream).then(code => {
+    finished = true;
+    return code;
+  });
+  assert.equal(finished, false);
+  assert.equal(await pending, 0);
+  assert.equal(finished, true);
+  assert.equal(stdout.text(), text);
+  assert.equal(stderr.text(), 'kept\n');
+});
+
+function capture() {
+  const chunks = [];
+  const stream = new Writable({
+    highWaterMark: 16,
+    write(chunk, _encoding, callback) {
+      chunks.push(Buffer.from(chunk));
+      queueMicrotask(callback);
+    },
+  });
+  return { stream, text: () => Buffer.concat(chunks).toString('utf8') };
+}
 
 test('writeListFile on a real folder uses mode 0600', () => {
   const dir = tempDir();
