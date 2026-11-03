@@ -8,8 +8,9 @@ thread "Draft next plans for outside builders"). Session name:
 follows [atlas-index-engine.md](atlas-index-engine.md), whose check lists
 broken links but leaves "fixes beyond index and map files" to a separate
 plan. This is that plan, for the one fix that needs no judgement: a link
-that broke because its note moved or was renamed, where exactly one note
-still carries that name. **Builder:** GrokBot team A, under AGENTS.md
+that broke because its note moved to another folder (or only its letter
+case changed), where exactly one note still carries that name. A note given
+a new name is not repaired; its links are listed for the person. **Builder:** GrokBot team A, under AGENTS.md
 "Outside Builders", through Cursor and signed in as `cloudwork-bot`.
 **Reviewers:** Codex reviews every push; the coordinator checks the result
 against this plan. **Finish line:** the package merges with `tests`
@@ -19,12 +20,13 @@ the owner trial below passes.
 
 ## Why
 
-Notes get moved into folders and renamed as a wiki grows, and every move
-breaks the links that pointed at the old place. The Atlas check already
+Notes get moved into folders as a wiki grows, and every move breaks the
+links that pointed at the old place. The Atlas check already
 lists them, but fixing each one by hand is the tedious part that makes
 people stop tidying. When exactly one note has the name the link was
-looking for, the fix is a rule, not a guess. Anything less certain is
-listed for the person and left alone.
+looking for, the fix is a rule, not a guess. Anything less certain,
+including a note that was given a different name (no record of its old name
+exists), is listed for the person and left alone.
 
 ## What It Does
 
@@ -132,8 +134,8 @@ with every repair in it applied; a note with none is not in `writes`.
 
 - **Two notes share the name:** no repair; listed under `needsYou` with
   both paths.
-- **The note was deleted, not moved:** no repair; listed with no
-  candidates.
+- **The note was deleted, or given a new name:** no repair; listed with
+  no candidates.
 - **The note changed while the command ran:** that note is skipped and
   named; the others are still written.
 - **A write fails halfway:** each note is written whole or not at all (the
