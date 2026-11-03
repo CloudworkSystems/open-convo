@@ -525,8 +525,12 @@ function roomFor(entries, kind) {
 }
 
 function closingBudget(reserve) {
+  // The closing line is written later, after other runs, so its sequence
+  // number can be wider than the reservation's. A wider number is a longer
+  // line. Budget the widest sequence the ledger can hold, or a settle near
+  // the size ceiling is refused and the bill is never recorded.
   return {
-    seq: reserve.seq,
+    seq: maxLedgerEntries,
     kind: 'over-bill',
     capabilityId: reserve.capabilityId,
     routeId: reserve.routeId,

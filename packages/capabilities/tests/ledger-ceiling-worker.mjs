@@ -93,8 +93,78 @@ async function proveClosingRoom() {
   }
 }
 
+async function proveWideSequence() {
+  // Every bill uses the longest amount the ledger can store, so the only
+  // extra byte in a closing line is a sequence number that gained a digit.
+  // The first run was sequence 1 and is closed at sequence 10. One byte of
+  // room past the finished file is enough. Without that byte a new
+  // reservation is refused, and the first run's bill is still recorded.
+  const now = '2026-01-15T20:00:00.000Z';
+  const bill = '999999999.999999';
+  const sameSize = '100000000.000001';
+  const rich = {
+    ...record,
+    perRun: { amount: bill, currency: 'USD' },
+    monthlyByCapability: { amount: bill, currency: 'USD' },
+    monthlyAll: { amount: bill, currency: 'USD' },
+  };
+  const richSig = sign('sha256', signingBytes(rich), { key: privateKey, dsaEncoding: 'der' });
+
+  async function run(bytes) {
+    setLedgerCeilingForTests(10, bytes);
+    const wideDir = mkdtempSync(join(tmpdir(), 'cap-wide-'));
+    const wideStore = memoryStore();
+    acceptCap(wideStore, rich, richSig, publicKey);
+    const wide = { ...base, ledgerDir: wideDir, store: wideStore, record: rich, signature: richSig };
+    try {
+      const reserved = await reserve({ ...wide, jobId: 'early', max: { amount: '1', currency: 'USD' }, now });
+      if (!reserved.ok) return { reserved };
+      let stopped = null;
+      for (let index = 0; index < 4; index += 1) {
+        const jobId = `later-${index}`;
+        const held = await reserve({ ...wide, jobId, max: { amount: '1', currency: 'USD' }, now });
+        if (!held.ok) {
+          stopped = held;
+          break;
+        }
+        const closed = await settle({ ...wide, jobId, actual: { amount: sameSize, currency: 'USD' }, now });
+        if (!closed.ok) return { closed };
+      }
+      const settled = await settle({ ...wide, jobId: 'early', actual: { amount: bill, currency: 'USD' }, now });
+      const text = readFileSync(join(wideDir, 'entries.jsonl'));
+      const last = JSON.parse(text.toString('utf8').trim().split('\n').at(-1));
+      const spent = await monthSpent({ ...wide, now });
+      return { stopped, settled, seq: last.seq, bytes: text.length, spent };
+    } finally {
+      rmSync(wideDir, { recursive: true, force: true });
+    }
+  }
+
+  const roomy = await run(1024 * 1024);
+  if (!roomy.settled?.ok || roomy.seq !== 10 || roomy.stopped) {
+    throw new Error(`wide sequence did not reach 10: ${JSON.stringify(roomy.settled || roomy.closed || roomy.reserved)}`);
+  }
+  try {
+    const tight = await run(roomy.bytes + 1);
+    if (tight.stopped || !tight.settled?.ok || tight.settled.amount?.amount !== bill || tight.seq !== 10) {
+      throw new Error(`expected the widened over-bill to be recorded, got ${JSON.stringify(tight.settled || tight.stopped)}`);
+    }
+    if (!tight.spent?.ok) throw new Error(`widened total ${tight.spent?.reason}`);
+    const exact = await run(roomy.bytes);
+    if (!exact.stopped || exact.stopped.reason !== REASONS.ledgerFull) {
+      throw new Error(`expected the last reservation to be refused, got ${JSON.stringify(exact.stopped || exact.settled)}`);
+    }
+    if (!exact.settled?.ok || exact.settled.amount?.amount !== bill || !exact.spent?.ok) {
+      throw new Error(`expected the first run's bill to be recorded, got ${JSON.stringify(exact.settled)}`);
+    }
+  } finally {
+    setLedgerCeilingForTests(ceiling, 1024 * 1024);
+  }
+}
+
 try {
   await proveClosingRoom();
+  await proveWideSequence();
   const january = '2026-01-15T20:00:00.000Z';
   // Four completed runs are eight lines, exactly the lowered ceiling.
   for (let index = 0; index < 4; index += 1) await completed(`j-${index}`, '0.1', january);

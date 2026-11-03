@@ -310,9 +310,11 @@ These are the choices the plan does not spell out. Each one has a test in
   Which of those amounts were estimates is not kept. An open run from a
   closed month is kept until it settles or is released. A job id from a
   folded month can be used again.
-- A reservation leaves room for its closing line. Filling the ledger with
-  an open run still lets that run settle, including an over-bill, or be
-  released. A further reservation is refused.
+- A reservation leaves room for its closing line, sized for the longest
+  sequence number the record can hold. Filling the ledger with an open run
+  still lets that run settle, including an over-bill, or be released, even
+  after later runs make the sequence number longer. A further reservation
+  is refused.
 - A foreign bill is converted with the rate stored on its reservation.
   Advancing the clock past a day, or signing a new rate, does not change
   that bill. A reservation in the cap's currency still goes through when
