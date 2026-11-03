@@ -84,19 +84,26 @@ names what it can't read instead of guessing:
 
 - Path: `sources/recall/<slug>.md`, where the slug comes from the key (a
   folder path inside the export is kept as folders). Two keys giving the
-  same slug get `-2`, `-3` in key order, and are named in `warnings`.
+  same slug get a suffix of the first 8 hex characters of the SHA-256 of
+  the key (`<slug>-<hash8>.md`), and are named in `warnings`. So a card's
+  path depends only on its own key and never shifts when another card is
+  added or removed. The manifest also records each key's path, and a key
+  already in the manifest keeps the path it was given.
 - **Keys must stay inside.** `checkSource` and `toNotes` both refuse a key
   that is empty, absolute, contains a backslash, a control character or a
   `.` or `..` segment, or has a segment starting with `.`, naming the key.
   Each slug segment is limited to letters, digits, `-` and `_` (other
   characters become `-`), and the finished path is checked to sit under
   `sources/recall/` before it is returned. Two keys whose slugs differ only
-  by letter case are numbered like a collision, since the Mac's disk
-  ignores case.
-- Front matter: `kind: source`, `source: Recall`, `label: from a source`,
-  `status: unchecked`, `imported: <importedAt>`, then `url`, `tags` and
-  `created` when present, and `recall:` for the kept fields. The body
-  follows unchanged.
+  by letter case get the hash suffix like a collision, since the Mac's
+  disk ignores case.
+- Front matter: `kind: source`, `title: <title>`, `description:
+  <title>` (the field `packages/atlas-index/` reads for a note's about
+  line), `source: <sourceName>` (the name passed to `toNotes`, so `Recall`
+  only for the Recall source), `label: from a source`, `status:
+  unchecked`, `imported: <importedAt>`, then `url`, `tags` and `created`
+  when present, and the source's own kept fields under a key named after
+  the source id (`recall:` for Recall). The body follows unchanged.
 
 ### The Command
 
@@ -162,9 +169,13 @@ questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
 3. Image links are kept as text, never fetched (the test fails on any
    network use), and the note gets the images line.
 4. Each limit gives its message; the count and total limits write nothing.
-5. Two keys with the same slug get numbered paths and a warning.
+5. Two keys with the same slug get hash-suffixed paths and a warning, and
+   adding or removing a colliding card on re-import leaves every other
+   card's path unchanged.
 6. The output notes pass through `buildAtlas` from `packages/atlas-index/`
-   (imported through its public export) with no refusals.
+   (imported through its public export) with no refusals, and each note's
+   about line in the generated index is the card's title, including a card
+   whose title was only in its original front matter.
 7. Re-import: an unchanged card is left alone, a changed card is replaced,
    a hand-edited note is kept and listed, a removed card is listed and not
    deleted, a file outside the manifest is never touched.
@@ -178,7 +189,8 @@ questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
     test edits it from a hook between the two steps) is kept and listed,
     and its temporary file is removed.
 10. A second invented source written only against the README guide passes
-    `checkSource` and produces notes through `toNotes` unchanged.
+    `checkSource` and produces notes through `toNotes` unchanged, labeled
+    with its own source name, never `Recall`.
 11. The library never imports `child_process` or a network module and
     never reads the clock (`importedAt` is passed in; a test checks the
     source).

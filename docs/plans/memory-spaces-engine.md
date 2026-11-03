@@ -90,7 +90,10 @@ no network.
    the current text only.
 8. **Forget acts at once.** `forget` moves an entry to `trash` and out of
    every read in the same call. `purge({ now })` removes trash entries
-   older than 30 days for good. Restoring from trash is `undo` of that
+   older than 30 days for good, and removes every copy of their text: the
+   entry's correction history, the candidate it came from, and the text in
+   every log entry about it, which keeps only the operation, its id, time
+   and actor, marked `purged`. Restoring from trash is `undo` of that
    forget, or `restore` within the 30 days.
 9. **Undo.** `undo({ opId })` reverses one logged keep, correct, forget,
    share, move or allowCloud, if nothing later depends on it. If something
@@ -135,7 +138,8 @@ the five questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
 2. **Interrupted.** Each file is a temporary file plus a rename, and the
    log entry is written last. A run stopped part-way leaves the last whole
    state; `show` then says "The last change didn't finish and was not
-   saved." if a file and the log disagree, and rebuilds from the log.
+   saved." if a file and the log disagree, and rebuilds from the log (a purged entry stays gone,
+   since its log entries no longer hold its text).
 3. **Empty or first run.** A folder without the marker says "This isn't a
    sample memory folder. Run init in an empty folder first." `read` on an
    empty space says "Nothing kept in this space yet."
@@ -162,7 +166,9 @@ the five questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
 6. Correct keeps history and reads return the new text.
 7. Forget removes the entry from every read in the same call; restore and
    undo bring it back within 30 days; purge after 30 days removes it and
-   can't be undone.
+   can't be undone, and after purge the entry's text (and every earlier
+   version of it) appears nowhere in the returned state or in any file in
+   `writes`, the log included.
 8. Undo of each operation kind, and a refused undo that names what depends
    on it.
 9. The 4 KB limits on subject files and the index, and the generated
