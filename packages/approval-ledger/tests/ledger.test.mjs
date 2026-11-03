@@ -108,6 +108,36 @@ test("tampered journal is refused by reads, writes, and reset", async (context) 
   for (const result of [await f.ledger.verify(), await ask(f.ledger, "r2"), await f.ledger.reset()]) assert.match(result.reason, /changed outside True Convo/);
 });
 
+test("ancestor alias is resolved once and later swaps cannot redirect writes", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "approval-alias-")); context.after(() => rm(root, { recursive: true, force: true }));
+  const real = join(root, "real"), other = join(root, "other"), alias = join(root, "alias");
+  await mkdir(real); await mkdir(other); await symlink(real, alias);
+  const ledger = await openApprovalLedger({ ledgerDir: join(alias, "nested", "ledger"), storePath: join(alias, "state", "head.json") });
+  await rm(alias); await symlink(other, alias);
+  assert.equal((await ask(ledger)).ok, true);
+  assert.equal((await lstat(join(real, "nested", "ledger", "ledger.json"))).isFile(), true);
+  assert.equal((await lstat(join(real, "state", "head.json"))).isFile(), true);
+  assert.deepEqual(await readdir(other), []);
+});
+
+test("protected symlinks and changed ledger path components refuse", async (context) => {
+  const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true })); await ask(f.ledger);
+  const link = join(f.root, "linked-ledger"); await symlink(f.ledgerDir, link);
+  await assert.rejects(openApprovalLedger({ ledgerDir: link, storePath: f.storePath }), /changed outside/);
+  const storeLink = join(f.root, "linked-store"); await symlink(f.storePath, storeLink);
+  await assert.rejects(openApprovalLedger({ ledgerDir: f.ledgerDir, storePath: storeLink }), /changed outside/);
+  for (const path of [join(f.ledgerDir, ".lock"), `${f.storePath}.journal.json`, join(f.ledgerDir, "unexpected")]) {
+    await symlink(f.storePath, path);
+    assert.equal((await f.ledger.verify()).ok, false);
+    assert.equal((await ask(f.ledger, "r2")).ok, false);
+    await rm(path);
+  }
+  await rm(f.ledgerDir, { recursive: true });
+  const replacement = join(f.root, "replacement"); await mkdir(replacement); await symlink(replacement, f.ledgerDir);
+  assert.equal((await ask(f.ledger, "r2")).ok, false);
+  assert.deepEqual(await readdir(replacement), []);
+});
+
 test("reading missing nested locations creates nothing", async (context) => {
   const root = await mkdtemp(join(tmpdir(), "approval-missing-"));
   context.after(() => rm(root, { recursive: true, force: true }));
@@ -249,7 +279,7 @@ test("damage fails closed, reset preserves every protected request id", async (c
 });
 
 test("symlinks, inside stores, and stale locks are refused", async (context) => {
-  const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true })); await ask(f.ledger); const path = join(f.ledgerDir, "ledger.json"); const target = join(f.root, "copy.json"); await writeFile(target, await readFile(path)); await rm(path); await symlink(target, path); assert.equal((await f.ledger.verify()).ok, false); assert.equal((await f.ledger.reset()).ok, true); assert.equal((await ask(f.ledger)).ok, false);
+  const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true })); await ask(f.ledger); const path = join(f.ledgerDir, "ledger.json"); const target = join(f.root, "copy.json"); await writeFile(target, await readFile(path)); await rm(path); await symlink(target, path); assert.equal((await f.ledger.verify()).ok, false); assert.equal((await f.ledger.reset()).ok, false); assert.equal((await ask(f.ledger)).ok, false);
   await assert.rejects(() => openApprovalLedger({ ledgerDir: join(f.root, "inside"), storePath: join(f.root, "inside", "head.json") }), /outside/);
   const g = await fixture(); context.after(() => rm(g.root, { recursive: true, force: true })); await writeFile(join(g.ledgerDir, ".lock"), "stale"); const result = await ask(g.ledger); assert.match(result.reason, /remove/); assert.ok((await readdir(g.ledgerDir)).includes(".lock"));
 });

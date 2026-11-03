@@ -43,6 +43,8 @@ The first claim succeeds and the second says the yes was already used. The other
 
 ## Edge cases
 
+- Ancestor aliases such as macOS `/tmp` are resolved once, and all later file operations use those real locations, so swapping an alias cannot redirect saves. Symlinks in the ledger tree or at the store, journal, or lock cause refusal, including during reset.
+
 - Interrupted saves use `<storePath>.journal.json` beside the store: reads validate its consistent pair without writing, and the next write or reset finishes it under the lock. Restoring the ledger folder alone cannot restore this journal or the store, so their checks still catch an older ledger.
 
 - Used ids include both individual request entries and the lists inside reset entries. Verification requires the store to contain all of those ids. Reset preserves both sources, and refuses malformed reset lists or an unreadable ledger with no readable store.

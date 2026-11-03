@@ -5,6 +5,7 @@ import {
   mkdir,
   open as openFile,
   readFile,
+  readdir,
   realpath,
   rename,
   rm,
@@ -54,8 +55,13 @@ async function assertNoSymlink(path, allowMissing = true) {
   const target = resolve(path);
   const targetExists = await exists(target);
   if (targetExists && (await lstat(target)).isSymbolicLink()) throw new Error(DAMAGE);
-  const parent = dirname(target);
-  if (await exists(parent) && (await lstat(parent)).isSymbolicLink()) throw new Error(DAMAGE);
+  let parent = dirname(target);
+  while (true) {
+    if (await exists(parent) && (await lstat(parent)).isSymbolicLink()) throw new Error(DAMAGE);
+    const next = dirname(parent);
+    if (next === parent) break;
+    parent = next;
+  }
   if (!allowMissing && !targetExists) throw Object.assign(new Error("missing"), { code: "ENOENT" });
 }
 
@@ -74,13 +80,14 @@ async function safeLocations(ledgerDir, storePath) {
   const ledger = resolve(ledgerDir);
   const store = resolve(storePath);
   if (isWithin(store, ledger)) throw new Error("storePath must be outside ledgerDir");
-  await assertNoSymlink(ledger);
-  await assertNoSymlink(dirname(store));
-  await assertNoSymlink(store);
+  // Ancestor aliases are resolved once, but the chosen endpoints may not be links.
+  for (const endpoint of [ledger, store, `${store}.journal.json`, join(ledger, ".lock")]) {
+    if (await exists(endpoint) && (await lstat(endpoint)).isSymbolicLink()) throw new Error(DAMAGE);
+  }
   const effectiveLedger = await resolveExistingAncestor(ledger);
   const effectiveStore = await resolveExistingAncestor(store);
   if (isWithin(effectiveStore, effectiveLedger)) throw new Error("storePath must be outside ledgerDir");
-  return { ledger, store, file: join(ledger, "ledger.json"), lock: join(ledger, ".lock") };
+  return { ledger: effectiveLedger, store: effectiveStore, file: join(effectiveLedger, "ledger.json"), lock: join(effectiveLedger, ".lock") };
 }
 
 async function readJson(path, fallback) {
@@ -94,9 +101,11 @@ async function readJson(path, fallback) {
 }
 
 async function atomicJson(path, value) {
+  await assertNoSymlink(path);
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const temp = join(dirname(path), `.${path.split("/").at(-1)}.${randomUUID()}.tmp`);
   await writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600, flag: "wx" });
+  await assertNoSymlink(path);
   await rename(temp, path);
 }
 
@@ -164,6 +173,19 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
   const paths = await safeLocations(ledgerDir, storePath);
   const journalPath = `${paths.store}.journal.json`;
 
+  async function checkLocations() {
+    async function scan(path) {
+      await assertNoSymlink(path);
+      if (!(await exists(path))) return;
+      if ((await lstat(path)).isDirectory()) {
+        for (const name of await readdir(path)) await scan(join(path, name));
+      }
+    }
+    await scan(paths.ledger);
+    await assertNoSymlink(paths.store);
+    await assertNoSymlink(journalPath);
+  }
+
   function validPair(entries, store) {
     const checked = verifyEntries(entries);
     const ids = Array.isArray(entries) ? chainRequestIds(entries) : null;
@@ -171,6 +193,7 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
   }
 
   async function journalSnapshot() {
+    await checkLocations();
     const journal = await readJson(journalPath, null);
     if (!journal) return null;
     const { before, entries, store, previousText } = journal;
@@ -243,7 +266,7 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
 
   async function write(kind, data, validate) {
     return withQueue(paths.lock, async () => {
-      await assertNoSymlink(paths.ledger);
+      try { await checkLocations(); } catch { return refusal(DAMAGE); }
       await mkdir(paths.ledger, { recursive: true, mode: 0o700 });
       let handle;
       try {
@@ -353,7 +376,7 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
     async verify() { return readSnapshot((loaded) => success({ head: loaded.store.head, count: loaded.store.count })); },
     async reset() {
       return withQueue(paths.lock, async () => {
-        await assertNoSymlink(paths.ledger);
+        try { await checkLocations(); } catch { return refusal(DAMAGE); }
         await mkdir(paths.ledger, { recursive: true, mode: 0o700 });
         let handle;
         try { handle = await openFile(paths.lock, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600); }
