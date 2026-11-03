@@ -307,6 +307,8 @@ These are the choices the plan does not spell out. Each one has a test in
   only for a run that never started.
 - A job id stays used after release, settle or over-bill, until that month is folded.
 - `now` has to be a real ISO instant. `2026-02-31` is refused.
+- A file write that the disk stops accepting is not renamed into place.
+  The previous file stays.
 - A symlink in place of `entries.jsonl` is treated as a changed ledger.
 - The show command's directory listing is unchanged after it runs.
 - A closed month is kept as checkpoint totals, not every settled line.

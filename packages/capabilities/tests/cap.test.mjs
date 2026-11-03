@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign, verify } from 'node:crypto';
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync, writeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -25,6 +25,7 @@ import {
   verifyCap,
 } from '../src/cap/index.mjs';
 import { REASONS } from '../src/cap/reasons.mjs';
+import { atomicWrite } from '../src/cap/files.mjs';
 import { withFileLock, withSyncLock } from '../src/cap/lock.mjs';
 
 const capDir = fileURLToPath(new URL('../src/cap/', import.meta.url));
@@ -778,6 +779,28 @@ test('a lock left by a finished process is taken, and a live one is not', async 
     const liveSync = withSyncLock(stateLock, () => 'ran', { attempts: 2, waitMs: 1 });
     assert.equal(liveSync.ok, false);
     assert.equal(readFileSync(stateLock, 'utf8'), `${process.pid}\n${token}\n`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a short write is retried, and a stalled write leaves the previous file', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cap-write-'));
+  const path = join(dir, 'entries.jsonl');
+  try {
+    assert.equal(atomicWrite(path, 'original\n'), true);
+    let calls = 0;
+    assert.equal(atomicWrite(path, 'abcdef', (fd, data, offset, length) => {
+      calls += 1;
+      const count = Math.min(2, length);
+      writeSync(fd, data, offset, count);
+      return count;
+    }), true);
+    assert.equal(readFileSync(path, 'utf8'), 'abcdef');
+    assert.ok(calls >= 3);
+    assert.throws(() => atomicWrite(path, 'replacement\n', () => 0), { code: 'EIO' });
+    assert.equal(readFileSync(path, 'utf8'), 'abcdef');
+    assert.equal(readdirSync(dir).some((name) => name.endsWith('.tmp')), false);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

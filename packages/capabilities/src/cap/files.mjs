@@ -47,13 +47,29 @@ export function readNoFollow(path, maxBytes) {
   }
 }
 
+// `write` is the system call. Tests pass a stand-in that reports a short
+// count. Callers of atomicWrite do not.
+function writeAll(fd, text, write = writeSync) {
+  const data = Buffer.from(text);
+  let offset = 0;
+  while (offset < data.length) {
+    const wrote = write(fd, data, offset, data.length - offset);
+    if (!Number.isInteger(wrote) || wrote <= 0 || wrote > data.length - offset) {
+      const error = new Error('incomplete write');
+      error.code = 'EIO';
+      throw error;
+    }
+    offset += wrote;
+  }
+}
+
 /** Write a new file and rename it into place. Refuses to follow a symlink. */
-export function atomicWrite(path, text) {
+export function atomicWrite(path, text, write = writeSync) {
   if (fileKind(path) === 'symlink' || fileKind(path) === 'directory' || fileKind(path) === 'other') return false;
   const tmp = `${path}.${randomBytes(8).toString('hex')}.tmp`;
   const fd = openSync(tmp, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW, 0o600);
   try {
-    writeSync(fd, text);
+    writeAll(fd, text, write);
     fsyncSync(fd);
   } catch (error) {
     try { closeSync(fd); } catch { /* already closing */ }
