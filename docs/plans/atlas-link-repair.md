@@ -67,7 +67,9 @@ an `<...>` destination.
 ### The One Rule
 
 For each broken link, take the file name it was looking for (the last
-segment without `.md`, or the wiki `name`), NFC-normalize it and compare it
+path segment without `.md`, for markdown links and for path-qualified wiki
+names such as `[[old/Seeds]]` alike, or the whole wiki `name` when it has no
+`/`), NFC-normalize it and compare it
 without regard to letter case with every note's file name without `.md`.
 
 - **Exactly one note matches:** propose a repair. A markdown link's
@@ -121,8 +123,9 @@ with every repair in it applied; a note with none is not in `writes`.
   rename it reads the note again; if its bytes changed since the scan, or
   it disappeared or became a link, that note is left as it is and reported
   as skipped. It never creates, deletes, renames or moves a file, and never
-  writes an index or the map (running atlas-index afterwards rebuilds
-  those).
+  writes a generated index. In `MAP.md` it may change only link targets in
+  the hand-written part before the marker; the bytes from the marker on are
+  written back unchanged (running atlas-index afterwards rebuilds them).
 - A refusal prints one plain message and exits 1. A result exits 0.
 
 ## When It Goes Wrong
@@ -150,7 +153,8 @@ in `tests/fixtures/` (invented notes only).
    `buildAtlas` then reports none of them as broken.
 2. A renamed letter case (`Seeds.md` linked as `seeds.md`) is repaired.
 3. Wiki links: `[[seeds]]` and `[[seeds|the seed list]]` are repaired to
-   the note's exact spelling, keeping the label.
+   the note's exact spelling, keeping the label, and `[[old/Seeds]]` after
+   the note moved to `archive/Seeds.md` is repaired by its last segment.
 4. An `#anchor` is kept. A repaired target to `archive/Seed Plans.md`,
    `plan#1.md` and `a (draft).md` is encoded, and `buildAtlas` resolves it.
    A hand-written link in `MAP.md` above the marker is repaired; the bytes
