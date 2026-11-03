@@ -67,11 +67,19 @@ rules follow the Atlas note's table, mapped as shown.
 | Order | State | Atlas note name | Rule |
 |---|---|---|---|
 | 1 | Blocked | Stuck | A "silent on" line in the PR keeper's latest "Not working" comment on #52, written by `cloudwork-bot`, names this pull request. Only those missed-deadline lines count: the comment's "Waiting on someone" section and its "not set up" lines never make a pull request Blocked |
-| 2 | Returned | Being fixed | The builder owes the next move: a draft; `tests` red on the latest commit; a merge conflict; Codex findings on the latest commit while `codex-approved` is not passing there; or an independent review of the latest commit with open findings |
-| 3 | Needs You | Waiting on you | Only the owner can move it: a protected path without his approval on the latest commit, or a risk-hold label (the same rules `owner-queue` uses today); or a pull request that would otherwise be Checked but changes a plan in `docs/plans/`, an `AGENTS.md` or `CLAUDE.md` file, or a path the `pages` workflow publishes (`site/`, `brand/tokens.css`, `brand/fonts/`), with auto-merge still off. Those merge only on his quoted yes, and auto-merge goes on only after it |
-| 4 | Under Way | In review | A reviewer has it: Codex hasn't reviewed the latest commit yet, the triage judge is pending, or the independent review of the latest commit hasn't arrived |
-| 5 | Checked | Ready to merge | `tests` and `codex-approved` pass on the latest commit, the owner's approval is there where a protected path needs it, and a clean independent review of that commit is there where the rules ask for one. Auto-merge being on is shown, never required, except for the yes-to-merge paths in Needs You |
+| 2 | Returned | Being fixed | The builder owes the next move: a draft; `tests` red on the latest commit; a merge conflict; Codex findings on the latest commit while `codex-approved` is not passing there and the triage judge isn't due (below); an independent review of the latest commit with open findings; or a plan check of the latest commit that lists something missing |
+| 3 | Needs You | Waiting on you | Only the owner can move it: a protected path without his approval on the latest commit, or a risk-hold label (the same rules `owner-queue` uses today); or a pull request the PR keeper's latest "Not working" comment lists as waiting on the owner ("plan waiting on the owner's yes", "rules change waiting on the owner's yes", "site change waiting on the owner's yes", "risk escalation waiting on the owner", "Dependabot waiting on the owner"). The keeper already decides whether a quoted yes covers the latest commit, so the feed reads its verdict instead of judging the quote again |
+| 4 | Under Way | In review | Someone other than the builder or the owner has it: Codex hasn't reviewed the latest commit yet; the triage judge is due (below); the independent review of the latest commit hasn't arrived; an outside module's plan check of the latest commit hasn't been posted; or the keeper's comment lists it as waiting on the coordinator or on the thread that asked the owner |
+| 5 | Checked | Ready to merge | `tests` and `codex-approved` pass on the latest commit, the owner's approval is there where a protected path needs it, a clean independent review of that commit is there where the rules ask for one, and for an outside module (an `agent: grokbot` or `agent: codex` pull request that changes `packages/`) a `cloudwork-bot` comment says "Plan check" of that commit "passed". Auto-merge being on is shown, never required |
 | 6 | Unknown | Unknown | None of the above |
+
+**The triage judge is due** when Codex has reviewed three or more rounds,
+only P2 and P3 findings are open on the latest commit, no judge verdict on
+that commit has arrived, and Codex's review of it is less than 2 hours old.
+The builder is meant to leave those findings for the judge, so the row says
+the judge has it (Under Way). After 2 hours with no verdict, the builder
+fixes them (AGENTS.md, Review Guidelines), and the row moves to Returned. The
+feed counts rounds and severities the same way `codex-triage.mjs` does.
 
 `codex-approved` passing counts as "no open Codex findings", whatever
 Codex's own summary still says, because that check already honors the triage
@@ -87,7 +95,9 @@ the merge gate's own workflow and out of scope here.
 
 Open review findings are the builder's move (Returned), even though the
 owner could accept them, so the board never hands him a review loop as a
-task by default. Each row also shows "your approval also needed" when a
+task by default. The keeper's comment is rewritten hourly, so a
+yes-to-merge wait can show up to an hour late; the row shows when the keeper
+last checked. Each row also shows "your approval also needed" when a
 protected path is waiting, whatever its state, so a pull request being fixed
 doesn't hide his approval.
 
@@ -161,16 +171,19 @@ Each part is its own pull request, in this order. Parts 1 and 3 touch
    feed yet shows "No status feed yet. It appears after the first hourly
    run" on the Pending tab.
 4. **Denied or stuck.** A missing permission fails the workflow run, which
-   shows red in Actions, and the keeper reports it with the other silent
-   jobs. The Desk never blocks on the feed: the other Rail Map tabs keep
-   working.
+   shows red in Actions and writes no new feed. The signal the owner sees is
+   the feed's age: after 3 hours the Pending tab and the board say "not
+   refreshed since <time>". Nothing else reports it in this plan; having the
+   PR keeper list a failed feed run is a later change to its instructions.
+   The Desk never blocks on the feed: the other Rail Map tabs keep working.
 5. **The error message.** Plain words: "The status feed couldn't be read.
    The other views still work." No codes.
 
 ## Finish Line
 
 The feed refreshes hourly on its branch; the state rules pass tests for
-every state, the order, the yes-to-merge paths and the loop flag; and the
+every state, the order, the yes-to-merge waits, the triage window, the
+plan check and the loop flag; and the
 Rail Map's Pending tab shows it. Then the owner's trial, one check per line:
 
 1. Five open pull requests: each one's state and next move is right.
@@ -180,8 +193,9 @@ Rail Map's Pending tab shows it. Then the owner's trial, one check per line:
    feed whole, and the tab shows it.
 4. Empty or first run: a snapshot with no feed shows "No status feed yet"
    and a feed with no open pull requests shows "Nothing open".
-5. Denied or stuck: a feed more than 3 hours old shows "not refreshed since
-   <time>", and the Desk never waits on it.
+5. Denied or stuck: with the feed workflow's write permission removed for
+   one run (or a feed file dated more than 3 hours back), the Pending tab
+   shows "not refreshed since <time>", and the Desk never waits on it.
 6. The error message: a damaged feed file shows "The status feed couldn't be
    read. The other views still work." and nothing in code words.
 
