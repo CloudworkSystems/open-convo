@@ -125,7 +125,8 @@ committed): the dry run shows his items, headings as sections and checked
 items marked; a note with a stray paragraph lists it as skipped with its
 line number; an empty paste gives the "no checklist items" message; a
 second run to the same `--out` without `--force` refuses and leaves the
-first file; the written list opens in the household lists engine's example
+first file; a `--force` run over that file stopped part-way (Control-C on
+the large sample note in the package) leaves the first file whole; the written list opens in the household lists engine's example
 (README) with the same items. He confirms each message says what to do
 next.
 
@@ -161,7 +162,7 @@ breaking one is a stop-and-report event.
   in the code or the tests. No `fs` in the library; the command may read
   its one input and write its one output.
 - No new dependencies. Add no license file and no `license` field.
-- Keep the slice small: the library, the command, the tests, a sample note
+- Keep the slice small: the library, the command, the tests, a sample note, a large sample note (near the 2,000-item limit, for the interrupted-run check)
   and a short README (marks read, the command, and the owner's steps for
   copying a note as plain text on the Mac). Finishable in one to two days.
 - The pull request says what was built, how to run the tests, what was not

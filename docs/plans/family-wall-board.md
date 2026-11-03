@@ -61,13 +61,14 @@ including `now`.
       "id": "sam",
       "name": "Sam",
       "color": "teal",
+      "calendars": ["Family", "School"],
       "agenda": { "...": "one today-agenda output object, unchanged" }
     }
   ],
   "lists": [
     { "id": "groceries", "name": "Groceries", "items": ["Milk", "Apples"], "more": 4 }
   ],
-  "private": ["calendar:Doctor"]
+  "private": ["key:dentist|2026-11-03T14:00:00Z"]
 }
 ```
 
@@ -80,11 +81,16 @@ including `now`.
   not share a color.
 - `lists`: 0 to 6 shared lists, each up to 12 shown items plus a `more`
   count, as the caller (later, the household lists engine) prepares them.
-- `private`: optional rules that hide an event's title on the wall. A rule
-  is `calendar:<name>` (every event from that calendar) or `key:<event key>`.
-  A hidden event shows as "Busy" in its person's color, at its time, with no location. The
-  agenda has no privacy field of its own, so these rules are the only way
-  to hide a title.
+- **Event titles are hidden unless shared.** Each person has a
+  `calendars` list naming the calendars whose event titles may appear on
+  the wall. An event from any other calendar (including one renamed since
+  the board was set up) shows as "Busy" in its person's color, at its
+  time, with no title or location. So a typo or a rename hides more, never
+  less. The agenda has no privacy field of its own.
+- `private`: optional `key:<event key>` rules that hide one event from a
+  shared calendar the same way. A `key:` rule matching no event that day is
+  kept (the event may be on another day) and listed in `warnings`, which
+  the command prints.
 - **Tasks and habits are hidden unless shared.** Each person has an
   optional `show` list naming the task lists (`list:<task list name>`),
   single tasks (`task:<id>`) and single habits (`habit:<id>`) that may
@@ -161,8 +167,10 @@ only):
 1. The sample family board renders to the expected page byte for byte
    (`tests/expected/sample.html`), and the expected page contains no `http`,
    `src=`, `<script`, `url(` or `@import`.
-2. A hidden calendar and a `key:` rule show "Busy" with no title or location anywhere in
-   the page, including attributes and comments. A person with no `show`
+2. An event from a calendar not in the person's `calendars` (including a
+   misspelled or renamed one) and a `key:` rule each show "Busy" with no
+   title or location anywhere in the page, including attributes and
+   comments; an unmatched `key:` rule is listed in `warnings`. A person with no `show`
    list has no task title or habit name anywhere in the page, only the
    counts; `list:`, `task:` and `habit:` rules show exactly what they name;
    a `show` rule naming nothing is refused.
@@ -185,8 +193,8 @@ each page): the sample page opens with Wi-Fi off and shows the family's
 day; a board with nobody busy shows "Nothing on today" and no lists strip;
 a person with no `show` list shows only task and habit counts, no names;
 a board 31 minutes old shows "Not updated since ..." in the warning style,
-and a next-day board shows "This is yesterday's board"; a hidden calendar
-shows "Busy" with no title or place; a board with a repeated color prints
+and a next-day board shows "This is yesterday's board"; an event from a calendar
+he hasn't shared shows "Busy" with no title or place; a board with a repeated color prints
 the plain message naming the section and item and writes no page; running
 again without `--force` leaves the old page as it was; stopping a run
 part-way (Control-C on a large sample) leaves the old page whole. He
