@@ -697,6 +697,31 @@ test('the library does not read the clock', () => {
   assert.doesNotMatch(source, /child_process|node:net|node:http|node:https|from 'node:dns'/);
 });
 
+test('a reservation after a folded month reports the sequence that was saved', async () => {
+  const box = world(cap({
+    perRun: { amount: '10', currency: 'USD' },
+    monthlyByCapability: { amount: '100', currency: 'USD' },
+    monthlyAll: { amount: '100', currency: 'USD' },
+  }));
+  const january = '2026-01-15T20:00:00.000Z';
+  const february = '2026-02-15T20:00:00.000Z';
+  try {
+    const first = await box.reserve({ jobId: 'jan', max: { amount: '1', currency: 'USD' }, now: january });
+    assert.equal(first.ok, true, first.reason);
+    assert.equal(first.seq, 1);
+    assert.equal((await box.settle({ jobId: 'jan', actual: { amount: '1', currency: 'USD' }, now: january })).ok, true);
+    const next = await box.reserve({ jobId: 'feb', max: { amount: '1', currency: 'USD' }, now: february });
+    assert.equal(next.ok, true, next.reason);
+    const lines = readFileSync(join(box.dir, 'entries.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+    assert.equal(lines[0].kind, 'checkpoint');
+    assert.equal(lines.at(-1).kind, 'reserve');
+    assert.equal(lines.at(-1).seq, 2);
+    assert.equal(next.seq, lines.at(-1).seq);
+  } finally {
+    box.close();
+  }
+});
+
 test('a month follows the cap time zone across a non-UTC boundary', async () => {
   const box = world(cap({
     perRun: { amount: '1', currency: 'USD' },

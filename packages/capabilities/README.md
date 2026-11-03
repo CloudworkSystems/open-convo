@@ -207,7 +207,7 @@ file uses the same rule.
 
 | Call | What it does |
 |---|---|
-| `reserve({ ledgerDir, store, record, signature, publicKey, capabilityId, routeId, max, jobId, now, providerTotal? })` | Holds `max` against all three levels. Refuses a paused cap, a max of zero, a max over the per-run level, or a month that would go over. A conversion rate that is more than a day old, or dated after `now`, is not stored on the line. |
+| `reserve({ ledgerDir, store, record, signature, publicKey, capabilityId, routeId, max, jobId, now, providerTotal? })` | Holds `max` against all three levels. Refuses a paused cap, a max of zero, a max over the per-run level, or a month that would go over. A conversion rate that is more than a day old, or dated after `now`, is not stored on the line. The returned `seq` is the number written on the saved line. |
 | `settle({ ...same, jobId, now, actual?, estimated? })` | `estimated: true` keeps the reserved maximum and marks it estimated. An `actual` at or under the reservation, including zero, settles that figure. An `actual` over it writes `over-bill`, counts the full bill, and returns `routeOff: true`. |
 | `release({ ...same, jobId, now })` | Drops an open reservation. The job id stays used while that run is still in the ledger. After the month is folded, the id can be used again. |
 | `monthSpent({ ...same, now, capabilityId?, routeId?, providerTotal? })` | `{ reserved, spent, counted }` for that month. `counted` is what the cap uses. A `providerTotal` also needs `capabilityId` and `routeId`, the route that key belongs to. |
@@ -322,6 +322,7 @@ These are the choices the plan does not spell out. Each one has a test in
   clears the file. Once the ledger is empty, that cap is refused again.
 - A symlink in place of `entries.jsonl` is treated as a changed ledger.
 - The show command's directory listing is unchanged after it runs.
+- The first reservation of a later month folds completed history first. The `seq` it returns is the number on the saved line, after that fold, not the number the file would have used if the old lines had stayed.
 - A closed month is kept as checkpoint totals, not every settled line.
   Which of those amounts were estimates is not kept. An open run from a
   closed month is kept until it settles or is released. A job id from a

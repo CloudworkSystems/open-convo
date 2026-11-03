@@ -136,7 +136,11 @@ function mutate(dir, args, build, { bookkeeping = false } = {}) {
       ? { ok: false, reason: REASONS.notSaved }
       : { ok: false, reason: REASONS.ledgerEdited, fullySpent: true };
   }
-  return built.result;
+  // Folding gives the new line a sequence of its own. The number chosen
+  // before the fold is the old file's next number, not the one that was saved.
+  const result = built.result;
+  if (compacted && result.seq !== undefined) return { ...result, seq: entry.seq };
+  return result;
 }
 
 function loadForWrite(dir, args, { bookkeeping = false } = {}) {
