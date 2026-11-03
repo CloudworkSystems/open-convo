@@ -174,6 +174,8 @@ reviews. Plan approved (merged as #127 on October 24):
 
 **Memory spaces engine** (Personal, the rules of PLAN.md step 5), Codex team B builds, GrokBot or a fresh Claude reviews; plan proposed November 3, waiting on the owner's yes (`docs/plans/memory-spaces-engine.md`): propose, keep, correct, forget (30-day Trash) and Undo in separate spaces, only by the person, as a standalone package in `packages/memory-spaces/`, with a sample-only driver and no storage, app or AI.
 
+**Atlas link repair** (Personal, the Atlas wiki), GrokBot team A builds, Codex reviews and the coordinator checks it against the plan; plan proposed November 3, waiting on the owner's yes (`docs/plans/atlas-link-repair.md`): repairs links broken by a moved or renamed note when exactly one note carries the name, lists every other broken link for the owner, dry run by default, as a standalone package in `packages/atlas-links/`.
+
 **Public website (trueconvo.com)**, Claude builds, Codex reviews; a home page (with two Desk preview screenshots) and a plain-language privacy policy in `site/`, published by `.github/workflows/pages.yml` from `main` (#153, October 25). For Meta's developer early-access application and regular visitors. The owner turned on Pages and set the custom domain, and the site is published at trueconvo.com (latest deploy October 26).
 
 **Security** (all work; owner asked October 28): plan
