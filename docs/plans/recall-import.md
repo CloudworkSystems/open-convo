@@ -211,6 +211,9 @@ request must meet (docs/agent-process.md "Plans stop after two Codex
 rounds"):
 
 - `toNotes` takes the source itself (`toNotes(items, { source, importedAt })`), not just a name: it writes under `sources/<source id>/`, labels notes with the source's `name`, and keys kept fields by its `id`, with a test where a second source's id differs from its name ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4460901340)).
+- The command takes `--imported-at <ISO time>` and, when it is left out, reads the clock once in the command layer only (the library itself never reads the clock), passing that value to `toNotes`; a test runs the command with a fixed `--imported-at` and checks every note carries it ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4460939038)).
+- `checkSource` and `toNotes` refuse a source id that is not 1–64 characters of `[a-z0-9-]` starting with a letter, and every destination path is checked to sit under `sources/<source id>/` before any write; a test supplies `../../private` as an id and checks nothing is written ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4460939021)).
+- Items gain an optional `extra` object for source-specific front matter; `toNotes` writes it under the source id key, and tests cover an unknown Recall field and an `extra` field from the second source surviving the import ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4460939047)).
 
 ## Out Of Scope For This Slice
 

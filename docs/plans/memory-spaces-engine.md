@@ -201,6 +201,7 @@ request must meet (docs/agent-process.md "Plans stop after two Codex
 rounds"):
 
 - Purge stays purged after a crash: the redacted log is committed before the trash and state files change (or a durable purge marker is written first and honored by recovery), with a test that interrupts a purge at each step and checks the text never comes back ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4460901326)).
+- `restore` also needs `actor: person`, and the actor-refusal test covers it ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4460939032)).
 
 ## Out Of Scope For This Slice
 
