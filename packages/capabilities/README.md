@@ -407,8 +407,9 @@ A reference picture is uploaded to that same ComfyUI first (`/upload/image`),
 and the name it returns is what goes in `{{reference_file}}`. The graph is
 then posted to `/prompt`. Progress comes from ComfyUI's progress socket on
 that same address. The estimate is the remaining time from progress so far
-and the elapsed time. If the socket is not there, the run still finishes
-and the estimate stays unknown. Nothing is retried. A server that is not
+and the elapsed time. If the socket is not there, or it accepts and then
+never finishes the upgrade, the run still finishes and the estimate stays
+unknown. A redirect or a cancel on that socket still stops the run. Nothing is retried. A server that is not
 running says `ComfyUI isn't running on this Mac` and how to open it.
 
 Cancel uses that run's prompt id. A waiting job is removed from the queue
@@ -458,7 +459,9 @@ Each of these is covered in `tests/media.test.mjs`.
   lists a paid route above them.
 - The upload type is sniffed from the bytes. A `.png` name full of text is
   refused. A file one byte over the record's limit is refused and not
-  copied. The source file is left where it was. The saved name is new.
+  copied. A file the record allows, but that is over 64 MiB, is refused
+  before it is read into memory. The source file is left where it was. The
+  saved name is new.
 - "Filmed or drawn by me" with no marker has no `ai_label`. The same answer
   on `trainedAlgorithmicMedia` or `compositeWithTrainedAlgorithmicMedia`,
   including UTF-16, is `made by AI`. "Not sure" stays `not sure` even with
@@ -493,7 +496,9 @@ Each of these is covered in `tests/media.test.mjs`.
   running, progress is a fraction `value / max` from the progress socket,
   and the remaining time is `elapsed * (1 - progress) / progress`. A
   progress callback that throws does not stop the run. If the socket never
-  opens, the file still comes back.
+  opens, or it accepts and then never finishes the upgrade, the file still
+  comes back. Cancelling during that wait still stops the run before the
+  prompt is sent.
 - ComfyUI answering with an error, or not answering, does not submit the
   prompt again. An output name that is not a plain file name is not
   fetched. A file over the output limit (64 MiB, or a lower limit the

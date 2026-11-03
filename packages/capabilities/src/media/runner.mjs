@@ -202,6 +202,7 @@ export function upload({ record, routeId, filePath, madeHow, mediaDir, now }) {
   if (!read.ok) {
     if (read.code === 'link') return fail(REASONS.fileLink);
     if (read.code === 'size') return fail(REASONS.fileSize);
+    if (read.code === 'ceiling') return fail(REASONS.fileHold);
     return fail(REASONS.fileUnreadable);
   }
   const typed = checkBytes(record, read.bytes);
@@ -413,6 +414,7 @@ export async function runLocal(options) {
     if (!read.ok) {
       if (read.code === 'link') return fail(REASONS.fileLink);
       if (read.code === 'size') return fail(REASONS.fileSize);
+      if (read.code === 'ceiling') return fail(REASONS.fileHold);
       return fail(REASONS.fileUnreadable);
     }
     const typed = checkBytes(options.record, read.bytes);
@@ -456,7 +458,10 @@ export async function runLocal(options) {
       onMessage: noteMessage,
       signal: options.signal,
     });
-    if (!socket.ok && socket.kind !== 'unavailable') {
+    // A missing socket, or one that accepts and then never upgrades, only
+    // means there is no progress. Abort and redirect still stop the run.
+    const noProgress = socket.kind === 'unavailable' || socket.kind === 'timeout';
+    if (!socket.ok && !noProgress) {
       const problem = netFail(socket, false);
       if (problem.abort) return fail(REASONS.stopped, { stopped: true });
       return problem;

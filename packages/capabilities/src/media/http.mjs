@@ -113,9 +113,9 @@ export function comfyRequest(address, { method, path, headers, body, timeoutMs, 
 }
 
 /**
- * ComfyUI's progress socket. A refused connection, a redirect, or a socket
- * that never answers is reported. Any other failure means progress is
- * unavailable and the caller can still run the job over HTTP.
+ * ComfyUI's progress socket. A refused connection, a redirect, or a cancel
+ * stops the caller. A socket that is missing, or that accepts and then never
+ * finishes the upgrade, is only a missing progress report.
  */
 export function openProgress(address, { clientId, timeoutMs, onMessage, signal }) {
   return new Promise((resolve) => {

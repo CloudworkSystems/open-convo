@@ -9,6 +9,7 @@ export const REASONS = {
   localSetup: 'Set up the local model first.',
   fileType: 'That file is not a type this capability accepts.',
   fileSize: 'That file is over the size limit.',
+  fileHold: 'That file is too large to take in at once.',
   fileUnreadable: 'That file could not be read.',
   fileLink: 'That file is a link, so it was not copied.',
   noFileRule: "This capability doesn't say which files it accepts.",

@@ -16,6 +16,10 @@ import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 
 const NOFOLLOW_READ = constants.O_RDONLY | constants.O_NOFOLLOW;
+
+// A capability may allow up to 10 GiB. Reading that into one Buffer can kill
+// the process, so anything over this is refused before it is allocated.
+export const MAX_READ_BYTES = 64 * 1024 * 1024;
 const CREATE = constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW;
 
 const MARKERS = [
@@ -79,10 +83,12 @@ export function mediaDirKind(dir) {
 }
 
 /**
- * Read a regular file up to `maxBytes`. A larger file is reported from its
- * size and is not read. A symlink is not followed.
+ * Read a regular file up to `maxBytes`, and never more than `MAX_READ_BYTES`.
+ * A larger file is reported from its size and is not read. A symlink is not
+ * followed.
  */
 export function readRegularFile(filePath, maxBytes) {
+  const limit = Number.isInteger(maxBytes) && maxBytes >= 0 ? maxBytes : 0;
   let stat;
   try {
     stat = lstatSync(filePath);
@@ -91,7 +97,8 @@ export function readRegularFile(filePath, maxBytes) {
   }
   if (stat.isSymbolicLink()) return { ok: false, code: 'link' };
   if (!stat.isFile()) return { ok: false, code: 'unreadable' };
-  if (stat.size > maxBytes) return { ok: false, code: 'size' };
+  const over = overLimit(stat.size, limit);
+  if (over) return over;
   let fd;
   try {
     fd = openSync(filePath, NOFOLLOW_READ);
@@ -102,7 +109,8 @@ export function readRegularFile(filePath, maxBytes) {
   try {
     const again = fstatSync(fd);
     if (!again.isFile()) return { ok: false, code: 'unreadable' };
-    if (again.size > maxBytes) return { ok: false, code: 'size' };
+    const grown = overLimit(again.size, limit);
+    if (grown) return grown;
     const bytes = Buffer.alloc(again.size);
     let offset = 0;
     while (offset < bytes.length) {
@@ -167,6 +175,12 @@ export function removeFile(filePath) {
   } catch {
     /* the save already failed; leaving the file is reported by the caller */
   }
+}
+
+function overLimit(size, limit) {
+  if (size > limit) return { ok: false, code: 'size' };
+  if (size > MAX_READ_BYTES) return { ok: false, code: 'ceiling' };
+  return null;
 }
 
 function writeAll(fd, bytes) {

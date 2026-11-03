@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { closeSync, ftruncateSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { validateCapability } from '../src/index.mjs';
 import { run } from '../src/media/make.mjs';
 import { LOCAL_NODES } from '../src/media/nodes.mjs';
+import { MAX_READ_BYTES } from '../src/media/store.mjs';
 import { REASONS } from '../src/media/reasons.mjs';
 import { listRoutes, remainingMs, runLocal, upload, MAX_OUTPUT_BYTES } from '../src/media/runner.mjs';
 
@@ -425,6 +426,52 @@ test('an upload receipt keeps how the file was made, and provenance beats a film
   } finally {
     folder.remove();
     media.remove();
+  }
+});
+
+test('a file the record allows, but that is over 64 MiB, is refused before it is read', async () => {
+  const folder = tempDir();
+  const media = tempDir();
+  const server = await startComfy();
+  try {
+    const allowed = record();
+    allowed.inputs.reference_files.max_bytes = MAX_READ_BYTES + 1;
+    assert.equal(validateCapability(allowed).ok, true);
+    const filePath = join(folder.dir, 'big.png');
+    const fd = openSync(filePath, 'w');
+    try {
+      ftruncateSync(fd, MAX_READ_BYTES + 1);
+    } finally {
+      closeSync(fd);
+    }
+    const saved = upload({
+      record: allowed, routeId: 'upload', filePath, madeHow: 'filmed-or-drawn-by-me', mediaDir: media.dir, now: fixedNow,
+    });
+    assert.equal(saved.reason, REASONS.fileHold);
+    assert.deepEqual(filesIn(media.dir), []);
+    const local = await runLocal(localOptions(server, {
+      record: allowed,
+      workflow: fullWorkflow(),
+      request: { kind: 'image', prompt: 'a boat', seconds: 2, width: 64, height: 64, referenceFile: filePath },
+    }));
+    assert.equal(local.reason, REASONS.fileHold);
+    assert.equal(server.state.paths.length, 0);
+  } finally {
+    folder.remove();
+    media.remove();
+    await server.close();
+  }
+});
+
+test('a progress socket that accepts but never upgrades does not stop the run', async () => {
+  const server = await startComfy({ ws: 'hang' });
+  try {
+    const result = await runLocal(localOptions(server, { requestTimeoutMs: 80 }));
+    assert.equal(result.ok, true, result.reason);
+    assert.equal(promptPosts(server.state), 1);
+    assert.equal(receiptBeside(result.file).ai_label, 'made by AI');
+  } finally {
+    await server.close();
   }
 });
 
