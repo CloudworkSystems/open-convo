@@ -10,3 +10,19 @@ export {
   INPUT_TYPES,
   OUTPUT_TYPES,
 } from './validate.mjs';
+
+export {
+  REASONS,
+  verifyCap,
+  acceptCap,
+  tighten,
+  convertQuote,
+  signingBytes,
+  reserve,
+  settle,
+  release,
+  resetLedger,
+  monthSpent,
+  memoryStore,
+  fileStore,
+} from './cap/index.mjs';
