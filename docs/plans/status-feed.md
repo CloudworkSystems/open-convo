@@ -66,12 +66,24 @@ rules follow the Atlas note's table, mapped as shown.
 
 | Order | State | Atlas note name | Rule |
 |---|---|---|---|
-| 1 | Blocked | Stuck | The PR keeper's latest "Not working" comment on #52, written by `cloudwork-bot`, names this pull request; or `tests` is red on this pull request and on `main`'s latest commit too |
-| 2 | Returned | Being fixed | The builder owes the next move: a draft; `tests` red; a merge conflict; Codex findings open on the latest commit; or an independent review of the latest commit with open findings |
-| 3 | Needs You | Waiting on you | Only the owner can move it: a protected path without his approval on the latest commit, or a risk-hold label (the same rules `owner-queue` uses today) |
+| 1 | Blocked | Stuck | A "silent on" line in the PR keeper's latest "Not working" comment on #52, written by `cloudwork-bot`, names this pull request. Only those missed-deadline lines count: the comment's "Waiting on someone" section and its "not set up" lines never make a pull request Blocked |
+| 2 | Returned | Being fixed | The builder owes the next move: a draft; `tests` red on the latest commit; a merge conflict; Codex findings on the latest commit while `codex-approved` is not passing there; or an independent review of the latest commit with open findings |
+| 3 | Needs You | Waiting on you | Only the owner can move it: a protected path without his approval on the latest commit, or a risk-hold label (the same rules `owner-queue` uses today); or a pull request that would otherwise be Checked but changes a plan in `docs/plans/`, an `AGENTS.md` or `CLAUDE.md` file, or a path the `pages` workflow publishes (`site/`, `brand/tokens.css`, `brand/fonts/`), with auto-merge still off. Those merge only on his quoted yes, and auto-merge goes on only after it |
 | 4 | Under Way | In review | A reviewer has it: Codex hasn't reviewed the latest commit yet, the triage judge is pending, or the independent review of the latest commit hasn't arrived |
-| 5 | Checked | Ready to merge | `tests` and `codex-approved` pass on the latest commit, the owner's approval is there where a protected path needs it, and a clean independent review of that commit is there where the rules ask for one. Auto-merge being on is shown, never required |
+| 5 | Checked | Ready to merge | `tests` and `codex-approved` pass on the latest commit, the owner's approval is there where a protected path needs it, and a clean independent review of that commit is there where the rules ask for one. Auto-merge being on is shown, never required, except for the yes-to-merge paths in Needs You |
 | 6 | Unknown | Unknown | None of the above |
+
+`codex-approved` passing counts as "no open Codex findings", whatever
+Codex's own summary still says, because that check already honors the triage
+judge's nit verdict and an `owner-accepts-findings` line for that commit.
+
+**A red `tests` that isn't the builder's.** `tests` runs on pull requests
+only, so `main` has no result of its own to compare with. The feed therefore
+doesn't guess: a red `tests` is Returned. When the same failing job is red on
+the latest commit of two or more open pull requests, each of those rows says
+"also red on #N", so a shared break shows without blaming anyone. A real
+`main` baseline would need `tests` to run on `main` too, which is a change to
+the merge gate's own workflow and out of scope here.
 
 Open review findings are the builder's move (Returned), even though the
 owner could accept them, so the board never hands him a review loop as a
@@ -158,9 +170,23 @@ Each part is its own pull request, in this order. Parts 1 and 3 touch
 ## Finish Line
 
 The feed refreshes hourly on its branch; the state rules pass tests for
-every state, the order and the loop flag; the Rail Map's Pending tab shows
-it; and in his trial the owner picks five open pull requests and finds each
-one's state and next move right. Then this status becomes Built.
+every state, the order, the yes-to-merge paths and the loop flag; and the
+Rail Map's Pending tab shows it. Then the owner's trial, one check per line:
+
+1. Five open pull requests: each one's state and next move is right.
+2. No connection: with the Mac offline, the Pending tab still shows the last
+   feed and its time, and the other Rail Map tabs work.
+3. Interrupted: a feed run cancelled in Actions midway leaves the previous
+   feed whole, and the tab shows it.
+4. Empty or first run: a snapshot with no feed shows "No status feed yet"
+   and a feed with no open pull requests shows "Nothing open".
+5. Denied or stuck: a feed more than 3 hours old shows "not refreshed since
+   <time>", and the Desk never waits on it.
+6. The error message: a damaged feed file shows "The status feed couldn't be
+   read. The other views still work." and nothing in code words.
+
+If part 3 is built, its board gets checks 1, 3 and 5 too. When the trial
+passes, this status becomes Built.
 
 ## Open Questions For The Owner
 
