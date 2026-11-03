@@ -83,6 +83,13 @@ flooded using aw-core v0.5.17's five-second default pulse behavior before
 active time is calculated. Each read is widened by five seconds so flooding
 continues correctly at day and split edges.
 
+Successful chunks are parsed immediately into timestamp, duration and app/status
+fields. These small records are de-duplicated across all chunks and days in the
+requested range, then flooded together before daily clipping. Memory grows with
+the number of distinct parsed events in the range (at most 400 days), rather
+than retaining response bodies, titles or URLs. This preserves merged-event
+history across both capped-response splits and midnight.
+
 Gaps up to and including five seconds go to the longer neighbouring event,
 or the earlier event on a tie. Equal app/status values merge during flooding,
 and zero-duration leftovers are dropped, following `aw_transform/flood.py`.

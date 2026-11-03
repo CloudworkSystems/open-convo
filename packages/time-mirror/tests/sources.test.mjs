@@ -219,3 +219,34 @@ test('flooding across a split edge gives the same result as an unsplit span', as
   assert.deepEqual(split.days, whole.days);
   assert.equal(split.days['2026-10-01'].coding, 6 / 60);
 });
+
+test('merged B history gives identical totals across capped splits and midnight', async () => {
+  async function run(windows, split, from = '2026-10-01', to = from) {
+    return awDays({ from, to, timeZone: 'UTC', host: 'test-mac', appTags: { A: 'a', B: 'b' },
+      fetchJson: async path => {
+        if (path === '/api/0/buckets/') return buckets;
+        const query = new URLSearchParams(path.split('?')[1]);
+        const start = Date.parse(query.get('start'));
+        const end = Date.parse(query.get('end'));
+        if (split && end - start > 12 * 3600_000 + 10_000) return { truncated: true };
+        const rows = path.includes('window') ? windows : [event('2026-10-01T00:00:00Z', 172800, { status: 'not-afk' })];
+        return rows.filter(row => Date.parse(row.timestamp) <= end && Date.parse(row.timestamp) + row.duration * 1000 >= start);
+      } });
+  }
+  const sequence = center => [event(new Date(center - 20000).toISOString(), 6, { app: 'B' }),
+    event(new Date(center - 13000).toISOString(), 10, { app: 'B' }), event(new Date(center + 1000).toISOString(), 12, { app: 'A' })];
+  const noon = Date.parse('2026-10-01T12:00:00Z');
+  const whole = await run(sequence(noon), false);
+  assert.deepEqual((await run(sequence(noon), true)).days, whole.days);
+  assert.ok(Math.abs(whole.days['2026-10-01'].b - 21 / 60) < 1e-12);
+  for (const offset of [-4000, 0, 4000, 3600_000]) {
+    for (const rows of [sequence(noon + offset), sequence(noon + offset).toReversed()]) {
+      assert.deepEqual((await run(rows, true)).days, (await run(rows, false)).days);
+    }
+  }
+  const midnight = sequence(Date.parse('2026-10-02T00:00:00Z'));
+  const acrossDays = await run(midnight, false, '2026-10-01', '2026-10-02');
+  assert.deepEqual((await run(midnight, true, '2026-10-01', '2026-10-02')).days, acrossDays.days);
+  assert.equal(acrossDays.days['2026-10-02'].b, 1 / 60);
+  assert.equal(acrossDays.days['2026-10-02'].a, 12 / 60);
+});

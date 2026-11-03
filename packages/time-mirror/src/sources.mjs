@@ -237,16 +237,18 @@ function eventPath(bucket, start, end) {
   return `/api/0/buckets/${encodeURIComponent(bucket)}/events?start=${encodeURIComponent(new Date(start).toISOString())}&end=${encodeURIComponent(new Date(end).toISOString())}`;
 }
 
-async function readSpan(fetchJson, buckets, start, end, minimum = HOUR_MS) {
+async function readSpan(fetchJson, buckets, start, end, accept, minimum = HOUR_MS) {
   const expandedStart = start - PULSE_MS;
   const expandedEnd = end + PULSE_MS;
   const responses = await Promise.all(buckets.map(bucket => fetchJson(eventPath(bucket, expandedStart, expandedEnd))));
   if (responses.some(response => response?.truncated === true)) {
     if (end - start <= minimum) fail(`ActivityWatch returned more than 2 MB for the hour starting ${new Date(start).toISOString()}. Narrow the range or reduce ActivityWatch data.`);
     const middle = start + Math.floor((end - start) / 2);
-    return [...await readSpan(fetchJson, buckets, start, middle, minimum), ...await readSpan(fetchJson, buckets, middle, end, minimum)];
+    await readSpan(fetchJson, buckets, start, middle, accept, minimum);
+    await readSpan(fetchJson, buckets, middle, end, accept, minimum);
+    return;
   }
-  return [{ start, end, responses }];
+  accept(responses.map((response, index) => parseEvents(response, index === 0 ? 'window' : 'idle')));
 }
 
 export async function awDays({ from, to, timeZone, appTags = {}, host, fetchJson, collectApps = false }) {
@@ -261,25 +263,31 @@ export async function awDays({ from, to, timeZone, appTags = {}, host, fetchJson
   const missing = [];
   let skipped = 0;
   const apps = {};
+  // Keep only parsed timestamp/duration/app-or-status fields across reads.
+  // Flood once across the complete range so merged durations survive both
+  // response splits and civil-day edges. Duplicate padding events count once.
+  const collected = [new Map(), new Map()];
+  for (const date of dates) {
+    await readSpan(fetchJson, [windowBucket, idleBucket], civilStart(date, timeZone), civilStart(addDays(date, 1), timeZone), parsed => {
+      parsed.forEach((result, index) => {
+        skipped += result.skipped;
+        for (const event of result.events) collected[index].set(JSON.stringify([event.start, event.end, event.value]), event);
+      });
+    });
+  }
+  const floodedWindows = flood([...collected[0].values()]);
+  const floodedIdle = flood([...collected[1].values()]);
+  collected.forEach(events => events.clear());
   for (const date of dates) {
     const start = civilStart(date, timeZone);
     const end = civilStart(addDays(date, 1), timeZone);
-    const spans = await readSpan(fetchJson, [windowBucket, idleBucket], start, end);
-    let sawValid = false;
+    const sawValid = [...floodedWindows, ...floodedIdle].some(event => Math.min(event.end, end) > Math.max(event.start, start));
     const totals = {};
-    for (const span of spans) {
-      const windows = parseEvents(span.responses[0], 'window');
-      const idle = parseEvents(span.responses[1], 'idle');
-      skipped += windows.skipped + idle.skipped;
-      const floodedWindows = flood(windows.events);
-      const floodedIdle = flood(idle.events);
-      if ([...floodedWindows, ...floodedIdle].some(event => Math.min(event.end, span.end) > Math.max(event.start, span.start))) sawValid = true;
-      for (const segment of activeSegments(floodedWindows, floodedIdle, span.start, span.end)) {
+      for (const segment of activeSegments(floodedWindows.filter(event => event.end > start && event.start < end), floodedIdle.filter(event => event.end > start && event.start < end), start, end)) {
         if (collectApps) apps[segment.app] = (apps[segment.app] ?? 0) + (segment.end - segment.start) / 60_000;
         const tag = own(appTags, segment.app) ? appTags[segment.app] : 'untagged';
         totals[tag] = (totals[tag] ?? 0) + (segment.end - segment.start) / 60_000;
       }
-    }
     if (!sawValid) missing.push(date);
     else days[date] = totals;
   }
