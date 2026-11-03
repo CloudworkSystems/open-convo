@@ -247,10 +247,12 @@ one is a stop-and-report event.
   not `STATUS.md` (the coordinator updates it).
 - JavaScript modules (`.mjs`), Node 22 or later, `"type": "module"`,
   `"private": true`, tests with `node --test`.
-- No network, no AI, no paid services, no `child_process`, no clock, in the
-  code or the tests. `node:fs` only in the command, and only under `--in`
-  (read) and `<atlas>/sources/recall/` (write), or the tests' temporary
-  folders.
+- No network, no AI, no paid services, no `child_process`, in the code or
+  the tests. No clock in the library or the tests; the command alone may
+  read it once, only when `--imported-at` is left out (see Carried To The
+  Build). `node:fs` only in the command, and only under `--in` (read) and
+  `<atlas>/sources/<selected source id>/` (write, after the id is
+  validated; `recall` by default), or the tests' temporary folders.
 - No new dependencies. Add no license file and no `license` field.
 - Keep the slice small: the library, the command, the tests, the sample
   export and a README (the slot, the guide "Add your own knowledge
