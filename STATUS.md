@@ -1,6 +1,6 @@
 # Status
 
-Updated November 1, 2026. The short version of where the build is. The full
+Updated November 2, 2026. The short version of where the build is. The full
 plan is in [PLAN.md](PLAN.md).
 
 ## Now
@@ -94,11 +94,12 @@ again, so it has no public address yet. PR 3, in review: the API docs page
 come attaching api.trueconvo.com, the path-only rate limit, and the owner's
 OK to go live.
 
-**Capability contract, cap and media** (Creator, standalone parts 1 to 3),
-built by Claude. Plan:
+**Capability contract, cap and media** (Creator, standalone parts 1 to 3).
+Plan:
 [docs/plans/media-generation-capability.md](docs/plans/media-generation-capability.md)
-(#256). Part 1, in review: the `capability.json` contract and validator in
-`packages/capabilities`. Next: part 2, the signed cap and ledger.
+(#256). Part 1, merged (#258): the `capability.json` contract and validator
+in `packages/capabilities`. Part 2, built and in review (#269): the signed
+cap and ledger (GrokBot team C). Next: part 3, `make_media`.
 
 **Site Engine, standalone first slice**, built by an outside builder (GrokBot
 builds, Codex reviews). Plan:
@@ -160,6 +161,14 @@ reviews. Plan approved (merged as #127 on October 24):
 **Atlas index engine** (Personal, the Atlas wiki's index rebuild and link checker), GrokBot team A builds, Codex reviews and the coordinator checks it against the plan; plan approved by the owner on November 2 (`docs/plans/atlas-index-engine.md`): rebuilds a notes folder's index and map and lists broken links, orphans, duplicates and conflicts, as a standalone package in `packages/atlas-index/`, dry run by default. Build issue to open.
 
 **Revisit reminders engine** (Personal, "revisit when" reminders), GrokBot team B builds, Codex reviews and the coordinator checks it against the plan; plan approved by the owner on November 2 (`docs/plans/revisit-reminders-engine.md`): list, add, snooze and finish dated reminders on saved items, as a standalone package in `packages/revisit-reminders/`, with no clock reads, network or writes (the command only reads the file it is given). Build issue to open.
+
+**Family wall board page** (Family, the homemade family wall display), GrokBot team B builds, Codex reviews and the coordinator checks it against the plan; plan approved by the owner on November 3 (`docs/plans/family-wall-board.md`); build issue to open: one self-contained page for a wall screen from each family member's day and the shared lists, as a standalone package in `packages/wall-board/`, with no network, scripts or clock.
+
+**Time mirror slice 2: ActivityWatch** (Personal), Codex team A builds, GrokBot or a fresh Claude reviews; plan approved by the owner on November 3 (`docs/plans/time-mirror-activitywatch.md`); build issue to open: turns the mirror's input into a documented activity source interface (the owner's native-slot rule, November 3), with RescueTime as his default source and ActivityWatch on the Mac (loopback only, never window titles or URLs) as the second, in `packages/time-mirror/`.
+
+**Approval ledger** (Personal, prime agent step 3's first piece), Codex team B builds, GrokBot or a fresh Claude reviews; plan approved by the owner on November 3 (`docs/plans/approval-ledger.md`); build issue to open: the host's hash-chained record of each yes, claimed exactly once before an action starts, as a standalone package in `packages/approval-ledger/`.
+
+**Notes checklist import** (Family and Home, day-one checklists), GrokBot team A builds, Codex reviews and the coordinator checks it against the plan; plan approved by the owner on November 3 (`docs/plans/notes-checklist-import.md`); build issue to open: turns a checklist copied out of Apple Notes as plain text into a household list file, as a standalone package in `packages/notes-import/`, with no network, clock or guessing.
 
 **Public website (trueconvo.com)**, Claude builds, Codex reviews; a home page (with two Desk preview screenshots) and a plain-language privacy policy in `site/`, published by `.github/workflows/pages.yml` from `main` (#153, October 25). For Meta's developer early-access application and regular visitors. The owner turned on Pages and set the custom domain, and the site is published at trueconvo.com (latest deploy October 26).
 
