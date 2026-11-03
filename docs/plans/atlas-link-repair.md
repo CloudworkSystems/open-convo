@@ -1,6 +1,6 @@
 # Atlas Link Repair (PRD)
 
-Status: Draft
+Status: Draft (Nov 3): waiting on the owner's yes in the Claude thread "Draft next plans for outside builders".
 
 Written November 3, 2026 by a Claude session (project "261024 OC Steering",
 thread "Draft next plans for outside builders"). Session name:
@@ -38,24 +38,31 @@ writes nothing itself.
 rules as `buildAtlas` (relative, `/` separators, ends in `.md`; the same
 refusals for empty, absolute, backslash, control characters, `.` or `..`
 segments, and NFC duplicates). Generated indexes (text starting with the
-atlas-index generated header) and the root map `MAP.md` are skipped: they
-are rebuilt by atlas-index, never repaired here.
+atlas-index generated header) are skipped: atlas-index rebuilds them. In the
+root map `MAP.md`, only the part from the `<!-- atlas-index:start -->`
+marker on is skipped; the hand-written part before it is read and repaired
+like any note, and its bytes after the marker are never changed.
 
 ### Links It Reads
 
-- Markdown links `[text](target)` whose target is relative and ends in
-  `.md`, with an optional `#anchor`. `https:`, `mailto:` and any other
-  scheme are ignored, as are absolute paths.
-- Wiki links `[[name]]` and `[[name|label]]`.
-- Links inside fenced code blocks (lines between ```` ``` ```` or `~~~`
-  fences) and inline code spans are ignored.
+Exactly the links atlas-index checks, read by exactly its rules (its
+README's "Edge cases": `<...>` destinations, balanced parentheses and
+brackets, labels across lines, percent-encoded segments decoded before
+lookup, schemes, `//`, leading `/`, anchor-only and non-`.md` links
+ignored, reference-style links ignored, fenced code, inline code and front
+matter not searched).
 
-A link is **broken** when its target does not resolve to a note by the
-same rule atlas-index uses (markdown: the path relative to the note's
-folder; wiki: a note whose file name without `.md` matches `name` after
-NFC). A test checks that every link this package calls broken in the
-sample wiki is also a `broken-link` in `buildAtlas` for the same notes,
-and the other way round for the link kinds above.
+- Markdown links `[text](target)`, with an optional `#anchor`.
+- Wiki links `[[name]]`, `[[name#anchor]]` and `[[name|label]]`.
+
+A link is **broken** exactly when atlas-index would call it broken:
+markdown by the decoded path relative to the note's folder; wiki by a
+case-sensitive NFC match against any note's front matter `name:`, its file
+name without `.md`, or its path without `.md`. So a wiki link that matches a
+note's `name:` is never broken here. A test checks that the broken set
+equals `buildAtlas`'s `broken-link` entries on the sample wiki, which
+includes notes reached only by `name:`, by path, by an encoded name and by
+an `<...>` destination.
 
 ### The One Rule
 
@@ -65,10 +72,15 @@ without regard to letter case with every note's file name without `.md`.
 
 - **Exactly one note matches:** propose a repair. A markdown link's
   target becomes the relative path from the linking note's folder to that
-  note, keeping any `#anchor`. A wiki link's `name` becomes that note's
-  file name exactly as spelled on disk, keeping any `|label`. Only the
-  target text changes; the link text, label and every other byte of the
-  note stay as they are.
+  note, each segment percent-encoded the way atlas-index writes links
+  (every octet that is not an RFC 3986 unreserved character), keeping any
+  `#anchor`; a `<...>` destination is replaced by the plain encoded form.
+  A wiki link's `name` becomes that note's file name exactly as spelled on
+  disk, keeping any `#anchor` or `|label`; when that file name contains
+  `#`, `|`, `[` or `]`, or is not a unique wiki match by atlas-index's rule,
+  the note's path without `.md` is used instead, and if that is not unique
+  or safe either the link goes to `needsYou`. Only the target text changes;
+  the link text, label and every other byte of the note stay as they are.
 - **No note or more than one note matches:** no repair. The link is listed
   under `needsYou` with the candidate paths (empty for none), so the
   person decides.
@@ -139,7 +151,10 @@ in `tests/fixtures/` (invented notes only).
 2. A renamed letter case (`Seeds.md` linked as `seeds.md`) is repaired.
 3. Wiki links: `[[seeds]]` and `[[seeds|the seed list]]` are repaired to
    the note's exact spelling, keeping the label.
-4. An `#anchor` is kept.
+4. An `#anchor` is kept. A repaired target to `archive/Seed Plans.md`,
+   `plan#1.md` and `a (draft).md` is encoded, and `buildAtlas` resolves it.
+   A hand-written link in `MAP.md` above the marker is repaired; the bytes
+   from the marker on are unchanged.
 5. Two notes with the same name: no repair, one `needsYou` entry with both
    paths. A deleted note: `needsYou` with no candidates.
 6. Links in fenced code blocks and inline code are not touched; external
