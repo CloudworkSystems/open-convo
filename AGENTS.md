@@ -99,7 +99,9 @@ differs. Read the full section before you act on it.
   commit it reviewed, and it ends with the privacy and security checklist
   (ten questions) plus any `risk-escalate` line.
 - A green "Ready to merge" button means no conflicts, not approval. Pull
-  requests waiting on the owner go on issue #52.
+  requests waiting on the owner go on the "Needs the owner" list, issue #114.
+  Issue #52 has the same title but is a frozen copy from October 22; it now
+  holds only the scheduled tasks' own comments.
 
 ### Outside Builders
 
@@ -232,15 +234,16 @@ judge that isn't there (owner decision, October 25, 2026).
 | GrokBot teams (Cursor) | `cloudwork-bot` | Each builds one module from its plan and fixes findings on its own pull request; on request, reviews Claude-built and Codex-built pull requests as the independent reviewer |
 | Codex | its own app | Reviews every pull request; builds Codex modules |
 | Gemini review | GitHub Actions, once built | Independent reviewer of Codex-built and Claude-built pull requests, alongside GrokBot (advisory for now; not set up yet: the Gemini Code Assist app is gone for individual accounts, see Agent Setup And Silence) |
-| PR steward (scheduled, 8:41 AM and 5:41 PM) | `cloudwork-bot` | Reviews Codex-built pull requests; flags stuck ones on issue #52 |
+| PR steward (scheduled, 8:41 AM and 5:41 PM) | `cloudwork-bot` | Reviews Codex-built pull requests; flags stuck ones in its comment on issue #52 ([instructions](docs/scheduled-tasks/pr-steward.md)) |
 | PR keeper (scheduled, hourly, in the cloud) | `cloudwork-bot` | Keeps pull requests moving: updates auto-merge pull requests that fall behind `main` once they are otherwise ready, restarts a hung Codex review once per commit, relays Codex findings to GrokBot's builders, finishes ready pull requests and fixes stalled Claude-built findings ("Keeping Finished Work Moving"), and reports silent or not-set-up agents in its "Not working" comment on issue #52 |
-| Daily list (scheduled, 7:52 AM) | `cloudwork-bot`, reading only | Sends the owner issue #52's list, including the keeper's "Not working" comment, plus pull requests Codex has gone silent on |
+| Daily list (scheduled, 7:52 AM) | `cloudwork-bot`, reading only | Sends the owner the "Needs the owner" list (issue #114) and the scheduled tasks' comments on issue #52, including the keeper's "Not working" comment, plus pull requests Codex has gone silent on |
 | Open-decision sweep (Claude thread "Nudge on idle open decisions", daily, 7:45 AM) | none; reads the steering project's thread list only | Lists the steering project's threads that have waited on the owner for 2 days or more and nudges him once per wait in that thread; changes nothing else |
 | Nightly Test build (scheduled, 2–6 AM) | none | Rebuilds True Convo Test from `main` on the owner's Mac |
 | Recycling pass (scheduled, Sundays) | `cloudwork-bot` | One pull request proposing fixes for stale docs |
 | Security sweep (scheduled, Mondays, in the cloud) | `cloudwork-bot`, the PR keeper's access (owner decision, November 1, 2026); its only write is its own comment | Runs the weekly self-audit in [docs/plans/security.md](docs/plans/security.md) and rewrites its "Security" comment on issue #52; never changes code, settings or merges |
 | Sender feed (scheduled, weekly) | the owner's Gmail, read and search only; no GitHub access | Reads only the followed senders' emails and posts drafted lessons and ideas in the owner's private steering project; after the owner picks, a building session opens the lessons pull request ([docs/plans/security.md](docs/plans/security.md) section 5) |
-| `owner-queue` workflow | GitHub Actions | Rewrites issue #52, "Needs the owner", every hour |
+| Project status (scheduled, hourly at :40, in the cloud) | `cloudwork-bot`; its only write is the body of issue #254 | Rewrites the "Project status" issue other projects read: what is being built, what waits on whom, and recent decisions ([instructions](docs/scheduled-tasks/project-status.md)) |
+| `owner-queue` workflow | GitHub Actions | Rewrites issue #114, "Needs the owner", every hour and on pull request events |
 
 Work that belongs to another row is forwarded there once, and the owner is
 told where it went. A Claude thread opened for a single pull request closes
