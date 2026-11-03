@@ -68,9 +68,9 @@ rules follow the Atlas note's table, mapped as shown.
 |---|---|---|---|
 | 1 | Blocked | Stuck | A "silent on" line in the PR keeper's latest "Not working" comment on #52, written by `cloudwork-bot`, names this pull request. Only those missed-deadline lines count: the comment's "Waiting on someone" section and its "not set up" lines never make a pull request Blocked |
 | 2 | Returned | Being fixed | The builder owes the next move: a draft; `tests` red on the latest commit; a merge conflict; Codex findings on the latest commit while `codex-approved` is not passing there and the triage judge isn't due (below); an independent review of the latest commit with an open P1 or P2 (P3s don't block, as in `docs/agent-process.md`); or a plan check of the latest commit that lists something missing |
-| 3 | Needs You | Waiting on you | Only the owner can move it: a protected path without his approval on the latest commit, or a risk-hold label (the same rules `owner-queue` uses today); or a pull request the PR keeper's latest "Not working" comment lists as waiting on the owner ("plan waiting on the owner's yes", "rules change waiting on the owner's yes", "site change waiting on the owner's yes", "risk escalation waiting on the owner", "Dependabot waiting on the owner"). The keeper already decides whether a quoted yes covers the latest commit, so the feed reads its verdict instead of judging the quote again |
+| 3 | Needs You | Waiting on you | Only the owner can move it: a protected path without his approval on the latest commit, or a `needs-owner: risk-escalate` label with no owner approval of the latest commit submitted after the escalating review (once he has approved it, only the coordinator's label removal is left, so the row is Under Way, waiting on the coordinator); or a pull request the PR keeper's latest "Not working" comment lists as waiting on the owner ("plan waiting on the owner's yes", "rules change waiting on the owner's yes", "site change waiting on the owner's yes", "risk escalation waiting on the owner", "Dependabot waiting on the owner"). The keeper already decides whether a quoted yes covers the latest commit, so the feed reads its verdict instead of judging the quote again |
 | 4 | Under Way | In review | Someone other than the builder or the owner has it: Codex hasn't reviewed the latest commit yet; the triage judge is due (below); the independent review of the latest commit hasn't arrived; an outside module's plan check of the latest commit hasn't been posted; or the keeper's comment lists it as waiting on the coordinator or on the thread that asked the owner |
-| 5 | Checked | Ready to merge | `tests` and `codex-approved` pass on the latest commit, the owner's approval is there where a protected path needs it, an independent review of that commit with no open P1 or P2 is there where the rules ask for one (P3-only counts as clean), and for an outside module (an `agent: grokbot` or `agent: codex` pull request that changes `packages/`) a `cloudwork-bot` comment says "Plan check" of that commit "passed". Auto-merge being on is shown, never required |
+| 5 | Checked | Ready to merge | `tests` and `codex-approved` pass on the latest commit, the owner's approval is there where a protected path needs it, an independent review of that commit with no open P1 or P2 is there where the rules ask for one (P3-only counts as clean; only a review the PR keeper's step D would count, as below), and for an outside module (an `agent: grokbot` or `agent: codex` pull request that changes `packages/`) a `cloudwork-bot` comment says "Plan check" of that commit "passed". Auto-merge being on is shown, never required |
 | 6 | Unknown | Unknown | None of the above |
 
 **The triage judge is due** when Codex has reviewed three or more rounds,
@@ -92,6 +92,15 @@ the latest commit of two or more open pull requests, each of those rows says
 "also red on #N", so a shared break shows without blaming anyone. A real
 `main` baseline would need `tests` to run on `main` too, which is a change to
 the merge gate's own workflow and out of scope here.
+
+**Who counts.** The repo is public, so anyone can post something that looks
+like a review. The feed counts evidence the same way the PR keeper's "Who
+counts" rule does (`docs/scheduled-tasks/pr-keeper.md`): an independent,
+delta or fresh Claude review, a plan check and the keeper's own comment only
+from `cloudwork-bot`, in one of the forms step D recognizes, naming the
+latest commit; an owner's approval or accept line only from
+`CloudworkSystems`; Codex only from `chatgpt-codex-connector[bot]`. Anything
+else is ignored, however it is worded.
 
 Open review findings are the builder's move (Returned), even though the
 owner could accept them, so the board never hands him a review loop as a
@@ -145,6 +154,23 @@ each with the count it rests on.
 
 Each part is its own pull request, in this order. Parts 1 and 3 touch
 `.github/`, so each needs the owner's approval on GitHub.
+
+## Requirements For The Code Pull Requests
+
+Findings raised after the plan's review rounds closed, carried here so the
+code pull requests build them and their tests cover them:
+
+1. An independent review counts toward Checked only when the keeper's step D
+   would count it: author `cloudwork-bot`, ending "— GrokBot review" or
+   beginning "Independent review" or "Delta review" (a fresh Claude review
+   included), and naming the latest commit. A clean-looking review from any
+   other account never makes a row Checked. Tests include an outsider's
+   clean review on the latest commit.
+2. A `needs-owner: risk-escalate` label makes a row Needs You only until
+   `CloudworkSystems` approves the latest commit after the escalating
+   review. After that approval the row is Under Way, waiting on the
+   coordinator to remove the label (`docs/agent-process.md`, risk-escalate).
+   Tests cover both sides of that approval.
 
 ## Not In Scope
 
