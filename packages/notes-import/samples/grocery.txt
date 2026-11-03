@@ -1,0 +1,15 @@
+Weekend groceries
+
+Produce
+- apples
+☐ bananas
+✓ lemons
+1. limes
+
+Dairy
+- [ ] whole milk
+- [x] yogurt
+* butter
+
+Bakery
+2) sourdough loaf
