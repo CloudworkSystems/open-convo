@@ -25,7 +25,7 @@ import {
   verifyCap,
 } from '../src/cap/index.mjs';
 import { REASONS } from '../src/cap/reasons.mjs';
-import { atomicWrite } from '../src/cap/files.mjs';
+import { atomicWrite, failNextAtomicWritesForTests } from '../src/cap/files.mjs';
 import { withFileLock, withSyncLock } from '../src/cap/lock.mjs';
 
 const capDir = fileURLToPath(new URL('../src/cap/', import.meta.url));
@@ -412,6 +412,48 @@ test('a reset with the stored cap is refused until a new cap is signed', async (
     })).ok, true);
     assert.equal((await resetLedger({ ...box, record: fresh, signature: freshSig })).reason, REASONS.resetNeedsFresh);
   } finally {
+    box.close();
+  }
+});
+
+test('a failed reset can be finished with the same signed cap', async () => {
+  const box = world(cap({
+    perRun: { amount: '5', currency: 'USD' },
+    monthlyByCapability: { amount: '10', currency: 'USD' },
+    monthlyAll: { amount: '10', currency: 'USD' },
+  }));
+  try {
+    assert.equal((await box.reserve({ jobId: 'spent', max: { amount: '4', currency: 'USD' } })).ok, true);
+    assert.equal((await box.settle({ jobId: 'spent', actual: { amount: '4', currency: 'USD' } })).ok, true);
+    const before = readFileSync(join(box.dir, 'entries.jsonl'));
+    const fresh = { ...box.record, revision: box.record.revision + 1 };
+    const freshSig = signRecord(fresh, box.keys.privateKey);
+    failNextAtomicWritesForTests(1);
+    const failed = await resetLedger({ ...box, record: fresh, signature: freshSig });
+    assert.equal(failed.ok, false);
+    assert.equal(failed.fullySpent, true);
+    assert.equal(readFileSync(join(box.dir, 'entries.jsonl')).equals(before), true);
+    const blocked = await box.reserve({
+      jobId: 'during',
+      record: fresh,
+      signature: freshSig,
+      max: { amount: '1', currency: 'USD' },
+    });
+    assert.equal(blocked.ok, false);
+    assert.equal(blocked.fullySpent, true);
+    assert.equal(blocked.reason, REASONS.ledgerEdited);
+    const finished = await resetLedger({ ...box, record: fresh, signature: freshSig });
+    assert.equal(finished.ok, true, finished.reason);
+    assert.equal((await box.spent({ record: fresh, signature: freshSig })).counted.amount, '0');
+    assert.equal((await box.reserve({
+      jobId: 'after',
+      record: fresh,
+      signature: freshSig,
+      max: { amount: '1', currency: 'USD' },
+    })).ok, true);
+    assert.equal((await resetLedger({ ...box, record: fresh, signature: freshSig })).reason, REASONS.resetNeedsFresh);
+  } finally {
+    failNextAtomicWritesForTests(0);
     box.close();
   }
 });

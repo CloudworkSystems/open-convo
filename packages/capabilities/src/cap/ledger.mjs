@@ -304,13 +304,17 @@ function resetEntries(dir, args) {
   if (state.broken) return { ok: false, reason: REASONS.protectedBroken };
   const signed = signedCap(args.record, args.signature, args.publicKey);
   if (!signed.ok) return { ok: false, reason: signed.reason };
-  // The cap already in the protected state is not a fresh signature. Reusing
-  // it would empty the month without the same approval a raise needs.
-  if (signed.revision <= state.capRevision) {
-    return {
-      ok: false,
-      reason: signed.revision < state.capRevision ? REASONS.capOlder : REASONS.resetNeedsFresh,
-    };
+  if (signed.revision < state.capRevision) return { ok: false, reason: REASONS.capOlder };
+  // A reset that already stored this signed cap, but could not replace the
+  // ledger, may be finished with that same signature. A healthy ledger, or
+  // one that is already empty, still needs a newer cap.
+  if (signed.revision === state.capRevision) {
+    if (!sameText(signed.hash, state.capHash) || state.ledgerCount !== 0 || state.ledgerHead !== null) {
+      return { ok: false, reason: REASONS.resetNeedsFresh };
+    }
+    const ledger = judgeLedger(dir, state, signed.cap.currency);
+    if (ledger.ok) return { ok: false, reason: REASONS.resetNeedsFresh };
+    return clearLedger(dir);
   }
   const next = {
     capRevision: signed.revision,
@@ -321,8 +325,14 @@ function resetEntries(dir, args) {
     currency: signed.cap.currency,
   };
   // Confirm the new head before erasing the file. A lost compare-and-swap
-  // leaves the history where it was.
+  // leaves the history where it was. If the file replace then fails, the
+  // same signed cap can clear it on retry, and paid runs stay stopped until
+  // that happens.
   if (!args.store.write(next, state.core)) return { ok: false, reason: REASONS.notSaved };
+  return clearLedger(dir);
+}
+
+function clearLedger(dir) {
   try {
     if (!writeEntries(dir, [])) return { ok: false, reason: REASONS.ledgerEdited, fullySpent: true };
   } catch {

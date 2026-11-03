@@ -18,6 +18,13 @@ import { randomBytes } from 'node:crypto';
 
 const NOFOLLOW_READ = constants.O_RDONLY | constants.O_NOFOLLOW;
 
+let failAtomicWrites = 0;
+
+/** Test-only. The next `count` atomic writes throw before the file is replaced. */
+export function failNextAtomicWritesForTests(count) {
+  failAtomicWrites = count;
+}
+
 export function fileKind(path) {
   let stat;
   try {
@@ -65,6 +72,12 @@ function writeAll(fd, text, write = writeSync) {
 
 /** Write a new file and rename it into place. Refuses to follow a symlink. */
 export function atomicWrite(path, text, write = writeSync) {
+  if (failAtomicWrites > 0) {
+    failAtomicWrites -= 1;
+    const error = new Error('incomplete write');
+    error.code = 'EIO';
+    throw error;
+  }
   if (fileKind(path) === 'symlink' || fileKind(path) === 'directory' || fileKind(path) === 'other') return false;
   const tmp = `${path}.${randomBytes(8).toString('hex')}.tmp`;
   const fd = openSync(tmp, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW, 0o600);

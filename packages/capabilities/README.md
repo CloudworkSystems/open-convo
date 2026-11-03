@@ -206,7 +206,7 @@ uses the same rule.
 | `settle({ ...same, jobId, now, actual?, estimated? })` | `estimated: true` keeps the reserved maximum and marks it estimated. An `actual` at or under the reservation, including zero, settles that figure. An `actual` over it writes `over-bill`, counts the full bill, and returns `routeOff: true`. |
 | `release({ ...same, jobId, now })` | Drops an open reservation. The job id stays used while that run is still in the ledger. After the month is folded, the id can be used again. |
 | `monthSpent({ ...same, now, capabilityId?, routeId?, providerTotal? })` | `{ reserved, spent, counted }` for that month. `counted` is what the cap uses. A `providerTotal` also needs `capabilityId` and `routeId`, the route that key belongs to. |
-| `resetLedger({ ledgerDir, store, record, signature, publicKey })` | Empties the ledger only when the caller presents a new signed cap, one with a higher revision than the cap already stored. The stored cap is refused, on a healthy ledger and on a damaged one. An older signed cap is refused. The new cap clears a tightening. |
+| `resetLedger({ ledgerDir, store, record, signature, publicKey })` | Empties the ledger only when the caller presents a new signed cap, one with a higher revision than the cap already stored. The stored cap is refused, on a healthy ledger and on a damaged one. An older signed cap is refused. The new cap clears a tightening. If that cap was saved but the ledger file could not be replaced, the same signed cap can finish the reset. Until then, paid runs stay stopped. |
 
 `now` is an ISO time with a zone, such as `2026-11-15T18:00:00.000Z`. The
 library does not call `Date.now()` or `new Date()` without an argument.
@@ -309,6 +309,9 @@ These are the choices the plan does not spell out. Each one has a test in
 - `now` has to be a real ISO instant. `2026-02-31` is refused.
 - A file write that the disk stops accepting is not renamed into place.
   The previous file stays.
+- A reset that saves the new signed cap but cannot replace the ledger can
+  be finished with that same cap. Paid runs stay stopped until the retry
+  clears the file. Once the ledger is empty, that cap is refused again.
 - A symlink in place of `entries.jsonl` is treated as a changed ledger.
 - The show command's directory listing is unchanged after it runs.
 - A closed month is kept as checkpoint totals, not every settled line.
