@@ -205,6 +205,7 @@ rounds"):
 - The 4 KB cap is checked before every operation that adds or restores content to a subject or its index (keep, correct, move, share, restore, undo), and an overflow refuses the whole call; tests cover a move into a nearly full subject and a restore after the subject filled ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4461031776)).
 - Space ids are nonempty and unique; a state with two spaces sharing an id is refused before anything else runs, and the separation tests cover it ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4461031769)).
 - Operation ids are nonempty and unique: a state whose log repeats an id is refused, an operation arriving with an id already in the log is refused (or, if identical, returns the earlier result without a second write), and `undo` targets exactly one record; tests cover both duplicate cases ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4461092017)).
+- Candidate and entry ids are nonempty and unique across proposed, kept and trash records together, and an entry keeps its id as it moves between them; a state with a repeated id is refused before anything runs, with a test for each set ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4461703582)).
 
 ## Out Of Scope For This Slice
 
