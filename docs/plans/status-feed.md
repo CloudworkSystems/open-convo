@@ -67,10 +67,10 @@ rules follow the Atlas note's table, mapped as shown.
 | Order | State | Atlas note name | Rule |
 |---|---|---|---|
 | 1 | Blocked | Stuck | A "silent on" line in the PR keeper's latest "Not working" comment on #52, written by `cloudwork-bot`, names this pull request. Only those missed-deadline lines count: the comment's "Waiting on someone" section and its "not set up" lines never make a pull request Blocked |
-| 2 | Returned | Being fixed | The builder owes the next move: a draft; `tests` red on the latest commit; a merge conflict; Codex findings on the latest commit while `codex-approved` is not passing there and the triage judge isn't due (below); an independent review of the latest commit with an open P1 or P2 (P3s don't block, as in `docs/agent-process.md`); or a plan check of the latest commit that lists something missing |
+| 2 | Returned | Being fixed | The builder owes the next move: a draft; `tests` red on the latest commit; a merge conflict; Codex findings on the latest commit while `codex-approved` is not passing there and the triage judge isn't due (below); an independent review of the latest commit with an open P0, P1 or P2 (P3s don't block, as in `docs/agent-process.md`); or a plan check of the latest commit that lists something missing |
 | 3 | Needs You | Waiting on you | Only the owner can move it: a protected path without his approval that still stands (requirement 8); a `needs-owner: risk` label (the automatic risk hold, which `owner-queue` already lists); or a `needs-owner: risk-escalate` label with no owner approval of the latest commit submitted after the escalating review (once he has approved it, only the coordinator's label removal is left, so the row is Under Way, waiting on the coordinator); or a pull request the PR keeper's latest "Not working" comment lists as waiting on the owner ("plan waiting on the owner's yes", "rules change waiting on the owner's yes", "site change waiting on the owner's yes", "risk escalation waiting on the owner", "Dependabot waiting on the owner"). The keeper already decides whether a quoted yes covers the latest commit, so the feed reads its verdict instead of judging the quote again |
 | 4 | Under Way | In review | Someone other than the builder or the owner has it: Codex hasn't reviewed the latest commit yet and `codex-approved` isn't passing there; the triage judge is due (below); the independent review of the latest commit hasn't arrived; an outside module's plan check of the latest commit hasn't been posted; or the keeper's comment lists it as waiting on the coordinator or on the thread that asked the owner |
-| 5 | Checked | Ready to merge | `tests` and `codex-approved` pass on the latest commit, the owner's approval is there where a protected path needs it, an independent review of that commit with no open P1 or P2 is there where the rules ask for one (P3-only counts as clean; only a review the PR keeper's step D would count, as below), and for an outside module (an `agent: grokbot` or `agent: codex` pull request that changes `packages/`) a `cloudwork-bot` comment says "Plan check" of that commit "passed". Auto-merge being on is shown, never required |
+| 5 | Checked | Ready to merge | `tests` and `codex-approved` pass on the latest commit, the owner's approval is there where a protected path needs it, an independent review of that commit with no open P0, P1 or P2 is there where the rules ask for one (P3-only counts as clean; only a review the PR keeper's step D would count, as below), and for an outside module (an `agent: grokbot` or `agent: codex` pull request that changes `packages/`) a `cloudwork-bot` comment says "Plan check" of that commit "passed". Auto-merge being on is shown, never required |
 | 6 | Unknown | Unknown | None of the above |
 
 **The triage judge is due** when Codex has reviewed three or more rounds,
@@ -149,8 +149,12 @@ each with the count it rests on.
 3. **The plain board** (if the owner wants it, open question 2). The feed
    rendered as text for the phone, either inside #114 under its current
    sections or in its own pinned issue (open question 1). If it goes in
-   #114, its current sections, wording and hidden auto-merge line stay
-   exactly as they are, because the PR keeper reads that line.
+   #114, `owner-queue.mjs` stays its only writer: it rewrites the whole
+   body every hour, so the board is added inside that same rewrite, below
+   the existing sections, which keep their wording, and never as a second
+   edit that the next run would erase. The hidden auto-merge line stays too.
+   The PR keeper now reads auto-merge from the pull request API rather than
+   from that line, but removing the line is a separate change.
 
 Each part is its own pull request, in this order. Parts 1 and 3 touch
 `.github/`, so each needs the owner's approval on GitHub.
@@ -256,7 +260,9 @@ passes, this status becomes Built.
 
 ## Open Questions For The Owner
 
-1. Does the plain board go inside #114 or in its own pinned issue?
+1. Does the plain board go inside #114 (written by the same hourly job that
+   keeps that list, so the two can't erase each other) or in its own pinned
+   issue?
 2. Do you want the plain board at all, or only the Rail Map's Pending tab?
 3. Should a pull request with the review-loop flag move into Needs You (as
    your call to accept findings or narrow the plan), or stay with the
