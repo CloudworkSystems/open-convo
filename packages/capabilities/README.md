@@ -194,8 +194,11 @@ reason is that this month's record is full.
 
 `reserve`, `settle`, `release`, `resetLedger` and `monthSpent` take one
 in-process queue per folder and an exclusive lock file (`ledger.lock`), so
-two processes cannot both fit a run into the same remaining budget. A lock
-that is already held is not taken. The run is refused.
+two processes cannot both fit a run into the same remaining budget. The
+lock names the process that holds it. A lock left by a process that has
+exited is removed and the run goes ahead. A lock still held by a running
+process is not taken, and the run is refused. The protected-state file
+uses the same rule.
 
 | Call | What it does |
 |---|---|
@@ -291,9 +294,9 @@ These are the choices the plan does not spell out. Each one has a test in
   does not move the spend. An over-bill that arrives in a later month
   still counts, in full, in the reservation's month. It does not reduce
   the next month's room.
-- A `ledger.lock` left behind after a crash is not removed. Paid runs stay
-  refused until that file is deleted. The lock is not taken over while it
-  is held.
+- A `ledger.lock` left by a process that has exited is removed by the next
+  paid run. A lock still held by a running process is not taken. The
+  protected-state lock works the same way.
 - The show command reads without the lock, so a read in the moment between
   writing the ledger head and writing the line can say the ledger does not
   check out. The next read, after the write finishes, checks out.

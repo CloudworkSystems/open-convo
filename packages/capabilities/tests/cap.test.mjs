@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { generateKeyPairSync, sign, verify } from 'node:crypto';
-import { copyFileSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -735,6 +736,50 @@ test('a lock that is already held does not get stolen', async () => {
     assert.equal(syncHeld.value, 'held');
   } finally {
     releaseHold();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a lock left by a finished process is taken, and a live one is not', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'cap-lock-dead-'));
+  const finished = spawnSync(process.execPath, ['-e', 'process.exit(0)']);
+  assert.equal(finished.status, 0);
+  const deadPid = finished.pid;
+  const token = 'ab'.repeat(16);
+  try {
+    const ledgerLock = join(dir, 'ledger.lock');
+    writeFileSync(ledgerLock, `${deadPid}\n${token}\n`);
+    const taken = await withFileLock(ledgerLock, () => 'ran', { attempts: 1, waitMs: 1 });
+    assert.equal(taken.ok, true);
+    assert.equal(taken.value, 'ran');
+    assert.equal(existsSync(ledgerLock), false);
+
+    const stateLock = join(dir, 'state.lock');
+    writeFileSync(stateLock, `${deadPid}\n${token}\n`);
+    const syncTaken = withSyncLock(stateLock, () => 'ran', { attempts: 1, waitMs: 1 });
+    assert.equal(syncTaken.ok, true);
+    assert.equal(syncTaken.value, 'ran');
+    assert.equal(existsSync(stateLock), false);
+
+    writeFileSync(ledgerLock, '');
+    const empty = await withFileLock(ledgerLock, () => 'ran', { attempts: 1, waitMs: 1 });
+    assert.equal(empty.ok, true);
+    assert.equal(empty.value, 'ran');
+    writeFileSync(stateLock, '');
+    const emptySync = withSyncLock(stateLock, () => 'ran', { attempts: 1, waitMs: 1 });
+    assert.equal(emptySync.ok, true);
+    assert.equal(emptySync.value, 'ran');
+
+    writeFileSync(ledgerLock, `${process.pid}\n${token}\n`);
+    const live = await withFileLock(ledgerLock, () => 'ran', { attempts: 2, waitMs: 1 });
+    assert.equal(live.ok, false);
+    assert.equal(readFileSync(ledgerLock, 'utf8'), `${process.pid}\n${token}\n`);
+
+    writeFileSync(stateLock, `${process.pid}\n${token}\n`);
+    const liveSync = withSyncLock(stateLock, () => 'ran', { attempts: 2, waitMs: 1 });
+    assert.equal(liveSync.ok, false);
+    assert.equal(readFileSync(stateLock, 'utf8'), `${process.pid}\n${token}\n`);
+  } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
