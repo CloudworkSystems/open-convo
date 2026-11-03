@@ -114,6 +114,17 @@ caller gives it, with mode `0600` for new files.
 for `status`, `pending`, `history` and `verify`. It only reads. Writes
 happen through the library, called by the host.
 
+**The sample driver**, for the finish line and the owner trial only:
+`node packages/approval-ledger/src/sample.mjs --dir <folder> <verb> ...`
+with `ask`, `yes`, `no`, `withdraw`, `claim`, `finish`, `reset` and
+`lock` (leaves a lock file as a crash would). It works only on a folder it
+created itself: given a missing or empty folder it creates the ledger and
+its store beside a marker file `SAMPLE-ONLY`, and it refuses any folder
+without that marker. Its actions are invented and fixed in the code (for
+example "Send the invented note to Robin"); it takes no action text,
+payload or source from the command line, records its yes as a `person`
+answer, and runs nothing. The README's owner trial uses it step by step.
+
 ## When It Goes Wrong
 
 The command is a screen the owner may see, and the rules above decide what
@@ -160,7 +171,9 @@ the Desk will later show, so this answers the five questions in
    refused at `open()`.
 9. A stale lock file makes writes refuse with the plain message and is not
    removed.
-10. The library reads no clock, opens no network, uses no `child_process`,
+10. The sample driver refuses a folder without its marker and takes no
+    action text from the command line.
+11. The library reads no clock, opens no network, uses no `child_process`,
     and imports `packages/prime-routing/` only through its public API (a
     test checks the source).
 

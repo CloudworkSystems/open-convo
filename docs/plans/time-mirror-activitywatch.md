@@ -50,9 +50,16 @@ trackers, grids and page are reused unchanged.
   `duration` and `data.app`. `data.title`, `data.url` and every other field
   are dropped at the point of parsing and never stored, returned, printed or
   written. Events from a web-browser watcher bucket are never requested.
-- **Active time.** A window event counts only where it overlaps an idle
-  event with `data.status` `"not-afk"`. Overlapping window events are
-  merged so a minute is never counted twice.
+- **Flood first.** ActivityWatch records heartbeats that can have zero
+  duration and leaves small gaps for analysis to fill. Before anything
+  else, both the window events and the idle events are flooded the way
+  ActivityWatch's own query does (its `flood` with the same default pulse
+  time: a gap shorter than the pulse time between neighbours is filled by
+  extending the earlier event, and overlaps are trimmed). The README names
+  the ActivityWatch version whose behavior was copied.
+- **Active time.** After flooding, a window event counts only where it
+  overlaps an idle event with `data.status` `"not-afk"`. Overlapping window
+  events are merged so a minute is never counted twice.
 - **Days.** Time is split at midnight in `timeZone` (an IANA name), so an
   event that crosses midnight counts on both days. Days run from `from` to
   `to`, at most 400.
@@ -111,6 +118,10 @@ only):
    command's output or `--list-apps`.
 3. Only the three allowed path kinds are requested, and no browser bucket.
 4. Idle time is subtracted; overlapping window events count once.
+   Zero-duration heartbeats a few seconds apart are flooded into one
+   visit and counted, a gap longer than the pulse time is not filled, and
+   a short not-afk gap at an idle boundary is flooded as ActivityWatch's
+   own query would.
 5. An event crossing midnight in `America/New_York` splits correctly, and a
    daylight-saving change day has 23 or 25 hours.
 6. Zero or two matching buckets are refused with the plain message.
