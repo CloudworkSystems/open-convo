@@ -251,8 +251,8 @@ breaking one is a stop-and-report event.
   `"private": true`, tests with `node --test`.
 - No network calls, no AI, no paid services, no `child_process`, no clock,
   in the code or the tests. No `fs` in the library; the command reads only
-  under `--dir` and writes only the notes in `writes`, or the tests'
-  temporary folders.
+  under `--dir` and writes only the notes in `writes` and the snapshot
+  file, or the tests' temporary folders.
 - No new dependencies. Add no license file and no `license` field.
 - Keep the slice small: the library, the command, the tests, the sample
   wiki and a short README (the rule, the command, and the owner's trial
