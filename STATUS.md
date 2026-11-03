@@ -163,7 +163,7 @@ reviews. Plan approved (merged as #127 on October 24):
 
 **Family wall board page** (Family, the homemade family wall display), GrokBot team B builds, Codex reviews and the coordinator checks it against the plan; plan in review, waiting on the owner's yes (`docs/plans/family-wall-board.md`): one self-contained page for a wall screen from each family member's day and the shared lists, as a standalone package in `packages/wall-board/`, with no network, scripts or clock.
 
-**Time mirror slice 2: ActivityWatch** (Personal), Codex team A builds, GrokBot or a fresh Claude reviews; plan in review, waiting on the owner's yes (`docs/plans/time-mirror-activitywatch.md`): reads app names and idle time from ActivityWatch on the Mac (loopback only, never window titles or URLs) into slice 1's heat maps, in `packages/time-mirror/`.
+**Time mirror slice 2: ActivityWatch** (Personal), Codex team A builds, GrokBot or a fresh Claude reviews; plan in review, waiting on the owner's yes (`docs/plans/time-mirror-activitywatch.md`): turns the mirror's input into a documented activity source interface (the owner's native-slot rule, November 3), with RescueTime as his default source and ActivityWatch on the Mac (loopback only, never window titles or URLs) as the second, in `packages/time-mirror/`.
 
 **Approval ledger** (Personal, prime agent step 3's first piece), Codex team B builds, GrokBot or a fresh Claude reviews; plan in review, waiting on the owner's yes (`docs/plans/approval-ledger.md`): the host's hash-chained record of each yes, claimed exactly once before an action starts, as a standalone package in `packages/approval-ledger/`.
 

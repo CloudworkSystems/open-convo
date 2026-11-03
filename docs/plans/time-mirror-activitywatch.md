@@ -1,4 +1,4 @@
-# Time Mirror Slice 2: Reading ActivityWatch On The Mac (PRD)
+# Time Mirror Slice 2: Activity Sources, With ActivityWatch On The Mac (PRD)
 
 Status: Draft (Nov 3): waiting on the owner's yes in the Claude thread "Draft next plans for outside builders".
 
@@ -17,20 +17,51 @@ coordinator checks it against this plan. **Finish line:** the pull request
 merges with `tests` passing, and the owner runs the command once on his Mac
 against his own ActivityWatch and opens a page of his own time as heat maps,
 with no RescueTime account involved, and the owner trial below passes.
+RescueTime stays his default source; this run proves the native slot works.
 
 ## Why
 
-Slice 1 reads RescueTime's daily totals, which means the owner's activity
-first goes to RescueTime's cloud. ActivityWatch is free, open source and
-runs only on the Mac: a local server with watchers for the active app and
-for idle time, no account, and its own pause control. Reading it ends the
-need for RescueTime's cloud for this mirror. The slice 1 wording still
-holds: a mirror, not a judge; the strictest privacy scope; no grades,
-scores or nudges.
+The owner's rule (November 3, 2026): where he already pays for a tool he
+used before True Convo, such as RescueTime, True Convo connects to that tool
+as the default, and every such connection also has a documented **native
+slot**, a clear interface and a guide, so anyone can build a True Convo
+native replacement and plug it in instead. Time Mirror is the first place
+this applies. RescueTime (slice 1) stays the owner's default source. This
+slice turns the mirror's input into a named **activity source** interface,
+wraps RescueTime as one source without changing it, and adds ActivityWatch
+as the second: free, open source, running only on the Mac, with no account.
+ActivityWatch is the worked example of the native slot, so the guide shows
+a real second source rather than a theory. The slice 1 wording still holds:
+a mirror, not a judge; the strictest privacy scope; no grades, scores or
+nudges.
+
+## The Activity Source Interface (The Native Slot)
+
+`src/sources.mjs` defines what any source gives the mirror:
+
+- A source is `{ id, name, days({ from, to, timeZone }) }`. `days` returns
+  `{ days: { "<YYYY-MM-DD>": { "<tag>": minutes } }, missing: [dates],
+  skipped: count }`, with whole or decimal minutes, the reserved tag names
+  of slice 1, and `untagged` for minutes with no tag.
+- `fromSource(source, options)` builds slice 1's trackers, grids and page
+  from any source, so the page never knows which tool fed it.
+- `rescueTimeSource({ fetchRows, categoryTags })` wraps slice 1's existing
+  RescueTime functions as a source. Slice 1's code is not changed.
+- `activityWatchSource({ host, appTags, fetchJson })` is this slice's
+  adapter (below).
+- `checkSource(source, sampleRange)` is a contract check any new source
+  can run in its own tests: shape, reserved names, day keys inside the
+  range, no negative or impossible minutes (over 1,440 a day), and missing
+  days listed rather than zero-filled.
+- The README gains **"Add your own activity source"**: the interface, the
+  privacy rules every source must keep (no titles, URLs or content leave
+  the adapter), how to run `checkSource`, and both built-in sources as
+  examples. This is the guide the owner's rule asks for.
 
 ## What It Does
 
-Additions to `packages/time-mirror/`, next to slice 1. Two parts:
+Additions to `packages/time-mirror/`, next to slice 1: the interface above,
+then two parts:
 
 ### The Adapter (Library)
 
@@ -122,7 +153,11 @@ questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
 only):
 
 1. A normal week of invented window and idle events gives the expected
-   per-tag minutes, and slice 1's page is built from them.
+   per-tag minutes, and slice 1's page is built from them through
+   `fromSource`. The same invented RescueTime rows through
+   `rescueTimeSource` give the same page slice 1 gives today, and both
+   built-in sources pass `checkSource`; a deliberately broken source fails
+   it with a plain reason.
 2. **Titles never leak.** Window events carry invented titles and URLs with
    a marker string; the marker appears nowhere in the result, the page, the
    command's output or `--list-apps`.
@@ -195,8 +230,10 @@ one is a stop-and-report event.
   `fetch` to `127.0.0.1:5600` only, and the tests may run a local server on
   loopback only.
 - No new dependencies. Add no license file and no `license` field.
-- Keep the slice small: the adapter, the command, the tests and a README
-  section with the inputs, the rules, the output and the owner's steps
+- Keep the slice small: the source interface and `checkSource`, the
+  RescueTime wrapper, the ActivityWatch adapter, the command, the tests, the
+  README's "Add your own activity source" guide, and a README section with
+  the inputs, the rules, the output and the owner's steps
   (install ActivityWatch, find the host name, write the tags file, run the
   command), written for someone new to Terminal. Finishable in one to two
   days.
