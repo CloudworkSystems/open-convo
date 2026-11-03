@@ -85,6 +85,14 @@ including `now`.
   A hidden event shows as "Busy" in its person's color, at its time, with no location. The
   agenda has no privacy field of its own, so these rules are the only way
   to hide a title.
+- **Tasks and habits are hidden unless shared.** Each person has an
+  optional `show` list naming the task lists (`list:<task list name>`),
+  single tasks (`task:<id>`) and single habits (`habit:<id>`) that may
+  appear on the wall. Everything else from that person's `tasks` and
+  `habits` is left off by default: the column shows only a count, such as
+  "2 more tasks" and "1 more habit", with no titles. A task with no `list`
+  can be shown only by its own `task:` rule. A `show` rule naming nothing
+  in the agenda is refused, so a typo can't be mistaken for privacy.
 - `layout.size`: `1080p` (1920 by 1080) or `4k` (3840 by 2160), landscape.
   `layout.theme`: `light` or `dark`.
 - `generatedAt`: when the caller collected the facts. Required.
@@ -103,8 +111,8 @@ section and, for a list, the 1-based item.
   "Updated 7:25 AM".
 - One column per person, in board order, each with their name and color:
   all-day events first, then timed events in order, clashes marked, then
-  open tasks due today or overdue (at most 5, then "and 3 more"), then open
-  habits.
+  shared open tasks due today or overdue (at most 5, then "and 3 more"),
+  then shared open habits, then the count of unshared ones.
 - A lists strip along the bottom.
 - **Fits without scrolling.** Text sizes are fixed per `size`, and the
   library cuts content to fit: each column shows at most a set number of
@@ -154,7 +162,10 @@ only):
    (`tests/expected/sample.html`), and the expected page contains no `http`,
    `src=`, `<script`, `url(` or `@import`.
 2. A hidden calendar and a `key:` rule show "Busy" with no title or location anywhere in
-   the page, including attributes and comments.
+   the page, including attributes and comments. A person with no `show`
+   list has no task title or habit name anywhere in the page, only the
+   counts; `list:`, `task:` and `habit:` rules show exactly what they name;
+   a `show` rule naming nothing is refused.
 3. Overflow: a person with 40 events and 30 tasks gets cut with "and N
    more", and `counts` matches. The same board at `4k` shows more lines.
 4. Stale: `now` 31 minutes after `generatedAt` shows the warning; 30
@@ -172,6 +183,7 @@ only):
 the command on the invented sample boards the README names, and he looks at
 each page): the sample page opens with Wi-Fi off and shows the family's
 day; a board with nobody busy shows "Nothing on today" and no lists strip;
+a person with no `show` list shows only task and habit counts, no names;
 a board 31 minutes old shows "Not updated since ..." in the warning style,
 and a next-day board shows "This is yesterday's board"; a hidden calendar
 shows "Busy" with no title or place; a board with a repeated color prints
