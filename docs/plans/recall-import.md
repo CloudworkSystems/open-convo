@@ -1,6 +1,6 @@
 # Recall Import, Behind A Knowledge Source Slot (PRD)
 
-Status: Proposed (Nov 3): waiting on the owner's yes in the Claude thread "Draft next plans for outside builders".
+Status: Draft (Nov 3): waiting on the owner's yes in the Claude thread "Draft next plans for outside builders".
 
 Written November 3, 2026 by a Claude session (project "261024 OC Steering",
 thread "Draft next plans for outside builders"). Session name:
@@ -203,6 +203,14 @@ editing one note by hand and importing again keeps his edit and says so;
 pointing `--in` at the zip gives the unzip message; an empty folder gives
 the "no Recall cards" message. He confirms each message says what to do
 next. Only counts, never card text, go into the pull request.
+
+## Carried To The Build
+
+Codex findings from the plan review's later rounds, which the code pull
+request must meet (docs/agent-process.md "Plans stop after two Codex
+rounds"):
+
+- `toNotes` takes the source itself (`toNotes(items, { source, importedAt })`), not just a name: it writes under `sources/<source id>/`, labels notes with the source's `name`, and keys kept fields by its `id`, with a test where a second source's id differs from its name ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4460901340)).
 
 ## Out Of Scope For This Slice
 

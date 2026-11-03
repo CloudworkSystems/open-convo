@@ -1,6 +1,6 @@
 # Memory Spaces Engine: Propose, Keep, Correct, Forget, Undo (PRD)
 
-Status: Proposed (Nov 3): waiting on the owner's yes in the Claude thread "Draft next plans for outside builders".
+Status: Draft (Nov 3): waiting on the owner's yes in the Claude thread "Draft next plans for outside builders".
 
 Written November 3, 2026 by a Claude session (project "261024 OC Steering",
 thread "Draft next plans for outside builders"). Session name:
@@ -193,6 +193,14 @@ sensitive candidate without `save` and see the refusal; run `undo` on a
 keep that was later corrected and see the refusal name the correction;
 run the driver on a folder without the marker and see the message. He
 confirms each message says what to do next.
+
+## Carried To The Build
+
+Codex findings from the plan review's later rounds, which the code pull
+request must meet (docs/agent-process.md "Plans stop after two Codex
+rounds"):
+
+- Purge stays purged after a crash: the redacted log is committed before the trash and state files change (or a durable purge marker is written first and honored by recovery), with a test that interrupts a purge at each step and checks the text never comes back ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4460901326)).
 
 ## Out Of Scope For This Slice
 
