@@ -117,7 +117,8 @@ function requestState(entries, requestId) {
   const relevant = entries.filter((entry) => entry.requestId === requestId);
   return {
     asked: relevant.find((entry) => entry.type === "asked"),
-    answers: relevant.filter((entry) => entry.type === "answered"),
+    answers: relevant.filter((entry) => entry.type === "answered" && entry.source === "person"),
+    ignoredAnswers: relevant.filter((entry) => entry.type === "answered" && entry.source !== "person"),
     claim: relevant.find((entry) => entry.type === "claimed"),
     finish: relevant.find((entry) => entry.type === "finished"),
     withdrawn: relevant.find((entry) => entry.type === "withdrawn")
@@ -157,7 +158,7 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
     const validStore = store && checked.ok && store.head === checked.head && store.count === checked.count && Array.isArray(store.usedRequestIds);
     if (damaged || !checked.ok || !validStore) {
       if (tolerateDamage) return { entries: Array.isArray(entries) ? entries : [], store, damaged: true };
-      return { refusal: refusal(DAMAGE) };
+      return { refusal: refusal(DAMAGE), retryable: !damaged && checked.ok && Array.isArray(store?.usedRequestIds) };
     }
     return { entries, store, damaged: false };
   }
@@ -187,6 +188,17 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
         await rm(paths.lock, { force: true });
       }
     });
+  }
+
+  async function readSnapshot(view) {
+    for (let attempt = 0; attempt < 21; attempt += 1) {
+      const loaded = await load();
+      if (!loaded.refusal) return view(loaded);
+      if (!loaded.retryable || attempt === 20) return loaded.refusal;
+      // A valid chain with a different store head can be the interval between
+      // the writer's two renames. Delay without reading the current time.
+      await new Promise((resume) => setTimeout(resume, 5));
+    }
   }
 
   return {
@@ -248,15 +260,16 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
         return success();
       });
     },
-    async status(requestId) { const loaded = await load(); return loaded.refusal ?? statusFor(loaded.entries, requestId); },
+    async status(requestId) { return readSnapshot((loaded) => statusFor(loaded.entries, requestId)); },
     async pending(now) {
-      const nowMs = instant(now, "now"); const loaded = await load(); if (loaded.refusal) return loaded.refusal;
+      const nowMs = instant(now, "now"); return readSnapshot((loaded) => {
       const ids = loaded.entries.filter((entry) => entry.type === "asked").map((entry) => entry.requestId);
       const requests = ids.filter((id) => { const state = requestState(loaded.entries, id); return !state.answers.length && !state.claim && !state.withdrawn && nowMs <= instant(state.asked.expiresAt, "expiresAt"); });
       return success({ requests, message: requests.length ? `${requests.length} request(s) waiting for your yes.` : "Nothing is waiting for your yes." });
+      });
     },
-    async history({ from = 1, to = Number.MAX_SAFE_INTEGER } = {}) { const loaded = await load(); return loaded.refusal ?? success({ entries: loaded.entries.filter((entry) => entry.seq >= from && entry.seq <= to) }); },
-    async verify() { const loaded = await load(); return loaded.refusal ?? success({ head: loaded.store.head, count: loaded.store.count }); },
+    async history({ from = 1, to = Number.MAX_SAFE_INTEGER } = {}) { return readSnapshot((loaded) => success({ entries: loaded.entries.filter((entry) => entry.seq >= from && entry.seq <= to) })); },
+    async verify() { return readSnapshot((loaded) => success({ head: loaded.store.head, count: loaded.store.count })); },
     async reset() {
       return withQueue(paths.lock, async () => {
         let handle;

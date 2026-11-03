@@ -43,6 +43,9 @@ The first claim succeeds and the second says the yes was already used. The other
 
 ## Edge cases
 
+- Approval views and claims use only the last person answer. Agent and system answers remain in history and appear in `status().ignoredAnswers`.
+- Reads create, change, and delete no files and ignore stale locks. If a valid chain disagrees with the store, reads retry up to 20 times with a fixed 5 ms timer delay, without reading the clock. A persistent mismatch still reports damage, including an older restored ledger.
+
 - Expiry is inclusive: a claim exactly at `expiresAt` is allowed; one millisecond later is refused.
 - Reset refuses damaged data when the protected store no longer contains a readable used-id list. Losing those ids would permit reuse.
 - A request id is reserved at `ask`, even if the person says no, it expires, or the ledger is later reset.

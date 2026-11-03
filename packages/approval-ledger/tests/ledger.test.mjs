@@ -11,6 +11,56 @@ const action = { actionId: "send-invented", description: "Send an invented note"
 const digest = actionDigest({ description: action.description, kind: action.kind, payload: action.payload });
 const t = { ask: "2030-01-01T00:00:00.000Z", yes: "2030-01-01T00:01:00.000Z", claim: "2030-01-01T00:02:00.000Z", finish: "2030-01-01T00:03:00.000Z" };
 
+test("approval views ignore agent and system answers, including after a person answers", async (context) => {
+  const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true }));
+  await ask(f.ledger);
+  for (const source of ["agent", "system"]) {
+    await yes(f.ledger, "r1", source);
+    const status = await f.ledger.status("r1");
+    assert.equal(status.status, "pending");
+    assert.equal(status.answers.length, 0);
+    assert.ok(status.ignoredAnswers.some((entry) => entry.source === source));
+    assert.deepEqual((await f.ledger.pending(t.yes)).requests, ["r1"]);
+  }
+  await yes(f.ledger);
+  await f.ledger.answer({ requestId: "r1", answer: "no", answeredAt: t.claim, source: "agent" });
+  assert.equal((await f.ledger.status("r1")).status, "yes");
+  assert.deepEqual((await f.ledger.pending(t.claim)).requests, []);
+  assert.equal((await f.ledger.claim({ requestId: "r1", actionId: action.actionId, digest, now: t.claim })).ok, true);
+  assert.equal((await f.ledger.history()).entries.filter((entry) => entry.type === "answered").length, 4);
+});
+
+test("all read methods remain consistent during worker writes", async (context) => {
+  const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true })); await ask(f.ledger);
+  const workerSource = `import { parentPort, workerData } from 'node:worker_threads'; import { openApprovalLedger } from ${JSON.stringify(new URL("../src/index.mjs", import.meta.url).href)}; const l=await openApprovalLedger(workerData); parentPort.postMessage('ready'); parentPort.once('message', async () => { for(let i=0;i<80;i++) await l.answer({requestId:'r1',answer:'yes',source:'person',answeredAt:'2030-01-01T00:01:00.000Z'}); parentPort.postMessage('done'); });`;
+  const worker = new Worker(workerSource, { eval: true, type: "module", workerData: { ledgerDir: f.ledgerDir, storePath: f.storePath } });
+  await new Promise((resolvePromise, reject) => { worker.once("message", resolvePromise); worker.once("error", reject); });
+  const done = new Promise((resolvePromise, reject) => { worker.once("message", resolvePromise); worker.once("error", reject); });
+  worker.postMessage("start");
+  for (let i = 0; i < 80; i += 1) {
+    const results = await Promise.all([f.ledger.status("r1"), f.ledger.pending(t.yes), f.ledger.history(), f.ledger.verify()]);
+    for (const result of results) assert.equal(result.ok, true, JSON.stringify(result));
+  }
+  await done;
+  assert.equal((await f.ledger.verify()).ok, true);
+});
+
+test("stale lock does not block reads and reads leave files unchanged", async (context) => {
+  const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true }));
+  await ask(f.ledger);
+  const lockPath = join(f.ledgerDir, ".lock");
+  await writeFile(lockPath, "invented stale lock");
+  const before = (await readdir(f.ledgerDir)).sort();
+  const contents = await Promise.all(before.map((name) => readFile(join(f.ledgerDir, name), "utf8")));
+  assert.equal((await f.ledger.status("r1")).status, "pending");
+  assert.equal((await f.ledger.pending(t.yes)).ok, true);
+  assert.equal((await f.ledger.history()).ok, true);
+  assert.equal((await f.ledger.verify()).ok, true);
+  assert.deepEqual((await readdir(f.ledgerDir)).sort(), before);
+  assert.deepEqual(await Promise.all(before.map((name) => readFile(join(f.ledgerDir, name), "utf8"))), contents);
+  assert.equal(await readFile(lockPath, "utf8"), "invented stale lock");
+});
+
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), "approval-ledger-"));
   const ledgerDir = join(root, "ledger"); const storePath = join(root, "state", "head.json");
