@@ -48,6 +48,12 @@ kinds:
   description, kind, payload })`, imported from `packages/prime-routing/`
   through its public API. The payload itself is not stored.
 - `answered`: `{ requestId, answer: "yes" | "no", answeredAt, source }`.
+
+Every `requestId` is used once. `ask()` refuses an id already in the
+ledger (asked, finished, withdrawn or expired, and ids from before a
+reset), and `answer()`, `withdraw()`, `claim()` and `finish()` refuse an id
+that was never asked, so a yes can only ever belong to the one request the
+person saw.
 - `claimed`: `{ requestId, claimId, claimedAt }`, written just before the
   action starts.
 - `finished`: `{ requestId, claimId, outcome: "done" | "failed" |
@@ -164,7 +170,9 @@ the Desk will later show, so this answers the five questions in
    digest but another action's `actionId`.
 4. Expiry: a claim one second after `expiresAt` is refused; `expiresAt`
    more than 24 hours out is refused when asking.
-5. No after yes cancels; yes after no restores; answers after a claim are
+5. Asking again with a used request id (including one from before a
+   reset) is refused, and answering an id that was never asked is refused
+   and leaves nothing claimable. No after yes cancels; yes after no restores; answers after a claim are
    refused; withdraw before claim works, after claim is refused.
 6. **Race.** 20 claims of the same request from `worker_threads` give
    exactly one success.
