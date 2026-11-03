@@ -84,10 +84,16 @@ trackers, grids and page are reused unchanged.
 - **Flood first.** ActivityWatch records heartbeats that can have zero
   duration and leaves small gaps for analysis to fill. Before anything
   else, both the window events and the idle events are flooded the way
-  ActivityWatch's own query does (its `flood` with the same default pulse
-  time: a gap shorter than the pulse time between neighbours is filled by
-  extending the earlier event, and overlaps are trimmed). The README names
-  the ActivityWatch version whose behavior was copied.
+  ActivityWatch's own query does: a port of `flood` in aw-core v0.5.17
+  (`aw_transform/flood.py`), with its default pulse time of 5 seconds. Where
+  this summary and that code differ, the code wins. In short: events are
+  sorted by start time; a gap of up to and including the pulse time
+  between neighbours is filled from the longer of the two (the earlier one
+  on a tie); neighbours with the same data are merged into one event;
+  overlaps of less than 0.1 seconds are treated as no gap, and larger
+  overlaps with the same data are merged; and events left with zero
+  duration are dropped at the end. The README names the aw-core version
+  copied and links the file.
 - **Active time.** After flooding, a window event counts only where it
   overlaps an idle event with `data.status` `"not-afk"`. Overlapping window
   events are merged so a minute is never counted twice.
@@ -164,9 +170,11 @@ only):
 3. Only the three allowed path kinds are requested, and no browser bucket.
 4. Idle time is subtracted; overlapping window events count once.
    Zero-duration heartbeats a few seconds apart are flooded into one
-   visit and counted, a gap longer than the pulse time is not filled, and
-   a short not-afk gap at an idle boundary is flooded as ActivityWatch's
-   own query would.
+   visit and counted, a gap exactly equal to the pulse time is filled, a
+   gap longer than the pulse time is not filled, a gap between a long and a
+   short event goes to the longer one, and a short not-afk gap at an idle
+   boundary is flooded as aw-core v0.5.17's `flood` would. Each case's
+   expected minutes match what that `flood` gives on the same events.
 5. An event crossing midnight in `America/New_York` splits correctly, and a
    daylight-saving change day has 23 or 25 hours.
 6. Zero or two matching buckets are refused with the plain message.
