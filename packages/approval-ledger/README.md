@@ -71,6 +71,8 @@ node src/sample.mjs --dir /tmp/approval-ledger-changed claim-changed
 
 ## Edge cases
 
+- Reset journals record the same normalized head, count, and protected IDs used for recovery, including when the prior head or count is malformed. Folder containment comparisons ignore case after Unicode NFC normalization, and saves also compare filesystem identities after creating the folders.
+
 - Protected request-id lists contain unique, non-empty strings, matching the identifiers accepted by `ask`. An invalid store or journal list is damage, and reset refuses rather than copying invalid values into the chain.
 
 - Ancestor aliases such as macOS `/tmp` are resolved once, and all later file operations use those real locations, so swapping an alias cannot redirect saves. Symlinks in the ledger tree or at the store, journal, or lock cause refusal, including during reset.

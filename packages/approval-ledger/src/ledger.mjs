@@ -66,7 +66,7 @@ async function assertNoSymlink(path, allowMissing = true) {
 }
 
 function isWithin(child, parent) {
-  const rel = relative(parent, child);
+  const rel = relative(parent.normalize("NFC").toLowerCase(), child.normalize("NFC").toLowerCase());
   return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 }
 
@@ -79,14 +79,14 @@ async function resolveExistingAncestor(path) {
 async function safeLocations(ledgerDir, storePath) {
   const ledger = resolve(ledgerDir);
   const store = resolve(storePath);
-  if (isWithin(store, ledger)) throw new Error("storePath must be outside ledgerDir");
+  if (isWithin(store, ledger) || isWithin(ledger, store)) throw new Error("storePath must be outside ledgerDir and neither path may contain the other");
   // Ancestor aliases are resolved once, but the chosen endpoints may not be links.
   for (const endpoint of [ledger, store, `${store}.journal.json`, join(ledger, ".lock")]) {
     if (await exists(endpoint) && (await lstat(endpoint)).isSymbolicLink()) throw new Error(DAMAGE);
   }
   const effectiveLedger = await resolveExistingAncestor(ledger);
   const effectiveStore = await resolveExistingAncestor(store);
-  if (isWithin(effectiveStore, effectiveLedger)) throw new Error("storePath must be outside ledgerDir");
+  if (isWithin(effectiveStore, effectiveLedger) || isWithin(effectiveLedger, effectiveStore)) throw new Error("storePath must be outside ledgerDir and neither path may contain the other");
   return { ledger: effectiveLedger, store: effectiveStore, file: join(effectiveLedger, "ledger.json"), lock: join(effectiveLedger, ".lock") };
 }
 
@@ -142,6 +142,14 @@ function validRequestIds(ids) {
   return Array.isArray(ids) && ids.every((id) => typeof id === "string" && id.length > 0) && new Set(ids).size === ids.length;
 }
 
+function resetBefore(store) {
+  return {
+    head: typeof store.head === "string" ? store.head : EMPTY_HEAD,
+    count: Number.isSafeInteger(store.count) && store.count >= 0 ? store.count : 0,
+    usedRequestIds: store.usedRequestIds
+  };
+}
+
 function chainRequestIds(entries) {
   const ids = new Set();
   for (const entry of entries) {
@@ -177,6 +185,21 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
   const paths = await safeLocations(ledgerDir, storePath);
   const journalPath = `${paths.store}.journal.json`;
 
+  async function prepareDirectories() {
+    await mkdir(paths.ledger, { recursive: true, mode: 0o700 });
+    await mkdir(dirname(paths.store), { recursive: true, mode: 0o700 });
+    const ledgerIdentity = await stat(await realpath(paths.ledger));
+    let ancestor = dirname(paths.store);
+    while (true) {
+      const identity = await stat(await realpath(ancestor));
+      if (identity.dev === ledgerIdentity.dev && identity.ino === ledgerIdentity.ino) throw new Error(DAMAGE);
+      const parent = dirname(ancestor);
+      if (parent === ancestor) break;
+      ancestor = parent;
+    }
+    await checkLocations();
+  }
+
   async function checkLocations() {
     async function scan(path) {
       await assertNoSymlink(path);
@@ -203,9 +226,9 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
     const { before, entries, store, previousText } = journal;
     if (!validPair(entries, store) || !before || !validRequestIds(before.usedRequestIds) || !before.usedRequestIds.every((id) => store.usedRequestIds.includes(id))) throw new Error(DAMAGE);
     const currentStore = await readJson(paths.store, null);
-    // Missing state is never reconstructed from an untrusted journal.
-    if (!currentStore || (canonical(currentStore) !== canonical(before) && canonical(currentStore) !== canonical(store))) throw new Error(DAMAGE);
     const reset = entries.length === 1 && entries[0].type === "reset";
+    // Missing state is never reconstructed from an untrusted journal.
+    if (!currentStore || !validRequestIds(currentStore.usedRequestIds) || (canonical(reset ? resetBefore(currentStore) : currentStore) !== canonical(before) && canonical(currentStore) !== canonical(store))) throw new Error(DAMAGE);
     if (reset) {
       if (entries[0].oldHead !== before.head) throw new Error(DAMAGE);
     } else {
@@ -271,7 +294,7 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
   async function write(kind, data, validate) {
     return withQueue(paths.lock, async () => {
       try { await checkLocations(); } catch { return refusal(DAMAGE); }
-      await mkdir(paths.ledger, { recursive: true, mode: 0o700 });
+      try { await prepareDirectories(); } catch { return refusal(DAMAGE); }
       let handle;
       try {
         handle = await openFile(paths.lock, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
@@ -381,7 +404,7 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
     async reset() {
       return withQueue(paths.lock, async () => {
         try { await checkLocations(); } catch { return refusal(DAMAGE); }
-        await mkdir(paths.ledger, { recursive: true, mode: 0o700 });
+        try { await prepareDirectories(); } catch { return refusal(DAMAGE); }
         let handle;
         try { handle = await openFile(paths.lock, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600); }
         catch (error) { if (error.code === "EEXIST") return refusal(`Another approval is being recorded. If nothing is running, remove ${paths.lock}.`); throw error; }
@@ -394,9 +417,10 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
           const protectedIds = Array.isArray(loaded.store?.usedRequestIds) ? loaded.store.usedRequestIds : [];
           if (readableIds === null || !validRequestIds(loaded.store?.usedRequestIds)) return refusal(DAMAGE);
           const usedRequestIds = [...new Set([...protectedIds, ...readableIds])].sort();
-          const oldHead = typeof loaded.store?.head === "string" ? loaded.store.head : EMPTY_HEAD;
+          const before = resetBefore(loaded.store);
+          const oldHead = before.head;
           const entries = append([], "reset", { oldHead, usedRequestIds });
-          await commit(entries, { head: entries[0].hash, count: 1, usedRequestIds }, loaded.store);
+          await commit(entries, { head: entries[0].hash, count: 1, usedRequestIds }, before);
           return success({ usedRequestIds });
         } finally { await handle?.close(); await rm(paths.lock, { force: true }); }
       });

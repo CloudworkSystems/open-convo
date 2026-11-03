@@ -158,6 +158,38 @@ test("invalid protected ids refuse verification, claims, and reset without poiso
   }
 });
 
+test("reset journal with normalized malformed state recovers for both next operations", async (context) => {
+  for (const next of ["write", "reset"]) {
+    for (const head of [null, 42]) {
+      const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true })); await ask(f.ledger);
+      const file = join(f.ledgerDir, "ledger.json"); const previousText = await readFile(file, "utf8");
+      const malformed = { ...JSON.parse(await readFile(f.storePath, "utf8")), head, count: null };
+      await writeFile(f.storePath, JSON.stringify(malformed));
+      assert.equal((await f.ledger.reset()).ok, true);
+      const entries = JSON.parse(await readFile(file, "utf8")); const store = JSON.parse(await readFile(f.storePath, "utf8"));
+      const before = { head: "0".repeat(64), count: 0, usedRequestIds: malformed.usedRequestIds };
+      assert.equal(entries[0].oldHead, before.head);
+      await writeFile(file, previousText); await writeFile(f.storePath, JSON.stringify(malformed));
+      await writeFile(`${f.storePath}.journal.json`, JSON.stringify({ before, previousText, entries, store }));
+      assert.equal((await f.ledger.verify()).ok, true);
+      assert.equal((next === "write" ? await ask(f.ledger, "r2") : await f.ledger.reset()).ok, true);
+      assert.equal((await f.ledger.verify()).ok, true);
+      assert.equal((await ask(f.ledger, "r1")).ok, false);
+    }
+  }
+});
+
+test("containment refuses case and Unicode aliases in both directions", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "approval-case-")); context.after(() => rm(root, { recursive: true, force: true }));
+  for (const [ledger, store] of [["Ledger", "ledger/state/head.json"], ["ledger/nested", "LEDGER"], ["Lédger", "Le\u0301dger/state/head.json"]]) {
+    await assert.rejects(openApprovalLedger({ ledgerDir: join(root, ledger), storePath: join(root, store) }), /outside/);
+  }
+  assert.deepEqual(await readdir(root), []);
+  const ledger = await openApprovalLedger({ ledgerDir: join(root, "Ledger"), storePath: join(root, "State", "head.json") });
+  assert.equal((await ask(ledger)).ok, true);
+  assert.equal((await ledger.verify()).ok, true);
+});
+
 test("reading missing nested locations creates nothing", async (context) => {
   const root = await mkdtemp(join(tmpdir(), "approval-missing-"));
   context.after(() => rm(root, { recursive: true, force: true }));
