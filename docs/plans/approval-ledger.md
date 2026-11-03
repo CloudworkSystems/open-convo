@@ -105,22 +105,26 @@ kinds:
 `ask`, `answer`, `withdraw`, `claim`, `finish`, `status(requestId)`,
 `pending(now)` (asked, unanswered, not expired), `history({ from, to })`,
 `verify()` and `reset()`. Each returns a plain result or a refusal
-`{ ok: false, reason }`. The library writes only inside the folder the
-caller gives it, with mode `0600` for new files.
+`{ ok: false, reason }`. The caller opens the ledger with two
+locations: `ledgerDir` (the ledger and its lock file) and `storePath` (the
+file store's one file, outside `ledgerDir`). The library writes only to
+those two, with mode `0600` for new files.
 
 ### The Command
 
-`node packages/approval-ledger/src/ledger.mjs --dir <folder> <verb> ...`
-for `status`, `pending`, `history` and `verify`. It only reads. Writes
+`node packages/approval-ledger/src/ledger.mjs --dir <ledger folder>
+--store <store file> <verb> ...` for `status`, `pending`, `history` and `verify`. It only reads. Writes
 happen through the library, called by the host.
 
 **The sample driver**, for the finish line and the owner trial only:
 `node packages/approval-ledger/src/sample.mjs --dir <folder> <verb> ...`
 with `ask`, `yes`, `no`, `withdraw`, `claim`, `finish`, `reset` and
 `lock` (leaves a lock file as a crash would). It works only on a folder it
-created itself: given a missing or empty folder it creates the ledger and
-its store beside a marker file `SAMPLE-ONLY`, and it refuses any folder
-without that marker. Its actions are invented and fixed in the code (for
+created itself: given a missing or empty folder it creates
+`<folder>/SAMPLE-ONLY`, the ledger in `<folder>/ledger/` and the store at
+`<folder>/state/head.json` (a sibling, so restoring `ledger/` alone is
+caught), and it refuses any folder without that marker. The trial's
+"restored from an older copy" step copies `ledger/` only. Its actions are invented and fixed in the code (for
 example "Send the invented note to Robin"); it takes no action text,
 payload or source from the command line, records its yes as a `person`
 answer, and runs nothing. The README's owner trial uses it step by step.
@@ -222,7 +226,8 @@ one is a stop-and-report event.
 - JavaScript modules (`.mjs`), Node 22 or later, `"type": "module"`,
   `"private": true`, tests with `node --test`.
 - No network, no AI, no paid services, no `child_process`, no clock, in the
-  code or the tests. `node:crypto`, `node:fs` (inside the given folder only)
+  code or the tests. `node:crypto`, `node:fs` (only the given ledger folder and store
+  file, or the tests' temporary folders)
   and `worker_threads` (tests) are allowed.
 - No new dependencies. Add no license file and no `license` field.
 - Keep the slice small: the library, the read-only command, the tests and a
