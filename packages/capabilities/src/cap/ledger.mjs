@@ -189,13 +189,10 @@ function reserveEntry(loaded, args) {
     return { ok: false, reason: REASONS.monthCapability };
   }
   if (allSpent + max.micros > parseDecimal(cap.monthlyAll.amount)) return { ok: false, reason: REASONS.monthAll };
-  // The rate copied onto this line is what a later foreign bill will use,
-  // with no further age check. A rate that is already more than a day old,
-  // or dated after now, must not be copied. The reservation is refused and
-  // nothing is written. A rate that was fresh at reservation time can still
-  // settle after it ages.
-  const rate = freshRate(cap, now);
-  if (!rate.ok) return rate;
+  // The reservation is in the cap's currency, so it does not use the
+  // conversion. Copy the rate only when it is fresh, for a later foreign
+  // bill. A stale or future rate stays off the line: a bill in the cap's
+  // currency still settles, and a foreign bill fails closed.
   const amount = moneyFromMicros(cap.currency, max.micros);
   const entry = makeEntry(loaded.state, {
     kind: 'reserve',
@@ -206,7 +203,7 @@ function reserveEntry(loaded, args) {
     jobId: args.jobId,
     at: now,
     month,
-    rate: rate.rate,
+    rate: freshRate(cap, now),
   });
   return { ok: true, entry, result: { ok: true, jobId: args.jobId, amount, seq: entry.seq } };
 }
@@ -253,10 +250,10 @@ function settleAmount(loaded, args, reserve) {
   if (!actual.ok || actual.micros < 0n) return { ok: false, reason: REASONS.badAmount };
   if (actual.currency === reserve.amount.currency) return { ok: true, estimated: false, micros: actual.micros };
   // The rate is the one stored on the reservation, under the hash chain.
-  // A bill can arrive after that rate is more than a day old. Freshness is
-  // a rule for a new reservation, not for a run that already started. A
-  // pause does not apply here either: the cap was already checked, and this
-  // is the bill for a run that was allowed to start.
+  // A bill can arrive after that rate is more than a day old. Freshness
+  // decides whether the rate was copied at reservation time. It does not
+  // apply again here. A pause does not apply either: this is the bill for
+  // a run that was allowed to start.
   const recorded = reserve.rate;
   if (!recorded || recorded.currency !== actual.currency) {
     return { ok: false, reason: REASONS.currencyOff, routeOff: true };
@@ -272,12 +269,11 @@ function settleAmount(loaded, args, reserve) {
 }
 
 function freshRate(cap, now) {
-  if (!cap.conversion) return { ok: true, rate: null };
+  if (!cap.conversion) return null;
   const age = rateAge(cap.conversion.asOf, now);
-  if (age === null || age < 0n) return { ok: false, reason: REASONS.rateBad };
-  if (age > DAY_MS) return { ok: false, reason: REASONS.rateStale };
+  if (age === null || age < 0n || age > DAY_MS) return null;
   const { currency, rate, margin, asOf } = cap.conversion;
-  return { ok: true, rate: { currency, rate, margin, asOf } };
+  return { currency, rate, margin, asOf };
 }
 
 function releaseEntry(loaded, args) {

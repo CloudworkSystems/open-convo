@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign, verify } from 'node:crypto';
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -997,7 +997,7 @@ test('a foreign bill uses the rate saved on the reservation, even after that rat
   }
 });
 
-test('a reservation under a rate more than a day old is refused and writes nothing', async () => {
+test('a stale conversion rate does not block a reservation in the cap currency', async () => {
   const record = cap({
     perRun: { amount: '10', currency: 'USD' },
     monthlyByCapability: { amount: '10', currency: 'USD' },
@@ -1006,14 +1006,23 @@ test('a reservation under a rate more than a day old is refused and writes nothi
   });
   const box = world(record);
   try {
-    const reserved = await box.reserve({ jobId: 'stale', max: { amount: '10', currency: 'USD' }, now: NOW });
-    assert.equal(reserved.ok, false);
-    assert.equal(reserved.reason, REASONS.rateStale);
-    assert.equal(existsSync(join(box.dir, 'entries.jsonl')), false);
-    assert.equal(box.store.read().core.ledgerCount, 0);
+    const reserved = await box.reserve({ jobId: 'native', max: { amount: '1', currency: 'USD' }, now: NOW });
+    assert.equal(reserved.ok, true, reserved.reason);
+    const saved = JSON.parse(readFileSync(join(box.dir, 'entries.jsonl'), 'utf8').trim().split('\n')[0]);
+    assert.equal(saved.rate, null);
+    const settled = await box.settle({ jobId: 'native', actual: { amount: '1', currency: 'USD' } });
+    assert.equal(settled.ok, true, settled.reason);
+    assert.equal(settled.routeOff, false);
+    const foreign = await box.reserve({ jobId: 'foreign', max: { amount: '1', currency: 'USD' }, now: NOW });
+    assert.equal(foreign.ok, true, foreign.reason);
+    const refused = await box.settle({ jobId: 'foreign', actual: { amount: '1', currency: 'EUR' } });
+    assert.equal(refused.ok, false);
+    assert.equal(refused.reason, REASONS.currencyOff);
+    assert.equal(refused.routeOff, true);
     const spent = await box.spent();
     assert.equal(spent.ok, true, spent.reason);
-    assert.equal(spent.counted.amount, '0');
+    assert.equal(spent.spent.amount, '1');
+    assert.equal(spent.reserved.amount, '1');
   } finally {
     box.close();
   }

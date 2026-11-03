@@ -199,7 +199,7 @@ that is already held is not taken. The run is refused.
 
 | Call | What it does |
 |---|---|
-| `reserve({ ledgerDir, store, record, signature, publicKey, capabilityId, routeId, max, jobId, now, providerTotal? })` | Holds `max` against all three levels. Refuses a paused cap, a max of zero, a max over the per-run level, a month that would go over, or a signed conversion rate that is more than a day old or dated after `now`. |
+| `reserve({ ledgerDir, store, record, signature, publicKey, capabilityId, routeId, max, jobId, now, providerTotal? })` | Holds `max` against all three levels. Refuses a paused cap, a max of zero, a max over the per-run level, or a month that would go over. A conversion rate that is more than a day old, or dated after `now`, is not stored on the line. |
 | `settle({ ...same, jobId, now, actual?, estimated? })` | `estimated: true` keeps the reserved maximum and marks it estimated. An `actual` at or under the reservation, including zero, settles that figure. An `actual` over it writes `over-bill`, counts the full bill, and returns `routeOff: true`. |
 | `release({ ...same, jobId, now })` | Drops an open reservation. The job id stays used while that run is still in the ledger. After the month is folded, the id can be used again. |
 | `monthSpent({ ...same, now, capabilityId?, routeId?, providerTotal? })` | `{ reserved, spent, counted }` for that month. `counted` is what the cap uses. A `providerTotal` also needs `capabilityId` and `routeId`, the route that key belongs to. |
@@ -251,8 +251,10 @@ hash. A bill in another currency is converted with that recorded rate,
 including when paid routes are paused and including when the rate is more
 than a day old, because the run already started. A newer signed rate does
 not change a bill for a run that was already reserved. A rate older than a
-day, or dated after `now`, refuses the reservation itself, and nothing is
-written. A new quote is refused for the same reason. A converted amount
+day, or dated after `now`, is not stored, so a reservation in the cap's
+currency still goes through. A new quote in the other currency is refused.
+A foreign bill for a run reserved without a stored rate is refused, the
+route is marked off, and the reservation stays open. A converted amount
 above `999999999.999999` is recorded as that largest figure, the route is
 switched off, and the ledger stays readable. If the bill cannot be
 converted, the route is marked off and the reservation stays open. A pause
@@ -313,9 +315,10 @@ These are the choices the plan does not spell out. Each one has a test in
   released. A further reservation is refused.
 - A foreign bill is converted with the rate stored on its reservation.
   Advancing the clock past a day, or signing a new rate, does not change
-  that bill. A reservation under a rate that is already more than a day
-  old is refused, and the ledger is left untouched. A new quote still
-  refuses a rate older than a day. A converted bill above the largest
+  that bill. A reservation in the cap's currency still goes through when
+  that rate is already more than a day old; the rate is not stored, and a
+  foreign bill for that run is refused with the route marked off. A new
+  quote still refuses a rate older than a day. A converted bill above the largest
   amount the ledger can store (`999999999.999999`) is recorded as that
   amount, the route is switched off, and later reads still check out.
 - A bill or a release for a run that already started is recorded even when
