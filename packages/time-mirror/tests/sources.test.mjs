@@ -25,6 +25,25 @@ test('flood mirrors aw-core v0.5.17 gap attribution, merges, overlaps and zero l
 
 function event(timestamp, duration, data) { return { timestamp, duration, data }; }
 
+test('contained B 10:30–10:50 leaves A 10:00–11:00 with 40 minutes in both input orders', async () => {
+  const windows = [event('2026-10-01T10:00:00Z', 3600, { app: 'A' }), event('2026-10-01T10:30:00Z', 1200, { app: 'B' })];
+  for (const windowEvents of [windows, windows.toReversed()]) {
+    const result = await awDays({ from: '2026-10-01', to: '2026-10-01', timeZone: 'UTC', host: 'test-mac', appTags: { A: 'a', B: 'b' },
+      fetchJson: inventedActivity({ windowEvents, idleEvents: [event('2026-10-01T10:00:00Z', 3600, { status: 'not-afk' })] }) });
+    assert.deepEqual(result.days['2026-10-01'], { a: 40, b: 20 });
+  }
+});
+
+test('RescueTime preserves an observed zero-second date and builds its page', async () => {
+  const headers = ['Date', 'Time Spent (seconds)', 'Productivity', 'Category'];
+  const source = rescueTimeSource({ fetchRows: async () => [headers, ['2026-10-01', 0, 2, 'General']] });
+  const range = { from: '2026-10-01', to: '2026-10-01', timeZone: 'UTC' };
+  const result = await source.days(range);
+  assert.deepEqual(result.days, { '2026-10-01': {} });
+  assert.deepEqual(result.missing, []);
+  assert.match((await fromSource(source, range)).html, /Time Mirror/);
+});
+
 function inventedActivity({ windowEvents = [], idleEvents = [], calls = [] } = {}) {
   return async path => {
     calls.push(path);

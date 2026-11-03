@@ -101,6 +101,8 @@ export function rescueTimeSource({ fetchRows, categoryTags = {} }) {
     async days({ from, to }) {
       const result = await buildTimeMirror({ start: from, end: to, fetchRows, categoryTags });
       const days = {};
+      const missing = new Set(result.missingDays);
+      for (const date of rangeDates(from, to)) if (!missing.has(date)) days[date] = {};
       for (const tracker of result.trackers) for (const square of tracker.grid.squares) {
         if (square.inRange && square.value > 0) (days[square.date] ??= {})[tracker.tag] = square.value;
       }
