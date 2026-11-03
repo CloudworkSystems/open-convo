@@ -61,7 +61,11 @@ including `now`.
       "id": "sam",
       "name": "Sam",
       "color": "teal",
-      "calendars": ["Family", "School"],
+      "calendars": ["cal-family", "cal-school"],
+      "sources": {
+        "calendars": [{ "id": "cal-family", "name": "Family" }, { "id": "cal-school", "name": "School" }],
+        "taskLists": []
+      },
       "agenda": { "...": "one today-agenda output object, unchanged" }
     }
   ],
@@ -82,8 +86,8 @@ including `now`.
 - `lists`: 0 to 6 shared lists, each up to 12 shown items plus a `more`
   count, as the caller (later, the household lists engine) prepares them.
 - **Event titles are hidden unless shared.** Each person has a
-  `calendars` list naming the calendars whose event titles may appear on
-  the wall. An event from any other calendar (including one renamed since
+  `calendars` list naming, by the ids in its `sources`, the calendars whose
+  event titles may appear on the wall (see "Carried To The Build"). An event from any other calendar (including one renamed since
   the board was set up) shows as "Busy" in its person's color, at its
   time, with no title or location. So a typo or a rename hides more, never
   less. The agenda has no privacy field of its own.
@@ -92,7 +96,7 @@ including `now`.
   kept (the event may be on another day) and listed in `warnings`, which
   the command prints.
 - **Tasks and habits are hidden unless shared.** Each person has an
-  optional `show` list naming the task lists (`list:<task list name>`),
+  optional `show` list naming the task lists (`list:<task list id>`, from `sources`),
   single tasks (`task:<id>`) and single habits (`habit:<id>`) that may
   appear on the wall. Everything else from that person's `tasks` and
   `habits` is left off by default: the column shows only a count, such as
@@ -207,7 +211,7 @@ Codex findings from the plan review's later rounds, which the code pull
 request must meet (docs/agent-process.md "Plans stop after two Codex
 rounds"):
 
-- Sharing matches stable unique ids, not display names: `calendars` and `list:` rules name a calendar or task list id from the agenda, or the board is refused when two calendars or two task lists share a name, with a test where a private calendar has the same name as a shared one and stays "Busy" ([thread](https://github.com/CloudworkSystems/open-convo/pull/276#discussion_r4450950247)).
+- Sharing matches stable ids only, never display names ([thread](https://github.com/CloudworkSystems/open-convo/pull/276#discussion_r4450950247), [thread](https://github.com/CloudworkSystems/open-convo/pull/276#discussion_r4460199862)). The agenda carries only calendar names, so each person also gets `sources`, supplied by the host when it builds the board: `calendars: [{ "id", "name" }]` and `taskLists: [{ "id", "name" }]`, where `id` is the host's permanent id for that feed or list (never its name) and `name` is the name the agenda shows today. `calendars` and `list:` rules name these ids. Every calendar and task list name in the agenda must appear in `sources` exactly once, or the board is refused. An event whose calendar maps to an id not in `calendars` shows "Busy". There is no name-matching fallback. Tests: a shared `Work` calendar is renamed, and a private calendar then takes the name `Work` under its own id: its events stay "Busy". The same holds for a task list. Two sources with the same name are refused.
 ## Out Of Scope For This Slice
 
 Reading engine output from storage, any schedule or refresh, Home
