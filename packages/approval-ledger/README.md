@@ -43,6 +43,10 @@ The first claim succeeds and the second says the yes was already used. The other
 
 ## Edge cases
 
+- Used ids include both individual request entries and the lists inside reset entries. Verification requires the store to contain all of those ids. Reset preserves both sources, and refuses malformed reset lists or an unreadable ledger with no readable store.
+
+- A missing store beside a nonempty ledger is damage. Reset refuses rather than replacing the protected used-id list with an empty list. Only an empty ledger can initialize a missing store.
+
 - Approval views and claims use only the last person answer. Agent and system answers remain in history and appear in `status().ignoredAnswers`.
 - Reads create, change, and delete no files and ignore stale locks. If a valid chain disagrees with the store, reads retry up to 20 times with a fixed 5 ms timer delay, without reading the clock. A persistent mismatch still reports damage, including an older restored ledger.
 

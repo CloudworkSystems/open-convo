@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile, readdir, rm, symlink, writeFile, mkdir, lstat } from "node:fs/promises";
+import { readFile, readdir, rm, symlink, writeFile, mkdir, lstat, cp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -10,6 +10,63 @@ import { actionDigest, openApprovalLedger } from "../src/index.mjs";
 const action = { actionId: "send-invented", description: "Send an invented note", kind: "send", payload: { to: "Robin", body: "Hello" } };
 const digest = actionDigest({ description: action.description, kind: action.kind, payload: action.payload });
 const t = { ask: "2030-01-01T00:00:00.000Z", yes: "2030-01-01T00:01:00.000Z", claim: "2030-01-01T00:02:00.000Z", finish: "2030-01-01T00:03:00.000Z" };
+
+test("missing store after reset refuses another reset and cannot revive an old id", async (context) => {
+  const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true }));
+  await ask(f.ledger); await yes(f.ledger);
+  assert.equal((await f.ledger.claim({ requestId: "r1", actionId: action.actionId, digest, now: t.claim })).ok, true);
+  assert.equal((await f.ledger.reset()).ok, true);
+  const before = await readFile(join(f.ledgerDir, "ledger.json"), "utf8");
+  await rm(f.storePath);
+  const damage = "The approval record was changed outside True Convo, so nothing can run until you reset it";
+  assert.deepEqual(await f.ledger.reset(), { ok: false, reason: damage });
+  for (const result of await Promise.all([f.ledger.status("r1"), f.ledger.pending(t.yes), f.ledger.history(), f.ledger.verify()])) {
+    assert.deepEqual(result, { ok: false, reason: damage });
+  }
+  assert.deepEqual(await ask(f.ledger), { ok: false, reason: damage });
+  assert.deepEqual(await f.ledger.claim({ requestId: "r1", actionId: action.actionId, digest, now: t.claim }), { ok: false, reason: damage });
+  assert.equal(await readFile(join(f.ledgerDir, "ledger.json"), "utf8"), before);
+  await assert.rejects(lstat(f.storePath), { code: "ENOENT" });
+});
+
+test("cleared store ids fail verification and reset recovers ids from reset entries", async (context) => {
+  const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true }));
+  await ask(f.ledger); await yes(f.ledger);
+  await f.ledger.claim({ requestId: "r1", actionId: action.actionId, digest, now: t.claim });
+  await f.ledger.reset();
+  const store = JSON.parse(await readFile(f.storePath, "utf8"));
+  await writeFile(f.storePath, JSON.stringify({ ...store, usedRequestIds: [] }));
+  assert.equal((await f.ledger.verify()).ok, false);
+  assert.equal((await ask(f.ledger)).ok, false);
+  assert.equal((await f.ledger.claim({ requestId: "r1", actionId: action.actionId, digest, now: t.claim })).ok, false);
+  assert.deepEqual((await f.ledger.reset()).usedRequestIds, ["r1"]);
+  assert.equal((await ask(f.ledger)).reason, "This request id was already used");
+  assert.equal((await f.ledger.reset()).ok, true);
+  assert.equal((await ask(f.ledger)).ok, false);
+});
+
+test("unreadable ledger with missing store refuses reset without replacing the log", async (context) => {
+  const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true }));
+  await ask(f.ledger); await rm(f.storePath);
+  const path = join(f.ledgerDir, "ledger.json"); await writeFile(path, "unreadable invented log");
+  assert.match((await f.ledger.reset()).reason, /changed outside True Convo/);
+  assert.equal(await readFile(path, "utf8"), "unreadable invented log");
+  await assert.rejects(lstat(f.storePath), { code: "ENOENT" });
+});
+
+test("restoring an older ledger folder preserves an id found only in the current store", async (context) => {
+  const f = await fixture(); context.after(() => rm(f.root, { recursive: true, force: true }));
+  await ask(f.ledger, "older-id");
+  const backup = join(f.root, "backup"); await cp(f.ledgerDir, backup, { recursive: true });
+  await ask(f.ledger, "lost-id"); await yes(f.ledger, "lost-id");
+  await f.ledger.claim({ requestId: "lost-id", actionId: action.actionId, digest, now: t.claim });
+  await rm(f.ledgerDir, { recursive: true }); await cp(backup, f.ledgerDir, { recursive: true });
+  assert.equal((await f.ledger.verify()).ok, false);
+  assert.deepEqual((await f.ledger.reset()).usedRequestIds, ["lost-id", "older-id"]);
+  assert.equal((await ask(f.ledger, "lost-id")).ok, false);
+  assert.equal((await yes(f.ledger, "lost-id")).ok, false);
+  assert.equal((await f.ledger.claim({ requestId: "lost-id", actionId: action.actionId, digest, now: t.claim })).ok, false);
+});
 
 test("reading missing nested locations creates nothing", async (context) => {
   const root = await mkdtemp(join(tmpdir(), "approval-missing-"));

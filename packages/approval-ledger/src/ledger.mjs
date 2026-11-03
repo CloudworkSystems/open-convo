@@ -129,6 +129,18 @@ function requestState(entries, requestId) {
   };
 }
 
+function chainRequestIds(entries) {
+  const ids = new Set();
+  for (const entry of entries) {
+    if (typeof entry?.requestId === "string") ids.add(entry.requestId);
+    if (entry?.type === "reset") {
+      if (!Array.isArray(entry.usedRequestIds) || entry.usedRequestIds.some((id) => typeof id !== "string" || id.length === 0)) return null;
+      for (const id of entry.usedRequestIds) ids.add(id);
+    }
+  }
+  return [...ids];
+}
+
 function statusFor(entries, requestId) {
   const state = requestState(entries, requestId);
   if (!state.asked) return refusal("This request was never asked");
@@ -156,9 +168,15 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
     let store;
     let damaged = false;
     try { await assertNoSymlink(paths.ledger); entries = await readJson(paths.file, []); } catch { if (!tolerateDamage) return { refusal: refusal(DAMAGE) }; entries = []; damaged = true; }
-    try { await assertNoSymlink(dirname(paths.store)); store = await readJson(paths.store, { head: EMPTY_HEAD, count: 0, usedRequestIds: [] }); } catch { if (!tolerateDamage) return { refusal: refusal(DAMAGE) }; store = null; damaged = true; }
+    try { await assertNoSymlink(dirname(paths.store)); store = await readJson(paths.store, null); } catch { if (!tolerateDamage) return { refusal: refusal(DAMAGE) }; store = null; damaged = true; }
+    // Only a genuinely empty ledger may initialize an absent store. A reset
+    // entry can summarize ids no longer present as individual requests.
+    if (store === null && !damaged && Array.isArray(entries) && entries.length === 0 && !(await exists(paths.file))) {
+      store = { head: EMPTY_HEAD, count: 0, usedRequestIds: [] };
+    }
     const checked = verifyEntries(entries);
-    const validStore = store && checked.ok && store.head === checked.head && store.count === checked.count && Array.isArray(store.usedRequestIds);
+    const chainIds = Array.isArray(entries) ? chainRequestIds(entries) : null;
+    const validStore = store && checked.ok && chainIds && store.head === checked.head && store.count === checked.count && Array.isArray(store.usedRequestIds) && chainIds.every((id) => store.usedRequestIds.includes(id));
     if (damaged || !checked.ok || !validStore) {
       if (tolerateDamage) return { entries: Array.isArray(entries) ? entries : [], store, damaged: true };
       return { refusal: refusal(DAMAGE), retryable: !damaged && checked.ok && Array.isArray(store?.usedRequestIds) };
@@ -214,7 +232,7 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
       const expiresMs = instant(expiry, "expiresAt");
       if (expiresMs <= askedMs || expiresMs - askedMs > MAX_AGE_MS) return refusal("expiresAt must be after askedAt and no more than 24 hours later");
       return write("asked", { requestId, actionId, digest, description, kind, askedAt, expiresAt: expiry }, (entries, store) => {
-        if (store.usedRequestIds.includes(requestId) || entries.some((entry) => entry.requestId === requestId)) return refusal("This request id was already used");
+        if (store.usedRequestIds.includes(requestId) || chainRequestIds(entries).includes(requestId)) return refusal("This request id was already used");
         return success({ usedRequestIds: [requestId] });
       });
     },
@@ -284,9 +302,9 @@ export async function openApprovalLedger({ ledgerDir, storePath }) {
         catch (error) { if (error.code === "EEXIST") return refusal(`Another approval is being recorded. If nothing is running, remove ${paths.lock}.`); throw error; }
         try {
           const loaded = await load({ tolerateDamage: true });
-          const readableIds = Array.isArray(loaded.entries) ? loaded.entries.map((entry) => entry?.requestId).filter((id) => typeof id === "string") : [];
+          const readableIds = chainRequestIds(loaded.entries);
           const protectedIds = Array.isArray(loaded.store?.usedRequestIds) ? loaded.store.usedRequestIds : [];
-          if (loaded.damaged && !Array.isArray(loaded.store?.usedRequestIds)) return refusal("The approval record is damaged and its used request ids cannot be preserved");
+          if (readableIds === null || (loaded.damaged && !Array.isArray(loaded.store?.usedRequestIds))) return refusal(DAMAGE);
           const usedRequestIds = [...new Set([...protectedIds, ...readableIds])].sort();
           const oldHead = typeof loaded.store?.head === "string" ? loaded.store.head : EMPTY_HEAD;
           const entries = append([], "reset", { oldHead, usedRequestIds });
