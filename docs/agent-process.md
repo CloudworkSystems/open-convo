@@ -447,6 +447,13 @@ nothing said so. The same rule for True Convo's own agents is in
   comment that starts with `@codex review`, but it refuses the bot's other
   requests ("create a Codex account"), so asking Codex to fix its own pull
   request waits for the owner until the bot has its own Codex access.
+  GrokBot's comments and reviews post from Cursor's app account
+  (`cursor[bot]`), even when a `cloudwork-bot` comment started them. A
+  `cursor[bot]` review counts as GrokBot's independent review of a commit
+  only when it ends with `— GrokBot review`, names that commit's sha, and
+  follows a `cloudwork-bot` comment on the same pull request that begins
+  "@cursor Independent review request for" and names that same sha. Any other
+  `cursor[bot]` post is never a review.
 - An agent that finds itself signed in as `CloudworkSystems` stops and tells
   the owner instead of acting.
 - Agents share one account, so each marks its own work:
