@@ -237,8 +237,9 @@ On a copy of a small notes folder (never the only copy):
    `--record`" advice; stop a `--write`
    part-way (Control-C) and see the next run finish with nothing left
    half-done; add a file that isn't valid UTF-8 and see the whole run
-   refused with the file named. (A note changed mid-run can't be timed by
-   hand; test 11 covers it.)
+   refused with the file named; run `--write --pause-before-write`, edit
+   one of the listed notes while it waits, press Enter, and see that note
+   skipped and named while the others are written.
 
 ## Out Of Scope For This Slice
 
@@ -318,6 +319,12 @@ Moving"); these later findings are requirements for the code pull request.
   checking that process is gone. Tests run two recoverers against one
   stale lock and check exactly one proceeds
   ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465380765)).
+- `--write --pause-before-write` stops after the scan with "Paused before
+  writing. Change a note now if you're testing, then press Enter." and
+  continues when Enter is pressed, so the owner trial can reproduce a note
+  edited mid-run. It changes nothing else, and a test drives it through a
+  piped Enter
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465499101)).
 
 ## Rules For The Builder (GrokBot Team A)
 
