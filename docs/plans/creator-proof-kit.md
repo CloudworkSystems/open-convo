@@ -334,6 +334,16 @@ Moving"); these later findings are requirements for the code pull request.
   before a date. The README and the pack say this in plain words, with a
   test for each kind
   ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465013064)).
+- A post is not a dated anchor on its own date either, since many posts
+  can be edited later without changing their date. The only anchor the
+  pack treats as independently dated is an email the creator sent with
+  the proof code, by its received date in someone else's inbox
+  (`kind: "email"`). A `post` anchor is listed as the creator's own
+  statement ("You say this code was in the post when it was first
+  published on <date>. Anyone checking will look at the post's edit
+  history.") and is never used on its own to say an original was recorded
+  before a date. Tests cover a `post` anchor and an `email` anchor
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465420996)).
 - Only one save changes a ledger at a time: `record` and `amend` take an
   exclusive lock beside the ledger (`<ledger>.lock`, created with `wx` so
   creation fails if it exists, holding the process id and host name)
