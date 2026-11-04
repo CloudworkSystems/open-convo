@@ -231,6 +231,14 @@ On a copy of a small notes folder (never the only copy):
 2. Run the command without `--write`: it lists the repairs it would make.
 3. Run it with `--write`, then run atlas-index on the folder: those links
    are no longer broken, and nothing else in the notes changed.
+4. Each "When It Goes Wrong" case once: give two notes the same name and
+   see both listed for him; delete a moved note and see it listed with no
+   candidates; run on a fresh copy with no snapshot and see the "run
+   `--record`" advice; stop a `--write`
+   part-way (Control-C) and see the next run finish with nothing left
+   half-done; add a file that isn't valid UTF-8 and see the whole run
+   refused with the file named. (A note changed mid-run can't be timed by
+   hand; test 11 covers it.)
 
 ## Out Of Scope For This Slice
 

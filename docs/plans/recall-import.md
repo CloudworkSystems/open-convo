@@ -201,7 +201,10 @@ shows sensible counts and lists skipped files; a write into a test Atlas
 folder creates notes he recognizes, each marked as a source from Recall;
 editing one note by hand and importing again keeps his edit and says so;
 pointing `--in` at the zip gives the unzip message; an empty folder gives
-the "no Recall cards" message. He confirms each message says what to do
+the "no Recall cards" message; stopping a write part-way (Control-C) and
+running it again finishes the import with every note whole; pointing `--in`
+at a folder he can't read (permissions removed on a copy) names the folder
+and says what to check. He confirms each message says what to do
 next. Only counts, never card text, go into the pull request.
 
 ## Carried To The Build

@@ -191,8 +191,11 @@ it as an agent and see the refusal; correct it and see the new text;
 forget it and see it gone from `read` at once, then `restore` it; try a
 sensitive candidate without `save` and see the refusal; run `undo` on a
 keep that was later corrected and see the refusal name the correction;
-run the driver on a folder without the marker and see the message. He
-confirms each message says what to do next.
+run the driver on a folder without the marker and see the message;
+`read` an empty space and see "Nothing kept in this space yet."; copy the
+folder, run a `correct`, then put the old log file back from the copy
+(the state a stop before the log write leaves) and run `show` to see the
+"didn't finish" message and the last whole state. He confirms each message says what to do next.
 
 ## Carried To The Build
 

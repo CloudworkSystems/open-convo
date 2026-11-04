@@ -268,7 +268,10 @@ one again and see the refusal; edit one character in the ledger and see
 `fake-fundraiser` report for the sample case; read the pack and confirm a
 creator under stress could follow its checklist; write the real links page
 and open it in Safari with the network off, and confirm it shows fully,
-links included; stop a `record` of the large sample part-way (Control-C)
+links included; run `report` and `links` on an empty ledger and see the
+"Record at least one original first:" message; point `record` at a file
+he can't read (permissions removed on a copy) and see it named with
+nothing changed; stop a `record` of the large sample part-way (Control-C)
 and confirm `verify` still passes and says either "nothing was added" or
 "Your last record was saved.", then `record` it again and see it recorded
 once. He confirms each message says what to do
