@@ -496,6 +496,7 @@ test('an upload receipt keeps how the file was made, and provenance beats a film
       assert.equal(receipt.model, null);
       assert.equal(receipt.time, NOW);
       assert.equal(receipt.route, 'upload');
+      assert.equal(statSync(saved.file).mode & 0o777, 0o600);
       assert.equal(statSync(`${saved.file}.receipt.json`).mode & 0o777, 0o600);
       assert.notEqual(basename(saved.file), name);
       assert.deepEqual(readFileSync(saved.file), bytes);
@@ -872,6 +873,7 @@ test('a local run returns a file and a receipt that says made by AI, and the que
     assert.equal(receipt.model, 'invented-video-1');
     assert.equal(receipt.time, NOW);
     assert.deepEqual(readFileSync(result.file), PNG);
+    assert.equal(statSync(result.file).mode & 0o777, 0o600);
     assert.equal(promptPosts(server.state), 1);
     const posted = server.state.posts[0];
     assert.deepEqual(Object.keys(posted).sort(), ['client_id', 'prompt', 'prompt_id']);

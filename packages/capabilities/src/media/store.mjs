@@ -218,7 +218,7 @@ export function streamCopy(src, dir, extension, size) {
     const filePath = join(dir, name);
     let out;
     try {
-      out = openSync(filePath, CREATE, 0o644);
+      out = openSync(filePath, CREATE, 0o600);
     } catch (error) {
       if (error.code === 'EEXIST') continue;
       return null;
@@ -279,7 +279,7 @@ export function writeNewFile(dir, extension, bytes) {
     const filePath = join(dir, name);
     let fd;
     try {
-      fd = openSync(filePath, CREATE, 0o644);
+      fd = openSync(filePath, CREATE, 0o600);
     } catch (error) {
       if (error.code === 'EEXIST') continue;
       return null;
