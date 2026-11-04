@@ -76,8 +76,19 @@ A creator records each original once, ideally the day it is posted.
 - **What the proof means, and what it doesn't** (carried from Codex's
   review on #289). The ledger is the creator's own record on their own
   computer. The hash chain catches an accidental or partial change (one
-  entry edited, removed or reordered), but anyone who can edit the file can
-  rewrite an entry and recompute every later hash, so a passing `verify` is
+  entry edited, a middle entry removed, entries reordered). A chain alone
+  can't show that the newest entries were cut off the end, so
+  `verifyLedger(ledger, { expectedHead })` also takes the last `seq` and
+  `entryHash` the creator saw, and reports "The ledger ends at entry <n>, but
+  your last record was entry <m>." when they differ. The command keeps that
+  head in a small file beside the ledger (`<ledger>.head`, written after each
+  append the same way the ledger is) and passes it to every check; with no
+  head file it says the end of the ledger can't be checked, and never calls
+  it complete. A run stopped between the two writes leaves the head one
+  entry behind; when the ledger's last entry is exactly one past the head
+  and chains to it, the command says so and brings the head up to date.
+  Anchors (below) are a second, outside check of the head. Anyone who can
+  edit the file can rewrite an entry and recompute every later hash, so a passing `verify` is
   never presented as tamper evidence or as proof of when a file was
   recorded. The README, the pack and the command all say this in plain
   words ("This is your own record. It shows what you recorded, not when,
@@ -206,8 +217,10 @@ creators, files and links only):
 2. `amendOriginal` appends, never rewrites; `currentOriginals` shows the
    latest facts and when each was recorded.
 3. `verifyLedger` catches a changed field, a removed entry, a swapped order,
-   a changed `prevHash` and a duplicate id, each named by `seq`; every
-   other function refuses that ledger.
+   a changed `prevHash` and a duplicate id, each named by `seq`; with an
+   `expectedHead`, a ledger with its last entry removed is caught; with no
+   head, the result says the end can't be checked; every other function
+   refuses a failing ledger.
 4. `buildReport` for each kind gives the expected sections and places; the
    timeline is in time order; an unknown original id is refused; missing
    post links and dates appear in `missing` and as marked gaps; an anchor
