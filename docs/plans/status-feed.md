@@ -1,6 +1,6 @@
 # Status Feed: The Rail Map's Pending View And A Plain Board
 
-Status: Approved (Nov 4, 2026): merged as #285 on the owner's yes; his answers to its four questions are written in below ("The Owner's Answers"). Not built yet.
+Status: Approved (Nov 4, 2026): merged as #285 on the owner's yes; his answers to its four open questions are in "Revision (November 4, 2026)" at the end, which wins where it differs from the text above. Not built yet.
 
 Written November 3, 2026 by a Claude building session, after the owner asked
 whether Open Convo could install or build something like the "mission
@@ -53,15 +53,13 @@ installed or copied. We borrow ideas only:
 | PR history branch | Built (#185): one row per pull request, daily | Reused for the "how long" and "how many rounds" numbers; not changed |
 
 The one place this repeats Nexus is the plain board on GitHub (part 3): the
-same rows as the Rail Map's Pending tab, as text, for the owner's phone. He
-wants it, inside #114 (answers 1 and 2 below).
+same rows as the Rail Map's Pending tab, as text, for the owner's phone. If
+he only wants the Rail Map, part 3 is dropped (open question 2).
 
 ## The States
 
 Every open pull request gets exactly one state, computed in code from
-GitHub's own data. When more than one fits, the first in this order wins,
-except that the review-loop flag puts a pull request in Needs You ahead of
-Returned and Under Way (below). A
+GitHub's own data. When more than one fits, the first in this order wins. A
 pull request no rule fits shows as Unknown, never as missing, so a gap in
 the rules is visible. The names are the owner's six; the
 rules follow the Atlas note's table, mapped as shown.
@@ -70,7 +68,7 @@ rules follow the Atlas note's table, mapped as shown.
 |---|---|---|---|
 | 1 | Blocked | Stuck | A "silent on" line in the PR keeper's latest "Not working" comment on #52, written by `cloudwork-bot`, names this pull request. Only those missed-deadline lines count: the comment's "Waiting on someone" section and its "not set up" lines never make a pull request Blocked |
 | 2 | Returned | Being fixed | The builder owes the next move: a draft; `tests` red on the latest commit; a merge conflict; Codex findings on the latest commit while `codex-approved` is not passing there and the triage judge isn't due (below); an independent review of the latest commit with an open P0, P1 or P2 (P3s don't block, as in `docs/agent-process.md`); or a plan check of the latest commit that lists something missing |
-| 3 | Needs You | Waiting on you | Only the owner can move it: a protected path without his approval that still stands (requirement 8); a `needs-owner: risk` label (the automatic risk hold, which `owner-queue` already lists); or a `needs-owner: risk-escalate` label with no owner approval of the latest commit submitted after the escalating review (once he has approved it, only the coordinator's label removal is left, so the row is Under Way, waiting on the coordinator); a pull request with the review-loop flag (below), unless it is Blocked or Checked; or a pull request the PR keeper's latest "Not working" comment lists as waiting on the owner ("plan waiting on the owner's yes", "rules change waiting on the owner's yes", "site change waiting on the owner's yes", "risk escalation waiting on the owner", "Dependabot waiting on the owner"). The keeper already decides whether a quoted yes covers the latest commit, so the feed reads its verdict instead of judging the quote again |
+| 3 | Needs You | Waiting on you | Only the owner can move it: a protected path without his approval that still stands (requirement 8); a `needs-owner: risk` label (the automatic risk hold, which `owner-queue` already lists); or a `needs-owner: risk-escalate` label with no owner approval of the latest commit submitted after the escalating review (once he has approved it, only the coordinator's label removal is left, so the row is Under Way, waiting on the coordinator); or a pull request the PR keeper's latest "Not working" comment lists as waiting on the owner ("plan waiting on the owner's yes", "rules change waiting on the owner's yes", "site change waiting on the owner's yes", "risk escalation waiting on the owner", "Dependabot waiting on the owner"). The keeper already decides whether a quoted yes covers the latest commit, so the feed reads its verdict instead of judging the quote again |
 | 4 | Under Way | In review | Someone other than the builder or the owner has it: Codex hasn't reviewed the latest commit yet and `codex-approved` isn't passing there; the triage judge is due (below); the independent review of the latest commit hasn't arrived; an outside module's plan check of the latest commit hasn't been posted; or the keeper's comment lists it as waiting on the coordinator or on the thread that asked the owner |
 | 5 | Checked | Ready to merge | `tests` and `codex-approved` pass on the latest commit, the owner's approval is there where a protected path needs it, an independent review of that commit with no open P0, P1 or P2 is there where the rules ask for one (P3-only counts as clean; only a review the PR keeper's step D would count, as below), and for an outside module (an `agent: grokbot` or `agent: codex` pull request that changes `packages/`) a `cloudwork-bot` comment says "Plan check" of that commit "passed". Auto-merge being on is shown, never required |
 | 6 | Unknown | Unknown | None of the above |
@@ -105,8 +103,8 @@ latest commit; an owner's approval or accept line only from
 else is ignored, however it is worded.
 
 Open review findings are the builder's move (Returned), even though the
-owner could accept them. The one exception is the loop flag below: a
-looping pull request is his call. The keeper's comment is rewritten hourly, so a
+owner could accept them, so the board never hands him a review loop as a
+task by default. The keeper's comment is rewritten hourly, so a
 yes-to-merge wait can show up to an hour late; the row shows when the keeper
 last checked. Each row also shows "your approval also needed" when a
 protected path is waiting, whatever its state, so a pull request being fixed
@@ -115,13 +113,8 @@ doesn't hide his approval.
 **Loop flag.** A pull request whose last three Codex reviews, on three
 different commits, each raised a new P0 or P1 gets a "review loop" badge,
 with the number of rounds. It's a flag, not a state, and it never stops
-anything. A flagged pull request shows in Needs You, ahead of Returned and
-Under Way, as the owner's call to accept the findings or narrow the plan
-(answer 3 below). Blocked still wins over it, and so does Checked: once
-everything Checked asks for is there on the latest commit (for example,
-`codex-approved` passing after his accept line), the row is Checked, with
-the badge still shown. The row's next move says "your call: accept the
-findings or narrow the plan".
+anything. Whether a looping pull request also moves into Needs You is open
+question 3.
 
 ## What Each Row Holds
 
@@ -146,16 +139,17 @@ each with the count it rests on.
    comment) and writes `status-feed.json` to its own branch,
    `status-feed-data`, never `main`. Pure state rules in their own module,
    with tests on invented pull requests covering every state, the order
-   between them, the loop flag (and its move into Needs You) and Unknown. Read-only toward pull requests
+   between them, the loop flag and Unknown. Read-only toward pull requests
    and issues.
 2. **The Rail Map's Pending tab.** `rail-map-snapshot.mjs` also fetches
    `status-feed-data` with git and copies the feed into the Rail Map
    snapshot, so the Desk reads one file as it does now. The Pending tab lists
    rows grouped by state, Needs You first, and each row opens the pull
    request. Desk tests use invented data.
-3. **The plain board** (answers 1 and 2 below). The feed rendered as text
-   for the phone, inside #114 under its current sections.
-   `owner-queue.mjs` stays that issue's only writer: it rewrites the whole
+3. **The plain board** (if the owner wants it, open question 2). The feed
+   rendered as text for the phone, either inside #114 under its current
+   sections or in its own pinned issue (open question 1). If it goes in
+   #114, `owner-queue.mjs` stays its only writer: it rewrites the whole
    body every hour, so the board is added inside that same rewrite, below
    the existing sections, which keep their wording, and never as a second
    edit that the next run would erase. The hidden auto-merge line stays too.
@@ -261,24 +255,50 @@ Rail Map's Pending tab shows it. Then the owner's trial, one check per line:
 6. The error message: a damaged feed file shows "The status feed couldn't be
    read. The other views still work." and nothing in code words.
 
-Part 3's board in #114 gets checks 1, 3 and 5 too. When the trial
+If part 3 is built, its board gets checks 1, 3 and 5 too. When the trial
 passes, this status becomes Built.
 
-## The Owner's Answers
+## Open Questions For The Owner
 
-He answered the four open questions in the Claude project chat on
-November 4, 2026, after the plan merged:
+Answered November 4, 2026; see "Revision (November 4, 2026)" below.
+
+1. Does the plain board go inside #114 (written by the same hourly job that
+   keeps that list, so the two can't erase each other) or in its own pinned
+   issue?
+2. Do you want the plain board at all, or only the Rail Map's Pending tab?
+3. Should a pull request with the review-loop flag move into Needs You (as
+   your call to accept findings or narrow the plan), or stay with the
+   builder as the Atlas note says?
+4. Do the six state names and the order above match what you meant?
+
+## Revision (November 4, 2026)
+
+After #285 merged, the owner answered the four open questions in the Claude
+project chat. Where this section differs from the text above, this section
+wins; everything else stays as approved in #285.
 
 1. **Where the plain board goes:** inside #114, written by `owner-queue`'s
-   own hourly rewrite (part 3). His words, 05:43 UTC, replying to "What do
-   you think of putting it in #114, where you already look?": "Put it in
-   #114".
-2. **Whether to build it:** yes. The same reply chose the board over the
-   Rail Map's Pending tab alone.
-3. **Looping pull requests:** a pull request with the review-loop flag moves
-   into Needs You (the loop flag paragraph and the Needs You row above).
-4. **State names and order:** they stay as written: Blocked, Returned, Needs
-   You, Under Way, Checked, Unknown.
+   own hourly rewrite, exactly as part 3 already describes for that choice.
+   The "own pinned issue" option is dropped. His words, 05:43 UTC, replying
+   to "What do you think of putting it in #114, where you already look?":
+   "Put it in #114".
+2. **Whether to build it:** yes. Part 3 is built, not optional, and its
+   board in #114 gets owner trial checks 1, 3 and 5. The same reply chose
+   the board over the Rail Map's Pending tab alone.
+3. **Looping pull requests:** a pull request with the review-loop flag
+   shows in Needs You, ahead of Returned and Under Way, as his call to
+   accept the findings or narrow the plan. This changes "The States": the
+   Needs You row gains "a pull request with the review-loop flag", and the
+   order rule gains that one exception. Blocked still wins over the flag,
+   and so does Checked: once everything Checked asks for is there on the
+   latest commit (for example, `codex-approved` passing after his accept
+   line), the row is Checked, with the badge still shown. A flagged row's
+   next move says "your call: accept the findings or narrow the plan". The
+   sentence that open review findings never hand him a review loop by
+   default no longer holds for flagged pull requests. Part 1's tests cover
+   the flag moving a pull request into Needs You, and both exceptions.
+4. **State names and order:** they stay as written: Blocked, Returned,
+   Needs You, Under Way, Checked, Unknown.
 
 Answers 3 and 4 are his words at 05:44 UTC, "yes, and yes I think so",
 replying to "should a PR stuck in a Codex loop move to Needs You, and does
