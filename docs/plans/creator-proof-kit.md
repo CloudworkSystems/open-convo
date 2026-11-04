@@ -321,6 +321,17 @@ Moving"); these later findings are requirements for the code pull request.
   before a date. The README and the pack say this in plain words, with a
   test for each kind
   ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465013064)).
+- Only one save changes a ledger at a time: `record` and `amend` take an
+  exclusive lock beside the ledger (`<ledger>.lock`, created with `wx` so
+  creation fails if it exists, holding the process id and start time)
+  before reading the ledger, and release it after the committed head is
+  written. A second save that finds the lock stops with "Another save is
+  running on this ledger. Try again when it finishes." and writes nothing.
+  A lock older than ten minutes whose process is gone is reported, never
+  removed silently; `verify --clear-stale-lock` removes it after saying
+  so. A test starts two overlapping saves and checks one is refused and
+  the other's entry is kept
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465048573)).
 
 ## Rules For The Builder (GrokBot Team B)
 
