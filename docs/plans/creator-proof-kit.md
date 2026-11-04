@@ -392,6 +392,12 @@ Moving"); these later findings are requirements for the code pull request.
   checking that process is gone. Tests run two recoverers against one
   stale lock and check exactly one proceeds
   ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465380765)).
+- `record` hashes a stable file: it reads the file's size and change time
+  before streaming and again after, and refuses if either changed ("This
+  file changed while it was being read. Wait until it has finished copying
+  or saving, then record it again."), writing nothing. A test changes the
+  file mid-read and checks the refusal
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465602365)).
 
 ## Rules For The Builder (GrokBot Team B)
 
