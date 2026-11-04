@@ -215,7 +215,7 @@ in `tests/fixtures/` (invented notes only).
 9. Unsafe paths, NFC duplicates and invalid UTF-8 are refused with a plain
    message; nothing is written.
 10. The command: dry run writes nothing; `--write` writes only the notes in
-    `writes`, keeps each file's mode, and a second run finds nothing to do.
+    `writes` (plus the snapshot, lock and journal under `.atlas-links/`), keeps each file's mode, and a second run finds nothing to do.
 11. A note edited between the scan and its rename is skipped and named; the
     other notes are written.
 12. A `--dir` that holds `.git`, or is the repository root, is refused;
@@ -269,8 +269,15 @@ Moving"); these later findings are requirements for the code pull request.
 - Only one `--write` or `--record` run changes a wiki at a time: it takes
   an exclusive lock (`<dir>/.atlas-links/run.lock`, created with `wx`)
   before reading the snapshot and releases it after the snapshot is saved
-  or kept. A second run that finds the lock stops and writes nothing; a
-  stale lock is reported, never removed silently. A test runs two
+  or kept. A second run that finds the lock stops and writes nothing,
+  unless the lock is stale: the lock holds the process id and host name,
+  and when its host is this computer and that process is no longer
+  running (checked with `process.kill(pid, 0)`, no clock needed), the run
+  says "An earlier run stopped without finishing; cleared its lock." and
+  removes it, then does journal recovery before anything else. A lock
+  whose process is still running, or from another host, is never removed.
+  Tests cover a stale lock followed by journal recovery
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465191563)). A test runs two
   overlapping writes (the same rule Codex raised for the Recall import)
   ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465135931)).
 - Before changing any note, `--write` saves a journal
@@ -309,8 +316,10 @@ breaking one is a stop-and-report event.
   `"private": true`, tests with `node --test`.
 - No network calls, no AI, no paid services, no `child_process`, no clock,
   in the code or the tests. No `fs` in the library; the command reads only
-  under `--dir` and writes only the notes in `writes` and the snapshot
-  file, or the tests' temporary folders.
+  under `--dir` and writes only the notes in `writes`, the snapshot file,
+  and its two safety files `.atlas-links/run.lock` and
+  `.atlas-links/journal.json` (see "Carried To The Build"), or the tests'
+  temporary folders.
 - No new dependencies. Add no license file and no `license` field.
 - Keep the slice small: the library, the command, the tests, the sample
   wiki and a short README (the rule, the command, and the owner's trial

@@ -202,8 +202,14 @@ answers the five questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
 1. **No connection.** Doesn't apply: everything is local files, nothing is
    fetched or sent.
 2. **Interrupted.** Temporary file plus rename for every write, so a stopped
-   run leaves the old ledger, pack or page whole. A stopped `record` adds
-   nothing; running it again records the file once.
+   run leaves the old ledger, pack or page whole. A `record` or `amend`
+   that stops before its ledger write adds nothing ("Your last record
+   didn't finish, so nothing was added."); one that stops after the ledger
+   write but before the last head write is finished at the next check
+   ("Your last record was saved."). Either way, running `record` again
+   records the file once: if it was saved, it says "This file is already
+   recorded as <id>." The owner trial checks this
+   ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465191580)).
 3. **Empty or first run.** With no ledger file yet, `record` creates it and
    says "Started a new proof ledger at <file>. Keep a copy somewhere safe."
    `report` and `links` with an empty ledger say "Record at least one
@@ -263,7 +269,9 @@ one again and see the refusal; edit one character in the ledger and see
 creator under stress could follow its checklist; write the real links page
 and open it in Safari with the network off, and confirm it shows fully,
 links included; stop a `record` of the large sample part-way (Control-C)
-and confirm `verify` still passes. He confirms each message says what to do
+and confirm `verify` still passes and says either "nothing was added" or
+"Your last record was saved.", then `record` it again and see it recorded
+once. He confirms each message says what to do
 next.
 
 ## Out Of Scope For This Slice

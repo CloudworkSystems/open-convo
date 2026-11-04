@@ -234,11 +234,18 @@ rounds"):
   ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465108422)).
 - Only one `--write` import changes a source at a time: it takes an
   exclusive lock (`sources/<source id>/.import.lock`, created with `wx`,
-  holding the process id and start time) before reading the manifest and
+  holding the process id and host name) before reading the manifest and
   releases it after the manifest rename. A second import that finds the
   lock stops with "Another import is running for this source. Try again
-  when it finishes." and writes nothing. A stale lock is reported, never
-  removed silently. A test starts two overlapping imports and checks one is
+  when it finishes." and writes nothing, unless the lock is stale: when
+  its host is this computer and its process is no longer running (checked
+  with `process.kill(pid, 0)`), the import says "An earlier import stopped
+  without finishing; cleared its lock." and removes it, then finishes the
+  pending import as the interruption rule promises. A lock whose process
+  is still running, or from another host, is never removed. Tests cover a
+  stale lock followed by a finished import
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465191576)).
+  A test starts two overlapping imports and checks one is
   refused and the manifest matches the notes on disk
   ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465135931)).
 
