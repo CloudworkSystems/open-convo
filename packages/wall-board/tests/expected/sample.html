@@ -9,7 +9,8 @@ html, body { margin: 0; padding: 0; }
 body {
   overflow: hidden;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-auto-rows: auto;
   gap: 12px;
   padding: 16px 20px 12px;
   font-family: "Avenir Next", "Segoe UI", sans-serif;
@@ -59,12 +60,9 @@ header { display: grid; gap: 2px; min-width: 0; }
   overflow-wrap: anywhere;
 }
 .rows { min-width: 0; min-height: 0; }
-.event, .task, .habit, .more, .hidden, .empty {
+.event, .task {
   font-size: var(--text);
   line-height: var(--line);
-  overflow-wrap: anywhere;
-  max-height: calc(var(--line) * 2);
-  overflow: hidden;
   margin: 0 0 6px;
   min-width: 0;
 }
@@ -73,7 +71,48 @@ header { display: grid; gap: 2px; min-width: 0; }
   color: var(--ink);
   padding: 0 10px;
 }
-.task, .habit { padding: 0; }
+.when, .markline {
+  height: var(--line);
+  line-height: var(--line);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.what {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4em;
+  height: var(--line);
+  line-height: var(--line);
+  min-width: 0;
+  overflow: hidden;
+}
+.mark { flex: none; font-weight: 700; white-space: nowrap; }
+.markline { font-weight: 700; }
+.title {
+  flex: 1 1 auto;
+  min-width: 3em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.where {
+  flex: 0 1 40%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.habit, .more, .hidden, .empty {
+  font-size: var(--text);
+  line-height: var(--line);
+  overflow-wrap: anywhere;
+  max-height: calc(var(--line) * 2);
+  overflow: hidden;
+  margin: 0 0 6px;
+  min-width: 0;
+}
 .more, .hidden, .empty { font-weight: 700; }
 .lists {
   display: grid;
@@ -168,17 +207,17 @@ body[data-theme="dark"] .person-slate { --fill: #d5dee8; --ink: #1a120c; }
 <h2>Sam</h2>
 <div class="rows">
 <ol class="events">
-<li class="event all-day"><p class="when">All day</p><p class="what">Town fair · River park</p></li>
-<li class="event busy clash"><p class="when">2:00 PM – 2:30 PM</p><p class="what">Busy · Overlaps</p></li>
-<li class="event clash"><p class="when">2:00 PM – 3:00 PM</p><p class="what">Design review · Studio · Overlaps</p></li>
-<li class="event busy"><p class="when">4:00 PM – 4:45 PM</p><p class="what">Busy</p></li>
+<li class="event all-day"><p class="when">All day</p><p class="what"><span class="title">Town fair</span><span class="where">River park</span></p></li>
+<li class="event busy clash"><p class="when">2:00 PM – 2:30 PM</p><p class="what"><span class="mark">Overlaps</span><span class="title">Busy</span></p></li>
+<li class="event clash"><p class="when">2:00 PM – 3:00 PM</p><p class="what"><span class="mark">Overlaps</span><span class="title">Design review</span><span class="where">Studio</span></p></li>
+<li class="event busy"><p class="when">4:00 PM – 4:45 PM</p><p class="what"><span class="title">Busy</span></p></li>
 </ol>
 <ul class="tasks">
-<li class="task"><p class="when">Overdue · High</p><p class="what">Pay the studio rent</p></li>
-<li class="task"><p class="when">Today</p><p class="what">File the notes</p></li>
+<li class="task"><p class="what"><span class="title">Pay the studio rent</span></p><p class="when">Overdue · High</p></li>
+<li class="task"><p class="what"><span class="title">File the notes</span></p><p class="when">Today</p></li>
 </ul>
 <ul class="habits">
-<li class="habit"><p class="what">Read a chapter</p></li>
+<li class="habit">Read a chapter</li>
 </ul>
 <p class="hidden">1 more task</p>
 <p class="hidden">1 more habit</p>
@@ -188,7 +227,7 @@ body[data-theme="dark"] .person-slate { --fill: #d5dee8; --ink: #1a120c; }
 <h2>Quinn</h2>
 <div class="rows">
 <ol class="events">
-<li class="event"><p class="when">10:00 AM – 11:30 AM</p><p class="what">Library visit · Reading room</p></li>
+<li class="event"><p class="when">10:00 AM – 11:30 AM</p><p class="what"><span class="title">Library visit</span><span class="where">Reading room</span></p></li>
 </ol>
 <p class="hidden">1 more task</p>
 <p class="hidden">1 more habit</p>

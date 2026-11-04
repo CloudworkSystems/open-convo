@@ -99,6 +99,36 @@ function entryHeight(g) {
   return block(ENTRY_LINES, g.line, g.margin);
 }
 
+function markText(event) {
+  const marks = [];
+  if (event.overlaps) marks.push('Overlaps');
+  if (event.tentative) marks.push('Tentative');
+  if (event.cancelled) marks.push('Cancelled');
+  return marks.join(' · ');
+}
+
+// Time is always one line. Marks stay fully in view: beside the title when
+// they fit, otherwise on their own line. The title then cannot be covered
+// by a wrapped time or a wrapped label.
+export function describeEvent(event, colW, g) {
+  const inner = Math.max(1, colW - 20);
+  const marks = markText(event);
+  const title = event.busy ? 'Busy' : event.title;
+  const where = !event.busy && event.where ? event.where : '';
+  let split = false;
+  if (marks) {
+    const gaps = where ? 2 : 1;
+    const gapW = 0.4 * g.text * gaps;
+    split = textWidth(marks, g.text) + gapW + 3 * g.text > inner;
+  }
+  return { marks, title, where, split };
+}
+
+function eventBlockHeight(event, colW, g) {
+  const lines = describeEvent(event, colW, g).split ? 3 : 2;
+  return block(lines, g.line, g.margin);
+}
+
 function habitHeight(name, colW, g) {
   return block(linesFor(name, colW, g.text), g.line, g.margin);
 }
@@ -199,7 +229,7 @@ function fitColumn(person, colW, rowsBudget, g) {
   }
 
   const sections = [
-    { key: 'events', noun: 'events', items: person.events, height: () => entryHeight(g) },
+    { key: 'events', noun: 'events', items: person.events, height: (event) => eventBlockHeight(event, colW, g) },
     { key: 'tasks', noun: 'tasks', items: person.tasks, height: () => entryHeight(g) },
     { key: 'habits', noun: 'habits', items: person.habits, height: (habit) => habitHeight(habit.name, colW, g) },
   ].filter(section => section.items.length > 0);
@@ -250,6 +280,8 @@ export function fitPage(input) {
   const g = GEOMETRY[input.size];
   const contentH = g.height - g.padTop - g.padBottom;
   const headerH = headerHeight(input.size, input);
+  // The grid template is two tracks. A lists footer is an implicit third
+  // row, so it adds a second gap. With no footer there is no third track.
   const gaps = input.lists.length > 0 ? g.gap * 2 : g.gap;
   const minMain = minimumMain(g);
   const maxStrip = input.lists.length > 0

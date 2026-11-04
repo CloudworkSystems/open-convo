@@ -1,5 +1,5 @@
 import { COLOR_NAMES, COLORS, PAGE } from './colors.mjs';
-import { GEOMETRY } from './layout.mjs';
+import { GEOMETRY, columnWidth, describeEvent } from './layout.mjs';
 import { escapeHtml } from './text.mjs';
 
 // The page is a fixed screen. Sizes, line heights and gaps come from
@@ -40,7 +40,8 @@ html, body { margin: 0; padding: 0; }
 body {
   overflow: hidden;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-auto-rows: auto;
   gap: ${shared.gap}px;
   padding: ${shared.padTop}px ${shared.padX}px ${shared.padBottom}px;
   font-family: "Avenir Next", "Segoe UI", sans-serif;
@@ -90,12 +91,9 @@ header { display: grid; gap: ${shared.headerGap}px; min-width: 0; }
   overflow-wrap: anywhere;
 }
 .rows { min-width: 0; min-height: 0; }
-.event, .task, .habit, .more, .hidden, .empty {
+.event, .task {
   font-size: var(--text);
   line-height: var(--line);
-  overflow-wrap: anywhere;
-  max-height: calc(var(--line) * 2);
-  overflow: hidden;
   margin: 0 0 ${shared.margin}px;
   min-width: 0;
 }
@@ -104,7 +102,48 @@ header { display: grid; gap: ${shared.headerGap}px; min-width: 0; }
   color: var(--ink);
   padding: 0 10px;
 }
-.task, .habit { padding: 0; }
+.when, .markline {
+  height: var(--line);
+  line-height: var(--line);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.what {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4em;
+  height: var(--line);
+  line-height: var(--line);
+  min-width: 0;
+  overflow: hidden;
+}
+.mark { flex: none; font-weight: 700; white-space: nowrap; }
+.markline { font-weight: 700; }
+.title {
+  flex: 1 1 auto;
+  min-width: 3em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.where {
+  flex: 0 1 40%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.habit, .more, .hidden, .empty {
+  font-size: var(--text);
+  line-height: var(--line);
+  overflow-wrap: anywhere;
+  max-height: calc(var(--line) * 2);
+  overflow: hidden;
+  margin: 0 0 ${shared.margin}px;
+  min-width: 0;
+}
 .more, .hidden, .empty { font-weight: 700; }
 .lists {
   display: grid;
@@ -159,40 +198,38 @@ function hiddenLine(count, singular, plural) {
   return `<p class="hidden">${count} more ${word}</p>`;
 }
 
-function eventItem(event) {
+function eventItem(event, colW, size) {
   const classes = ['event'];
   if (event.busy) classes.push('busy');
   if (event.allDay) classes.push('all-day');
   if (event.overlaps) classes.push('clash');
-  // Time on the first line. Title, place and marks share the second line so
-  // the two-line clamp cannot hide a clash or a place.
-  const detail = [];
-  detail.push(event.busy ? 'Busy' : event.title);
-  if (!event.busy && event.where) detail.push(event.where);
-  if (event.cancelled) detail.push('Cancelled');
-  if (event.tentative) detail.push('Tentative');
-  if (event.overlaps) detail.push('Overlaps');
-  return `<li class="${classes.join(' ')}"><p class="when">${escapeHtml(event.when)}</p><p class="what">${escapeHtml(detail.join(' · '))}</p></li>`;
+  const detail = describeEvent(event, colW, GEOMETRY[size]);
+  const where = detail.where ? `<span class="where">${escapeHtml(detail.where)}</span>` : '';
+  const title = `<span class="title">${escapeHtml(detail.title)}</span>`;
+  const body = detail.split
+    ? `<p class="markline">${escapeHtml(detail.marks)}</p><p class="what">${title}${where}</p>`
+    : `<p class="what">${detail.marks ? `<span class="mark">${escapeHtml(detail.marks)}</span>` : ''}${title}${where}</p>`;
+  return `<li class="${classes.join(' ')}"><p class="when">${escapeHtml(event.when)}</p>${body}</li>`;
 }
 
-function personSection(person) {
+function personSection(person, colW, size) {
   const parts = [`<section class="person person-${person.color}">`, `<h2>${escapeHtml(person.name)}</h2>`, '<div class="rows">'];
   if (person.empty) {
     parts.push('<p class="empty">Nothing on today</p>');
   } else {
     if (person.events.length > 0) {
-      parts.push(`<ol class="events">\n${person.events.map(eventItem).join('\n')}\n</ol>`);
+      parts.push(`<ol class="events">\n${person.events.map(event => eventItem(event, colW, size)).join('\n')}\n</ol>`);
     }
     parts.push(moreLine(person.eventsCut, person.events.length === 0 ? 'events' : ''));
     if (person.tasks.length > 0) {
       const items = person.tasks.map(task =>
-        `<li class="task"><p class="when">${escapeHtml(task.label)}</p><p class="what">${escapeHtml(task.title)}</p></li>`);
+        `<li class="task"><p class="what"><span class="title">${escapeHtml(task.title)}</span></p><p class="when">${escapeHtml(task.label)}</p></li>`);
       parts.push(`<ul class="tasks">\n${items.join('\n')}\n</ul>`);
     }
     parts.push(moreLine(person.tasksCut, person.tasks.length === 0 ? 'tasks' : ''));
     if (person.habits.length > 0) {
       const items = person.habits.map(habit =>
-        `<li class="habit"><p class="what">${escapeHtml(habit.name)}</p></li>`);
+        `<li class="habit">${escapeHtml(habit.name)}</li>`);
       parts.push(`<ul class="habits">\n${items.join('\n')}\n</ul>`);
     }
     parts.push(moreLine(person.habitsCut, person.habits.length === 0 ? 'habits' : ''));
@@ -219,6 +256,7 @@ export function renderPage(model) {
     ? `<p class="updated stale">Not updated since ${escapeHtml(model.updatedClock)}</p>`
     : `<p class="updated">Updated ${escapeHtml(model.updatedClock)}</p>`;
   const lists = listsStrip(model.lists);
+  const colW = columnWidth(model.size, model.people.length);
   return [
     '<!DOCTYPE html>',
     '<html lang="en">',
@@ -237,7 +275,7 @@ export function renderPage(model) {
     updated,
     '</header>',
     '<main class="people">',
-    model.people.map(personSection).join('\n'),
+    model.people.map(person => personSection(person, colW, model.size)).join('\n'),
     '</main>',
     lists,
     '</body>',

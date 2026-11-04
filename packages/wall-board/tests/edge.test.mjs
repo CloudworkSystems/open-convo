@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { renderBoard } from '../src/index.mjs';
+import { COLOR_NAMES, renderBoard } from '../src/index.mjs';
 import { allDay, board, habit, person, task, timed } from './helpers.mjs';
 
 describe('edge cases', () => {
@@ -13,6 +13,30 @@ describe('edge cases', () => {
     assert.match(html, /Nothing on today/);
     assert.equal(html.includes('<footer'), false);
     assert.equal(html.includes('more task'), false);
+    assert.match(html, /grid-template-rows: auto minmax\(0, 1fr\);/);
+    assert.equal(html.includes('grid-template-rows: auto minmax(0, 1fr) auto'), false);
+  });
+
+  it('keeps an overlap mark and a task name on their own lines', () => {
+    const people = COLOR_NAMES.map((color, index) => {
+      if (index > 0) return person({ id: `p${index}`, name: `Person ${index}`, color });
+      return person({
+        id: 'sam',
+        name: 'Sam',
+        color,
+        events: [
+          timed('review', 'Design review for the whole household', 14, 16, 'Family', { location: 'Studio' }),
+          timed('other', 'Supplier call about the same hour', 14, 15, 'Family', { location: 'Desk' }),
+        ],
+        tasks: [task('rent', 'Pay the studio rent', { due: '2026-10-20', priority: 'high', list: 'Bills' })],
+        show: ['task:rent'],
+      });
+    });
+    const html = renderBoard(board({ people })).html;
+    assert.match(html, /<p class="markline">Overlaps<\/p>/);
+    const titleAt = html.indexOf('<span class="title">Pay the studio rent</span>');
+    const labelAt = html.indexOf('>Overdue · High<');
+    assert.ok(titleAt !== -1 && labelAt !== -1 && titleAt < labelAt);
   });
 
   it('keeps an empty show list as counts only', () => {
