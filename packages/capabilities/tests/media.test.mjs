@@ -695,6 +695,53 @@ test('the saved file matches the kind that was asked for', async () => {
   }
 });
 
+test('an uploaded file is not saved as the file the run made', async () => {
+  const onlyInput = await startComfy({
+    outputs: { 1: { images: [{ filename: 'boat.png', subfolder: '', type: 'input' }] } },
+  });
+  try {
+    const result = await runLocal(localOptions(onlyInput, {
+      request: { kind: 'image', prompt: 'a boat' },
+    }));
+    assert.equal(result.reason, REASONS.noOutput);
+    assert.equal(onlyInput.state.views.length, 0);
+    assert.deepEqual(filesIn(onlyInput.media), []);
+  } finally {
+    await onlyInput.close();
+  }
+  const mixed = await startComfy({
+    outputs: {
+      1: { images: [{ filename: 'boat.png', subfolder: '', type: 'input' }] },
+      2: { images: [{ filename: 'preview.png', subfolder: '', type: 'temp' }] },
+      3: { images: [{ filename: 'made.png', subfolder: '', type: 'output' }] },
+    },
+  });
+  try {
+    const result = await runLocal(localOptions(mixed, {
+      request: { kind: 'image', prompt: 'a boat' },
+    }));
+    assert.equal(result.ok, true, result.reason);
+    assert.equal(mixed.state.views.length, 1);
+    assert.equal(mixed.state.views[0].includes('filename=made.png'), true);
+    assert.equal(mixed.state.views[0].includes('type=output'), true);
+  } finally {
+    await mixed.close();
+  }
+  const tempOnly = await startComfy({
+    outputs: { 1: { images: [{ filename: 'preview.png', subfolder: '', type: 'temp' }] } },
+  });
+  try {
+    const result = await runLocal(localOptions(tempOnly, {
+      request: { kind: 'image', prompt: 'a boat' },
+    }));
+    assert.equal(result.ok, true, result.reason);
+    assert.equal(tempOnly.state.views[0].includes('filename=preview.png'), true);
+    assert.equal(tempOnly.state.views[0].includes('type=temp'), true);
+  } finally {
+    await tempOnly.close();
+  }
+});
+
 test('a reference file is checked against reference_files, not every files input', async () => {
   const folder = tempDir();
   const server = await startComfy();

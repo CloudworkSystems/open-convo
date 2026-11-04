@@ -379,7 +379,8 @@ function firstOutput(entry, kind) {
         const subfolder = safeSubfolder(item.subfolder);
         const type = item.type == null ? 'output' : item.type;
         if (!ext || subfolder == null || mediaKind(ext) !== kind) continue;
-        if (type !== 'output' && type !== 'temp' && type !== 'input') continue;
+        // An input entry is the file that was uploaded, not a file this run made.
+        if (type !== 'output' && type !== 'temp') continue;
         found.push({ filename: item.filename, subfolder, type, ext, kind: mediaKind(ext) });
       }
     }

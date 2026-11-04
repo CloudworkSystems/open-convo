@@ -528,7 +528,10 @@ Each of these is covered in `tests/media.test.mjs`.
   saved for a video and the still is the one saved for an image. A video
   request that comes back with only a still is refused and nothing is fetched.
   The bytes of the file are checked too: a download that is not actually an
-  image or a clip of the kind asked for is not saved.
+  image or a clip of the kind asked for is not saved. A file ComfyUI marks
+  as an input, such as the picture that was uploaded, is not saved as the
+  result. A run that finishes with only that file is refused and nothing
+  is fetched. A temporary file is saved only when there is no generated one.
 - A reference picture is accepted only when `reference_files` allows its
   type and size. A files input with another name does not. With no
   `reference_files` input, a reference is refused before any connection.
