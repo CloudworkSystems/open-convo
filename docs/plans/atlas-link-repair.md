@@ -266,6 +266,13 @@ Moving"); these later findings are requirements for the code pull request.
   still matches next run. A test repairs note A, skips note B whose broken
   link points to A's old path, and checks a second run repairs B
   ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465013068)).
+- Only one `--write` or `--record` run changes a wiki at a time: it takes
+  an exclusive lock (`<dir>/.atlas-links/run.lock`, created with `wx`)
+  before reading the snapshot and releases it after the snapshot is saved
+  or kept. A second run that finds the lock stops and writes nothing; a
+  stale lock is reported, never removed silently. A test runs two
+  overlapping writes (the same rule Codex raised for the Recall import)
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465135931)).
 
 ## Rules For The Builder (GrokBot Team A)
 

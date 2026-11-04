@@ -232,6 +232,15 @@ rounds"):
   never widened. A test under umask `022` imports nested keys and checks
   every new directory is `0700`
   ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465108422)).
+- Only one `--write` import changes a source at a time: it takes an
+  exclusive lock (`sources/<source id>/.import.lock`, created with `wx`,
+  holding the process id and start time) before reading the manifest and
+  releases it after the manifest rename. A second import that finds the
+  lock stops with "Another import is running for this source. Try again
+  when it finishes." and writes nothing. A stale lock is reported, never
+  removed silently. A test starts two overlapping imports and checks one is
+  refused and the manifest matches the notes on disk
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465135931)).
 
 ## Out Of Scope For This Slice
 
