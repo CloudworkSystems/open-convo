@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
-import { closeSync, ftruncateSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { closeSync, ftruncateSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
@@ -496,6 +496,7 @@ test('an upload receipt keeps how the file was made, and provenance beats a film
       assert.equal(receipt.model, null);
       assert.equal(receipt.time, NOW);
       assert.equal(receipt.route, 'upload');
+      assert.equal(statSync(`${saved.file}.receipt.json`).mode & 0o777, 0o600);
       assert.notEqual(basename(saved.file), name);
       assert.deepEqual(readFileSync(saved.file), bytes);
       assert.equal(readFileSync(filePath).equals(bytes), true);

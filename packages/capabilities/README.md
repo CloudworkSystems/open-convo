@@ -378,7 +378,8 @@ record's `files` inputs: the bytes have to
 match a type that input allows, and the size has to fit that same input.
 The type comes from the bytes, not the name. A symlink is not followed.
 The copy gets a new name in the media folder, and the receipt is
-`<file>.receipt.json` beside it.
+`<file>.receipt.json` beside it. The receipt is readable and writable
+only by the account that saved it.
 
 `madeHow` is `filmed-or-drawn-by-me`, `made-with-ai` or `not-sure`. The
 receipt's `ai_label` is `made by AI`, `not sure`, or left off. It is left
@@ -487,6 +488,7 @@ Each of these is covered in `tests/media.test.mjs`.
   prompt field is refused, and a prompt longer than that string's limit is
   refused before anything is sent. An upload route that names a provider
   or a model is refused the same way. An upload receipt leaves both empty.
+  The receipt file is private to the account that saved it.
 - "Filmed or drawn by me" with no marker has no `ai_label`. The same answer
   on `trainedAlgorithmicMedia` or `compositeWithTrainedAlgorithmicMedia`,
   including UTF-16 little-endian and big-endian, is `made by AI`. "Not sure" stays `not sure` even with

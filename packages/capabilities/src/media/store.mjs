@@ -302,7 +302,7 @@ export function writeNewFile(dir, extension, bytes) {
 export function writeReceipt(filePath, receipt) {
   const receiptPath = `${filePath}.receipt.json`;
   const text = `${JSON.stringify(receipt, null, 2)}\n`;
-  const fd = openSync(receiptPath, CREATE, 0o644);
+  const fd = openSync(receiptPath, CREATE, 0o600);
   try {
     writeAll(fd, Buffer.from(text));
     fsyncSync(fd);
