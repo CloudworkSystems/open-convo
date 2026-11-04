@@ -62,7 +62,7 @@ export function sniffType(bytes) {
   }
   if (bytes.length >= 12 && bytes.toString('ascii', 4, 8) === 'ftyp') return isoType(bytes);
   if (bytes.length >= 4 && bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) {
-    return 'video/webm';
+    return ebmlDocType(bytes) === 'webm' ? 'video/webm' : null;
   }
   return null;
 }
@@ -87,6 +87,49 @@ function isoBrands(bytes) {
   }
   const end = boxSize >= 16 ? Math.min(boxSize, bytes.length) : bytes.length;
   return brandsFrom(bytes, 8, end);
+}
+
+// Matroska and WebM share the EBML signature. Only a DocType of "webm" is WebM.
+function ebmlDocType(bytes) {
+  const headerSize = readVint(bytes, 4);
+  if (!headerSize) return null;
+  const headerEnd = Math.min(bytes.length, 4 + headerSize.width + headerSize.value);
+  let at = 4 + headerSize.width;
+  while (at + 2 <= headerEnd) {
+    if (bytes[at] === 0x42 && bytes[at + 1] === 0x82) {
+      const size = readVint(bytes, at + 2);
+      if (!size || size.value > 32) return null;
+      const start = at + 2 + size.width;
+      const end = start + size.value;
+      if (end > bytes.length) return null;
+      return bytes.toString('ascii', start, end);
+    }
+    const id = readVint(bytes, at);
+    if (!id) return null;
+    const size = readVint(bytes, at + id.width);
+    if (!size) return null;
+    const next = at + id.width + size.width + size.value;
+    if (next <= at || next > headerEnd) return null;
+    at = next;
+  }
+  return null;
+}
+
+function readVint(bytes, offset) {
+  if (offset >= bytes.length) return null;
+  const first = bytes[offset];
+  if (first === 0) return null;
+  let width = 1;
+  let marker = 0x80;
+  while (width <= 8 && (first & marker) === 0) {
+    width += 1;
+    marker >>= 1;
+  }
+  if (width > 8 || offset + width > bytes.length) return null;
+  let value = first & (marker - 1);
+  for (let i = 1; i < width; i += 1) value = value * 256 + bytes[offset + i];
+  if (!Number.isSafeInteger(value)) return null;
+  return { width, value };
 }
 
 function brandsFrom(bytes, majorAt, end) {

@@ -468,7 +468,11 @@ Each of these is covered in `tests/media.test.mjs`.
   held all at once. The source file is left where it was. The saved name is new.
 - An `ftyp` file is not treated as MP4 until its brand says so. QuickTime
   (`qt`) is `video/quicktime`. HEIC and AVIF stay images. An MP4 brand is
-  `video/mp4`.
+  `video/mp4`. A Matroska file shares WebM's opening bytes and is refused
+  unless its DocType is `webm`.
+- The local prompt has to be the record's string input. An enum or other
+  prompt field is refused, and a prompt longer than that string's limit is
+  refused before anything is sent.
 - "Filmed or drawn by me" with no marker has no `ai_label`. The same answer
   on `trainedAlgorithmicMedia` or `compositeWithTrainedAlgorithmicMedia`,
   including UTF-16 little-endian and big-endian, is `made by AI`. "Not sure" stays `not sure` even with

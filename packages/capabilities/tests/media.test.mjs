@@ -502,6 +502,64 @@ test('an ftyp file is typed from its brand, and a big-endian marker still counts
   }
 });
 
+test('a Matroska file is not WebM, and a non-string prompt is refused', async () => {
+  const folder = tempDir();
+  const media = tempDir();
+  const server = await startComfy();
+  try {
+    const webm = ebml('webm', Buffer.from([0x42, 0x86, 0x81, 0x01]));
+    const matroska = ebml('matroska');
+    const bare = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x80]);
+    const allowed = record();
+    allowed.inputs.reference_files.types = ['video/webm'];
+    allowed.inputs.reference_files.max_bytes = 1000;
+    const asWebm = upload({
+      record: allowed,
+      routeId: 'upload',
+      filePath: writeBytes(folder.dir, 'clip.mkv', webm),
+      madeHow: 'filmed-or-drawn-by-me',
+      mediaDir: media.dir,
+      now: fixedNow,
+    });
+    assert.equal(asWebm.ok, true, asWebm.reason);
+    assert.equal(basename(asWebm.file).endsWith('.webm'), true);
+    for (const bytes of [matroska, bare]) {
+      const saved = upload({
+        record: allowed,
+        routeId: 'upload',
+        filePath: writeBytes(folder.dir, 'other.mkv', bytes),
+        madeHow: 'filmed-or-drawn-by-me',
+        mediaDir: media.dir,
+        now: fixedNow,
+      });
+      assert.equal(saved.reason, REASONS.fileType);
+    }
+    const custom = record();
+    custom.inputs.prompt = { type: 'enum', values: ['a boat', 'a ship'] };
+    assert.equal(validateCapability(custom).ok, true);
+    const refused = await runLocal(localOptions(server, {
+      record: custom,
+      request: { kind: 'image', prompt: 'a'.repeat(5000) },
+    }));
+    assert.equal(refused.reason, REASONS.badRequest);
+    const over = await runLocal(localOptions(server, {
+      request: { kind: 'image', prompt: 'a'.repeat(record().inputs.prompt.max_length + 1) },
+    }));
+    assert.equal(over.reason, REASONS.badRequest);
+    assert.equal(server.state.paths.length, 0);
+  } finally {
+    folder.remove();
+    media.remove();
+    await server.close();
+  }
+});
+
+function ebml(docType, leading = Buffer.alloc(0)) {
+  const name = Buffer.from(docType, 'ascii');
+  const body = Buffer.concat([leading, Buffer.from([0x42, 0x82, 0x80 | name.length]), name]);
+  return Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x80 | body.length]), body]);
+}
+
 test('a file the record allows, but that is over 64 MiB, is refused before it is read', async () => {
   const folder = tempDir();
   const media = tempDir();

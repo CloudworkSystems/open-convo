@@ -261,7 +261,12 @@ function checkLocalRequest(record, request) {
     return fail(REASONS.badRequest);
   }
   const promptField = record.inputs?.prompt;
-  if (!promptField || typeof request.prompt !== 'string' || request.prompt.length > promptField.max_length) {
+  // An enum or other non-string prompt has no max_length, and a missing
+  // limit would accept every string. This runner only takes a string prompt.
+  if (!promptField || promptField.type !== 'string' || !Number.isInteger(promptField.max_length)) {
+    return fail(REASONS.badRequest);
+  }
+  if (typeof request.prompt !== 'string' || request.prompt.length > promptField.max_length) {
     return fail(REASONS.badRequest);
   }
   const seconds = integerInput(record, 'seconds', request.seconds);
