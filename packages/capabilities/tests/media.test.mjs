@@ -11,7 +11,7 @@ import { parseServer } from '../src/media/address.mjs';
 import { comfyRequest } from '../src/media/http.mjs';
 import { run } from '../src/media/make.mjs';
 import { LOCAL_NODES } from '../src/media/nodes.mjs';
-import { MAX_READ_BYTES } from '../src/media/store.mjs';
+import { MAX_READ_BYTES, streamFileAwait } from '../src/media/store.mjs';
 import { REASONS } from '../src/media/reasons.mjs';
 import { listRoutes, remainingMs, runLocal, upload, MAX_OUTPUT_BYTES } from '../src/media/runner.mjs';
 
@@ -168,6 +168,10 @@ function startComfy(options = {}) {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
     state.paths.push(url.pathname);
+    if (req.method === 'POST' && url.pathname === '/upload/image' && options.upload === 'slow') {
+      state.uploadPaused = true;
+      await new Promise((resolve) => { state.releaseUpload = resolve; });
+    }
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
     const body = Buffer.concat(chunks);
@@ -682,6 +686,47 @@ test('a cancelled request is not opened, so a later reset cannot crash the run',
     assert.equal(result.kind, 'abort');
     assert.equal(server.state.paths.length, 0);
   } finally {
+    await server.close();
+  }
+});
+
+test('a reference is read one piece at a time, and a slow server still receives it', async () => {
+  const folder = tempDir();
+  const server = await startComfy({ upload: 'slow' });
+  try {
+    const bytes = Buffer.alloc(256 * 1024);
+    PNG.copy(bytes);
+    const filePath = writeBytes(folder.dir, 'wide.png', bytes);
+    const gates = [];
+    const reading = streamFileAwait(filePath, bytes.length, () => new Promise((resolve) => {
+      gates.push(resolve);
+    }));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(gates.length, 1);
+    while (gates.length > 0) {
+      gates.shift()();
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.equal(await reading, true);
+
+    const custom = record();
+    custom.inputs.reference_files.max_bytes = bytes.length;
+    const run = runLocal(localOptions(server, {
+      record: custom,
+      workflow: fullWorkflow(),
+      request: { kind: 'image', prompt: 'a boat', seconds: 2, width: 64, height: 64, referenceFile: filePath },
+    }));
+    for (let i = 0; i < 50 && !server.state.uploadPaused; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(server.state.uploadPaused, true);
+    assert.equal(server.state.posts.length, 0);
+    server.state.releaseUpload();
+    const result = await run;
+    assert.equal(result.ok, true, result.reason);
+    assert.equal(server.state.uploads.length, 1);
+  } finally {
+    folder.remove();
     await server.close();
   }
 });

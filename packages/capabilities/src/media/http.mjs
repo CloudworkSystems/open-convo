@@ -4,7 +4,7 @@
 
 import { createHash, randomBytes } from 'node:crypto';
 import http from 'node:http';
-import { streamFile } from './store.mjs';
+import { streamFileAwait } from './store.mjs';
 
 const WS_MAGIC = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 const MAX_FRAME = 1024 * 1024;
@@ -116,30 +116,57 @@ export function comfyRequest(address, { method, path, headers, body, stream, tim
   });
 }
 
+function writeChunk(req, chunk) {
+  return new Promise((resolve, reject) => {
+    if (req.destroyed) {
+      reject(Object.assign(new Error('closed'), { code: 'ECONNRESET' }));
+      return;
+    }
+    let settled = false;
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      req.removeListener('error', onError);
+      req.removeListener('drain', onDrain);
+      if (error) reject(error);
+      else resolve();
+    };
+    const onError = (error) => finish(error);
+    const onDrain = () => finish();
+    req.on('error', onError);
+    let ready = true;
+    try {
+      ready = req.write(chunk);
+    } catch (error) {
+      finish(error);
+      return;
+    }
+    if (ready) finish();
+    else req.once('drain', onDrain);
+  });
+}
+
 function sendBody(req, body, stream) {
   if (!stream) {
     if (body) req.end(body);
     else req.end();
     return;
   }
-  const write = (chunk) => new Promise((resolve, reject) => {
-    if (req.write(chunk)) resolve();
-    else req.once('drain', resolve);
-    req.once('error', reject);
-  });
   (async () => {
-    await write(stream.prefix);
-    const copied = streamFile(stream.path, stream.size, (piece) => {
-      // The chunk buffer is reused, so copy it before the socket takes it.
-      req.write(Buffer.from(piece));
-    });
+    await writeChunk(req, stream.prefix);
+    // Copy the piece: the reader reuses its buffer for the next read.
+    // Wait until this piece is accepted before that next read, so a slow
+    // server cannot queue the whole file in memory.
+    const copied = await streamFileAwait(stream.path, stream.size, (piece) => (
+      writeChunk(req, Buffer.from(piece))
+    ));
     if (!copied) {
       req.destroy(Object.assign(new Error('short read'), { code: 'EIO' }));
       return;
     }
     req.end(stream.suffix);
   })().catch((error) => {
-    req.destroy(error.code ? error : Object.assign(error, { code: 'EIO' }));
+    if (!req.destroyed) req.destroy(error.code ? error : Object.assign(error, { code: 'EIO' }));
   });
 }
 

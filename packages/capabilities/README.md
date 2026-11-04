@@ -479,7 +479,8 @@ Each of these is covered in `tests/media.test.mjs`.
   refused. A file one byte over the record's limit is refused and not
   copied. A file the record allows, but that is over 64 MiB, is refused
   before it is read. A file under that limit is read in small pieces, not
-  held all at once. The source file is left where it was. The saved name is new.
+  held all at once. A reference sent to ComfyUI waits for each piece to be
+  accepted before the next piece is read. The source file is left where it was. The saved name is new.
 - An `ftyp` file is not treated as MP4 until its brand says so. QuickTime
   (`qt`) is `video/quicktime`. HEIC and AVIF stay images. An MP4 brand is
   `video/mp4`. A Matroska file shares WebM's opening bytes. It is WebM only

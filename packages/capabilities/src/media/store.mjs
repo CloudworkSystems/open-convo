@@ -242,26 +242,64 @@ export function streamCopy(src, dir, extension, size) {
   return null;
 }
 
+function openForRead(src, size) {
+  let fd;
+  try {
+    fd = openSync(src, NOFOLLOW_READ);
+  } catch {
+    return null;
+  }
+  try {
+    const again = fstatSync(fd);
+    if (!again.isFile() || again.size !== size || size > MAX_READ_BYTES) {
+      closeSync(fd);
+      return null;
+    }
+    return fd;
+  } catch {
+    try { closeSync(fd); } catch { /* already closing */ }
+    return null;
+  }
+}
+
 /**
  * Read `size` bytes from `src` and hand each chunk to `write` before the
  * next one is read. `write` must use the chunk before it returns.
  */
 export function streamFile(src, size, write) {
-  let fd;
+  const fd = openForRead(src, size);
+  if (fd == null) return false;
   try {
-    fd = openSync(src, NOFOLLOW_READ);
-  } catch {
-    return false;
-  }
-  try {
-    const again = fstatSync(fd);
-    if (!again.isFile() || again.size !== size || size > MAX_READ_BYTES) return false;
     const chunk = Buffer.alloc(CHUNK);
     let offset = 0;
     while (offset < size) {
       const n = readSync(fd, chunk, 0, Math.min(CHUNK, size - offset), offset);
       if (n <= 0) return false;
       write(chunk.subarray(0, n));
+      offset += n;
+    }
+    return true;
+  } catch {
+    return false;
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/**
+ * Same pieces as `streamFile`, but the next piece is not read until `write`
+ * finishes. A slow reader therefore never has the rest of the file waiting.
+ */
+export async function streamFileAwait(src, size, write) {
+  const fd = openForRead(src, size);
+  if (fd == null) return false;
+  try {
+    const chunk = Buffer.alloc(CHUNK);
+    let offset = 0;
+    while (offset < size) {
+      const n = readSync(fd, chunk, 0, Math.min(CHUNK, size - offset), offset);
+      if (n <= 0) return false;
+      await write(chunk.subarray(0, n));
       offset += n;
     }
     return true;
