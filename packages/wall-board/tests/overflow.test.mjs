@@ -56,6 +56,33 @@ describe('overflow', () => {
     assert.match(large.html, /Event 04/);
   });
 
+  it('shows at most five shared tasks, on 1080p and on 4k', () => {
+    const tasks = [];
+    for (let i = 0; i < 20; i += 1) {
+      const n = String(i).padStart(2, '0');
+      tasks.push(task(`t${n}`, `Task ${n}`, { list: 'Bills' }));
+    }
+    for (const size of ['1080p', '4k']) {
+      const result = renderBoard(board({
+        layout: { size, theme: 'light' },
+        people: [person({
+          id: 'sam',
+          name: 'Sam',
+          color: 'teal',
+          tasks,
+          show: ['list:tl-bills'],
+        })],
+      }));
+      const shown = result.counts.people[0];
+      assert.equal(shown.tasksShown, 5, size);
+      assert.equal(shown.tasksCut, 15, size);
+      assert.equal(count(result.html, '<li class="task'), 5);
+      assert.match(result.html, /and 15 more/);
+      assert.match(result.html, /Task 00/);
+      assert.equal(result.html.includes('Task 05'), false);
+    }
+  });
+
   it('keeps a full column, including the lists strip, inside the screen budget', () => {
     const habits = [];
     for (let i = 0; i < 8; i += 1) habits.push(habit(`h${i}`, `Habit ${i}`));

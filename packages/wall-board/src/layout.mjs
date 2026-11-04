@@ -48,6 +48,8 @@ export const GEOMETRY = Object.freeze({
 
 const ENTRY_LINES = 2;
 const MAX_TEXT_LINES = 2;
+// The plan shows at most five shared tasks, then "and N more".
+const TASK_CAP = 5;
 
 function textWidth(text, fontSize) {
   return plain(text).length * fontSize;
@@ -247,9 +249,10 @@ function fitColumn(person, colW, rowsBudget, g) {
   for (const section of sections) {
     const moreH = moreHeights.get(section.key);
     const heights = section.items.map(section.height);
+    const cap = section.key === 'tasks' ? Math.min(TASK_CAP, section.items.length) : section.items.length;
     let count = 0;
     let sum = 0;
-    while (count < section.items.length && used + sum + heights[count] <= rowsBudget) {
+    while (count < cap && used + sum + heights[count] <= rowsBudget) {
       sum += heights[count];
       count += 1;
     }
