@@ -273,6 +273,20 @@ uploading anything, publishing the page, third-party timestamps, reading a
 post's date from its link, the Meta protection walkthrough (the other
 thread's piece), wiring into the app, and any AI.
 
+## Carried To The Build
+
+Plans stop after two Codex rounds (AGENTS.md "Keeping Finished Work
+Moving"); these later findings are requirements for the code pull request.
+
+- Every public function that reads the ledger (`buildReport`,
+  `currentOriginals`, `amendOriginal`, `recordOriginal`) takes the expected
+  head (or a value returned by `verifyLedger` that carries it) and refuses or
+  marks the result incomplete when the ledger's end doesn't match it, so a
+  report never omits a cut-off newest entry while calling the ledger
+  complete ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4464855303)).
+  Tests remove the last entry and the last amendment and run each of these
+  functions.
+
 ## Rules For The Builder (GrokBot Team B)
 
 These are rules the builder must follow; the setup does not enforce them, so
