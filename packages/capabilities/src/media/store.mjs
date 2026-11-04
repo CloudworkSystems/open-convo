@@ -43,6 +43,7 @@ const EXTENSIONS = {
   'video/mp4': 'mp4',
   'video/quicktime': 'mov',
   'video/webm': 'webm',
+  'video/x-matroska': 'mkv',
 };
 
 export function sniffType(bytes) {
@@ -62,7 +63,10 @@ export function sniffType(bytes) {
   }
   if (bytes.length >= 12 && bytes.toString('ascii', 4, 8) === 'ftyp') return isoType(bytes);
   if (bytes.length >= 4 && bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) {
-    return ebmlDocType(bytes) === 'webm' ? 'video/webm' : null;
+    const docType = ebmlDocType(bytes);
+    if (docType === 'webm') return 'video/webm';
+    if (docType === 'matroska') return 'video/x-matroska';
+    return null;
   }
   return null;
 }
@@ -89,7 +93,7 @@ function isoBrands(bytes) {
   return brandsFrom(bytes, 8, end);
 }
 
-// Matroska and WebM share the EBML signature. Only a DocType of "webm" is WebM.
+// Matroska and WebM share the EBML signature. The DocType says which one.
 function ebmlDocType(bytes) {
   const headerSize = readVint(bytes, 4);
   if (!headerSize) return null;

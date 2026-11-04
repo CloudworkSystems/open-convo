@@ -695,6 +695,27 @@ test('the saved file matches the kind that was asked for', async () => {
   }
 });
 
+test('a local video saved as MKV is kept as MKV', async () => {
+  const clip = ebml('matroska');
+  const server = await startComfy({
+    output: clip,
+    outputName: 'clip.mkv',
+    outputs: { 1: { videos: [{ filename: 'clip.mkv', subfolder: '', type: 'output' }] } },
+  });
+  try {
+    const result = await runLocal(localOptions(server, {
+      workflow: promptOnly('video'),
+      request: { kind: 'video', prompt: 'a boat' },
+    }));
+    assert.equal(result.ok, true, result.reason);
+    assert.equal(basename(result.file).endsWith('.mkv'), true);
+    assert.deepEqual(readFileSync(result.file), clip);
+    assert.equal(server.state.views.some((query) => query.includes('filename=clip.mkv')), true);
+  } finally {
+    await server.close();
+  }
+});
+
 test('an uploaded file is not saved as the file the run made', async () => {
   const onlyInput = await startComfy({
     outputs: { 1: { images: [{ filename: 'boat.png', subfolder: '', type: 'input' }] } },

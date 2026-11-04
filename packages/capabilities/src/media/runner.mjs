@@ -26,9 +26,9 @@ export { remainingMs } from './time.mjs';
 const MADE = new Set(['filmed-or-drawn-by-me', 'made-with-ai', 'not-sure']);
 const PROMPT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SAFE_NAME = /^[A-Za-z0-9._-]{1,200}$/;
-const OUTPUT_EXT = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'mp4', 'webm', 'mov']);
+const OUTPUT_EXT = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'mp4', 'webm', 'mov', 'mkv']);
 const IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif']);
-const VIDEO_EXT = new Set(['mp4', 'webm', 'mov']);
+const VIDEO_EXT = new Set(['mp4', 'webm', 'mov', 'mkv']);
 const OUTPUT_KEYS = ['images', 'gifs', 'video', 'videos'];
 
 export const MAX_OUTPUT_BYTES = 64 * 1024 * 1024;

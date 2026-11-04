@@ -469,8 +469,8 @@ Each of these is covered in `tests/media.test.mjs`.
   held all at once. The source file is left where it was. The saved name is new.
 - An `ftyp` file is not treated as MP4 until its brand says so. QuickTime
   (`qt`) is `video/quicktime`. HEIC and AVIF stay images. An MP4 brand is
-  `video/mp4`. A Matroska file shares WebM's opening bytes and is refused
-  unless its DocType is `webm`.
+  `video/mp4`. A Matroska file shares WebM's opening bytes. It is WebM only
+  when its DocType is `webm`. A DocType of `matroska` is its own video type.
 - The local prompt has to be the record's string input. An enum or other
   prompt field is refused, and a prompt longer than that string's limit is
   refused before anything is sent.
@@ -523,7 +523,8 @@ Each of these is covered in `tests/media.test.mjs`.
   fetched. A file over the output limit (64 MiB, or a lower limit the
   caller passes) is not saved. A reference upload that returns a path is
   not used, and the prompt is not sent.
-- A video workflow saves a video extension. The receipt still says made by AI.
+- A video workflow saves a video extension, including MKV when that is the
+  file ComfyUI made. The receipt still says made by AI.
   When ComfyUI returns both a preview still and a clip, the clip is the one
   saved for a video and the still is the one saved for an image. A video
   request that comes back with only a still is refused and nothing is fetched.
