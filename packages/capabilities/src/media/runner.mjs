@@ -545,17 +545,18 @@ export async function runLocal(options) {
       reference_file: reference?.name,
     });
     const payload = Buffer.from(JSON.stringify({ prompt: graph, client_id: clientId }));
-    const posted = await call({
+    // Do not abort this request. ComfyUI may already have taken the job
+    // before its answer arrives, and the answer is what names that job.
+    // The request timeout still bounds the wait.
+    const posted = await comfyRequest(address, {
       method: 'POST',
       path: '/prompt',
       headers: jsonHeaders(payload),
       body: payload,
+      timeoutMs,
+      maxBytes: MAX_JSON_BYTES,
     });
-    if (!posted.ok) {
-      const problem = netFail(posted, false);
-      if (problem.abort) return fail(REASONS.stopped, { stopped: true });
-      return problem;
-    }
+    if (!posted.ok) return netFail(posted, false);
     if (posted.status !== 200) return fail(REASONS.comfyFailed);
     const postedBody = parseJson(posted.body);
     if (!postedBody || typeof postedBody.prompt_id !== 'string' || !PROMPT_ID.test(postedBody.prompt_id)) {

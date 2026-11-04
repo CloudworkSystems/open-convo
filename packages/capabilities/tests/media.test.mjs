@@ -199,6 +199,17 @@ function startComfy(options = {}) {
         return;
       }
       if (options.prompt === 'hang') return;
+      if (options.prompt === 'hold-response') {
+        const parsed = JSON.parse(body.toString('utf8'));
+        const id = randomUUID();
+        state.promptId = id;
+        state.posts.push(parsed);
+        state.running.push([1, id, {}, {}, []]);
+        await new Promise((resolve) => { state.releasePrompt = resolve; });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ prompt_id: id, number: 1, node_errors: {} }));
+        return;
+      }
       const parsed = JSON.parse(body.toString('utf8'));
       const id = randomUUID();
       state.promptId = id;
@@ -829,6 +840,29 @@ test('a workflow with an API, partner or custom node is refused before anything 
     for (const name of LOCAL_NODES) {
       assert.doesNotMatch(name, /API|Partner|Webcam|Train|RecordAudio/);
     }
+  } finally {
+    await server.close();
+  }
+});
+
+test('cancelling while the queue answer is still on its way stops that job', async () => {
+  const server = await startComfy({ prompt: 'hold-response', done: false });
+  try {
+    const ac = new AbortController();
+    const run = runLocal(localOptions(server, { signal: ac.signal, requestTimeoutMs: 2000 }));
+    for (let i = 0; i < 50 && !server.state.promptId; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.ok(server.state.promptId);
+    ac.abort();
+    server.state.releasePrompt();
+    const result = await run;
+    assert.equal(result.stopped, true);
+    assert.equal(result.reason, REASONS.stopped);
+    const cancelled = server.state.interrupts[0]?.prompt_id ?? server.state.deletes[0]?.delete?.[0];
+    assert.equal(cancelled, server.state.promptId);
+    assert.equal(server.state.running.some((item) => item[1] === server.state.promptId), false);
+    assert.deepEqual(filesIn(server.media), []);
   } finally {
     await server.close();
   }

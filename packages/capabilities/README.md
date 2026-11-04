@@ -498,7 +498,9 @@ Each of these is covered in `tests/media.test.mjs`.
   whole numbers inside the record's limits.
 - Cancelling before the run has contacted the server sends nothing. Cancelling
   while that first connection is still opening stops the run and does not
-  send the prompt. Cancelling
+  send the prompt. Cancelling after the job has been sent, while the answer
+  that names it is still on its way, waits for that answer (bounded by the
+  request timeout) and then stops that job. Cancelling
   a waiting job deletes that prompt id and does not interrupt a different
   running job. Cancelling the running job sends an interrupt that names
   that id, and a different waiting job stays queued. If the queue cannot be
