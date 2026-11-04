@@ -27,14 +27,6 @@ export const LIMITS = Object.freeze({
   agendaLists: 50,
 });
 
-// How many entries a column keeps before "and N more". Caps are entries,
-// not wrapped visual lines. 4k keeps more of each kind than 1080p. Chosen
-// so a two-line entry still fits on the screen with the lists strip.
-export const LINE_CAPS = Object.freeze({
-  '1080p': Object.freeze({ events: 4, tasks: 5, habits: 2 }),
-  '4k': Object.freeze({ events: 8, tasks: 8, habits: 4 }),
-});
-
 export const STALE_MS = 30 * 60 * 1000;
 
 export class WallBoardError extends Error {

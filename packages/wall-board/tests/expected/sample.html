@@ -16,13 +16,20 @@ body {
 }
 h1, h2, h3, p, ul, ol { margin: 0; padding: 0; }
 ul, ol { list-style: none; }
-h1 { font-size: var(--title); line-height: 1.15; font-weight: 700; overflow-wrap: anywhere; }
+h1 {
+  font-size: var(--title);
+  line-height: var(--title-line);
+  max-height: calc(var(--title-line) * 2);
+  overflow: hidden;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
 .date, .updated, .banner { font-size: var(--text); line-height: var(--line); }
 .banner, .updated.stale {
   background: var(--warning-bg);
   color: var(--warning);
   font-weight: 700;
-  padding: 2px 10px;
+  padding: 0 10px;
 }
 header { display: grid; gap: 2px; min-width: 0; }
 .people {
@@ -36,7 +43,6 @@ header { display: grid; gap: 2px; min-width: 0; }
 .person {
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -48,9 +54,11 @@ header { display: grid; gap: 2px; min-width: 0; }
   font-size: var(--text);
   line-height: var(--line);
   padding: 6px 10px;
+  max-height: calc(var(--line) * 2 + 12px);
+  overflow: hidden;
   overflow-wrap: anywhere;
 }
-.rows { min-width: 0; min-height: 0; overflow: hidden; }
+.rows { min-width: 0; min-height: 0; }
 .event, .task, .habit, .more, .hidden, .empty {
   font-size: var(--text);
   line-height: var(--line);
@@ -63,50 +71,61 @@ header { display: grid; gap: 2px; min-width: 0; }
 .event {
   background: var(--fill);
   color: var(--ink);
-  padding: 4px 10px;
+  padding: 0 10px;
 }
-.task, .habit { padding: 0 2px; }
+.task, .habit { padding: 0; }
 .more, .hidden, .empty { font-weight: 700; }
-.mark { font-weight: 700; }
 .lists {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   gap: 12px;
-  max-height: var(--strip);
-  overflow: hidden;
   min-width: 0;
 }
-.list { min-width: 0; overflow: hidden; }
-.list h3 { font-size: var(--text); line-height: var(--line); overflow-wrap: anywhere; }
-.chips { min-width: 0; }
+.list { min-width: 0; }
+.list h3 {
+  font-size: var(--text);
+  line-height: var(--line);
+  max-height: calc(var(--line) * 2);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  margin: 0 0 6px;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 6px;
+  min-width: 0;
+}
 .chip {
-  display: inline-block;
+  flex: none;
+  min-width: 0;
   max-width: 100%;
-  margin: 0 6px 6px 0;
   padding: 0 8px;
   border: 2px solid currentColor;
   border-radius: 999px;
   font-size: var(--text);
   line-height: var(--line);
+  max-height: calc(var(--line) * 2 + 4px);
+  overflow: hidden;
   overflow-wrap: anywhere;
-  vertical-align: top;
 }
 body[data-size="1080p"] {
   width: 1920px;
   height: 1080px;
   --title: 40px;
+  --title-line: 46px;
   --text: 26px;
   --line: 32px;
-  --strip: 168px;
 }
 body[data-size="4k"] {
   width: 3840px;
   height: 2160px;
   --title: 60px;
+  --title-line: 69px;
   --text: 39px;
   --line: 48px;
-  --strip: 250px;
 }
 body[data-theme="light"] {
   background: #f4f0e8;

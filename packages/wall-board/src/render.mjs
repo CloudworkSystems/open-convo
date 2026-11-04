@@ -1,14 +1,11 @@
 import { COLOR_NAMES, COLORS, PAGE } from './colors.mjs';
+import { GEOMETRY } from './layout.mjs';
 import { escapeHtml } from './text.mjs';
 
-// The page is a fixed screen. 4k type is larger, but not twice as large, so
-// the same family fits more lines. Each entry is at most two lines tall.
-// Long words wrap inside the column (overflow-wrap) and cannot widen it.
-
-const SIZES = {
-  '1080p': { width: 1920, height: 1080, title: 40, text: 26, line: 32, strip: 168 },
-  '4k': { width: 3840, height: 2160, title: 60, text: 39, line: 48, strip: 250 },
-};
+// The page is a fixed screen. Sizes, line heights and gaps come from
+// GEOMETRY, which is also what decides how many rows fit. 4k type is
+// larger, but not twice as large, so the same family fits more lines.
+// Each entry is at most two lines tall. Long words wrap inside the column.
 
 function css() {
   const person = [];
@@ -26,16 +23,17 @@ function css() {
     }
   }
   const sizes = [];
-  for (const [name, size] of Object.entries(SIZES)) {
+  for (const [name, size] of Object.entries(GEOMETRY)) {
     sizes.push(`body[data-size="${name}"] {`);
     sizes.push(`  width: ${size.width}px;`);
     sizes.push(`  height: ${size.height}px;`);
     sizes.push(`  --title: ${size.title}px;`);
+    sizes.push(`  --title-line: ${size.titleLine}px;`);
     sizes.push(`  --text: ${size.text}px;`);
     sizes.push(`  --line: ${size.line}px;`);
-    sizes.push(`  --strip: ${size.strip}px;`);
     sizes.push('}');
   }
+  const shared = GEOMETRY['1080p'];
   return `
 html, body { margin: 0; padding: 0; }
 * { box-sizing: border-box; }
@@ -43,36 +41,42 @@ body {
   overflow: hidden;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 12px;
-  padding: 16px 20px 12px;
+  gap: ${shared.gap}px;
+  padding: ${shared.padTop}px ${shared.padX}px ${shared.padBottom}px;
   font-family: "Avenir Next", "Segoe UI", sans-serif;
 }
 h1, h2, h3, p, ul, ol { margin: 0; padding: 0; }
 ul, ol { list-style: none; }
-h1 { font-size: var(--title); line-height: 1.15; font-weight: 700; overflow-wrap: anywhere; }
+h1 {
+  font-size: var(--title);
+  line-height: var(--title-line);
+  max-height: calc(var(--title-line) * 2);
+  overflow: hidden;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
 .date, .updated, .banner { font-size: var(--text); line-height: var(--line); }
 .banner, .updated.stale {
   background: var(--warning-bg);
   color: var(--warning);
   font-weight: 700;
-  padding: 2px 10px;
+  padding: 0 10px;
 }
-header { display: grid; gap: 2px; min-width: 0; }
+header { display: grid; gap: ${shared.headerGap}px; min-width: 0; }
 .people {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
-  gap: 12px;
+  gap: ${shared.gap}px;
   min-height: 0;
   min-width: 0;
 }
 .person {
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: ${shared.personGap}px;
 }
 .person h2 {
   flex: none;
@@ -80,59 +84,73 @@ header { display: grid; gap: 2px; min-width: 0; }
   color: var(--ink);
   font-size: var(--text);
   line-height: var(--line);
-  padding: 6px 10px;
+  padding: ${shared.headingPad / 2}px 10px;
+  max-height: calc(var(--line) * 2 + ${shared.headingPad}px);
+  overflow: hidden;
   overflow-wrap: anywhere;
 }
-.rows { min-width: 0; min-height: 0; overflow: hidden; }
+.rows { min-width: 0; min-height: 0; }
 .event, .task, .habit, .more, .hidden, .empty {
   font-size: var(--text);
   line-height: var(--line);
   overflow-wrap: anywhere;
   max-height: calc(var(--line) * 2);
   overflow: hidden;
-  margin: 0 0 6px;
+  margin: 0 0 ${shared.margin}px;
   min-width: 0;
 }
 .event {
   background: var(--fill);
   color: var(--ink);
-  padding: 4px 10px;
+  padding: 0 10px;
 }
-.task, .habit { padding: 0 2px; }
+.task, .habit { padding: 0; }
 .more, .hidden, .empty { font-weight: 700; }
-.mark { font-weight: 700; }
 .lists {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
-  gap: 12px;
-  max-height: var(--strip);
-  overflow: hidden;
+  gap: ${shared.gap}px;
   min-width: 0;
 }
-.list { min-width: 0; overflow: hidden; }
-.list h3 { font-size: var(--text); line-height: var(--line); overflow-wrap: anywhere; }
-.chips { min-width: 0; }
+.list { min-width: 0; }
+.list h3 {
+  font-size: var(--text);
+  line-height: var(--line);
+  max-height: calc(var(--line) * 2);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  margin: 0 0 ${shared.margin}px;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: ${shared.chipGap}px;
+  margin: 0 0 ${shared.margin}px;
+  min-width: 0;
+}
 .chip {
-  display: inline-block;
+  flex: none;
+  min-width: 0;
   max-width: 100%;
-  margin: 0 6px 6px 0;
-  padding: 0 8px;
-  border: 2px solid currentColor;
+  padding: 0 ${shared.chipPadX}px;
+  border: ${shared.chipBorder}px solid currentColor;
   border-radius: 999px;
   font-size: var(--text);
   line-height: var(--line);
+  max-height: calc(var(--line) * 2 + ${shared.chipBorder * 2}px);
+  overflow: hidden;
   overflow-wrap: anywhere;
-  vertical-align: top;
 }
 ${sizes.join('\n')}
 ${person.join('\n')}
 `.trim();
 }
 
-function moreLine(count) {
+function moreLine(count, noun = '') {
   if (count <= 0) return '';
-  return `<p class="more">and ${count} more</p>`;
+  const tail = noun ? ` ${noun}` : '';
+  return `<p class="more">and ${count} more${tail}</p>`;
 }
 
 function hiddenLine(count, singular, plural) {
@@ -164,20 +182,20 @@ function personSection(person) {
   } else {
     if (person.events.length > 0) {
       parts.push(`<ol class="events">\n${person.events.map(eventItem).join('\n')}\n</ol>`);
-      parts.push(moreLine(person.eventsCut));
     }
+    parts.push(moreLine(person.eventsCut, person.events.length === 0 ? 'events' : ''));
     if (person.tasks.length > 0) {
       const items = person.tasks.map(task =>
         `<li class="task"><p class="when">${escapeHtml(task.label)}</p><p class="what">${escapeHtml(task.title)}</p></li>`);
       parts.push(`<ul class="tasks">\n${items.join('\n')}\n</ul>`);
-      parts.push(moreLine(person.tasksCut));
     }
+    parts.push(moreLine(person.tasksCut, person.tasks.length === 0 ? 'tasks' : ''));
     if (person.habits.length > 0) {
       const items = person.habits.map(habit =>
         `<li class="habit"><p class="what">${escapeHtml(habit.name)}</p></li>`);
       parts.push(`<ul class="habits">\n${items.join('\n')}\n</ul>`);
-      parts.push(moreLine(person.habitsCut));
     }
+    parts.push(moreLine(person.habitsCut, person.habits.length === 0 ? 'habits' : ''));
     parts.push(hiddenLine(person.tasksHidden, 'task', 'tasks'));
     parts.push(hiddenLine(person.habitsHidden, 'habit', 'habits'));
   }

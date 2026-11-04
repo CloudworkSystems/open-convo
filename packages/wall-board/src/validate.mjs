@@ -1,5 +1,6 @@
 import { COLOR_NAMES } from './colors.mjs';
-import { LIMITS, LINE_CAPS, SCHEMA_VERSION, STALE_MS, fail } from './errors.mjs';
+import { LIMITS, SCHEMA_VERSION, STALE_MS, fail } from './errors.mjs';
+import { fitPage } from './layout.mjs';
 import {
   civilDate,
   eventWhen,
@@ -124,8 +125,17 @@ export function readBoard(board) {
     warnings.push(`${item('private', rule.index)}: no event today has the key ${quoted(rule.key)}.`);
   }
 
-  const caps = LINE_CAPS[layout.size];
-  const shownPeople = people.map(person => projectPerson(person, privateKeys.keys, caps, date.text));
+  const projected = people.map(person => projectPerson(person, privateKeys.keys, date.text));
+  const fitted = fitPage({
+    size: layout.size,
+    title,
+    writtenDate: writtenDate(date.text),
+    updatedClock,
+    stale,
+    yesterday,
+    people: projected,
+    lists,
+  });
   return {
     title,
     writtenDate: writtenDate(date.text),
@@ -134,10 +144,10 @@ export function readBoard(board) {
     yesterday,
     size: layout.size,
     theme: layout.theme,
-    people: shownPeople,
-    lists,
+    people: fitted.people,
+    lists: fitted.lists,
     warnings,
-    counts: countsFor(shownPeople, lists, layout),
+    counts: countsFor(fitted.people, fitted.lists, layout),
   };
 }
 
@@ -518,7 +528,7 @@ function readCounts(value, where) {
   }
 }
 
-function projectPerson(person, privateKeys, caps, boardDate) {
+function projectPerson(person, privateKeys, boardDate) {
   const share = new Set(person.calendars);
   const allDay = [];
   const timed = [];
@@ -563,9 +573,6 @@ function projectPerson(person, privateKeys, caps, boardDate) {
     if (person.show !== null && habitRules.has(habit.id)) sharedHabits.push({ name: habit.name });
     else habitsHidden += 1;
   }
-  const eventCut = cut(dated, caps.events);
-  const taskCut = cut(sharedTasks, caps.tasks);
-  const habitCut = cut(sharedHabits, caps.habits);
   const empty = person.agenda.timeline.length === 0
     && person.agenda.tasks.length === 0
     && person.agenda.habits.length === 0;
@@ -573,12 +580,12 @@ function projectPerson(person, privateKeys, caps, boardDate) {
     id: person.id,
     name: person.name,
     color: person.color,
-    events: eventCut.shown,
-    eventsCut: eventCut.cut,
-    tasks: taskCut.shown,
-    tasksCut: taskCut.cut,
-    habits: habitCut.shown,
-    habitsCut: habitCut.cut,
+    events: dated,
+    eventsCut: 0,
+    tasks: sharedTasks,
+    tasksCut: 0,
+    habits: sharedHabits,
+    habitsCut: 0,
     tasksHidden,
     habitsHidden,
     empty,
@@ -609,11 +616,6 @@ function taskLabel(task) {
   if (clock) parts.push(clock);
   if (task.priority === 'high') parts.push('High');
   return parts.join(' · ');
-}
-
-function cut(items, cap) {
-  if (items.length <= cap) return { shown: items, cut: 0 };
-  return { shown: items.slice(0, cap), cut: items.length - cap };
 }
 
 function countsFor(people, lists, layout) {
