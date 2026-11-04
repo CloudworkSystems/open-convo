@@ -286,6 +286,12 @@ Moving"); these later findings are requirements for the code pull request.
   complete ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4464855303)).
   Tests remove the last entry and the last amendment and run each of these
   functions.
+- The ledger, its head file and report packs are written owner-only:
+  temporary files are created with mode `0600`, and replacing an existing
+  file keeps that file's mode only when it is no wider than `0600`, so a
+  rename never broadens it. The real links page is meant to be public and
+  keeps the default mode. A test checks the modes under umask `022`
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4464882002)).
 
 ## Rules For The Builder (GrokBot Team B)
 
