@@ -73,18 +73,29 @@ A creator records each original once, ideally the day it is posted.
   with its latest facts and the time each fact was recorded.
 - Recording the same `fileSha256` twice is refused ("This file is already
   recorded as <id>."), so one video has one id.
-- **What the proof means.** The README says it plainly: the ledger shows the
-  creator held this exact file and recorded it at the stated time on their
-  own computer, and the chain shows nothing was changed afterwards without
-  it showing. It is not a third-party timestamp. The strongest evidence of
-  "first" is still the platform's own post date and link, which the report
-  puts first.
+- **What the proof means, and what it doesn't** (carried from Codex's
+  review on #289). The ledger is the creator's own record on their own
+  computer. The hash chain catches an accidental or partial change (one
+  entry edited, removed or reordered), but anyone who can edit the file can
+  rewrite an entry and recompute every later hash, so a passing `verify` is
+  never presented as tamper evidence or as proof of when a file was
+  recorded. The README, the pack and the command all say this in plain
+  words ("This is your own record. It shows what you recorded, not when,
+  to anyone else."). The only thing that pins the ledger in time is a copy
+  of its latest `entryHash` placed somewhere the creator can't rewrite
+  later: the "proof code" on a published real links page (section 3), or a
+  post or email that carries it, whose own date then counts. The pack lists
+  any such anchors the creator gives it (`theCase.anchors`, each `{ where,
+  date, entryHash }`) and says which originals were recorded before each
+  one. The strongest evidence of "first" is still the platform's own post
+  date and link, which the report puts first.
 
 ### 2. The Report Pack
 
 `buildReport(ledger, theCase)` returns `{ markdown, checklist, missing }`.
 
-- `theCase` is `{ kind, copies, originalIds, seenAt, creatorName, notes }`.
+- `theCase` is `{ kind, copies, originalIds, seenAt, creatorName, notes,
+  anchors }` (`anchors` optional).
   `kind` is `stolen-video`, `impersonation` or `fake-fundraiser`. `copies`
   is a list of `{ url, accountName, accountUrl, seenAt, whatItShows }`, at
   least one. `originalIds` name ledger entries; an unknown id is refused.
@@ -98,8 +109,10 @@ A creator records each original once, ideally the day it is posted.
   4. the copies, with their links and what each shows;
   5. drafted report text for each place that fits the kind (below), with
      `[brackets]` where only the creator can fill in a fact;
-  6. the ledger's verify result and the entry hashes, so anyone given the
-     ledger file can check it.
+  6. the entry hashes, any anchors with the originals each one covers, and
+     the plain-words note on what the ledger does and doesn't show. A
+     passing check is reported as "the file is complete and in order", never
+     as proof against changes.
 - **Where to report**, by kind. The pack names each place in words, never a
   web address, because Meta's forms and their eligibility change (the
   design note's recheck rule). The places come from one table in
@@ -197,7 +210,11 @@ creators, files and links only):
    other function refuses that ledger.
 4. `buildReport` for each kind gives the expected sections and places; the
    timeline is in time order; an unknown original id is refused; missing
-   post links and dates appear in `missing` and as marked gaps.
+   post links and dates appear in `missing` and as marked gaps; an anchor
+   lists exactly the originals recorded at or before its `entryHash`, and an
+   anchor whose `entryHash` isn't in the ledger is refused; the pack never
+   calls a passing check proof against changes (a test scans for the
+   plain-words note and for the words "tamper" and "proves").
 5. The pack contains no web address for any reporting place (a test scans
    the drafted sections).
 6. `realLinksPage` escapes every field (a name and label with `<script>`,
