@@ -227,6 +227,11 @@ rounds"):
   `hash8` collision with an injected hash function and checks both cards
   get distinct files
   ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465077546)).
+- Every directory the import creates (`sources/<source id>/` and any
+  folder below it) is created with mode `0700`, and an existing one is
+  never widened. A test under umask `022` imports nested keys and checks
+  every new directory is `0700`
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465108422)).
 
 ## Out Of Scope For This Slice
 
