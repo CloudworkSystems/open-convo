@@ -1,6 +1,6 @@
 # Status
 
-Updated November 2, 2026. The short version of where the build is. The full
+Updated November 4, 2026. The short version of where the build is. The full
 plan is in [PLAN.md](PLAN.md).
 
 ## Now
@@ -99,7 +99,8 @@ Plan:
 [docs/plans/media-generation-capability.md](docs/plans/media-generation-capability.md)
 (#256). Part 1, merged (#258): the `capability.json` contract and validator
 in `packages/capabilities`. Part 2, built and in review (#269): the signed
-cap and ledger (GrokBot team C). Next: part 3, `make_media`.
+cap and ledger (GrokBot team C). Part 3, built and in review (#290):
+`make_media` upload and local routes (GrokBot team C).
 
 **Site Engine, standalone first slice**, built by an outside builder (GrokBot
 builds, Codex reviews). Plan:

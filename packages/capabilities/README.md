@@ -517,7 +517,9 @@ Each of these is covered in `tests/media.test.mjs`.
   that names it is still on its way, waits for that answer (bounded by the
   request timeout) and then stops that job. If that answer times out or the
   connection drops after the job was sent, and the run was cancelled, that
-  same job is still stopped. Cancelling
+  job is found by the client id sent with it and then stopped. That is the
+  id the server assigned, even when the server did not use the id we sent.
+  Cancelling
   a waiting job deletes that prompt id and does not interrupt a different
   running job. If that job starts running before the delete arrives, the
   queue is read again. If it is not listed yet, it is read once more, and

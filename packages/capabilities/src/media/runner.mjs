@@ -585,9 +585,9 @@ export async function runLocal(options) {
       height: request.height,
       reference_file: reference?.name,
     });
-    // The id is chosen here so a lost answer can still name the job ComfyUI accepted.
-    const chosenId = randomUUID();
-    const payload = Buffer.from(JSON.stringify({ prompt: graph, client_id: clientId, prompt_id: chosenId }));
+    // The server names the job. A lost answer is matched by client_id,
+    // because the server may ignore the prompt_id sent with the request.
+    const payload = Buffer.from(JSON.stringify({ prompt: graph, client_id: clientId, prompt_id: randomUUID() }));
     // Do not abort this request. ComfyUI may already have taken the job
     // before its answer arrives, and the answer is what names that job.
     // The request timeout still bounds the wait.
@@ -601,7 +601,7 @@ export async function runLocal(options) {
     });
     if (!posted.ok || posted.status !== 200) {
       if (options.signal?.aborted) {
-        await cancelExact(address, chosenId, timeoutMs);
+        await cancelAccepted(address, clientId, timeoutMs);
         return fail(REASONS.stopped, { stopped: true });
       }
       if (!posted.ok) return netFail(posted, false);
@@ -610,7 +610,7 @@ export async function runLocal(options) {
     const postedBody = parseJson(posted.body);
     if (!postedBody || typeof postedBody.prompt_id !== 'string' || !PROMPT_ID.test(postedBody.prompt_id)) {
       if (options.signal?.aborted) {
-        await cancelExact(address, chosenId, timeoutMs);
+        await cancelAccepted(address, clientId, timeoutMs);
         return fail(REASONS.stopped, { stopped: true });
       }
       return fail(REASONS.comfyFailed);
@@ -769,6 +769,43 @@ async function cancelExact(address, promptId, timeoutMs) {
   } catch {
     /* the run is still marked stopped */
   }
+}
+
+function idsForClient(list, clientId) {
+  if (!Array.isArray(list)) return [];
+  const ids = [];
+  for (const item of list) {
+    if (!Array.isArray(item) || typeof item[1] !== 'string') continue;
+    const extra = item[3];
+    if (extra && typeof extra === 'object' && !Array.isArray(extra) && extra.client_id === clientId) {
+      ids.push(item[1]);
+    }
+  }
+  return ids;
+}
+
+// The prompt answer never arrived. The queue still carries the client id
+// sent with the job, and that is how the server's own prompt id is found.
+async function cancelAccepted(address, clientId, timeoutMs) {
+  let queue;
+  try {
+    queue = await comfyRequest(address, {
+      method: 'GET',
+      path: '/queue',
+      timeoutMs,
+      maxBytes: MAX_JSON_BYTES,
+    });
+  } catch {
+    return;
+  }
+  if (!queue.ok || queue.status !== 200) return;
+  const body = parseJson(queue.body);
+  if (!body) return;
+  const ids = [
+    ...idsForClient(body.queue_running, clientId),
+    ...idsForClient(body.queue_pending, clientId),
+  ];
+  for (const id of ids) await cancelExact(address, id, timeoutMs);
 }
 
 async function deletePending(address, promptId, timeoutMs) {

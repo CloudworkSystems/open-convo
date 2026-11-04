@@ -203,20 +203,20 @@ function startComfy(options = {}) {
       if (options.prompt === 'hang') return;
       if (options.prompt === 'hold-response') {
         const parsed = JSON.parse(body.toString('utf8'));
-        const id = clientPromptId(parsed);
+        const id = options.serverPromptId ? randomUUID() : clientPromptId(parsed);
         state.promptId = id;
         state.posts.push(parsed);
-        state.running.push([1, id, {}, {}, []]);
+        state.running.push([1, id, parsed.prompt ?? {}, { client_id: parsed.client_id }, []]);
         await new Promise((resolve) => { state.releasePrompt = resolve; });
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ prompt_id: id, number: 1, node_errors: {} }));
         return;
       }
       const parsed = JSON.parse(body.toString('utf8'));
-      const id = clientPromptId(parsed);
+      const id = options.serverPromptId ? randomUUID() : clientPromptId(parsed);
       state.promptId = id;
       state.posts.push(parsed);
-      const row = [1, id, {}, {}, []];
+      const row = [1, id, parsed.prompt ?? {}, { client_id: parsed.client_id }, []];
       if (options.place === 'pending') state.pending.push(row);
       else state.running.push(row);
       if (options.ws === 'progress' && state.sockets[0]) {
@@ -1078,6 +1078,31 @@ test('cancelling when the queue answer never arrives still stops that job', asyn
     const cancelled = server.state.interrupts[0]?.prompt_id ?? server.state.deletes[0]?.delete?.[0];
     assert.equal(cancelled, server.state.promptId);
     assert.equal(server.state.running.some((item) => item[1] === server.state.promptId), false);
+  } finally {
+    server.state.releasePrompt?.();
+    await server.close();
+  }
+});
+
+test('a lost prompt answer is stopped by the id the server assigned', async () => {
+  const server = await startComfy({ prompt: 'hold-response', done: false, serverPromptId: true });
+  try {
+    const ac = new AbortController();
+    const run = runLocal(localOptions(server, { signal: ac.signal, requestTimeoutMs: 150 }));
+    for (let i = 0; i < 50 && !server.state.promptId; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.ok(server.state.promptId);
+    assert.notEqual(server.state.promptId, server.state.posts[0].prompt_id);
+    ac.abort();
+    const result = await run;
+    assert.equal(result.stopped, true);
+    assert.equal(result.reason, REASONS.stopped);
+    const cancelled = server.state.interrupts[0]?.prompt_id ?? server.state.deletes[0]?.delete?.[0];
+    assert.equal(cancelled, server.state.promptId);
+    assert.notEqual(cancelled, server.state.posts[0].prompt_id);
+    assert.equal(server.state.running.some((item) => item[1] === server.state.promptId), false);
+    assert.deepEqual(filesIn(server.media), []);
   } finally {
     server.state.releasePrompt?.();
     await server.close();
