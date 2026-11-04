@@ -259,6 +259,13 @@ Moving"); these later findings are requirements for the code pull request.
   one run
   ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4464930305),
   [thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4464959789)).
+- A partial `--write` keeps move evidence for the notes this run
+  rewrote: the kept snapshot is the old one with each successfully written
+  note's hash updated to the bytes this run wrote (paths unchanged), so a
+  note that is both repaired and the moved destination of a skipped link
+  still matches next run. A test repairs note A, skips note B whose broken
+  link points to A's old path, and checks a second run repairs B
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465013068)).
 
 ## Rules For The Builder (GrokBot Team A)
 

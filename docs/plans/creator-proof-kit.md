@@ -301,6 +301,26 @@ Moving"); these later findings are requirements for the code pull request.
   the chain. A test amends an original and checks the ledger still
   verifies and `currentOriginals` folds the change in
   ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4464984476)).
+- The head file tells a finished append from a cut-off one: it carries
+  `state` (`pending` or `committed`). An append writes the head as
+  `pending`, then the ledger, then the head again as `committed`, each
+  through a temporary file and a rename. Recovery puts the head back to
+  `prev` only when the state is `pending`; a `committed` head whose entry
+  is missing from the ledger is always the cut-off message, never "didn't
+  finish". Tests delete the newest finished entry (and the newest
+  amendment) and check `verify` reports the cut-off, plus a stop at each
+  of the three writes
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465013053)).
+- A real links page on the creator's own site is never a dated anchor,
+  since the creator can edit it and its `updatedAt` comes from the caller.
+  The pack lists it as a current claim only ("Your page shows this proof
+  code today."). Only anchors the creator can't rewrite count as dated: a
+  platform post's own date, or an email's received date in someone else's
+  inbox, each entered by the creator with `kind: "post"` or `"email"`; an
+  anchor of kind `"page"` is never used to say an original was recorded
+  before a date. The README and the pack say this in plain words, with a
+  test for each kind
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465013064)).
 
 ## Rules For The Builder (GrokBot Team B)
 
