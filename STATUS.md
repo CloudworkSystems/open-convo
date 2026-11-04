@@ -176,6 +176,8 @@ reviews. Plan approved (merged as #127 on October 24):
 
 **Atlas link repair** (Personal, the Atlas wiki), GrokBot team A builds, Codex reviews and the coordinator checks it against the plan; plan proposed November 3, waiting on the owner's yes (`docs/plans/atlas-link-repair.md`): repairs links broken by a note moved to another folder (or a letter-case change) when exactly one note still carries the name, lists every other broken link for the owner, dry run by default, as a standalone package in `packages/atlas-links/`.
 
+**Creator proof kit** (Creators, the first public-facing project's first slice), GrokBot team B builds, Codex reviews and the coordinator checks it against the plan; plan proposed November 4, waiting on the owner's yes (`docs/plans/creator-proof-kit.md`): a hash-chained local ledger of a creator's original posts, a filled-in report pack for stolen videos, impersonation and fake fundraisers, and a self-contained "real links" page for fans; nothing is fetched, sent or published.
+
 **Public website (trueconvo.com)**, Claude builds, Codex reviews; a home page (with two Desk preview screenshots) and a plain-language privacy policy in `site/`, published by `.github/workflows/pages.yml` from `main` (#153, October 25). For Meta's developer early-access application and regular visitors. The owner turned on Pages and set the custom domain, and the site is published at trueconvo.com (latest deploy October 26).
 
 **Security** (all work; owner asked October 28): plan
