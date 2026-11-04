@@ -239,6 +239,14 @@ function startComfy(options = {}) {
     if (req.method === 'POST' && url.pathname === '/queue') {
       const parsed = JSON.parse(body.toString('utf8'));
       state.deletes.push(parsed);
+      if (options.startBeforeDelete && Array.isArray(parsed.delete)) {
+        for (const id of parsed.delete) {
+          const index = state.pending.findIndex((item) => item[1] === id);
+          if (index === -1) continue;
+          state.running.push(state.pending[index]);
+          state.pending.splice(index, 1);
+        }
+      }
       if (Array.isArray(parsed.delete)) {
         state.pending = state.pending.filter((item) => !parsed.delete.includes(item[1]));
       }
@@ -984,6 +992,33 @@ test('cancelling removes only that waiting job and does not interrupt a differen
     assert.deepEqual(server.state.deletes, [{ delete: [server.state.promptId] }]);
     assert.equal(server.state.running[0][1], 'other-job');
     assert.equal(server.state.pending.some((item) => item[1] === server.state.promptId), false);
+    assert.deepEqual(filesIn(server.media), []);
+  } finally {
+    await server.close();
+  }
+});
+
+test('a job that starts running before its delete arrives is still interrupted', async () => {
+  const server = await startComfy({ done: false, place: 'pending', startBeforeDelete: true });
+  try {
+    const ac = new AbortController();
+    let sawQueued;
+    const queued = new Promise((resolve) => { sawQueued = resolve; });
+    const run = runLocal(localOptions(server, {
+      signal: ac.signal,
+      onProgress(info) {
+        if (info.status === 'queued') sawQueued();
+      },
+    }));
+    await queued;
+    ac.abort();
+    const result = await run;
+    assert.equal(result.stopped, true);
+    assert.equal(result.reason, REASONS.stopped);
+    assert.deepEqual(server.state.deletes, [{ delete: [server.state.promptId] }]);
+    assert.deepEqual(server.state.interrupts, [{ prompt_id: server.state.promptId }]);
+    assert.equal(server.state.globalInterrupt, false);
+    assert.equal(server.state.running.some((item) => item[1] === server.state.promptId), false);
     assert.deepEqual(filesIn(server.media), []);
   } finally {
     await server.close();

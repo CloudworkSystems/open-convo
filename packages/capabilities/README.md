@@ -506,7 +506,9 @@ Each of these is covered in `tests/media.test.mjs`.
   connection drops after the job was sent, and the run was cancelled, that
   same job is still stopped. Cancelling
   a waiting job deletes that prompt id and does not interrupt a different
-  running job. Cancelling the running job sends an interrupt that names
+  running job. If that job starts running before the delete arrives, the
+  queue is read again and that id is interrupted only when it is the one
+  running. Cancelling the running job sends an interrupt that names
   that id, and a different waiting job stays queued. If the queue cannot be
   read, no interrupt is sent. The run is still marked stopped.
 - A job ComfyUI has already finished does not emit progress. While it is

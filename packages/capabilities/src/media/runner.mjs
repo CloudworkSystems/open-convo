@@ -700,27 +700,14 @@ async function fetchOutput({
  * Cancel one prompt id. A waiting id is removed from the queue. An interrupt
  * is sent only when that id is the one running. Another running job is left
  * alone, and a queue this runner cannot read does not get an interrupt.
+ * A job that starts after the queue was read, and so misses the delete, is
+ * read again and interrupted when it is the one running.
  */
 async function cancelExact(address, promptId, timeoutMs) {
-  let queue;
+  const seen = await readQueue(address, timeoutMs);
+  if (!seen) return;
   try {
-    queue = await comfyRequest(address, {
-      method: 'GET',
-      path: '/queue',
-      timeoutMs,
-      maxBytes: MAX_JSON_BYTES,
-    });
-  } catch {
-    return;
-  }
-  if (!queue.ok || queue.status !== 200) return;
-  const body = parseJson(queue.body);
-  if (!body) return;
-  const running = queueIds(body.queue_running);
-  const pending = queueIds(body.queue_pending);
-  if (!running || !pending) return;
-  try {
-    if (pending.includes(promptId) && !running.includes(promptId)) {
+    if (seen.pending.includes(promptId) && !seen.running.includes(promptId)) {
       const payload = Buffer.from(JSON.stringify({ delete: [promptId] }));
       await comfyRequest(address, {
         method: 'POST',
@@ -730,20 +717,53 @@ async function cancelExact(address, promptId, timeoutMs) {
         timeoutMs,
         maxBytes: MAX_JSON_BYTES,
       });
+      const again = await readQueue(address, timeoutMs);
+      if (again && onlyThisRunning(again.running, promptId)) {
+        await interruptPrompt(address, promptId, timeoutMs);
+      }
       return;
     }
-    if (running.length > 0 && running.every((id) => id === promptId)) {
-      const payload = Buffer.from(JSON.stringify({ prompt_id: promptId }));
-      await comfyRequest(address, {
-        method: 'POST',
-        path: '/interrupt',
-        headers: jsonHeaders(payload),
-        body: payload,
-        timeoutMs,
-        maxBytes: MAX_JSON_BYTES,
-      });
+    if (onlyThisRunning(seen.running, promptId)) {
+      await interruptPrompt(address, promptId, timeoutMs);
     }
   } catch {
     /* the run is still marked stopped */
   }
+}
+
+async function readQueue(address, timeoutMs) {
+  let queue;
+  try {
+    queue = await comfyRequest(address, {
+      method: 'GET',
+      path: '/queue',
+      timeoutMs,
+      maxBytes: MAX_JSON_BYTES,
+    });
+  } catch {
+    return null;
+  }
+  if (!queue.ok || queue.status !== 200) return null;
+  const body = parseJson(queue.body);
+  if (!body) return null;
+  const running = queueIds(body.queue_running);
+  const pending = queueIds(body.queue_pending);
+  if (!running || !pending) return null;
+  return { running, pending };
+}
+
+function onlyThisRunning(running, promptId) {
+  return running.length > 0 && running.every((id) => id === promptId);
+}
+
+async function interruptPrompt(address, promptId, timeoutMs) {
+  const payload = Buffer.from(JSON.stringify({ prompt_id: promptId }));
+  await comfyRequest(address, {
+    method: 'POST',
+    path: '/interrupt',
+    headers: jsonHeaders(payload),
+    body: payload,
+    timeoutMs,
+    maxBytes: MAX_JSON_BYTES,
+  });
 }
