@@ -1,0 +1,375 @@
+{
+  "schemaVersion": 1,
+  "title": "The Maple family",
+  "date": "2026-11-03",
+  "timeZone": "America/New_York",
+  "now": "2026-11-03T07:30:00-05:00",
+  "generatedAt": "2026-11-03T07:25:00-05:00",
+  "layout": {
+    "size": "1080p",
+    "theme": "light"
+  },
+  "people": [
+    {
+      "id": "sam",
+      "name": "Sam",
+      "color": "teal",
+      "calendars": [
+        "cal-family",
+        "cal-school"
+      ],
+      "sources": {
+        "calendars": [
+          {
+            "id": "cal-family",
+            "name": "Family"
+          },
+          {
+            "id": "cal-school",
+            "name": "School"
+          },
+          {
+            "id": "cal-private",
+            "name": "Private"
+          }
+        ],
+        "taskLists": [
+          {
+            "id": "tl-bills",
+            "name": "Bills"
+          },
+          {
+            "id": "tl-errands",
+            "name": "Errands"
+          }
+        ]
+      },
+      "show": [
+        "list:tl-bills",
+        "habit:read"
+      ],
+      "agenda": {
+        "schemaVersion": 1,
+        "date": "2026-11-03",
+        "timeZone": "America/New_York",
+        "summary": [
+          "You have 4 events today, starting at 14:00.",
+          "2 events overlap at 14:00.",
+          "Your longest free stretch is 08:00 to 14:00.",
+          "2 tasks are overdue and 1 is due today.",
+          "2 habits are still open.",
+          "Groceries has 6 items."
+        ],
+        "nextUp": {
+          "inProgress": [],
+          "next": {
+            "key": "tooth|2026-11-03T19:00:00Z",
+            "title": "Tooth cleaning",
+            "allDay": false,
+            "calendar": "Family",
+            "location": "Room 4",
+            "status": "confirmed",
+            "start": "2026-11-03T14:00",
+            "end": "2026-11-03T14:30",
+            "startInstant": "2026-11-03T14:00:00-05:00",
+            "endInstant": "2026-11-03T14:30:00-05:00",
+            "startsBefore": false,
+            "endsAfter": false,
+            "noLength": false,
+            "minutesUntil": 390
+          }
+        },
+        "timeline": [
+          {
+            "key": "fair",
+            "title": "Town fair",
+            "allDay": true,
+            "calendar": "Family",
+            "location": "River park",
+            "status": "confirmed",
+            "start": "2026-11-03",
+            "end": "2026-11-04",
+            "startInstant": null,
+            "endInstant": null,
+            "startsBefore": false,
+            "endsAfter": false,
+            "noLength": false
+          },
+          {
+            "key": "tooth|2026-11-03T19:00:00Z",
+            "title": "Tooth cleaning",
+            "allDay": false,
+            "calendar": "Family",
+            "location": "Room 4",
+            "status": "confirmed",
+            "start": "2026-11-03T14:00",
+            "end": "2026-11-03T14:30",
+            "startInstant": "2026-11-03T14:00:00-05:00",
+            "endInstant": "2026-11-03T14:30:00-05:00",
+            "startsBefore": false,
+            "endsAfter": false,
+            "noLength": false
+          },
+          {
+            "key": "review",
+            "title": "Design review",
+            "allDay": false,
+            "calendar": "Family",
+            "location": "Studio",
+            "status": "confirmed",
+            "start": "2026-11-03T14:00",
+            "end": "2026-11-03T15:00",
+            "startInstant": "2026-11-03T14:00:00-05:00",
+            "endInstant": "2026-11-03T15:00:00-05:00",
+            "startsBefore": false,
+            "endsAfter": false,
+            "noLength": false
+          },
+          {
+            "key": "quiet",
+            "title": "Quiet rehearsal",
+            "allDay": false,
+            "calendar": "Private",
+            "location": "Side room",
+            "status": "confirmed",
+            "start": "2026-11-03T16:00",
+            "end": "2026-11-03T16:45",
+            "startInstant": "2026-11-03T16:00:00-05:00",
+            "endInstant": "2026-11-03T16:45:00-05:00",
+            "startsBefore": false,
+            "endsAfter": false,
+            "noLength": false
+          }
+        ],
+        "clashes": [
+          {
+            "keys": [
+              "tooth|2026-11-03T19:00:00Z",
+              "review"
+            ],
+            "start": "2026-11-03T14:00",
+            "end": "2026-11-03T14:30",
+            "startInstant": "2026-11-03T19:00:00Z",
+            "endInstant": "2026-11-03T19:30:00Z",
+            "minutes": 30,
+            "tentative": false
+          }
+        ],
+        "freeTime": [
+          {
+            "start": "08:00",
+            "end": "14:00",
+            "startInstant": "2026-11-03T13:00:00Z",
+            "endInstant": "2026-11-03T19:00:00Z",
+            "minutes": 360
+          },
+          {
+            "start": "15:00",
+            "end": "16:00",
+            "startInstant": "2026-11-03T20:00:00Z",
+            "endInstant": "2026-11-03T21:00:00Z",
+            "minutes": 60
+          },
+          {
+            "start": "16:45",
+            "end": "18:00",
+            "startInstant": "2026-11-03T21:45:00Z",
+            "endInstant": "2026-11-03T23:00:00Z",
+            "minutes": 75
+          }
+        ],
+        "tasks": [
+          {
+            "id": "rent",
+            "title": "Pay the studio rent",
+            "due": "2026-10-20",
+            "dueTime": null,
+            "dueTimeLocal": null,
+            "priority": "high",
+            "list": "Bills",
+            "group": "overdue"
+          },
+          {
+            "id": "milk",
+            "title": "Order oat milk",
+            "due": "2026-10-25",
+            "dueTime": null,
+            "dueTimeLocal": null,
+            "priority": null,
+            "list": null,
+            "group": "overdue"
+          },
+          {
+            "id": "notes",
+            "title": "File the notes",
+            "due": "2026-11-03",
+            "dueTime": null,
+            "dueTimeLocal": null,
+            "priority": null,
+            "list": "Bills",
+            "group": "today"
+          }
+        ],
+        "habits": [
+          {
+            "id": "read",
+            "name": "Read a chapter"
+          },
+          {
+            "id": "stretch",
+            "name": "Stretch"
+          }
+        ],
+        "lists": [
+          {
+            "id": "groceries",
+            "name": "Groceries",
+            "open": 6
+          }
+        ],
+        "counts": {
+          "cancelledEvents": 0,
+          "tasksNoDue": 0,
+          "tasksOtherDates": 0,
+          "habitsDone": 0,
+          "habitsRest": 0
+        }
+      }
+    },
+    {
+      "id": "quinn",
+      "name": "Quinn",
+      "color": "coral",
+      "calendars": [
+        "cal-family"
+      ],
+      "sources": {
+        "calendars": [
+          {
+            "id": "cal-family",
+            "name": "Family"
+          }
+        ],
+        "taskLists": [
+          {
+            "id": "tl-errands",
+            "name": "Errands"
+          }
+        ]
+      },
+      "agenda": {
+        "schemaVersion": 1,
+        "date": "2026-11-03",
+        "timeZone": "America/New_York",
+        "summary": [
+          "You have 1 event today, starting at 10:00.",
+          "Your longest free stretch is 11:30 to 18:00.",
+          "1 task is due today.",
+          "1 habit is still open."
+        ],
+        "nextUp": {
+          "inProgress": [],
+          "next": {
+            "key": "library",
+            "title": "Library visit",
+            "allDay": false,
+            "calendar": "Family",
+            "location": "Reading room",
+            "status": "confirmed",
+            "start": "2026-11-03T10:00",
+            "end": "2026-11-03T11:30",
+            "startInstant": "2026-11-03T10:00:00-05:00",
+            "endInstant": "2026-11-03T11:30:00-05:00",
+            "startsBefore": false,
+            "endsAfter": false,
+            "noLength": false,
+            "minutesUntil": 150
+          }
+        },
+        "timeline": [
+          {
+            "key": "library",
+            "title": "Library visit",
+            "allDay": false,
+            "calendar": "Family",
+            "location": "Reading room",
+            "status": "confirmed",
+            "start": "2026-11-03T10:00",
+            "end": "2026-11-03T11:30",
+            "startInstant": "2026-11-03T10:00:00-05:00",
+            "endInstant": "2026-11-03T11:30:00-05:00",
+            "startsBefore": false,
+            "endsAfter": false,
+            "noLength": false
+          }
+        ],
+        "clashes": [],
+        "freeTime": [
+          {
+            "start": "08:00",
+            "end": "10:00",
+            "startInstant": "2026-11-03T13:00:00Z",
+            "endInstant": "2026-11-03T15:00:00Z",
+            "minutes": 120
+          },
+          {
+            "start": "11:30",
+            "end": "18:00",
+            "startInstant": "2026-11-03T16:30:00Z",
+            "endInstant": "2026-11-03T23:00:00Z",
+            "minutes": 390
+          }
+        ],
+        "tasks": [
+          {
+            "id": "glue",
+            "title": "Buy glue",
+            "due": "2026-11-03",
+            "dueTime": null,
+            "dueTimeLocal": null,
+            "priority": null,
+            "list": "Errands",
+            "group": "today"
+          }
+        ],
+        "habits": [
+          {
+            "id": "stretch",
+            "name": "Stretch"
+          }
+        ],
+        "lists": [],
+        "counts": {
+          "cancelledEvents": 0,
+          "tasksNoDue": 0,
+          "tasksOtherDates": 0,
+          "habitsDone": 0,
+          "habitsRest": 0
+        }
+      }
+    }
+  ],
+  "lists": [
+    {
+      "id": "groceries",
+      "name": "Groceries",
+      "items": [
+        "Milk",
+        "Apples"
+      ],
+      "more": 4
+    },
+    {
+      "id": "hardware",
+      "name": "Hardware",
+      "items": [
+        "Nails"
+      ],
+      "more": 0
+    }
+  ],
+  "private": [
+    "key:tooth|2026-11-03T19:00:00Z",
+    "key:next-week|2026-11-10T15:00:00Z"
+  ]
+}
