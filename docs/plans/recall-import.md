@@ -219,6 +219,14 @@ rounds"):
 - Change detection ignores the run's `imported` time, but edit protection does not: the manifest keeps two hashes per note, a full-file hash used for the hand-edit check and the race check just before each rename, and a hash without the `imported` line used only to tell whether the source card changed. An unchanged card is left alone; a changed card's note keeps edit protection on every byte, including a hand-edited `imported` line. Tests run two imports of an unchanged export with different `--imported-at` values (no note rewritten) and hand-edit only the `imported` line before a card change (the note is kept) ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4461092011), [thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4461703568)).
 - No write follows a symbolic link: before any write, every folder from `<atlas>` down to the note's folder (and the manifest's) must exist as a real folder or be created by the command, none may be a symbolic link, and the real path of the destination must sit under the real path of `<atlas>/sources/<source id>/`; otherwise the run refuses before writing. Tests plant a symbolic link at each level ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4461730514)).
 - Slugs never land on a file name Atlas reserves (`INDEX.md` in any letter case, in any folder); such a card gets the stable `<slug>-<hash8>.md` path, with a test covering nested folders and case variants ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4461092002)).
+- Every final path is unique: after suffixes are applied, `toNotes`
+  checks all output paths (case-folded, as macOS compares them) together
+  with the manifest's paths; a path that still repeats gets a longer hash
+  suffix (16, then the full 64 hex characters), and if any still repeats,
+  the whole import is refused before anything is written. A test forces a
+  `hash8` collision with an injected hash function and checks both cards
+  get distinct files
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465077546)).
 
 ## Out Of Scope For This Slice
 

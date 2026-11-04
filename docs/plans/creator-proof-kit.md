@@ -305,12 +305,17 @@ Moving"); these later findings are requirements for the code pull request.
   `state` (`pending` or `committed`). An append writes the head as
   `pending`, then the ledger, then the head again as `committed`, each
   through a temporary file and a rename. Recovery puts the head back to
-  `prev` only when the state is `pending`; a `committed` head whose entry
+  `prev` only when the state is `pending` and the ledger still ends at
+  `prev`. A `pending` head whose entry is already the ledger's last entry
+  (a stop after the ledger rename, before the final head write) is
+  finished instead: recovery verifies that entry and rewrites the head as
+  `committed`, and says "Your last record was saved." A `committed` head whose entry
   is missing from the ledger is always the cut-off message, never "didn't
   finish". Tests delete the newest finished entry (and the newest
   amendment) and check `verify` reports the cut-off, plus a stop at each
   of the three writes
-  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465013053)).
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465013053),
+  [thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465077539)).
 - A real links page on the creator's own site is never a dated anchor,
   since the creator can edit it and its `updatedAt` comes from the caller.
   The pack lists it as a current claim only ("Your page shows this proof
