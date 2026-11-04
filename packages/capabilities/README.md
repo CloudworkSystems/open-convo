@@ -500,7 +500,9 @@ Each of these is covered in `tests/media.test.mjs`.
   while that first connection is still opening stops the run and does not
   send the prompt. Cancelling after the job has been sent, while the answer
   that names it is still on its way, waits for that answer (bounded by the
-  request timeout) and then stops that job. Cancelling
+  request timeout) and then stops that job. If that answer times out or the
+  connection drops after the job was sent, and the run was cancelled, that
+  same job is still stopped. Cancelling
   a waiting job deletes that prompt id and does not interrupt a different
   running job. Cancelling the running job sends an interrupt that names
   that id, and a different waiting job stays queued. If the queue cannot be
@@ -521,6 +523,8 @@ Each of these is covered in `tests/media.test.mjs`.
   When ComfyUI returns both a preview still and a clip, the clip is the one
   saved for a video and the still is the one saved for an image. A video
   request that comes back with only a still is refused and nothing is fetched.
+  The bytes of the file are checked too: a download that is not actually an
+  image or a clip of the kind asked for is not saved.
 - A reference picture is accepted only when `reference_files` allows its
   type and size. A files input with another name does not. With no
   `reference_files` input, a reference is refused before any connection.

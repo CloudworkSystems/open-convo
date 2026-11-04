@@ -201,7 +201,7 @@ function startComfy(options = {}) {
       if (options.prompt === 'hang') return;
       if (options.prompt === 'hold-response') {
         const parsed = JSON.parse(body.toString('utf8'));
-        const id = randomUUID();
+        const id = clientPromptId(parsed);
         state.promptId = id;
         state.posts.push(parsed);
         state.running.push([1, id, {}, {}, []]);
@@ -211,7 +211,7 @@ function startComfy(options = {}) {
         return;
       }
       const parsed = JSON.parse(body.toString('utf8'));
-      const id = randomUUID();
+      const id = clientPromptId(parsed);
       state.promptId = id;
       state.posts.push(parsed);
       const row = [1, id, {}, {}, []];
@@ -565,6 +565,12 @@ test('a Matroska file is not WebM, and a non-string prompt is refused', async ()
   }
 });
 
+function clientPromptId(parsed) {
+  const id = parsed && parsed.prompt_id;
+  if (typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return id;
+  return randomUUID();
+}
+
 function ebml(docType, leading = Buffer.alloc(0)) {
   const name = Buffer.from(docType, 'ascii');
   const body = Buffer.concat([leading, Buffer.from([0x42, 0x82, 0x80 | name.length]), name]);
@@ -641,7 +647,7 @@ test('the saved file matches the kind that was asked for', async () => {
     1: { images: [{ filename: 'preview.png', subfolder: '', type: 'output' }] },
     2: { videos: [{ filename: 'clip.mp4', subfolder: '', type: 'output' }] },
   };
-  const video = await startComfy({ outputs });
+  const video = await startComfy({ outputs, output: ftyp('isom') });
   try {
     const result = await runLocal(localOptions(video, {
       workflow: promptOnly('video'),
@@ -757,7 +763,7 @@ test('a local run returns a file and a receipt that says made by AI, and the que
     assert.deepEqual(readFileSync(result.file), PNG);
     assert.equal(promptPosts(server.state), 1);
     const posted = server.state.posts[0];
-    assert.deepEqual(Object.keys(posted).sort(), ['client_id', 'prompt']);
+    assert.deepEqual(Object.keys(posted).sort(), ['client_id', 'prompt', 'prompt_id']);
     assert.equal(posted.prompt['1'].inputs.text, prompt);
     assert.equal(posted.prompt['3'].inputs.width, 640);
     assert.equal(posted.prompt['3'].inputs.height, 480);
@@ -841,6 +847,28 @@ test('a workflow with an API, partner or custom node is refused before anything 
       assert.doesNotMatch(name, /API|Partner|Webcam|Train|RecordAudio/);
     }
   } finally {
+    await server.close();
+  }
+});
+
+test('cancelling when the queue answer never arrives still stops that job', async () => {
+  const server = await startComfy({ prompt: 'hold-response', done: false });
+  try {
+    const ac = new AbortController();
+    const run = runLocal(localOptions(server, { signal: ac.signal, requestTimeoutMs: 150 }));
+    for (let i = 0; i < 50 && !server.state.promptId; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.ok(server.state.promptId);
+    ac.abort();
+    const result = await run;
+    assert.equal(result.stopped, true);
+    assert.equal(result.reason, REASONS.stopped);
+    const cancelled = server.state.interrupts[0]?.prompt_id ?? server.state.deletes[0]?.delete?.[0];
+    assert.equal(cancelled, server.state.promptId);
+    assert.equal(server.state.running.some((item) => item[1] === server.state.promptId), false);
+  } finally {
+    server.state.releasePrompt?.();
     await server.close();
   }
 });
@@ -1221,11 +1249,22 @@ test('edge cases: placeholders, cancel before contact, redirects, size and links
         workflow: promptOnly('video'),
         request: { kind: 'video', prompt: 'a boat' },
       }));
+      assert.equal(result.reason, REASONS.noOutput);
+      assert.deepEqual(filesIn(video.media), []);
+    } finally {
+      await video.close();
+    }
+    const realClip = await startComfy({ outputName: 'clip.mp4', output: ftyp('isom') });
+    try {
+      const result = await runLocal(localOptions(realClip, {
+        workflow: promptOnly('video'),
+        request: { kind: 'video', prompt: 'a boat' },
+      }));
       assert.equal(result.ok, true, result.reason);
       assert.equal(basename(result.file).endsWith('.mp4'), true);
       assert.equal(receiptBeside(result.file).ai_label, 'made by AI');
     } finally {
-      await video.close();
+      await realClip.close();
     }
 
     let threw = false;

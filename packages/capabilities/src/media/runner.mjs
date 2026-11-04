@@ -11,6 +11,7 @@ import { REASONS } from './reasons.mjs';
 import {
   extensionFor,
   mediaDirKind,
+  sniffType,
   removeFile,
   scanFile,
   streamCopy,
@@ -544,7 +545,9 @@ export async function runLocal(options) {
       height: request.height,
       reference_file: reference?.name,
     });
-    const payload = Buffer.from(JSON.stringify({ prompt: graph, client_id: clientId }));
+    // The id is chosen here so a lost answer can still name the job ComfyUI accepted.
+    const chosenId = randomUUID();
+    const payload = Buffer.from(JSON.stringify({ prompt: graph, client_id: clientId, prompt_id: chosenId }));
     // Do not abort this request. ComfyUI may already have taken the job
     // before its answer arrives, and the answer is what names that job.
     // The request timeout still bounds the wait.
@@ -556,10 +559,20 @@ export async function runLocal(options) {
       timeoutMs,
       maxBytes: MAX_JSON_BYTES,
     });
-    if (!posted.ok) return netFail(posted, false);
-    if (posted.status !== 200) return fail(REASONS.comfyFailed);
+    if (!posted.ok || posted.status !== 200) {
+      if (options.signal?.aborted) {
+        await cancelExact(address, chosenId, timeoutMs);
+        return fail(REASONS.stopped, { stopped: true });
+      }
+      if (!posted.ok) return netFail(posted, false);
+      return fail(REASONS.comfyFailed);
+    }
     const postedBody = parseJson(posted.body);
     if (!postedBody || typeof postedBody.prompt_id !== 'string' || !PROMPT_ID.test(postedBody.prompt_id)) {
+      if (options.signal?.aborted) {
+        await cancelExact(address, chosenId, timeoutMs);
+        return fail(REASONS.stopped, { stopped: true });
+      }
       return fail(REASONS.comfyFailed);
     }
     promptId = postedBody.prompt_id;
@@ -597,6 +610,7 @@ export async function runLocal(options) {
         return await fetchOutput({
           address,
           output,
+          kind: request.kind,
           timeoutMs,
           maxOutputBytes,
           signal: options.signal,
@@ -641,7 +655,7 @@ export async function runLocal(options) {
 }
 
 async function fetchOutput({
-  address, output, timeoutMs, maxOutputBytes, signal, mediaDir, route, prompt, now, promptId,
+  address, output, kind, timeoutMs, maxOutputBytes, signal, mediaDir, route, prompt, now, promptId,
 }) {
   const params = new URLSearchParams({
     filename: output.filename,
@@ -664,9 +678,12 @@ async function fetchOutput({
   }
   if (viewed.status !== 200 || viewed.body.length === 0) return fail(REASONS.noOutput);
   if (signal?.aborted) return fail(REASONS.stopped, { stopped: true });
+  // The history name is not proof. The bytes have to be the kind that was asked for.
+  const ext = extensionFor(sniffType(viewed.body));
+  if (!ext || mediaKind(ext) !== kind) return fail(REASONS.noOutput);
   const time = readClock(now);
   if (!time.ok) return time;
-  return savePair(mediaDir, output.ext, viewed.body, {
+  return savePair(mediaDir, ext, viewed.body, {
     route,
     prompt,
     time: time.value,
