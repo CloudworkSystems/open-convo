@@ -337,6 +337,14 @@ Moving"); these later findings are requirements for the code pull request.
   so. A test starts two overlapping saves and checks one is refused and
   the other's entry is kept
   ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465048573)).
+- Every command that can recover or rewrite the head (`verify`,
+  `report`, `links` and any other reader that runs the "on every check"
+  recovery) takes the same lock first; if a save holds it, the reader
+  stops with the "Another save is running" message and changes nothing.
+  Reading without recovering is allowed without the lock only when it
+  changes no file and its result says the end couldn't be checked. Tests
+  run a reader against a save paused at each of the three writes
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465166903)).
 
 ## Rules For The Builder (GrokBot Team B)
 

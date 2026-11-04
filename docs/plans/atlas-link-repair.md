@@ -273,6 +273,16 @@ Moving"); these later findings are requirements for the code pull request.
   stale lock is reported, never removed silently. A test runs two
   overlapping writes (the same rule Codex raised for the Recall import)
   ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465135931)).
+- Before changing any note, `--write` saves a journal
+  (`<dir>/.atlas-links/journal.json`, temporary file plus rename, mode
+  `0600`) listing each planned note write with its path, hash before and
+  hash after. The journal is removed only after the snapshot is saved or
+  kept. A run that finds a journal (an earlier run stopped) treats a note
+  whose current hash equals its journaled after-hash as still matching its
+  before-hash move evidence, then finishes the snapshot as above and
+  removes the journal. Tests stop a run after a note write and before the
+  snapshot rename, and check the next run still repairs the skipped link
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465166908)).
 
 ## Rules For The Builder (GrokBot Team A)
 
