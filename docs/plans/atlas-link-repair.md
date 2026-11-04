@@ -298,6 +298,18 @@ Moving"); these later findings are requirements for the code pull request.
   same message. A test leaves an empty lock and checks the next run
   recovers
   ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465321707)).
+- Reclaiming a stale lock has one winner. A command that finds a stale
+  lock first takes a short reclaim lock (`<lock>.reclaim`, published whole
+  the same way, failing if it exists), then reads the stale lock again and
+  removes it only if it still names the same dead process it inspected,
+  publishes its own lock, and removes the reclaim lock. A command that
+  finds a reclaim lock stops with "Another command is recovering; try
+  again in a moment." and writes nothing. A reclaim lock whose own process
+  is gone (both runs stopped) is never cleared automatically: the command
+  names it and prints the one `unlock` command, which removes it only after
+  checking that process is gone. Tests run two recoverers against one
+  stale lock and check exactly one proceeds
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465380765)).
 
 ## Rules For The Builder (GrokBot Team A)
 
@@ -325,9 +337,10 @@ breaking one is a stop-and-report event.
 - No network calls, no AI, no paid services, no `child_process`, no clock,
   in the code or the tests. No `fs` in the library; the command reads only
   under `--dir` and writes only the notes in `writes`, the snapshot file,
-  and its two safety files `.atlas-links/run.lock` and
-  `.atlas-links/journal.json` (see "Carried To The Build"), or the tests'
-  temporary folders.
+  and its safety files under `.atlas-links/` (`run.lock`,
+  `run.lock.reclaim`, `journal.json`, and the temporary files used to
+  publish each of them whole, which are removed once published; see
+  "Carried To The Build"), or the tests' temporary folders.
 - No new dependencies. Add no license file and no `license` field.
 - Keep the slice small: the library, the command, the tests, the sample
   wiki and a short README (the rule, the command, and the owner's trial
