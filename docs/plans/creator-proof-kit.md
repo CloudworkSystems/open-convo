@@ -336,13 +336,19 @@ Moving"); these later findings are requirements for the code pull request.
   ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465013064)).
 - Only one save changes a ledger at a time: `record` and `amend` take an
   exclusive lock beside the ledger (`<ledger>.lock`, created with `wx` so
-  creation fails if it exists, holding the process id and start time)
+  creation fails if it exists, holding the process id and host name)
   before reading the ledger, and release it after the committed head is
   written. A second save that finds the lock stops with "Another save is
-  running on this ledger. Try again when it finishes." and writes nothing.
-  A lock older than ten minutes whose process is gone is reported, never
-  removed silently; `verify --clear-stale-lock` removes it after saying
-  so. A test starts two overlapping saves and checks one is refused and
+  running on this ledger. Try again when it finishes." and writes nothing,
+  unless the lock is stale: when its host is this computer and its process
+  is no longer running (checked with `process.kill(pid, 0)`, no clock
+  needed), any command says "An earlier save stopped without finishing;
+  cleared its lock.", removes it and runs the head recovery at once. A lock
+  whose process is still running, or from another host, is never removed.
+  Tests force-stop a save at each write and check the very next `verify`
+  recovers
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465234726)).
+  A test starts two overlapping saves and checks one is refused and
   the other's entry is kept
   ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465048573)).
 - Every command that can recover or rewrite the head (`verify`,
