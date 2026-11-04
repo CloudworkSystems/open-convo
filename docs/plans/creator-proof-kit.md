@@ -292,6 +292,15 @@ Moving"); these later findings are requirements for the code pull request.
   rename never broadens it. The real links page is meant to be public and
   keeps the default mode. A test checks the modes under umask `022`
   ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4464882002)).
+- Ledger entries and originals have separate identities: every entry has
+  a unique entry id (for example `entry-<seq>`), originals keep their
+  `orig-` id in a separate `originalId` field, and an `amend` entry carries
+  its own entry id plus `targetOriginalId` naming the original it changes.
+  `verifyLedger` rejects duplicate entry ids, duplicate `originalId`s on
+  record entries, and an amendment whose target doesn't exist earlier in
+  the chain. A test amends an original and checks the ledger still
+  verifies and `currentOriginals` folds the change in
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4464984476)).
 
 ## Rules For The Builder (GrokBot Team B)
 
