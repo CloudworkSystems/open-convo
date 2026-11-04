@@ -495,7 +495,8 @@ Each of these is covered in `tests/media.test.mjs`.
   marks stay inside that one field. A prompt whose text is `{{prompt}}` is
   stored as that text and is not expanded again.
 - A node id of `__proto__` is refused. Seconds, width and height have to be
-  whole numbers inside the record's limits.
+  whole numbers inside the record's limits. When the record marks one of
+  those as required, leaving it out is refused before anything is sent.
 - Cancelling before the run has contacted the server sends nothing. Cancelling
   while that first connection is still opening stops the run and does not
   send the prompt. Cancelling after the job has been sent, while the answer

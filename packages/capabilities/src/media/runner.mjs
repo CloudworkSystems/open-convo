@@ -249,8 +249,11 @@ export function upload({ record, routeId, filePath, madeHow, mediaDir, now }) {
 }
 
 function integerInput(record, name, value) {
-  if (value == null) return { ok: true, present: false };
   const field = record.inputs?.[name];
+  if (value == null) {
+    if (field && field.required === true) return fail(REASONS.badRequest);
+    return { ok: true, present: false };
+  }
   if (!field || field.type !== 'integer' || !Number.isInteger(value)) return fail(REASONS.badRequest);
   if (value < field.min || value > field.max) return fail(REASONS.badRequest);
   return { ok: true, present: true };

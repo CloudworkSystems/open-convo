@@ -851,6 +851,35 @@ test('a workflow with an API, partner or custom node is refused before anything 
   }
 });
 
+test('a required seconds, width or height cannot be left out', async () => {
+  const server = await startComfy();
+  try {
+    for (const name of ['seconds', 'width', 'height']) {
+      const custom = record();
+      custom.inputs[name].required = true;
+      assert.equal(validateCapability(custom).ok, true, name);
+      const request = { kind: 'image', prompt: 'a boat', seconds: 2, width: 64, height: 64 };
+      delete request[name];
+      const result = await runLocal(localOptions(server, {
+        record: custom,
+        workflow: fullWorkflow(),
+        request,
+      }));
+      assert.equal(result.reason, REASONS.badRequest, name);
+    }
+    assert.equal(server.state.paths.length, 0);
+    const optional = record();
+    assert.equal(optional.inputs.seconds.required, undefined);
+    const omitted = await runLocal(localOptions(server, {
+      record: optional,
+      request: { kind: 'image', prompt: 'a boat' },
+    }));
+    assert.equal(omitted.ok, true, omitted.reason);
+  } finally {
+    await server.close();
+  }
+});
+
 test('cancelling when the queue answer never arrives still stops that job', async () => {
   const server = await startComfy({ prompt: 'hold-response', done: false });
   try {
