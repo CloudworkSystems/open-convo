@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "title": "The Maple family",
+  "date": "2026-11-03",
+  "timeZone": "America/New_York",
+  "now": "2026-11-03T07:31:00-05:00",
+  "generatedAt": "2026-11-03T07:00:00-05:00",
+  "layout": {
+    "size": "1080p",
+    "theme": "light"
+  },
+  "people": [
+    {
+      "id": "sam",
+      "name": "Sam",
+      "color": "teal",
+      "calendars": [
+        "cal-family"
+      ],
+      "sources": {
+        "calendars": [
+          {
+            "id": "cal-family",
+            "name": "Family"
+          }
+        ],
+        "taskLists": []
+      },
+      "agenda": {
+        "schemaVersion": 1,
+        "date": "2026-11-03",
+        "timeZone": "America/New_York",
+        "summary": [
+          "You have 1 event today, starting at 15:00.",
+          "Your longest free stretch is 08:00 to 15:00."
+        ],
+        "nextUp": {
+          "inProgress": [],
+          "next": {
+            "key": "fair",
+            "title": "Town fair visit",
+            "allDay": false,
+            "calendar": "Family",
+            "location": "River park",
+            "status": "confirmed",
+            "start": "2026-11-03T15:00",
+            "end": "2026-11-03T16:00",
+            "startInstant": "2026-11-03T15:00:00-05:00",
+            "endInstant": "2026-11-03T16:00:00-05:00",
+            "startsBefore": false,
+            "endsAfter": false,
+            "noLength": false,
+            "minutesUntil": 450
+          }
+        },
+        "timeline": [
+          {
+            "key": "fair",
+            "title": "Town fair visit",
+            "allDay": false,
+            "calendar": "Family",
+            "location": "River park",
+            "status": "confirmed",
+            "start": "2026-11-03T15:00",
+            "end": "2026-11-03T16:00",
+            "startInstant": "2026-11-03T15:00:00-05:00",
+            "endInstant": "2026-11-03T16:00:00-05:00",
+            "startsBefore": false,
+            "endsAfter": false,
+            "noLength": false
+          }
+        ],
+        "clashes": [],
+        "freeTime": [
+          {
+            "start": "08:00",
+            "end": "15:00",
+            "startInstant": "2026-11-03T13:00:00Z",
+            "endInstant": "2026-11-03T20:00:00Z",
+            "minutes": 420
+          },
+          {
+            "start": "16:00",
+            "end": "18:00",
+            "startInstant": "2026-11-03T21:00:00Z",
+            "endInstant": "2026-11-03T23:00:00Z",
+            "minutes": 120
+          }
+        ],
+        "tasks": [],
+        "habits": [],
+        "lists": [],
+        "counts": {
+          "cancelledEvents": 0,
+          "tasksNoDue": 0,
+          "tasksOtherDates": 0,
+          "habitsDone": 0,
+          "habitsRest": 0
+        }
+      }
+    }
+  ],
+  "lists": []
+}

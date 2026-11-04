@@ -1,0 +1,14 @@
+{
+  "name": "@open-convo/wall-board",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "One family board file turned into a wall page. No network and no AI.",
+  "exports": "./src/index.mjs",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

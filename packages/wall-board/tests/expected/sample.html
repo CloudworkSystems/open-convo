@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The Maple family</title>
+<style>
+html, body { margin: 0; padding: 0; }
+* { box-sizing: border-box; }
+body {
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 16px 20px 12px;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+}
+h1, h2, h3, p, ul, ol { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+h1 { font-size: var(--title); line-height: 1.15; font-weight: 700; overflow-wrap: anywhere; }
+.date, .updated, .banner { font-size: var(--text); line-height: var(--line); }
+.banner, .updated.stale {
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-weight: 700;
+  padding: 2px 10px;
+}
+header { display: grid; gap: 2px; min-width: 0; }
+.people {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 12px;
+  min-height: 0;
+  min-width: 0;
+}
+.person {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.person h2 {
+  flex: none;
+  background: var(--fill);
+  color: var(--ink);
+  font-size: var(--text);
+  line-height: var(--line);
+  padding: 6px 10px;
+  overflow-wrap: anywhere;
+}
+.rows { min-width: 0; min-height: 0; overflow: hidden; }
+.event, .task, .habit, .more, .hidden, .empty {
+  font-size: var(--text);
+  line-height: var(--line);
+  overflow-wrap: anywhere;
+  max-height: calc(var(--line) * 2);
+  overflow: hidden;
+  margin: 0 0 6px;
+  min-width: 0;
+}
+.event {
+  background: var(--fill);
+  color: var(--ink);
+  padding: 4px 10px;
+}
+.task, .habit { padding: 0 2px; }
+.more, .hidden, .empty { font-weight: 700; }
+.mark { font-weight: 700; }
+.lists {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 12px;
+  max-height: var(--strip);
+  overflow: hidden;
+  min-width: 0;
+}
+.list { min-width: 0; overflow: hidden; }
+.list h3 { font-size: var(--text); line-height: var(--line); overflow-wrap: anywhere; }
+.chips { min-width: 0; }
+.chip {
+  display: inline-block;
+  max-width: 100%;
+  margin: 0 6px 6px 0;
+  padding: 0 8px;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  font-size: var(--text);
+  line-height: var(--line);
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+body[data-size="1080p"] {
+  width: 1920px;
+  height: 1080px;
+  --title: 40px;
+  --text: 26px;
+  --line: 32px;
+  --strip: 168px;
+}
+body[data-size="4k"] {
+  width: 3840px;
+  height: 2160px;
+  --title: 60px;
+  --text: 39px;
+  --line: 48px;
+  --strip: 250px;
+}
+body[data-theme="light"] {
+  background: #f4f0e8;
+  color: #1b1714;
+  --warning: #8a2e0b;
+  --warning-bg: #f6e2c4;
+}
+body[data-theme="light"] .person-teal { --fill: #0e5c58; --ink: #ffffff; }
+body[data-theme="light"] .person-coral { --fill: #a33b32; --ink: #ffffff; }
+body[data-theme="light"] .person-gold { --fill: #7a5200; --ink: #ffffff; }
+body[data-theme="light"] .person-blue { --fill: #1c4e96; --ink: #ffffff; }
+body[data-theme="light"] .person-green { --fill: #1c6630; --ink: #ffffff; }
+body[data-theme="light"] .person-plum { --fill: #6b3878; --ink: #ffffff; }
+body[data-theme="light"] .person-rust { --fill: #8a3d10; --ink: #ffffff; }
+body[data-theme="light"] .person-slate { --fill: #3a4654; --ink: #ffffff; }
+body[data-theme="dark"] {
+  background: #14110f;
+  color: #f6f1ea;
+  --warning: #ffc2a2;
+  --warning-bg: #3a2418;
+}
+body[data-theme="dark"] .person-teal { --fill: #8ef0e6; --ink: #1a120c; }
+body[data-theme="dark"] .person-coral { --fill: #ffb8ae; --ink: #1a120c; }
+body[data-theme="dark"] .person-gold { --fill: #ffd56a; --ink: #1a120c; }
+body[data-theme="dark"] .person-blue { --fill: #c5d8ff; --ink: #1a120c; }
+body[data-theme="dark"] .person-green { --fill: #a6e8b8; --ink: #1a120c; }
+body[data-theme="dark"] .person-plum { --fill: #f0c6ff; --ink: #1a120c; }
+body[data-theme="dark"] .person-rust { --fill: #ffc7a8; --ink: #1a120c; }
+body[data-theme="dark"] .person-slate { --fill: #d5dee8; --ink: #1a120c; }
+</style>
+</head>
+<body data-size="1080p" data-theme="light">
+<header>
+<h1>The Maple family</h1>
+<p class="date">Tuesday, November 3</p>
+<p class="updated">Updated 7:25 AM</p>
+</header>
+<main class="people">
+<section class="person person-teal">
+<h2>Sam</h2>
+<div class="rows">
+<ol class="events">
+<li class="event all-day"><p class="when">All day</p><p class="what">Town fair · River park</p></li>
+<li class="event busy clash"><p class="when">2:00 PM – 2:30 PM</p><p class="what">Busy · Overlaps</p></li>
+<li class="event clash"><p class="when">2:00 PM – 3:00 PM</p><p class="what">Design review · Studio · Overlaps</p></li>
+<li class="event busy"><p class="when">4:00 PM – 4:45 PM</p><p class="what">Busy</p></li>
+</ol>
+<ul class="tasks">
+<li class="task"><p class="when">Overdue · High</p><p class="what">Pay the studio rent</p></li>
+<li class="task"><p class="when">Today</p><p class="what">File the notes</p></li>
+</ul>
+<ul class="habits">
+<li class="habit"><p class="what">Read a chapter</p></li>
+</ul>
+<p class="hidden">1 more task</p>
+<p class="hidden">1 more habit</p>
+</div>
+</section>
+<section class="person person-coral">
+<h2>Quinn</h2>
+<div class="rows">
+<ol class="events">
+<li class="event"><p class="when">10:00 AM – 11:30 AM</p><p class="what">Library visit · Reading room</p></li>
+</ol>
+<p class="hidden">1 more task</p>
+<p class="hidden">1 more habit</p>
+</div>
+</section>
+</main>
+<footer class="lists">
+<section class="list"><h3>Groceries</h3><ul class="chips"><li class="chip">Milk</li><li class="chip">Apples</li></ul><p class="more">and 4 more</p></section>
+<section class="list"><h3>Hardware</h3><ul class="chips"><li class="chip">Nails</li></ul></section>
+</footer>
+</body>
+</html>

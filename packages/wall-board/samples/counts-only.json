@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "title": "The Maple family",
+  "date": "2026-11-03",
+  "timeZone": "America/New_York",
+  "now": "2026-11-03T07:30:00-05:00",
+  "generatedAt": "2026-11-03T07:25:00-05:00",
+  "layout": {
+    "size": "1080p",
+    "theme": "light"
+  },
+  "people": [
+    {
+      "id": "sam",
+      "name": "Sam",
+      "color": "teal",
+      "calendars": [],
+      "sources": {
+        "calendars": [],
+        "taskLists": [
+          {
+            "id": "tl-bills",
+            "name": "Bills"
+          }
+        ]
+      },
+      "agenda": {
+        "schemaVersion": 1,
+        "date": "2026-11-03",
+        "timeZone": "America/New_York",
+        "summary": [
+          "Your longest free stretch is 08:00 to 18:00.",
+          "2 tasks are due today.",
+          "1 habit is still open."
+        ],
+        "nextUp": {
+          "inProgress": [],
+          "next": null
+        },
+        "timeline": [],
+        "clashes": [],
+        "freeTime": [
+          {
+            "start": "08:00",
+            "end": "18:00",
+            "startInstant": "2026-11-03T13:00:00Z",
+            "endInstant": "2026-11-03T23:00:00Z",
+            "minutes": 600
+          }
+        ],
+        "tasks": [
+          {
+            "id": "milk",
+            "title": "Order oat milk",
+            "due": "2026-11-03",
+            "dueTime": null,
+            "dueTimeLocal": null,
+            "priority": null,
+            "list": null,
+            "group": "today"
+          },
+          {
+            "id": "rent",
+            "title": "Pay the studio rent",
+            "due": "2026-11-03",
+            "dueTime": null,
+            "dueTimeLocal": null,
+            "priority": null,
+            "list": "Bills",
+            "group": "today"
+          }
+        ],
+        "habits": [
+          {
+            "id": "read",
+            "name": "Read a chapter"
+          }
+        ],
+        "lists": [],
+        "counts": {
+          "cancelledEvents": 0,
+          "tasksNoDue": 0,
+          "tasksOtherDates": 0,
+          "habitsDone": 0,
+          "habitsRest": 0
+        }
+      }
+    }
+  ],
+  "lists": []
+}

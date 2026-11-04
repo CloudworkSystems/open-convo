@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "title": "The Maple family",
+  "date": "2026-11-03",
+  "timeZone": "America/New_York",
+  "now": "2026-11-03T07:30:00-05:00",
+  "generatedAt": "2026-11-03T07:25:00-05:00",
+  "layout": {
+    "size": "1080p",
+    "theme": "light"
+  },
+  "people": [
+    {
+      "id": "sam",
+      "name": "Sam",
+      "color": "teal",
+      "calendars": [
+        "cal-office"
+      ],
+      "sources": {
+        "calendars": [
+          {
+            "id": "cal-office",
+            "name": "Office"
+          },
+          {
+            "id": "cal-private",
+            "name": "Work"
+          }
+        ],
+        "taskLists": []
+      },
+      "agenda": {
+        "schemaVersion": 1,
+        "date": "2026-11-03",
+        "timeZone": "America/New_York",
+        "summary": [
+          "You have 2 events today, starting at 09:00.",
+          "Your longest free stretch is 12:00 to 18:00."
+        ],
+        "nextUp": {
+          "inProgress": [],
+          "next": {
+            "key": "stand",
+            "title": "Standup",
+            "allDay": false,
+            "calendar": "Office",
+            "location": "Front desk",
+            "status": "confirmed",
+            "start": "2026-11-03T09:00",
+            "end": "2026-11-03T10:00",
+            "startInstant": "2026-11-03T09:00:00-05:00",
+            "endInstant": "2026-11-03T10:00:00-05:00",
+            "startsBefore": false,
+            "endsAfter": false,
+            "noLength": false,
+            "minutesUntil": 90
+          }
+        },
+        "timeline": [
+          {
+            "key": "stand",
+            "title": "Standup",
+            "allDay": false,
+            "calendar": "Office",
+            "location": "Front desk",
+            "status": "confirmed",
+            "start": "2026-11-03T09:00",
+            "end": "2026-11-03T10:00",
+            "startInstant": "2026-11-03T09:00:00-05:00",
+            "endInstant": "2026-11-03T10:00:00-05:00",
+            "startsBefore": false,
+            "endsAfter": false,
+            "noLength": false
+          },
+          {
+            "key": "secret",
+            "title": "Secret interview",
+            "allDay": false,
+            "calendar": "Work",
+            "location": "Clinic back room",
+            "status": "confirmed",
+            "start": "2026-11-03T11:00",
+            "end": "2026-11-03T12:00",
+            "startInstant": "2026-11-03T11:00:00-05:00",
+            "endInstant": "2026-11-03T12:00:00-05:00",
+            "startsBefore": false,
+            "endsAfter": false,
+            "noLength": false
+          }
+        ],
+        "clashes": [],
+        "freeTime": [
+          {
+            "start": "08:00",
+            "end": "09:00",
+            "startInstant": "2026-11-03T13:00:00Z",
+            "endInstant": "2026-11-03T14:00:00Z",
+            "minutes": 60
+          },
+          {
+            "start": "10:00",
+            "end": "11:00",
+            "startInstant": "2026-11-03T15:00:00Z",
+            "endInstant": "2026-11-03T16:00:00Z",
+            "minutes": 60
+          },
+          {
+            "start": "12:00",
+            "end": "18:00",
+            "startInstant": "2026-11-03T17:00:00Z",
+            "endInstant": "2026-11-03T23:00:00Z",
+            "minutes": 360
+          }
+        ],
+        "tasks": [],
+        "habits": [],
+        "lists": [],
+        "counts": {
+          "cancelledEvents": 0,
+          "tasksNoDue": 0,
+          "tasksOtherDates": 0,
+          "habitsDone": 0,
+          "habitsRest": 0
+        }
+      }
+    }
+  ],
+  "lists": []
+}
