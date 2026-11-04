@@ -12,6 +12,7 @@ import {
   extensionFor,
   mediaDirKind,
   sniffType,
+  supportedFileTypes,
   removeFile,
   scanFile,
   streamCopy,
@@ -92,6 +93,32 @@ function validated(record) {
   const result = validateCapability(record);
   if (!result.ok) return fail(REASONS.record, { errors: result.errors });
   return { ok: true, record };
+}
+
+const READABLE = new Set(supportedFileTypes());
+
+// The shared record check allows any file type. This runner only reads the
+// types it can sniff, and only once upload or local is the route chosen.
+function chosenMedia(record) {
+  const checked = validated(record);
+  if (!checked.ok) return checked;
+  const errors = [];
+  const inputs = record.inputs;
+  if (inputs && typeof inputs === 'object') {
+    for (const [name, field] of Object.entries(inputs)) {
+      if (!field || field.type !== 'files' || !Array.isArray(field.types)) continue;
+      field.types.forEach((type, index) => {
+        if (!READABLE.has(type)) {
+          errors.push({
+            path: `inputs.${name}.types[${index}]`,
+            message: 'must be a file type this runner can read, such as image/png',
+          });
+        }
+      });
+    }
+  }
+  if (errors.length > 0) return fail(REASONS.record, { errors });
+  return checked;
 }
 
 function pickRoute(record, routeId, expectedKind) {
@@ -223,7 +250,7 @@ function folderProblem(mediaDir) {
  * beside it. Nothing is sent anywhere.
  */
 export function upload({ record, routeId, filePath, madeHow, mediaDir, now }) {
-  const checked = validated(record);
+  const checked = chosenMedia(record);
   if (!checked.ok) return checked;
   const picked = pickRoute(record, routeId ?? 'upload', 'upload');
   if (!picked.ok) return picked;
@@ -439,7 +466,7 @@ function uploadParts(name, type) {
  * prompt id, and an interrupt is sent only when that id is the one running.
  */
 export async function runLocal(options) {
-  const checked = validated(options.record);
+  const checked = chosenMedia(options.record);
   if (!checked.ok) return checked;
   const picked = pickRoute(options.record, options.routeId ?? 'local', 'local');
   if (!picked.ok) return picked;

@@ -1174,7 +1174,9 @@ test('a record that promises a file type this runner cannot read, or a provider 
   try {
     const png = writeBytes(folder.dir, 'picture.png', PNG);
     const bmp = record();
-    bmp.inputs.reference_files.types = ['image/bmp'];
+    bmp.inputs.reference_files.types = ['application/pdf'];
+    assert.equal(validateCapability(bmp).ok, true);
+    assert.equal(listRoutes(bmp, []).ok, true);
     const named = upload({
       record: bmp, routeId: 'upload', filePath: png, madeHow: 'filmed-or-drawn-by-me', mediaDir: media.dir, now: fixedNow,
     });
@@ -1190,6 +1192,23 @@ test('a record that promises a file type this runner cannot read, or a provider 
   } finally {
     folder.remove();
     media.remove();
+  }
+});
+
+test('choosing local refuses a file type this runner cannot read before any connection', async () => {
+  const server = await startComfy();
+  try {
+    const custom = record();
+    custom.inputs.reference_files.types = ['image/bmp'];
+    assert.equal(validateCapability(custom).ok, true);
+    const result = await runLocal(localOptions(server, {
+      record: custom,
+      request: { kind: 'image', prompt: 'a boat' },
+    }));
+    assert.equal(result.reason, REASONS.record);
+    assert.equal(server.state.paths.length, 0);
+  } finally {
+    await server.close();
   }
 });
 

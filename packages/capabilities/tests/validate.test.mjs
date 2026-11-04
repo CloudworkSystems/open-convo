@@ -104,13 +104,8 @@ test('every input has a type and a limit', () => {
   assertRefused((r) => { r.inputs.kind.values = []; }, 'inputs.kind.values');
   assertRefused((r) => delete r.inputs.reference_files.max_bytes, 'inputs.reference_files.max_bytes');
   assertRefused((r) => { r.inputs.reference_files.types = ['png']; }, 'inputs.reference_files.types[0]');
-  assertRefused((r) => { r.inputs.reference_files.types = ['image/bmp']; }, 'inputs.reference_files.types[0]', /can read/);
-  assertRefused((r) => { r.inputs.reference_files.types = ['image/tiff']; }, 'inputs.reference_files.types[0]', /can read/);
   assert.deepEqual(errorsAfter((r) => {
-    r.inputs.reference_files.types = [
-      'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/heic', 'image/avif',
-      'video/mp4', 'video/quicktime', 'video/webm', 'video/x-matroska',
-    ];
+    r.inputs.reference_files.types = ['image/bmp', 'image/tiff', 'application/pdf'];
   }), []);
   assertRefused((r) => { r.inputs.prompt.type = 'any'; }, 'inputs.prompt.type');
   assertRefused((r) => { r.inputs.Prompt = r.inputs.prompt; }, 'inputs.Prompt');

@@ -49,7 +49,7 @@ pass silently and nothing like an "always allow" switch can be slipped in.
 | `actions_needing_approval`, `not_proven` | Required lists of text (may be empty). |
 | `models_passed` | Required list of model names, each once. |
 | `install_gate` | Required: `outcome` is `not run yet`, `native`, `partial` or `needed`; optional `expected` (one of the last three) and `note`. |
-| `inputs` | Optional. Named fields (`lower_case`), each with a `type` and its limit: `string` needs `max_length`; `integer` and `number` need `min` and `max`; `enum` needs `values`; `files` needs `max_items`, `max_bytes` and `types`. A file type has to be one this runner can read: `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/heic`, `image/avif`, `video/mp4`, `video/quicktime`, `video/webm` or `video/x-matroska`. `boolean` needs none. Each may say `required` and `description`. |
+| `inputs` | Optional. Named fields (`lower_case`), each with a `type` and its limit: `string` needs `max_length`; `integer` and `number` need `min` and `max`; `enum` needs `values`; `files` needs `max_items`, `max_bytes` and `types` (file types such as `image/png` or `application/pdf`). `boolean` needs none. Each may say `required` and `description`. |
 | `outputs` | Optional. Named outputs with `type` `file`, `receipt`, `text` or `data`. A `file` names the app `folder` it lands in (for example `media`), never a path. |
 | `routes` | Optional list of the ways it can run (below). |
 
@@ -369,7 +369,12 @@ Paid routes are only in `unavailable`, even if their id was passed in
 
 ### Upload
 
-The file is checked against the record's `files` inputs: the bytes have to
+Choosing upload or local checks that every file type on the record is one
+this runner can read: `image/png`, `image/jpeg`, `image/gif`, `image/webp`,
+`image/heic`, `image/avif`, `video/mp4`, `video/quicktime`, `video/webm` or
+`video/x-matroska`. Another type, such as `application/pdf`, can still be
+in a record that is not run here. The file is then checked against the
+record's `files` inputs: the bytes have to
 match a type that input allows, and the size has to fit that same input.
 The type comes from the bytes, not the name. A symlink is not followed.
 The copy gets a new name in the media folder, and the receipt is
@@ -462,9 +467,10 @@ Each of these is covered in `tests/media.test.mjs`.
   set up is a set-up choice, not a run. A paid route stays unavailable
   even if its id is listed as ready. Free routes stay first when the record
   lists a paid route above them.
-- A file type the runner cannot read, such as `image/bmp` or `image/tiff`,
-  is refused when the record is checked, before any file is copied. The
-  upload type is sniffed from the bytes. A `.png` name full of text is
+- A file type the runner cannot read, such as `image/bmp`, `image/tiff` or
+  `application/pdf`, is refused when upload or local is chosen, before any
+  file is copied and before a connection. The shared record check still
+  allows that type. The upload type is sniffed from the bytes. A `.png` name full of text is
   refused. A file one byte over the record's limit is refused and not
   copied. A file the record allows, but that is over 64 MiB, is refused
   before it is read. A file under that limit is read in small pieces, not

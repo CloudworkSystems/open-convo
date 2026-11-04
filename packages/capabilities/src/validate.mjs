@@ -2,8 +2,6 @@
 // part 1). validateCapability() checks one parsed record and returns every
 // problem it finds. It reads no files, contacts no host and changes nothing.
 
-import { supportedFileTypes } from './media/store.mjs';
-
 export const MAX_RECORD_BYTES = 64 * 1024;
 
 export const STATUSES = ['draft', 'tested', 'retired'];
@@ -21,7 +19,6 @@ const AMOUNT = /^(0|[1-9]\d{0,8})(\.\d{1,6})?$/;
 const CURRENCY = /^[A-Z]{3}$/;
 const HOST_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const MIME = /^[a-z]+\/[a-z0-9.+-]+$/;
-const SUPPORTED_FILES = new Set(supportedFileTypes());
 const KNOWN_CURRENCIES = new Set(Intl.supportedValuesOf('currency'));
 
 const TOP_FIELDS = new Set([
@@ -181,9 +178,7 @@ function inputs(value, fail) {
         else {
           if (new Set(field.types).size !== field.types.length) fail(`${q}.types`, 'each type appears once');
           field.types.forEach((t, i) => {
-            if (typeof t !== 'string' || !MIME.test(t) || !SUPPORTED_FILES.has(t)) {
-              fail(`${q}.types[${i}]`, 'must be a file type this runner can read, such as image/png');
-            }
+            if (typeof t !== 'string' || !MIME.test(t)) fail(`${q}.types[${i}]`, 'must be a file type like image/png');
           });
         }
       }
