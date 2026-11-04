@@ -149,6 +149,11 @@ export function extensionFor(type) {
   return EXTENSIONS[type] ?? null;
 }
 
+/** File types `sniffType` can name. A record may not promise any other. */
+export function supportedFileTypes() {
+  return Object.keys(EXTENSIONS);
+}
+
 /** IPTC trained-algorithmic markers, as C2PA and XMP store them. */
 export function hasAiProvenance(bytes) {
   return MARKERS.some((marker) => bytes.includes(marker));

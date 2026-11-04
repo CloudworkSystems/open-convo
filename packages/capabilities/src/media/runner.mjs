@@ -162,10 +162,11 @@ function labelFor(madeHow, provenance) {
 }
 
 function receiptFor({ route, prompt, time, label, file }) {
+  const ownFile = route.kind === 'upload';
   const receipt = {
     route: route.id,
-    provider: route.provider ?? null,
-    model: route.model ?? null,
+    provider: ownFile ? null : (route.provider ?? null),
+    model: ownFile ? null : (route.model ?? null),
     prompt,
     leaves_machine: 'nothing',
     cost: 'free',

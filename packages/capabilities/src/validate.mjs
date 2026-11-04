@@ -2,6 +2,8 @@
 // part 1). validateCapability() checks one parsed record and returns every
 // problem it finds. It reads no files, contacts no host and changes nothing.
 
+import { supportedFileTypes } from './media/store.mjs';
+
 export const MAX_RECORD_BYTES = 64 * 1024;
 
 export const STATUSES = ['draft', 'tested', 'retired'];
@@ -19,6 +21,7 @@ const AMOUNT = /^(0|[1-9]\d{0,8})(\.\d{1,6})?$/;
 const CURRENCY = /^[A-Z]{3}$/;
 const HOST_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const MIME = /^[a-z]+\/[a-z0-9.+-]+$/;
+const SUPPORTED_FILES = new Set(supportedFileTypes());
 const KNOWN_CURRENCIES = new Set(Intl.supportedValuesOf('currency'));
 
 const TOP_FIELDS = new Set([
@@ -178,7 +181,9 @@ function inputs(value, fail) {
         else {
           if (new Set(field.types).size !== field.types.length) fail(`${q}.types`, 'each type appears once');
           field.types.forEach((t, i) => {
-            if (typeof t !== 'string' || !MIME.test(t)) fail(`${q}.types[${i}]`, 'must be a file type like image/png');
+            if (typeof t !== 'string' || !MIME.test(t) || !SUPPORTED_FILES.has(t)) {
+              fail(`${q}.types[${i}]`, 'must be a file type this runner can read, such as image/png');
+            }
           });
         }
       }
@@ -240,9 +245,13 @@ function routes(value, fail) {
     if (route.kind === 'upload') uploads += 1;
 
     // Who runs it. An upload is the person's own file, so it names nobody.
-    const needsProvider = route.kind !== 'upload';
-    text(route, 'provider', q, fail, { required: needsProvider, max: 80 });
-    text(route, 'model', q, fail, { required: needsProvider, max: 120 });
+    if (route.kind === 'upload') {
+      if (has(route, 'provider')) fail(`${q}.provider`, 'an upload names no provider');
+      if (has(route, 'model')) fail(`${q}.model`, 'an upload names no model');
+    } else {
+      text(route, 'provider', q, fail, { required: true, max: 80 });
+      text(route, 'model', q, fail, { required: true, max: 120 });
+    }
 
     // Every outside host it contacts.
     if (required(route, 'hosts', q, fail)) {

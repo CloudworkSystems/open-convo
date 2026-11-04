@@ -460,6 +460,7 @@ test('an upload receipt keeps how the file was made, and provenance beats a film
       assert.equal(receipt.cost, 'free');
       assert.equal(receipt.prompt, null);
       assert.equal(receipt.provider, null);
+      assert.equal(receipt.model, null);
       assert.equal(receipt.time, NOW);
       assert.equal(receipt.route, 'upload');
       assert.notEqual(basename(saved.file), name);
@@ -1164,6 +1165,31 @@ test('hostile prompt text stays text in the receipt and in the queued workflow',
     assert.equal(promptPosts(server.state), 1);
   } finally {
     await server.close();
+  }
+});
+
+test('a record that promises a file type this runner cannot read, or a provider on an upload, is refused before anything is copied', () => {
+  const folder = tempDir();
+  const media = tempDir();
+  try {
+    const png = writeBytes(folder.dir, 'picture.png', PNG);
+    const bmp = record();
+    bmp.inputs.reference_files.types = ['image/bmp'];
+    const named = upload({
+      record: bmp, routeId: 'upload', filePath: png, madeHow: 'filmed-or-drawn-by-me', mediaDir: media.dir, now: fixedNow,
+    });
+    assert.equal(named.reason, REASONS.record);
+    const credited = record();
+    credited.routes.find((item) => item.kind === 'upload').provider = 'Example Media';
+    credited.routes.find((item) => item.kind === 'upload').model = 'example-1';
+    const claimed = upload({
+      record: credited, routeId: 'upload', filePath: png, madeHow: 'filmed-or-drawn-by-me', mediaDir: media.dir, now: fixedNow,
+    });
+    assert.equal(claimed.reason, REASONS.record);
+    assert.deepEqual(filesIn(media.dir), []);
+  } finally {
+    folder.remove();
+    media.remove();
   }
 });
 

@@ -104,6 +104,14 @@ test('every input has a type and a limit', () => {
   assertRefused((r) => { r.inputs.kind.values = []; }, 'inputs.kind.values');
   assertRefused((r) => delete r.inputs.reference_files.max_bytes, 'inputs.reference_files.max_bytes');
   assertRefused((r) => { r.inputs.reference_files.types = ['png']; }, 'inputs.reference_files.types[0]');
+  assertRefused((r) => { r.inputs.reference_files.types = ['image/bmp']; }, 'inputs.reference_files.types[0]', /can read/);
+  assertRefused((r) => { r.inputs.reference_files.types = ['image/tiff']; }, 'inputs.reference_files.types[0]', /can read/);
+  assert.deepEqual(errorsAfter((r) => {
+    r.inputs.reference_files.types = [
+      'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/heic', 'image/avif',
+      'video/mp4', 'video/quicktime', 'video/webm', 'video/x-matroska',
+    ];
+  }), []);
   assertRefused((r) => { r.inputs.prompt.type = 'any'; }, 'inputs.prompt.type');
   assertRefused((r) => { r.inputs.Prompt = r.inputs.prompt; }, 'inputs.Prompt');
 });
@@ -120,6 +128,8 @@ test('upload and local routes contact nobody, send nothing and are free', () => 
   assertRefused((r) => { route(r, 'upload').leaves_machine = 'your file'; }, 'routes[0].leaves_machine', /nothing/);
   assertRefused((r) => { route(r, 'local-video').cost = route(r, 'own-key-example').cost; }, 'routes[1].cost', /free/);
   assertRefused((r) => delete route(r, 'upload').hosts, 'routes[0].hosts', /required/);
+  assertRefused((r) => { route(r, 'upload').provider = 'Example Media'; }, 'routes[0].provider', /no provider/);
+  assertRefused((r) => { route(r, 'upload').model = 'example-1'; }, 'routes[0].model', /no model/);
 });
 
 test('a local route names its model and its checked license', () => {
