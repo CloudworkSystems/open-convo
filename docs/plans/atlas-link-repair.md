@@ -149,7 +149,12 @@ with every repair in it applied; a note with none is not in `writes`.
   written back unchanged (running atlas-index afterwards rebuilds them).
 - The snapshot lives at `<dir>/.atlas-links/paths.json` and holds only the
   relative note paths and their SHA-256 hashes, no text from the notes. `--record` saves it
-  and changes nothing else; `--write` saves it after its repairs. Both
+  and changes nothing else; `--write` saves it only when every planned
+  repair was written. If any repair was skipped (a note changed between the
+  scan and its write), it keeps the old snapshot, so the next run still has
+  the old path as evidence, and says "Kept the old snapshot so the skipped
+  links can be repaired next run." A test covers a skipped repair followed
+  by a second run that repairs it. Both
   write it through a temporary file and a rename, mode `0600`, and refuse
   if `.atlas-links` is a symbolic link. A dry run never writes it. A
   snapshot that is missing is `null`; one that is unreadable or malformed

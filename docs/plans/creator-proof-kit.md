@@ -81,12 +81,18 @@ A creator records each original once, ideally the day it is posted.
   `verifyLedger(ledger, { expectedHead })` also takes the last `seq` and
   `entryHash` the creator saw, and reports "The ledger ends at entry <n>, but
   your last record was entry <m>." when they differ. The command keeps that
-  head in a small file beside the ledger (`<ledger>.head`, written after each
-  append the same way the ledger is) and passes it to every check; with no
-  head file it says the end of the ledger can't be checked, and never calls
-  it complete. A run stopped between the two writes leaves the head one
-  entry behind; when the ledger's last entry is exactly one past the head
-  and chains to it, the command says so and brings the head up to date.
+  head in a small file beside the ledger (`<ledger>.head`) holding the new
+  head and the one before it (`{ seq, entryHash, prev }`, where `prev` is
+  `null` before the first entry). Each append writes the head file first
+  (temporary file plus rename), then the ledger. On every check: the
+  ledger's last entry equals the head, so the end is complete; or the ledger
+  ends at `prev` (or is missing or empty when `prev` is `null`), so the last
+  record didn't finish, and the command says "Your last record didn't
+  finish, so nothing was added." and puts the head back to `prev`; anything
+  else is the cut-off message above. With no head file at all, it says the
+  end of the ledger can't be checked and never calls it complete. Tests
+  cover a stop after the head write and before the ledger write, on the
+  first record and on a later one.
   Anchors (below) are a second, outside check of the head. Anyone who can
   edit the file can rewrite an entry and recompute every later hash, so a passing `verify` is
   never presented as tamper evidence or as proof of when a file was
@@ -106,7 +112,11 @@ A creator records each original once, ideally the day it is posted.
 `buildReport(ledger, theCase)` returns `{ markdown, checklist, missing }`.
 
 - `theCase` is `{ kind, copies, originalIds, seenAt, creatorName, notes,
-  anchors }` (`anchors` optional).
+  anchors, paymentService }` (`anchors` optional). `paymentService` is
+  `{ name, accountShownOnCopy }`, the payment service and account the fake
+  link points to, as the creator reads them off the copy. It is used only
+  for `fake-fundraiser`; when it is absent there, the report still names
+  "the payment service on the fake link" and lists it in `missing`.
   `kind` is `stolen-video`, `impersonation` or `fake-fundraiser`. `copies`
   is a list of `{ url, accountName, accountUrl, seenAt, whatItShows }`, at
   least one. `originalIds` name ledger entries; an unknown id is refused.
@@ -134,7 +144,7 @@ A creator records each original once, ideally the day it is posted.
     impersonated, who may be asked for ID, which goes to Meta directly and
     never through True Convo); the in-app report.
   - `fake-fundraiser`: both of the above, plus the payment service named on
-    the fake account's link (the creator types its name), plus a note for
+    the fake account's link (`theCase.paymentService.name`), plus a note for
     fans who already gave: ReportFraud.ftc.gov and IC3.gov (the two places
     the design note lists).
 - `checklist` lists each step for the creator (open the form, paste section
@@ -223,7 +233,9 @@ creators, files and links only):
    refuses a failing ledger.
 4. `buildReport` for each kind gives the expected sections and places; the
    timeline is in time order; an unknown original id is refused; missing
-   post links and dates appear in `missing` and as marked gaps; an anchor
+   post links and dates appear in `missing` and as marked gaps; a
+   `fake-fundraiser` case names its `paymentService` in the places and the
+   checklist, and one without it lists it in `missing`; an anchor
    lists exactly the originals recorded at or before its `entryHash`, and an
    anchor whose `entryHash` isn't in the ledger is refused; the pack never
    calls a passing check proof against changes (a test scans for the
