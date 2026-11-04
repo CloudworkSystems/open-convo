@@ -403,8 +403,10 @@ decoders, image and video save and load, and the local Wan, LTX, Hunyuan,
 Mochi and Cosmos builders. An API node, a Partner node, a custom node, and
 a built-in that is not in that list (such as the webcam) are refused.
 
-A reference picture is uploaded to that same ComfyUI first (`/upload/image`),
-and the name it returns is what goes in `{{reference_file}}`. The graph is
+A reference picture is checked only against the `reference_files` input,
+then uploaded to that same ComfyUI (`/upload/image`),
+and the name it returns is what goes in `{{reference_file}}`. Another files
+input does not widen what a reference may be. The graph is
 then posted to `/prompt`. Progress comes from ComfyUI's progress socket on
 that same address. The estimate is the remaining time from progress so far
 and the elapsed time. If the socket is not there, or it accepts and then
@@ -419,7 +421,9 @@ that cannot be read does not get an interrupt. The run is marked stopped
 and no file is written.
 
 The output is fetched from `/view` into the media folder under a new name.
-The receipt says `made by AI`, `leaves_machine` `nothing`, and cost `free`.
+It has to match the kind that was asked for: a clip is a video file, and a
+still is an image. A preview still next to a clip is not returned as the
+clip. The receipt says `made by AI`, `leaves_machine` `nothing`, and cost `free`.
 
 ### Receipt
 
@@ -505,6 +509,13 @@ Each of these is covered in `tests/media.test.mjs`.
   caller passes) is not saved. A reference upload that returns a path is
   not used, and the prompt is not sent.
 - A video workflow saves a video extension. The receipt still says made by AI.
+  When ComfyUI returns both a preview still and a clip, the clip is the one
+  saved for a video and the still is the one saved for an image. A video
+  request that comes back with only a still is refused and nothing is fetched.
+- A reference picture is accepted only when `reference_files` allows its
+  type and size. A files input with another name does not. With no
+  `reference_files` input, a reference is refused before any connection.
+- A request whose cancel already happened does not open a connection.
 - The library files other than the command do not call `Date.now()` or
   `new Date()` without an argument. A `now()` that does not return an ISO
   time is refused before a connection.

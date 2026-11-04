@@ -27,6 +27,8 @@ const MADE = new Set(['filmed-or-drawn-by-me', 'made-with-ai', 'not-sure']);
 const PROMPT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SAFE_NAME = /^[A-Za-z0-9._-]{1,200}$/;
 const OUTPUT_EXT = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'mp4', 'webm', 'mov']);
+const IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif']);
+const VIDEO_EXT = new Set(['mp4', 'webm', 'mov']);
 const OUTPUT_KEYS = ['images', 'gifs', 'video', 'videos'];
 
 export const MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
@@ -48,6 +50,18 @@ function fileFields(record) {
 function checkBytes(record, bytes) {
   const fields = fileFields(record);
   if (fields.length === 0) return fail(REASONS.noFileRule);
+  return checkField(fields, bytes);
+}
+
+function referenceField(record) {
+  const field = record.inputs?.reference_files;
+  if (!field || field.type !== 'files' || !Array.isArray(field.types) || !Number.isInteger(field.max_bytes)) {
+    return null;
+  }
+  return field;
+}
+
+function checkField(fields, bytes) {
   const type = sniffType(bytes);
   if (!type) return fail(REASONS.fileType);
   const typed = fields.filter((field) => field.types.includes(type));
@@ -309,6 +323,12 @@ function outputExtension(filename) {
   return ext === 'jpeg' ? 'jpg' : ext;
 }
 
+function mediaKind(ext) {
+  if (IMAGE_EXT.has(ext)) return 'image';
+  if (VIDEO_EXT.has(ext)) return 'video';
+  return null;
+}
+
 function safeSubfolder(value) {
   if (value == null || value === '') return '';
   if (typeof value !== 'string' || value.length > 200 || value.includes('\\') || value.startsWith('/')) return null;
@@ -317,7 +337,7 @@ function safeSubfolder(value) {
   return parts.join('/');
 }
 
-function firstOutput(entry) {
+function firstOutput(entry, kind) {
   const outputs = entry?.outputs;
   if (!outputs || typeof outputs !== 'object') return null;
   const found = [];
@@ -331,7 +351,7 @@ function firstOutput(entry) {
         const ext = outputExtension(item.filename);
         const subfolder = safeSubfolder(item.subfolder);
         const type = item.type == null ? 'output' : item.type;
-        if (!ext || subfolder == null) continue;
+        if (!ext || subfolder == null || mediaKind(ext) !== kind) continue;
         if (type !== 'output' && type !== 'temp' && type !== 'input') continue;
         found.push({ filename: item.filename, subfolder, type, ext });
       }
@@ -408,16 +428,16 @@ export async function runLocal(options) {
 
   let reference = null;
   if (fields.hasReference) {
-    const ceiling = fileCeiling(options.record);
-    if (ceiling == null) return fail(REASONS.noFileRule);
-    const read = readRegularFile(request.referenceFile, ceiling);
+    const field = referenceField(options.record);
+    if (!field) return fail(REASONS.noReference);
+    const read = readRegularFile(request.referenceFile, field.max_bytes);
     if (!read.ok) {
       if (read.code === 'link') return fail(REASONS.fileLink);
       if (read.code === 'size') return fail(REASONS.fileSize);
       if (read.code === 'ceiling') return fail(REASONS.fileHold);
       return fail(REASONS.fileUnreadable);
     }
-    const typed = checkBytes(options.record, read.bytes);
+    const typed = checkField([field], read.bytes);
     if (!typed.ok) return typed;
     reference = { bytes: read.bytes, type: typed.type };
   }
@@ -552,7 +572,7 @@ export async function runLocal(options) {
       if (!parsed || typeof parsed !== 'object') return fail(REASONS.comfyFailed);
       const entry = parsed[promptId];
       if (entry?.status?.status_str === 'error') return fail(REASONS.comfyFailed);
-      const output = entry ? firstOutput(entry) : null;
+      const output = entry ? firstOutput(entry, request.kind) : null;
       if (output) {
         if (options.signal?.aborted) {
           await cancelExact(address, promptId, timeoutMs);

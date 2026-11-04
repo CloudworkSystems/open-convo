@@ -38,6 +38,12 @@ function hostHeader(address) {
  */
 export function comfyRequest(address, { method, path, headers, body, timeoutMs, maxBytes, signal }) {
   return new Promise((resolve) => {
+    // Checked before the request exists. Creating one and then returning
+    // leaves a socket with no error handler, and a later reset crashes Node.
+    if (signal?.aborted) {
+      resolve({ ok: false, kind: 'abort' });
+      return;
+    }
     let settled = false;
     const finish = (result) => {
       if (settled) return;
@@ -90,22 +96,20 @@ export function comfyRequest(address, { method, path, headers, body, timeoutMs, 
     const onAbort = () => {
       req.destroy(Object.assign(new Error('aborted'), { code: 'ABORT_ERR' }));
     };
-    if (signal) {
-      if (signal.aborted) {
-        finish({ ok: false, kind: 'abort' });
-        return;
-      }
-      signal.addEventListener('abort', onAbort, { once: true });
-    }
-    req.setTimeout(timeoutMs, () => {
-      req.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' }));
-    });
     req.on('error', (error) => {
-      if (signal) signal.removeEventListener('abort', onAbort);
+      signal?.removeEventListener('abort', onAbort);
       finish({ ok: false, kind: errorKind(error) });
     });
-    req.on('close', () => {
-      if (signal) signal.removeEventListener('abort', onAbort);
+    req.on('close', () => signal?.removeEventListener('abort', onAbort));
+    // The signal can flip in the gap after the early check. The error
+    // handler is already on, so destroying here cannot crash the process.
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener('abort', onAbort, { once: true });
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' }));
     });
     if (body) req.end(body);
     else req.end();

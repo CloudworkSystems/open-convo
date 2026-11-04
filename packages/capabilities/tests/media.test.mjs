@@ -7,6 +7,8 @@ import { basename, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { validateCapability } from '../src/index.mjs';
+import { parseServer } from '../src/media/address.mjs';
+import { comfyRequest } from '../src/media/http.mjs';
 import { run } from '../src/media/make.mjs';
 import { LOCAL_NODES } from '../src/media/nodes.mjs';
 import { MAX_READ_BYTES } from '../src/media/store.mjs';
@@ -231,11 +233,11 @@ function startComfy(options = {}) {
         res.end('{}');
         return;
       }
-      const outputs = options.historyStatus === 'error' ? {} : {
+      const outputs = options.historyStatus === 'error' ? {} : (options.outputs ?? {
         9: {
           images: [{ filename: state.outputName, subfolder: state.subfolder, type: options.outputType ?? 'output' }],
         },
-      };
+      });
       res.end(JSON.stringify({
         [id]: {
           outputs,
@@ -471,6 +473,123 @@ test('a progress socket that accepts but never upgrades does not stop the run', 
     assert.equal(promptPosts(server.state), 1);
     assert.equal(receiptBeside(result.file).ai_label, 'made by AI');
   } finally {
+    await server.close();
+  }
+});
+
+test('a cancelled request is not opened, so a later reset cannot crash the run', async () => {
+  const server = await startComfy();
+  try {
+    const ac = new AbortController();
+    ac.abort();
+    const result = await comfyRequest(parseServer(server.url), {
+      method: 'GET',
+      path: '/queue',
+      timeoutMs: 1000,
+      maxBytes: 1000,
+      signal: ac.signal,
+    });
+    assert.equal(result.kind, 'abort');
+    assert.equal(server.state.paths.length, 0);
+  } finally {
+    await server.close();
+  }
+});
+
+test('the saved file matches the kind that was asked for', async () => {
+  const outputs = {
+    1: { images: [{ filename: 'preview.png', subfolder: '', type: 'output' }] },
+    2: { videos: [{ filename: 'clip.mp4', subfolder: '', type: 'output' }] },
+  };
+  const video = await startComfy({ outputs });
+  try {
+    const result = await runLocal(localOptions(video, {
+      workflow: promptOnly('video'),
+      request: { kind: 'video', prompt: 'a boat' },
+    }));
+    assert.equal(result.ok, true, result.reason);
+    assert.equal(basename(result.file).endsWith('.mp4'), true);
+    assert.equal(video.state.views.some((query) => query.includes('filename=clip.mp4')), true);
+    assert.equal(video.state.views.some((query) => query.includes('preview.png')), false);
+  } finally {
+    await video.close();
+  }
+  const image = await startComfy({ outputs });
+  try {
+    const result = await runLocal(localOptions(image, {
+      request: { kind: 'image', prompt: 'a boat' },
+    }));
+    assert.equal(result.ok, true, result.reason);
+    assert.equal(basename(result.file).endsWith('.png'), true);
+    assert.equal(image.state.views.some((query) => query.includes('filename=preview.png')), true);
+  } finally {
+    await image.close();
+  }
+  const still = await startComfy({
+    outputs: { 1: { images: [{ filename: 'preview.png', subfolder: '', type: 'output' }] } },
+  });
+  try {
+    const result = await runLocal(localOptions(still, {
+      workflow: promptOnly('video'),
+      request: { kind: 'video', prompt: 'a boat' },
+    }));
+    assert.equal(result.reason, REASONS.noOutput);
+    assert.equal(still.state.views.length, 0);
+    assert.deepEqual(filesIn(still.media), []);
+  } finally {
+    await still.close();
+  }
+});
+
+test('a reference file is checked against reference_files, not every files input', async () => {
+  const folder = tempDir();
+  const server = await startComfy();
+  try {
+    const custom = record();
+    custom.inputs.reference_files = {
+      type: 'files', max_items: 1, max_bytes: PNG.length, types: ['image/png'],
+    };
+    custom.inputs.mask_files = {
+      type: 'files', max_items: 1, max_bytes: 5000000, types: ['image/jpeg'],
+    };
+    assert.equal(validateCapability(custom).ok, true);
+    const jpeg = writeBytes(folder.dir, 'mask.jpg', JPEG);
+    const png = writeBytes(folder.dir, 'boat.png', PNG);
+    const request = { kind: 'image', prompt: 'a boat', seconds: 2, width: 64, height: 64 };
+    const wrongType = await runLocal(localOptions(server, {
+      record: custom,
+      workflow: fullWorkflow(),
+      request: { ...request, referenceFile: jpeg },
+    }));
+    assert.equal(wrongType.reason, REASONS.fileType);
+    const tooBig = Buffer.concat([PNG, Buffer.from('x')]);
+    const big = writeBytes(folder.dir, 'big.png', tooBig);
+    const over = await runLocal(localOptions(server, {
+      record: custom,
+      workflow: fullWorkflow(),
+      request: { ...request, referenceFile: big },
+    }));
+    assert.equal(over.reason, REASONS.fileSize);
+    delete custom.inputs.reference_files;
+    const missing = await runLocal(localOptions(server, {
+      record: custom,
+      workflow: fullWorkflow(),
+      request: { ...request, referenceFile: png },
+    }));
+    assert.equal(missing.reason, REASONS.noReference);
+    assert.equal(server.state.paths.length, 0);
+    custom.inputs.reference_files = {
+      type: 'files', max_items: 1, max_bytes: PNG.length, types: ['image/png'],
+    };
+    const ok = await runLocal(localOptions(server, {
+      record: custom,
+      workflow: fullWorkflow(),
+      request: { ...request, referenceFile: png },
+    }));
+    assert.equal(ok.ok, true, ok.reason);
+    assert.equal(server.state.uploads.length, 1);
+  } finally {
+    folder.remove();
     await server.close();
   }
 });

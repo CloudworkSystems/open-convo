@@ -13,6 +13,7 @@ export const REASONS = {
   fileUnreadable: 'That file could not be read.',
   fileLink: 'That file is a link, so it was not copied.',
   noFileRule: "This capability doesn't say which files it accepts.",
+  noReference: "This capability doesn't say which reference file it accepts.",
   madeHow: 'Say how the file was made: filmed or drawn by you, made with AI, or not sure.',
   mediaFolder: 'The media folder is missing.',
   mediaLink: 'The media folder has to be a real folder on this Mac.',
