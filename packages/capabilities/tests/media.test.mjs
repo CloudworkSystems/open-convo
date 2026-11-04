@@ -880,6 +880,39 @@ test('a required seconds, width or height cannot be left out', async () => {
   }
 });
 
+test('a required reference cannot be left out', async () => {
+  const folder = tempDir();
+  const server = await startComfy();
+  try {
+    const custom = record();
+    custom.inputs.reference_files.required = true;
+    assert.equal(validateCapability(custom).ok, true);
+    const omitted = await runLocal(localOptions(server, {
+      record: custom,
+      workflow: fullWorkflow(),
+      request: { kind: 'image', prompt: 'a boat', seconds: 2, width: 64, height: 64 },
+    }));
+    assert.equal(omitted.reason, REASONS.badRequest);
+    assert.equal(server.state.paths.length, 0);
+    const png = writeBytes(folder.dir, 'boat.png', PNG);
+    const supplied = await runLocal(localOptions(server, {
+      record: custom,
+      workflow: fullWorkflow(),
+      request: { kind: 'image', prompt: 'a boat', seconds: 2, width: 64, height: 64, referenceFile: png },
+    }));
+    assert.equal(supplied.ok, true, supplied.reason);
+    custom.inputs.reference_files.required = false;
+    const optional = await runLocal(localOptions(server, {
+      record: custom,
+      request: { kind: 'image', prompt: 'a boat' },
+    }));
+    assert.equal(optional.ok, true, optional.reason);
+  } finally {
+    folder.remove();
+    await server.close();
+  }
+});
+
 test('cancelling when the queue answer never arrives still stops that job', async () => {
   const server = await startComfy({ prompt: 'hold-response', done: false });
   try {

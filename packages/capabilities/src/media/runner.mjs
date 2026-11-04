@@ -280,6 +280,8 @@ function checkLocalRequest(record, request) {
   const height = integerInput(record, 'height', request.height);
   if (!height.ok) return height;
   const hasReference = request.referenceFile != null;
+  const reference = record.inputs?.reference_files;
+  if (!hasReference && reference?.required === true) return fail(REASONS.badRequest);
   if (hasReference && typeof request.referenceFile !== 'string') return fail(REASONS.badRequest);
   return {
     ok: true,

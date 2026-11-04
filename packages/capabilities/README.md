@@ -405,8 +405,9 @@ a built-in that is not in that list (such as the webcam) are refused.
 
 A reference picture is checked only against the `reference_files` input,
 then uploaded to that same ComfyUI (`/upload/image`),
-and the name it returns is what goes in `{{reference_file}}`. Another files
-input does not widen what a reference may be. The graph is
+and the name it returns is what goes in `{{reference_file}}`. When that
+input is required, leaving it out is refused before anything is sent.
+Another files input does not widen what a reference may be. The graph is
 then posted to `/prompt`. Progress comes from ComfyUI's progress socket on
 that same address. The estimate is the remaining time from progress so far
 and the elapsed time. If the socket is not there, or it accepts and then
@@ -529,6 +530,8 @@ Each of these is covered in `tests/media.test.mjs`.
 - A reference picture is accepted only when `reference_files` allows its
   type and size. A files input with another name does not. With no
   `reference_files` input, a reference is refused before any connection.
+  When `reference_files` is required, leaving it out is refused before any
+  connection. An optional one can still be left out.
 - A request whose cancel already happened does not open a connection.
 - The library files other than the command do not call `Date.now()` or
   `new Date()` without an argument. A `now()` that does not return an ISO
