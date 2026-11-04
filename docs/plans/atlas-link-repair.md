@@ -241,6 +241,21 @@ On a copy of a small notes folder (never the only copy):
 - Real notes. Nothing from anyone's actual wiki goes into the tests or the
   repo.
 
+## Carried To The Build
+
+Plans stop after two Codex rounds (AGENTS.md "Keeping Finished Work
+Moving"); these later findings are requirements for the code pull request.
+
+- Just before writing a note's repairs, `--write` also rechecks every
+  destination those repairs point to: it is still a regular file (not a
+  symbolic link) at the planned path inside the wiki, and its SHA-256 still
+  equals the hash the move evidence matched. A destination that fails the
+  recheck skips every repair pointing to it, lists them as skipped with the
+  reason, and keeps the old snapshot (as for any skipped repair). Tests
+  delete, replace, edit and symlink a destination between the scan and the
+  write
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4464930305)).
+
 ## Rules For The Builder (GrokBot Team A)
 
 These are rules the builder must follow; the setup does not enforce them, so
