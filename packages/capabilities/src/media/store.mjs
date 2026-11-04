@@ -22,19 +22,26 @@ const NOFOLLOW_READ = constants.O_RDONLY | constants.O_NOFOLLOW;
 export const MAX_READ_BYTES = 64 * 1024 * 1024;
 const CREATE = constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW;
 
-const MARKERS = [
-  Buffer.from('trainedAlgorithmicMedia', 'utf8'),
-  Buffer.from('compositeWithTrainedAlgorithmicMedia', 'utf8'),
-  Buffer.from('trainedAlgorithmicMedia', 'utf16le'),
-  Buffer.from('compositeWithTrainedAlgorithmicMedia', 'utf16le'),
-];
+const MARKER_TEXT = ['trainedAlgorithmicMedia', 'compositeWithTrainedAlgorithmicMedia'];
+const MARKERS = MARKER_TEXT.flatMap((text) => [Buffer.from(text), utf16le(text), utf16be(text)]);
+const MARKER_OVERLAP = Math.max(...MARKERS.map((marker) => marker.length)) - 1;
+const CHUNK = 64 * 1024;
+
+const AVIF_BRANDS = new Set(['avif', 'avis']);
+const HEIF_BRANDS = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'heif', 'mif1', 'msf1']);
+const MP4_BRANDS = new Set([
+  'isom', 'iso2', 'iso3', 'iso4', 'iso5', 'iso6', 'mp41', 'mp42', 'mp71', 'avc1', 'dash', 'MSNV', 'M4V ',
+]);
 
 const EXTENSIONS = {
   'image/png': 'png',
   'image/jpeg': 'jpg',
   'image/gif': 'gif',
   'image/webp': 'webp',
+  'image/heic': 'heic',
+  'image/avif': 'avif',
   'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
   'video/webm': 'webm',
 };
 
@@ -53,11 +60,42 @@ export function sniffType(bytes) {
   if (bytes.length >= 12 && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP') {
     return 'image/webp';
   }
-  if (bytes.length >= 12 && bytes.toString('ascii', 4, 8) === 'ftyp') return 'video/mp4';
+  if (bytes.length >= 12 && bytes.toString('ascii', 4, 8) === 'ftyp') return isoType(bytes);
   if (bytes.length >= 4 && bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) {
     return 'video/webm';
   }
   return null;
+}
+
+// An ftyp box is shared by MP4, QuickTime, HEIC and AVIF. The brand says which.
+function isoType(bytes) {
+  const brands = isoBrands(bytes);
+  if (!brands) return null;
+  if (brands.some((brand) => AVIF_BRANDS.has(brand))) return 'image/avif';
+  if (brands.some((brand) => HEIF_BRANDS.has(brand))) return 'image/heic';
+  if (brands[0] === 'qt  ') return 'video/quicktime';
+  if (brands.some((brand) => MP4_BRANDS.has(brand))) return 'video/mp4';
+  if (brands.includes('qt  ')) return 'video/quicktime';
+  return null;
+}
+
+function isoBrands(bytes) {
+  const boxSize = bytes.readUInt32BE(0);
+  if (boxSize === 1) {
+    if (bytes.length < 20) return null;
+    return brandsFrom(bytes, 16, bytes.length);
+  }
+  const end = boxSize >= 16 ? Math.min(boxSize, bytes.length) : bytes.length;
+  return brandsFrom(bytes, 8, end);
+}
+
+function brandsFrom(bytes, majorAt, end) {
+  if (majorAt + 4 > bytes.length) return null;
+  const brands = [bytes.toString('latin1', majorAt, majorAt + 4)];
+  for (let i = majorAt + 8; i + 4 <= end && i + 4 <= bytes.length; i += 4) {
+    brands.push(bytes.toString('latin1', i, i + 4));
+  }
+  return brands;
 }
 
 export function extensionFor(type) {
@@ -83,44 +121,100 @@ export function mediaDirKind(dir) {
 }
 
 /**
- * Read a regular file up to `maxBytes`, and never more than `MAX_READ_BYTES`.
- * A larger file is reported from its size and is not read. A symlink is not
- * followed.
+ * Look at a regular file in small pieces, up to `maxBytes` and never more
+ * than `MAX_READ_BYTES`. The whole file is not held in one Buffer. A larger
+ * file is reported from its size and is not read. A symlink is not followed.
  */
-export function readRegularFile(filePath, maxBytes) {
-  const limit = Number.isInteger(maxBytes) && maxBytes >= 0 ? maxBytes : 0;
-  let stat;
+export function scanFile(filePath, maxBytes) {
+  const opened = openBounded(filePath, maxBytes);
+  if (!opened.ok) return opened;
+  const { fd, size } = opened;
   try {
-    stat = lstatSync(filePath);
+    const chunk = Buffer.alloc(CHUNK);
+    let header = Buffer.alloc(0);
+    let overlap = Buffer.alloc(0);
+    let provenance = false;
+    let offset = 0;
+    while (offset < size) {
+      const n = readSync(fd, chunk, 0, Math.min(CHUNK, size - offset), offset);
+      if (n <= 0) return { ok: false, code: 'unreadable' };
+      const piece = chunk.subarray(0, n);
+      if (header.length < 4096) {
+        const take = Math.min(4096 - header.length, piece.length);
+        header = Buffer.concat([header, piece.subarray(0, take)]);
+      }
+      if (!provenance) {
+        const window = overlap.length === 0 ? piece : Buffer.concat([overlap, piece]);
+        provenance = hasAiProvenance(window);
+        const start = Math.max(0, window.length - MARKER_OVERLAP);
+        overlap = Buffer.from(window.subarray(start));
+      }
+      offset += n;
+    }
+    return { ok: true, size, type: sniffType(header), provenance, filePath };
   } catch {
     return { ok: false, code: 'unreadable' };
+  } finally {
+    closeSync(fd);
   }
-  if (stat.isSymbolicLink()) return { ok: false, code: 'link' };
-  if (!stat.isFile()) return { ok: false, code: 'unreadable' };
-  const over = overLimit(stat.size, limit);
-  if (over) return over;
+}
+
+/** Copy `size` bytes from `src` into a new file. Reads one chunk at a time. */
+export function streamCopy(src, dir, extension, size) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const name = `${randomBytes(16).toString('hex')}.${extension}`;
+    const filePath = join(dir, name);
+    let out;
+    try {
+      out = openSync(filePath, CREATE, 0o644);
+    } catch (error) {
+      if (error.code === 'EEXIST') continue;
+      return null;
+    }
+    const copied = streamFile(src, size, (piece) => writeAll(out, piece));
+    try {
+      if (!copied) {
+        closeSync(out);
+        unlinkSync(filePath);
+        return null;
+      }
+      fsyncSync(out);
+      closeSync(out);
+      return { name, filePath };
+    } catch {
+      try { closeSync(out); } catch { /* already closing */ }
+      try { unlinkSync(filePath); } catch { /* nothing to remove */ }
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Read `size` bytes from `src` and hand each chunk to `write` before the
+ * next one is read. `write` must use the chunk before it returns.
+ */
+export function streamFile(src, size, write) {
   let fd;
   try {
-    fd = openSync(filePath, NOFOLLOW_READ);
-  } catch (error) {
-    if (error.code === 'ELOOP') return { ok: false, code: 'link' };
-    return { ok: false, code: 'unreadable' };
+    fd = openSync(src, NOFOLLOW_READ);
+  } catch {
+    return false;
   }
   try {
     const again = fstatSync(fd);
-    if (!again.isFile()) return { ok: false, code: 'unreadable' };
-    const grown = overLimit(again.size, limit);
-    if (grown) return grown;
-    const bytes = Buffer.alloc(again.size);
+    if (!again.isFile() || again.size !== size || size > MAX_READ_BYTES) return false;
+    const chunk = Buffer.alloc(CHUNK);
     let offset = 0;
-    while (offset < bytes.length) {
-      const read = readSync(fd, bytes, offset, bytes.length - offset, offset);
-      if (read <= 0) return { ok: false, code: 'unreadable' };
-      offset += read;
+    while (offset < size) {
+      const n = readSync(fd, chunk, 0, Math.min(CHUNK, size - offset), offset);
+      if (n <= 0) return false;
+      write(chunk.subarray(0, n));
+      offset += n;
     }
-    return { ok: true, bytes };
+    return true;
   } catch {
-    return { ok: false, code: 'unreadable' };
+    return false;
   } finally {
     closeSync(fd);
   }
@@ -177,10 +271,61 @@ export function removeFile(filePath) {
   }
 }
 
+function openBounded(filePath, maxBytes) {
+  const limit = Number.isInteger(maxBytes) && maxBytes >= 0 ? maxBytes : 0;
+  let stat;
+  try {
+    stat = lstatSync(filePath);
+  } catch {
+    return { ok: false, code: 'unreadable' };
+  }
+  if (stat.isSymbolicLink()) return { ok: false, code: 'link' };
+  if (!stat.isFile()) return { ok: false, code: 'unreadable' };
+  const over = overLimit(stat.size, limit);
+  if (over) return over;
+  let fd;
+  try {
+    fd = openSync(filePath, NOFOLLOW_READ);
+  } catch (error) {
+    if (error.code === 'ELOOP') return { ok: false, code: 'link' };
+    return { ok: false, code: 'unreadable' };
+  }
+  try {
+    const again = fstatSync(fd);
+    if (!again.isFile()) {
+      closeSync(fd);
+      return { ok: false, code: 'unreadable' };
+    }
+    const grown = overLimit(again.size, limit);
+    if (grown) {
+      closeSync(fd);
+      return grown;
+    }
+    return { ok: true, fd, size: again.size };
+  } catch {
+    try { closeSync(fd); } catch { /* already closing */ }
+    return { ok: false, code: 'unreadable' };
+  }
+}
+
 function overLimit(size, limit) {
   if (size > limit) return { ok: false, code: 'size' };
   if (size > MAX_READ_BYTES) return { ok: false, code: 'ceiling' };
   return null;
+}
+
+function utf16le(text) {
+  return Buffer.from(text, 'utf16le');
+}
+
+function utf16be(text) {
+  const le = utf16le(text);
+  const be = Buffer.alloc(le.length);
+  for (let i = 0; i < le.length; i += 2) {
+    be[i] = le[i + 1];
+    be[i + 1] = le[i];
+  }
+  return be;
 }
 
 function writeAll(fd, bytes) {

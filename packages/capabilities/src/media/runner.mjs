@@ -10,11 +10,10 @@ import { comfyRequest, openProgress } from './http.mjs';
 import { REASONS } from './reasons.mjs';
 import {
   extensionFor,
-  hasAiProvenance,
   mediaDirKind,
-  readRegularFile,
   removeFile,
-  sniffType,
+  scanFile,
+  streamCopy,
   writeNewFile,
   writeReceipt,
 } from './store.mjs';
@@ -47,10 +46,10 @@ function fileFields(record) {
   ));
 }
 
-function checkBytes(record, bytes) {
+function checkBytes(record, scanned) {
   const fields = fileFields(record);
   if (fields.length === 0) return fail(REASONS.noFileRule);
-  return checkField(fields, bytes);
+  return checkField(fields, scanned);
 }
 
 function referenceField(record) {
@@ -61,12 +60,12 @@ function referenceField(record) {
   return field;
 }
 
-function checkField(fields, bytes) {
-  const type = sniffType(bytes);
+function checkField(fields, scanned) {
+  const type = scanned.type;
   if (!type) return fail(REASONS.fileType);
   const typed = fields.filter((field) => field.types.includes(type));
   if (typed.length === 0) return fail(REASONS.fileType);
-  if (!typed.some((field) => bytes.length <= field.max_bytes)) return fail(REASONS.fileSize);
+  if (!typed.some((field) => scanned.size <= field.max_bytes)) return fail(REASONS.fileSize);
   return { ok: true, type };
 }
 
@@ -189,6 +188,27 @@ function savePair(mediaDir, extension, bytes, fields) {
   }
 }
 
+function scanProblem(scanned) {
+  if (scanned.ok) return null;
+  if (scanned.code === 'link') return fail(REASONS.fileLink);
+  if (scanned.code === 'size') return fail(REASONS.fileSize);
+  if (scanned.code === 'ceiling') return fail(REASONS.fileHold);
+  return fail(REASONS.fileUnreadable);
+}
+
+function saveScanned(mediaDir, extension, scanned, fields) {
+  const written = streamCopy(scanned.filePath, mediaDir, extension, scanned.size);
+  if (!written) return fail(REASONS.notSaved);
+  const receipt = receiptFor({ ...fields, file: written.name });
+  try {
+    const receiptPath = writeReceipt(written.filePath, receipt);
+    return { ok: true, file: written.filePath, receiptPath, receipt };
+  } catch {
+    removeFile(written.filePath);
+    return fail(REASONS.notSaved);
+  }
+}
+
 function folderProblem(mediaDir) {
   const folder = mediaDirKind(mediaDir);
   if (folder === 'symlink') return fail(REASONS.mediaLink);
@@ -212,22 +232,18 @@ export function upload({ record, routeId, filePath, madeHow, mediaDir, now }) {
   if (!time.ok) return time;
   const ceiling = fileCeiling(record);
   if (ceiling == null) return fail(REASONS.noFileRule);
-  const read = readRegularFile(filePath, ceiling);
-  if (!read.ok) {
-    if (read.code === 'link') return fail(REASONS.fileLink);
-    if (read.code === 'size') return fail(REASONS.fileSize);
-    if (read.code === 'ceiling') return fail(REASONS.fileHold);
-    return fail(REASONS.fileUnreadable);
-  }
-  const typed = checkBytes(record, read.bytes);
+  const scanned = scanFile(filePath, ceiling);
+  const problem = scanProblem(scanned);
+  if (problem) return problem;
+  const typed = checkBytes(record, scanned);
   if (!typed.ok) return typed;
   const extension = extensionFor(typed.type);
   if (!extension) return fail(REASONS.fileType);
-  return savePair(mediaDir, extension, read.bytes, {
+  return saveScanned(mediaDir, extension, scanned, {
     route: picked.route,
     prompt: null,
     time: time.value,
-    label: labelFor(madeHow, hasAiProvenance(read.bytes)),
+    label: labelFor(madeHow, scanned.provenance),
   });
 }
 
@@ -353,11 +369,12 @@ function firstOutput(entry, kind) {
         const type = item.type == null ? 'output' : item.type;
         if (!ext || subfolder == null || mediaKind(ext) !== kind) continue;
         if (type !== 'output' && type !== 'temp' && type !== 'input') continue;
-        found.push({ filename: item.filename, subfolder, type, ext });
+        found.push({ filename: item.filename, subfolder, type, ext, kind: mediaKind(ext) });
       }
     }
   }
-  return found.find((item) => item.type === 'output') ?? found[0] ?? null;
+  const sameKind = found.filter((item) => item.kind === kind);
+  return sameKind.find((item) => item.type === 'output') ?? sameKind[0] ?? null;
 }
 
 function progressFraction(data) {
@@ -394,16 +411,13 @@ function reportProgress(onProgress, info) {
   }
 }
 
-function uploadBody(name, type, bytes) {
+function uploadParts(name, type) {
   const boundary = `openconvo${randomBytes(12).toString('hex')}`;
-  const head = Buffer.from(
+  const prefix = Buffer.from(
     `--${boundary}\r\nContent-Disposition: form-data; name="image"; filename="${name}"\r\nContent-Type: ${type}\r\n\r\n`,
   );
-  const tail = Buffer.from(`\r\n--${boundary}--\r\n`);
-  return {
-    boundary,
-    body: Buffer.concat([head, bytes, tail]),
-  };
+  const suffix = Buffer.from(`\r\n--${boundary}--\r\n`);
+  return { boundary, prefix, suffix };
 }
 
 /**
@@ -430,16 +444,12 @@ export async function runLocal(options) {
   if (fields.hasReference) {
     const field = referenceField(options.record);
     if (!field) return fail(REASONS.noReference);
-    const read = readRegularFile(request.referenceFile, field.max_bytes);
-    if (!read.ok) {
-      if (read.code === 'link') return fail(REASONS.fileLink);
-      if (read.code === 'size') return fail(REASONS.fileSize);
-      if (read.code === 'ceiling') return fail(REASONS.fileHold);
-      return fail(REASONS.fileUnreadable);
-    }
-    const typed = checkField([field], read.bytes);
+    const scanned = scanFile(request.referenceFile, field.max_bytes);
+    const problem = scanProblem(scanned);
+    if (problem) return problem;
+    const typed = checkField([field], scanned);
     if (!typed.ok) return typed;
-    reference = { bytes: read.bytes, type: typed.type };
+    reference = scanned;
   }
 
   const inspected = inspectWorkflow(options.workflow, { kind: request.kind, ...fields });
@@ -493,15 +503,15 @@ export async function runLocal(options) {
     if (reference) {
       const extension = extensionFor(reference.type);
       const name = `ref-${randomBytes(8).toString('hex')}.${extension}`;
-      const form = uploadBody(name, reference.type, reference.bytes);
+      const form = uploadParts(name, reference.type);
       const uploaded = await call({
         method: 'POST',
         path: '/upload/image',
         headers: {
           'Content-Type': `multipart/form-data; boundary=${form.boundary}`,
-          'Content-Length': String(form.body.length),
+          'Content-Length': String(form.prefix.length + reference.size + form.suffix.length),
         },
-        body: form.body,
+        stream: { path: reference.filePath, size: reference.size, prefix: form.prefix, suffix: form.suffix },
         maxBytes: MAX_JSON_BYTES,
       });
       if (!uploaded.ok) {

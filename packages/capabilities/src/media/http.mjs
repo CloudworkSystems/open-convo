@@ -4,6 +4,7 @@
 
 import { createHash, randomBytes } from 'node:crypto';
 import http from 'node:http';
+import { streamFile } from './store.mjs';
 
 const WS_MAGIC = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 const MAX_FRAME = 1024 * 1024;
@@ -36,7 +37,7 @@ function hostHeader(address) {
  * One request. `kind` is `refused`, `redirect`, `timeout`, `abort`,
  * `too-big` or `reset` when it does not complete.
  */
-export function comfyRequest(address, { method, path, headers, body, timeoutMs, maxBytes, signal }) {
+export function comfyRequest(address, { method, path, headers, body, stream, timeoutMs, maxBytes, signal }) {
   return new Promise((resolve) => {
     // Checked before the request exists. Creating one and then returning
     // leaves a socket with no error handler, and a later reset crashes Node.
@@ -111,8 +112,34 @@ export function comfyRequest(address, { method, path, headers, body, timeoutMs, 
     req.setTimeout(timeoutMs, () => {
       req.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' }));
     });
+    sendBody(req, body, stream);
+  });
+}
+
+function sendBody(req, body, stream) {
+  if (!stream) {
     if (body) req.end(body);
     else req.end();
+    return;
+  }
+  const write = (chunk) => new Promise((resolve, reject) => {
+    if (req.write(chunk)) resolve();
+    else req.once('drain', resolve);
+    req.once('error', reject);
+  });
+  (async () => {
+    await write(stream.prefix);
+    const copied = streamFile(stream.path, stream.size, (piece) => {
+      // The chunk buffer is reused, so copy it before the socket takes it.
+      req.write(Buffer.from(piece));
+    });
+    if (!copied) {
+      req.destroy(Object.assign(new Error('short read'), { code: 'EIO' }));
+      return;
+    }
+    req.end(stream.suffix);
+  })().catch((error) => {
+    req.destroy(error.code ? error : Object.assign(error, { code: 'EIO' }));
   });
 }
 

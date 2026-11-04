@@ -379,7 +379,7 @@ The copy gets a new name in the media folder, and the receipt is
 receipt's `ai_label` is `made by AI`, `not sure`, or left off. It is left
 off only for "filmed or drawn by me" when the bytes do not contain the IPTC
 markers `trainedAlgorithmicMedia` or `compositeWithTrainedAlgorithmicMedia`
-(UTF-8 or UTF-16). "Not sure" stays "not sure" even when a marker is there.
+(UTF-8, UTF-16LE or UTF-16BE). "Not sure" stays "not sure" even when a marker is there.
 Site Engine treats "not sure" as AI.
 
 ### Local
@@ -464,11 +464,14 @@ Each of these is covered in `tests/media.test.mjs`.
 - The upload type is sniffed from the bytes. A `.png` name full of text is
   refused. A file one byte over the record's limit is refused and not
   copied. A file the record allows, but that is over 64 MiB, is refused
-  before it is read into memory. The source file is left where it was. The
-  saved name is new.
+  before it is read. A file under that limit is read in small pieces, not
+  held all at once. The source file is left where it was. The saved name is new.
+- An `ftyp` file is not treated as MP4 until its brand says so. QuickTime
+  (`qt`) is `video/quicktime`. HEIC and AVIF stay images. An MP4 brand is
+  `video/mp4`.
 - "Filmed or drawn by me" with no marker has no `ai_label`. The same answer
   on `trainedAlgorithmicMedia` or `compositeWithTrainedAlgorithmicMedia`,
-  including UTF-16, is `made by AI`. "Not sure" stays `not sure` even with
+  including UTF-16 little-endian and big-endian, is `made by AI`. "Not sure" stays `not sure` even with
   a marker. "Made with AI" is `made by AI` with no marker.
 - A symlink source or a symlink media folder is refused.
 - A record with no `files` input cannot accept an upload, because there is

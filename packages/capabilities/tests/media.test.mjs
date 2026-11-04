@@ -57,6 +57,28 @@ function filesIn(dir) {
   return readdirSync(dir);
 }
 
+function utf16be(text) {
+  const le = Buffer.from(text, 'utf16le');
+  const be = Buffer.alloc(le.length);
+  for (let i = 0; i < le.length; i += 2) {
+    be[i] = le[i + 1];
+    be[i + 1] = le[i];
+  }
+  return be;
+}
+
+function ftyp(major, compatible = []) {
+  const size = 16 + compatible.length * 4;
+  const bytes = Buffer.alloc(size);
+  bytes.writeUInt32BE(size, 0);
+  bytes.write('ftyp', 4, 'ascii');
+  bytes.write(major.padEnd(4, ' ').slice(0, 4), 8, 'ascii');
+  compatible.forEach((brand, index) => {
+    bytes.write(brand.padEnd(4, ' ').slice(0, 4), 16 + index * 4, 'ascii');
+  });
+  return bytes;
+}
+
 function receiptBeside(filePath) {
   return JSON.parse(readFileSync(`${filePath}.receipt.json`, 'utf8'));
 }
@@ -400,6 +422,8 @@ test('an upload receipt keeps how the file was made, and provenance beats a film
       ['marked.png', Buffer.concat([PNG, Buffer.from('trainedAlgorithmicMedia')]), 'filmed-or-drawn-by-me', 'made by AI'],
       ['composite.png', Buffer.concat([PNG, Buffer.from('compositeWithTrainedAlgorithmicMedia')]), 'filmed-or-drawn-by-me', 'made by AI'],
       ['utf16.png', Buffer.concat([PNG, Buffer.from('trainedAlgorithmicMedia', 'utf16le')]), 'filmed-or-drawn-by-me', 'made by AI'],
+      ['utf16be.png', Buffer.concat([PNG, utf16be('trainedAlgorithmicMedia')]), 'filmed-or-drawn-by-me', 'made by AI'],
+      ['utf16be-composite.png', Buffer.concat([PNG, utf16be('compositeWithTrainedAlgorithmicMedia')]), 'filmed-or-drawn-by-me', 'made by AI'],
       ['unsure.png', PNG, 'not-sure', 'not sure'],
       ['unsure-marked.png', Buffer.concat([PNG, Buffer.from('trainedAlgorithmicMedia')]), 'not-sure', 'not sure'],
       ['ai.png', PNG, 'made-with-ai', 'made by AI'],
@@ -425,6 +449,53 @@ test('an upload receipt keeps how the file was made, and provenance beats a film
       if (!label) assert.equal(JSON.stringify(receipt).includes('made by AI'), false);
       if (label === 'not sure') assert.equal(JSON.stringify(receipt).includes('made by AI'), false);
     }
+  } finally {
+    folder.remove();
+    media.remove();
+  }
+});
+
+test('an ftyp file is typed from its brand, and a big-endian marker still counts as AI', () => {
+  const folder = tempDir();
+  const media = tempDir();
+  try {
+    const cases = [
+      [ftyp('isom'), 'video/mp4', 'mp4', true],
+      [ftyp('qt  ', ['isom']), 'video/mp4', 'mp4', false],
+      [ftyp('qt  ', ['isom']), 'video/quicktime', 'mov', true],
+      [ftyp('heic'), 'video/mp4', 'mp4', false],
+      [ftyp('heic'), 'image/heic', 'heic', true],
+      [ftyp('avif'), 'image/avif', 'avif', true],
+      [ftyp('mp42', ['isom', 'qt  ']), 'video/mp4', 'mp4', true],
+    ];
+    for (const [bytes, type, extension, accepts] of cases) {
+      const allowed = record();
+      allowed.inputs.reference_files.types = [type];
+      allowed.inputs.reference_files.max_bytes = Math.max(bytes.length, 32);
+      const filePath = writeBytes(folder.dir, `clip.${extension}`, bytes);
+      const saved = upload({
+        record: allowed, routeId: 'upload', filePath, madeHow: 'filmed-or-drawn-by-me', mediaDir: media.dir, now: fixedNow,
+      });
+      if (accepts) {
+        assert.equal(saved.ok, true, `${type} ${saved.reason}`);
+        assert.equal(basename(saved.file).endsWith(`.${extension}`), true);
+        assert.deepEqual(readFileSync(saved.file), bytes);
+      } else {
+        assert.equal(saved.ok, false, type);
+        assert.equal(saved.reason, REASONS.fileType, type);
+      }
+    }
+    const splitAt = (64 * 1024) - 2;
+    const marker = utf16be('trainedAlgorithmicMedia');
+    const spanning = Buffer.concat([PNG, Buffer.alloc(Math.max(0, splitAt - PNG.length)), marker]);
+    const marked = record();
+    marked.inputs.reference_files.max_bytes = spanning.length;
+    const filePath = writeBytes(folder.dir, 'span.png', spanning);
+    const saved = upload({
+      record: marked, routeId: 'upload', filePath, madeHow: 'filmed-or-drawn-by-me', mediaDir: media.dir, now: fixedNow,
+    });
+    assert.equal(saved.ok, true, saved.reason);
+    assert.equal(receiptBeside(saved.file).ai_label, 'made by AI');
   } finally {
     folder.remove();
     media.remove();
