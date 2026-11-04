@@ -162,6 +162,8 @@ function startComfy(options = {}) {
     historyStatus: options.historyStatus ?? 'success',
     sockets: [],
     globalInterrupt: false,
+    deferred: [],
+    hideDeferredReads: 0,
   };
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
@@ -227,7 +229,29 @@ function startComfy(options = {}) {
       res.end(JSON.stringify({ prompt_id: id, number: 1, node_errors: {} }));
       return;
     }
+    if (req.method === 'GET' && url.pathname.startsWith('/object_info')) {
+      const name = decodeURIComponent(url.pathname.slice('/object_info/'.length));
+      const spec = options.nodeModules?.[name];
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      if (spec === 'missing') {
+        res.end('{}');
+        return;
+      }
+      if (spec === 'nofield') {
+        res.end(JSON.stringify({ [name]: { name } }));
+        return;
+      }
+      const api = spec && typeof spec === 'object' && spec.api === true;
+      const pythonModule = api ? (spec.module ?? 'nodes') : (spec ?? 'nodes');
+      res.end(JSON.stringify({ [name]: { name, python_module: pythonModule, api_node: api } }));
+      return;
+    }
     if (req.method === 'GET' && url.pathname === '/queue') {
+      if (state.hideDeferredReads > 0) state.hideDeferredReads -= 1;
+      else if (state.deferred.length > 0) {
+        state.running.push(...state.deferred);
+        state.deferred = [];
+      }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       if (options.queue === 'bad') {
         res.end(JSON.stringify({ queue_running: 'nope', queue_pending: [] }));
@@ -246,6 +270,15 @@ function startComfy(options = {}) {
           state.running.push(state.pending[index]);
           state.pending.splice(index, 1);
         }
+      }
+      if (options.appearOnSecondRead && Array.isArray(parsed.delete)) {
+        for (const id of parsed.delete) {
+          const index = state.pending.findIndex((item) => item[1] === id);
+          if (index === -1) continue;
+          state.deferred.push(state.pending[index]);
+          state.pending.splice(index, 1);
+        }
+        state.hideDeferredReads = 1;
       }
       if (Array.isArray(parsed.delete)) {
         state.pending = state.pending.filter((item) => !parsed.delete.includes(item[1]));
@@ -928,6 +961,45 @@ test('a workflow with an API, partner or custom node is refused before anything 
   }
 });
 
+test('an allowlisted name is refused when ComfyUI says it is not a built-in', async () => {
+  const folder = tempDir();
+  const cases = [
+    ['SaveImage', 'custom_nodes.replaced'],
+    ['SaveImage', 'comfy_api_nodes.nodes_kling'],
+    ['SaveImage', 'nofield'],
+    ['SaveImage', 'missing'],
+    ['CLIPTextEncode', { api: true, module: 'nodes' }],
+  ];
+  try {
+    for (const [name, spec] of cases) {
+      const server = await startComfy({ nodeModules: { [name]: spec } });
+      try {
+        const reference = writeBytes(folder.dir, 'boat.png', PNG);
+        const result = await runLocal(localOptions(server, {
+          workflow: fullWorkflow(),
+          request: { kind: 'image', prompt: 'a boat', seconds: 2, width: 64, height: 64, referenceFile: reference },
+        }));
+        assert.match(result.reason, new RegExp(name), JSON.stringify(spec));
+        assert.equal(server.state.posts.length, 0, JSON.stringify(spec));
+        assert.equal(server.state.uploads.length, 0, JSON.stringify(spec));
+      } finally {
+        await server.close();
+      }
+    }
+    const extras = await startComfy({ nodeModules: { SaveImage: 'comfy_extras.nodes_images' } });
+    try {
+      const result = await runLocal(localOptions(extras, {
+        request: { kind: 'image', prompt: 'a boat' },
+      }));
+      assert.equal(result.ok, true, result.reason);
+    } finally {
+      await extras.close();
+    }
+  } finally {
+    folder.remove();
+  }
+});
+
 test('a required seconds, width or height cannot be left out', async () => {
   const server = await startComfy();
   try {
@@ -1069,6 +1141,33 @@ test('cancelling removes only that waiting job and does not interrupt a differen
 
 test('a job that starts running before its delete arrives is still interrupted', async () => {
   const server = await startComfy({ done: false, place: 'pending', startBeforeDelete: true });
+  try {
+    const ac = new AbortController();
+    let sawQueued;
+    const queued = new Promise((resolve) => { sawQueued = resolve; });
+    const run = runLocal(localOptions(server, {
+      signal: ac.signal,
+      onProgress(info) {
+        if (info.status === 'queued') sawQueued();
+      },
+    }));
+    await queued;
+    ac.abort();
+    const result = await run;
+    assert.equal(result.stopped, true);
+    assert.equal(result.reason, REASONS.stopped);
+    assert.deepEqual(server.state.deletes, [{ delete: [server.state.promptId] }]);
+    assert.deepEqual(server.state.interrupts, [{ prompt_id: server.state.promptId }]);
+    assert.equal(server.state.globalInterrupt, false);
+    assert.equal(server.state.running.some((item) => item[1] === server.state.promptId), false);
+    assert.deepEqual(filesIn(server.media), []);
+  } finally {
+    await server.close();
+  }
+});
+
+test('a job that appears on the runner only after the first recheck is still interrupted', async () => {
+  const server = await startComfy({ done: false, place: 'pending', appearOnSecondRead: true });
   try {
     const ac = new AbortController();
     let sawQueued;

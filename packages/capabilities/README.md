@@ -407,6 +407,10 @@ Before anything is sent, every node's `class_type` has to be in
 decoders, image and video save and load, and the local Wan, LTX, Hunyuan,
 Mochi and Cosmos builders. An API node, a Partner node, a custom node, and
 a built-in that is not in that list (such as the webcam) are refused.
+The runner then asks ComfyUI which module provides each of those names.
+A name on the list is still refused when ComfyUI says it comes from a
+custom node or an API node, when it is marked as an API node, or when
+ComfyUI does not say. The prompt and any reference are not sent.
 
 A reference picture is checked only against the `reference_files` input,
 then uploaded to that same ComfyUI (`/upload/image`),
@@ -516,7 +520,8 @@ Each of these is covered in `tests/media.test.mjs`.
   same job is still stopped. Cancelling
   a waiting job deletes that prompt id and does not interrupt a different
   running job. If that job starts running before the delete arrives, the
-  queue is read again and that id is interrupted only when it is the one
+  queue is read again. If it is not listed yet, it is read once more, and
+  that id is interrupted only when it is the one
   running. Cancelling the running job sends an interrupt that names
   that id, and a different waiting job stays queued. If the queue cannot be
   read, no interrupt is sent. The run is still marked stopped.

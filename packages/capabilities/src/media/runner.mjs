@@ -7,7 +7,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { validateCapability } from '../validate.mjs';
 import { parseServer } from './address.mjs';
 import { comfyRequest, openProgress } from './http.mjs';
-import { REASONS } from './reasons.mjs';
+import { REASONS, refusedNode } from './reasons.mjs';
 import {
   extensionFor,
   mediaDirKind,
@@ -540,6 +540,12 @@ export async function runLocal(options) {
 
     const call = (spec) => comfyRequest(address, { timeoutMs, maxBytes: MAX_JSON_BYTES, signal: options.signal, ...spec });
 
+    // A custom node can reuse a built-in name. ComfyUI says which module
+    // actually provides it. The prompt and any reference stay here until
+    // every node is a built-in local module.
+    const provenance = await verifyBuiltins(address, options.workflow, timeoutMs, options.signal);
+    if (!provenance.ok) return provenance;
+
     if (reference) {
       const extension = extensionFor(reference.type);
       const name = `ref-${randomBytes(8).toString('hex')}.${extension}`;
@@ -730,25 +736,30 @@ async function fetchOutput({
  * is sent only when that id is the one running. Another running job is left
  * alone, and a queue this runner cannot read does not get an interrupt.
  * A job that starts after the queue was read, and so misses the delete, is
- * read again and interrupted when it is the one running.
+ * read again. If it is not listed yet, it is read once more, and interrupted
+ * when it is the one running.
  */
 async function cancelExact(address, promptId, timeoutMs) {
   const seen = await readQueue(address, timeoutMs);
   if (!seen) return;
   try {
     if (seen.pending.includes(promptId) && !seen.running.includes(promptId)) {
-      const payload = Buffer.from(JSON.stringify({ delete: [promptId] }));
-      await comfyRequest(address, {
-        method: 'POST',
-        path: '/queue',
-        headers: jsonHeaders(payload),
-        body: payload,
-        timeoutMs,
-        maxBytes: MAX_JSON_BYTES,
-      });
-      const again = await readQueue(address, timeoutMs);
-      if (again && onlyThisRunning(again.running, promptId)) {
-        await interruptPrompt(address, promptId, timeoutMs);
+      await deletePending(address, promptId, timeoutMs);
+      for (let look = 0; look < 2; look += 1) {
+        const again = await readQueue(address, timeoutMs);
+        if (!again) return;
+        if (again.running.includes(promptId)) {
+          if (onlyThisRunning(again.running, promptId)) {
+            await interruptPrompt(address, promptId, timeoutMs);
+          }
+          return;
+        }
+        if (again.pending.includes(promptId)) {
+          await deletePending(address, promptId, timeoutMs);
+          continue;
+        }
+        if (look === 0) continue;
+        return;
       }
       return;
     }
@@ -758,6 +769,57 @@ async function cancelExact(address, promptId, timeoutMs) {
   } catch {
     /* the run is still marked stopped */
   }
+}
+
+async function deletePending(address, promptId, timeoutMs) {
+  const payload = Buffer.from(JSON.stringify({ delete: [promptId] }));
+  await comfyRequest(address, {
+    method: 'POST',
+    path: '/queue',
+    headers: jsonHeaders(payload),
+    body: payload,
+    timeoutMs,
+    maxBytes: MAX_JSON_BYTES,
+  });
+}
+
+// Core nodes report "nodes". The local extras report "comfy_extras...".
+// A custom pack reports "custom_nodes..." and an API node reports
+// "comfy_api_nodes...", even when it reused a built-in class name.
+function builtinModule(moduleName) {
+  if (typeof moduleName !== 'string' || moduleName.length === 0 || moduleName.length > 200) return false;
+  if (moduleName === 'custom_nodes' || moduleName.startsWith('custom_nodes.') || moduleName.startsWith('custom_nodes/')) {
+    return false;
+  }
+  if (moduleName === 'comfy_api_nodes' || moduleName.startsWith('comfy_api_nodes.') || moduleName.startsWith('comfy_api_nodes/')) {
+    return false;
+  }
+  if (moduleName === 'nodes' || moduleName.startsWith('nodes.')) return true;
+  return moduleName === 'comfy_extras' || moduleName.startsWith('comfy_extras.') || moduleName.startsWith('comfy_extras/');
+}
+
+async function verifyBuiltins(address, workflow, timeoutMs, signal) {
+  const names = new Set();
+  for (const node of Object.values(workflow.prompt)) names.add(node.class_type);
+  for (const name of names) {
+    const result = await comfyRequest(address, {
+      method: 'GET',
+      path: `/object_info/${encodeURIComponent(name)}`,
+      timeoutMs,
+      maxBytes: MAX_JSON_BYTES,
+      signal,
+    });
+    if (!result.ok) {
+      if (result.kind === 'abort') return fail(REASONS.stopped, { stopped: true });
+      return netFail(result, false);
+    }
+    if (result.status !== 200) return fail(refusedNode(name));
+    const body = parseJson(result.body);
+    const info = body?.[name];
+    if (!info || typeof info !== 'object' || Array.isArray(info)) return fail(refusedNode(name));
+    if (info.api_node === true || !builtinModule(info.python_module)) return fail(refusedNode(name));
+  }
+  return { ok: true };
 }
 
 async function readQueue(address, timeoutMs) {
