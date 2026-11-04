@@ -249,12 +249,16 @@ Moving"); these later findings are requirements for the code pull request.
 - Just before writing a note's repairs, `--write` also rechecks every
   destination those repairs point to: it is still a regular file (not a
   symbolic link) at the planned path inside the wiki, and its SHA-256 still
-  equals the hash the move evidence matched. A destination that fails the
+  equals the hash the move evidence matched, or the hash of the exact bytes
+  this same run wrote to it (a destination that is itself a repaired note,
+  for example two moved notes that link to each other). A destination that fails the
   recheck skips every repair pointing to it, lists them as skipped with the
   reason, and keeps the old snapshot (as for any skipped repair). Tests
   delete, replace, edit and symlink a destination between the scan and the
-  write
-  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4464930305)).
+  write, and two moved notes that link to each other are both repaired in
+  one run
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4464930305),
+  [thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4464959789)).
 
 ## Rules For The Builder (GrokBot Team A)
 
