@@ -248,6 +248,14 @@ rounds"):
   A test starts two overlapping imports and checks one is
   refused and the manifest matches the notes on disk
   ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465135931)).
+- Locks are published whole: the process id and host name are written to
+  a temporary file first, which is then linked into place with
+  `fs.linkSync` (which fails if the lock already exists) and the temporary
+  file removed, so a lock is never empty or half-written. A lock file that
+  is empty or can't be parsed is treated as stale and cleared with the
+  same message. A test leaves an empty lock and checks the next run
+  recovers
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465321707)).
 
 ## Out Of Scope For This Slice
 

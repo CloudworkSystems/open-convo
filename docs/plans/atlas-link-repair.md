@@ -290,6 +290,14 @@ Moving"); these later findings are requirements for the code pull request.
   removes the journal. Tests stop a run after a note write and before the
   snapshot rename, and check the next run still repairs the skipped link
   ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465166908)).
+- Locks are published whole: the process id and host name are written to
+  a temporary file first, which is then linked into place with
+  `fs.linkSync` (which fails if the lock already exists) and the temporary
+  file removed, so a lock is never empty or half-written. A lock file that
+  is empty or can't be parsed is treated as stale and cleared with the
+  same message. A test leaves an empty lock and checks the next run
+  recovers
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/289#discussion_r4465321707)).
 
 ## Rules For The Builder (GrokBot Team A)
 
