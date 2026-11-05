@@ -1,0 +1,10 @@
+{
+  "creatorName": "River Lane",
+  "intro": "Short films about small towns. This creator is invented.",
+  "updatedAt": "2026-03-01",
+  "links": [
+    { "label": "Donation page", "url": "https://give.example/river-lane", "kind": "donate" },
+    { "label": "River Lane on Townstage", "url": "https://social.example/riverlane", "kind": "account" },
+    { "label": "Mailing list", "url": "https://letters.example/river-lane", "kind": "other" }
+  ]
+}

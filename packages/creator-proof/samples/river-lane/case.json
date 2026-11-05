@@ -1,0 +1,21 @@
+{
+  "kind": "fake-fundraiser",
+  "creatorName": "River Lane",
+  "seenAt": "2026-03-02T15:00:00.000Z",
+  "notes": "Invented sample. Not a real creator, post or donation link.",
+  "originalIds": ["orig-a866ffa25fc7", "orig-c17bca9e680d"],
+  "copies": [
+    {
+      "url": "https://social.example/fake-river/post/1",
+      "accountName": "River Lane Official",
+      "accountUrl": "https://social.example/fake-river",
+      "seenAt": "2026-03-02T15:00:00.000Z",
+      "whatItShows": "The meadow film with a different donation link."
+    }
+  ],
+  "paymentService": {
+    "name": "Northwind Pay",
+    "accountShownOnCopy": "northwind.example/give-river"
+  },
+  "anchors": []
+}
