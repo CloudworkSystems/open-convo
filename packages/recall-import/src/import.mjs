@@ -70,13 +70,18 @@ function validateManifest(manifest, file, sourceRoot) {
   return manifest;
 }
 function shortTemp(file, kind) {
-  const directory = fs.mkdtempSync(path.join(path.dirname(file), `.import-${kind}-tmp-`));
+  const directory = fs.mkdtempSync(path.join(path.dirname(file), `.import-${kind}-tmp-${kind === 'note' ? digest(path.basename(file)) + '-' : ''}`));
   return { directory, file: path.join(directory, 'data') };
+}
+function removeTemporary(file, directory) {
+  for (const [target, remove] of [[file, fs.unlinkSync], [directory, fs.rmdirSync]]) {
+    try { remove(target); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
 }
 function writeAtomic(file, text, mode = 0o600) {
   const temp = shortTemp(file, 'manifest');
   try { fs.writeFileSync(temp.file, text, { mode, flag: 'wx' }); fs.renameSync(temp.file, file); }
-  finally { fs.rmSync(temp.file, { force: true }); fs.rmdirSync(temp.directory); }
+  finally { removeTemporary(temp.file, temp.directory); }
 }
 
 function loadImportState(manifestFile, journalFile) {
@@ -131,7 +136,9 @@ function reconcilePending(manifest, atlas, sourceRoot, inspect, messages, source
     try { files = fs.readdirSync(path.dirname(destination), { withFileTypes: true }); }
     catch (error) { if (error.code !== 'ENOENT') throw stateError(path.dirname(destination), error.code || 'cannot inspect interrupted note files'); files = []; }
     for (const file of files) {
-      if (!file.name.startsWith('.import-note-tmp-') || !file.isDirectory()) continue;
+      // The prefix identifies the destination, never the note's content. Older
+      // anonymous temporary folders cannot be attributed safely and stay untouched.
+      if (!file.name.startsWith(`.import-note-tmp-${digest(path.basename(destination))}-`) || !file.isDirectory()) continue;
       const folder = path.join(path.dirname(destination), file.name), temporary = path.join(folder, 'data');
       const bytes = readState(temporary, null);
       if (bytes !== null && digest(bytes) === pending.fullHash) leftovers.push({ folder, temporary });
@@ -259,7 +266,7 @@ function publishLock(lock, data) {
   try {
     fs.writeFileSync(temp.file, JSON.stringify(data), { mode: 0o600, flag: 'wx' });
     fs.linkSync(temp.file, lock);
-  } finally { fs.rmSync(temp.file, { force: true }); fs.rmdirSync(temp.directory); }
+  } finally { removeTemporary(temp.file, temp.directory); }
 }
 function alive(info) { if (!info || Object.hasOwn(info, 'invalid')) return false; if (info.host !== os.hostname()) return true; if (!Number.isInteger(info.pid)) return false; try { process.kill(info.pid, 0); return true; } catch (e) { return e.code !== 'ESRCH'; } }
 function validateLock(info, file) {
@@ -462,7 +469,7 @@ export function runImport(argv, options = {}) {
     const recovering = state.recovering;
     canCompact = true;
     const leftovers = reconcilePending(manifest, atlas, sourceRoot, inspect, messages, source, result.items);
-    for (const { folder, temporary } of leftovers) { fs.unlinkSync(temporary); fs.rmdirSync(folder); }
+    for (const { folder, temporary } of leftovers) removeTemporary(temporary, folder);
     // Checkpoint a recovered journal once, then start a fresh append sequence.
     if (recovering || !fs.existsSync(manifestFile)) compact();
     const converted = convert(manifest);
@@ -476,9 +483,9 @@ export function runImport(argv, options = {}) {
       fs.writeFileSync(temp, note.text, { mode: 0o600, flag: 'wx' });
       options.beforeRename?.({ note, destination, temp });
       const latestContent = readState(destination, null), latest = latestContent === null ? null : digest(latestContent);
-      if (latest !== diskHash) { fs.rmSync(temp, { force: true }); fs.rmdirSync(temporary.directory); delete manifest.pending[note.key]; record(note.key, null); addChange(note.key, note.path, 'kept'); continue; }
+      if (latest !== diskHash) { removeTemporary(temp, temporary.directory); delete manifest.pending[note.key]; record(note.key, null); addChange(note.key, note.path, 'kept'); continue; }
       fs.renameSync(temp, destination);
-      fs.rmdirSync(temporary.directory);
+      removeTemporary(temp, temporary.directory);
       options.afterRename?.({ note, destination });
       manifest.entries[note.key] = ownValue(manifest.pending, note.key); delete manifest.pending[note.key];
       addChange(note.key, note.path, action);
