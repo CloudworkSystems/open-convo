@@ -211,6 +211,69 @@ function parseFrontMatter(text, sourcePath) {
   return { fields, body: text.slice(end + 5), warning: null };
 }
 
+function escapedAt(text, offset) {
+  let slashes = 0;
+  while (offset > 0 && text[--offset] === '\\') slashes++;
+  return slashes % 2 === 1;
+}
+
+// Keep offsets into the original Markdown: code is never removed or normalized.
+// Fences use their opening character and length; inline spans need a matching
+// backtick run of exactly the same length (and may cross line endings).
+function markdownCodeMask(text) {
+  const mask = new Uint8Array(text.length);
+  let fence = null;
+  for (const match of text.matchAll(/[^\n]*(?:\n|$)/g)) {
+    const line = match[0].replace(/\r?\n$/, '');
+    if (fence) {
+      mask.fill(1, match.index, match.index + match[0].length);
+      const close = /^ {0,3}(`+|~+)[ \t]*$/.exec(line);
+      if (close && close[1][0] === fence[0] && close[1].length >= fence.length) fence = null;
+      continue;
+    }
+    const open = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (open && (open[1][0] !== '`' || !open[2].includes('`'))) {
+      fence = open[1];
+      mask.fill(1, match.index, match.index + match[0].length);
+    } else if (/^(?: {4}| {0,3}\t)/.test(line)) mask.fill(1, match.index, match.index + match[0].length);
+  }
+  for (let i = 0; i < text.length;) {
+    if (mask[i] || text[i] !== '`' || escapedAt(text, i)) { i++; continue; }
+    let end = i + 1;
+    while (text[end] === '`') end++;
+    let cursor = end, closed = false;
+    while (cursor < text.length) {
+      if (mask[cursor]) break;
+      if (text[cursor] !== '`') { cursor++; continue; }
+      let next = cursor + 1;
+      while (text[next] === '`') next++;
+      if (next - cursor === end - i) {
+        mask.fill(1, i, next);
+        i = next;
+        closed = true;
+        break;
+      }
+      cursor = next;
+    }
+    if (!closed) i = end;
+  }
+  return mask;
+}
+
+function readMarkdown(text) {
+  const code = markdownCodeMask(text);
+  let heading;
+  for (const match of text.matchAll(/^# (.+)$/gm)) if (!code[match.index]) { heading = match[1]; break; }
+  let converted = false;
+  let body = text.replace(/!\[([^\]]*)\]\((https?:\/\/[^)]*)\)/gi, (match, label, url, offset) => {
+    if (code[offset] || escapedAt(text, offset)) return match;
+    converted = true;
+    return `[${label}](${url})`;
+  });
+  if (converted) body = `${body.replace(/\n?$/, '\n')}\nImages in this card were not imported. Their links may stop working.\n`;
+  return { heading, body };
+}
+
 export function recallSource() {
   return { id: 'recall', name: 'Recall', read(files) {
     const items = [], skipped = [], warnings = [];
@@ -222,11 +285,9 @@ export function recallSource() {
       const parsed = parseFrontMatter(file.text, file.path);
       if (parsed.warning) warnings.push(parsed.warning);
       const fields = parsed.fields;
-      const heading = /^# (.+)$/m.exec(parsed.body)?.[1];
+      const { heading, body } = readMarkdown(parsed.body);
       const title = fields.title || heading || file.path.split('/').at(-1).replace(/\.md$/i, '');
       const extra = Object.fromEntries(Object.entries(fields).filter(([key]) => !['title', 'url', 'source', 'tags', 'created', 'date'].includes(key)));
-      let body = parsed.body;
-      if (/!\[[^\]]*\]\(https?:\/\//i.test(body)) body = `${body.replace(/!\[([^\]]*)\]\((https?:\/\/[^)]*)\)/gi, '[$1]($2)').replace(/\n?$/, '\n')}\nImages in this card were not imported. Their links may stop working.\n`;
       items.push({ key: file.path, title, body, url: fields.url || fields.source || null, tags: fields.tags || [], created: fields.created || fields.date || null, sourcePath: file.path, extra });
     }
     return { items, skipped, warnings };
