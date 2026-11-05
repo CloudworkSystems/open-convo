@@ -1,6 +1,6 @@
 # Memory Spaces Engine: Propose, Keep, Correct, Forget, Undo (PRD)
 
-Status: In progress (Nov 5): the owner chose "Yes, all four" in the Claude thread "Draft next plans for outside builders" on November 5, 2026; building from issue #297.
+Status: In progress (Nov 5): the owner chose "Yes, all four" in the Claude thread "Draft next plans for outside builders" on November 5, 2026; built from issue #297 and merged November 5 as pull request #300; the owner trial is next, and the plan stays In progress until it passes.
 
 Written November 3, 2026 by a Claude session (project "261024 OC Steering",
 thread "Draft next plans for outside builders"). Session name:
