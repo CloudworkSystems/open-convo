@@ -173,8 +173,11 @@ wiki:
 7. Run on a folder that doesn't exist and see "Can't read that folder".
 8. Add a file that isn't plain text and see it named as skipped while the
    rest are searched.
-9. Run with `--limit 0` and with an empty query and see each refusal.
-10. Check the folder afterwards: nothing in it changed.
+9. Run with `--limit 0`, with an empty query, and with a query over 500
+   characters, and see each refusal.
+10. Run with `--dir` set to a folder that holds `.git` (for example this
+    repository's root) and see atlas-index's refusal.
+11. Check the folder afterwards: nothing in it changed.
 
 He confirms each message says what to do next.
 
@@ -185,6 +188,7 @@ request must meet (docs/agent-process.md "Plans stop after two Codex
 rounds"):
 
 - A note matched only by its file name or about line (no searched content line holds a query word, or the note is empty) is still returned, with `line: null` and `lineNumber: null`. The command shows "(matched by its title)" in place of a line, never an unrelated first line. Tests cover an empty `seed-potatoes.md` and a note whose only match is its file name ([thread](https://github.com/CloudworkSystems/open-convo/pull/303#discussion_r4479814048)).
+- The owner trial covers every refusal the command promises, including a query over 500 characters and a `--dir` holding `.git` (trial steps 9 and 10) ([thread](https://github.com/CloudworkSystems/open-convo/pull/303#discussion_r4479836666)).
 
 ## Out Of Scope For This Slice
 
