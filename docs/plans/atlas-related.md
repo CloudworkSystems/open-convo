@@ -80,7 +80,9 @@ in, and later sit beside each note in the Desk.
    the number of them that use the word. The `1 +` keeps every weight above
    zero, so in a folder of two notes, or for a word every note uses, a
    shared word still counts, only less. A word used by only one note can't
-   be shared and drops out. The score is the cosine of the two lists. A
+   be shared, so it adds nothing to the dot product, but it stays in that
+   note's list and counts in its length (the cosine's denominator), so a
+   single shared word among many unrelated ones scores low, not 1. The score is the cosine of the two lists. A
    note that shares no word with the starting note is never returned.
 3. **Titles count twice.** A word in the file name or the note's `about`
    line counts twice in that note.
@@ -153,7 +155,9 @@ questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
    words; an exact score for a small hand-worked example of three notes.
 2. Folding: upper case, accents (`café` and `cafe` are one word),
    punctuation, one-character words, digit-only words and stop words.
-3. A word in only one note never counts; a word in every note weighs
+3. A word in only one note never counts toward sharing but does count in
+   the note's length (two notes sharing one word among several unique ones
+   score well below 1, with an exact hand-worked value); a word in every note weighs
    least but more than zero; a folder of exactly two related notes returns
    the other note.
 4. File name and about-line words count twice, and the about line matches
