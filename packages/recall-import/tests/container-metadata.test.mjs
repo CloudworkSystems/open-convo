@@ -20,10 +20,10 @@ for (const [name, open, continuation] of shapes) test(`Container metadata contin
   const shortcut = `${open}[${escaped}]:\n${continuation}  <https://example.invalid/page>\n${continuation}  "Page title"\n${continuation}\n${continuation}[${label}]\n`;
   assert.ok(read(shortcut).body.includes('[cover](<https://example.invalid/page>\n  "Page title")'), read(shortcut).body);
 });
-for (const [name, open, continuation] of shapes) test(`Container metadata heading table: ${name} ATX and setext`, () => {
+for (const [name, open, continuation] of shapes) test(`Container metadata heading table: ${name} ATX and setext stay excluded from fallback titles`, () => {
   for (const lines of [['# Basil plants'], ['Basil plants', '==='], ['Basil plants', '---']]) {
     const text = open + lines.join('\n' + continuation) + '\n' + continuation + '\n' + continuation + `![cover](${url})\n`;
-    const item = read(text); assert.equal(item.title, 'Basil plants'); assert.ok(item.body.startsWith(text.replace('![cover]', '[cover]')));
+    const item = read(text); assert.equal(item.title, 'invented'); assert.ok(item.body.startsWith(text.replace('![cover]', '[cover]')));
   }
 });
 test('Container metadata protection table: quoted code HTML and front matter never define references or titles', () => {
@@ -44,6 +44,6 @@ test('Container metadata sweep table: unindented destinations and continued titl
     assert.ok(body.includes('> ![hidden](https://example.invalid/hidden.png)')); assert.ok(body.includes('> [cover][img]')); assert.ok(body.slice(body.indexOf(notice)).includes(url));
   }
 });
-test('Container metadata sweep table: multiline setext and higher ATX headings retain original title text', () => {
-  for (const [body, title] of [['> First line\n> second line\n> ===\n', 'First line second line'], ['- ## Basil plants ##\n', 'Basil plants']]) assert.equal(read(body).title, title);
+test('Container metadata sweep table: container headings remain excluded regardless of level or setext style', () => {
+  for (const [body, title] of [['> First line\n> second line\n> ===\n', 'invented'], ['- ## Basil plants ##\n', 'invented']]) assert.equal(read(body).title, title);
 });

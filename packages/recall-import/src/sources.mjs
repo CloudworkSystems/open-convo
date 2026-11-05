@@ -507,8 +507,8 @@ function markdownCodeMask(text) {
     }
     const heading = /^ {0,3}#{1,6}(?:[ \t]|$)/.test(line);
     const setext = paragraph && /^ {0,3}(?:=+|-+)[ \t]*$/.test(line);
-    if (heading) headings.push({ at: blockLines.length - 1, title: record.content.replace(/^ {0,3}#{1,6}(?:[ \t]+|$)/, '').replace(/[ \t]+#+[ \t]*$/, '').trim() });
-    if (setext) {
+    if (heading && /^ {0,3}# /.test(raw)) headings.push({ at: blockLines.length - 1, title: record.content.replace(/^ {0,3}#{1,6}(?:[ \t]+|$)/, '').replace(/[ \t]+#+[ \t]*$/, '').trim() });
+    if (setext && containers.length === 0 && /^ {0,3}=+[ \t]*$/.test(line)) {
       const parts = [];
       for (let i = blockLines.length - 2; i >= 0 && blockLines[i].paragraph && blockLines[i].scope === record.scope; i--) parts.unshift(blockLines[i].content.trim());
       if (parts.length) headings.push({ at: blockLines.length - 1 - parts.length, title: parts.join(' ') });
