@@ -212,7 +212,7 @@ request must meet (docs/agent-process.md "Plans stop after two Codex
 rounds"):
 
 - BM25's word weight is the smoothed form `idf = ln(1 + (N - df + 0.5) / (df + 0.5))`, where `N` is the number of entries `read` returned and `df` the number that hold the word, so it is never negative, even for a word in most of them. The hand-worked exact-score test uses this formula ([thread](https://github.com/CloudworkSystems/open-convo/pull/303#discussion_r4479950988)).
-- An `owner said` label whose date isn't a valid `YYYY-MM-DD` calendar date is ignored for age, which then comes from the keep or correct still in effect, so `ageDays` is always a whole number and never `NaN`. A test gives a stale price an unparseable label date and checks it is still flagged `recheck` ([thread](https://github.com/CloudworkSystems/open-convo/pull/303#discussion_r4480141627)).
+- An `owner said` label whose date isn't a valid `YYYY-MM-DD` calendar date, or is later than `now`, is ignored for age, which then comes from the keep or correct still in effect, so `ageDays` is always a whole number and never `NaN`. Tests give a stale price an unparseable label date, and one a future label date, and check each is still flagged `recheck` (and `ageDays` is never negative) ([thread](https://github.com/CloudworkSystems/open-convo/pull/303#discussion_r4480141627)).
 
 ## Out Of Scope For This Slice
 
