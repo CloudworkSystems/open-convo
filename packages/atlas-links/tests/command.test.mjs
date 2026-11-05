@@ -300,6 +300,40 @@ test('a partial write is journaled before the rename so the next run can finish'
   }
 });
 
+test('an untouched note edited during the pause is the hash stored in the snapshot', async () => {
+  const dir = tempDir();
+  try {
+    writeNote(dir, 'b.md', '# Bee\n');
+    writeNote(dir, 'a.md', 'See [b](b.md).\n');
+    writeNote(dir, 'c.md', '# Cee\n');
+    writeNote(dir, 'd.md', 'See [c](c.md).\n');
+    assert.equal((await capture(['--dir', dir, '--record'])).code, 0);
+    move(dir, 'b.md', 'nest/b.md');
+    const input = new PassThrough();
+    let out = '';
+    const pending = run(['--dir', dir, '--write', '--pause-before-write'], {
+      stdin: input,
+      stdout: text => { out += text; },
+      stderr: text => { out += text; },
+    });
+    assert.match(out, /Paused before writing/);
+    const edited = '# Cee\nEdited.\n';
+    writeFileSync(path.join(dir, 'c.md'), edited);
+    input.end('\n');
+    assert.equal(await pending, 0);
+    assert.match(readNote(dir, 'a.md'), /nest\/b\.md/);
+    const saved = JSON.parse(readFileSync(path.join(dir, '.atlas-links', 'paths.json'), 'utf8'));
+    const want = createHash('sha256').update(edited).digest('hex');
+    assert.equal(saved.notes.find(note => note.path === 'c.md').sha256, want);
+    move(dir, 'c.md', 'box/c.md');
+    const second = await capture(['--dir', dir, '--write']);
+    assert.equal(second.code, 0, second.err);
+    assert.match(readNote(dir, 'd.md'), /box\/c\.md/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('a note with a byte-order mark is read and written with that mark', async () => {
   const dir = tempDir();
   try {
@@ -485,8 +519,19 @@ test('unsafe folders, hidden files, links, and bad bytes are refused', async () 
     writeFileSync(path.join(messy, '.atlas-links', 'paths.json'), damaged);
     const badHash = await capture(['--dir', messy, '--record']);
     assert.equal(badHash.code, 1);
-    assert.match(badHash.err, /64 lowercase hex/);
+    assert.match(badHash.err, /not usable/);
     assert.equal(readFileSync(path.join(messy, '.atlas-links', 'paths.json'), 'utf8'), damaged);
+    const brokenList = '{ "notes": [null] }';
+    writeFileSync(path.join(messy, '.atlas-links', 'paths.json'), brokenList);
+    writeFileSync(path.join(messy, '.atlas-links', 'journal.json'), JSON.stringify({
+      notes: [{ path: 'a.md', before: 'a'.repeat(64), after: 'b'.repeat(64) }],
+    }));
+    const recovered = await capture(['--dir', messy, '--write']);
+    assert.equal(recovered.code, 1);
+    assert.match(recovered.err, /not usable/);
+    assert.equal(recovered.err.includes('TypeError'), false);
+    assert.equal(readFileSync(path.join(messy, '.atlas-links', 'paths.json'), 'utf8'), brokenList);
+    assert.equal(readNote(messy, 'a.md'), '# A\n');
   } finally {
     rmSync(gitDir, { recursive: true, force: true });
     rmSync(hidden, { recursive: true, force: true });

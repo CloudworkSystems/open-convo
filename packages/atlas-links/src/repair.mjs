@@ -570,11 +570,39 @@ function loadJson(root, name, label) {
   }
 }
 
+function snapshotNoteOk(note) {
+  if (!note || typeof note !== 'object' || Array.isArray(note)) return false;
+  if (typeof note.path !== 'string' || typeof note.sha256 !== 'string') return false;
+  if (!/^[0-9a-f]{64}$/.test(note.sha256)) return false;
+  if (
+    note.path.length === 0
+    || note.path.length > 4096
+    || note.path.includes('\\')
+    || note.path.startsWith('/')
+    || !note.path.endsWith('.md')
+    || note.path.split('/').some(part => part === '' || part === '.' || part === '..')
+  ) return false;
+  for (const key of Object.keys(note)) {
+    if (key !== 'path' && key !== 'sha256') return false;
+  }
+  return true;
+}
+
 function readSnapshot(root) {
   const parsed = loadJson(root, SNAPSHOT, 'snapshot');
   if (parsed === null) return null;
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || !Array.isArray(parsed.notes)) {
     fail('The snapshot is not usable.');
+  }
+  for (const key of Object.keys(parsed)) {
+    if (key !== 'notes') fail('The snapshot is not usable.');
+  }
+  const seen = new Set();
+  for (const note of parsed.notes) {
+    if (!snapshotNoteOk(note)) fail('The snapshot is not usable.');
+    const key = note.path.normalize('NFC');
+    if (seen.has(key)) fail('The snapshot is not usable.');
+    seen.add(key);
   }
   return parsed;
 }
@@ -614,7 +642,11 @@ function pathPresent(paths, notePath) {
 function aliasSnapshot(snapshot, journal, hashes) {
   if (!journal) return snapshot;
   if (!snapshot) fail('The snapshot is missing, so the unfinished repair cannot be finished.');
-  const notes = snapshot.notes.map(note => ({ path: note.path, sha256: note.sha256 }));
+  const notes = [];
+  for (const note of snapshot.notes) {
+    if (!snapshotNoteOk(note)) fail('The snapshot is not usable.');
+    notes.push({ path: note.path, sha256: note.sha256 });
+  }
   for (const entry of journal.notes) {
     if (hashes.get(entry.path) !== entry.after) continue;
     const direct = notes.find(note => note.path.normalize('NFC') === entry.path.normalize('NFC'));
@@ -633,9 +665,25 @@ function aliasSnapshot(snapshot, journal, hashes) {
   return { notes };
 }
 
-function updateKept(snapshot, scannedPaths, written) {
+function hashOnDisk(root, notePath, previous) {
+  let target;
+  try {
+    target = locate(root, notePath);
+  } catch (error) {
+    if (error instanceof LinkRepairError) return null;
+    throw error;
+  }
+  const seen = inspect(target);
+  if (!seen.bytes) return null;
+  if (!previous || !previous.equals(seen.bytes)) decodeNote(seen.bytes, notePath);
+  return sha256Bytes(seen.bytes);
+}
+
+function updateKept(root, snapshot, scanned, written) {
   const notes = snapshot.notes.map(note => ({ path: note.path, sha256: note.sha256 }));
+  const writtenPaths = new Set();
   for (const item of written) {
+    writtenPaths.add(item.path);
     const direct = notes.find(note => note.path.normalize('NFC') === item.path.normalize('NFC'));
     if (direct) {
       direct.sha256 = item.after;
@@ -644,20 +692,31 @@ function updateKept(snapshot, scannedPaths, written) {
     const key = nameKey(fileTitle(item.path));
     for (const note of notes) {
       if (note.sha256 !== item.before) continue;
-      if (pathPresent(scannedPaths, note.path)) continue;
+      if (pathPresent(scanned.bytes, note.path)) continue;
       if (nameKey(fileTitle(note.path)) !== key) continue;
       note.sha256 = item.after;
     }
+  }
+  for (const note of notes) {
+    if (writtenPaths.has(note.path) || !scanned.bytes.has(note.path)) continue;
+    const hash = hashOnDisk(root, note.path, scanned.bytes.get(note.path));
+    if (hash) note.sha256 = hash;
   }
   notes.sort((a, b) => compareText(a.path, b.path));
   return { notes };
 }
 
-function fullSnapshot(scanned, writtenText) {
-  const notes = scanned.notes.map(note => ({
-    path: note.path,
-    sha256: writtenText.has(note.path) ? sha256Text(writtenText.get(note.path)) : sha256Bytes(scanned.bytes.get(note.path)),
-  }));
+function fullSnapshot(root, scanned, writtenText) {
+  const notes = [];
+  for (const note of scanned.notes) {
+    if (writtenText.has(note.path)) {
+      notes.push({ path: note.path, sha256: sha256Text(writtenText.get(note.path)) });
+      continue;
+    }
+    const hash = hashOnDisk(root, note.path, scanned.bytes.get(note.path));
+    if (!hash) continue;
+    notes.push({ path: note.path, sha256: hash });
+  }
   notes.sort((a, b) => compareText(a.path, b.path));
   return { notes };
 }
@@ -847,8 +906,8 @@ async function runWrite(root, args, scanned, snapshot, journal, io, stdout) {
   const snapshotKept = skipped.length > 0;
   if (!aliased && snapshotKept) fail('The snapshot is missing, so the skipped links cannot be kept.');
   const next = snapshotKept
-    ? updateKept(aliased, new Set(scanned.notes.map(note => note.path)), written)
-    : fullSnapshot(scanned, writtenText);
+    ? updateKept(root, aliased, scanned, written)
+    : fullSnapshot(root, scanned, writtenText);
   if (io.crashBeforeSnapshot) {
     const crash = new Error('Stopped before the snapshot was saved.');
     crash.crash = true;
@@ -913,7 +972,7 @@ export async function run(argv, io = {}) {
       if (journal) fail('An earlier repair stopped without finishing. Run --write to finish it before recording.');
       const scanned = scanDirectory(root);
       planRepairs(scanned.notes, existing);
-      const snapshot = fullSnapshot(scanned, new Map());
+      const snapshot = fullSnapshot(root, scanned, new Map());
       saveJson(root, SNAPSHOT, snapshotJson(snapshot));
       emit(stdout, args.json ? `${snapshotJson(snapshot)}` : `Recorded ${snapshot.notes.length} notes.\n`);
       return 0;
