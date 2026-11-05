@@ -205,6 +205,14 @@ the shipped sample):
 
 He confirms each message says what to do next.
 
+## Carried To The Build
+
+Codex findings from the plan review's later rounds, which the code pull
+request must meet (docs/agent-process.md "Plans stop after two Codex
+rounds"):
+
+- BM25's word weight is the smoothed form `idf = ln(1 + (N - df + 0.5) / (df + 0.5))`, where `N` is the number of entries `read` returned and `df` the number that hold the word, so it is never negative, even for a word in most of them. The hand-worked exact-score test uses this formula ([thread](https://github.com/CloudworkSystems/open-convo/pull/303#discussion_r4479950988)).
+
 ## Out Of Scope For This Slice
 
 The protected store, real memory, the prime agent's call, the Desk view,
