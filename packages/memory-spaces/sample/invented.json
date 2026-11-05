@@ -1,0 +1,7 @@
+{
+  "spaces": [
+    { "id": "personal", "name": "Personal", "kind": "personal" },
+    { "id": "studio", "name": "Invented Studio", "kind": "business" }
+  ],
+  "proposal": "The invented sample prefers blue notebook covers."
+}
