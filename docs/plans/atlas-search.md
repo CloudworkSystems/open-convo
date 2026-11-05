@@ -86,9 +86,14 @@ notes, and later sit behind the Desk's search box and the prime agent's
 
 `node packages/atlas-search/src/search.mjs --dir <folder> [--limit n] [--json] "words to find"`
 
-- It reads the folder with atlas-index's own `scanDirectory`, so it skips
-  hidden folders and symbolic links and refuses a `--dir` that holds
-  `.git` or is this repository's root, exactly as atlas-index does.
+- It reads the folder itself, by the reading rules atlas-index's README
+  states: every `.md` file under `--dir`, skipping hidden folders and
+  symbolic links, and refusing a `--dir` that holds `.git` or is this
+  repository's root. (atlas-index's `scanDirectory` isn't part of its
+  public export, so this package doesn't import it.) A test reads the
+  sample wiki both ways, this command's reader and `scanDirectory`
+  imported from `packages/atlas-index/src/atlas.mjs` in the test only,
+  and checks they give the same notes.
 - It prints each result as the note's path, its about line, and the
   matched line with its number, then the notes. `--json` prints the
   library's result.
@@ -143,8 +148,10 @@ questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
    order.
 10. The library never reads the clock, imports `child_process` or a
     network module, or uses `fs` (a test checks the source).
-11. The command: writes no file (a test lists the folder, hidden files
-    included, before and after), skips hidden folders and symbolic links,
+11. The command: reads the same notes as atlas-index's `scanDirectory`
+    on the sample wiki, writes no file (a test lists the folder, hidden
+    files included, before and after), skips hidden folders and symbolic
+    links,
     refuses a folder holding `.git`, skips and names a file that isn't
     valid UTF-8, and prints each "When It Goes Wrong" message.
 
@@ -198,14 +205,16 @@ so breaking one is a stop-and-report event.
 - Touch no keys, tokens, passwords, accounts, Keychain, iCloud or private
   files. Invented notes only, with no real names.
 - Change files only under `packages/atlas-search/`. Import
-  `packages/atlas-index/` by relative path through its public export; if
-  it lacks something, stop and report instead of changing it. Nothing
-  else, not even `STATUS.md` (the coordinator updates it).
+  `packages/atlas-index/` by relative path through its public export
+  (`src/index.mjs`) in the library, if at all; the tests may also import
+  its `src/atlas.mjs` to compare readers. If it lacks something else,
+  stop and report instead of changing it. Nothing else, not even
+  `STATUS.md` (the coordinator updates it).
 - JavaScript modules (`.mjs`), Node 22 or later, `"type": "module"`,
   `"private": true`, tests with `node --test`.
 - No network calls, no AI, no paid services, no `child_process`, no clock,
   in the code or the tests. No `fs` in the library; the command only
-  reads, through atlas-index's `scanDirectory`, and writes nothing. The
+  reads, by the reading rules above, and writes nothing. The
   tests may write only in their own temporary folders.
 - No new dependencies. Add no license file and no `license` field.
 - Keep the slice small: the library, the command, the tests, the sample
