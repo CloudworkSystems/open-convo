@@ -1,6 +1,6 @@
 # Recall Import, Behind A Knowledge Source Slot (PRD)
 
-Status: Built (Nov 5): the owner chose "Yes, all four" in the Claude thread "Draft next plans for outside builders" on November 5, 2026; built from issue #296 and merged November 5 as pull request #299; owner trial next.
+Status: In progress (Nov 5): the owner chose "Yes, all four" in the Claude thread "Draft next plans for outside builders" on November 5, 2026; built from issue #296 and merged November 5 as pull request #299; the owner trial is next, and the plan stays In progress until it passes.
 
 Written November 3, 2026 by a Claude session (project "261024 OC Steering",
 thread "Draft next plans for outside builders"). Session name:
