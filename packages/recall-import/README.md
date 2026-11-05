@@ -25,6 +25,8 @@ Add a source object to the small list in `src/sources.mjs`: `{ id, name, read(fi
 - Hidden export entries are ignored. Symbolic links are listed and never followed.
 - Simple front matter means one `key: value` per line. Tags may be comma-separated inside brackets. Front matter outside that shape stays in the body and produces a warning.
 - Scalar front-matter values are preserved as text. Unknown values are written under the source id.
+- Unknown values that resemble numbers, dates, null or booleans are quoted under the source id so they remain text, including leading zeroes such as `"001"`.
+- `checkSource` gives readers read-only file records sharing their original text strings. It checks repeatability with a SHA-256 comparison fed in small chunks, without cloning the export text or serializing the full result.
 - Slug collisions, paths differing only by letter case, and reserved `INDEX.md` names receive a stable hash suffix.
 - Existing folders keep their permissions. New import folders use mode `0700`; new notes use `0600`.
 - A source has one writer at a time. A dead same-computer lock is recovered. A recovery lock requires the printed manual command after its process is confirmed gone.

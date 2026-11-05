@@ -87,7 +87,7 @@ export function runImport(argv, options = {}) {
     const reclaim = argv[1];
     if (argv.length !== 2 || !path.isAbsolute(reclaim || '') || !reclaim.endsWith('/.import.lock.reclaim')) throw new Error('Use unlock with the absolute reclaim-lock path printed by the command.');
     const info = lockInfo(reclaim);
-    if (!info || info.host !== os.hostname() || !Number.isInteger(info.pid) || alive(info)) throw new Error(`Cannot unlock "${reclaim}": its process is running or cannot be confirmed gone.`);
+    if (!info || info.host !== os.hostname() || !Number.isInteger(info.pid) || info.pid <= 0 || alive(info) || fs.lstatSync(reclaim).isSymbolicLink()) throw new Error(`Cannot unlock "${reclaim}": its process is running or cannot be confirmed gone.`);
     const before = fs.readFileSync(reclaim, 'utf8');
     if (before !== JSON.stringify(info)) throw new Error('Recovery lock changed. Try again.');
     fs.unlinkSync(reclaim);

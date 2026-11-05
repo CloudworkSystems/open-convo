@@ -37,12 +37,40 @@ function validateResult(source, result) {
   return result;
 }
 
+// Hash typed values a small string chunk at a time. In particular, never build
+// a JSON string containing all card bodies just to compare two reader results.
+function resultDigest(result) {
+  const digest = createHash('sha256');
+  const ancestors = new Set();
+  function visit(value) {
+    if (typeof value === 'string') {
+      digest.update(`string:${value.length}:`);
+      for (let offset = 0; offset < value.length; offset += 4096) digest.update(value.slice(offset, offset + 4096), 'utf16le');
+    } else if (value === null) digest.update('null;');
+    else if (typeof value === 'object') {
+      if (ancestors.has(value)) fail('Source result must not contain circular references.');
+      ancestors.add(value);
+      digest.update(Array.isArray(value) ? 'array{' : 'object{');
+      for (const key of Object.keys(value)) { visit(key); visit(value[key]); }
+      digest.update('}');
+      ancestors.delete(value);
+    } else if (['number', 'boolean', 'undefined'].includes(typeof value)) digest.update(`${typeof value}:${String(value)};`);
+    else fail('Source result contains a value that is not plain data.');
+  }
+  visit(result);
+  return digest.digest('hex');
+}
+
 export function checkSource(source, files) {
   validateSource(source);
   if (!Array.isArray(files)) fail('Files must be a list.');
-  const first = validateResult(source, source.read(structuredClone(files)));
-  const second = validateResult(source, source.read(structuredClone(files)));
-  if (JSON.stringify(first) !== JSON.stringify(second)) fail(`Source "${source.id}" returned different results for the same files.`);
+  // Copy only the small records, sharing immutable strings rather than cloning
+  // every card's text. Readers get the same read-only input on both calls.
+  const input = Object.freeze(files.map(file => Object.freeze({ path: file.path, text: file.text })));
+  const first = validateResult(source, source.read(input));
+  const firstDigest = resultDigest(first);
+  const secondDigest = resultDigest(validateResult(source, source.read(input)));
+  if (firstDigest !== secondDigest) fail(`Source "${source.id}" returned different results for the same files.`);
   return first;
 }
 
@@ -51,14 +79,15 @@ function scalar(value) {
   return /^[A-Za-z0-9 _./:@+-]+$/.test(text) && text.trim() === text ? text : JSON.stringify(text);
 }
 
-function frontLines(key, value, indent = '') {
-  if (Array.isArray(value)) return value.length ? [`${indent}${key}:`, ...value.map(v => `${indent}  - ${scalar(v)}`)] : [`${indent}${key}: []`];
+function frontLines(key, value, indent = '', keepText = false) {
+  const emit = v => keepText && /^(?:[+-]?(?:\d|\.\d)|null$|true$|false$|yes$|no$|on$|off$|~$|\.inf$|\.nan$)/i.test(String(v)) ? JSON.stringify(String(v)) : scalar(v);
+  if (Array.isArray(value)) return value.length ? [`${indent}${key}:`, ...value.map(v => `${indent}  - ${emit(v)}`)] : [`${indent}${key}: []`];
   if (plain(value)) {
     const lines = [`${indent}${key}:`];
-    for (const [child, childValue] of Object.entries(value)) lines.push(...frontLines(child, childValue, `${indent}  `));
+    for (const [child, childValue] of Object.entries(value)) lines.push(...frontLines(child, childValue, `${indent}  `, keepText));
     return lines;
   }
-  return [`${indent}${key}: ${scalar(value)}`];
+  return [`${indent}${key}: ${emit(value)}`];
 }
 
 function slugParts(key) {
@@ -112,7 +141,7 @@ export function toNotes(items, { source, importedAt, manifest = {}, hashKey = ha
     if (item.url) lines.push(...frontLines('url', item.url));
     if (item.tags.length) lines.push(...frontLines('tags', item.tags));
     if (item.created) lines.push(...frontLines('created', item.created));
-    if (item.extra && Object.keys(item.extra).length) lines.push(...frontLines(source.id, item.extra));
+    if (item.extra && Object.keys(item.extra).length) lines.push(...frontLines(source.id, item.extra, '', true));
     lines.push('---', '', item.body);
     return { key: item.key, path, text: lines.slice(0, -1).join('\n') + '\n' + item.body };
   });
