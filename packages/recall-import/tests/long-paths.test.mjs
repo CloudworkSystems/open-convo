@@ -50,7 +50,7 @@ test('Filename sweep: valid 255-byte UTF-8 manifest names keep their exact path'
   fs.writeFileSync(path.join(f.input, 'one.md'), '# Updated invented\n'); fs.mkdirSync(f.dir, { recursive: true });
   const text = 'Existing invented note\n', key = 'one.md', notePath = 'sources/recall/' + name;
   fs.writeFileSync(path.join(f.dir, name), text);
-  const entry = { path: notePath, fullHash: createHash('sha256').update(text).digest('hex'), sourceHash: 'old' };
+  const entry = { path: notePath, fullHash: createHash('sha256').update(text).digest('hex'), sourceHash: '0'.repeat(64) };
   fs.writeFileSync(path.join(f.dir, '.import-manifest.json'), JSON.stringify({ version: 1, entries: { [key]: entry }, pending: {} }));
   const report = runImport(f.argv, { beforeRename({ temp }) { shortComponents(temp); } });
   assert.equal(report.paths[0].path, notePath); assert.match(fs.readFileSync(path.join(f.dir, name), 'utf8'), /Updated invented/);

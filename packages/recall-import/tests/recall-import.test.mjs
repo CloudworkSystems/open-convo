@@ -140,7 +140,8 @@ test('writes private modes, refuses destination symlinks, and recovers stale or 
   for (const dir of [path.join(atlas, 'sources'), path.join(atlas, 'sources/recall'), path.join(atlas, 'sources/recall/nested')]) assert.equal(fs.statSync(dir).mode & 0o777, 0o700);
   assert.equal(fs.statSync(path.join(atlas, 'sources/recall/nested/one.md')).mode & 0o777, 0o600);
   const lock = path.join(atlas, 'sources/recall/.import.lock'); fs.writeFileSync(lock, '');
-  assert.ok(runImport(args(input, atlas, ['--write'])).messages.some(m => m.includes('cleared its lock')));
+  assert.ok(runImport(args(input, atlas, ['--write'])).messages.includes('An earlier import stopped without finishing; cleared its lock.'));
+  assert.equal(fs.existsSync(lock), false);
   const root2 = temp(), input2 = path.join(root2, 'input'), atlas2 = path.join(root2, 'atlas'), outside = path.join(root2, 'outside'); fs.mkdirSync(input2); fs.mkdirSync(atlas2); fs.mkdirSync(outside); write(input2, 'one.md', '# One'); fs.mkdirSync(path.join(atlas2, 'sources')); fs.symlinkSync(outside, path.join(atlas2, 'sources/recall'));
   assert.throws(() => runImport(args(input2, atlas2, ['--write'])), /non-folder/);
 });

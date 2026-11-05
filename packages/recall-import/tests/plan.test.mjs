@@ -175,7 +175,7 @@ test('Carried 10: suffixes escalate to full hash and exhausted collisions refuse
   assert.throws(() => toNotes(keys.map(item), { source, importedAt: time, hashKey }), /unique path/);
   const f = fixture(); for (const key of keys) f.put(key);
   assert.throws(() => f.run({ hashKey }), /unique path/);
-  assert.equal(fs.readdirSync(f.dir).some(name => name.endsWith('.md')), false);
+  assert.equal(fs.existsSync(f.dir) && fs.readdirSync(f.dir).some(name => name.endsWith('.md')), false);
 });
 
 test('Carried 11: umask 022 creates all nested directories 0700 without widening existing', () => {
@@ -200,10 +200,10 @@ test('Carried 12: dead same-host lock recovers pending import; foreign lock is k
   assert.throws(() => f.run(), /Another import is running/); assert.equal(fs.readFileSync(lock, 'utf8'), foreign);
 });
 
-test('Carried 13: whole lock publication and empty or malformed lock recovery', () => {
+test('Carried 13: whole lock publication and recovery of empty or malformed locks', () => {
   const f = fixture(); f.put('one.md');
   f.run({ beforeRename: () => { const lock = JSON.parse(fs.readFileSync(path.join(f.dir, '.import.lock'))); assert.equal(lock.pid, process.pid); assert.equal(lock.host, os.hostname()); assert.equal(fs.readdirSync(f.dir).some(n => n.includes('.new-')), false); } });
-  for (const content of ['', '{broken']) { fs.writeFileSync(path.join(f.dir, '.import.lock'), content); assert.ok(f.run().messages.some(m => m.includes('cleared its lock'))); manifestMatches(f); }
+  for (const content of ['', '{broken']) { const lock = path.join(f.dir, '.import.lock'); fs.writeFileSync(lock, content); assert.ok(f.run().messages.includes('An earlier import stopped without finishing; cleared its lock.')); assert.equal(fs.existsSync(lock), false); manifestMatches(f); }
 });
 
 test('Carried 14: two overlapping recoverers have exactly one winner', () => {
@@ -219,4 +219,16 @@ test('Carried 14: printed unlock command removes only a confirmed dead reclaim l
   assert.throws(() => f.run(), error => { assert.ok(error.message.includes(`unlock "${reclaim}"`)); return true; }); assert.equal(fs.existsSync(reclaim), true);
   runImport(['unlock', reclaim]); assert.equal(fs.existsSync(reclaim), false); f.run(); manifestMatches(f);
   for (const info of [{ pid: process.pid, host: os.hostname() }, { pid: 2147483647, host: 'invented-foreign-host' }]) { fs.writeFileSync(reclaim, JSON.stringify(info)); assert.throws(() => runImport(['unlock', reclaim]), /cannot be confirmed gone/); assert.equal(fs.existsSync(reclaim), true); }
+});
+
+
+test('Carried 13: a competing import sees a whole valid lock and refuses while its owner holds it', () => {
+  const f = fixture(); f.put('one.md'); let checked = false;
+  f.run({ beforeRename: () => {
+    const lock = path.join(f.dir, '.import.lock'), before = fs.readFileSync(lock, 'utf8');
+    assert.deepEqual(JSON.parse(before), { pid: process.pid, host: os.hostname() });
+    assert.throws(() => f.run(), /Another import is running for this source/);
+    assert.equal(fs.readFileSync(lock, 'utf8'), before); checked = true;
+  } });
+  assert.ok(checked); manifestMatches(f);
 });

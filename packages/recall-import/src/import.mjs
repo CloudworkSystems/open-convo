@@ -11,7 +11,64 @@ const digest = text => createHash('sha256').update(text).digest('hex');
 const sourceDigest = text => digest(text.replace(/^imported: .*$/m, 'imported:'));
 const dataMap = value => Object.assign(Object.create(null), value);
 const ownValue = (record, key) => Object.hasOwn(record, key) ? record[key] : undefined;
-const safeJson = file => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return { version: 1, entries: {}, pending: {} }; } };
+class StateReadError extends Error {}
+const stateError = (file, detail) => new StateReadError(`Refusing saved state "${file}": ${detail}. Restore a readable, valid copy of "${file}", or back it up and move "${file}" aside before starting fresh.`);
+function readState(file, encoding = 'utf8') {
+  try {
+    const stat = fs.lstatSync(file);
+    if (!stat.isFile() || stat.isSymbolicLink()) throw stateError(file, 'expected a regular file, not a directory or symbolic link');
+    return fs.readFileSync(file, encoding);
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    if (error instanceof StateReadError) throw error;
+    throw stateError(file, error.code || 'could not read the file');
+  }
+}
+const plainRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
+const safeKey = key => typeof key === 'string' && key.length > 0 && !key.startsWith('/') && !/[\\\u0000-\u001f\u007f-\u009f]/.test(key) && key.split('/').every(part => part && !part.startsWith('.'));
+const hashText = value => typeof value === 'string' && /^[0-9a-f]{64}$(?![\s\S])/i.test(value);
+function parseState(text, file) {
+  let parsed;
+  try { parsed = JSON.parse(text); } catch { throw stateError(file, 'malformed or truncated JSON'); }
+  // JSON.parse silently keeps the last duplicate field. Saved ownership maps
+  // cannot safely discard an earlier record this way, even if JSON is valid.
+  const stack = [];
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (char === '{') stack.push({ object: true, key: true, names: new Set() });
+    else if (char === '[') stack.push({ object: false });
+    else if (char === '}' || char === ']') stack.pop();
+    else if (char === ',') { if (stack.at(-1)?.object) stack.at(-1).key = true; }
+    else if (char === ':') { if (stack.at(-1)?.object) stack.at(-1).key = false; }
+    else if (char === '"') {
+      const start = i++;
+      while (i < text.length && text[i] !== '"') { if (text[i] === '\\') i++; i++; }
+      const frame = stack.at(-1);
+      if (frame?.object && frame.key) {
+        const name = JSON.parse(text.slice(start, i + 1));
+        if (frame.names.has(name)) throw stateError(file, 'duplicate JSON fields');
+        frame.names.add(name);
+      }
+    }
+  }
+  return parsed;
+}
+function validateEntry(entry, key, file, sourceRoot) {
+  const prefix = `sources/${path.basename(sourceRoot)}/`;
+  if (!safeKey(key) || !plainRecord(entry) || Object.keys(entry).some(name => !['path', 'fullHash', 'sourceHash'].includes(name)) || !safeKey(entry.path) || !entry.path.startsWith(prefix) || !entry.path.endsWith('.md') || entry.path.split('/').some(part => Buffer.byteLength(part) > 255) || !hashText(entry.fullHash) || !hashText(entry.sourceHash)) throw stateError(file, 'invalid note-record schema or source path');
+}
+function validateManifest(manifest, file, sourceRoot) {
+  if (!plainRecord(manifest) || manifest.version !== 1 || Object.keys(manifest).some(key => !['version', 'entries', 'pending'].includes(key)) || !plainRecord(manifest.entries) || !plainRecord(manifest.pending)) throw stateError(file, 'unsupported manifest version or schema');
+  manifest.entries = dataMap(manifest.entries); manifest.pending = dataMap(manifest.pending);
+  const paths = new Map();
+  for (const records of [manifest.entries, manifest.pending]) for (const [key, entry] of Object.entries(records)) {
+    validateEntry(entry, key, file, sourceRoot);
+    const folded = entry.path.toLowerCase();
+    if (paths.has(folded) && paths.get(folded) !== key || ownValue(manifest.entries, key) && ownValue(manifest.entries, key).path !== entry.path) throw stateError(file, 'conflicting note paths');
+    paths.set(folded, key);
+  }
+  return manifest;
+}
 function shortTemp(file, kind) {
   const directory = fs.mkdtempSync(path.join(path.dirname(file), `.import-${kind}-tmp-`));
   return { directory, file: path.join(directory, 'data') };
@@ -23,22 +80,38 @@ function writeAtomic(file, text, mode = 0o600) {
 }
 
 function loadImportState(manifestFile, journalFile) {
-  const manifest = safeJson(manifestFile);
-  manifest.entries = dataMap(ownValue(manifest, 'entries'));
-  manifest.pending = dataMap(ownValue(manifest, 'pending'));
-  const recovering = fs.existsSync(journalFile);
+  const text = readState(manifestFile), sourceRoot = path.dirname(manifestFile);
+  const manifest = text === null ? { version: 1, entries: dataMap(), pending: dataMap() } : validateManifest(parseState(text, manifestFile), manifestFile, sourceRoot);
+  const journal = readState(journalFile);
+  const recovering = journal !== null;
   if (recovering) {
-    const journal = fs.readFileSync(journalFile, 'utf8');
-    // A partial final append cannot have been followed by a note rename.
+    if (text === null) throw stateError(journalFile, 'journal exists without its checkpoint manifest');
+    // An unterminated final append is an interrupted write, never a complete record.
     const complete = journal.slice(0, journal.lastIndexOf('\n') + 1);
     for (const line of complete.split('\n')) {
       if (!line) continue;
-      let entry;
-      try { entry = JSON.parse(line); } catch { throw new Error(`Could not read recovery journal "${journalFile}". Keep it and check the interrupted import.`); }
-      if (typeof entry.key !== 'string' || !Object.hasOwn(entry, 'entry')) throw new Error(`Invalid recovery record in "${journalFile}".`);
+      const entry = parseState(line, journalFile);
+      if (!plainRecord(entry) || !safeKey(entry.key) || !Object.hasOwn(entry, 'entry') || Object.keys(entry).some(key => !['key', 'entry', 'previous'].includes(key))) throw stateError(journalFile, 'invalid journal-record schema');
+      if (entry.entry !== null) validateEntry(entry.entry, entry.key, journalFile, sourceRoot);
+      const old = ownValue(manifest.entries, entry.key);
+      if (entry.entry && old && entry.entry.path !== old.path) throw stateError(journalFile, 'journal path disagrees with the manifest');
+      if (entry.entry && old && entry.entry.fullHash === old.fullHash && entry.entry.sourceHash !== old.sourceHash) throw stateError(journalFile, 'journal content hash disagrees with the manifest');
+      if (entry.entry) {
+        const atlas = path.dirname(path.dirname(sourceRoot)), content = readState(path.join(atlas, entry.entry.path), null);
+        if (content !== null && digest(content) === entry.entry.fullHash && sourceDigest(content.toString('utf8')) !== entry.entry.sourceHash) throw stateError(journalFile, 'journal hashes disagree with the completed note');
+      }
+      if (Object.hasOwn(entry, 'previous')) {
+        if (entry.previous !== null) validateEntry(entry.previous, entry.key, journalFile, sourceRoot);
+        const same = (a, b) => (!a && !b) || a && b && a.path === b.path && a.fullHash === b.fullHash && a.sourceHash === b.sourceHash;
+        if (!same(entry.previous, old) && !same(entry.entry, old)) throw stateError(journalFile, 'journal baseline disagrees with the manifest');
+      } else if (entry.entry && old && entry.entry.fullHash !== old.fullHash) {
+        const atlas = path.dirname(path.dirname(sourceRoot)), content = readState(path.join(atlas, entry.entry.path), null);
+        if (content === null || digest(content) !== entry.entry.fullHash) throw stateError(journalFile, 'legacy journal disagrees with the manifest and note');
+      }
       if (entry.entry === null) delete manifest.pending[entry.key];
       else manifest.pending[entry.key] = entry.entry;
     }
+    validateManifest(manifest, journalFile, sourceRoot);
   }
   return { manifest, recovering };
 }
@@ -49,7 +122,7 @@ function reconcilePending(manifest, atlas, sourceRoot, inspect, messages) {
     if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) throw new Error(`Refusing pending path for "${key}" outside this source's folder.`);
     const destination = path.join(sourceRoot, relative);
     inspect(destination);
-    const diskHash = fs.existsSync(destination) ? digest(fs.readFileSync(destination)) : null;
+    const content = readState(destination, null), diskHash = content === null ? null : digest(content);
     const old = ownValue(manifest.entries, key);
     if (diskHash === pending.fullHash || !old) manifest.entries[key] = pending;
     if (diskHash !== null && diskHash !== pending.fullHash && diskHash !== old?.fullHash) messages.push(`${pending.path}: kept, edited since the last import.`);
@@ -173,8 +246,49 @@ function publishLock(lock, data) {
     fs.linkSync(temp.file, lock);
   } finally { fs.rmSync(temp.file, { force: true }); fs.rmdirSync(temp.directory); }
 }
-function alive(info) { if (!info) return false; if (info.host !== os.hostname()) return true; if (!Number.isInteger(info.pid)) return false; try { process.kill(info.pid, 0); return true; } catch (e) { return e.code !== 'ESRCH'; } }
-function lockInfo(file) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } }
+function alive(info) { if (!info || Object.hasOwn(info, 'invalid')) return false; if (info.host !== os.hostname()) return true; if (!Number.isInteger(info.pid)) return false; try { process.kill(info.pid, 0); return true; } catch (e) { return e.code !== 'ESRCH'; } }
+function validateLock(info, file) {
+  if (!plainRecord(info) || Object.keys(info).some(key => !['pid', 'host'].includes(key)) || !Number.isSafeInteger(info.pid) || info.pid <= 0 || typeof info.host !== 'string' || !info.host.trim()) throw stateError(file, 'invalid process-id and host-name schema');
+  return info;
+}
+function lockInfo(file) {
+  const text = readState(file);
+  if (text === null) return null;
+  let parsed;
+  try { parsed = parseState(text, file); }
+  catch (error) {
+    // Carried 13 applies only to the published import lock, not reclaim locks.
+    if (path.basename(file) === '.import.lock') return { invalid: text };
+    throw error;
+  }
+  return validateLock(parsed, file);
+}
+
+function inspectLeftovers(sourceRoot) {
+  function walk(folder, kind = null) {
+    let entries;
+    try { entries = fs.readdirSync(folder, { withFileTypes: true }); } catch (error) { if (error.code === 'ENOENT') return; throw stateError(folder, error.code || 'cannot inspect saved temporary files'); }
+    for (const entry of entries) {
+      const file = path.join(folder, entry.name);
+      const temporary = /^\.import-(note|manifest|lock)-tmp-/.exec(entry.name);
+      if (temporary) {
+        if (!entry.isDirectory() || entry.isSymbolicLink()) throw stateError(file, 'expected a private temporary folder');
+        walk(file, temporary[1]);
+      } else if (kind) {
+        if (entry.name !== 'data') throw stateError(file, 'unexpected temporary-folder contents');
+        const text = readState(file);
+        if (kind === 'manifest') validateManifest(parseState(text, file), file, sourceRoot);
+        if (kind === 'lock') validateLock(parseState(text, file), file);
+      } else if (entry.isDirectory() && !entry.name.startsWith('.')) walk(file);
+      else if (/\.tmp-|\.new-/.test(entry.name)) {
+        const text = readState(file);
+        if (entry.name.startsWith('.import-manifest.json.tmp-')) validateManifest(parseState(text, file), file, sourceRoot);
+        else if (entry.name.startsWith('.import.lock')) validateLock(parseState(text, file), file);
+      }
+    }
+  }
+  walk(sourceRoot);
+}
 function takeLock(lock, messages, options) {
   const reclaim = `${lock}.reclaim`;
   if (fs.existsSync(reclaim)) throw new Error(`Another command is recovering; try again in a moment. Reclaim lock: ${reclaim}. To remove it after checking its process is gone: node "${fileURLToPath(import.meta.url)}" unlock "${reclaim}"`);
@@ -201,8 +315,8 @@ export function runImport(argv, options = {}) {
     if (argv.length !== 2 || !path.isAbsolute(reclaim) || !/\/sources\/[a-z][a-z0-9-]{0,63}\/\.import\.lock\.reclaim$/.test(reclaim)) throw new Error('unlock: expected the absolute sources/<id>/.import.lock.reclaim path printed by the command.');
     const info = lockInfo(reclaim);
     if (!info || info.host !== os.hostname() || !Number.isInteger(info.pid) || info.pid <= 0 || alive(info) || fs.lstatSync(reclaim).isSymbolicLink()) throw new Error(`Cannot unlock "${reclaim}": its process is running or cannot be confirmed gone.`);
-    const before = fs.readFileSync(reclaim, 'utf8');
-    if (before !== JSON.stringify(info)) throw new Error('Recovery lock changed. Try again.');
+    const before = readState(reclaim);
+    if (before === null || JSON.stringify(parseState(before, reclaim)) !== JSON.stringify(info)) throw stateError(reclaim, 'recovery lock changed while checking its owner');
     fs.unlinkSync(reclaim);
     return { cards: 0, notes: 0, skipped: [], warnings: [], messages: [`Removed recovery lock "${reclaim}".`] };
   }
@@ -215,7 +329,7 @@ export function runImport(argv, options = {}) {
   if (overlaps(input, atlas) || overlaps(atlas, input)) throw new Error('--atlas: expected a folder separate from --in, with neither folder inside the other.');
   for (const folder of [atlas, path.join(atlas, 'sources'), path.join(atlas, 'sources', source.id)]) {
     let stat;
-    try { stat = fs.lstatSync(folder); } catch (error) { if (error.code === 'ENOENT') continue; throw new Error(`--atlas: expected accessible real folders; ${error.message}`); }
+    try { stat = fs.lstatSync(folder); } catch (error) { if (error.code === 'ENOENT') continue; throw stateError(folder, `--atlas requires accessible real folders (${error.code || 'read failure'})`); }
     if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(`--atlas: refusing non-folder or symbolic link "${folder}"; expected real folders for the selected source.`);
   }
   let files, skipped;
@@ -229,7 +343,6 @@ export function runImport(argv, options = {}) {
     messages.push(source.emptyGuidance ?? 'This folder has no items for the selected source. Check that --in points to a readable folder in the format this source supports, then try again.');
     // A genuinely first empty run writes nothing. An existing import still
     // needs its lock, pending recovery, and removed-card reconciliation.
-    if (!fs.existsSync(manifestFile) && !fs.existsSync(journalFile)) return { cards: 0, notes: 0, skipped: result.skipped, warnings: result.warnings, messages, paths: [], changes: [] };
   }
   const importedAt = args.importedat || new Date().toISOString();
   // Inspect the complete destination tree before creating any import files.
@@ -239,8 +352,8 @@ export function runImport(argv, options = {}) {
     for (const segment of ['', ...path.relative(atlas, target).split(path.sep).filter(Boolean)]) {
       if (segment) current = path.join(current, segment);
       let stat;
-      try { stat = fs.lstatSync(current); } catch (error) { if (error.code === 'ENOENT') continue; throw error; }
-      if (stat.isSymbolicLink()) throw new Error(`Refusing write through non-folder "${current}".`);
+      try { stat = fs.lstatSync(current); } catch (error) { if (error.code === 'ENOENT') continue; throw stateError(current, error.code || 'could not inspect saved state'); }
+      if (stat.isSymbolicLink()) throw stateError(current, 'refusing a non-folder symbolic link');
     }
   };
   for (const note of preview.notes) inspect(path.join(atlas, note.path));
@@ -248,6 +361,15 @@ export function runImport(argv, options = {}) {
   inspect(journalFile);
   inspect(path.join(sourceRoot, '.import.lock'));
   inspect(path.join(sourceRoot, '.import.lock.reclaim'));
+  // Read and validate every existing state record before publishing a lock or
+  // checkpoint. Dry runs perform exactly the same read-only validation.
+  const preflight = loadImportState(manifestFile, journalFile);
+  lockInfo(path.join(sourceRoot, '.import.lock'));
+  const reclaimInfo = lockInfo(path.join(sourceRoot, '.import.lock.reclaim'));
+  inspectLeftovers(sourceRoot);
+  if (reclaimInfo) throw new Error(`Another command is recovering; try again in a moment. Reclaim lock: ${path.join(sourceRoot, '.import.lock.reclaim')}. Use node "${fileURLToPath(import.meta.url)}" unlock "${path.join(sourceRoot, '.import.lock.reclaim')}" only after its process is gone.`);
+  for (const records of [preflight.manifest.entries, preflight.manifest.pending]) for (const entry of Object.values(records)) { const file = path.join(atlas, entry.path); inspect(file); readState(file, null); }
+  if (!result.items.length && readState(manifestFile) === null && readState(journalFile) === null) return { cards: 0, notes: 0, skipped: result.skipped, warnings: result.warnings, messages, paths: [], changes: [] };
   const changes = [];
   const report = converted => ({ cards: result.items.length, notes: converted.notes.length, skipped: result.skipped, warnings: [...result.warnings, ...converted.warnings], messages, paths: converted.notes.map(({ key, path: notePath }) => ({ key, path: notePath })), changes });
   const addChange = (key, notePath, action) => {
@@ -264,18 +386,25 @@ export function runImport(argv, options = {}) {
   };
   const classify = (note, manifest) => {
     const destination = path.join(atlas, note.path), old = ownValue(manifest.entries, note.key), pending = ownValue(manifest.pending, note.key);
-    const exists = fs.existsSync(destination), diskHash = exists ? digest(fs.readFileSync(destination)) : null;
+    const content = readState(destination, null), exists = content !== null, diskHash = exists ? digest(content) : null;
     const owned = !exists || diskHash === old?.fullHash || diskHash === pending?.fullHash;
     const action = !owned ? 'kept' : old?.sourceHash === sourceDigest(note.text) && diskHash === old.fullHash ? 'unchanged' : exists ? 'updated' : 'created';
     return { destination, diskHash, action };
   };
   if (!args.write) {
-    const { manifest } = loadImportState(manifestFile, journalFile);
+    const { manifest } = preflight;
     reconcilePending(manifest, atlas, sourceRoot, inspect, messages);
     const converted = convert(manifest);
     for (const note of converted.notes) addChange(note.key, note.path, classify(note, manifest).action);
     return report(converted);
   }
+  // Classify all target notes before any write, not one note at a time after
+  // earlier notes have already been replaced.
+  const initialMessages = messages.length;
+  reconcilePending(preflight.manifest, atlas, sourceRoot, inspect, messages);
+  const checked = convert(preflight.manifest);
+  for (const note of checked.notes) classify(note, preflight.manifest);
+  messages.length = initialMessages; changes.length = 0;
   mkdirSafe(sourceRoot, atlas);
   const lock = path.join(sourceRoot, '.import.lock');
   takeLock(lock, messages, options);
@@ -284,7 +413,7 @@ export function runImport(argv, options = {}) {
     writeAtomic(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
     fs.rmSync(journalFile, { force: true });
   };
-  const record = (key, entry) => fs.appendFileSync(journalFile, `${JSON.stringify({ key, entry })}\n`, { mode: 0o600 });
+  const record = (key, entry) => fs.appendFileSync(journalFile, `${JSON.stringify({ key, entry, previous: ownValue(manifest.entries, key) || null })}\n`, { mode: 0o600 });
   try {
     const state = loadImportState(manifestFile, journalFile);
     manifest = state.manifest;
@@ -303,7 +432,7 @@ export function runImport(argv, options = {}) {
       const temporary = shortTemp(destination, 'note'), temp = temporary.file;
       fs.writeFileSync(temp, note.text, { mode: 0o600, flag: 'wx' });
       options.beforeRename?.({ note, destination, temp });
-      const latest = fs.existsSync(destination) ? digest(fs.readFileSync(destination)) : null;
+      const latestContent = readState(destination, null), latest = latestContent === null ? null : digest(latestContent);
       if (latest !== diskHash) { fs.rmSync(temp, { force: true }); fs.rmdirSync(temporary.directory); delete manifest.pending[note.key]; record(note.key, null); addChange(note.key, note.path, 'kept'); continue; }
       fs.renameSync(temp, destination);
       fs.rmdirSync(temporary.directory);
@@ -316,7 +445,7 @@ export function runImport(argv, options = {}) {
   } catch (error) {
     // Caught interruptions keep the legacy pending-manifest representation.
     // Abrupt exits leave the journal for the next lock owner to recover.
-    if (canCompact) compact();
+    if (canCompact && !(error instanceof StateReadError)) compact();
     throw error;
   } finally { fs.rmSync(lock, { force: true }); }
 }

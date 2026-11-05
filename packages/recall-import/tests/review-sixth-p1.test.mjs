@@ -76,7 +76,7 @@ test('Sixth P1 2: journal recovers a renamed note when checkpoint failed and exp
   assert.equal(fs.existsSync(journalFile), false);
 });
 
-test('Sixth P1 2: empty recovery consumes complete journal records and ignores a torn final append', () => {
+test('Sixth P1 2: torn final journal record is ignored and complete records recover', () => {
   const f = fixture(1); runImport(f.argv);
   const manifestFile = path.join(f.dir, '.import-manifest.json'), journalFile = path.join(f.dir, '.import-journal.jsonl');
   const manifest = JSON.parse(fs.readFileSync(manifestFile));
