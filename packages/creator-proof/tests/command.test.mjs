@@ -17,7 +17,7 @@ import { hostname } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 
-import { StopAfter, main } from '../bin/creator-proof.mjs';
+import { StopAfter, main, writeAllBytes } from '../bin/creator-proof.mjs';
 import { CLOCK, capture, deadPid, tempDir } from './helpers.mjs';
 
 function run(args, extra = {}) {
@@ -129,6 +129,56 @@ test('record, verify, amend, report and links round trip', async () => {
     assert.equal(statSync(`${ledger}.head`).mode & 0o777, 0o600);
   } finally {
     process.umask(previous);
+    remove();
+  }
+});
+
+test('a short write is finished or refused before the file is renamed', () => {
+  const parts = [];
+  writeAllBytes(Buffer.from('abcdefghij'), (buffer, offset, length) => {
+    const size = Math.min(3, length);
+    parts.push(buffer.subarray(offset, offset + size).toString());
+    return size;
+  });
+  assert.equal(parts.join(''), 'abcdefghij');
+  assert.throws(() => writeAllBytes(Buffer.from('abc'), () => 0), /short write/);
+});
+
+test('report and links will not write over the ledger, its head, or its lock', async () => {
+  const { dir, remove } = tempDir();
+  try {
+    const ledger = join(dir, 'ledger.json');
+    const media = join(dir, 'meadow.mov');
+    writeFileSync(media, 'sample\n');
+    assert.equal((await run(['record', media, '--title', 'Meadow', '--ledger', ledger])).code, 0);
+    const before = readFileSync(ledger);
+    const headBefore = readFileSync(`${ledger}.head`);
+    const casePath = join(dir, 'case.json');
+    const links = join(dir, 'links.json');
+    const entries = JSON.parse(before.toString('utf8'));
+    writeFileSync(casePath, JSON.stringify({
+      kind: 'stolen-video',
+      creatorName: 'River Lane',
+      originalIds: [entries[0].originalId],
+      copies: [{ url: 'https://social.example/copy', accountName: 'Copy', seenAt: '2026-03-02T15:00:00.000Z', whatItShows: 'A copy.' }],
+    }));
+    writeFileSync(links, JSON.stringify({
+      creatorName: 'River Lane',
+      updatedAt: '2026-03-01',
+      links: [{ label: 'Give', url: 'https://give.example/river', kind: 'donate' }],
+    }));
+    for (const out of [ledger, `${ledger}.head`, `${ledger}.lock`, `${ledger}.lock.reclaim`, `${dir}/./ledger.json`]) {
+      const reported = await run(['report', '--case', casePath, '--out', out, '--force', '--ledger', ledger]);
+      assert.equal(reported.code, 1);
+      assert.match(reported.io.errors(), /proof ledger or its head or lock/);
+      const linked = await run(['links', '--links', links, '--out', out, '--force', '--ledger', ledger]);
+      assert.equal(linked.code, 1);
+      assert.match(linked.io.errors(), /proof ledger or its head or lock/);
+    }
+    assert.deepEqual(readFileSync(ledger), before);
+    assert.deepEqual(readFileSync(`${ledger}.head`), headBefore);
+    assert.equal(existsSync(`${ledger}.lock`), false);
+  } finally {
     remove();
   }
 });

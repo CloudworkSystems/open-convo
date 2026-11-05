@@ -13,13 +13,14 @@ import {
   lstatSync,
   openSync,
   readSync,
+  realpathSync,
   renameSync,
   statSync,
   unlinkSync,
   writeSync,
 } from 'node:fs';
 import { hostname } from 'node:os';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { LEDGER_BYTES, ProofError, SIDE_FILE_BYTES } from '../src/errors.mjs';
@@ -162,6 +163,26 @@ function privateMode(file) {
   return existing;
 }
 
+// writeSync may stop early when the disk is full. A short write must not
+// be renamed over the ledger, the head or a report.
+export function writeAllBytes(buffer, writeAt) {
+  let offset = 0;
+  while (offset < buffer.length) {
+    const written = writeAt(buffer, offset, buffer.length - offset);
+    if (!Number.isInteger(written) || written <= 0 || written > buffer.length - offset) {
+      const error = new Error('short write');
+      error.code = 'EIO';
+      throw error;
+    }
+    offset += written;
+  }
+}
+
+function writeAll(fd, data) {
+  const buffer = Buffer.isBuffer(data) ? data : Buffer.from(String(data));
+  writeAllBytes(buffer, (bytes, offset, length) => writeSync(fd, bytes, offset, length));
+}
+
 function writeAtomic(file, data, { mode, label, hooks }) {
   refuseLink(file);
   const dir = dirname(file);
@@ -170,7 +191,7 @@ function writeAtomic(file, data, { mode, label, hooks }) {
   let fd;
   try {
     fd = openSync(tmp, 'w', openMode);
-    writeSync(fd, data);
+    writeAll(fd, data);
     fsyncSync(fd);
   } catch (error) {
     if (fd !== undefined) closeSync(fd);
@@ -704,7 +725,44 @@ function readJson(file, label) {
   }
 }
 
-function refuseOverwrite(file, force) {
+function pathKey(file) {
+  const resolved = resolve(file);
+  try {
+    return realpathSync(resolved);
+  } catch (error) {
+    if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
+  }
+  const parent = dirname(resolved);
+  let parentKey = parent;
+  try {
+    parentKey = realpathSync(parent);
+  } catch {
+    parentKey = resolve(parent);
+  }
+  return join(parentKey, basename(resolved));
+}
+
+function samePath(left, right) {
+  const fold = (value) => (process.platform === 'darwin' ? value.normalize('NFD').toLowerCase() : value);
+  return fold(pathKey(left)) === fold(pathKey(right));
+}
+
+function refuseLedgerTarget(file, ledgerPath) {
+  const protectedPaths = [
+    ledgerPath,
+    `${ledgerPath}.head`,
+    `${ledgerPath}.lock`,
+    `${ledgerPath}.lock.reclaim`,
+  ];
+  for (const target of protectedPaths) {
+    if (samePath(file, target)) {
+      throw new ProofError(`${file} is the proof ledger or its head or lock. Choose another file. Nothing was written.`);
+    }
+  }
+}
+
+function refuseOverwrite(file, force, ledgerPath) {
+  refuseLedgerTarget(file, ledgerPath);
   if (!force && existsSync(file)) {
     throw new ProofError(`${file} already exists. Pass --force to replace it. Nothing was written.`);
   }
@@ -727,7 +785,7 @@ async function commandReport(flags, io) {
     }
     const theCase = readJson(flags.case, 'case');
     const report = buildReport(state.entries, theCase, { expectedHead: state.expectedHead });
-    refuseOverwrite(flags.out, flags.force === true);
+    refuseOverwrite(flags.out, flags.force === true, ledgerPath);
     writePrivate(flags.out, report.markdown, 'pack', hooks);
     lines.push('Checklist:');
     report.checklist.forEach((item, index) => {
@@ -765,7 +823,7 @@ async function commandLinks(flags, io) {
       updatedAt: pageInput.updatedAt,
       ledgerHash: state.expectedHead?.entryHash,
     });
-    refuseOverwrite(flags.out, flags.force === true);
+    refuseOverwrite(flags.out, flags.force === true, ledgerPath);
     writePublic(flags.out, html, 'page', hooks);
     lines.push(`Wrote ${flags.out}`);
     return { code: 0, text: lines.join('\n') };

@@ -70,7 +70,7 @@ function timeline(originals, copies, seenAt) {
   return { events, gaps };
 }
 
-function missingFacts(originals, copies, paymentMissing) {
+function missingFacts(originals, copies, paymentMissing, accountMissing) {
   const missing = [];
   for (const original of originals) {
     const postUrl = original.facts?.postUrl?.value;
@@ -103,6 +103,12 @@ function missingFacts(originals, copies, paymentMissing) {
     missing.push({
       field: 'paymentService',
       message: 'The fake link\'s payment service is not named. Name the service and the account shown on the copy so that service can be told.',
+    });
+  }
+  if (accountMissing) {
+    missing.push({
+      field: 'accountShownOnCopy',
+      message: 'The account shown on the fake link is not named. The payment service needs that account to find who received the money.',
     });
   }
   return missing;
@@ -165,8 +171,10 @@ function draftBody(place, theCase, originals) {
   } else if (place.id === 'in-app') {
     lines.push('Please review this account. It is reposting my work and is not me.');
   } else if (place.id === 'payment') {
-    const account = theCase.paymentService?.accountShownOnCopy;
-    lines.push(`The fake fundraiser asks for money${account ? ` through ${account}` : ''}.`);
+    const rawAccount = theCase.paymentService?.accountShownOnCopy;
+    const account = typeof rawAccount === 'string' ? rawAccount.trim() : '';
+    if (account) lines.push(`The fake fundraiser asks for money through ${account}.`);
+    else lines.push('The fake fundraiser asks for money. The account shown on the fake link is not recorded.');
     lines.push('Please freeze that account and mark the report with [the case number].');
   }
   lines.push('My contact email is [your email].');
@@ -311,7 +319,10 @@ export function buildReport(ledger, theCase, options = {}) {
   if (theCase.notes !== undefined && theCase.notes !== '') {
     notes = requireText(theCase.notes, 'notes');
   }
-  const anchors = Array.isArray(theCase.anchors) ? theCase.anchors : [];
+  if (theCase.anchors !== undefined && !Array.isArray(theCase.anchors)) {
+    fail('anchors must be a list. Put each anchor in [ ].');
+  }
+  const anchors = theCase.anchors ?? [];
   if (anchors.length > ANCHOR_LIMIT) fail('This case has too many anchors.');
   const readAnchors = anchors.map((anchor, index) => readAnchor(anchor, index, ledger));
 
@@ -324,7 +335,11 @@ export function buildReport(ledger, theCase, options = {}) {
 
   const places = placesFor(theCase.kind, theCase.paymentService);
   const paymentMissing = places.some((place) => place.missing);
-  const missing = missingFacts(originals, copies, paymentMissing);
+  const shownAccount = typeof theCase.paymentService?.accountShownOnCopy === 'string'
+    ? theCase.paymentService.accountShownOnCopy.trim()
+    : '';
+  const accountMissing = theCase.kind === 'fake-fundraiser' && shownAccount === '';
+  const missing = missingFacts(originals, copies, paymentMissing, accountMissing);
   const { events, gaps } = timeline(originals, copies, seenAt);
   const checklist = places.map((place) => ({ place: place.name, steps: place.steps }));
   const summary = summaryText(theCase.kind, creatorName, originals, copies);

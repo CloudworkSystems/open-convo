@@ -109,7 +109,38 @@ test('a fake fundraiser without a payment service lists that gap', () => {
   const report = buildReport(ledger, baseCase(ledger, { kind: 'fake-fundraiser' }), { expectedHead: headOf(ledger) });
   assert.match(report.markdown, /the payment service on the fake link/);
   assert.ok(report.missing.some((item) => item.field === 'paymentService'));
+  assert.ok(report.missing.some((item) => item.field === 'accountShownOnCopy'));
   assert.ok(report.checklist.some((item) => item.place === 'the payment service on the fake link'));
+});
+
+test('a named payment service without the account on the copy is still a gap', () => {
+  const ledger = ledgerWithTwo();
+  const report = buildReport(ledger, baseCase(ledger, {
+    kind: 'fake-fundraiser',
+    paymentService: { name: 'Northwind Pay' },
+  }), { expectedHead: headOf(ledger) });
+  assert.match(report.markdown, /Northwind Pay/);
+  assert.match(report.markdown, /The account shown on the fake link is not recorded/);
+  assert.equal(report.missing.some((item) => item.field === 'paymentService'), false);
+  assert.ok(report.missing.some((item) => item.field === 'accountShownOnCopy'));
+  const blank = buildReport(ledger, baseCase(ledger, {
+    kind: 'fake-fundraiser',
+    paymentService: { name: 'Northwind Pay', accountShownOnCopy: '   ' },
+  }), { expectedHead: headOf(ledger) });
+  assert.ok(blank.missing.some((item) => item.field === 'accountShownOnCopy'));
+});
+
+test('anchors must be a list when the case includes them', () => {
+  const ledger = ledgerWithTwo();
+  const expectedHead = headOf(ledger);
+  assert.throws(
+    () => buildReport(ledger, baseCase(ledger, {
+      anchors: { kind: 'email', where: 'a friend', date: '2026-02-20', entryHash: ledger[0].entryHash },
+    }), { expectedHead }),
+    /anchors must be a list/,
+  );
+  const omitted = buildReport(ledger, baseCase(ledger), { expectedHead });
+  assert.match(omitted.markdown, /No anchors were given/);
 });
 
 test('unknown originals and unknown anchors are refused', () => {
