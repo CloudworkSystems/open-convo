@@ -4,6 +4,10 @@ import { test } from 'node:test';
 import { amendOriginal, buildReport, recordOriginal } from '../src/index.mjs';
 import { PLAIN_NOTE } from '../src/words.mjs';
 
+function escapeRegExp(value) {
+  return value.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
+}
+
 const HASH_A = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const HASH_B = 'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210';
 const T1 = '2026-01-15T00:00:00.000Z';
@@ -92,7 +96,7 @@ test('each kind names its places, in time order, without calling the check proof
   assert.match(fake.markdown, /not recorded/);
 
   for (const report of [stolen, impersonation, fake]) {
-    assert.match(report.markdown, new RegExp(PLAIN_NOTE.replace(/[.]/g, '\\.')));
+    assert.match(report.markdown, new RegExp(escapeRegExp(PLAIN_NOTE)));
     assert.match(report.markdown, /The file is complete and in order/);
     assert.doesNotMatch(report.markdown, /tamper/i);
     assert.doesNotMatch(report.markdown, /\bproves\b/i);

@@ -170,7 +170,7 @@ function checkRecord(entry, index, seenOriginals, seenFiles) {
   return null;
 }
 
-function checkAmend(entry, index, entries) {
+function checkAmend(entry, index, earlierOriginals) {
   const seq = index + 1;
   if (typeof entry.targetOriginalId !== 'string' || !isPlainObject(entry.changes)) {
     return problem(seq, 'changed', `Ledger entry ${seq} was changed after it was recorded.`);
@@ -187,8 +187,7 @@ function checkAmend(entry, index, entries) {
       return problem(seq, 'changed', `Ledger entry ${seq} was changed after it was recorded.`);
     }
   }
-  const earlier = entries.slice(0, index).some((item) => item && item.kind === 'record' && item.originalId === entry.targetOriginalId);
-  if (!earlier) {
+  if (!earlierOriginals.has(entry.targetOriginalId)) {
     return problem(seq, 'missing', `Entry ${seq} amends ${entry.targetOriginalId}, which is not an earlier original.`);
   }
   return null;
@@ -244,23 +243,25 @@ export function verifyLedger(ledger, options = {}) {
 
   const seenOriginals = new Set();
   const seenFiles = new Map();
+  const earlierOriginals = new Set();
   for (let index = 0; index < ledger.length; index += 1) {
     const entry = ledger[index];
-    if (!isPlainObject(entry) || entry.seq !== index + 1) continue;
-    if (problems.some((item) => item.seq === index + 1 && (item.code === 'changed' || item.code === 'duplicate-id'))) {
-      continue;
+    if (isPlainObject(entry) && entry.seq === index + 1) {
+      const blocked = problems.some((item) => item.seq === index + 1 && (item.code === 'changed' || item.code === 'duplicate-id'));
+      if (!blocked) {
+        const linked = checkHashAndLink(entry, index, ledger);
+        if (linked) problems.push(linked);
+        else if (entry.kind === 'record') {
+          const recordProblem = checkRecord(entry, index, seenOriginals, seenFiles);
+          if (recordProblem) problems.push(recordProblem);
+        } else if (entry.kind === 'amend') {
+          const amendProblem = checkAmend(entry, index, earlierOriginals);
+          if (amendProblem) problems.push(amendProblem);
+        }
+      }
     }
-    const linked = checkHashAndLink(entry, index, ledger);
-    if (linked) {
-      problems.push(linked);
-      continue;
-    }
-    if (entry.kind === 'record') {
-      const recordProblem = checkRecord(entry, index, seenOriginals, seenFiles);
-      if (recordProblem) problems.push(recordProblem);
-    } else if (entry.kind === 'amend') {
-      const amendProblem = checkAmend(entry, index, ledger);
-      if (amendProblem) problems.push(amendProblem);
+    if (isPlainObject(entry) && entry.kind === 'record' && typeof entry.originalId === 'string') {
+      earlierOriginals.add(entry.originalId);
     }
   }
 

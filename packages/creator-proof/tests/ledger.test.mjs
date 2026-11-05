@@ -205,6 +205,45 @@ test('a missing tail is caught only when the expected head is given', () => {
   }
 });
 
+test('twenty thousand amendments still verify quickly', () => {
+  const fileSha256 = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+  const first = {
+    entryId: 'entry-1',
+    seq: 1,
+    kind: 'record',
+    originalId: 'orig-0123456789ab',
+    recordedAt: T1,
+    title: 'Meadow morning',
+    fileName: 'meadow.mov',
+    fileSha256,
+    prevHash: ZERO_HASH,
+  };
+  first.entryHash = hashEntry(first);
+  const entries = [first];
+  const count = 20000;
+  for (let seq = 2; seq <= count + 1; seq += 1) {
+    const amend = {
+      entryId: `entry-${seq}`,
+      seq,
+      kind: 'amend',
+      targetOriginalId: first.originalId,
+      recordedAt: T1,
+      changes: { notes: `note ${seq}` },
+      prevHash: entries[seq - 2].entryHash,
+    };
+    amend.entryHash = hashEntry(amend);
+    entries.push(amend);
+  }
+  const started = Date.now();
+  const result = verifyLedger(entries, {
+    expectedHead: { seq: entries.length, entryHash: entries[entries.length - 1].entryHash },
+  });
+  const elapsed = Date.now() - started;
+  assert.equal(result.complete, true);
+  assert.equal(result.problems.length, 0);
+  assert.ok(elapsed < 2000, `verification took ${elapsed}ms`);
+});
+
 function caseFor(ledger) {
   return {
     kind: 'stolen-video',
