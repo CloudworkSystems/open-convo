@@ -112,7 +112,11 @@ Only these, read on every run:
   gate passes as it does today, and the label comes off.
 - Codex is clean on the head, in any form the gate counts as clean
   (including its 👍 reaction). The loop ended on its own.
-- The pull request closes or merges.
+- The pull request closes or merges. Nothing needs to run for this: the
+  watchdog and the "Stuck in review" list read only open pull requests, so
+  it drops off issue #114 at its next rewrite. The label stays on the
+  closed pull request as a record of the halt, and no workflow trigger is
+  added for closing.
 
 A lift resets the count: the next halt comes only after another full limit
 of rounds after the lifting event.
