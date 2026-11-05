@@ -106,7 +106,8 @@ test('Sweep: empty recovery before note rename clears pending without creating a
   const report = runImport(f.argv);
   assert.deepEqual(JSON.parse(fs.readFileSync(f.manifest)).pending, {});
   assert.equal(fs.existsSync(path.join(f.dir, 'one.md')), false);
-  assert.ok(report.messages.some(m => m.includes('no longer in Recall')));
+  assert.ok(!report.messages.some(m => /kept|no longer/.test(m)));
+  assert.deepEqual(JSON.parse(fs.readFileSync(f.manifest)).entries, {});
   // The interrupted temporary note is never mistaken for a completed note.
-  assert.ok(fs.existsSync(temporary));
+  assert.equal(fs.existsSync(temporary), false);
 });

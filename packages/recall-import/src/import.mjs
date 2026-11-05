@@ -116,7 +116,8 @@ function loadImportState(manifestFile, journalFile) {
   return { manifest, recovering };
 }
 
-function reconcilePending(manifest, atlas, sourceRoot, inspect, messages) {
+function reconcilePending(manifest, atlas, sourceRoot, inspect, messages, source, items) {
+  const leftovers = [];
   for (const [key, pending] of Object.entries(manifest.pending)) {
     const relative = typeof pending.path === 'string' ? path.relative(sourceRoot, path.resolve(atlas, pending.path)) : '..';
     if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) throw new Error(`Refusing pending path for "${key}" outside this source's folder.`);
@@ -124,10 +125,24 @@ function reconcilePending(manifest, atlas, sourceRoot, inspect, messages) {
     inspect(destination);
     const content = readState(destination, null), diskHash = content === null ? null : digest(content);
     const old = ownValue(manifest.entries, key);
-    if (diskHash === pending.fullHash || !old) manifest.entries[key] = pending;
-    if (diskHash !== null && diskHash !== pending.fullHash && diskHash !== old?.fullHash) messages.push(`${pending.path}: kept, edited since the last import.`);
+    // A pending intent is ownership only after its recorded bytes reached disk.
+    if (diskHash !== null && diskHash === pending.fullHash) manifest.entries[key] = pending;
+    let files;
+    try { files = fs.readdirSync(path.dirname(destination), { withFileTypes: true }); }
+    catch (error) { if (error.code !== 'ENOENT') throw stateError(path.dirname(destination), error.code || 'cannot inspect interrupted note files'); files = []; }
+    for (const file of files) {
+      if (!file.name.startsWith('.import-note-tmp-') || !file.isDirectory()) continue;
+      const folder = path.join(path.dirname(destination), file.name), temporary = path.join(folder, 'data');
+      const bytes = readState(temporary, null);
+      if (bytes !== null && digest(bytes) === pending.fullHash) leftovers.push({ folder, temporary });
+    }
+    if (diskHash !== null && diskHash !== pending.fullHash && diskHash !== old?.fullHash) {
+      messages.push(`${pending.path}: kept, edited since the last import.`);
+      if (!old && !items.some(item => item.key === key)) messages.push(`${pending.path}: no longer in ${source.name}; kept.`);
+    }
     delete manifest.pending[key];
   }
+  return leftovers;
 }
 
 function parseArgs(argv) {
@@ -417,7 +432,7 @@ export function runImport(argv, options = {}) {
   };
   if (!args.write) {
     const { manifest } = preflight;
-    reconcilePending(manifest, atlas, sourceRoot, inspect, messages);
+    reconcilePending(manifest, atlas, sourceRoot, inspect, messages, source, result.items);
     const converted = convert(manifest);
     for (const note of converted.notes) addChange(note.key, note.path, classify(note, manifest).action);
     return report(converted);
@@ -425,7 +440,7 @@ export function runImport(argv, options = {}) {
   // Classify all target notes before any write, not one note at a time after
   // earlier notes have already been replaced.
   const initialMessages = messages.length;
-  reconcilePending(preflight.manifest, atlas, sourceRoot, inspect, messages);
+  reconcilePending(preflight.manifest, atlas, sourceRoot, inspect, messages, source, result.items);
   const checked = convert(preflight.manifest);
   for (const note of checked.notes) classify(note, preflight.manifest);
   messages.length = initialMessages; changes.length = 0;
@@ -444,7 +459,8 @@ export function runImport(argv, options = {}) {
     manifest = state.manifest;
     const recovering = state.recovering;
     canCompact = true;
-    reconcilePending(manifest, atlas, sourceRoot, inspect, messages);
+    const leftovers = reconcilePending(manifest, atlas, sourceRoot, inspect, messages, source, result.items);
+    for (const { folder, temporary } of leftovers) { fs.unlinkSync(temporary); fs.rmdirSync(folder); }
     // Checkpoint a recovered journal once, then start a fresh append sequence.
     if (recovering || !fs.existsSync(manifestFile)) compact();
     const converted = convert(manifest);
