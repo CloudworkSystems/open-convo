@@ -298,13 +298,16 @@ function flowTags(value, sourcePath) {
 }
 
 function parseFrontMatter(text, sourcePath) {
-  if (!text.startsWith('---\n')) return { fields: dataMap(), body: text, warning: null };
-  const end = text.indexOf('\n---\n', 4);
-  if (end < 0) return { fields: dataMap(), body: text, warning: `${sourcePath}: front matter could not be read and was kept in the card.` };
-  const raw = text.slice(4, end);
+  const opening = /^\uFEFF?---\r?\n/.exec(text);
+  if (!opening) return { fields: dataMap(), body: text, warning: null };
+  const delimiters = /^---(?:\r?\n|$)/gm;
+  delimiters.lastIndex = opening[0].length;
+  const closing = delimiters.exec(text);
+  if (!closing) return { fields: dataMap(), body: text, warning: `${sourcePath}: front matter could not be read and was kept in the card.` };
+  const raw = text.slice(opening[0].length, closing.index).replace(/\r?\n$/, '');
   const fields = dataMap();
   const unreadable = () => ({ fields: dataMap(), body: text, warning: `${sourcePath}: front matter could not be read and was kept in the card.` });
-  const lines = raw.split('\n');
+  const lines = raw ? raw.split(/\r?\n/) : [];
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index];
     const match = /^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$/.exec(line);
@@ -331,7 +334,7 @@ function parseFrontMatter(text, sourcePath) {
       fields[key] = decoded;
     }
   }
-  return { fields, body: text.slice(end + 5), warning: null };
+  return { fields, body: text.slice(closing.index + closing[0].length), warning: null };
 }
 
 function escapedAt(text, offset) {
@@ -347,7 +350,8 @@ function markdownCodeMask(text) {
   const mask = new Uint8Array(text.length);
   let fence = null;
   for (const match of text.matchAll(/[^\n]*(?:\n|$)/g)) {
-    const line = match[0].replace(/\r?\n$/, '');
+    let line = match[0].replace(/\r?\n$/, '');
+    if (match.index === 0 && line.startsWith('\uFEFF')) line = line.slice(1);
     if (fence) {
       mask.fill(1, match.index, match.index + match[0].length);
       const close = /^ {0,3}(`+|~+)[ \t]*$/.exec(line);
@@ -383,10 +387,11 @@ function markdownCodeMask(text) {
   return mask;
 }
 
-function bracketEnd(text, start) {
+function bracketEnd(text, start, code = null) {
   if (text[start] !== '[') return -1;
   let depth = 1;
   for (let i = start + 1; i < text.length; i++) {
+    if (code?.[i]) continue;
     if (text[i] === '\\') { i++; continue; }
     if (text[i] === '[') depth++;
     if (text[i] === ']' && --depth === 0) return i;
@@ -399,7 +404,7 @@ function destinationAt(text, start) {
   if (text[i] === '<') {
     const begin = ++i;
     while (i < text.length && text[i] !== '>') {
-      if (text[i] === '\n' || text[i] === '\r') return null;
+      if (text[i] === '\n' || text[i] === '\r' || text[i] === '<') return null;
       if (text[i] === '\\') i++;
       i++;
     }
@@ -408,7 +413,7 @@ function destinationAt(text, start) {
   let depth = 0;
   for (; i < text.length; i++) {
     if (text[i] === '\\') { i++; continue; }
-    if (/\s/.test(text[i])) break;
+    if (/[\u0000-\u0020\u007f]/.test(text[i])) break;
     if (text[i] === '(') depth++;
     if (text[i] === ')') { if (!depth) break; depth--; }
   }
@@ -416,54 +421,90 @@ function destinationAt(text, start) {
 }
 
 const referenceLabel = value => value.replace(/\\([\[\]\\])/g, '$1').trim().replace(/\s+/g, ' ').toLowerCase();
-const remoteImage = url => /^https?:\/\//i.test(url);
+function decodedDestination(url) {
+  return url.replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~])/g, '$1').replace(/&#(x[0-9a-f]+|[0-9]+);|&(colon|sol|amp);/gi, (whole, point, name) => {
+    if (name) return ({ colon: ':', sol: '/', amp: '&' })[name.toLowerCase()];
+    const value = point[0].toLowerCase() === 'x' ? parseInt(point.slice(1), 16) : parseInt(point, 10);
+    return value > 0 && value <= 0x10ffff ? String.fromCodePoint(value) : whole;
+  });
+}
+const remoteImage = url => /^(?:https?:)?\/\//i.test(decodedDestination(url));
+
+function linkSpace(text, start) {
+  let end = start;
+  while (end < text.length && /[ \t\r\n]/.test(text[end])) end++;
+  return /(?:\r?\n)[ \t]*(?:\r?\n)/.test(text.slice(start, end)) ? -1 : end;
+}
+
+function titleEnd(text, start) {
+  const opener = text[start], closer = opener === '(' ? ')' : opener;
+  if (!['"', "'", '('].includes(opener)) return -1;
+  for (let i = start + 1; i < text.length; i++) {
+    if (text[i] === '\\') { i++; continue; }
+    if (text[i] === closer) return i + 1;
+    if (opener === '(' && text[i] === '(') return -1;
+    if (text[i] === '\n' && /^[ \t]*\r?\n/.test(text.slice(i + 1))) return -1;
+  }
+  return -1;
+}
 
 function plainImageLinks(text, code) {
   const references = new Map();
   // Definitions are collected before uses, so their order in the card does not matter.
   for (const line of text.matchAll(/[^\n]*(?:\n|$)/g)) {
-    const indentation = /^ {0,3}(?=\[)/.exec(line[0]);
+    const indentation = /^(?:\uFEFF)? {0,3}(?=\[)/.exec(line[0]);
     if (!indentation) continue;
     const start = line.index + indentation[0].length;
     if (code[start]) continue;
     const end = bracketEnd(text, start);
-    if (end < 0 || text[end + 1] !== ':' || end >= line.index + line[0].length) continue;
-    let cursor = end + 2;
-    while (text[cursor] === ' ' || text[cursor] === '\t') cursor++;
+    if (end < 0 || text[end + 1] !== ':') continue;
+    const cursor = linkSpace(text, end + 2);
+    if (cursor < 0 || code[cursor]) continue;
     const destination = destinationAt(text, cursor);
     const label = referenceLabel(text.slice(start + 1, end));
-    if (destination && label && !references.has(label)) references.set(label, destination.url);
+    if (label && !references.has(label)) references.set(label, destination ? destination.url : null);
   }
   const chunks = [];
-  let previous = 0, converted = false;
+  let previous = 0, converted = false, uncertain = false;
   for (let i = 0; i < text.length; i++) {
+    if (text[i] === '<' && !code[i] && !escapedAt(text, i) && /^<img(?:[\s/>]|$)/i.test(text.slice(i))) {
+      // HTML attribute grammars and srcset may carry multiple destinations.
+      // Preserve the tag and warn rather than guessing which bytes to rewrite.
+      uncertain = true;
+    }
     if (text[i] !== '!' || text[i + 1] !== '[' || code[i] || escapedAt(text, i)) continue;
-    const close = bracketEnd(text, i + 1);
-    if (close < 0) continue;
+    const close = bracketEnd(text, i + 1, code);
+    if (close < 0) { uncertain = true; continue; }
     const label = referenceLabel(text.slice(i + 2, close));
     let end = close + 1, remote = false;
     if (text[end] === '(') {
-      let cursor = end + 1;
-      while (/\s/.test(text[cursor] || '') && cursor < text.length) cursor++;
+      let cursor = linkSpace(text, end + 1);
+      if (cursor < 0) { uncertain = true; continue; }
       const destination = destinationAt(text, cursor);
-      if (!destination) continue;
-      cursor = destination.end;
-      while (/\s/.test(text[cursor] || '') && cursor < text.length) cursor++;
-      if (text[cursor] === '"' || text[cursor] === "'") {
-        const quote = text[cursor++];
-        while (cursor < text.length && (text[cursor] !== quote || escapedAt(text, cursor))) cursor++;
-        if (text[cursor++] !== quote) continue;
-        while (/\s/.test(text[cursor] || '') && cursor < text.length) cursor++;
+      if (!destination) { uncertain = true; continue; }
+      cursor = linkSpace(text, destination.end);
+      if (cursor < 0) { uncertain = true; continue; }
+      if (['"', "'", '('].includes(text[cursor])) {
+        if (cursor === destination.end) { uncertain = true; continue; }
+        const afterTitle = titleEnd(text, cursor);
+        if (afterTitle < 0) { uncertain = true; continue; }
+        cursor = linkSpace(text, afterTitle);
       }
-      if (text[cursor] !== ')') continue;
+      if (cursor < 0 || text[cursor] !== ')') { uncertain = true; continue; }
       remote = remoteImage(destination.url);
       end = cursor + 1;
     } else if (text[end] === '[') {
       const referenceEnd = bracketEnd(text, end);
-      if (referenceEnd < 0) continue;
-      remote = remoteImage(references.get(referenceLabel(text.slice(end + 1, referenceEnd)) || label) || '');
+      if (referenceEnd < 0) { uncertain = true; continue; }
+      const target = references.get(referenceLabel(text.slice(end + 1, referenceEnd)) || label);
+      if (target === null) uncertain = true;
+      remote = remoteImage(target || '');
       end = referenceEnd + 1;
-    } else remote = remoteImage(references.get(label) || '');
+    } else {
+      const target = references.get(label);
+      if (target === null) uncertain = true;
+      remote = remoteImage(target || '');
+    }
     if (!remote) continue;
     chunks.push(text.slice(previous, i), text.slice(i + 1, end));
     previous = end;
@@ -471,15 +512,18 @@ function plainImageLinks(text, code) {
     converted = true;
   }
   chunks.push(text.slice(previous));
-  return { body: chunks.join(''), converted };
+  return { body: chunks.join(''), converted, uncertain };
 }
 
 function readMarkdown(text) {
   const code = markdownCodeMask(text);
   let heading;
-  for (const match of text.matchAll(/^# (.+)$/gm)) if (!code[match.index]) { heading = match[1]; break; }
-  let { body, converted } = plainImageLinks(text, code);
-  if (converted) body = `${body.replace(/\n?$/, '\n')}\nImages in this card were not imported. Their links may stop working.\n`;
+  for (const match of text.matchAll(/^(?:\uFEFF)? {0,3}# ([^\r\n]+)\r?$/gm)) if (!code[match.index]) { heading = match[1]; break; }
+  let { body, converted, uncertain } = plainImageLinks(text, code);
+  if (converted || uncertain) {
+    const eol = /\r?\n(?=[^\n]*$)/.exec(body)?.[0] || '\n';
+    body += `${body.endsWith('\n') ? '' : eol}${eol}Images in this card were not imported. Their links may stop working.${eol}`;
+  }
   return { heading, body };
 }
 
