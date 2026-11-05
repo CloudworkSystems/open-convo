@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 const DAY = 86_400_000;
 const LIMIT = 4096;
 const kinds = new Set(["personal", "business", "family"]);
@@ -170,13 +172,12 @@ function undo(state, op) {
 function purge(state, op) {
   const expired = state.trash.filter((item) => Date.parse(op.now) - Date.parse(item.forgottenAt) > 30 * DAY);
   const ids = new Set(expired.map((item) => item.id));
-  const texts = new Set(expired.flatMap((item) => [item.text, ...item.history.map((h) => h.text), item.candidate?.text].filter(Boolean)));
   state.trash = state.trash.filter((item) => !ids.has(item.id));
   state.proposed = state.proposed.filter((item) => !ids.has(item.id));
   for (const record of state.log) if (ids.has(record.entryId) || ids.has(record.candidateId)) {
     for (const key of Object.keys(record)) if (!["id", "type", "now", "actor"].includes(key)) delete record[key];
     record.purged = true;
-  } else redactLogText(record, texts);
+  } else redactSnapshots(record, ids);
   log(state, op, { purgedIds: [...ids] });
   return { purged: [...ids] };
 }
@@ -242,17 +243,14 @@ function addEntry(state, entry, index) {
   const entries = own(subjects, entry.subject);
   entries.splice(index ?? entries.length, 0, entry);
 }
-function redactLogText(record, texts) {
-  // Only these schema fields contain memory text. IDs, actors, dates and labels are metadata.
-  for (const key of ['text', 'oldText']) if (texts.has(record[key])) delete record[key];
-  function redactEntry(entry) {
-    if (!entry || typeof entry !== 'object') return;
-    if (texts.has(entry.text)) delete entry.text;
-    for (const version of entry.history ?? []) if (texts.has(version.text)) delete version.text;
-    if (entry.candidate && texts.has(entry.candidate.text)) delete entry.candidate.text;
+function redactSnapshots(record, ids) {
+  // A snapshot carries its own entry/candidate identity. Equal words are unrelated.
+  for (const key of ['snapshot', 'candidate']) {
+    const snapshot = record[key];
+    if (!snapshot || typeof snapshot !== 'object') continue;
+    if (ids.has(snapshot.id)) delete record[key];
+    else redactSnapshots(snapshot, ids);
   }
-  redactEntry(record.snapshot);
-  if (record.effect) redactEntry(record.effect.values);
 }
 // One dependency rule: a later effect blocks Undo only while it still holds
 // and the proposed reversal would invalidate it (including shared capacity).
@@ -280,7 +278,7 @@ function effectHolds(state, record) {
   if (!record.effect) return false;
   const { status, entry } = entity(state, record.entryId);
   const effect = record.effect;
-  return !(effect.requires ?? []).some(id => reversedOperations(state).has(id)) && status === effect.status && Object.entries(effect.values).every(([key, value]) => JSON.stringify(entry?.[key]) === JSON.stringify(value)) &&
+  return !(effect.requires ?? []).some(id => reversedOperations(state).has(id)) && status === effect.status && Object.entries(effect.values).every(([key, value]) => valueHash(entry?.[key]) === value) &&
     (effect.contains ?? []).every(space => entry?.shares?.includes(space)) && (effect.excludes ?? []).every(space => !entry?.shares?.includes(space));
 }
 function reversedOperations(state) {
@@ -290,7 +288,7 @@ function describeEffect(state, record) {
   const { status, entry } = entity(state, record.entryId);
   const fields = { keep: [], correct: ['text', 'history'], forget: ['text', 'history', 'cloud', 'space', 'subject', 'shares'], restore: [], share: ['space'], move: ['space', 'subject'], allowCloud: ['cloud'], undo: [] };
   if (!Object.hasOwn(fields, record.type)) return undefined;
-  const effect = { status, values: Object.fromEntries(fields[record.type].map(key => [key, structuredClone(entry[key])])) };
+  const effect = { status, values: Object.fromEntries(fields[record.type].map(key => [key, valueHash(entry[key])])) };
   if (record.type === 'share') effect.contains = [record.space];
   if (record.type === 'undo') effect.resourceOnly = true;
   if (record.type === 'move') {
@@ -301,6 +299,9 @@ function describeEffect(state, record) {
     }
   }
   return effect;
+}
+function valueHash(value) {
+  return createHash('sha256').update(JSON.stringify(value) ?? 'undefined').digest('hex');
 }
 function sizeExcess(state) {
   let excess = 0;

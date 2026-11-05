@@ -62,6 +62,35 @@ test('P1 restored memory can undo its earlier cloud grant', () => {
   assert.equal(visible(undone).length, 1);
 });
 
+test('P1 purging middle in A preserves the blocking correction in B', () => {
+  let s = keep(proposal(base(), 'b', 'start'), 'b');
+  s = step(s, 'correct', { entryId: 'b', text: 'middle' });
+  const first = s.log.at(-1).id;
+  s = step(s, 'correct', { entryId: 'b', text: 'end' });
+  const second = s.log.at(-1).id;
+  const bLog = structuredClone(s.log);
+  s = keep(proposal(s, 'a', 'middle'), 'a');
+  s = step(s, 'forget', { entryId: 'a' });
+  s = step(s, 'purge', { now: '2041-01-01T00:00:00Z' });
+  unchangedRefusal(s, 'undo', { opId: first }, error => error.message === `Operation '${first}' cannot be undone because operation '${second}' depends on it.`);
+  assert.equal(visible(s)[0].text, 'end');
+  for (const record of bLog) assert.deepEqual(s.log.find(r => r.id === record.id), record);
+});
+
+test('P1 identical text on two entries only purges the selected identity', () => {
+  let s = keep(proposal(base(), 'b', 'identical invented text'), 'b');
+  s = step(s, 'correct', { entryId: 'b', text: 'new invented text' });
+  const correction = s.log.at(-1).id;
+  const history = structuredClone(s.subjects.personal.covers[0].history);
+  const records = structuredClone(s.log);
+  s = keep(proposal(s, 'a', 'identical invented text'), 'a');
+  s = step(s, 'forget', { entryId: 'a' });
+  s = step(s, 'purge', { now: '2041-01-01T00:00:00Z' });
+  for (const record of records) assert.deepEqual(s.log.find(r => r.id === record.id), record);
+  assert.deepEqual(s.subjects.personal.covers[0].history, history);
+  assert.equal(visible(step(s, 'undo', { opId: correction }))[0].text, 'identical invented text');
+});
+
 test('Undo lifecycle matrix: 216 operation pairs and lifecycle states', async t => {
   const targetKinds = ['keep', 'correct', 'forget', 'share', 'move', 'allowCloud'];
   const laterKinds = [...targetKinds, 'restore', 'purge', 'undo'];
@@ -97,7 +126,7 @@ test('Undo lifecycle matrix: 216 operation pairs and lifecycle states', async t 
       }
       let laterId = s.log.at(-1).id;
       if (reversed) {
-        if (laterKind === 'purge' || laterKind === 'undo') unchangedRefusal(s, 'undo', { opId: laterId }, /cannot be undone/);
+        if (laterKind === 'purge' || laterKind === 'undo') unchangedRefusal(s, 'undo', { opId: laterId }, error => error.message === `Operation '${laterId}' cannot be undone.`);
         else if (laterKind === 'forget') { s = step(s, 'restore', { entryId }); if (same && targetKind === 'forget') targetRestored = true; }
         else if (laterKind === 'restore') s = step(s, 'forget', { entryId });
         else s = step(s, 'undo', { opId: laterId });
@@ -110,7 +139,14 @@ test('Undo lifecycle matrix: 216 operation pairs and lifecycle states', async t 
         else if (!reversed) blocked = targetKind === 'keep' && laterKind !== 'undo' || targetKind === 'correct' && laterKind === 'correct' || targetKind === 'move' && ['move', 'share'].includes(laterKind) || targetKind === 'allowCloud' && laterKind === 'allowCloud';
       }
       if (s.log.find(r => r.id === targetId).purged) blocked = true;
-      if (blocked) unchangedRefusal(s, 'undo', { opId: targetId }, /depends on it|cannot be undone|reversed by restore/);
+      if (blocked) {
+        const expected = s.log.find(r => r.id === targetId).purged
+          ? `Operation '${targetId}' cannot be undone.`
+          : targetRestored
+            ? `Operation '${targetId}' has already been reversed by restore.`
+            : `Operation '${targetId}' cannot be undone because operation '${s.log.at(-1).id}' depends on it.`;
+        unchangedRefusal(s, 'undo', { opId: targetId }, error => error.message === expected);
+      }
       else {
         const undone = step(s, 'undo', { opId: targetId });
         if (targetKind === 'keep') assert.ok(undone.proposed.some(e => e.id === 'note'));
@@ -172,18 +208,41 @@ test('Undo sweep: reversed dependents are ignored for every operation kind', () 
   }
 });
 
-test('Purge sweep: text fields are redacted in unrelated snapshots without metadata loss', () => {
+test('Purge sweep: unrelated snapshots retain their own text and metadata', () => {
   let s = keep(proposal(base(), 'other', 'Shared invented phrase.'), 'other');
   s = step(s, 'correct', { entryId: 'other', text: 'Unrelated current phrase.' });
   s = step(s, 'forget', { entryId: 'other', now: '2040-02-01T00:00:00Z' });
+  const unrelated = structuredClone(s.log);
   s = keep(proposal(s, 'expired', 'Shared invented phrase.'), 'expired');
   s = step(s, 'forget', { entryId: 'expired' });
   const out = op(s, 'purge', { now: '2040-02-02T00:00:00Z' });
-  for (const record of out.state.log.filter(r => r.entryId === 'other' || r.candidateId === 'other')) {
-    assert.equal(JSON.stringify(record).includes('Shared invented phrase.'), false);
-    assert.ok(['person', 'helper'].includes(record.actor));
-    assert.ok(record.id);
-  }
+  for (const record of unrelated) assert.deepEqual(out.state.log.find(r => r.id === record.id), record);
+});
+
+test('Dependency effects store hashes without memory text and survive unrelated purge', () => {
+  let s = keep(proposal(base(), 'b', 'Invented first phrase.'), 'b');
+  s = step(s, 'correct', { entryId: 'b', text: 'Invented second phrase.' });
+  const record = structuredClone(s.log.at(-1));
+  assert.deepEqual(Object.keys(record.effect.values), ['text', 'history']);
+  for (const hash of Object.values(record.effect.values)) assert.match(hash, /^[0-9a-f]{64}$/);
+  assert.equal(JSON.stringify(record.effect).includes('Invented'), false);
+  s = keep(proposal(s, 'a', 'Invented first phrase.'), 'a');
+  s = step(s, 'forget', { entryId: 'a' });
+  s = step(s, 'purge', { now: '2041-01-01T00:00:00Z' });
+  assert.deepEqual(s.log.find(r => r.id === record.id).effect, record.effect);
+  assert.equal(visible(step(s, 'undo', { opId: record.id }))[0].text, 'Invented first phrase.');
+});
+
+test('Purge redacts a snapshot by its own identity inside another record', () => {
+  let s = keep(proposal(base(), 'b', 'Same invented text.'), 'b');
+  s = keep(proposal(s, 'a', 'Same invented text.'), 'a');
+  s = step(s, 'forget', { entryId: 'a' });
+  const record = s.log.find(r => r.entryId === 'b');
+  const before = structuredClone(record);
+  record.snapshot = structuredClone(s.trash[0]);
+  s = step(s, 'purge', { now: '2041-01-01T00:00:00Z' });
+  assert.deepEqual(s.log.find(r => r.id === record.id), before);
+  assert.equal(visible(s)[0].text, 'Same invented text.');
 });
 
 test('Undo sweep: correction move share chains unwind in reverse order', () => {
