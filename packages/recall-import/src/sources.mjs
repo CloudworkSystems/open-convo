@@ -376,7 +376,7 @@ function escapedAt(text, offset) {
 // backtick run of exactly the same length (and may cross line endings).
 function markdownCodeMask(text) {
   const mask = new Uint8Array(text.length);
-  let fence = null, html = null, paragraph = false, container = '', listPadding = 0, referenceContinuation = false;
+  let leaf = null, paragraph = false, container = '', listPadding = 0, referenceContinuation = false;
   const blockTags = 'address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul';
   const blockTag = new RegExp(`^ {0,3}</?(?:${blockTags})(?=[ \t/>]|$)`, 'i');
   // CommonMark tag grammar, including quoted attributes whose contents are opaque.
@@ -389,59 +389,84 @@ function markdownCodeMask(text) {
       if (/^<img(?:[\s/>]|$)/i.test(match[0])) mask[at] = 2;
     }
   }
+  const indented = line => /^(?: {4}| {0,3}\t)/.test(line);
+  const blankLine = line => /^[ \t]*$/.test(line);
+  const thematic = line => /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}|(?:-[ \t]*){3,})$/.test(line);
+  function htmlStart(line) {
+    const raw = /^ {0,3}<(pre|script|style|textarea)(?=[ \t>]|$)/i.exec(line);
+    if (raw) return { kind: 'html', end: `</${raw[1].toLowerCase()}>`, fold: true };
+    for (const [start, end] of [['<!--', '-->'], ['<?', '?>'], ['<![CDATA[', ']]>']]) {
+      if (line.replace(/^ {0,3}/, '').startsWith(start)) return { kind: 'html', end };
+    }
+    if (/^ {0,3}<![A-Z]/.test(line)) return { kind: 'html', end: '>' };
+    if (blockTag.test(line) || !paragraph && tagAtStart.test(line)) return { kind: 'html', blank: true, tags: true };
+    return null;
+  }
+  function htmlEnded(block, line) {
+    return block.blank ? blankLine(line) : (block.fold ? line.toLowerCase() : line).includes(block.end);
+  }
   for (const match of text.matchAll(/[^\n]*(?:\n|$)/g)) {
     let line = match[0].replace(/\r?\n$/, '');
     if (match.index === 0 && line.startsWith('\uFEFF')) line = line.slice(1);
-    // Remove container markers for block recognition, retaining original offsets for masks.
+    const protect = () => mask.fill(1, match.index, match.index + match[0].length);
+    // An open leaf owns the line. Only its own continuation/end rule runs here.
+    // A saved container prefix is removed literally, never reparsed as structure.
+    if (leaf) {
+      const content = leaf.prefix && line.startsWith(leaf.prefix) ? line.slice(leaf.prefix.length) : line;
+      if (leaf.kind === 'fence') {
+        protect();
+        const close = /^ {0,3}(`+|~+)[ \t]*$/.exec(content);
+        if (close && close[1][0] === leaf.fence[0] && close[1].length >= leaf.fence.length) leaf = null;
+        continue;
+      }
+      if (leaf.kind === 'html') {
+        if (leaf.blank && htmlEnded(leaf, content)) { leaf = null; paragraph = false; }
+        else {
+          protect();
+          if (leaf.tags) markTags(match.index, match.index + match[0].length);
+          if (htmlEnded(leaf, content)) leaf = null;
+          continue;
+        }
+      } else if (leaf.kind === 'indent') {
+        if (blankLine(content) || indented(content)) { protect(); continue; }
+        leaf = null;
+      }
+    }
+    // Containers precede new leaf starts, but never run inside an open leaf.
+    const originalLine = line;
     let quoteDepth = 0;
     while (/^ {0,3}>/.test(line)) { line = line.replace(/^ {0,3}>[ \t]?/, ''); quoteDepth++; }
-    const list = /^ {0,3}(?:[-+*]|\d{1,9}[.)])(?:[ \t]+|$)/.exec(line);
+    const list = !thematic(line) && /^ {0,3}(?:[-+*]|\d{1,9}[.)])(?:[ \t]+|$)/.exec(line);
     const sameQuote = container.startsWith(`${quoteDepth}:`);
     let inList = false;
     if (list) { listPadding = list[0].length; line = line.slice(listPadding); inList = true; }
     else if (sameQuote && listPadding && line.startsWith(' '.repeat(listPadding))) { line = line.slice(listPadding); inList = true; }
     else listPadding = 0;
     const nextContainer = `${quoteDepth}:${inList ? 'list' : ''}`;
-    if (nextContainer !== container || list) { paragraph = false; fence = null; html = null; referenceContinuation = false; }
+    if (nextContainer !== container || list) { paragraph = false; referenceContinuation = false; }
     container = nextContainer;
-    const blank = /^[ \t]*$/.test(line);
-    if (html && html.blank && blank) html = null;
-    if (!fence && !html) {
-      // End conditions are plain string searches, exactly as CommonMark names them, so a protected
-      // region never ends earlier than the spec says. CommonMark ends a comment block only at "-->".
-      if (/^ {0,3}<(?:pre|script|style|textarea)(?=[ \t>]|$)/i.test(line)) html = { end: ['</pre>', '</script>', '</style>', '</textarea>'], fold: true };
-      else if (/^ {0,3}<!--/.test(line)) html = { end: ['-->'] };
-      else if (/^ {0,3}<\?/.test(line)) html = { end: ['?>'] };
-      else if (/^ {0,3}<![A-Z]/.test(line)) html = { end: ['>'] };
-      else if (/^ {0,3}<!\[CDATA\[/.test(line)) html = { end: [']]>'] };
-      else if (blockTag.test(line)) html = { blank: true, tags: true };
-      else if (!paragraph && tagAtStart.test(line)) html = { blank: true, tags: true };
-    }
-    if (html) {
-      mask.fill(1, match.index, match.index + match[0].length);
-      if (html.tags) markTags(match.index, match.index + match[0].length);
-      if (html.end && html.end.some(marker => (html.fold ? line.toLowerCase() : line).includes(marker))) html = null;
-      paragraph = false;
-      continue;
-    }
-    if (fence) {
-      mask.fill(1, match.index, match.index + match[0].length);
-      const close = /^ {0,3}(`+|~+)[ \t]*$/.exec(line);
-      if (close && close[1][0] === fence[0] && close[1].length >= fence.length) fence = null;
-      continue;
-    }
-    const open = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
-    if (open && (open[1][0] !== '`' || !open[2].includes('`'))) {
-      fence = open[1];
-      mask.fill(1, match.index, match.index + match[0].length);
-    } else if (/^(?: {4}| {0,3}\t)/.test(line)) mask.fill(1, match.index, match.index + match[0].length);
+    // Future continuation lines carry list indentation, not the opening marker.
+    const prefix = originalLine.slice(0, originalLine.length - line.length).replace(/(?:[-+*]|\d{1,9}[.)])[ \t]*$/, marker => ' '.repeat(marker.length));
+    if (blankLine(line)) { paragraph = false; referenceContinuation = false; continue; }
     const heading = /^ {0,3}#{1,6}(?:[ \t]|$)/.test(line);
     const setext = paragraph && /^ {0,3}(?:=+|-+)[ \t]*$/.test(line);
-    const thematic = /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}|(?:-[ \t]*){3,})$/.test(line);
+    if (heading || setext || thematic(line)) { paragraph = false; referenceContinuation = false; continue; }
+    const fence = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (fence && (fence[1][0] !== '`' || !fence[2].includes('`'))) {
+      leaf = { kind: 'fence', fence: fence[1], prefix }; paragraph = false; protect(); continue;
+    }
+    const html = htmlStart(line);
+    if (html) {
+      protect();
+      if (html.tags) markTags(match.index, match.index + match[0].length);
+      leaf = htmlEnded(html, line) ? null : { ...html, prefix };
+      paragraph = false; referenceContinuation = false; continue;
+    }
+    if (!paragraph && indented(line)) { leaf = { kind: 'indent', prefix }; paragraph = false; protect(); continue; }
     const definition = !paragraph && /^ {0,3}\[(?:\\.|[^\]\\])+\]:[ \t]*/.exec(line);
-    const continuation = referenceContinuation && /^(?: {0,3})(?:<[^>]+>|[^ \t]+)(?:[ \t].*)?$/.test(line);
+    const continuation = referenceContinuation && /^ {0,3}(?:<[^>]+>|[^ \t]+)(?:[ \t].*)?$/.test(line);
     referenceContinuation = !!definition && !line.slice(definition[0].length).trim();
-    paragraph = !blank && !open && !mask[match.index] && !heading && !setext && !thematic && !definition && !continuation;
+    paragraph = !definition && !continuation;
   }
   for (let i = 0; i < text.length;) {
     if (!mask[i] && text[i] === '<' && !escapedAt(text, i)) {

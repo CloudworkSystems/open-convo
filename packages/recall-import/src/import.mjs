@@ -326,7 +326,31 @@ export function runImport(argv, options = {}) {
   validateSource(source);
   const input = path.resolve(args.in), atlas = path.resolve(args.atlas);
   const overlaps = (parent, child) => { const relative = path.relative(parent, child); return !relative || !relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative); };
-  if (overlaps(input, atlas) || overlaps(atlas, input)) throw new Error('--atlas: expected a folder separate from --in, with neither folder inside the other.');
+  const checkSeparation = () => {
+    // Resolve the deepest existing ancestor without creating any folders.
+    const resolveExisting = target => {
+      let current = target;
+      const remaining = [];
+      for (;;) {
+        try { return path.join(fs.realpathSync(current), ...remaining); }
+        catch (error) {
+          if (error.code !== 'ENOENT') throw new Error(`--atlas/--in: cannot resolve "${current}" (${error.code}). Expected accessible folders.`);
+          const parent = path.dirname(current);
+          if (parent === current) throw error;
+          remaining.unshift(path.basename(current)); current = parent;
+        }
+      }
+    };
+    const resolvedInput = resolveExisting(input), resolvedAtlas = resolveExisting(atlas);
+    if (overlaps(input, atlas) || overlaps(atlas, input) || overlaps(resolvedInput, resolvedAtlas) || overlaps(resolvedAtlas, resolvedInput)) throw new Error('--atlas: expected a folder separate from --in, with neither resolved folder inside the other.');
+    for (let ancestor = path.dirname(atlas); ; ancestor = path.dirname(ancestor)) {
+      try {
+        if (fs.lstatSync(ancestor).isSymbolicLink() && overlaps(resolvedInput, fs.realpathSync(ancestor))) throw new Error(`--atlas: expected a folder separate from --in; symbolic-link ancestor "${ancestor}" leads into the export.`);
+      } catch (error) { if (error.code !== 'ENOENT') throw error; }
+      if (path.dirname(ancestor) === ancestor) break;
+    }
+  };
+  checkSeparation();
   for (const folder of [atlas, path.join(atlas, 'sources'), path.join(atlas, 'sources', source.id)]) {
     let stat;
     try { stat = fs.lstatSync(folder); } catch (error) { if (error.code === 'ENOENT') continue; throw stateError(folder, `--atlas requires accessible real folders (${error.code || 'read failure'})`); }
@@ -405,6 +429,7 @@ export function runImport(argv, options = {}) {
   const checked = convert(preflight.manifest);
   for (const note of checked.notes) classify(note, preflight.manifest);
   messages.length = initialMessages; changes.length = 0;
+  checkSeparation(); // Recheck after source readers and all preflight reads, before the first write.
   mkdirSafe(sourceRoot, atlas);
   const lock = path.join(sourceRoot, '.import.lock');
   takeLock(lock, messages, options);
