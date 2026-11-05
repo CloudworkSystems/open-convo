@@ -11,7 +11,15 @@ const sourceDigest = text => digest(text.replace(/^imported: .*$/m, 'imported:')
 const dataMap = value => Object.assign(Object.create(null), value);
 const ownValue = (record, key) => Object.hasOwn(record, key) ? record[key] : undefined;
 const safeJson = file => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return { version: 1, entries: {}, pending: {} }; } };
-const writeAtomic = (file, text, mode = 0o600) => { const temp = `${file}.tmp-${process.pid}-${Math.random().toString(16).slice(2)}`; fs.writeFileSync(temp, text, { mode }); fs.renameSync(temp, file); };
+function shortTemp(file, kind) {
+  const directory = fs.mkdtempSync(path.join(path.dirname(file), `.import-${kind}-tmp-`));
+  return { directory, file: path.join(directory, 'data') };
+}
+function writeAtomic(file, text, mode = 0o600) {
+  const temp = shortTemp(file, 'manifest');
+  try { fs.writeFileSync(temp.file, text, { mode, flag: 'wx' }); fs.renameSync(temp.file, file); }
+  finally { fs.rmSync(temp.file, { force: true }); fs.rmdirSync(temp.directory); }
+}
 
 function loadImportState(manifestFile, journalFile) {
   const manifest = safeJson(manifestFile);
@@ -125,9 +133,11 @@ function readExport(root, readNonMarkdown = false) {
 }
 
 function publishLock(lock, data) {
-  const temp = `${lock}.new-${process.pid}-${Math.random().toString(16).slice(2)}`;
-  fs.writeFileSync(temp, JSON.stringify(data), { mode: 0o600 });
-  try { fs.linkSync(temp, lock); } finally { fs.rmSync(temp, { force: true }); }
+  const temp = shortTemp(lock, 'lock');
+  try {
+    fs.writeFileSync(temp.file, JSON.stringify(data), { mode: 0o600, flag: 'wx' });
+    fs.linkSync(temp.file, lock);
+  } finally { fs.rmSync(temp.file, { force: true }); fs.rmdirSync(temp.directory); }
 }
 function alive(info) { if (!info) return false; if (info.host !== os.hostname()) return true; if (!Number.isInteger(info.pid)) return false; try { process.kill(info.pid, 0); return true; } catch (e) { return e.code !== 'ESRCH'; } }
 function lockInfo(file) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } }
@@ -246,12 +256,13 @@ export function runImport(argv, options = {}) {
       if (action === 'kept' || action === 'unchanged') { addChange(note.key, note.path, action); continue; }
       manifest.pending[note.key] = { path: note.path, fullHash: digest(note.text), sourceHash: sourceDigest(note.text) };
       record(note.key, ownValue(manifest.pending, note.key));
-      const temp = `${destination}.tmp-${process.pid}`;
-      fs.writeFileSync(temp, note.text, { mode: 0o600 });
+      const temporary = shortTemp(destination, 'note'), temp = temporary.file;
+      fs.writeFileSync(temp, note.text, { mode: 0o600, flag: 'wx' });
       options.beforeRename?.({ note, destination, temp });
       const latest = fs.existsSync(destination) ? digest(fs.readFileSync(destination)) : null;
-      if (latest !== diskHash) { fs.rmSync(temp, { force: true }); delete manifest.pending[note.key]; record(note.key, null); addChange(note.key, note.path, 'kept'); continue; }
+      if (latest !== diskHash) { fs.rmSync(temp, { force: true }); fs.rmdirSync(temporary.directory); delete manifest.pending[note.key]; record(note.key, null); addChange(note.key, note.path, 'kept'); continue; }
       fs.renameSync(temp, destination);
+      fs.rmdirSync(temporary.directory);
       options.afterRename?.({ note, destination });
       manifest.entries[note.key] = ownValue(manifest.pending, note.key); delete manifest.pending[note.key];
       addChange(note.key, note.path, action);

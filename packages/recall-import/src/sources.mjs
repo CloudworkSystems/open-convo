@@ -141,12 +141,33 @@ function frontLines(key, value, indent = '', keepText = true) {
   return [`${indent}${label}: ${emit(value)}`];
 }
 
-function slugParts(key) {
-  const parts = key.replace(/\.md$/i, '').split('/').map(part => part.normalize('NFKD').replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'card');
-  return parts;
+function utf8Prefix(text, maxBytes) {
+  let prefix = '', bytes = 0;
+  for (const character of text) {
+    const size = Buffer.byteLength(character);
+    if (bytes + size > maxBytes) break;
+    prefix += character;
+    bytes += size;
+  }
+  return prefix;
 }
 
-function addSuffix(path, suffix) { return path.replace(/\.md$/, `-${suffix}.md`); }
+function fitComponent(stem, suffix = '') {
+  if (Buffer.byteLength(stem + suffix) <= 255) return stem + suffix;
+  const tail = `-${hash(stem).slice(0, 16)}${suffix}`;
+  return utf8Prefix(stem, 255 - Buffer.byteLength(tail)) + tail;
+}
+
+function slugParts(key) {
+  const parts = key.replace(/\.md$/i, '').split('/').map(part => part.normalize('NFKD').replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'card');
+  return parts.map((part, index) => fitComponent(part, index === parts.length - 1 ? '.md' : ''));
+}
+
+function addSuffix(notePath, suffix) {
+  const slash = notePath.lastIndexOf('/');
+  const stem = notePath.slice(slash + 1, -3), tail = `-${suffix}.md`;
+  return notePath.slice(0, slash + 1) + utf8Prefix(stem, 255 - Buffer.byteLength(tail)) + tail;
+}
 
 export function toNotes(items, { source, importedAt, manifest = Object.create(null), hashKey = hash } = {}) {
   validateSource(source);
@@ -156,8 +177,9 @@ export function toNotes(items, { source, importedAt, manifest = Object.create(nu
   const base = `sources/${source.id}/`;
   const candidates = items.map(item => {
     const kept = ownValue(manifest, item.key)?.path;
-    const path = kept || `${base}${slugParts(item.key).join('/')}.md`;
+    const path = kept || `${base}${slugParts(item.key).join('/')}`;
     if (!path.startsWith(base) || !validKey(path) || !path.endsWith('.md')) fail(`Refusing path for key "${item.key}" because it leaves ${base}.`);
+    if (path.split('/').some(component => Buffer.byteLength(component) > 255)) fail(`Refusing path for key "${item.key}" because a file or folder name exceeds 255 bytes.`);
     return { item, path };
   });
   const groups = new Map();
