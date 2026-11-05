@@ -434,9 +434,9 @@ function readHead(headPath) {
   try {
     raw = readLimited(headPath, SIDE_FILE_BYTES, 'read');
   } catch (error) {
-    if (error instanceof ProofError && (/is a link/.test(error.message) || /permission denied/.test(error.message))) {
-      throw error;
-    }
+    // A permission failure, a link, or any other read error names the file.
+    // Only a file we could read and then could not parse is an invalid head.
+    if (error instanceof ProofError) throw error;
     return { exists: true, valid: false, value: null };
   }
   let parsed;
@@ -552,19 +552,24 @@ function recover(ledgerPath, hooks) {
     }
     return { fresh: false, actionable: true, entries: loaded.entries, expectedHead: target, notices, loaded };
   }
+  const checked = verifyLedger(loaded.entries, { expectedHead: target });
   const last = loaded.entries[loaded.entries.length - 1];
-  const tailReady = loaded.entries.length === 0 || (isPlainObject(last) && Number.isInteger(last.seq));
-  if (!tailReady) {
-    const checked = verifyLedger(loaded.entries, { expectedHead: target });
-    const refusal = ownerRefusal(checked.message);
-    notices.push(refusal);
-    if (!refusal.includes('Restore the ledger')) notices.push('Restore the ledger from your copy.');
-    return { fresh: false, actionable: false, entries: loaded.entries, expectedHead: undefined, notices, loaded };
+  const lastSeq = isPlainObject(last) && Number.isInteger(last.seq) ? last.seq : null;
+  const onlyCutoff = checked.problems.length > 0 && checked.problems.every((item) => item.code === 'cutoff');
+  // A tail with the same sequence as the head, but a different or missing
+  // proof code, was changed. A cutoff is only a shorter chain.
+  if (onlyCutoff && lastSeq !== head.seq) {
+    notices.push(checked.message);
+    notices.push('Restore the ledger from your copy.');
+    return { fresh: false, actionable: false, entries: loaded.entries, expectedHead: undefined, notices, loaded, cutoff: true };
   }
-  const actualSeq = loaded.entries.length === 0 ? 0 : last.seq;
-  notices.push(cutoffLine(actualSeq, head.seq));
-  notices.push('Restore the ledger from your copy.');
-  return { fresh: false, actionable: false, entries: loaded.entries, expectedHead: undefined, notices, loaded, cutoff: true };
+  const named = onlyCutoff
+    ? `Ledger entry ${lastSeq ?? Math.max(loaded.entries.length, 1)} was changed after it was recorded.`
+    : checked.message;
+  const refusal = ownerRefusal(named);
+  notices.push(refusal);
+  if (!refusal.includes('Restore the ledger')) notices.push('Restore the ledger from your copy.');
+  return { fresh: false, actionable: false, entries: loaded.entries, expectedHead: undefined, notices, loaded };
 }
 
 async function withLock(ledgerPath, io, fn) {

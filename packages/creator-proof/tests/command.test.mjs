@@ -314,6 +314,41 @@ test('an append that would make the ledger unreadable is not saved', async () =>
   }
 });
 
+test('a shaped tail with a bad proof code is not called a cutoff', async () => {
+  const { dir, remove } = tempDir();
+  try {
+    const ledger = join(dir, 'ledger.json');
+    const media = join(dir, 'meadow.mov');
+    writeFileSync(media, 'sample\n');
+    assert.equal((await run(['record', media, '--title', 'Meadow', '--ledger', ledger])).code, 0);
+    const entries = JSON.parse(readFileSync(ledger, 'utf8'));
+    const headBefore = readFileSync(`${ledger}.head`);
+    delete entries[0].entryHash;
+    const missingHash = `${JSON.stringify(entries, null, 2)}\n`;
+    writeFileSync(ledger, missingHash);
+    const missing = await run(['verify', '--ledger', ledger]);
+    const missingOut = `${missing.io.text()}${missing.io.errors()}`;
+    assert.equal(missing.code, 1);
+    assert.match(missingOut, /Ledger entry 1 was changed after it was recorded/);
+    assert.match(missingOut, /Restore the ledger from your copy/);
+    assert.doesNotMatch(missingOut, /ends at entry 1, but your last record was entry 1/);
+
+    entries[0].title = 'Changed meadow';
+    entries[0].entryHash = hashEntry(entries[0]);
+    const rehashed = `${JSON.stringify(entries, null, 2)}\n`;
+    writeFileSync(ledger, rehashed);
+    const changed = await run(['verify', '--ledger', ledger]);
+    const changedOut = `${changed.io.text()}${changed.io.errors()}`;
+    assert.equal(changed.code, 1);
+    assert.match(changedOut, /Ledger entry 1 was changed after it was recorded/);
+    assert.doesNotMatch(changedOut, /ends at entry 1, but your last record was entry 1/);
+    assert.equal(readFileSync(ledger, 'utf8'), rehashed);
+    assert.deepEqual(readFileSync(`${ledger}.head`), headBefore);
+  } finally {
+    remove();
+  }
+});
+
 test('a ledger that ends in null names the damaged entry', async () => {
   const { dir, remove } = tempDir();
   try {
