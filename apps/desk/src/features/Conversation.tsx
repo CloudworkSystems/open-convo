@@ -445,8 +445,21 @@ export function Conversation({
           onFocus={(event) => reportDraftSelection(event.currentTarget, true)}
           onSelect={(event) => reportDraftSelection(event.currentTarget, document.activeElement === event.currentTarget)}
           onBlur={(event) => reportDraftSelection(event.currentTarget, false)}
-          onCompositionStart={() => { composing.current = true; }}
-          onCompositionEnd={(event) => { composing.current = false; if (!session) { startSession(event.currentTarget.value); setStartText(''); } }}
+          onCompositionStart={(event) => {
+            composing.current = true;
+            // Dictation steps aside while an input method composes, so a final can't start the session over it.
+            if (!session) reportDraftSelection(event.currentTarget, false);
+          }}
+          onCompositionEnd={(event) => {
+            composing.current = false;
+            if (!session) {
+              const field = event.currentTarget;
+              startSession(field.value);
+              setStartText('');
+              // Nothing was kept (an empty or cancelled composition): offer the blank box to dictation again.
+              if (!field.value.trim()) reportDraftSelection(field, document.activeElement === field);
+            }
+          }}
           onKeyDown={(event) => {
             if (event.key !== 'Enter' || event.nativeEvent.isComposing || composing.current || event.nativeEvent.keyCode === 229) return;
             if (event.altKey) return;
@@ -464,9 +477,7 @@ export function Conversation({
         <div className="composer-actions">
           <span className="composer-hint shortcut-hint" id="message-shortcuts">Enter to send · Ctrl / ⌘ / Shift + Enter for a new line
             {dictation?.status === 'ready' && <span className="dictation-ready"> · Dictation ready</span>}
-            {/* Mac dictation aims at a saved session, and a blank one has none yet. */}
-            {starting && dictation && dictation.status !== 'none' && dictation.status !== 'unavailable'
-              && <span className="dictation-after-start"> · Dictation works after the first word</span>}</span>
+</span>
           <>{participantChoices !== undefined || session?.participantChoice ? <ParticipantPicker key={session?.id}
             choices={participantChoices ?? []} selected={session?.participantChoice}
             error={participantChoiceError} confirmation={participantConfirmation}
