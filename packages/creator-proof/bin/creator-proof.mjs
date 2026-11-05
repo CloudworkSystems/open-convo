@@ -552,7 +552,16 @@ function recover(ledgerPath, hooks) {
     }
     return { fresh: false, actionable: true, entries: loaded.entries, expectedHead: target, notices, loaded };
   }
-  const actualSeq = loaded.entries.length === 0 ? 0 : loaded.entries[loaded.entries.length - 1].seq;
+  const last = loaded.entries[loaded.entries.length - 1];
+  const tailReady = loaded.entries.length === 0 || (isPlainObject(last) && Number.isInteger(last.seq));
+  if (!tailReady) {
+    const checked = verifyLedger(loaded.entries, { expectedHead: target });
+    const refusal = ownerRefusal(checked.message);
+    notices.push(refusal);
+    if (!refusal.includes('Restore the ledger')) notices.push('Restore the ledger from your copy.');
+    return { fresh: false, actionable: false, entries: loaded.entries, expectedHead: undefined, notices, loaded };
+  }
+  const actualSeq = loaded.entries.length === 0 ? 0 : last.seq;
   notices.push(cutoffLine(actualSeq, head.seq));
   notices.push('Restore the ledger from your copy.');
   return { fresh: false, actionable: false, entries: loaded.entries, expectedHead: undefined, notices, loaded, cutoff: true };

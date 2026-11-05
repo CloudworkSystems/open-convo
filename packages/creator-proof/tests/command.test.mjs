@@ -314,6 +314,31 @@ test('an append that would make the ledger unreadable is not saved', async () =>
   }
 });
 
+test('a ledger that ends in null names the damaged entry', async () => {
+  const { dir, remove } = tempDir();
+  try {
+    const ledger = join(dir, 'ledger.json');
+    const media = join(dir, 'meadow.mov');
+    writeFileSync(media, 'sample\n');
+    assert.equal((await run(['record', media, '--title', 'Meadow', '--ledger', ledger])).code, 0);
+    const entries = JSON.parse(readFileSync(ledger, 'utf8'));
+    entries.push(null);
+    const damaged = `${JSON.stringify(entries, null, 2)}\n`;
+    writeFileSync(ledger, damaged);
+    const headBefore = readFileSync(`${ledger}.head`);
+    const checked = await run(['verify', '--ledger', ledger]);
+    assert.equal(checked.code, 1);
+    const output = `${checked.io.text()}${checked.io.errors()}`;
+    assert.match(output, /Ledger entry 2 was changed after it was recorded/);
+    assert.match(output, /Restore the ledger from your copy/);
+    assert.doesNotMatch(output, /Cannot read properties/);
+    assert.equal(readFileSync(ledger, 'utf8'), damaged);
+    assert.deepEqual(readFileSync(`${ledger}.head`), headBefore);
+  } finally {
+    remove();
+  }
+});
+
 test('an unreadable head file keeps its permission error', async () => {
   const { dir, remove } = tempDir();
   const ledger = join(dir, 'ledger.json');
