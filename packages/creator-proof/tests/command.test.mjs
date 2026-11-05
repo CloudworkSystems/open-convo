@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import {
   chmodSync,
   closeSync,
+  mkdirSync,
   createReadStream,
   existsSync,
   openSync,
@@ -369,6 +370,23 @@ test('a ledger that ends in null names the damaged entry', async () => {
     assert.doesNotMatch(output, /Cannot read properties/);
     assert.equal(readFileSync(ledger, 'utf8'), damaged);
     assert.deepEqual(readFileSync(`${ledger}.head`), headBefore);
+  } finally {
+    remove();
+  }
+});
+
+test('an empty ledger in a folder with spaces shows a quoted command', async () => {
+  const { dir, remove } = tempDir();
+  try {
+    const folder = join(dir, 'my proofs');
+    mkdirSync(folder);
+    const ledger = join(folder, 'ledger.json');
+    const casePath = join(dir, 'case.json');
+    const pack = join(dir, 'pack.md');
+    writeFileSync(casePath, '{}');
+    const reported = await run(['report', '--case', casePath, '--out', pack, '--ledger', ledger]);
+    assert.equal(reported.code, 1);
+    assert.match(reported.io.text(), /--ledger '.*my proofs\/ledger\.json'/);
   } finally {
     remove();
   }

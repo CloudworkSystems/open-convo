@@ -13,6 +13,8 @@ export {
   FILE_CHANGED,
   RECORD_FIRST,
   cutoffLine,
+  recordCommand,
+  unlockCommand,
 } from './words.mjs';
 export { verifyLedger, recordOriginal, amendOriginal, currentOriginals, originalIdFor } from './ledger.mjs';
 export { buildReport } from './report.mjs';

@@ -430,15 +430,8 @@ function loadLedger(ledgerPath) {
 
 function readHead(headPath) {
   if (!existsSync(headPath)) return { exists: false, valid: false, value: null };
-  let raw;
-  try {
-    raw = readLimited(headPath, SIDE_FILE_BYTES, 'read');
-  } catch (error) {
-    // A permission failure, a link, or any other read error names the file.
-    // Only a file we could read and then could not parse is an invalid head.
-    if (error instanceof ProofError) throw error;
-    return { exists: true, valid: false, value: null };
-  }
+  // Do not catch read errors. Permission denied must stay permission denied.
+  const raw = readLimited(headPath, SIDE_FILE_BYTES, 'read');
   let parsed;
   try {
     parsed = JSON.parse(raw);

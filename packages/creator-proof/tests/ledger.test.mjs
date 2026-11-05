@@ -7,7 +7,9 @@ import {
   amendOriginal,
   buildReport,
   currentOriginals,
+  recordCommand,
   recordOriginal,
+  unlockCommand,
   verifyLedger,
 } from '../src/index.mjs';
 
@@ -203,6 +205,19 @@ test('a missing tail is caught only when the expected head is given', () => {
   ]) {
     assert.throws(fn, /The ledger ends at entry 1, but your last record was entry 2\./);
   }
+});
+
+test('suggested commands quote a ledger path', () => {
+  const path = "/tmp/my proofs/o'brien/ledger.json";
+  const quoted = `'/tmp/my proofs/o'\\''brien/ledger.json'`;
+  assert.equal(
+    recordCommand(path),
+    `node packages/creator-proof/bin/creator-proof.mjs record <media file> --title "<text>" --ledger ${quoted}`,
+  );
+  assert.equal(
+    unlockCommand(path),
+    `node packages/creator-proof/bin/creator-proof.mjs unlock --ledger ${quoted}`,
+  );
 });
 
 test('twenty thousand amendments still verify quickly', () => {
