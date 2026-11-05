@@ -132,12 +132,13 @@ export function runImport(argv, options = {}) {
   const result = checkSource(source, files);
   result.skipped.push(...skipped);
   const sourceRoot = path.join(atlas, 'sources', source.id), manifestFile = path.join(sourceRoot, '.import-manifest.json');
+  const journalFile = path.join(sourceRoot, '.import-journal.jsonl');
   const messages = [];
   if (!result.items.length) {
     messages.push("This folder has no Recall cards. In Recall's web app, open Settings, choose Export, unzip the download, then run this again on that folder.");
     // A genuinely first empty run writes nothing. An existing import still
     // needs its lock, pending recovery, and removed-card reconciliation.
-    if (!args.write || !fs.existsSync(manifestFile)) return { cards: 0, notes: 0, skipped: result.skipped, warnings: result.warnings, messages };
+    if (!args.write || !fs.existsSync(manifestFile) && !fs.existsSync(journalFile)) return { cards: 0, notes: 0, skipped: result.skipped, warnings: result.warnings, messages };
   }
   const importedAt = args.importedat || new Date().toISOString();
   if (!args.write) {
@@ -157,13 +158,36 @@ export function runImport(argv, options = {}) {
   };
   for (const note of preview.notes) inspect(path.join(atlas, note.path));
   inspect(manifestFile);
+  inspect(journalFile);
   inspect(path.join(sourceRoot, '.import.lock'));
   inspect(path.join(sourceRoot, '.import.lock.reclaim'));
   mkdirSafe(sourceRoot, atlas);
   const lock = path.join(sourceRoot, '.import.lock');
   takeLock(lock, messages, options);
+  let manifest, canCompact = false;
+  const compact = () => {
+    writeAtomic(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
+    fs.rmSync(journalFile, { force: true });
+  };
+  const record = (key, entry) => fs.appendFileSync(journalFile, `${JSON.stringify({ key, entry })}\n`, { mode: 0o600 });
   try {
-    const manifest = safeJson(manifestFile); manifest.entries ||= {}; manifest.pending ||= {};
+    manifest = safeJson(manifestFile); manifest.entries ||= {}; manifest.pending ||= {};
+    const recovering = fs.existsSync(journalFile);
+    if (recovering) {
+      const journal = fs.readFileSync(journalFile, 'utf8');
+      // An interrupted append can leave an incomplete final line. No rename
+      // happens until its complete journal record has been appended.
+      const complete = journal.slice(0, journal.lastIndexOf('\n') + 1);
+      for (const line of complete.split('\n')) {
+        if (!line) continue;
+        let entry;
+        try { entry = JSON.parse(line); } catch { throw new Error(`Could not read recovery journal "${journalFile}". Keep it and check the interrupted import.`); }
+        if (typeof entry.key !== 'string' || !Object.hasOwn(entry, 'entry')) throw new Error(`Invalid recovery record in "${journalFile}".`);
+        if (entry.entry === null) delete manifest.pending[entry.key];
+        else manifest.pending[entry.key] = entry.entry;
+      }
+    }
+    canCompact = true;
     for (const [key, pending] of Object.entries(manifest.pending)) {
       const relative = typeof pending.path === 'string' ? path.relative(sourceRoot, path.resolve(atlas, pending.path)) : '..';
       if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) throw new Error(`Refusing pending path for "${key}" outside this source's folder.`);
@@ -175,6 +199,8 @@ export function runImport(argv, options = {}) {
       if (diskHash !== null && diskHash !== pending.fullHash && diskHash !== old?.fullHash) messages.push(`${pending.path}: kept, edited since the last import.`);
       delete manifest.pending[key];
     }
+    // Checkpoint a recovered journal once, then start a fresh append sequence.
+    if (recovering || !fs.existsSync(manifestFile)) compact();
     const converted = toNotes(result.items, { source, importedAt, manifest: { ...manifest.pending, ...manifest.entries }, hashKey: options.hashKey });
     for (const note of converted.notes) inspect(path.join(atlas, note.path));
     const currentKeys = new Set(result.items.map(i => i.key));
@@ -187,18 +213,23 @@ export function runImport(argv, options = {}) {
       if (!owned) { messages.push(`${note.path}: kept, edited since the last import.`); continue; }
       if (old?.sourceHash === sourceDigest(note.text) && diskHash === old.fullHash) { messages.push(`${note.path}: unchanged.`); continue; }
       manifest.pending[note.key] = { path: note.path, fullHash: digest(note.text), sourceHash: sourceDigest(note.text) };
-      writeAtomic(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
+      record(note.key, manifest.pending[note.key]);
       const temp = `${destination}.tmp-${process.pid}`;
       fs.writeFileSync(temp, note.text, { mode: 0o600 });
       options.beforeRename?.({ note, destination, temp });
       const latest = fs.existsSync(destination) ? digest(fs.readFileSync(destination)) : null;
-      if (latest !== diskHash) { fs.rmSync(temp, { force: true }); delete manifest.pending[note.key]; messages.push(`${note.path}: kept, edited since the last import.`); continue; }
+      if (latest !== diskHash) { fs.rmSync(temp, { force: true }); delete manifest.pending[note.key]; record(note.key, null); messages.push(`${note.path}: kept, edited since the last import.`); continue; }
       fs.renameSync(temp, destination);
       options.afterRename?.({ note, destination });
       manifest.entries[note.key] = manifest.pending[note.key]; delete manifest.pending[note.key];
     }
-    writeAtomic(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
+    compact();
     return { cards: result.items.length, notes: converted.notes.length, skipped: result.skipped, warnings: [...result.warnings, ...converted.warnings], messages };
+  } catch (error) {
+    // Caught interruptions keep the legacy pending-manifest representation.
+    // Abrupt exits leave the journal for the next lock owner to recover.
+    if (canCompact) compact();
+    throw error;
   } finally { fs.rmSync(lock, { force: true }); }
 }
 

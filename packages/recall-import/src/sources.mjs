@@ -122,8 +122,16 @@ function atlasScalar(text) {
 function frontLines(key, value, indent = '', keepText = true) {
   const emit = v => scalar(v, keepText);
   const label = scalar(key);
-  if (Array.isArray(value)) return value.length ? [`${indent}${label}:`, ...value.map(v => `${indent}  - ${emit(v)}`)] : [`${indent}${label}: []`];
+  function sequence(values, prefix) {
+    return values.flatMap(child => {
+      if (Array.isArray(child)) return child.length ? [`${prefix}-`, ...sequence(child, `${prefix}  `)] : [`${prefix}- []`];
+      if (plain(child)) return Object.keys(child).length ? [`${prefix}-`, ...Object.entries(child).flatMap(([name, nested]) => frontLines(name, nested, `${prefix}  `, keepText))] : [`${prefix}- {}`];
+      return [`${prefix}- ${emit(child)}`];
+    });
+  }
+  if (Array.isArray(value)) return value.length ? [`${indent}${label}:`, ...sequence(value, `${indent}  `)] : [`${indent}${label}: []`];
   if (plain(value)) {
+    if (!Object.keys(value).length) return [`${indent}${label}: {}`];
     const lines = [`${indent}${label}:`];
     for (const [child, childValue] of Object.entries(value)) lines.push(...frontLines(child, childValue, `${indent}  `, keepText));
     return lines;
@@ -269,16 +277,102 @@ function markdownCodeMask(text) {
   return mask;
 }
 
+function bracketEnd(text, start) {
+  if (text[start] !== '[') return -1;
+  let depth = 1;
+  for (let i = start + 1; i < text.length; i++) {
+    if (text[i] === '\\') { i++; continue; }
+    if (text[i] === '[') depth++;
+    if (text[i] === ']' && --depth === 0) return i;
+  }
+  return -1;
+}
+
+function destinationAt(text, start) {
+  let i = start;
+  if (text[i] === '<') {
+    const begin = ++i;
+    while (i < text.length && text[i] !== '>') {
+      if (text[i] === '\n' || text[i] === '\r') return null;
+      if (text[i] === '\\') i++;
+      i++;
+    }
+    return text[i] === '>' ? { url: text.slice(begin, i), end: i + 1 } : null;
+  }
+  let depth = 0;
+  for (; i < text.length; i++) {
+    if (text[i] === '\\') { i++; continue; }
+    if (/\s/.test(text[i])) break;
+    if (text[i] === '(') depth++;
+    if (text[i] === ')') { if (!depth) break; depth--; }
+  }
+  return i > start && !depth ? { url: text.slice(start, i), end: i } : null;
+}
+
+const referenceLabel = value => value.replace(/\\([\[\]\\])/g, '$1').trim().replace(/\s+/g, ' ').toLowerCase();
+const remoteImage = url => /^https?:\/\//i.test(url);
+
+function plainImageLinks(text, code) {
+  const references = new Map();
+  // Definitions are collected before uses, so their order in the card does not matter.
+  for (const line of text.matchAll(/[^\n]*(?:\n|$)/g)) {
+    const indentation = /^ {0,3}(?=\[)/.exec(line[0]);
+    if (!indentation) continue;
+    const start = line.index + indentation[0].length;
+    if (code[start]) continue;
+    const end = bracketEnd(text, start);
+    if (end < 0 || text[end + 1] !== ':' || end >= line.index + line[0].length) continue;
+    let cursor = end + 2;
+    while (text[cursor] === ' ' || text[cursor] === '\t') cursor++;
+    const destination = destinationAt(text, cursor);
+    const label = referenceLabel(text.slice(start + 1, end));
+    if (destination && label && !references.has(label)) references.set(label, destination.url);
+  }
+  const chunks = [];
+  let previous = 0, converted = false;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '!' || text[i + 1] !== '[' || code[i] || escapedAt(text, i)) continue;
+    const close = bracketEnd(text, i + 1);
+    if (close < 0) continue;
+    const label = referenceLabel(text.slice(i + 2, close));
+    let end = close + 1, remote = false;
+    if (text[end] === '(') {
+      let cursor = end + 1;
+      while (/\s/.test(text[cursor] || '') && cursor < text.length) cursor++;
+      const destination = destinationAt(text, cursor);
+      if (!destination) continue;
+      cursor = destination.end;
+      while (/\s/.test(text[cursor] || '') && cursor < text.length) cursor++;
+      if (text[cursor] === '"' || text[cursor] === "'") {
+        const quote = text[cursor++];
+        while (cursor < text.length && (text[cursor] !== quote || escapedAt(text, cursor))) cursor++;
+        if (text[cursor++] !== quote) continue;
+        while (/\s/.test(text[cursor] || '') && cursor < text.length) cursor++;
+      }
+      if (text[cursor] !== ')') continue;
+      remote = remoteImage(destination.url);
+      end = cursor + 1;
+    } else if (text[end] === '[') {
+      const referenceEnd = bracketEnd(text, end);
+      if (referenceEnd < 0) continue;
+      remote = remoteImage(references.get(referenceLabel(text.slice(end + 1, referenceEnd)) || label) || '');
+      end = referenceEnd + 1;
+    } else remote = remoteImage(references.get(label) || '');
+    if (!remote) continue;
+    chunks.push(text.slice(previous, i), text.slice(i + 1, end));
+    previous = end;
+    i = end - 1;
+    converted = true;
+  }
+  chunks.push(text.slice(previous));
+  return { body: chunks.join(''), converted };
+}
+
 function readMarkdown(text) {
   const code = markdownCodeMask(text);
   let heading;
   for (const match of text.matchAll(/^# (.+)$/gm)) if (!code[match.index]) { heading = match[1]; break; }
-  let converted = false;
-  let body = text.replace(/!\[([^\]]*)\]\((https?:\/\/[^)]*)\)/gi, (match, label, url, offset) => {
-    if (code[offset] || escapedAt(text, offset)) return match;
-    converted = true;
-    return `[${label}](${url})`;
-  });
+  let { body, converted } = plainImageLinks(text, code);
   if (converted) body = `${body.replace(/\n?$/, '\n')}\nImages in this card were not imported. Their links may stop working.\n`;
   return { heading, body };
 }
