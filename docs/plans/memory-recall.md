@@ -200,8 +200,9 @@ the shipped sample):
 12. Point `--state` at the package's `package.json` and see "This file
     isn't a memory state." with the check that failed.
 13. Run with `--limit 0`, then `--budget 100`, then `--now yesterday`,
-    then an empty message, and see each one-sentence refusal naming the
-    value that was wrong.
+    then an empty message, then a message of 4,001 characters (the
+    builder gives a one-line command that makes it), and see each
+    one-sentence refusal naming the value that was wrong.
 
 He confirms each message says what to do next.
 
