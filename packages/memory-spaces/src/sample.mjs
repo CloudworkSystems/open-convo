@@ -33,49 +33,51 @@ const out = applyOperation(state, op); save(out.state, verb === "purge"); output
 function statePath() { return path.join(dir, ".sample-state.json"); }
 function committedPath() { return path.join(dir, ".sample-committed.json"); }
 function purgePath() { return path.join(dir, ".purge-first.json"); }
+function pendingPath() { return path.join(dir, '.sample-pending.json'); }
 function initialState() { return emptyState([{ id: 'personal', name: 'Personal', kind: 'personal' }, { id: 'studio', name: 'Invented Studio', kind: 'business' }]); }
 function partialInit() {
-  return fs.existsSync(marker) && fs.readdirSync(dir).every(name => ['SAMPLE-ONLY', '.sample-committed.json.tmp'].includes(name));
+  const allowed = ['SAMPLE-ONLY', '.sample-committed.json', '.sample-committed.json.tmp', '.sample-pending.json', '.sample-pending.json.tmp'];
+  const history = readHistory(committedPath()) ?? readHistory(committedPath() + '.tmp');
+  return fs.existsSync(marker) && fs.readdirSync(dir).every(name => allowed.includes(name)) && (!history || history.every(state => state.log.length === 0));
 }
+function readJson(file, validate) {
+  try { const value = JSON.parse(fs.readFileSync(file, 'utf8')); return validate(value) ? value : undefined; } catch { return undefined; }
+}
+function validState(value) { try { renderWrites(value); return true; } catch { return false; } }
+function readState(file) { return readJson(file, validState); }
+function readHistory(file) { return readJson(file, value => Array.isArray(value) && value.length > 0 && value.every(validState)); }
+function readText(file) { try { return fs.readFileSync(file, 'utf8'); } catch { return undefined; } }
 function load() {
-  if (partialInit()) {
-    interrupted = true;
-    const initial = initialState();
-    save(initial);
-    return initial;
-  }
-  if (fs.existsSync(purgePath()) || fs.existsSync(purgePath() + '.tmp')) {
-    interrupted = true;
-    const purged = JSON.parse(fs.readFileSync(fs.existsSync(purgePath()) ? purgePath() : purgePath() + '.tmp', "utf8"));
-    save(purged, true);
-    return purged;
-  }
-  try {
-    const current = JSON.parse(fs.readFileSync(statePath(), "utf8"));
-    const expectedLog = renderWrites(current).find((write) => write.path === ".log/log.jsonl").text;
-    const actualLog = fs.readFileSync(path.join(dir, ".log/log.jsonl"), "utf8");
-    if (expectedLog === actualLog) {
-      const mismatch = renderWrites(current).some((w) => !fs.existsSync(path.join(dir, w.path)) || fs.readFileSync(path.join(dir, w.path), "utf8") !== w.text);
-      const history = JSON.parse(fs.readFileSync(committedPath(), 'utf8'));
-      const pending = JSON.stringify(history.at(-1)) !== JSON.stringify(current) || fs.existsSync(committedPath() + '.tmp') || fs.existsSync(statePath() + '.tmp');
-      if (mismatch || pending) { interrupted = true; save(current, false, true); }
-      return current;
+  for (const file of [purgePath(), purgePath() + '.tmp']) {
+    const purged = readState(file);
+    if (purged && purged.log.at(-1)?.type === 'purge') {
+      interrupted = true; save(purged, true); return purged;
     }
-    interrupted = true;
-    const recovered = JSON.parse(fs.readFileSync(committedPath(), "utf8")).findLast(s => renderWrites(s).find(w => w.path === '.log/log.jsonl').text === actualLog);
-    if (!recovered) fail("The saved log has no complete sample state.");
-    save(recovered, false, true);
-    return recovered;
-  } catch {
-    if (fs.existsSync(committedPath())) { interrupted = true; const recovered = JSON.parse(fs.readFileSync(committedPath(), "utf8")).at(-1); save(recovered, false, true); return recovered; }
-    fail("The last change didn't finish and was not saved.");
   }
+  const current = readState(statePath());
+  const fullHistory = readHistory(committedPath());
+  const history = fullHistory ?? readHistory(committedPath() + '.tmp') ?? [];
+  const actualLog = readText(path.join(dir, '.log/log.jsonl'));
+  const logText = state => renderWrites(state).find(write => write.path === '.log/log.jsonl').text;
+  const validPending = value => value && value.saving === true;
+  const pending = readJson(pendingPath(), validPending) ?? readJson(pendingPath() + '.tmp', validPending);
+  const fromLog = history.findLast(state => logText(state) === actualLog && (!pending || [pending.baseLogId, pending.nextLogId].includes(state.log.at(-1)?.id)));
+  const recovered = fromLog ?? current ?? history.at(-1) ?? readState(statePath() + '.tmp') ?? (partialInit() ? initialState() : undefined);
+  if (!recovered) fail("The last change didn't finish and was not saved.");
+  const controlFiles = [pendingPath(), pendingPath() + '.tmp', purgePath(), purgePath() + '.tmp', committedPath() + '.tmp', statePath() + '.tmp'];
+  const writes = renderWrites(recovered);
+  const dirty = !current || !fullHistory || controlFiles.some(file => fs.existsSync(file)) ||
+    JSON.stringify(current) !== JSON.stringify(recovered) || JSON.stringify(history.at(-1)) !== JSON.stringify(recovered) ||
+    writes.some(write => readText(path.join(dir, write.path)) !== write.text || fs.existsSync(path.join(dir, write.path + '.tmp')));
+  if (dirty) { interrupted = true; save(recovered, false, true); }
+  return recovered;
 }
 function atomic(file, text) { const full = path.resolve(dir, file); if (full !== marker && !full.startsWith(dir + path.sep)) fail("A sample write tried to leave the sample folder."); fs.mkdirSync(path.dirname(full), { recursive: true }); const temp = full + ".tmp"; fs.writeFileSync(temp, text); afterWrite(`${file}:temporary`); fs.renameSync(temp, full); afterWrite(`${file}:renamed`); }
 function save(next, purgeFirst = false, recovering = false) {
   const writes = renderWrites(next); const log = writes.find((w) => w.path === ".log/log.jsonl");
   if (purgeFirst) { atomic(".purge-first.json", JSON.stringify(next, null, 2) + "\n"); atomic(log.path, log.text); }
-  let history = !purgeFirst && fs.existsSync(committedPath()) ? JSON.parse(fs.readFileSync(committedPath(), 'utf8')) : [];
+  atomic('.sample-pending.json', JSON.stringify({ saving: true, baseLogId: readState(statePath())?.log.at(-1)?.id, nextLogId: next.log.at(-1)?.id }) + '\n');
+  let history = !purgeFirst ? readHistory(committedPath()) ?? readHistory(committedPath() + '.tmp') ?? [] : [];
   if (recovering) {
     const index = history.findLastIndex(state => JSON.stringify(state) === JSON.stringify(next));
     const expected = new Set(writes.map(write => write.path));
@@ -95,7 +97,7 @@ function save(next, purgeFirst = false, recovering = false) {
   atomic(".sample-state.json", JSON.stringify(next, null, 2) + "\n");
   for (const write of writes) if (write !== log) atomic(write.path, write.text);
   if (!purgeFirst) atomic(log.path, log.text);
-  if (purgeFirst && fs.existsSync(purgePath())) fs.rmSync(purgePath());
+  for (const file of [pendingPath(), pendingPath() + '.tmp', ...(purgeFirst || recovering ? [purgePath(), purgePath() + '.tmp'] : [])]) if (fs.existsSync(file)) fs.rmSync(file);
 }
 function fail(message) { throw new Error(message); }
 }
