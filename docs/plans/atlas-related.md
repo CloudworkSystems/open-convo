@@ -209,6 +209,14 @@ wiki:
 
 He confirms each message says what to do next.
 
+## Carried To The Build
+
+Codex findings from the plan review's later rounds, which the code pull
+request must meet (docs/agent-process.md "Plans stop after two Codex
+rounds"):
+
+- The `about` line is still shown by atlas-index's rule, but the title boost counts only words of the `about` line that are themselves read under rule 1: when atlas-index's rule picks a heading or line from inside fenced code, inline code or excluded front matter, those words get no boost and are not read at all; the file name boost still applies. A test gives two notes the same `# heading` only inside fenced code and checks it adds nothing to either note's weights ([thread](https://github.com/CloudworkSystems/open-convo/pull/303#discussion_r4480225564)).
+
 ## Out Of Scope For This Slice
 
 - Any model, embedding or "smart" ranking; word stems; synonyms.
