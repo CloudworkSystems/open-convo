@@ -80,12 +80,14 @@ function:
    with the query is never returned. The same inputs give the same output
    byte for byte.
 3. **Age comes from the label or the log.** `ageDays` is whole days from
-   the entry's last change to `now`. The last change is the `now` of the
-   latest log record that kept, corrected, moved or restored that entry
-   and is still in effect, or the `owner said` label's date if that is
-   later. A record that a later `undo` reversed doesn't count, so a
-   correction made today and then undone leaves the entry as old as its
-   text really is. If neither exists,
+   the time its current text was set to `now`. That time is the `now` of
+   the latest log record that kept or corrected that entry and is still in
+   effect, or the `owner said` label's date if that is later. A `move`,
+   `share`, `restore` or `allowCloud` changes where the entry is filed or
+   who may see it, not what it says, so it never makes an entry younger.
+   A record that a later `undo` reversed doesn't count, so a correction
+   made today and then undone leaves the entry as old as its text really
+   is. If neither exists,
    `ageDays` is `null`. The library reads only those records' times and
    entry ids from the log, never their text.
 4. **Recheck old facts that name something.** `recheck` is true when
@@ -113,7 +115,7 @@ reads one JSON file with a memory spaces state, prints the brief and the
 notes, and writes nothing. `--now` defaults to a fixed invented date, so
 the command never reads the clock. The package ships
 `sample/state.json`: an invented state made with the memory spaces
-library, with two spaces, a shared entry, a cloud-allowed entry, a
+library, with three spaces (one of them empty), a shared entry, a cloud-allowed entry, a
 forgotten entry, a candidate, an old entry naming a price and one entry
 claiming an approval. The package's tests rebuild it from the memory
 spaces library and check it matches, so it never drifts.
@@ -156,7 +158,8 @@ answers the five questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
 5. Age: from the log, from a later `owner said` date, and `null` when
    neither exists; a `correct` resets the age; a `correct` that is then
    undone doesn't, so an old price corrected and undone today is still
-   flagged `recheck`.
+   flagged `recheck`; a `move`, `share`, `restore` or `allowCloud` today
+   leaves a 60-day-old price flagged.
 6. Recheck: each kind of changeable thing at 31 days is flagged, the same
    text at 30 days isn't, and plain text at 300 days isn't.
 7. Approval claims: each listed phrase is flagged; "not approved yet" is
@@ -192,6 +195,13 @@ the shipped sample):
    fit.
 9. Ask with only "the and of" and see the "say a little more" message.
 10. Run with a space that doesn't exist and see its message.
+11. Ask anything in the sample's empty space and see "Nothing kept in
+    this space yet."
+12. Point `--state` at the package's `package.json` and see "This file
+    isn't a memory state." with the check that failed.
+13. Run with `--limit 0`, then `--budget 100`, then `--now yesterday`,
+    then an empty message, and see each one-sentence refusal naming the
+    value that was wrong.
 
 He confirms each message says what to do next.
 
