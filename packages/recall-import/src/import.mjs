@@ -13,6 +13,41 @@ const ownValue = (record, key) => Object.hasOwn(record, key) ? record[key] : und
 const safeJson = file => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return { version: 1, entries: {}, pending: {} }; } };
 const writeAtomic = (file, text, mode = 0o600) => { const temp = `${file}.tmp-${process.pid}-${Math.random().toString(16).slice(2)}`; fs.writeFileSync(temp, text, { mode }); fs.renameSync(temp, file); };
 
+function loadImportState(manifestFile, journalFile) {
+  const manifest = safeJson(manifestFile);
+  manifest.entries = dataMap(ownValue(manifest, 'entries'));
+  manifest.pending = dataMap(ownValue(manifest, 'pending'));
+  const recovering = fs.existsSync(journalFile);
+  if (recovering) {
+    const journal = fs.readFileSync(journalFile, 'utf8');
+    // A partial final append cannot have been followed by a note rename.
+    const complete = journal.slice(0, journal.lastIndexOf('\n') + 1);
+    for (const line of complete.split('\n')) {
+      if (!line) continue;
+      let entry;
+      try { entry = JSON.parse(line); } catch { throw new Error(`Could not read recovery journal "${journalFile}". Keep it and check the interrupted import.`); }
+      if (typeof entry.key !== 'string' || !Object.hasOwn(entry, 'entry')) throw new Error(`Invalid recovery record in "${journalFile}".`);
+      if (entry.entry === null) delete manifest.pending[entry.key];
+      else manifest.pending[entry.key] = entry.entry;
+    }
+  }
+  return { manifest, recovering };
+}
+
+function reconcilePending(manifest, atlas, sourceRoot, inspect, messages) {
+  for (const [key, pending] of Object.entries(manifest.pending)) {
+    const relative = typeof pending.path === 'string' ? path.relative(sourceRoot, path.resolve(atlas, pending.path)) : '..';
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) throw new Error(`Refusing pending path for "${key}" outside this source's folder.`);
+    const destination = path.join(sourceRoot, relative);
+    inspect(destination);
+    const diskHash = fs.existsSync(destination) ? digest(fs.readFileSync(destination)) : null;
+    const old = ownValue(manifest.entries, key);
+    if (diskHash === pending.fullHash || !old) manifest.entries[key] = pending;
+    if (diskHash !== null && diskHash !== pending.fullHash && diskHash !== old?.fullHash) messages.push(`${pending.path}: kept, edited since the last import.`);
+    delete manifest.pending[key];
+  }
+}
+
 function parseArgs(argv) {
   const out = { write: false, json: false, source: 'recall' };
   for (let i = 0; i < argv.length; i += 1) {
@@ -140,13 +175,9 @@ export function runImport(argv, options = {}) {
     messages.push("This folder has no Recall cards. In Recall's web app, open Settings, choose Export, unzip the download, then run this again on that folder.");
     // A genuinely first empty run writes nothing. An existing import still
     // needs its lock, pending recovery, and removed-card reconciliation.
-    if (!args.write || !fs.existsSync(manifestFile) && !fs.existsSync(journalFile)) return { cards: 0, notes: 0, skipped: result.skipped, warnings: result.warnings, messages };
+    if (!fs.existsSync(manifestFile) && !fs.existsSync(journalFile)) return { cards: 0, notes: 0, skipped: result.skipped, warnings: result.warnings, messages, paths: [], changes: [] };
   }
   const importedAt = args.importedat || new Date().toISOString();
-  if (!args.write) {
-    const converted = toNotes(result.items, { source, importedAt });
-    return { cards: result.items.length, notes: converted.notes.length, skipped: result.skipped, warnings: [...result.warnings, ...converted.warnings], messages };
-  }
   // Inspect the complete destination tree before creating any import files.
   const preview = toNotes(result.items, { source, importedAt });
   const inspect = target => {
@@ -163,6 +194,34 @@ export function runImport(argv, options = {}) {
   inspect(journalFile);
   inspect(path.join(sourceRoot, '.import.lock'));
   inspect(path.join(sourceRoot, '.import.lock.reclaim'));
+  const changes = [];
+  const report = converted => ({ cards: result.items.length, notes: converted.notes.length, skipped: result.skipped, warnings: [...result.warnings, ...converted.warnings], messages, paths: converted.notes.map(({ key, path: notePath }) => ({ key, path: notePath })), changes });
+  const addChange = (key, notePath, action) => {
+    changes.push({ key, path: notePath, action });
+    const detail = action === 'removed' ? `no longer in ${source.name}; kept.` : action === 'kept' ? 'kept, edited since the last import.' : `${action}.`;
+    messages.push(`${notePath}: ${detail}`);
+  };
+  const convert = manifest => {
+    const converted = toNotes(result.items, { source, importedAt, manifest: Object.assign(dataMap(manifest.pending), manifest.entries), hashKey: options.hashKey });
+    for (const note of converted.notes) inspect(path.join(atlas, note.path));
+    const currentKeys = new Set(result.items.map(item => item.key));
+    for (const [key, old] of Object.entries(manifest.entries)) if (!currentKeys.has(key)) addChange(key, old.path, 'removed');
+    return converted;
+  };
+  const classify = (note, manifest) => {
+    const destination = path.join(atlas, note.path), old = ownValue(manifest.entries, note.key), pending = ownValue(manifest.pending, note.key);
+    const exists = fs.existsSync(destination), diskHash = exists ? digest(fs.readFileSync(destination)) : null;
+    const owned = !exists || diskHash === old?.fullHash || diskHash === pending?.fullHash;
+    const action = !owned ? 'kept' : old?.sourceHash === sourceDigest(note.text) && diskHash === old.fullHash ? 'unchanged' : exists ? 'updated' : 'created';
+    return { destination, diskHash, action };
+  };
+  if (!args.write) {
+    const { manifest } = loadImportState(manifestFile, journalFile);
+    reconcilePending(manifest, atlas, sourceRoot, inspect, messages);
+    const converted = convert(manifest);
+    for (const note of converted.notes) addChange(note.key, note.path, classify(note, manifest).action);
+    return report(converted);
+  }
   mkdirSafe(sourceRoot, atlas);
   const lock = path.join(sourceRoot, '.import.lock');
   takeLock(lock, messages, options);
@@ -173,62 +232,32 @@ export function runImport(argv, options = {}) {
   };
   const record = (key, entry) => fs.appendFileSync(journalFile, `${JSON.stringify({ key, entry })}\n`, { mode: 0o600 });
   try {
-    manifest = safeJson(manifestFile);
-    manifest.entries = dataMap(ownValue(manifest, 'entries'));
-    manifest.pending = dataMap(ownValue(manifest, 'pending'));
-    const recovering = fs.existsSync(journalFile);
-    if (recovering) {
-      const journal = fs.readFileSync(journalFile, 'utf8');
-      // An interrupted append can leave an incomplete final line. No rename
-      // happens until its complete journal record has been appended.
-      const complete = journal.slice(0, journal.lastIndexOf('\n') + 1);
-      for (const line of complete.split('\n')) {
-        if (!line) continue;
-        let entry;
-        try { entry = JSON.parse(line); } catch { throw new Error(`Could not read recovery journal "${journalFile}". Keep it and check the interrupted import.`); }
-        if (typeof entry.key !== 'string' || !Object.hasOwn(entry, 'entry')) throw new Error(`Invalid recovery record in "${journalFile}".`);
-        if (entry.entry === null) delete manifest.pending[entry.key];
-        else manifest.pending[entry.key] = entry.entry;
-      }
-    }
+    const state = loadImportState(manifestFile, journalFile);
+    manifest = state.manifest;
+    const recovering = state.recovering;
     canCompact = true;
-    for (const [key, pending] of Object.entries(manifest.pending)) {
-      const relative = typeof pending.path === 'string' ? path.relative(sourceRoot, path.resolve(atlas, pending.path)) : '..';
-      if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) throw new Error(`Refusing pending path for "${key}" outside this source's folder.`);
-      const destination = path.join(sourceRoot, relative);
-      inspect(destination);
-      const diskHash = fs.existsSync(destination) ? digest(fs.readFileSync(destination)) : null;
-      const old = ownValue(manifest.entries, key);
-      if (diskHash === pending.fullHash || !old) manifest.entries[key] = pending;
-      if (diskHash !== null && diskHash !== pending.fullHash && diskHash !== old?.fullHash) messages.push(`${pending.path}: kept, edited since the last import.`);
-      delete manifest.pending[key];
-    }
+    reconcilePending(manifest, atlas, sourceRoot, inspect, messages);
     // Checkpoint a recovered journal once, then start a fresh append sequence.
     if (recovering || !fs.existsSync(manifestFile)) compact();
-    const converted = toNotes(result.items, { source, importedAt, manifest: Object.assign(dataMap(manifest.pending), manifest.entries), hashKey: options.hashKey });
-    for (const note of converted.notes) inspect(path.join(atlas, note.path));
-    const currentKeys = new Set(result.items.map(i => i.key));
-    for (const [key, old] of Object.entries(manifest.entries)) if (!currentKeys.has(key)) messages.push(`${old.path}: no longer in ${source.name}; kept.`);
+    const converted = convert(manifest);
     for (const note of converted.notes) {
-      const destination = path.join(atlas, note.path), old = ownValue(manifest.entries, note.key), pending = ownValue(manifest.pending, note.key);
+      const { destination, diskHash, action } = classify(note, manifest);
       mkdirSafe(path.dirname(destination), atlas);
-      const exists = fs.existsSync(destination), diskHash = exists ? digest(fs.readFileSync(destination)) : null;
-      const owned = !exists || diskHash === old?.fullHash || diskHash === pending?.fullHash;
-      if (!owned) { messages.push(`${note.path}: kept, edited since the last import.`); continue; }
-      if (old?.sourceHash === sourceDigest(note.text) && diskHash === old.fullHash) { messages.push(`${note.path}: unchanged.`); continue; }
+      if (action === 'kept' || action === 'unchanged') { addChange(note.key, note.path, action); continue; }
       manifest.pending[note.key] = { path: note.path, fullHash: digest(note.text), sourceHash: sourceDigest(note.text) };
       record(note.key, ownValue(manifest.pending, note.key));
       const temp = `${destination}.tmp-${process.pid}`;
       fs.writeFileSync(temp, note.text, { mode: 0o600 });
       options.beforeRename?.({ note, destination, temp });
       const latest = fs.existsSync(destination) ? digest(fs.readFileSync(destination)) : null;
-      if (latest !== diskHash) { fs.rmSync(temp, { force: true }); delete manifest.pending[note.key]; record(note.key, null); messages.push(`${note.path}: kept, edited since the last import.`); continue; }
+      if (latest !== diskHash) { fs.rmSync(temp, { force: true }); delete manifest.pending[note.key]; record(note.key, null); addChange(note.key, note.path, 'kept'); continue; }
       fs.renameSync(temp, destination);
       options.afterRename?.({ note, destination });
       manifest.entries[note.key] = ownValue(manifest.pending, note.key); delete manifest.pending[note.key];
+      addChange(note.key, note.path, action);
     }
     compact();
-    return { cards: result.items.length, notes: converted.notes.length, skipped: result.skipped, warnings: [...result.warnings, ...converted.warnings], messages };
+    return report(converted);
   } catch (error) {
     // Caught interruptions keep the legacy pending-manifest representation.
     // Abrupt exits leave the journal for the next lock owner to recover.
