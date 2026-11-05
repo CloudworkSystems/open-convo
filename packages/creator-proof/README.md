@@ -98,7 +98,7 @@ These are choices the plan does not spell out.
 - The clock is read once, only for `record` and `amend`, and only after the file and the ledger have been checked.
 - A link page accepts only `https` addresses with a host, up to 2,000 characters, and refuses spaces, quotes and a user name in the address. An empty link list is allowed. The page then says no donation link is listed.
 - `paymentService` is only for a fake fundraiser. If the service is named but the account on the copy is missing, the pack is still written and that account is listed under missing. `anchors`, when present, must be a list. An anchor `kind` is `email`, `post` or `page`. Any other kind is refused. An anchor whose proof code is not in the ledger is refused.
-- `--out` cannot be the ledger, its head file, or its lock, even with `--force`.
+- `--out` cannot be the ledger, its head file, or its lock, even with `--force`. Without `--force`, a new pack or page is linked into place, so a second export that chose the same new path is refused and the first file stays.
 - A lock from another computer is left in place. `unlock` removes a recovery lock only when that computer is this one and that process is gone, or when the recovery lock cannot be read. A process id that a new process has reused looks live, so that lock stays until the process exits.
 - If the existing ledger, head or pack is tighter than `0600`, that mode is kept. If it is wider, the new file is `0600`. The real links page keeps the usual new-file mode.
 - A symlink at the ledger, head, lock, pack or page path is refused. Nothing is followed.

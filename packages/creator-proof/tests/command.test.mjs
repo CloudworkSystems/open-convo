@@ -183,6 +183,80 @@ test('report and links will not write over the ledger, its head, or its lock', a
   }
 });
 
+test('two exports to a new file cannot replace each other', async () => {
+  const { dir, remove } = tempDir();
+  try {
+    const media = join(dir, 'meadow.mov');
+    writeFileSync(media, 'sample\n');
+    const ledgerA = join(dir, 'a.json');
+    const ledgerB = join(dir, 'b.json');
+    assert.equal((await run(['record', media, '--title', 'Meadow', '--ledger', ledgerA])).code, 0);
+    assert.equal((await run(['record', media, '--title', 'Meadow', '--ledger', ledgerB])).code, 0);
+    const idA = JSON.parse(readFileSync(ledgerA, 'utf8'))[0].originalId;
+    const idB = JSON.parse(readFileSync(ledgerB, 'utf8'))[0].originalId;
+    const copy = {
+      url: 'https://social.example/copy',
+      accountName: 'Copy account',
+      seenAt: '2026-03-02T15:00:00.000Z',
+      whatItShows: 'A copy.',
+    };
+    const caseA = join(dir, 'case-a.json');
+    const caseB = join(dir, 'case-b.json');
+    writeFileSync(caseA, JSON.stringify({
+      kind: 'stolen-video', creatorName: 'First Lane', originalIds: [idA], copies: [copy],
+    }));
+    writeFileSync(caseB, JSON.stringify({
+      kind: 'stolen-video', creatorName: 'Second Lane', originalIds: [idB], copies: [copy],
+    }));
+    const pack = join(dir, 'pack.md');
+    let packed = false;
+    const firstPack = await run(['report', '--case', caseA, '--out', pack, '--ledger', ledgerA], {
+      hooks: {
+        beforePublishOut: async () => {
+          if (packed) return;
+          packed = true;
+          const second = await run(['report', '--case', caseB, '--out', pack, '--ledger', ledgerB]);
+          assert.equal(second.code, 0, second.io.errors());
+        },
+      },
+    });
+    assert.equal(firstPack.code, 1);
+    assert.match(firstPack.io.errors(), /already exists/);
+    const packText = readFileSync(pack, 'utf8');
+    assert.match(packText, /Second Lane/);
+    assert.doesNotMatch(packText, /First Lane/);
+
+    const linksA = join(dir, 'links-a.json');
+    const linksB = join(dir, 'links-b.json');
+    const page = join(dir, 'page.html');
+    const link = (name) => ({
+      creatorName: name,
+      updatedAt: '2026-03-01',
+      links: [{ label: 'Give', url: 'https://give.example/river', kind: 'donate' }],
+    });
+    writeFileSync(linksA, JSON.stringify(link('First Lane')));
+    writeFileSync(linksB, JSON.stringify(link('Second Lane')));
+    let linked = false;
+    const firstPage = await run(['links', '--links', linksA, '--out', page, '--ledger', ledgerA], {
+      hooks: {
+        beforePublishOut: async () => {
+          if (linked) return;
+          linked = true;
+          const second = await run(['links', '--links', linksB, '--out', page, '--ledger', ledgerB]);
+          assert.equal(second.code, 0, second.io.errors());
+        },
+      },
+    });
+    assert.equal(firstPage.code, 1);
+    assert.match(firstPage.io.errors(), /already exists/);
+    const pageText = readFileSync(page, 'utf8');
+    assert.match(pageText, /Second Lane/);
+    assert.doesNotMatch(pageText, /First Lane/);
+  } finally {
+    remove();
+  }
+});
+
 test('refuses a missing ledger path, a symlink, and a file it cannot read', async () => {
   const { dir, remove } = tempDir();
   try {

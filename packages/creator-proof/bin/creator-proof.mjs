@@ -183,7 +183,11 @@ function writeAll(fd, data) {
   writeAllBytes(buffer, (bytes, offset, length) => writeSync(fd, bytes, offset, length));
 }
 
-function writeAtomic(file, data, { mode, label, hooks }) {
+function alreadyThere(file) {
+  return `${file} already exists. Pass --force to replace it. Nothing was written.`;
+}
+
+function writeAtomic(file, data, { mode, label, hooks, exclusive = false }) {
   refuseLink(file);
   const dir = dirname(file);
   const tmp = join(dir, `.${basename(file)}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`);
@@ -214,6 +218,19 @@ function writeAtomic(file, data, { mode, label, hooks }) {
     }
   }
   if (hooks?.onBeforeRename) hooks.onBeforeRename({ label, tmp, finalPath: file });
+  // rename replaces a file that appeared after the exists check. A new pack
+  // or page is linked into place instead, so the second creator loses.
+  if (exclusive) {
+    try {
+      linkSync(tmp, file);
+    } catch (error) {
+      try { unlinkSync(tmp); } catch { /* already gone */ }
+      if (error.code === 'EEXIST') throw new ProofError(alreadyThere(file));
+      throw new ProofError(fsMessage('write', file, error));
+    }
+    try { unlinkSync(tmp); } catch { /* the output is already in place */ }
+    return;
+  }
   try {
     renameSync(tmp, file);
   } catch (error) {
@@ -222,12 +239,12 @@ function writeAtomic(file, data, { mode, label, hooks }) {
   }
 }
 
-function writePrivate(file, data, label, hooks) {
-  writeAtomic(file, data, { mode: 'private', label, hooks });
+function writePrivate(file, data, label, hooks, { exclusive = false } = {}) {
+  writeAtomic(file, data, { mode: 'private', label, hooks, exclusive });
 }
 
-function writePublic(file, data, label, hooks) {
-  writeAtomic(file, data, { mode: 'public', label, hooks });
+function writePublic(file, data, label, hooks, { exclusive = false } = {}) {
+  writeAtomic(file, data, { mode: 'public', label, hooks, exclusive });
 }
 
 function publishLock(lockPath, payload, pid) {
@@ -763,9 +780,7 @@ function refuseLedgerTarget(file, ledgerPath) {
 
 function refuseOverwrite(file, force, ledgerPath) {
   refuseLedgerTarget(file, ledgerPath);
-  if (!force && existsSync(file)) {
-    throw new ProofError(`${file} already exists. Pass --force to replace it. Nothing was written.`);
-  }
+  if (!force && existsSync(file)) throw new ProofError(alreadyThere(file));
   refuseLink(file);
 }
 
@@ -786,7 +801,8 @@ async function commandReport(flags, io) {
     const theCase = readJson(flags.case, 'case');
     const report = buildReport(state.entries, theCase, { expectedHead: state.expectedHead });
     refuseOverwrite(flags.out, flags.force === true, ledgerPath);
-    writePrivate(flags.out, report.markdown, 'pack', hooks);
+    if (hooks.beforePublishOut) await hooks.beforePublishOut();
+    writePrivate(flags.out, report.markdown, 'pack', hooks, { exclusive: flags.force !== true });
     lines.push('Checklist:');
     report.checklist.forEach((item, index) => {
       lines.push(`${index + 1}. ${item.place}`);
@@ -824,7 +840,8 @@ async function commandLinks(flags, io) {
       ledgerHash: state.expectedHead?.entryHash,
     });
     refuseOverwrite(flags.out, flags.force === true, ledgerPath);
-    writePublic(flags.out, html, 'page', hooks);
+    if (hooks.beforePublishOut) await hooks.beforePublishOut();
+    writePublic(flags.out, html, 'page', hooks, { exclusive: flags.force !== true });
     lines.push(`Wrote ${flags.out}`);
     return { code: 0, text: lines.join('\n') };
   });
