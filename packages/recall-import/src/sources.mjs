@@ -378,6 +378,8 @@ function markdownCodeMask(text) {
   const mask = new Uint8Array(text.length);
   let leaf = null, paragraph = false, referenceContinuation = false;
   const containers = [];
+  const blockLines = [], headings = [];
+  let containerId = 0;
   const blockTags = 'address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul';
   const blockTag = new RegExp(`^ {0,3}</?(?:${blockTags})(?=[ \t/>]|$)`, 'i');
   // CommonMark tag grammar, including quoted attributes whose contents are opaque.
@@ -425,7 +427,9 @@ function markdownCodeMask(text) {
   for (const match of text.matchAll(/[^\n]*(?:\n|$)/g)) {
     let line = columns(match[0].replace(/\r?\n$/, ''));
     if (match.index === 0 && line.startsWith('\uFEFF')) line = line.slice(1);
-    const protect = () => mask.fill(1, match.index, match.index + match[0].length);
+    const record = { content: '', scope: '', allowed: false, definition: false, paragraph: false };
+    blockLines.push(record);
+    const protect = () => { record.allowed = false; mask.fill(1, match.index, match.index + match[0].length); };
     // Walk the existing container stack before any leaf continuation. A failed
     // container closes every nested block, except a lazy paragraph continuation.
     let matched = 0;
@@ -471,21 +475,43 @@ function markdownCodeMask(text) {
     if (!lazy) for (;;) {
       const quote = quoteMarker(line);
       if (quote) {
-        containers.push({ kind: 'quote' }); line = line.slice(quote[0].length);
+        containers.push({ kind: 'quote', id: ++containerId }); line = line.slice(quote[0].length);
       } else {
         const marker = listMarker(line);
         if (!marker) break;
         const rest = line.slice(marker[0].length), spaces = /^ */.exec(rest)[0].length;
         // CommonMark gives 1–4 spaces to list padding. Excess indentation is content.
         const padding = spaces > 0 && spaces <= 4 && rest.trim() ? spaces : 1;
-        containers.push({ kind: 'list', padding: marker[0].length + padding });
+        containers.push({ kind: 'list', id: ++containerId, padding: marker[0].length + padding });
         line = rest.slice(Math.min(padding, spaces));
       }
       paragraph = false; referenceContinuation = false;
     }
+    // Publish the same container-stripped line to every line-start consumer.
+    // Convert the consumed structural columns back to original character offsets.
+    const raw = match[0].replace(/\r?\n$/, '').replace(match.index === 0 ? /^\uFEFF/ : /$^/, '');
+    const consumed = columns(raw).length - line.length;
+    let column = 0, offset = 0;
+    while (offset < raw.length && column < consumed) {
+      column += raw[offset] === '\t' ? 4 - column % 4 : 1; offset++;
+    }
+    record.content = ' '.repeat(Math.max(0, column - consumed)) + raw.slice(offset);
+    record.offset = match.index + offset;
+    record.scope = containers.map(container => container.id).join('/');
+    record.allowed = true; record.definition = !lazy;
     if (blankLine(line)) { paragraph = false; referenceContinuation = false; continue; }
+    const titleStart = /^ {0,3}(?=["'(])/.exec(line);
+    if (referenceContinuation === 'title' && titleStart && titleEnd(line, titleStart[0].length) >= 0) {
+      paragraph = false; referenceContinuation = false; continue;
+    }
     const heading = /^ {0,3}#{1,6}(?:[ \t]|$)/.test(line);
     const setext = paragraph && /^ {0,3}(?:=+|-+)[ \t]*$/.test(line);
+    if (heading) headings.push({ at: blockLines.length - 1, title: record.content.replace(/^ {0,3}#{1,6}(?:[ \t]+|$)/, '').replace(/[ \t]+#+[ \t]*$/, '').trim() });
+    if (setext) {
+      const parts = [];
+      for (let i = blockLines.length - 2; i >= 0 && blockLines[i].paragraph && blockLines[i].scope === record.scope; i--) parts.unshift(blockLines[i].content.trim());
+      if (parts.length) headings.push({ at: blockLines.length - 1 - parts.length, title: parts.join(' ') });
+    }
     if (heading || setext || thematic(line)) { paragraph = false; referenceContinuation = false; continue; }
     const fence = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
     if (fence && (fence[1][0] !== '`' || !fence[2].includes('`'))) {
@@ -500,9 +526,10 @@ function markdownCodeMask(text) {
     }
     if (!paragraph && indented(line)) { leaf = { kind: 'indent' }; paragraph = false; protect(); continue; }
     const definition = !paragraph && /^ {0,3}\[(?:\\.|[^\]\\])+\]:[ \t]*/.exec(line);
-    const continuation = referenceContinuation && /^ {0,3}(?:<[^>]+>|[^ \t]+)(?:[ \t].*)?$/.test(line);
-    referenceContinuation = !!definition && !line.slice(definition[0].length).trim();
+    const continuation = referenceContinuation === 'destination' && /^ {0,3}(?:<[^>]+>|[^ \t]+)(?:[ \t].*)?$/.test(line);
+    referenceContinuation = definition ? (line.slice(definition[0].length).trim() ? 'title' : 'destination') : continuation ? 'title' : false;
     paragraph = !definition && !continuation;
+    record.paragraph = paragraph;
   }
   for (let i = 0; i < text.length;) {
     if (!mask[i] && text[i] === '<' && !escapedAt(text, i)) {
@@ -548,6 +575,8 @@ function markdownCodeMask(text) {
     }
     if (!closed) i = end;
   }
+  mask.blockLines = blockLines;
+  mask.heading = headings.sort((a, b) => a.at - b.at).find(entry => entry.title && !mask[blockLines[entry.at].offset])?.title;
   return mask;
 }
 
@@ -615,25 +644,30 @@ function titleEnd(text, start) {
 function plainImageLinks(text, code) {
   const references = new Map(), referenceSyntax = new Map();
   // Definitions are collected before uses, so their order in the card does not matter.
-  for (const line of text.matchAll(/[^\n]*(?:\n|$)/g)) {
+  let definitionText = '', previousScope = null;
+  for (const line of code.blockLines) {
+    if (previousScope !== null && previousScope !== line.scope) definitionText += '\n';
+    definitionText += line.allowed && line.definition && (!/^ *\[/.test(line.content) || !code[line.offset + /^ */.exec(line.content)[0].length]) ? line.content + '\n' : '\n';
+    previousScope = line.scope;
+  }
+  for (const line of definitionText.matchAll(/[^\n]*(?:\n|$)/g)) {
     const indentation = /^(?:\uFEFF)? {0,3}(?=\[)/.exec(line[0]);
     if (!indentation) continue;
     const start = line.index + indentation[0].length;
-    if (code[start]) continue;
-    const end = bracketEnd(text, start);
-    if (end < 0 || text[end + 1] !== ':') continue;
-    const cursor = linkSpace(text, end + 2);
-    if (cursor < 0 || (code[cursor] && text[cursor] !== '<')) continue;
-    const destination = destinationAt(text, cursor);
-    const label = referenceLabel(text.slice(start + 1, end));
+    const end = bracketEnd(definitionText, start);
+    if (end < 0 || definitionText[end + 1] !== ':') continue;
+    const cursor = linkSpace(definitionText, end + 2);
+    if (cursor < 0) continue;
+    const destination = destinationAt(definitionText, cursor);
+    const label = referenceLabel(definitionText.slice(start + 1, end));
     if (label && !references.has(label)) {
       references.set(label, destination ? destination.url : null);
       if (destination) {
         let end = destination.end;
-        const space = linkSpace(text, end);
-        const title = space > end ? titleEnd(text, space) : -1;
+        const space = linkSpace(definitionText, end);
+        const title = space > end ? titleEnd(definitionText, space) : -1;
         if (title >= 0) end = title;
-        referenceSyntax.set(label, text.slice(cursor, end));
+        referenceSyntax.set(label, definitionText.slice(cursor, end));
       }
     }
   }
@@ -666,7 +700,7 @@ function plainImageLinks(text, code) {
     }
     if (!references.has(target)) return null;
     if (references.get(target) === null) return { uncertain: true };
-    return { end, url: references.get(target), suffix: explicit ? text.slice(close + 1, end) : `(${referenceSyntax.get(target)})` };
+    return { end, reference: true, url: references.get(target), suffix: explicit ? text.slice(close + 1, end) : `(${referenceSyntax.get(target)})` };
   }
   // Alt text must remain text, even if it contains autolinks or bracket syntax.
   const altText = value => value.replace(/<((?:https?:\/\/|mailto:)[^<>]+)>/gi, '$1')
@@ -709,6 +743,11 @@ function plainImageLinks(text, code) {
     const image = linkAt(i + 1, close);
     if (image?.uncertain) uncertain = true;
     if (!image?.end || !remoteImage(image.url)) continue;
+    if (image.reference) {
+      const alt = altText(text.slice(i + 2, close));
+      const url = decodedDestination(image.url).replace(/[<>\s]/g, character => encodeURIComponent(character));
+      imageLinks.push(`[${alt}](<${url}>)`);
+    }
     chunks.push(text.slice(previous, i), text.slice(i + 1, image.end));
     previous = image.end; i = image.end - 1; converted = true;
   }
@@ -718,8 +757,7 @@ function plainImageLinks(text, code) {
 
 function readMarkdown(text) {
   const code = markdownCodeMask(text);
-  let heading;
-  for (const match of text.matchAll(/^(?:\uFEFF)? {0,3}# ([^\r\n]+)\r?$/gm)) if (!code[match.index]) { heading = match[1]; break; }
+  const heading = code.heading;
   let { body, converted, uncertain, imageLinks } = plainImageLinks(text, code);
   if (converted || uncertain) {
     const eol = /\r?\n(?=[^\n]*$)/.exec(body)?.[0] || '\n';

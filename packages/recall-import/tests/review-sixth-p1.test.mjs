@@ -19,7 +19,7 @@ test('Sixth P1 1: full collapsed shortcut and angle images become plain links', 
   ]) for (const before of [false, true]) {
     const body = before ? `${definition}\n\n${image}\n` : `${image}\n\n${definition}\n`;
     const expectedBody = before ? `${definition}\n\n${expected}\n` : `${expected}\n\n${definition}\n`;
-    assert.equal(read(body), expectedBody + '\n' + imageNotice + '\n');
+    assert.equal(read(body), expectedBody + '\n' + imageNotice + '\n' + (definition ? '- [cover](<https://example.invalid/cover.png>)\n' : ''));
   }
 });
 
@@ -32,7 +32,7 @@ test('Sixth P1 1: image parser respects code escapes local and undefined referen
 
 test('Sixth P1 1: parser handles balanced destinations and normalized reference labels', () => {
   const body = '![cover](https://example.invalid/a(b).png "Invented")\n![cover][ My   Image ]\n[my image]: <HTTP://example.invalid/a.png> "Title"\n';
-  assert.equal(read(body), body.replaceAll('![', '[') + '\n' + imageNotice + '\n');
+  assert.equal(read(body), body.replaceAll('![', '[') + '\n' + imageNotice + '\n- [cover](<HTTP://example.invalid/a.png>)\n');
 });
 
 function fixture(count) {
