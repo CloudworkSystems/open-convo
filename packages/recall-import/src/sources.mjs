@@ -12,6 +12,7 @@ const ownValue = (record, key) => Object.hasOwn(record, key) ? record[key] : und
 export function validateSource(source) {
   if (!plain(source) || typeof source.id !== 'string' || !ID.test(source.id)) fail(`Refusing source id "${source?.id ?? ''}". Use 1 to 64 lowercase letters, digits or hyphens, starting with a letter.`);
   if (typeof source.name !== 'string' || !source.name.trim()) fail(`Source "${source.id}" needs a name.`);
+  if (source.emptyGuidance !== undefined && (typeof source.emptyGuidance !== 'string' || !source.emptyGuidance.trim())) fail(`Source "${source.id}" needs emptyGuidance to be nonempty text when supplied.`);
   if (typeof source.read !== 'function') fail(`Source "${source.id}" needs a read(files) function.`);
 }
 
@@ -483,7 +484,7 @@ function readMarkdown(text) {
 }
 
 export function recallSource() {
-  return { id: 'recall', name: 'Recall', read(files) {
+  return { id: 'recall', name: 'Recall', emptyGuidance: "This folder has no Recall cards. In Recall's web app, open Settings, choose Export, unzip the download, then run this again on that folder.", read(files) {
     const items = [], skipped = [], warnings = [];
     checkFiles(files);
     for (const file of files) {

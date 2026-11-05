@@ -20,6 +20,8 @@ In Recall's web app, open Settings, choose Export, and unzip the download. Run t
 
 Add a source object to the small list in `src/sources.mjs`: `{ id, name, read(files) }`. Its id is 1 to 64 lowercase letters, digits or hyphens, begins with a letter, and becomes the folder under `sources/`. `read` receives already-read `{ path, text }` files and returns `{ items, skipped, warnings }`. Each item has `key`, `title`, `body`, `url`, `tags`, `created`, `sourcePath`, and optional `extra`. Run `checkSource(source, files)`, then pass its items to `toNotes(items, { source, importedAt })`. The source reader needs no file-system access.
 
+Sources may also supply `emptyGuidance`, a nonempty text message explaining what to do when their reader returns no items. `checkSource` validates it. For example, an invented bookmark source could use `emptyGuidance: "No bookmarks found. Export bookmarks as Markdown and select that folder."` Recall supplies its own export instructions. Omitting the field gives neutral guidance to check the selected folder and the source's supported format. Removal messages use the selected source's `name`.
+
 ## Edge cases
 
 - Hidden export entries are ignored. Symbolic links are listed and never followed.

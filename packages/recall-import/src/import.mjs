@@ -182,7 +182,7 @@ export function runImport(argv, options = {}) {
   const journalFile = path.join(sourceRoot, '.import-journal.jsonl');
   const messages = [];
   if (!result.items.length) {
-    messages.push("This folder has no Recall cards. In Recall's web app, open Settings, choose Export, unzip the download, then run this again on that folder.");
+    messages.push(source.emptyGuidance ?? 'This folder has no items for the selected source. Check that --in points to a readable folder in the format this source supports, then try again.');
     // A genuinely first empty run writes nothing. An existing import still
     // needs its lock, pending recovery, and removed-card reconciliation.
     if (!fs.existsSync(manifestFile) && !fs.existsSync(journalFile)) return { cards: 0, notes: 0, skipped: result.skipped, warnings: result.warnings, messages, paths: [], changes: [] };
