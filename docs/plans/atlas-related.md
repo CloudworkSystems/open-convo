@@ -72,11 +72,13 @@ in, and later sit beside each note in the Desk.
    notes aren't related just because they link to the same file. Word
    stems aren't joined ("seeds" and "seed" are different words).
 2. **Unusual words count most.** Each note becomes a list of word weights:
-   the word's count in the note times its rarity, `ln(N / df)`, where `N`
-   is the number of notes given (not counting left-out files) and `df` the
-   number of them that use the word. A word used by only one note can't be
-   shared and drops out. The score is the cosine of the two lists. A note
-   that shares no word with the starting note is never returned.
+   the word's count in the note times its rarity, `ln(1 + N / df)`, where
+   `N` is the number of notes given (not counting left-out files) and `df`
+   the number of them that use the word. The `1 +` keeps every weight above
+   zero, so in a folder of two notes, or for a word every note uses, a
+   shared word still counts, only less. A word used by only one note can't
+   be shared and drops out. The score is the cosine of the two lists. A
+   note that shares no word with the starting note is never returned.
 3. **Titles count twice.** A word in the file name or the note's `about`
    line counts twice in that note.
 4. **Generated files don't compete.** The map (`MAP.md`) and generated
@@ -132,7 +134,8 @@ questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
    folder prints "There's no note at <the path as typed> in that folder."
    A note that isn't valid UTF-8 is left out and named in a note ("Skipped
    1 file that isn't plain text: <path>."), and the rest are compared; if
-   it is the starting note, the command says so and stops with exit code 1.
+   it is the starting note, the command prints "Can't compare <path>: it
+   isn't plain text." and stops with exit code 1.
 5. **The error message.** Each refusal is one plain sentence naming what
    was wrong (no note path, a path outside the folder, a generated index or
    `MAP.md` given as the starting note, a limit out of range), with no
@@ -147,7 +150,9 @@ questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
    words; an exact score for a small hand-worked example of three notes.
 2. Folding: upper case, accents (`café` and `cafe` are one word),
    punctuation, one-character words, digit-only words and stop words.
-3. A word in only one note never counts; a word in every note weighs zero.
+3. A word in only one note never counts; a word in every note weighs
+   least but more than zero; a folder of exactly two related notes returns
+   the other note.
 4. File name and about-line words count twice, and the about line matches
    the label atlas-index's `buildAtlas` gives every sample note in its
    generated folder index (test-only import, labels unescaped).
@@ -185,12 +190,17 @@ wiki:
 6. Run on a folder that doesn't exist and see "Can't read that folder".
 7. Give a note path that isn't there and see "There's no note at".
 8. Add a file that isn't plain text and see it named as skipped while the
-   rest are compared.
-9. Run with `--limit 0`, with no note path, with `MAP.md` as the note, and
-   with `../` in the note path, and see each refusal.
-10. Run with `--dir` set to a folder that holds `.git` (for example this
+   rest are compared; then pick that file as the starting note and see the
+   "Can't compare <path>: it isn't plain text."
+9. Pick an empty note, or one holding only code, as the starting note and
+   see "This note has no words to compare yet."
+10. Run on a folder of exactly two notes on the same subject and see the
+    other note listed.
+11. Run with `--limit 0`, with no note path, with `MAP.md` as the note,
+    and with `../` in the note path, and see each refusal.
+12. Run with `--dir` set to a folder that holds `.git` (for example this
     repository's root) and see atlas-index's refusal.
-11. Check the folder afterwards: nothing in it changed.
+13. Check the folder afterwards: nothing in it changed.
 
 He confirms each message says what to do next.
 
