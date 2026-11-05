@@ -33,7 +33,7 @@ node packages/atlas-links/src/repair.mjs --dir <folder> --unlock
 
 Without `--write` it changes nothing. It prints each repair as `path:line from → to` and each link that needs a person. `--json` prints the result. `--record` saves the snapshot and changes nothing else. `--write` applies the repairs and saves the snapshot when every planned repair was written. A skipped repair keeps the old snapshot, updates the hashes of notes this run did rewrite, and says `Kept the old snapshot so the skipped links can be repaired next run.`
 
-The snapshot is `<folder>/.atlas-links/paths.json`. It holds paths and SHA-256 hashes only. A missing snapshot is `null`. An unreadable or malformed snapshot refuses the run. `.atlas-links` is refused when it is a symbolic link.
+The snapshot is `<folder>/.atlas-links/paths.json`. It holds paths and SHA-256 hashes only. A missing snapshot is `null`. An unreadable or malformed snapshot refuses the run, including `--record`, which checks the file already there and does not replace a damaged one. `.atlas-links` is refused when it is a symbolic link.
 
 One `--write` or `--record` runs at a time. The lock is `.atlas-links/run.lock`, and a second run stops without writing. A lock whose process on this computer is gone, or a lock that is empty or unreadable, is cleared with `An earlier run stopped without finishing; cleared its lock.` A lock from another computer is left alone. Recovering a stale lock takes `.atlas-links/run.lock.reclaim` first. If that reclaim lock is already held, the run says `Another command is recovering; try again in a moment.` If the reclaim lock's process is gone, it is left in place. `--unlock` removes it after checking that process is gone.
 

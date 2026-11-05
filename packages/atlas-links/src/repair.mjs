@@ -908,10 +908,11 @@ export async function run(argv, io = {}) {
     lock = held.lock;
     for (const message of held.messages) notice(stdout, stderr, args.json, message);
     if (args.record) {
+      const existing = readSnapshot(root);
       const journal = readJournal(root);
       if (journal) fail('An earlier repair stopped without finishing. Run --write to finish it before recording.');
       const scanned = scanDirectory(root);
-      planRepairs(scanned.notes, null);
+      planRepairs(scanned.notes, existing);
       const snapshot = fullSnapshot(scanned, new Map());
       saveJson(root, SNAPSHOT, snapshotJson(snapshot));
       emit(stdout, args.json ? `${snapshotJson(snapshot)}` : `Recorded ${snapshot.notes.length} notes.\n`);

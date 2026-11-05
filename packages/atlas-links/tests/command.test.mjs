@@ -476,6 +476,17 @@ test('unsafe folders, hidden files, links, and bad bytes are refused', async () 
     assert.equal(malformed.code, 1);
     assert.match(malformed.err, /not usable/);
     assert.equal(readNote(messy, 'a.md'), '# A\n');
+    assert.equal(readFileSync(path.join(messy, '.atlas-links', 'paths.json'), 'utf8'), '{');
+    const rerecord = await capture(['--dir', messy, '--record']);
+    assert.equal(rerecord.code, 1);
+    assert.match(rerecord.err, /not usable/);
+    assert.equal(readFileSync(path.join(messy, '.atlas-links', 'paths.json'), 'utf8'), '{');
+    const damaged = JSON.stringify({ notes: [{ path: 'a.md', sha256: 'zz' }] });
+    writeFileSync(path.join(messy, '.atlas-links', 'paths.json'), damaged);
+    const badHash = await capture(['--dir', messy, '--record']);
+    assert.equal(badHash.code, 1);
+    assert.match(badHash.err, /64 lowercase hex/);
+    assert.equal(readFileSync(path.join(messy, '.atlas-links', 'paths.json'), 'utf8'), damaged);
   } finally {
     rmSync(gitDir, { recursive: true, force: true });
     rmSync(hidden, { recursive: true, force: true });
