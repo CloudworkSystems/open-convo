@@ -1,6 +1,6 @@
 # Status Feed: The Rail Map's Pending View And A Plain Board
 
-Status: Draft (Nov 3, 2026): written on the owner's yes to drafting it; waiting on his yes to the plan and his answers to the open questions below.
+Status: Approved (Nov 4, 2026): merged as #285 on the owner's yes; his answers to its four open questions are in "Revision (November 4, 2026)" at the end, which wins where it differs from the text above. Not built yet.
 
 Written November 3, 2026 by a Claude building session, after the owner asked
 whether Open Convo could install or build something like the "mission
@@ -260,6 +260,8 @@ passes, this status becomes Built.
 
 ## Open Questions For The Owner
 
+Answered November 4, 2026; see "Revision (November 4, 2026)" below.
+
 1. Does the plain board go inside #114 (written by the same hourly job that
    keeps that list, so the two can't erase each other) or in its own pinned
    issue?
@@ -268,3 +270,36 @@ passes, this status becomes Built.
    your call to accept findings or narrow the plan), or stay with the
    builder as the Atlas note says?
 4. Do the six state names and the order above match what you meant?
+
+## Revision (November 4, 2026)
+
+After #285 merged, the owner answered the four open questions in the Claude
+project chat. Where this section differs from the text above, this section
+wins; everything else stays as approved in #285.
+
+1. **Where the plain board goes:** inside #114, written by `owner-queue`'s
+   own hourly rewrite, exactly as part 3 already describes for that choice.
+   The "own pinned issue" option is dropped. His words, 05:43 UTC, replying
+   to "What do you think of putting it in #114, where you already look?":
+   "Put it in #114".
+2. **Whether to build it:** yes. Part 3 is built, not optional, and its
+   board in #114 gets owner trial checks 1, 3 and 5. The same reply chose
+   the board over the Rail Map's Pending tab alone.
+3. **Looping pull requests:** a pull request with the review-loop flag
+   shows in Needs You, ahead of Returned and Under Way, as his call to
+   accept the findings or narrow the plan. This changes "The States": the
+   Needs You row gains "a pull request with the review-loop flag", and the
+   order rule gains that one exception. Blocked still wins over the flag,
+   and so does Checked: once everything Checked asks for is there on the
+   latest commit (for example, `codex-approved` passing after his accept
+   line), the row is Checked, with the badge still shown. A flagged row's
+   next move says "your call: accept the findings or narrow the plan". The
+   sentence that open review findings never hand him a review loop by
+   default no longer holds for flagged pull requests. Part 1's tests cover
+   the flag moving a pull request into Needs You, and both exceptions.
+4. **State names and order:** they stay as written: Blocked, Returned,
+   Needs You, Under Way, Checked, Unknown.
+
+Answers 3 and 4 are his words at 05:44 UTC, "yes, and yes I think so",
+replying to "should a PR stuck in a Codex loop move to Needs You, and does
+this order fit: Blocked, Returned, Needs You, Under Way, Checked, Unknown?"
