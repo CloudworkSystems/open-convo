@@ -18,6 +18,8 @@ export function applyOperation(input, operation) {
   if (personOnly.has(op.type) && op.actor !== "person") throw new Error(`${op.type} can only be done by the person.`);
   if (!op.now) throw new Error("The operation needs a now value.");
   if (Number.isNaN(Date.parse(op.now))) throw new Error("The operation's now value must be a valid date and time.");
+  const affectedId = op.entryId ?? op.candidateId ?? op.candidate?.id ?? (op.type === 'undo' ? state.log.find(record => record.id === op.opId)?.entryId : undefined);
+  const capacityBefore = affectedId ? capacityView(state, affectedId) : undefined;
   let result;
   switch (op.type) {
     case "propose": result = propose(state, op); break;
@@ -33,6 +35,7 @@ export function applyOperation(input, operation) {
     case "purge": result = purge(state, op); break;
     default: throw new Error(`Unknown operation '${op.type}'.`);
   }
+  if (affectedId) state.log.at(-1).capacity = { before: capacityBefore, after: capacityView(state, affectedId) };
   validateState(state);
   const writes = renderWrites(state);
   return { state, writes, result };
@@ -259,11 +262,36 @@ function undoDependency(state, candidate, target, reversed) {
   const broken = live.find(record => !record.effect.resourceOnly && !effectHolds(candidate, record));
   if (broken) return broken;
   if (sizeExcess(candidate) > 0) return live.findLast(record => {
-    if (record.entryId === target.entryId) return false;
     const without = cloneState(candidate);
-    removeEntry(without, record.entryId);
+    reverseCapacityEffect(without, record);
     return sizeExcess(without) < sizeExcess(candidate);
   });
+}
+function capacityView(state, id) {
+  const { status, entry } = entity(state, id);
+  return { status, ...(entry ? { space: entry.space, subject: entry.subject, textBytes: Buffer.byteLength(entry.text) } : {}) };
+}
+function reverseCapacityEffect(state, record) {
+  if (!record.capacity) return;
+  const { before, after } = record.capacity;
+  const current = entity(state, record.entryId);
+  if (current.status !== 'kept') return;
+  const entry = current.entry;
+  if (before.status !== after.status && before.status !== 'kept') { removeEntry(state, entry.id); return; }
+  if (before.status !== 'kept' || after.status !== 'kept') return;
+  // Only reverse the resource dimensions this operation changed. No memory text is stored here.
+  if (before.textBytes !== after.textBytes) entry.text = 'x'.repeat(before.textBytes);
+  else if (Object.hasOwn(record.effect.values, 'text')) {
+    // A current text effect still occupies capacity after a same-size replacement;
+    // its superseded predecessor is no longer a live effect to attribute it to.
+    entry.text = '';
+  }
+  if (before.space !== after.space || before.subject !== after.subject) {
+    removeEntry(state, entry.id);
+    if (before.space !== after.space) entry.space = before.space;
+    if (before.subject !== after.subject) entry.subject = before.subject;
+    addEntry(state, entry);
+  }
 }
 function entity(state, id) {
   for (const subjects of Object.values(state.subjects)) for (const entries of Object.values(subjects)) {

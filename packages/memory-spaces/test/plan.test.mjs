@@ -62,6 +62,17 @@ test('P1 restored memory can undo its earlier cloud grant', () => {
   assert.equal(visible(undone).length, 1);
 });
 
+test('P1 undo move names the same-entry correction that fills its original subject', () => {
+  let s = keep(proposal(base(), 'filler', 'x'.repeat(3900)), 'filler');
+  s = keep(proposal(s, 'note', 'short'), 'note');
+  s = step(s, 'move', { entryId: 'note', space: 'studio' });
+  const moveId = s.log.at(-1).id;
+  s = step(s, 'correct', { entryId: 'note', text: 'y'.repeat(400) });
+  const correctionId = s.log.at(-1).id;
+  s = step(s, 'allowCloud', { entryId: 'note' });
+  unchangedRefusal(s, 'undo', { opId: moveId }, error => error.message.startsWith(`Operation '${moveId}' cannot be undone because operation '${correctionId}' depends on it:`));
+});
+
 test('P1 purging middle in A preserves the blocking correction in B', () => {
   let s = keep(proposal(base(), 'b', 'start'), 'b');
   s = step(s, 'correct', { entryId: 'b', text: 'middle' });
@@ -91,7 +102,7 @@ test('P1 identical text on two entries only purges the selected identity', () =>
   assert.equal(visible(step(s, 'undo', { opId: correction }))[0].text, 'identical invented text');
 });
 
-test('Undo lifecycle matrix: 216 operation pairs and lifecycle states', async t => {
+test('Undo lifecycle matrix: 240 operation pairs and lifecycle states', async t => {
   const targetKinds = ['keep', 'correct', 'forget', 'share', 'move', 'allowCloud'];
   const laterKinds = [...targetKinds, 'restore', 'purge', 'undo'];
   let count = 0;
@@ -160,7 +171,61 @@ test('Undo lifecycle matrix: 216 operation pairs and lifecycle states', async t 
       assert.ok(beforeLater.log.some(r => r.id === targetId));
     });
   }
-  assert.equal(count, 216);
+  for (const fillerBytes of [3850, 3900]) for (const laterKind of ['correct', 'same-size-correct', 'undo']) for (const reversed of [false, true]) for (const cloud of [false, true]) {
+    count++;
+    await t.test(`same-entry capacity / ${fillerBytes} bytes / ${laterKind} / ${reversed ? 'reversed' : 'in effect'} / cloud ${cloud}`, () => {
+      let s = keep(proposal(base(), 'filler', 'x'.repeat(fillerBytes)), 'filler');
+      s = keep(proposal(s, 'note', 'short'), 'note');
+      s = step(s, 'move', { entryId: 'note', space: 'studio' });
+      const moveId = s.log.at(-1).id;
+      s = step(s, 'correct', { entryId: 'note', text: 'y'.repeat(400) });
+      let blockerId = s.log.at(-1).id;
+      const firstCorrectionId = blockerId;
+      if (laterKind === 'same-size-correct') {
+        s = step(s, 'correct', { entryId: 'note', text: 'z'.repeat(400) });
+        blockerId = s.log.at(-1).id;
+      }
+      if (laterKind === 'undo') {
+        s = step(s, 'correct', { entryId: 'note', text: 'short' });
+        s = step(s, 'undo', { opId: s.log.at(-1).id });
+        blockerId = s.log.at(-1).id;
+      }
+      if (cloud) s = step(s, 'allowCloud', { entryId: 'note' });
+      if (reversed) {
+        s = laterKind === 'undo' ? step(s, 'correct', { entryId: 'note', text: 'short' }) : step(s, 'undo', { opId: blockerId });
+        if (laterKind === 'same-size-correct') s = step(s, 'undo', { opId: firstCorrectionId });
+        const undone = step(s, 'undo', { opId: moveId });
+        assert.equal(visible(undone).find(entry => entry.id === 'note').text, 'short');
+      } else unchangedRefusal(s, 'undo', { opId: moveId }, error => error.message === `Operation '${moveId}' cannot be undone because operation '${blockerId}' depends on it: This subject is full. Split it or correct an older entry..`);
+    });
+  }
+  assert.equal(count, 240);
+});
+
+test('Undo refusal sweep: exact blockers and exact reasons when no operation blocks', () => {
+  const k = keep();
+  const move = step(k, 'move', { entryId: 'note', space: 'studio' });
+  const share = step(move, 'share', { entryId: 'note', space: 'personal' });
+  unchangedRefusal(share, 'undo', { opId: move.log.at(-1).id }, error => error.message === `Operation '${move.log.at(-1).id}' cannot be undone because operation '${share.log.at(-1).id}' depends on it.`);
+  const firstGrant = step(k, 'allowCloud', { entryId: 'note' });
+  const secondGrant = step(firstGrant, 'allowCloud', { entryId: 'note' });
+  unchangedRefusal(secondGrant, 'undo', { opId: firstGrant.log.at(-1).id }, error => error.message === `Operation '${firstGrant.log.at(-1).id}' cannot be undone because operation '${secondGrant.log.at(-1).id}' depends on it.`);
+  unchangedRefusal(k, 'undo', { opId: 'missing' }, error => error.message === "Operation 'missing' was not found.");
+  unchangedRefusal(k, 'undo', { id: k.log[0].id, opId: k.log.at(-1).id }, error => error.message === `Operation id '${k.log[0].id}' is already in the log.`);
+  const forgotten = step(k, 'forget', { entryId: 'note' });
+  unchangedRefusal(forgotten, 'undo', { opId: forgotten.log.at(-1).id, now: '2040-02-01T00:00:00Z' }, error => error.message === "This memory's 30 days in Trash are over.");
+  const restored = step(forgotten, 'restore', { entryId: 'note' });
+  unchangedRefusal(restored, 'undo', { opId: forgotten.log.at(-1).id }, error => error.message === `Operation '${forgotten.log.at(-1).id}' has already been reversed by restore.`);
+  const purged = step(forgotten, 'purge', { now: '2040-02-01T00:00:00Z' });
+  unchangedRefusal(purged, 'undo', { opId: forgotten.log.at(-1).id }, error => error.message === `Operation '${forgotten.log.at(-1).id}' cannot be undone.`);
+  // Another entry consumes capacity released by a shortening correction.
+  let s = keep(proposal(base(), 'note', 'x'.repeat(3900)));
+  s = step(s, 'correct', { entryId: 'note', text: 'short' });
+  const correctionId = s.log.at(-1).id;
+  s = keep(proposal(s, 'other', 'y'.repeat(200)), 'other');
+  const blockingKeepId = s.log.at(-1).id;
+  s = step(s, 'allowCloud', { entryId: 'other' });
+  unchangedRefusal(s, 'undo', { opId: correctionId }, error => error.message === `Operation '${correctionId}' cannot be undone because operation '${blockingKeepId}' depends on it: This subject is full. Split it or correct an older entry..`);
 });
 function entityForTest(s, id) {
   const kept = s.spaces.flatMap(space => visible(s, space.id)).find(e => e.id === id);
