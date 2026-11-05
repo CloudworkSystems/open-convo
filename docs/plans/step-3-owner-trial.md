@@ -1,6 +1,8 @@
 # Step 3: The Owner's Trial
 
-Status: Done (Nov 5): check 8 passed on the re-check with the F11 fix.
+Status: In progress (Nov 5): check 8 passed on the re-check with the F11
+fix, quitting from the menu and with Command-Q. One run quitting with
+`osascript` (the way the first trial quit) is left; then step 3 is done.
 F12 (wording) and the findings below stay open as follow-ups.
 
 The last part of step 3 (PR 5). The scripted proof checks the local route
@@ -187,7 +189,9 @@ Build: True Convo Test from commit 79be95d. Relayed by Claude in thread
 "Build the Claude Code adapter".
 
 Check 8 passed twice, once quitting from the menu bar menu and once with
-Command-Q. Each time the reply reopened as "Stopped on this Mac. The reply
+Command-Q. Both take the menu's Quit path. The `osascript` quit, which is
+how the first trial quit when F11 happened, reaches the app as an outside
+request and still needs its own run. Each time the reply reopened as "Stopped on this Mac. The reply
 so far is kept.", with all the words. The Mac's log showed, for both quits:
 `desk.terminate.participants owed=true limit=17s`, then
 `desk.terminate.save-wait outcome=saved waited=0.1s`, then `desk.closed`.
