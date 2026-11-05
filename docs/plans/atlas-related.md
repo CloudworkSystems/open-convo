@@ -202,6 +202,8 @@ wiki:
 10. Run on a folder of exactly two notes on the same subject and see the
     other note listed.
 11. Run with `--limit 0`, with no note path, with `MAP.md` as the note,
+    with a generated folder `INDEX.md` (build the sample's indexes with
+    atlas-index first) as the note,
     and with `../` in the note path, and see each refusal.
 12. Run with `--dir` set to a folder that holds `.git` (for example this
     repository's root) and see atlas-index's refusal.
