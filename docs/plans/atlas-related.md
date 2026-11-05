@@ -82,8 +82,11 @@ in, and later sit beside each note in the Desk.
    shared word still counts, only less. A word used by only one note can't
    be shared, so it adds nothing to the dot product, but it stays in that
    note's list and counts in its length (the cosine's denominator), so a
-   single shared word among many unrelated ones scores low, not 1. The score is the cosine of the two lists. A
-   note that shares no word with the starting note is never returned.
+   single shared word among many unrelated ones scores low, not 1. The
+   score is the cosine of the two lists. **Enough in common:** a note is
+   returned only if it shares at least two different words with the
+   starting note and scores at least 0.05, so one ordinary word in
+   common (even a title word) never makes two notes related.
 3. **Titles count twice.** A word in the file name or the note's `about`
    line counts twice in that note.
 4. **Generated files don't compete.** The map (`MAP.md`) and generated
@@ -169,7 +172,9 @@ questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
    not read; `description:` and `name:` are.
 6. `MAP.md` and generated indexes never appear and don't change any score;
    a hand-made `INDEX.md` can appear.
-7. `shared`: at most 5 words, heaviest first, ties by word.
+7. `shared`: at most 5 words, heaviest first, ties by word. Enough in
+   common: a note sharing only one word (a title word included) is not
+   returned, and one scoring under 0.05 is not returned.
 8. Limits: default 10, `--limit 1` and `--limit 50`, and each out-of-range
    value refused.
 9. The same output byte for byte twice, and with the notes in reverse
