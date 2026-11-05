@@ -22,6 +22,10 @@ Other verbs are `propose`, `keep`, `skip`, `correct`, `forget`, `restore`, `undo
 
 - Space and subject dictionaries use null prototypes and own-property lookups, including after loading ordinary JSON objects. `constructor` is a valid id. `__proto__` and `toString` are refused by the existing lowercase id rules.
 - Undo checks the field changed by each operation. A correction and cloud permission are independent, so either may be undone after the other. Later changes to the same field, forgetting the entry, or undoing the target itself block undo. Keeping an entry must still precede every later operation on that entry.
+- Each cloud grant records its prior cloud value. Undo restores that value, so undoing a repeated grant preserves an earlier grant, as the plan's reversal rule requires.
+- Sharing after a move depends on the move's origin. Undo names that share's operation id. A move into a space already shared with the entry consumes that share and records it for restoration. Undoing the consumed share is refused with the move's id.
+- Undo restores candidate and subject-entry positions as well as their contents. Empty subject files remain present so adapters overwrite any old text.
+- Other entries normally remain independent. If later keep, correct, move, restore or undo operations consume capacity needed by an Undo, the refusal names a later operation in that subject or space and includes the size-limit message.
 
 - Thirty days means exactly 30 times 24 hours from `forgottenAt`; restore is allowed at the exact limit and refused after it.
 - A repeated operation id is refused rather than replayed.

@@ -53,6 +53,107 @@ test('P1 undo allowCloud succeeds after a later correction', () => {
 });
 function unchangedRefusal(s, type, data, pattern) { const before = JSON.stringify(s); assert.throws(() => op(s, type, data), pattern); assert.equal(JSON.stringify(s), before); }
 
+test('P1 undo move names a later share back to its original space', () => {
+  const moved = step(keep(), 'move', { entryId: 'note', space: 'studio' });
+  const shared = step(moved, 'share', { entryId: 'note', space: 'personal' });
+  unchangedRefusal(shared, 'undo', { opId: moved.log.at(-1).id }, /operation 'op-3' depends on it/);
+});
+
+test('P1 undo repeated allowCloud restores the previous grant', () => {
+  const first = step(keep(), 'allowCloud', { entryId: 'note' });
+  const second = step(first, 'allowCloud', { entryId: 'note' });
+  const undone = step(second, 'undo', { opId: second.log.at(-1).id });
+  assert.equal(visible(undone, 'personal', true)[0].id, 'note');
+});
+
+test('Undo audit: moving into a shared space preserves and restores sharing', () => {
+  const shared = step(keep(), 'share', { entryId: 'note', space: 'studio' });
+  const moved = step(shared, 'move', { entryId: 'note', space: 'studio' });
+  assert.deepEqual(visible(moved, 'studio')[0].shares, []);
+  unchangedRefusal(moved, 'undo', { opId: shared.log.at(-1).id }, /operation 'op-3' depends on it/);
+  const undone = step(moved, 'undo', { opId: moved.log.at(-1).id });
+  assert.deepEqual(visible(undone), visible(shared));
+  assert.deepEqual(visible(undone, 'studio'), visible(shared, 'studio'));
+});
+
+test('Undo audit: other entries consuming restored space name their operation', () => {
+  let s = keep(proposal(base(), 'note', 'x'.repeat(3900)));
+  const moved = step(s, 'move', { entryId: 'note', space: 'studio' });
+  s = keep(proposal(moved, 'other', 'y'.repeat(200)), 'other');
+  unchangedRefusal(s, 'undo', { opId: moved.log.at(-1).id }, new RegExp(`operation '${s.log.at(-1).id}' depends on it`));
+  const corrected = step(keep(proposal(base(), 'note', 'x'.repeat(3900))), 'correct', { entryId: 'note', text: 'Short invented text.' });
+  const filled = keep(proposal(corrected, 'other', 'y'.repeat(200)), 'other');
+  unchangedRefusal(filled, 'undo', { opId: corrected.log.at(-1).id }, new RegExp(`operation '${filled.log.at(-1).id}' depends on it`));
+  for (const addition of ['keep', 'move', 'correct', 'restore', 'undo']) {
+    let initial = keep(proposal(base(), 'other', 'y'.repeat(addition === 'correct' ? 1 : 200)), 'other', addition === 'move' ? 'elsewhere' : 'covers');
+    let forgetId;
+    if (['restore', 'undo'].includes(addition)) { initial = step(initial, 'forget', { entryId: 'other' }); forgetId = initial.log.at(-1).id; }
+    if (addition === 'keep') initial = step(initial, 'forget', { entryId: 'other' });
+    initial = keep(proposal(initial, 'note', 'x'.repeat(3900)));
+    const target = step(initial, 'forget', { entryId: 'note' });
+    let later;
+    if (addition === 'keep') later = keep(proposal(target, 'added', 'y'.repeat(200)), 'added');
+    if (addition === 'move') later = step(target, 'move', { entryId: 'other', space: 'personal', subject: 'covers' });
+    if (addition === 'correct') later = step(target, 'correct', { entryId: 'other', text: 'y'.repeat(200) });
+    if (addition === 'restore') later = step(target, 'restore', { entryId: 'other' });
+    if (addition === 'undo') later = step(target, 'undo', { opId: forgetId });
+    unchangedRefusal(later, 'undo', { opId: target.log.at(-1).id }, new RegExp(`operation '${later.log.at(-1).id}' depends on it`));
+  }
+});
+
+test('Undo audit: keep forget and move restore original entry ordering', () => {
+  const proposed = proposal(proposal(base(), 'first'), 'second');
+  const keptFirst = keep(proposed, 'first');
+  assert.deepEqual(step(keptFirst, 'undo', { opId: keptFirst.log.at(-1).id }).proposed, proposed.proposed);
+  const both = keep(proposal(keep(), 'other'), 'other');
+  for (const [type, data] of [['forget', {}], ['move', { space: 'studio' }]]) {
+    const changed = step(both, type, { entryId: 'note', ...data });
+    const undone = step(changed, 'undo', { opId: changed.log.at(-1).id });
+    assert.deepEqual(undone.subjects.personal.covers, both.subjects.personal.covers);
+  }
+});
+
+test('Undo audit: dependency matrix for every undoable kind and later operation', () => {
+  const targets = {
+    keep: {}, correct: { text: 'Invented revised text.' }, forget: {}, share: { space: 'studio' }, move: { space: 'studio' }, allowCloud: {}
+  };
+  const laterOps = { correct: { text: 'Invented later text.' }, share: { space: 'archive' }, move: { space: 'archive' }, forget: {}, allowCloud: {}, restore: {} };
+  const blocked = { keep: ['correct', 'share', 'move', 'forget', 'allowCloud'], correct: ['correct', 'forget'], forget: ['restore'], share: ['forget'], move: ['share', 'move', 'forget'], allowCloud: ['allowCloud', 'forget'] };
+  for (const targetType of Object.keys(targets)) for (const laterType of Object.keys(laterOps)) {
+    if ((targetType === 'forget') !== (laterType === 'restore')) continue;
+    let before = base(); before.spaces.push({ id: 'archive', name: 'Invented Archive', kind: 'family' });
+    before = targetType === 'keep' ? proposal(before) : keep(proposal(before));
+    const changed = step(before, targetType, { entryId: 'note', candidateId: 'note', subject: 'covers', space: 'personal', label, ...targets[targetType] });
+    const targetId = changed.log.at(-1).id;
+    const later = step(changed, laterType, { entryId: 'note', ...laterOps[laterType] });
+    if (blocked[targetType].includes(laterType)) unchangedRefusal(later, 'undo', { opId: targetId }, new RegExp(`operation '${later.log.at(-1).id}' depends on it`));
+    else {
+      const undone = step(later, 'undo', { opId: targetId });
+      const expected = step(before, laterType, { entryId: 'note', ...laterOps[laterType] });
+      for (const space of ['personal', 'studio', 'archive']) assert.deepEqual(visible(undone, space), visible(expected, space), `${targetType} then ${laterType}`);
+    }
+  }
+});
+
+test('Undo audit: other entries and spaces remain independent for every kind', () => {
+  for (const targetType of ['keep', 'correct', 'forget', 'share', 'move', 'allowCloud']) for (const laterType of ['correct', 'forget', 'restore', 'share', 'move', 'allowCloud']) {
+    let before = keep(proposal(base(), 'other'), 'other', 'other-subject');
+    if (laterType === 'restore') before = step(before, 'forget', { entryId: 'other' });
+    before = proposal(before);
+    if (targetType !== 'keep') before = keep(before);
+    const data = { entryId: 'note', candidateId: 'note', subject: 'covers', space: targetType === 'share' || targetType === 'move' ? 'studio' : 'personal', label, text: 'Invented target correction.' };
+    const changed = step(before, targetType, data); const targetId = changed.log.at(-1).id;
+    const laterData = { entryId: 'other', space: 'studio', text: 'Invented unrelated correction.' };
+    const later = step(changed, laterType, laterData);
+    const undone = step(later, 'undo', { opId: targetId });
+    // Compare the unrelated entry with the result when the target was never changed.
+    const expected = step(before, laterType, laterData);
+    for (const space of ['personal', 'studio']) assert.deepEqual(visible(undone, space).filter(e => e.id === 'other'), visible(expected, space).filter(e => e.id === 'other'));
+    if (targetType === 'keep') assert.ok(undone.proposed.some(e => e.id === 'note'));
+    else assert.equal(visible(undone).find(e => e.id === 'note').text, visible(before).find(e => e.id === 'note').text);
+  }
+});
+
 test('Plan 1: candidates, keep, separation, skip', () => {
   const p = proposal(); assert.deepEqual(visible(p), []);
   const k = keep(p); assert.equal(visible(k)[0].id, 'note'); assert.deepEqual(visible(k, 'studio'), []);

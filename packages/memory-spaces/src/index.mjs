@@ -69,13 +69,14 @@ function propose(state, op) {
 
 function keep(state, op) {
   const candidate = takeCandidate(state, op.candidateId, false);
+  const candidateIndex = state.proposed.indexOf(candidate);
   requireSpace(state, op.space);
   validateSubject(op.subject);
   validateLabel(op.label);
   if (candidate.sensitive && op.save !== true) throw new Error(`Candidate '${candidate.id}' is sensitive. Keep it with save: true.`);
   const entry = { id: candidate.id, text: candidate.text, space: op.space, subject: op.subject, label: structuredClone(op.label), cloud: false, history: [], shares: [], candidate: structuredClone(candidate) };
   mutateWithSizeCheck(state, () => { takeCandidate(state, op.candidateId, true); addEntry(state, entry); });
-  log(state, op, { entryId: entry.id, candidateId: entry.id, text: entry.text });
+  log(state, op, { entryId: entry.id, candidateId: entry.id, candidateIndex, text: entry.text });
   return entry;
 }
 
@@ -96,17 +97,19 @@ function correct(state, op) {
 
 function forget(state, op) {
   const entry = findEntry(state, op.entryId);
+  const entryIndex = own(own(state.subjects, entry.space), entry.subject).indexOf(entry);
   const snapshot = structuredClone(entry);
   removeEntry(state, entry.id);
   state.trash.push({ ...snapshot, forgottenAt: op.now });
-  log(state, op, { entryId: entry.id, text: entry.text, snapshot });
+  log(state, op, { entryId: entry.id, entryIndex, text: entry.text, snapshot });
   return { forgotten: entry.id };
 }
 
 function restore(state, op) {
   const item = findTrash(state, op.entryId);
   withinTrashWindow(item, op.now);
-  mutateWithSizeCheck(state, () => { state.trash.splice(state.trash.indexOf(item), 1); const restored = structuredClone(item); delete restored.forgottenAt; addEntry(state, restored); });
+  const forgotten = state.log.findLast(record => record.type === 'forget' && record.entryId === item.id);
+  mutateWithSizeCheck(state, () => { state.trash.splice(state.trash.indexOf(item), 1); const restored = structuredClone(item); delete restored.forgottenAt; addEntry(state, restored, forgotten?.entryIndex); });
   log(state, op, { entryId: item.id, text: item.text });
   return findEntry(state, item.id);
 }
@@ -124,16 +127,17 @@ function move(state, op) {
   const entry = findEntry(state, op.entryId);
   requireSpace(state, op.space);
   if (op.subject !== undefined) validateSubject(op.subject);
-  const before = { space: entry.space, subject: entry.subject };
-  mutateWithSizeCheck(state, () => { removeEntry(state, entry.id); entry.space = op.space; entry.subject = op.subject ?? entry.subject; addEntry(state, entry); });
-  log(state, op, { entryId: entry.id, before, text: entry.text });
+  const before = { space: entry.space, subject: entry.subject, shares: structuredClone(entry.shares), entryIndex: own(own(state.subjects, entry.space), entry.subject).indexOf(entry) };
+  mutateWithSizeCheck(state, () => { removeEntry(state, entry.id); entry.space = op.space; entry.subject = op.subject ?? entry.subject; entry.shares = entry.shares.filter(space => space !== op.space); addEntry(state, entry); });
+  log(state, op, { entryId: entry.id, before, space: entry.space, text: entry.text });
   return entry;
 }
 
 function allowCloud(state, op) {
   const entry = findEntry(state, op.entryId);
+  const beforeCloud = entry.cloud;
   entry.cloud = true;
-  log(state, op, { entryId: entry.id, text: entry.text });
+  log(state, op, { entryId: entry.id, beforeCloud, text: entry.text });
   return entry;
 }
 
@@ -143,14 +147,25 @@ function undo(state, op) {
   if (!["keep", "correct", "forget", "share", "move", "allowCloud"].includes(target.type) || target.purged) throw new Error(`Operation '${op.opId}' cannot be undone.`);
   const later = state.log.slice(state.log.indexOf(target) + 1).find((record) => dependsOn(record, target, state.log));
   if (later) throw new Error(`Operation '${op.opId}' cannot be undone because operation '${later.id}' depends on it.`);
-  mutateWithSizeCheck(state, () => {
-    if (target.type === "keep") { const entry = findEntry(state, target.entryId); removeEntry(state, entry.id); state.proposed.push(structuredClone(entry.candidate)); }
+  const previousLocation = target.type === 'move' ? target.before : target.type === 'forget' ? findTrash(state, target.entryId) : findEntry(state, target.entryId);
+  try { mutateWithSizeCheck(state, () => {
+    if (target.type === "keep") { const entry = findEntry(state, target.entryId); removeEntry(state, entry.id); state.proposed.splice(target.candidateIndex ?? state.proposed.length, 0, structuredClone(entry.candidate)); }
     if (target.type === "correct") { const entry = findEntry(state, target.entryId); entry.text = target.oldText; entry.history.pop(); }
-    if (target.type === "forget") { const item = findTrash(state, target.entryId); withinTrashWindow(item, op.now); state.trash.splice(state.trash.indexOf(item), 1); const restored = structuredClone(item); delete restored.forgottenAt; addEntry(state, restored); }
+    if (target.type === "forget") { const item = findTrash(state, target.entryId); withinTrashWindow(item, op.now); state.trash.splice(state.trash.indexOf(item), 1); const restored = structuredClone(item); delete restored.forgottenAt; addEntry(state, restored, target.entryIndex); }
     if (target.type === "share") { const entry = findEntry(state, target.entryId); entry.shares = entry.shares.filter((id) => id !== target.space); }
-    if (target.type === "move") { const entry = findEntry(state, target.entryId); removeEntry(state, entry.id); entry.space = target.before.space; entry.subject = target.before.subject; addEntry(state, entry); }
-    if (target.type === "allowCloud") findEntry(state, target.entryId).cloud = false;
-  });
+    if (target.type === "move") { const entry = findEntry(state, target.entryId); removeEntry(state, entry.id); const removedShare = target.before.shares?.find(space => space === entry.space); if (removedShare) entry.shares.splice(target.before.shares.indexOf(removedShare), 0, removedShare); entry.space = target.before.space; entry.subject = target.before.subject; addEntry(state, entry, target.before.entryIndex); }
+    if (target.type === "allowCloud") findEntry(state, target.entryId).cloud = target.beforeCloud ?? false;
+  }); } catch (error) {
+    if (/subject is full|index is full/.test(error.message)) {
+      const dependency = state.log.slice(state.log.indexOf(target) + 1).findLast(record => {
+        if (!record.entryId || record.entryId === target.entryId || !['keep', 'correct', 'move', 'restore', 'undo'].includes(record.type)) return false;
+        let entry; try { entry = findEntry(state, record.entryId); } catch { return false; }
+        return entry.space === previousLocation.space && (/index is full/.test(error.message) || entry.subject === previousLocation.subject);
+      });
+      if (dependency) throw new Error(`Operation '${op.opId}' cannot be undone because operation '${dependency.id}' depends on it: ${error.message}`);
+    }
+    throw error;
+  }
   log(state, op, { entryId: target.entryId, targetId: target.id });
   return { undone: target.id };
 }
@@ -223,11 +238,12 @@ function cloneState(input) {
   for (const [space, subjects] of Object.entries(state.subjects)) state.subjects[space] = Object.assign(Object.create(null), subjects);
   return state;
 }
-function addEntry(state, entry) {
+function addEntry(state, entry, index) {
   if (!Object.hasOwn(state.subjects, entry.space)) state.subjects[entry.space] = Object.create(null);
   const subjects = own(state.subjects, entry.space);
   if (!Object.hasOwn(subjects, entry.subject)) subjects[entry.subject] = [];
-  own(subjects, entry.subject).push(entry);
+  const entries = own(subjects, entry.subject);
+  entries.splice(index ?? entries.length, 0, entry);
 }
 function dependsOn(record, target, records) {
   if (!target.entryId || record.entryId !== target.entryId) return false;
@@ -239,8 +255,8 @@ function dependsOn(record, target, records) {
   if (target.type === 'forget') return ['restore', 'forget'].includes(effective.type);
   if (target.type === 'correct') return effective.type === 'correct';
   if (target.type === 'allowCloud') return effective.type === 'allowCloud';
-  if (target.type === 'move') return effective.type === 'move';
-  if (target.type === 'share') return effective.type === 'share' && effective.space === target.space;
+  if (target.type === 'move') return ['move', 'share'].includes(effective.type);
+  if (target.type === 'share') return ['share', 'move'].includes(effective.type) && effective.space === target.space;
   return false;
 }
 function removeEntry(state, id) { for (const subjects of Object.values(state.subjects)) for (const entries of Object.values(subjects)) { const i = entries.findIndex((x) => x.id === id); if (i >= 0) { entries.splice(i, 1); return; } } }
