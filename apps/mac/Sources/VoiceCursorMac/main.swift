@@ -6259,6 +6259,11 @@ final class DictationController {
     private var sliceCountTotal = 0
     private var sliceCountAtOrAboveNearSilent = 0
     private var sliceCountAtOrAboveStrictSilent = 0
+    /// Loudest slice and which input channel each slice was taken from, for
+    /// the run log only (step 2 trial, F13: a 20-channel interface heard
+    /// nothing, and nothing said how loud the input was or which channel).
+    private var sliceLoudestDBFS = -60.0
+    private var sliceChannelCounts: [Int: Int] = [:]
     private let sliceCountLock = NSLock()
     /// Set when Apple's live listener reports a real error during this dictation.
     private var liveListenerHadError = false
@@ -6793,6 +6798,8 @@ final class DictationController {
             sliceCountTotal = 0
             sliceCountAtOrAboveNearSilent = 0
             sliceCountAtOrAboveStrictSilent = 0
+            sliceLoudestDBFS = -60
+            sliceChannelCounts = [:]
             tapInStopTail = false
             sliceCountLock.unlock()
             stopTail.reset()
@@ -6908,7 +6915,8 @@ final class DictationController {
                 tapSpeechAnalyzerEngine?.tapCallbackBegan()
                 defer { tapSpeechAnalyzerEngine?.tapCallbackEnded() }
                 guard let self else { return }
-                let speechBuffer = Self.monoSpeechBuffer(from: buffer, targetFormat: speechFormat) ?? buffer
+                let mono = Self.monoSpeechBufferAndChannel(from: buffer, targetFormat: speechFormat)
+                let speechBuffer = mono?.buffer ?? buffer
                 self.request?.append(speechBuffer)
                 self.realtimeTranscriber?.append(speechBuffer)
                 tapSpeechAnalyzerEngine?.append(speechBuffer)
@@ -6925,6 +6933,8 @@ final class DictationController {
                 if sliceDBFS >= SilentRecordingPolicy.strictSilentThresholdDBFS {
                     self.sliceCountAtOrAboveStrictSilent += 1
                 }
+                self.sliceLoudestDBFS = max(self.sliceLoudestDBFS, sliceDBFS)
+                self.sliceChannelCounts[mono?.channel ?? 0, default: 0] += 1
                 let inStopTail = self.tapInStopTail
                 self.sliceCountLock.unlock()
                 // During the tail after Stop the pill shows "Finishing…":
@@ -7271,6 +7281,14 @@ final class DictationController {
     }
 
     private static func monoSpeechBuffer(from buffer: AVAudioPCMBuffer, targetFormat: AVAudioFormat) -> AVAudioPCMBuffer? {
+        monoSpeechBufferAndChannel(from: buffer, targetFormat: targetFormat)?.buffer
+    }
+
+    /// The mono speech buffer and the input channel it was taken from.
+    private static func monoSpeechBufferAndChannel(
+        from buffer: AVAudioPCMBuffer,
+        targetFormat: AVAudioFormat
+    ) -> (buffer: AVAudioPCMBuffer, channel: Int)? {
         let channelCount = Int(buffer.format.channelCount)
         let frameLength = Int(buffer.frameLength)
         guard channelCount > 0, frameLength > 0,
@@ -7288,7 +7306,7 @@ final class DictationController {
             for frame in 0..<frameLength {
                 output[frame] = input[frame]
             }
-            return monoBuffer
+            return (monoBuffer, 0)
         }
 
         guard buffer.format.commonFormat == .pcmFormatFloat32 else {
@@ -7305,7 +7323,7 @@ final class DictationController {
             for frame in 0..<frameLength {
                 output[frame] = input[(frame * channelCount) + selectedChannel]
             }
-            return monoBuffer
+            return (monoBuffer, selectedChannel)
         }
 
         guard let channels = buffer.floatChannelData else {
@@ -7315,7 +7333,7 @@ final class DictationController {
         for frame in 0..<frameLength {
             output[frame] = channels[selectedChannel][frame]
         }
-        return monoBuffer
+        return (monoBuffer, selectedChannel)
     }
 
     private static func loudestInterleavedChannel(input: UnsafePointer<Float>, frameLength: Int, channelCount: Int) -> Int {
@@ -7712,7 +7730,12 @@ final class DictationController {
                 target: targetContext,
                 correction: correction
             )
-            if deskRouteAtStop == nil {
+            if deskRouteAtStop == nil, cleanedText.isEmpty, retainedAudioPath == nil, correction == nil {
+                // Nothing was heard and no audio is kept: a row would only
+                // read "(empty)" (step 2 trial, F13). The pill already says
+                // it didn't hear you; the levels line above says why.
+                RunLog.write("archive.session.skipped", "id=\(id) reason=no-words")
+            } else if deskRouteAtStop == nil {
                 do {
                     try Archive.append(entry)
                     RunLog.write(
@@ -7952,7 +7975,17 @@ final class DictationController {
         let totalSlices = sliceCountTotal
         let nearSlices = sliceCountAtOrAboveNearSilent
         let strictSlices = sliceCountAtOrAboveStrictSilent
+        let loudestDBFS = sliceLoudestDBFS
+        let channelCounts = sliceChannelCounts
         sliceCountLock.unlock()
+        // Numbers only, never words: how loud the input was and which
+        // channels it came from, busiest first.
+        let busiestChannels = channelCounts.sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
+            .prefix(4).map { "\($0.key):\($0.value)" }.joined(separator: ",")
+        RunLog.write(
+            "dictation.capture.levels",
+            "id=\(sessionId) slices=\(totalSlices) speechLoud=\(nearSlices) quietSpeech=\(strictSlices) loudestDBFS=\(String(format: "%.1f", loudestDBFS)) channels=\(busiestChannels.isEmpty ? "none" : busiestChannels) heardWords=\(firstPartialAt != nil)"
+        )
         result.resolve(CaptureEndEvidence(
             words: latestTranscript.trimmingCharacters(in: .whitespacesAndNewlines),
             firstPartialAt: firstPartialAt,

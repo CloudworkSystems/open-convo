@@ -10,6 +10,8 @@ type Events = Pick<EventTarget, 'addEventListener' | 'removeEventListener'>;
  * What the composer offers as a dictation target. The App supplies it only
  * while the draft field is focused, the workspace is unlocked and every edit
  * is saved, so the bound revision is the native host's committed revision.
+ * For a blank session (no session yet), `sessionId` is the id reserved for
+ * the session the dictated words will start.
  */
 export interface DictationComposerTarget {
   readonly state: DeskState;
@@ -50,7 +52,8 @@ function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boo
   return own.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 }
 const keyFor = (target: DictationComposerTarget) => JSON.stringify([target.sessionId, target.state.revision,
-  target.selection.start, target.selection.end, target.state.drafts[target.sessionId] ?? null]);
+  target.selection.start, target.selection.end, target.state.drafts[target.sessionId] ?? null,
+  target.state.selection.sessionId, target.state.selection.goalId]);
 /** Recently replaced bindings whose late finals can still be matched to their own capture. */
 const RECENT_LIMIT = 4;
 
