@@ -1,0 +1,14 @@
+{
+  "name": "@open-convo/creator-proof",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A local proof ledger, report pack and real links page for a creator. It sends nothing.",
+  "exports": "./src/index.mjs",
+  "scripts": {
+    "test": "node --test --test-concurrency=1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
