@@ -17,7 +17,9 @@ import { hostname } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 
-import { StopAfter, main, writeAllBytes } from '../bin/creator-proof.mjs';
+import { StopAfter, main, prospectiveLedger, writeAllBytes } from '../bin/creator-proof.mjs';
+import { ENTRY_LIMIT, LEDGER_BYTES } from '../src/errors.mjs';
+import { hashEntry, recordOriginal } from '../src/index.mjs';
 import { CLOCK, capture, deadPid, tempDir } from './helpers.mjs';
 
 function run(args, extra = {}) {
@@ -252,6 +254,61 @@ test('two exports to a new file cannot replace each other', async () => {
     const pageText = readFileSync(page, 'utf8');
     assert.match(pageText, /Second Lane/);
     assert.doesNotMatch(pageText, /First Lane/);
+  } finally {
+    remove();
+  }
+});
+
+test('a save that would exceed the ledger limits is refused before the head changes', () => {
+  assert.throws(
+    () => prospectiveLedger('/tmp/invented-ledger.json', new Array(ENTRY_LIMIT + 1)),
+    /nothing was added/,
+  );
+  const small = prospectiveLedger('/tmp/invented-ledger.json', []);
+  assert.equal(small, '[]\n');
+});
+
+test('an append that would make the ledger unreadable is not saved', async () => {
+  const { dir, remove } = tempDir();
+  try {
+    const ledger = join(dir, 'ledger.json');
+    const fileSha256 = 'ab'.repeat(32);
+    const [base] = recordOriginal([], {
+      title: 'Meadow',
+      fileName: 'meadow.mov',
+      fileSha256,
+      sizeBytes: 4,
+    }, { recordedAt: CLOCK, expectedHead: null });
+    const bare = { ...base };
+    delete bare.notes;
+    delete bare.entryHash;
+    const emptyRaw = `${JSON.stringify([{ ...bare, notes: '', entryHash: 'x'.repeat(64) }], null, 2)}\n`;
+    const oneRaw = `${JSON.stringify([{ ...bare, notes: 'a', entryHash: 'x'.repeat(64) }], null, 2)}\n`;
+    const perNote = Buffer.byteLength(oneRaw) - Buffer.byteLength(emptyRaw);
+    const room = LEDGER_BYTES - Buffer.byteLength(emptyRaw);
+    const notes = 'a'.repeat(Math.floor(room / perNote));
+    const entry = { ...bare, notes };
+    entry.entryHash = hashEntry(entry);
+    const raw = `${JSON.stringify([entry], null, 2)}\n`;
+    assert.ok(Buffer.byteLength(raw) <= LEDGER_BYTES);
+    assert.ok(LEDGER_BYTES - Buffer.byteLength(raw) < 64);
+    writeFileSync(ledger, raw);
+    const head = {
+      state: 'committed',
+      seq: 1,
+      entryHash: entry.entryHash,
+      prev: null,
+    };
+    writeFileSync(`${ledger}.head`, `${JSON.stringify(head, null, 2)}\n`);
+    const headBefore = readFileSync(`${ledger}.head`);
+    const amended = await run(['amend', entry.originalId, '--notes', 'one more fact', '--ledger', ledger]);
+    assert.equal(amended.code, 1);
+    assert.match(amended.io.errors(), /too large|limit is/);
+    assert.match(amended.io.errors(), /nothing was added/);
+    assert.equal(readFileSync(ledger, 'utf8'), raw);
+    assert.deepEqual(readFileSync(`${ledger}.head`), headBefore);
+    const verified = await run(['verify', '--ledger', ledger]);
+    assert.equal(verified.code, 0, verified.io.text());
   } finally {
     remove();
   }

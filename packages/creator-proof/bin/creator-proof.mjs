@@ -23,7 +23,7 @@ import { hostname } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { LEDGER_BYTES, ProofError, SIDE_FILE_BYTES } from '../src/errors.mjs';
+import { ENTRY_LIMIT, LEDGER_BYTES, ProofError, SIDE_FILE_BYTES } from '../src/errors.mjs';
 import { amendOriginal, recordOriginal, verifyLedger } from '../src/ledger.mjs';
 import { realLinksPage } from '../src/page.mjs';
 import { buildReport } from '../src/report.mjs';
@@ -592,6 +592,23 @@ async function pause(stage, hooks) {
   stageStop(stage, hooks);
 }
 
+// The bytes we are about to write are the bytes the next check will read.
+// Refuse before the pending head exists, or a too-large save would stick.
+export function prospectiveLedger(ledgerPath, next) {
+  if (!Array.isArray(next)) {
+    throw new ProofError(`The ledger at ${ledgerPath} could not be saved, so nothing was added.`);
+  }
+  if (next.length > ENTRY_LIMIT) {
+    throw new ProofError(`This save would hold ${next.length} entries in ${ledgerPath}. The limit is ${ENTRY_LIMIT}, so nothing was added. The ledger was left as it was.`);
+  }
+  const raw = `${JSON.stringify(next, null, 2)}\n`;
+  const bytes = Buffer.byteLength(raw);
+  if (bytes > LEDGER_BYTES) {
+    throw new ProofError(`This save would make ${ledgerPath} ${bytes} bytes. The limit is ${LEDGER_BYTES} bytes, so nothing was added. The ledger was left as it was.`);
+  }
+  return raw;
+}
+
 function appendFiles(ledgerPath, next, previousHead, hooks) {
   const last = next[next.length - 1];
   const pending = {
@@ -625,9 +642,10 @@ async function saveNewEntry(ledgerPath, io, build) {
       throw new ProofError(joinNotices(notices, 'The ledger changed after it was read, so nothing was added. Run verify, then try again.'));
     }
     const previousHead = state.expectedHead === null ? null : { ...state.expectedHead };
+    const raw = prospectiveLedger(ledgerPath, built.next);
     const pending = appendFiles(ledgerPath, built.next, previousHead, hooks);
     await pause('pending-head', hooks);
-    writePrivate(ledgerPath, `${JSON.stringify(built.next, null, 2)}\n`, 'ledger', hooks);
+    writePrivate(ledgerPath, raw, 'ledger', hooks);
     await pause('ledger', hooks);
     writeHeadFile(`${ledgerPath}.head`, { ...pending, state: 'committed' }, hooks);
     await pause('committed-head', hooks);

@@ -92,7 +92,7 @@ These are choices the plan does not spell out.
 - Facts you do not have yet are left out. `amend` stores the new facts under `changes`. Empty text clears a fact. Only platform, post link, posted date and notes can be added later.
 - An omitted expected head means the end was not checked. `null` means the ledger is expected to be empty. A missing ledger file and a missing head file start a new ledger. A ledger file with no head file is not called complete.
 - A save that stops before the ledger write adds nothing. The next check puts the head back. A save that stops after the ledger write and before the last head write is finished on the next check ("Your last record was saved."). A committed head whose entry is no longer in the ledger is reported as cut off, not as an unfinished save.
-- Text fields are at most 100,000 characters. The ledger file is at most 32 MB, and a ledger is at most 100,000 entries. A case file or a links file is at most 1 MB. The media file itself has no size cap; it is hashed in 64 KB pieces.
+- Text fields are at most 100,000 characters. The ledger file is at most 32 MB, and a ledger is at most 100,000 entries. A save that would pass either limit is refused before anything is written. A case file or a links file is at most 1 MB. The media file itself has no size cap; it is hashed in 64 KB pieces.
 - `recordedAt` and `postedAt` are UTC times ending in `Z`, with no leap second. The page shows `updatedAt` as you wrote it.
 - The command stores the media file's base name, not its folder.
 - The clock is read once, only for `record` and `amend`, and only after the file and the ledger have been checked.
