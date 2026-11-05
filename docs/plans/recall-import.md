@@ -1,6 +1,6 @@
 # Recall Import, Behind A Knowledge Source Slot (PRD)
 
-Status: Approved (Nov 5): the owner approved this plan on November 5, 2026, and pull request #289 merged it.
+Status: In progress (Nov 5): the owner approved this plan on November 5, 2026 (pull request #289); the build is pull request #299, in review.
 
 Written November 3, 2026 by a Claude session (project "261024 OC Steering",
 thread "Draft next plans for outside builders"). Session name:
