@@ -376,7 +376,8 @@ function escapedAt(text, offset) {
 // backtick run of exactly the same length (and may cross line endings).
 function markdownCodeMask(text) {
   const mask = new Uint8Array(text.length);
-  let leaf = null, paragraph = false, container = '', listPadding = 0, referenceContinuation = false;
+  let leaf = null, paragraph = false, referenceContinuation = false;
+  const containers = [];
   const blockTags = 'address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul';
   const blockTag = new RegExp(`^ {0,3}</?(?:${blockTags})(?=[ \t/>]|$)`, 'i');
   // CommonMark tag grammar, including quoted attributes whose contents are opaque.
@@ -405,14 +406,48 @@ function markdownCodeMask(text) {
   function htmlEnded(block, line) {
     return block.blank ? blankLine(line) : (block.fold ? line.toLowerCase() : line).includes(block.end);
   }
+  // Expand tabs only for structural columns. All masks and output retain original bytes.
+  function columns(line) {
+    let column = 0, expanded = '';
+    for (const character of line) {
+      const width = character === '\t' ? 4 - column % 4 : 1;
+      expanded += character === '\t' ? ' '.repeat(width) : character;
+      column += width;
+    }
+    return expanded;
+  }
+  const quoteMarker = line => /^ {0,3}> ?/.exec(line);
+  const listMarker = line => !thematic(line) && /^ {0,3}(?:[-+*]|\d{1,9}[.)])(?= |$)/.exec(line);
+  function interruptsParagraph(line) {
+    return blankLine(line) || /^ {0,3}(?:#{1,6}(?: |$)|`{3,}|~{3,}|>|(?:[-+*]|1[.)])(?: |$))/.test(line) || thematic(line) ||
+      /^ {0,3}<(?:!--|\?|!\[CDATA\[|![A-Z]|(?:pre|script|style|textarea)(?=[ >]|$))/i.test(line) || blockTag.test(line);
+  }
   for (const match of text.matchAll(/[^\n]*(?:\n|$)/g)) {
-    let line = match[0].replace(/\r?\n$/, '');
+    let line = columns(match[0].replace(/\r?\n$/, ''));
     if (match.index === 0 && line.startsWith('\uFEFF')) line = line.slice(1);
     const protect = () => mask.fill(1, match.index, match.index + match[0].length);
-    // An open leaf owns the line. Only its own continuation/end rule runs here.
-    // A saved container prefix is removed literally, never reparsed as structure.
+    // Walk the existing container stack before any leaf continuation. A failed
+    // container closes every nested block, except a lazy paragraph continuation.
+    let matched = 0;
+    for (const container of containers) {
+      if (container.kind === 'quote') {
+        const marker = quoteMarker(line);
+        if (!marker) break;
+        line = line.slice(marker[0].length);
+      } else if (!blankLine(line)) {
+        const indent = /^ */.exec(line)[0].length;
+        if (indent < container.padding) break;
+        line = line.slice(container.padding);
+      }
+      matched++;
+    }
+    const lazy = matched < containers.length && paragraph && !leaf && !interruptsParagraph(line) && !tagAtStart.test(line);
+    if (matched < containers.length && !lazy) {
+      containers.length = matched;
+      leaf = null; paragraph = false; referenceContinuation = false;
+    }
     if (leaf) {
-      const content = leaf.prefix && line.startsWith(leaf.prefix) ? line.slice(leaf.prefix.length) : line;
+      const content = line;
       if (leaf.kind === 'fence') {
         protect();
         const close = /^ {0,3}(`+|~+)[ \t]*$/.exec(content);
@@ -432,37 +467,38 @@ function markdownCodeMask(text) {
         leaf = null;
       }
     }
-    // Containers precede new leaf starts, but never run inside an open leaf.
-    const originalLine = line;
-    let quoteDepth = 0;
-    while (/^ {0,3}>/.test(line)) { line = line.replace(/^ {0,3}>[ \t]?/, ''); quoteDepth++; }
-    const list = !thematic(line) && /^ {0,3}(?:[-+*]|\d{1,9}[.)])(?:[ \t]+|$)/.exec(line);
-    const sameQuote = container.startsWith(`${quoteDepth}:`);
-    let inList = false;
-    if (list) { listPadding = list[0].length; line = line.slice(listPadding); inList = true; }
-    else if (sameQuote && listPadding && line.startsWith(' '.repeat(listPadding))) { line = line.slice(listPadding); inList = true; }
-    else listPadding = 0;
-    const nextContainer = `${quoteDepth}:${inList ? 'list' : ''}`;
-    if (nextContainer !== container || list) { paragraph = false; referenceContinuation = false; }
-    container = nextContainer;
-    // Future continuation lines carry list indentation, not the opening marker.
-    const prefix = originalLine.slice(0, originalLine.length - line.length).replace(/(?:[-+*]|\d{1,9}[.)])[ \t]*$/, marker => ' '.repeat(marker.length));
+    // Only after open leaves have handled their line may new containers begin.
+    if (!lazy) for (;;) {
+      const quote = quoteMarker(line);
+      if (quote) {
+        containers.push({ kind: 'quote' }); line = line.slice(quote[0].length);
+      } else {
+        const marker = listMarker(line);
+        if (!marker) break;
+        const rest = line.slice(marker[0].length), spaces = /^ */.exec(rest)[0].length;
+        // CommonMark gives 1–4 spaces to list padding. Excess indentation is content.
+        const padding = spaces > 0 && spaces <= 4 && rest.trim() ? spaces : 1;
+        containers.push({ kind: 'list', padding: marker[0].length + padding });
+        line = rest.slice(Math.min(padding, spaces));
+      }
+      paragraph = false; referenceContinuation = false;
+    }
     if (blankLine(line)) { paragraph = false; referenceContinuation = false; continue; }
     const heading = /^ {0,3}#{1,6}(?:[ \t]|$)/.test(line);
     const setext = paragraph && /^ {0,3}(?:=+|-+)[ \t]*$/.test(line);
     if (heading || setext || thematic(line)) { paragraph = false; referenceContinuation = false; continue; }
     const fence = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
     if (fence && (fence[1][0] !== '`' || !fence[2].includes('`'))) {
-      leaf = { kind: 'fence', fence: fence[1], prefix }; paragraph = false; protect(); continue;
+      leaf = { kind: 'fence', fence: fence[1] }; paragraph = false; protect(); continue;
     }
     const html = htmlStart(line);
     if (html) {
       protect();
       if (html.tags) markTags(match.index, match.index + match[0].length);
-      leaf = htmlEnded(html, line) ? null : { ...html, prefix };
+      leaf = htmlEnded(html, line) ? null : html;
       paragraph = false; referenceContinuation = false; continue;
     }
-    if (!paragraph && indented(line)) { leaf = { kind: 'indent', prefix }; paragraph = false; protect(); continue; }
+    if (!paragraph && indented(line)) { leaf = { kind: 'indent' }; paragraph = false; protect(); continue; }
     const definition = !paragraph && /^ {0,3}\[(?:\\.|[^\]\\])+\]:[ \t]*/.exec(line);
     const continuation = referenceContinuation && /^ {0,3}(?:<[^>]+>|[^ \t]+)(?:[ \t].*)?$/.test(line);
     referenceContinuation = !!definition && !line.slice(definition[0].length).trim();

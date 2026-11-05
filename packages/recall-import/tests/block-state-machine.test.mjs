@@ -37,3 +37,27 @@ test('Block state machine P2 paragraph table: indented images lazily continue a 
     assert.equal(item.title, 'Basil plants'); assert.ok(item.body.startsWith(text.replace(picture, picture.slice(1)))); assert.ok(item.body.includes(notice));
   }
 });
+
+const containerExamples = [
+  ['GrokBot quote close without space', '> ```\n> ' + image + '\n>```\n'],
+  ['GrokBot tab-indented list close', '- ```\n  ' + image + '\n\t```\n'],
+  ['GrokBot quote ends after blank', '> ```\n> ' + image + '\n\n'],
+  ['list container ends without fence close', '- ```\n  ' + image + '\n\n'],
+  ['CommonMark quote indentation variation', ' > ```\n> ' + image + '\n   >```\n'],
+  ['CommonMark quote tab partial expansion', '>\t```\n>\t' + image + '\n>```\n'],
+  ['CommonMark ordered list tabs', '1. ```\n\t' + image + '\n\t```\n'],
+  ['nested quote inside list', '- > ```\n  > ' + image + '\n\t>```\n'],
+  ['nested list inside quote', '> - ```\n>   ' + image + '\n>\t```\n'],
+  ['nested quotes lose inner container', '> > ```\n> > ' + image + '\n>\n\n'],
+  ['HTML quote container ends', '> <pre>\n> ' + image + '\n\n'],
+  ['HTML list container ends', '- <!--\n  ' + image + '\n\n']
+];
+for (const [name, protectedText] of containerExamples) test(`Container stack table: ${name}`, () => {
+  for (const eol of ['\n', '\r\n']) {
+    const prefix = protectedText.replaceAll('\n', eol), tail = '# Basil plants' + eol + picture + eol;
+    const item = recallSource().read([{ path: 'invented.md', text: prefix + tail }]).items[0];
+    assert.equal(item.title, 'Basil plants');
+    assert.ok(item.body.startsWith(prefix + tail.replace(picture, picture.slice(1))), item.body);
+    assert.equal(item.body.split(notice).length, 2);
+  }
+});
