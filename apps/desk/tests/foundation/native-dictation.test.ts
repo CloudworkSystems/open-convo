@@ -240,3 +240,25 @@ test('a late final for an unbound target is never applied, even back at the same
   assert.deepEqual(result, { kind: 'refused', reason: 'revoked' }, 'The App keeps it unplaced instead.');
   lane.revoke();
 });
+
+test('a blank session binds under its reserved id, so the Mac records and the words start that session (step 2 trial, F14)', async () => {
+  const { host, lane, finals, options, state } = setup();
+  const blank = applyCommand(state, { type: 'open-blank-session', goalId: state.selection.goalId }, options);
+  assert.equal(blank.revision, state.revision, 'Opening a blank session is a view change only.');
+  const reserved = 'e5000000-0000-4000-8000-000000000001';
+  const selection = { start: 0, end: 0 };
+  lane.setTarget({ state: blank, sessionId: reserved, selection });
+  await until(() => lane.status === 'ready', 'binding the blank session');
+  assert.ok(host.beginRecording(), 'A recording now has a confirmed draft binding.');
+  assert.notEqual(host.deliverFinal(host.beginRecording(), 'first dictated words'), 'held');
+  const final = finals[0]!;
+  assert.ok(final.capture && final.target);
+  const result = final.capture.deliver(blank, final.target, selection, final.deliveryId, final.text, options);
+  assert.equal(result.kind, 'applied-in-memory');
+  if (result.kind === 'applied-in-memory') {
+    assert.equal(result.expectedRevision, blank.revision, 'Committed against the revision the Mac bound.');
+    assert.equal(result.state.selection.sessionId, reserved);
+    assert.equal(result.state.drafts[reserved], 'first dictated words');
+  }
+  lane.revoke();
+});

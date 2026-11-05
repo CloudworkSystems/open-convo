@@ -196,3 +196,56 @@ test('invalidation during command application cannot expose a late candidate', (
   assert.deepEqual(result, { kind: 'refused', reason: 'revoked' });
   assert.deepEqual(state, before);
 });
+
+// Step 2 trial, F14: a new Desk opens on a blank session, which has no saved
+// session for Mac dictation to aim at. Its words now start the session.
+function blankFixture() {
+  const { state: base, target, options } = fixture('');
+  const goalId = base.selection.goalId;
+  const state = applyCommand(base, { type: 'open-blank-session', goalId }, options);
+  const reserved = '7e000000-0000-4000-8000-000000000001';
+  return { state, options, goalId, target: { ...target, sessionId: reserved }, reserved };
+}
+
+test('dictation into a blank session starts that session with the words as its draft, under the reserved id', () => {
+  const { state, options, goalId, target, reserved } = blankFixture();
+  assert.equal(state.selection.sessionId, null);
+  const before = structuredClone(state);
+  const binding = new CapturedDictationDraft(state, target, { start: 0, end: 0 });
+  const result = binding.deliver(state, target, { start: 0, end: 0 }, 'delivery', 'Dictated first words', options);
+  assert.equal(result.kind, 'applied-in-memory');
+  if (result.kind !== 'applied-in-memory') return;
+  assert.equal(result.expectedRevision, state.revision);
+  assert.equal(result.revision, state.revision + 1);
+  const started = result.state.sessions.find((session) => session.id === reserved);
+  assert.ok(started, 'The session is created under the reserved id.');
+  assert.equal(started.goalId, goalId);
+  assert.equal(result.state.drafts[reserved], 'Dictated first words');
+  assert.deepEqual(result.state.selection, { goalId, sessionId: reserved, route: 'sessions' });
+  assert.deepEqual(result.selection, { start: 'Dictated first words'.length, end: 'Dictated first words'.length });
+  assert.equal(result.state.messages.length, state.messages.length, 'Nothing is sent.');
+  assert.deepEqual(state, before);
+});
+
+test('a blank-session capture refuses to start a session once the view moved on', () => {
+  const { state, options, target } = blankFixture();
+  const binding = () => new CapturedDictationDraft(state, target, { start: 0, end: 0 });
+  const elsewhere = applyCommand(state, { type: 'select-session', sessionId: state.sessions[0].id }, options);
+  assert.deepEqual(binding().deliver(elsewhere, target, { start: 0, end: 0 }, 'one', 'Words', options),
+    { kind: 'conflict', reason: 'target-changed' });
+  const otherGoal = applyCommand(state, { type: 'open-blank-session', goalId: null }, options);
+  if (state.selection.goalId !== null) {
+    assert.deepEqual(binding().deliver(otherGoal, target, { start: 0, end: 0 }, 'one', 'Words', options),
+      { kind: 'conflict', reason: 'target-changed' });
+  }
+  const typed = applyCommand(state, { type: 'create-session', goalId: state.selection.goalId, draft: 'Typed' }, options);
+  const blankAgain = applyCommand(typed, { type: 'open-blank-session', goalId: state.selection.goalId }, options);
+  assert.deepEqual(binding().deliver(blankAgain, target, { start: 0, end: 0 }, 'one', 'Words', options),
+    { kind: 'conflict', reason: 'workspace-changed' });
+});
+
+test('a blank session is captured only with an empty box and the caret at the start, and never under a taken id', () => {
+  const { state, target } = blankFixture();
+  assert.throws(() => new CapturedDictationDraft(state, target, { start: 1, end: 1 }), TypeError);
+  assert.throws(() => new CapturedDictationDraft(state, { ...target, sessionId: state.sessions[0].id }, { start: 0, end: 0 }), TypeError);
+});

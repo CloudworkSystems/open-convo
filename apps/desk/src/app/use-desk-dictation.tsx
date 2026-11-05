@@ -23,7 +23,8 @@ export interface DeskDictationView {
   readonly retained: readonly RetainedDictation[];
   /** Caret to restore after dictated text lands in this session's draft. */
   readonly caret?: { readonly sessionId: string; readonly position: number; readonly nonce: number };
-  reportComposer(sessionId: string, selection: DictationDraftSelection | null): void;
+  /** `sessionId` is null for a blank session: dictation then starts the session, as typing does. */
+  reportComposer(sessionId: string | null, selection: DictationDraftSelection | null): void;
   dismiss(deliveryId: string): void;
 }
 
@@ -55,7 +56,18 @@ export function useDeskDictation(access: DeskDictationAccess): DeskDictationView
   const lane = access.runtime.dictation;
   const status = useSyncExternalStore(lane ? (listener) => lane.subscribe(listener) : noLane,
     () => lane ? lane.status : 'none');
-  const [composer, setComposer] = useState<{ sessionId: string; selection: DictationDraftSelection } | null>(null);
+  const [composer, setComposer] = useState<{ sessionId: string; selection: DictationDraftSelection; starts?: true } | null>(null);
+  // The id a blank session's dictation would start its session under (step 2 trial, F14).
+  const reservedId = useRef<string | null>(null);
+  const reserveStartId = () => {
+    const state = access.current();
+    const taken = (id: string) => Boolean(state && (state.sessions.some((session) => session.id === id)
+      || Object.hasOwn(state.drafts, id)));
+    if (!reservedId.current || taken(reservedId.current)) {
+      reservedId.current = access.runtime.createId ? access.runtime.createId() : crypto.randomUUID();
+    }
+    return reservedId.current;
+  };
   const [retained, setRetained] = useState<readonly RetainedDictation[]>([]);
   const [caret, setCaret] = useState<DeskDictationView['caret']>();
   const composerRef = useRef(composer);
@@ -72,7 +84,8 @@ export function useDeskDictation(access: DeskDictationAccess): DeskDictationView
     if (!lane) return;
     const state = access.current();
     if (!composer || !state || !access.settled() || access.blocked()
-      || state.selection.sessionId !== composer.sessionId) { lane.setTarget(null); return; }
+      || state.selection.sessionId !== (composer.starts ? null : composer.sessionId)
+      || (composer.starts && state.sessions.some((session) => session.id === composer.sessionId))) { lane.setTarget(null); return; }
     lane.setTarget({ state, sessionId: composer.sessionId, selection: composer.selection });
   }, [lane, composer, access.state, access.settleSignal]);
 
@@ -112,12 +125,18 @@ export function useDeskDictation(access: DeskDictationAccess): DeskDictationView
 
   return {
     status, retained, caret,
-    reportComposer(sessionId, selection) {
+    reportComposer(reported, selection) {
+      const starts = reported === null;
       setComposer((previous) => {
-        if (!selection) return previous && previous.sessionId === sessionId ? null : previous;
-        if (previous && previous.sessionId === sessionId && previous.selection.start === selection.start
-          && previous.selection.end === selection.end) return previous;
-        return { sessionId, selection: { start: selection.start, end: selection.end } };
+        if (!selection) {
+          const same = previous && (starts ? previous.starts === true : !previous.starts && previous.sessionId === reported);
+          return same ? null : previous;
+        }
+        if (previous && (starts ? previous.starts === true && previous.sessionId === reservedId.current
+          : !previous.starts && previous.sessionId === reported)
+          && previous.selection.start === selection.start && previous.selection.end === selection.end) return previous;
+        const sessionId = starts ? reserveStartId() : reported;
+        return { sessionId, selection: { start: selection.start, end: selection.end }, ...(starts ? { starts: true as const } : {}) };
       });
     },
     dismiss: drop,

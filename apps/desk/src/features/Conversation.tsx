@@ -115,7 +115,14 @@ export function Conversation({
   const shownDraft = session ? draft : startText;
   const dictation = useDeskDictationView();
   const reportDraftSelection = (field: HTMLTextAreaElement, focused: boolean) => {
-    if (!dictation || !session) return;
+    if (!dictation) return;
+    if (!session) {
+      // A blank session: dictation starts it, as typing does (step 2 trial, F14).
+      // Offered only while the box is empty, so no text waiting in an input method is passed over.
+      if (!starting) return;
+      dictation.reportComposer(null, focused && !field.value && !composing.current ? { start: 0, end: 0 } : null);
+      return;
+    }
     dictation.reportComposer(session.id, focused && !readOnly ? { start: field.selectionStart, end: field.selectionEnd } : null);
   };
   const unplaced = dictation?.retained.filter((item) => item.state !== 'saving') ?? [];

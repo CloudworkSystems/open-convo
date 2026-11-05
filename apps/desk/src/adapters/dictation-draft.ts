@@ -30,6 +30,11 @@ type Capture = {
   readonly text: string;
   readonly revision: number;
   readonly selection: DictationDraftSelection;
+  /**
+   * Set for a blank session (no session yet, step 2 trial F14): the target's
+   * session id is reserved for the session the words start, in this goal.
+   */
+  readonly starts?: { readonly goalId: string | null };
 };
 
 const hasText = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
@@ -57,21 +62,30 @@ const validSelection = (selection: DictationDraftSelection, text: string) => Num
  * There is no per-draft revision in DeskState. This proof conservatively refuses
  * any intervening workspace revision, including unrelated edits. It does not
  * invent a persistent draft revision or a durable deduplication ledger.
+ *
+ * A blank session (selection with no session, empty box, caret at 0) can be
+ * captured too, under a session id reserved for it (step 2 trial, F14): its
+ * words start that session with them as its draft, exactly as typed words
+ * would, and only if the view is still that blank session at that revision.
  */
 export class CapturedDictationDraft {
   private capture: Capture | undefined;
   private delivery: { id: string; text: string; outcome: 'applied-in-memory' | 'conflict' | 'refused' } | undefined;
 
   constructor(state: DeskState, target: DictationDraftTarget, selection: DictationDraftSelection) {
-    const text = state.drafts[target.sessionId];
-    if (!validTarget(target) || !state.sessions.some((session) => session.id === target.sessionId)
-      || state.selection.sessionId !== target.sessionId || typeof text !== 'string'
+    const exists = state.sessions.some((session) => session.id === target.sessionId);
+    const starts = !exists && state.selection.sessionId === null && state.selection.route === 'sessions'
+      && !Object.hasOwn(state.drafts, target.sessionId);
+    const text = starts ? '' : state.drafts[target.sessionId];
+    if (!validTarget(target) || !(exists || starts)
+      || (exists && state.selection.sessionId !== target.sessionId) || typeof text !== 'string'
       || !Number.isSafeInteger(state.revision) || state.revision < 0 || state.revision >= Number.MAX_SAFE_INTEGER
       || !validSelection(selection, text)) throw new TypeError('The dictation draft target cannot be captured.');
     this.capture = Object.freeze({
       target: Object.freeze({ connectionId: target.connectionId, documentGeneration: target.documentGeneration,
         workspaceHandle: target.workspaceHandle, sessionId: target.sessionId }),
       text, revision: state.revision, selection: Object.freeze({ start: selection.start, end: selection.end }),
+      ...(starts ? { starts: Object.freeze({ goalId: state.selection.goalId }) } : {}),
     });
   }
 
@@ -109,17 +123,33 @@ export class CapturedDictationDraft {
       this.delivery!.outcome = 'conflict';
       return { kind: 'conflict', reason };
     };
-    if (!validTarget(currentTarget) || !sameTarget(capture.target, currentTarget)
-      || state.selection.sessionId !== capture.target.sessionId
-      || !state.sessions.some((session) => session.id === capture.target.sessionId)) return conflict('target-changed');
-    if (state.drafts[capture.target.sessionId] !== capture.text) return conflict('draft-changed');
+    if (!validTarget(currentTarget) || !sameTarget(capture.target, currentTarget)) return conflict('target-changed');
+    const exists = state.sessions.some((session) => session.id === capture.target.sessionId);
+    if (capture.starts) {
+      // Still the same blank session: nothing selected, in the same goal.
+      if (exists || state.selection.sessionId !== null || state.selection.route !== 'sessions'
+        || state.selection.goalId !== capture.starts.goalId) return conflict('target-changed');
+      if (Object.hasOwn(state.drafts, capture.target.sessionId)) return conflict('draft-changed');
+    } else {
+      if (state.selection.sessionId !== capture.target.sessionId || !exists) return conflict('target-changed');
+      if (state.drafts[capture.target.sessionId] !== capture.text) return conflict('draft-changed');
+    }
     if (state.revision !== capture.revision) return conflict('workspace-changed');
     if (!validSelection(currentSelection, capture.text) || currentSelection.start !== capture.selection.start
       || currentSelection.end !== capture.selection.end) return conflict('selection-changed');
     const text = capture.text.slice(0, capture.selection.start) + literalText + capture.text.slice(capture.selection.end);
     let next: DeskState;
     try {
-      next = applyCommand(state, { type: 'set-draft', sessionId: capture.target.sessionId, text, expectedText: capture.text }, options);
+      if (capture.starts) {
+        // The same command as typing into a blank session, under the reserved id.
+        let reserved: string | undefined = capture.target.sessionId;
+        const nextId = options.id ?? (() => crypto.randomUUID());
+        const id = () => { const value = reserved ?? nextId(); reserved = undefined; return value; };
+        next = applyCommand(state, { type: 'create-session', goalId: capture.starts.goalId, draft: text }, { ...options, id });
+        if (!next.sessions.some((session) => session.id === capture.target.sessionId)) throw new Error('not started');
+      } else {
+        next = applyCommand(state, { type: 'set-draft', sessionId: capture.target.sessionId, text, expectedText: capture.text }, options);
+      }
     } catch {
       return { kind: 'refused', reason: 'command-refused' };
     }
