@@ -216,6 +216,7 @@ request must meet (docs/agent-process.md "Plans stop after two Codex
 rounds"):
 
 - The `about` line is still shown by atlas-index's rule, but the title boost counts only words of the `about` line that are themselves read under rule 1: when atlas-index's rule picks a heading or line from inside fenced code, inline code or excluded front matter, those words get no boost and are not read at all; the file name boost still applies. A test gives two notes the same `# heading` only inside fenced code and checks it adds nothing to either note's weights ([thread](https://github.com/CloudworkSystems/open-convo/pull/303#discussion_r4480225564)).
+- A generated index is recognized with atlas-index's exported `isGeneratedIndex` (imported through `src/index.mjs`), so one that starts with a byte-order mark is left out too. A test adds a BOM-prefixed generated index and checks it never appears and changes no score ([thread](https://github.com/CloudworkSystems/open-convo/pull/303#discussion_r4480247781)).
 
 ## Out Of Scope For This Slice
 
