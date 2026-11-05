@@ -56,24 +56,40 @@ function load() {
     const actualLog = fs.readFileSync(path.join(dir, ".log/log.jsonl"), "utf8");
     if (expectedLog === actualLog) {
       const mismatch = renderWrites(current).some((w) => !fs.existsSync(path.join(dir, w.path)) || fs.readFileSync(path.join(dir, w.path), "utf8") !== w.text);
-      if (mismatch) { interrupted = true; save(current); }
+      const history = JSON.parse(fs.readFileSync(committedPath(), 'utf8'));
+      const pending = JSON.stringify(history.at(-1)) !== JSON.stringify(current) || fs.existsSync(committedPath() + '.tmp') || fs.existsSync(statePath() + '.tmp');
+      if (mismatch || pending) { interrupted = true; save(current, false, true); }
       return current;
     }
     interrupted = true;
     const recovered = JSON.parse(fs.readFileSync(committedPath(), "utf8")).findLast(s => renderWrites(s).find(w => w.path === '.log/log.jsonl').text === actualLog);
     if (!recovered) fail("The saved log has no complete sample state.");
-    save(recovered);
+    save(recovered, false, true);
     return recovered;
   } catch {
-    if (fs.existsSync(committedPath())) { interrupted = true; const recovered = JSON.parse(fs.readFileSync(committedPath(), "utf8")).at(-1); save(recovered); return recovered; }
+    if (fs.existsSync(committedPath())) { interrupted = true; const recovered = JSON.parse(fs.readFileSync(committedPath(), "utf8")).at(-1); save(recovered, false, true); return recovered; }
     fail("The last change didn't finish and was not saved.");
   }
 }
 function atomic(file, text) { const full = path.resolve(dir, file); if (full !== marker && !full.startsWith(dir + path.sep)) fail("A sample write tried to leave the sample folder."); fs.mkdirSync(path.dirname(full), { recursive: true }); const temp = full + ".tmp"; fs.writeFileSync(temp, text); afterWrite(`${file}:temporary`); fs.renameSync(temp, full); afterWrite(`${file}:renamed`); }
-function save(next, purgeFirst = false) {
+function save(next, purgeFirst = false, recovering = false) {
   const writes = renderWrites(next); const log = writes.find((w) => w.path === ".log/log.jsonl");
   if (purgeFirst) { atomic(".purge-first.json", JSON.stringify(next, null, 2) + "\n"); atomic(log.path, log.text); }
-  const history = !purgeFirst && fs.existsSync(committedPath()) ? JSON.parse(fs.readFileSync(committedPath(), 'utf8')) : [];
+  let history = !purgeFirst && fs.existsSync(committedPath()) ? JSON.parse(fs.readFileSync(committedPath(), 'utf8')) : [];
+  if (recovering) {
+    const index = history.findLastIndex(state => JSON.stringify(state) === JSON.stringify(next));
+    const expected = new Set(writes.map(write => write.path));
+    const discarded = history.slice(index + 1).flatMap(state => renderWrites(state)).map(write => write.path);
+    // Keep the pending history until cleanup completes, so an interrupted cleanup retries.
+    for (const file of new Set(discarded)) if (!expected.has(file)) {
+      for (const suffix of ['', '.tmp']) {
+        const full = path.resolve(dir, file + suffix);
+        if (!full.startsWith(dir + path.sep)) fail('A sample cleanup tried to leave the sample folder.');
+        if (fs.existsSync(full)) { fs.rmSync(full); afterWrite(`${file}${suffix}:discarded`); }
+      }
+    }
+    history = index >= 0 ? history.slice(0, index + 1) : [];
+  }
   if (!history.some(s => JSON.stringify(s) === JSON.stringify(next))) history.push(next);
   atomic('.sample-committed.json', JSON.stringify(history, null, 2) + '\n');
   atomic(".sample-state.json", JSON.stringify(next, null, 2) + "\n");
