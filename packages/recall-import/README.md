@@ -69,7 +69,31 @@ Recall owns the conversion of export text into contract items. A filename or hea
 | Source id: 1–64 lowercase letters/digits/hyphens, starting with a letter | Reader configuration error. Source name must be nonblank text; optional emptyGuidance must be nonblank text. Neither has a numeric length cap. |
 | Result: items, skipped, and warnings arrays | Every item field is required except extra. Skipped entries require a safe sourcePath and nonblank reason; warnings require nonblank text naming a file. Invalid author-produced records are reader errors. |
 | Repeatability: identical input must give identical output | Reader error if the comparison differs. |
-| Conversion time: importedAt must be supplied as nonempty text | Caller error if absent; the command supplies it. |
+| Conversion time: importedAt must be a real ISO timestamp with an explicit UTC offset | Caller error if absent/invalid; the command supplies it when omitted. Stored as UTC with exactly three fractional digits. |
+
+## Accepted command and API inputs
+
+Flags may appear only once. Unknown flags/options, missing/empty values, and values supplied to switches are refused before opening files. Path components must be at most 255 UTF-8 bytes and contain no control characters or `..` segments. Input and Atlas folders must be separate, with neither inside the other. Filesystem metadata is checked before reading export content; existing Atlas/source roots must be real folders.
+
+| Flag or API option | Accepted form |
+| --- | --- |
+| `--in` | Required readable, unzipped export-folder path, absolute or relative. |
+| `--atlas` | Required absolute or relative Atlas-folder path; missing folders may be created in write mode. |
+| `--source` | Registered source id: 1–64 lowercase letters/digits/hyphens, starting with a letter. Defaults to `recall`. |
+| `--imported-at`, `toNotes.importedAt` | `YYYY-MM-DDTHH:mm:ss[.SSS]Z` or an explicit `±HH:mm` offset. Seconds are required; fractional seconds may contain 1–3 digits. Years are 0001–9999, hours 00–23, minutes/seconds 00–59, with real calendar dates and valid offset fields. No implicit timezone, leap-second value, or normalization of impossible dates. |
+| `--write` | Switch without a value; permits writes. |
+| `--dry-run` | Switch without a value; explicit read-only preview, also the default when `--write` is absent. Cannot be combined with `--write`. |
+| `--json` | Switch without a value; emits the report as JSON. |
+| `unlock <path>` | Exactly one absolute `sources/<id>/.import.lock.reclaim` path; the owner must be confirmed dead on this computer before removal. |
+| `runImport(argv, options)` | String argument array and a plain options object. Supported options are `sources`, `hashKey`, `beforeRename`, `afterRename`, and `afterReclaimLock`. |
+| `options.sources` | Nonempty array of validated source objects with unique ids. |
+| `options.hashKey`, `toNotes.hashKey` | Trusted deterministic function returning exactly 64 hexadecimal characters; used for collision tests. |
+| Callback options | Trusted functions used by tests; non-functions are refused. |
+| `toNotes(items, options)` | Validated items plus only `source`, `importedAt`, `manifest`, and `hashKey`. Source metadata is validated at this boundary too. |
+| `toNotes.manifest` | Object whose own keys are safe source keys and whose records contain safe `.md` paths under the selected source folder. |
+| Limits | Fixed, frozen package constants. CLI/API overrides are unsupported and refused. |
+
+The normalized stored timestamp is **UTC `YYYY-MM-DDTHH:mm:ss.SSSZ`**, for example `2026-11-05T12:00:00.000Z`. The same normalization runs in the CLI and library. Parsing an explicitly supplied timestamp never reads the current clock. Source content such as `created` remains source text under its existing contract; it is not treated as the import command's timestamp.
 
 ## Not included
 

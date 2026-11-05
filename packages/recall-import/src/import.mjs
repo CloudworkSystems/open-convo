@@ -5,6 +5,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { checkSource, limits, sources as registeredSources, toNotes, validateSource } from './sources.mjs';
+import { normalizeTime, optionObject, checkHashKey } from './validation.mjs';
 
 const digest = text => createHash('sha256').update(text).digest('hex');
 const sourceDigest = text => digest(text.replace(/^imported: .*$/m, 'imported:'));
@@ -58,14 +59,47 @@ function reconcilePending(manifest, atlas, sourceRoot, inspect, messages) {
 
 function parseArgs(argv) {
   const out = { write: false, json: false, source: 'recall' };
+  const seen = new Set();
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === '--write' || arg === '--json') out[arg.slice(2)] = true;
-    else if (['--in', '--atlas', '--source', '--imported-at'].includes(arg)) out[arg.slice(2).replaceAll('-', '')] = argv[++i];
-    else throw new Error(`Unknown option "${arg}".`);
+    if (!['--write', '--dry-run', '--json', '--in', '--atlas', '--source', '--imported-at'].includes(arg)) throw new Error(`${arg}: unknown flag; use --in, --atlas, --source, --imported-at, --write, --dry-run or --json.`);
+    if (seen.has(arg)) throw new Error(`${arg}: repeated flag; supply it only once.`);
+    seen.add(arg);
+    if (['--write', '--dry-run', '--json'].includes(arg)) {
+      if (i + 1 < argv.length && !String(argv[i + 1]).startsWith('--')) throw new Error(`${arg}: expected a switch without a value.`);
+      if (arg !== '--dry-run') out[arg.slice(2)] = true;
+    } else {
+      const value = argv[++i];
+      if (typeof value !== 'string' || !value.trim() || value.startsWith('--')) throw new Error(`${arg}: expected one nonempty value after the flag.`);
+      out[arg.slice(2).replaceAll('-', '')] = value;
+    }
   }
-  if (!out.in || !out.atlas) throw new Error('Use --in <export folder> and --atlas <atlas folder>.');
+  if (seen.has('--write') && seen.has('--dry-run')) throw new Error('--dry-run: use either --dry-run or --write, not both.');
+  if (!out.in) throw new Error('--in: expected an unzipped export-folder path.');
+  if (!out.atlas) throw new Error('--atlas: expected an Atlas folder path.');
+  checkPath(out.in, '--in'); checkPath(out.atlas, '--atlas');
+  if (!/^[a-z][a-z0-9-]{0,63}$(?![\s\S])/.test(out.source)) throw new Error('--source: expected 1 to 64 lowercase letters, digits or hyphens, starting with a letter.');
+  if (out.importedat !== undefined) out.importedat = normalizeTime(out.importedat, '--imported-at');
   return out;
+}
+
+function checkPath(value, label) {
+  if (typeof value !== 'string' || !value.trim() || /[\u0000-\u001f\u007f-\u009f]/.test(value) || value.split('/').includes('..') || value.split('/').some(part => Buffer.byteLength(part) > 255)) throw new Error(`${label}: expected a nonempty folder path, without controls, '..' segments or components over 255 UTF-8 bytes.`);
+}
+
+function checkCommandOptions(options) {
+  optionObject(options, 'runImport', ['sources', 'hashKey', 'beforeRename', 'afterRename', 'afterReclaimLock']);
+  for (const name of ['beforeRename', 'afterRename', 'afterReclaimLock']) if (options[name] !== undefined && typeof options[name] !== 'function') throw new Error(`${name}: expected a callback function.`);
+  checkHashKey(options.hashKey);
+  const list = options.sources === undefined ? registeredSources : options.sources;
+  if (!Array.isArray(list) || !list.length) throw new Error('sources: expected a nonempty array of valid source objects.');
+  const ids = new Set();
+  for (const source of list) {
+    try { validateSource(source); } catch (error) { throw new Error(`sources/--source: ${error.message}`); }
+    if (ids.has(source.id)) throw new Error('sources: expected unique source ids.');
+    ids.add(source.id);
+  }
+  return list;
 }
 
 function mkdirSafe(dir, root) {
@@ -159,9 +193,12 @@ function takeLock(lock, messages, options) {
 }
 
 export function runImport(argv, options = {}) {
+  if (!Array.isArray(argv)) throw new Error('argv: expected an array of command-line flags and string values.');
+  const sourceList = checkCommandOptions(options);
   if (argv[0] === 'unlock') {
     const reclaim = argv[1];
-    if (argv.length !== 2 || !path.isAbsolute(reclaim || '') || !reclaim.endsWith('/.import.lock.reclaim')) throw new Error('Use unlock with the absolute reclaim-lock path printed by the command.');
+    checkPath(reclaim, 'unlock');
+    if (argv.length !== 2 || !path.isAbsolute(reclaim) || !/\/sources\/[a-z][a-z0-9-]{0,63}\/\.import\.lock\.reclaim$/.test(reclaim)) throw new Error('unlock: expected the absolute sources/<id>/.import.lock.reclaim path printed by the command.');
     const info = lockInfo(reclaim);
     if (!info || info.host !== os.hostname() || !Number.isInteger(info.pid) || info.pid <= 0 || alive(info) || fs.lstatSync(reclaim).isSymbolicLink()) throw new Error(`Cannot unlock "${reclaim}": its process is running or cannot be confirmed gone.`);
     const before = fs.readFileSync(reclaim, 'utf8');
@@ -169,13 +206,20 @@ export function runImport(argv, options = {}) {
     fs.unlinkSync(reclaim);
     return { cards: 0, notes: 0, skipped: [], warnings: [], messages: [`Removed recovery lock "${reclaim}".`] };
   }
-  const args = parseArgs(argv), sourceList = options.sources || registeredSources;
+  const args = parseArgs(argv);
   const source = sourceList.find(item => item.id === args.source);
-  if (!source) throw new Error(`Unknown source "${args.source}".`);
+  if (!source) throw new Error(`--source: unknown source "${args.source}"; select a registered id: ${sourceList.map(item => item.id).join(', ')}.`);
   validateSource(source);
   const input = path.resolve(args.in), atlas = path.resolve(args.atlas);
+  const overlaps = (parent, child) => { const relative = path.relative(parent, child); return !relative || !relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative); };
+  if (overlaps(input, atlas) || overlaps(atlas, input)) throw new Error('--atlas: expected a folder separate from --in, with neither folder inside the other.');
+  for (const folder of [atlas, path.join(atlas, 'sources'), path.join(atlas, 'sources', source.id)]) {
+    let stat;
+    try { stat = fs.lstatSync(folder); } catch (error) { if (error.code === 'ENOENT') continue; throw new Error(`--atlas: expected accessible real folders; ${error.message}`); }
+    if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error(`--atlas: refusing non-folder or symbolic link "${folder}"; expected real folders for the selected source.`);
+  }
   let files, skipped;
-  try { ({ files, skipped } = readExport(input, source.id !== 'recall')); } catch (e) { if (e.code === 'EACCES') throw new Error(`Could not read "${input}". Check that it was unzipped and is readable.`); throw e; }
+  try { ({ files, skipped } = readExport(input, source.id !== 'recall')); } catch (e) { throw new Error(`--in: ${e.message}. Expected an unzipped readable export folder.`); }
   const result = checkSource(source, files);
   result.skipped.push(...skipped);
   const sourceRoot = path.join(atlas, 'sources', source.id), manifestFile = path.join(sourceRoot, '.import-manifest.json');

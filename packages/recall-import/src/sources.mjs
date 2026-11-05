@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { normalizeTime, optionObject, checkHashKey } from './validation.mjs';
 
 export const limits = Object.freeze({ cards: 20_000, cardBytes: 1024 * 1024, totalBytes: 512 * 1024 * 1024 });
 const ID = /^[a-z][a-z0-9-]{0,63}$/;
@@ -13,7 +14,7 @@ const cardError = message => { throw new CardInputError(message); };
 const titleSegments = new Intl.Segmenter('und', { granularity: 'grapheme' });
 
 export function validateSource(source) {
-  if (!plain(source) || typeof source.id !== 'string' || !ID.test(source.id)) fail(`Refusing source id "${source?.id ?? ''}". Use 1 to 64 lowercase letters, digits or hyphens, starting with a letter.`);
+  if (!plain(source) || typeof source.id !== 'string' || source.id !== source.id.trim() || !ID.test(source.id)) fail(`Refusing source id "${source?.id ?? ''}". Use 1 to 64 lowercase letters, digits or hyphens, starting with a letter.`);
   if (typeof source.name !== 'string' || !source.name.trim()) fail(`Source "${source.id}" needs a name.`);
   if (source.emptyGuidance !== undefined && (typeof source.emptyGuidance !== 'string' || !source.emptyGuidance.trim())) fail(`Source "${source.id}" needs emptyGuidance to be nonempty text when supplied.`);
   if (typeof source.read !== 'function') fail(`Source "${source.id}" needs a read(files) function.`);
@@ -173,10 +174,17 @@ function addSuffix(notePath, suffix) {
   return notePath.slice(0, slash + 1) + utf8Prefix(stem, 255 - Buffer.byteLength(tail)) + tail;
 }
 
-export function toNotes(items, { source, importedAt, manifest = Object.create(null), hashKey = hash } = {}) {
+export function toNotes(items, options = {}) {
+  optionObject(options, 'toNotes', ['source', 'importedAt', 'manifest', 'hashKey']);
+  let { source, importedAt, manifest = Object.create(null), hashKey = hash } = options;
   validateSource(source);
+  importedAt = normalizeTime(importedAt);
+  checkHashKey(hashKey);
+  if (manifest === null || typeof manifest !== 'object' || Array.isArray(manifest)) fail('manifest: expected an object mapping source keys to saved note records.');
   manifest = dataMap(manifest);
-  if (typeof importedAt !== 'string' || !importedAt) fail('importedAt must be supplied.');
+  for (const [key, entry] of Object.entries(manifest)) {
+    if (!validKey(key) || !plain(entry) || typeof entry.path !== 'string' || !entry.path.startsWith(`sources/${source.id}/`) || !validKey(entry.path) || !entry.path.endsWith('.md') || entry.path.split('/').some(part => Buffer.byteLength(part) > 255)) fail(`manifest: expected safe keys and .md paths under sources/${source.id}/; invalid record for "${key}".`);
+  }
   validateResult(source, { items, skipped: [], warnings: [] });
   const base = `sources/${source.id}/`;
   const candidates = items.map(item => {
@@ -201,6 +209,7 @@ export function toNotes(items, { source, importedAt, manifest = Object.create(nu
     if (!ownValue(manifest, entry.item.key)?.path && used.has(entry.path.toLowerCase())) entry.needsSuffix = true;
     if (entry.needsSuffix && !ownValue(manifest, entry.item.key)?.path) {
       const digest = hashKey(entry.item.key);
+      if (typeof digest !== 'string' || !/^[0-9a-f]{64}$(?![\s\S])/i.test(digest)) fail('hashKey: expected 64 hexadecimal characters for every source key.');
       let found;
       for (const length of [8, 16, 64]) {
         const next = addSuffix(entry.path, digest.slice(0, length));
