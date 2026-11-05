@@ -25,3 +25,5 @@ Other verbs are `propose`, `keep`, `skip`, `correct`, `forget`, `restore`, `undo
 - Sharing exposes the source entry in another space without making a second entry; undo removes that exposure.
 - Index size is checked after keep, correct, move, share, restore, and undo even when the changed operation usually leaves its line count unchanged.
 - Purge writes its redacted log before other files so an interrupted driver run cannot make purged text recoverable. Purge cannot be undone.
+- The driver keeps complete sample states keyed by their log contents so replacing a log with an older complete log restores that exact state. Purge replaces that recovery history with only the redacted state. Recovery honors a complete purge marker even if interruption happened before its rename.
+- Tests call the same exported `runSample` function as the command line. Its optional `afterWrite` callback simulates interruption after each temporary-file write and rename without launching processes or reading the clock.
