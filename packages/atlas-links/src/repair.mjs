@@ -809,7 +809,19 @@ async function runWrite(root, args, scanned, snapshot, journal, io, stdout) {
     before: sha256Bytes(scanned.bytes.get(item.path)),
     after: sha256Text(item.text),
   }));
-  if (planned.length) saveJson(root, JOURNAL, journalJson(planned));
+  // A note finished by an earlier interrupted run is not in this plan. Keep its
+  // journal entry so a second interruption can still prove that move.
+  const plannedKeys = new Set(planned.map(item => item.path.normalize('NFC')));
+  const carried = [];
+  if (journal) {
+    for (const entry of journal.notes) {
+      if (plannedKeys.has(entry.path.normalize('NFC'))) continue;
+      if (hashes.get(entry.path) !== entry.after) continue;
+      carried.push({ path: entry.path, before: entry.before, after: entry.after });
+    }
+  }
+  const journalEntries = () => [...planned, ...carried];
+  if (journalEntries().length) saveJson(root, JOURNAL, journalJson(journalEntries()));
   const skipped = [];
   const written = [];
   const writtenText = new Map();
@@ -880,7 +892,7 @@ async function runWrite(root, args, scanned, snapshot, journal, io, stdout) {
     if (entry && entry.after !== actualAfter) {
       entry.after = actualAfter;
       try {
-        saveJson(root, JOURNAL, journalJson(planned));
+        saveJson(root, JOURNAL, journalJson(journalEntries()));
       } catch (error) {
         try { unlinkSync(tmp); } catch { /* already gone */ }
         throw error;

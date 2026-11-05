@@ -300,6 +300,40 @@ test('a partial write is journaled before the rename so the next run can finish'
   }
 });
 
+test('a second interruption still repairs a link to a note the first run finished', async () => {
+  const dir = tempDir();
+  try {
+    writeNote(dir, 'old/m.md', 'See [n](../n.md).\n');
+    writeNote(dir, 'n.md', '# Enn\n');
+    writeNote(dir, 'p.md', 'See [m](old/m.md).\n');
+    writeNote(dir, 'q.md', 'See [m](old/m.md).\n');
+    assert.equal((await capture(['--dir', dir, '--record'])).code, 0);
+    move(dir, 'old/m.md', 'archive/m.md');
+    move(dir, 'n.md', 'plots/n.md');
+    await assert.rejects(
+      () => run(['--dir', dir, '--write'], { crashAfterWrites: 1, stdout() {}, stderr() {} }),
+      /Stopped before the snapshot/,
+    );
+    assert.match(readNote(dir, 'archive/m.md'), /plots\/n\.md/);
+    assert.match(readNote(dir, 'q.md'), /\(old\/m\.md\)/);
+    await assert.rejects(
+      () => run(['--dir', dir, '--write'], { crashAfterWrites: 1, stdout() {}, stderr() {} }),
+      /Stopped before the snapshot/,
+    );
+    assert.match(readNote(dir, 'p.md'), /archive\/m\.md/);
+    assert.match(readNote(dir, 'q.md'), /\(old\/m\.md\)/);
+    const journal = JSON.parse(readFileSync(path.join(dir, '.atlas-links', 'journal.json'), 'utf8'));
+    const kept = journal.notes.find(item => item.path === 'archive/m.md');
+    const moved = readFileSync(path.join(dir, 'archive', 'm.md'));
+    assert.equal(kept.after, createHash('sha256').update(moved).digest('hex'));
+    const third = await capture(['--dir', dir, '--write']);
+    assert.equal(third.code, 0, third.err);
+    assert.match(readNote(dir, 'q.md'), /archive\/m\.md/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('an untouched note edited during the pause is the hash stored in the snapshot', async () => {
   const dir = tempDir();
   try {
