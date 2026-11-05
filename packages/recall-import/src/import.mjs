@@ -131,10 +131,15 @@ export function runImport(argv, options = {}) {
   try { ({ files, skipped } = readExport(input, source.id !== 'recall')); } catch (e) { if (e.code === 'EACCES') throw new Error(`Could not read "${input}". Check that it was unzipped and is readable.`); throw e; }
   const result = checkSource(source, files);
   result.skipped.push(...skipped);
-  if (!result.items.length) return { cards: 0, notes: 0, skipped: result.skipped, warnings: result.warnings, messages: ["This folder has no Recall cards. In Recall's web app, open Settings, choose Export, unzip the download, then run this again on that folder."] };
-  const importedAt = args.importedat || new Date().toISOString();
   const sourceRoot = path.join(atlas, 'sources', source.id), manifestFile = path.join(sourceRoot, '.import-manifest.json');
   const messages = [];
+  if (!result.items.length) {
+    messages.push("This folder has no Recall cards. In Recall's web app, open Settings, choose Export, unzip the download, then run this again on that folder.");
+    // A genuinely first empty run writes nothing. An existing import still
+    // needs its lock, pending recovery, and removed-card reconciliation.
+    if (!args.write || !fs.existsSync(manifestFile)) return { cards: 0, notes: 0, skipped: result.skipped, warnings: result.warnings, messages };
+  }
+  const importedAt = args.importedat || new Date().toISOString();
   if (!args.write) {
     const converted = toNotes(result.items, { source, importedAt });
     return { cards: result.items.length, notes: converted.notes.length, skipped: result.skipped, warnings: [...result.warnings, ...converted.warnings], messages };
@@ -159,6 +164,17 @@ export function runImport(argv, options = {}) {
   takeLock(lock, messages, options);
   try {
     const manifest = safeJson(manifestFile); manifest.entries ||= {}; manifest.pending ||= {};
+    for (const [key, pending] of Object.entries(manifest.pending)) {
+      const relative = typeof pending.path === 'string' ? path.relative(sourceRoot, path.resolve(atlas, pending.path)) : '..';
+      if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) throw new Error(`Refusing pending path for "${key}" outside this source's folder.`);
+      const destination = path.join(sourceRoot, relative);
+      inspect(destination);
+      const diskHash = fs.existsSync(destination) ? digest(fs.readFileSync(destination)) : null;
+      const old = manifest.entries[key];
+      if (diskHash === pending.fullHash || !old) manifest.entries[key] = pending;
+      if (diskHash !== null && diskHash !== pending.fullHash && diskHash !== old?.fullHash) messages.push(`${pending.path}: kept, edited since the last import.`);
+      delete manifest.pending[key];
+    }
     const converted = toNotes(result.items, { source, importedAt, manifest: { ...manifest.pending, ...manifest.entries }, hashKey: options.hashKey });
     for (const note of converted.notes) inspect(path.join(atlas, note.path));
     const currentKeys = new Set(result.items.map(i => i.key));
