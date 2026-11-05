@@ -188,6 +188,7 @@ request must meet (docs/agent-process.md "Plans stop after two Codex
 rounds"):
 
 - A note matched only by its file name or about line (no searched content line holds a query word, or the note is empty) is still returned, with `line: null` and `lineNumber: null`. The command shows "(matched by its title)" in place of a line, never an unrelated first line. Tests cover an empty `seed-potatoes.md` and a note whose only match is its file name ([thread](https://github.com/CloudworkSystems/open-convo/pull/303#discussion_r4479814048)).
+- Generated files are left out before any ranking number is computed: `MAP.md` and generated folder indexes count toward no document frequency, note count or average length, so rebuilding the map or indexes never changes a real note's score or place. A test adds them to the sample and checks the real notes' scores and order are unchanged ([thread](https://github.com/CloudworkSystems/open-convo/pull/303#discussion_r4479923966)).
 - The owner trial covers every refusal the command promises, including a query over 500 characters and a `--dir` holding `.git` (trial steps 9 and 10) ([thread](https://github.com/CloudworkSystems/open-convo/pull/303#discussion_r4479836666)).
 
 ## Out Of Scope For This Slice
