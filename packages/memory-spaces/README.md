@@ -20,6 +20,8 @@ Other verbs are `propose`, `keep`, `skip`, `correct`, `forget`, `restore`, `undo
 
 ## Edge cases
 
+- `init` and `show` finish an interrupted initialization when the folder contains only `SAMPLE-ONLY` and optionally the first `.sample-committed.json.tmp`. That temporary file may be incomplete. Once a complete recovery history exists, normal recovery finishes the remaining files. An unrelated file prevents initialization from being retried.
+
 - An operation already reversed by Undo does not block earlier Undo operations. Undo records remain in the audit log, but are not forward dependencies. A second Undo of the same operation is refused explicitly. Capacity checks also skip reversed forward operations.
 - Purge always redacts records about an expired entry, including operations that were undone. Collision cleanup in unrelated records touches only `text`, `oldText`, and memory-text fields in snapshots, correction histories and candidate copies. IDs, actors, operation kinds, dates, labels and space names remain intact even when they equal forgotten text.
 

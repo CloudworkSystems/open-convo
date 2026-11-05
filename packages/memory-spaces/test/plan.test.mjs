@@ -302,6 +302,69 @@ test('Plan 11: byte deterministic operations and forbidden source APIs', () => {
 function temp(t) { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'invented-memory-')); t.after(() => fs.rmSync(dir, { recursive: true, force: true })); return dir; }
 function driver(dir, verb, data, options) { const output = []; runSample(['--dir', dir, verb, ...(data ? ['--data', JSON.stringify(data)] : [])], { output: s => output.push(s), ...options }); return output; }
 function seed(dir) { driver(dir, 'init'); driver(dir, 'propose', { id: 'p', actor: 'helper', candidate: { id: 'note', text: 'Invented blue cover.' } }); driver(dir, 'keep', { id: 'k', actor: 'person', candidateId: 'note', space: 'personal', subject: 'covers', label }); }
+
+test('P1 partial init recovers after every initialization write step', t => {
+  const points = [];
+  driver(temp(t), 'init', undefined, { afterWrite: p => points.push(p) });
+  for (const point of points) {
+    const dir = temp(t);
+    assert.throws(() => driver(dir, 'init', undefined, { afterWrite: p => { if (p === point) throw new Error('Invented init interruption'); } }), /Invented init interruption/);
+    const shown = driver(dir, 'show');
+    const state = JSON.parse(shown.at(-1));
+    assert.deepEqual(state.log, [], point);
+    for (const w of renderWrites(state)) assert.equal(fs.readFileSync(path.join(dir, w.path), 'utf8'), w.text, point);
+    assert.deepEqual(JSON.parse(driver(dir, 'show').at(-1)), state);
+  }
+});
+
+test('Init sweep: retry partial init without overwriting unrelated files', t => {
+  for (const content of [undefined, '[truncated invented temp']) {
+    const dir = temp(t); fs.writeFileSync(path.join(dir, 'SAMPLE-ONLY'), 'Invented sample data only.\n');
+    if (content) fs.writeFileSync(path.join(dir, '.sample-committed.json.tmp'), content);
+    driver(dir, 'init');
+    assert.deepEqual(JSON.parse(driver(dir, 'show').at(-1)).log, []);
+  }
+  const dir = temp(t); fs.writeFileSync(path.join(dir, 'SAMPLE-ONLY'), 'Invented sample data only.\n');
+  fs.writeFileSync(path.join(dir, 'unrelated.txt'), 'Invented unrelated file.');
+  assert.throws(() => driver(dir, 'init'), /empty folder/);
+  assert.throws(() => driver(dir, 'show'), /didn't finish/);
+  assert.equal(fs.readFileSync(path.join(dir, 'unrelated.txt'), 'utf8'), 'Invented unrelated file.');
+});
+
+test('Driver sweep: every changing verb recovers at every write step', t => {
+  for (const verb of ['propose', 'keep', 'skip', 'correct', 'forget', 'restore', 'undo', 'share', 'move', 'allowCloud', 'purge']) {
+    function prepare() {
+      const dir = temp(t); seed(dir);
+      if (['keep', 'skip'].includes(verb)) driver(dir, 'propose', { id: 'p-other', actor: 'helper', candidate: { id: 'other', text: 'Invented second note.' } });
+      if (['restore', 'purge'].includes(verb)) driver(dir, 'forget', { id: 'f', actor: 'person', entryId: 'note' });
+      return dir;
+    }
+    const data = { id: 'change', actor: 'person', entryId: 'note', candidateId: 'other', subject: 'covers', space: 'studio', label, text: 'Invented changed note.', opId: 'k', candidate: { id: 'other', text: 'Invented second note.' }, ...(verb === 'purge' ? { now: '2041-01-01T00:00:00Z' } : {}) };
+    const points = []; driver(prepare(), verb, data, { afterWrite: p => points.push(p) });
+    for (const point of points) {
+      const dir = prepare(); const before = JSON.parse(driver(dir, 'show').at(-1));
+      const complete = applyOperation(before, { type: verb, now: '2040-01-02T12:00:00.000Z', ...data }).state;
+      assert.throws(() => driver(dir, verb, data, { afterWrite: p => { if (p === point) throw new Error('Invented write interruption'); } }), /Invented write interruption/);
+      const recovered = JSON.parse(driver(dir, 'show').at(-1));
+      assert.ok([JSON.stringify(before), JSON.stringify(complete)].includes(JSON.stringify(recovered)), `${verb}: ${point}`);
+      if (verb === 'purge') assert.deepEqual(recovered.trash, [], point);
+      for (const w of renderWrites(recovered)) assert.equal(fs.readFileSync(path.join(dir, w.path), 'utf8'), w.text, `${verb}: ${point}`);
+      assert.deepEqual(JSON.parse(driver(dir, 'show').at(-1)), recovered);
+    }
+  }
+});
+
+test('Recovery sweep: interrupted init recovery remains recoverable at every write step', t => {
+  function partial() { const dir = temp(t); fs.writeFileSync(path.join(dir, 'SAMPLE-ONLY'), 'Invented sample data only.\n'); return dir; }
+  const points = []; driver(partial(), 'show', undefined, { afterWrite: p => points.push(p) });
+  for (const point of points) {
+    const dir = partial();
+    assert.throws(() => driver(dir, 'show', undefined, { afterWrite: p => { if (p === point) throw new Error('Invented recovery interruption'); } }), /Invented recovery interruption/);
+    const state = JSON.parse(driver(dir, 'show').at(-1));
+    assert.deepEqual(state.log, []);
+    for (const w of renderWrites(state)) assert.equal(fs.readFileSync(path.join(dir, w.path), 'utf8'), w.text, point);
+  }
+});
 test('Plan 12: sample marker refusal, successful run and interrupted recovery', t => {
   const dir = temp(t); assert.throws(() => driver(dir, 'show'), /This isn't a sample memory folder. Run init in an empty folder first./); assert.deepEqual(fs.readdirSync(dir), []);
   seed(dir); assert.equal(JSON.parse(driver(dir, 'show').at(-1)).subjects.personal.covers[0].text, 'Invented blue cover.');

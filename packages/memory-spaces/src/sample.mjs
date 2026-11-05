@@ -13,9 +13,10 @@ const [verb, ...values] = rest;
 if (!dir || !verb) fail("Use --dir <sample folder> <verb>.");
 const marker = path.join(dir, "SAMPLE-ONLY");
 if (verb === "init") {
-  if (fs.existsSync(dir) && fs.readdirSync(dir).length) fail("Init needs an empty folder.");
+  if (fs.existsSync(dir) && fs.readdirSync(dir).length && !partialInit()) fail("Init needs an empty folder.");
   fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(marker, "Invented sample data only.\n");
-  save(emptyState([{ id: "personal", name: "Personal", kind: "personal" }, { id: "studio", name: "Invented Studio", kind: "business" }]));
+  afterWrite('SAMPLE-ONLY:written');
+  save(initialState());
   output("Sample memory folder created."); return;
 }
 if (!fs.existsSync(marker)) fail("This isn't a sample memory folder. Run init in an empty folder first.");
@@ -32,7 +33,17 @@ const out = applyOperation(state, op); save(out.state, verb === "purge"); output
 function statePath() { return path.join(dir, ".sample-state.json"); }
 function committedPath() { return path.join(dir, ".sample-committed.json"); }
 function purgePath() { return path.join(dir, ".purge-first.json"); }
+function initialState() { return emptyState([{ id: 'personal', name: 'Personal', kind: 'personal' }, { id: 'studio', name: 'Invented Studio', kind: 'business' }]); }
+function partialInit() {
+  return fs.existsSync(marker) && fs.readdirSync(dir).every(name => ['SAMPLE-ONLY', '.sample-committed.json.tmp'].includes(name));
+}
 function load() {
+  if (partialInit()) {
+    interrupted = true;
+    const initial = initialState();
+    save(initial);
+    return initial;
+  }
   if (fs.existsSync(purgePath()) || fs.existsSync(purgePath() + '.tmp')) {
     interrupted = true;
     const purged = JSON.parse(fs.readFileSync(fs.existsSync(purgePath()) ? purgePath() : purgePath() + '.tmp', "utf8"));
