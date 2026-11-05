@@ -613,7 +613,7 @@ function titleEnd(text, start) {
 }
 
 function plainImageLinks(text, code) {
-  const references = new Map();
+  const references = new Map(), referenceSyntax = new Map();
   // Definitions are collected before uses, so their order in the card does not matter.
   for (const line of text.matchAll(/[^\n]*(?:\n|$)/g)) {
     const indentation = /^(?:\uFEFF)? {0,3}(?=\[)/.exec(line[0]);
@@ -626,67 +626,105 @@ function plainImageLinks(text, code) {
     if (cursor < 0 || (code[cursor] && text[cursor] !== '<')) continue;
     const destination = destinationAt(text, cursor);
     const label = referenceLabel(text.slice(start + 1, end));
-    if (label && !references.has(label)) references.set(label, destination ? destination.url : null);
+    if (label && !references.has(label)) {
+      references.set(label, destination ? destination.url : null);
+      if (destination) {
+        let end = destination.end;
+        const space = linkSpace(text, end);
+        const title = space > end ? titleEnd(text, space) : -1;
+        if (title >= 0) end = title;
+        referenceSyntax.set(label, text.slice(cursor, end));
+      }
+    }
   }
-  const chunks = [];
+  function linkAt(start, close) {
+    const label = referenceLabel(text.slice(start + 1, close));
+    let end = close + 1;
+    if (text[end] === '(') {
+      let cursor = linkSpace(text, end + 1);
+      if (cursor < 0) return { uncertain: true };
+      const destination = destinationAt(text, cursor);
+      if (!destination) return { uncertain: true };
+      cursor = linkSpace(text, destination.end);
+      if (cursor < 0) return { uncertain: true };
+      if (['"', "'", '('].includes(text[cursor])) {
+        if (cursor === destination.end) return { uncertain: true };
+        const afterTitle = titleEnd(text, cursor);
+        if (afterTitle < 0) return { uncertain: true };
+        cursor = linkSpace(text, afterTitle);
+      }
+      if (cursor < 0 || text[cursor] !== ')') return { uncertain: true };
+      return { end: cursor + 1, url: destination.url, suffix: text.slice(end, cursor + 1) };
+    }
+    let target = label, explicit = false;
+    if (text[end] === '[') {
+      const referenceEnd = bracketEnd(text, end);
+      if (referenceEnd < 0) return { uncertain: true };
+      const named = referenceLabel(text.slice(end + 1, referenceEnd));
+      target = named || label; explicit = !!named;
+      end = referenceEnd + 1;
+    }
+    if (!references.has(target)) return null;
+    if (references.get(target) === null) return { uncertain: true };
+    return { end, url: references.get(target), suffix: explicit ? text.slice(close + 1, end) : `(${referenceSyntax.get(target)})` };
+  }
+  // Alt text must remain text, even if it contains autolinks or bracket syntax.
+  const altText = value => value.replace(/<((?:https?:\/\/|mailto:)[^<>]+)>/gi, '$1')
+    .replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~])/g, '$1')
+    .replace(/[\\`*_[\]<>!]/g, '\\$&') || 'image';
+  const chunks = [], imageLinks = [];
   let previous = 0, converted = false, uncertain = false;
   for (let i = 0; i < text.length; i++) {
-    if (text[i] === '<' && (!code[i] || code[i] === 2) && !escapedAt(text, i) && /^<img(?:[\s/>]|$)/i.test(text.slice(i))) {
-      // HTML attribute grammars and srcset may carry multiple destinations.
-      // Preserve the tag and warn rather than guessing which bytes to rewrite.
-      uncertain = true;
+    if (text[i] === '<' && (!code[i] || code[i] === 2) && !escapedAt(text, i) && /^<img(?:[\s/>]|$)/i.test(text.slice(i))) uncertain = true;
+    // Parse a surrounding link before considering its child images. This avoids
+    // ever emitting nested links, and keeps an inline/full-reference suffix intact.
+    if (text[i] === '[' && !code[i] && !escapedAt(text, i) && (text[i - 1] !== '!' || escapedAt(text, i - 1))) {
+      const close = bracketEnd(text, i, code);
+      const outer = close >= 0 ? linkAt(i, close) : null;
+      if (outer?.end) {
+        const labels = [];
+        let last = i + 1, changed = false;
+        for (let child = i + 1; child < close; child++) {
+          if (text[child] !== '!' || text[child + 1] !== '[' || code[child] || escapedAt(text, child)) continue;
+          const altEnd = bracketEnd(text, child + 1, code);
+          const image = altEnd >= 0 ? linkAt(child + 1, altEnd) : null;
+          if (!image?.end || image.end > close || !remoteImage(image.url)) continue;
+          const alt = altText(text.slice(child + 2, altEnd));
+          labels.push(text.slice(last, child), alt);
+          // Angle destinations with encoded delimiters remain valid plain links.
+          const url = decodedDestination(image.url).replace(/[<>\s]/g, character => encodeURIComponent(character));
+          imageLinks.push(`[${alt}](<${url}>)`);
+          last = image.end; child = image.end - 1; changed = true;
+        }
+        if (changed) {
+          labels.push(text.slice(last, close));
+          chunks.push(text.slice(previous, i), `[${labels.join('')}]${outer.suffix}`);
+          previous = outer.end; i = outer.end - 1; converted = true; continue;
+        }
+      }
     }
     if (text[i] !== '!' || text[i + 1] !== '[' || code[i] || escapedAt(text, i)) continue;
     const close = bracketEnd(text, i + 1, code);
     if (close < 0) { uncertain = true; continue; }
-    const label = referenceLabel(text.slice(i + 2, close));
-    let end = close + 1, remote = false;
-    if (text[end] === '(') {
-      let cursor = linkSpace(text, end + 1);
-      if (cursor < 0) { uncertain = true; continue; }
-      const destination = destinationAt(text, cursor);
-      if (!destination) { uncertain = true; continue; }
-      cursor = linkSpace(text, destination.end);
-      if (cursor < 0) { uncertain = true; continue; }
-      if (['"', "'", '('].includes(text[cursor])) {
-        if (cursor === destination.end) { uncertain = true; continue; }
-        const afterTitle = titleEnd(text, cursor);
-        if (afterTitle < 0) { uncertain = true; continue; }
-        cursor = linkSpace(text, afterTitle);
-      }
-      if (cursor < 0 || text[cursor] !== ')') { uncertain = true; continue; }
-      remote = remoteImage(destination.url);
-      end = cursor + 1;
-    } else if (text[end] === '[') {
-      const referenceEnd = bracketEnd(text, end);
-      if (referenceEnd < 0) { uncertain = true; continue; }
-      const target = references.get(referenceLabel(text.slice(end + 1, referenceEnd)) || label);
-      if (target === null) uncertain = true;
-      remote = remoteImage(target || '');
-      end = referenceEnd + 1;
-    } else {
-      const target = references.get(label);
-      if (target === null) uncertain = true;
-      remote = remoteImage(target || '');
-    }
-    if (!remote) continue;
-    chunks.push(text.slice(previous, i), text.slice(i + 1, end));
-    previous = end;
-    i = end - 1;
-    converted = true;
+    const image = linkAt(i + 1, close);
+    if (image?.uncertain) uncertain = true;
+    if (!image?.end || !remoteImage(image.url)) continue;
+    chunks.push(text.slice(previous, i), text.slice(i + 1, image.end));
+    previous = image.end; i = image.end - 1; converted = true;
   }
   chunks.push(text.slice(previous));
-  return { body: chunks.join(''), converted, uncertain };
+  return { body: chunks.join(''), converted, uncertain, imageLinks };
 }
 
 function readMarkdown(text) {
   const code = markdownCodeMask(text);
   let heading;
   for (const match of text.matchAll(/^(?:\uFEFF)? {0,3}# ([^\r\n]+)\r?$/gm)) if (!code[match.index]) { heading = match[1]; break; }
-  let { body, converted, uncertain } = plainImageLinks(text, code);
+  let { body, converted, uncertain, imageLinks } = plainImageLinks(text, code);
   if (converted || uncertain) {
     const eol = /\r?\n(?=[^\n]*$)/.exec(body)?.[0] || '\n';
     body += `${body.endsWith('\n') ? '' : eol}${eol}Images in this card were not imported. Their links may stop working.${eol}`;
+    if (imageLinks.length) body += imageLinks.map(link => `- ${link}${eol}`).join('');
   }
   return { heading, body };
 }
