@@ -64,15 +64,16 @@ test('Plan 4: card, count and total limits report and refuse before writing', ()
   const f = fixture();
   assert.match(source.read([{ path: 'large.md', text: 'x'.repeat(limits.cardBytes + 1) }]).skipped[0].reason, /1048577 bytes; limit is 1048576/);
   // Feed the command through its filesystem boundary without creating 512 MiB on disk.
-  const original = fs.readdirSync, read = fs.readFileSync;
+  const original = fs.readdirSync, read = fs.readFileSync, stat = fs.lstatSync;
   let mode = 'count';
   fs.readdirSync = (dir, opts) => dir === f.input ? Array.from({ length: mode === 'count' ? 20001 : 513 }, (_, i) => ({ name: `${i}.md`, isSymbolicLink: () => false, isDirectory: () => false, isFile: () => true })) : original(dir, opts);
   const megabyte = 'x'.repeat(limits.cardBytes);
   fs.readFileSync = (file, ...rest) => String(file).startsWith(f.input + path.sep) ? (mode === 'count' ? '' : megabyte) : read(file, ...rest);
+  fs.lstatSync = (file, ...rest) => String(file).startsWith(f.input + path.sep) ? { size: mode === 'count' ? 0 : limits.cardBytes, isFile: () => true, isSymbolicLink: () => false } : stat(file, ...rest);
   try {
     assert.throws(() => f.run(), /card limit is 20000/); assert.equal(fs.existsSync(f.atlas), false);
     mode = 'total'; assert.throws(() => f.run(), /536870912 bytes/); assert.equal(fs.existsSync(f.atlas), false);
-  } finally { fs.readdirSync = original; fs.readFileSync = read; }
+  } finally { fs.readdirSync = original; fs.readFileSync = read; fs.lstatSync = stat; }
 });
 
 test('Plan 5: collision additions and removals preserve manifest paths', () => {

@@ -64,6 +64,7 @@ function resultDigest(result) {
 export function checkSource(source, files) {
   validateSource(source);
   if (!Array.isArray(files)) fail('Files must be a list.');
+  checkFiles(files);
   // Copy only the small records, sharing immutable strings rather than cloning
   // every card's text. Readers get the same read-only input on both calls.
   const input = Object.freeze(files.map(file => Object.freeze({ path: file.path, text: file.text })));
@@ -74,20 +75,32 @@ export function checkSource(source, files) {
   return first;
 }
 
-function scalar(value) {
-  const text = String(value);
-  return /^[A-Za-z0-9 _./:@+-]+$/.test(text) && text.trim() === text ? text : JSON.stringify(text);
+function checkFiles(files) {
+  let count = 0, total = 0;
+  for (const file of files) if (/\.md$/i.test(file.path) && ++count > limits.cards) fail(`Refusing ${count} files. The card limit is ${limits.cards}.`);
+  for (const file of files) {
+    total += Buffer.byteLength(file.text);
+    if (total > limits.totalBytes) fail(`Refusing export larger than ${limits.totalBytes} bytes.`);
+  }
 }
 
-function frontLines(key, value, indent = '', keepText = false) {
-  const emit = v => keepText && /^(?:[+-]?(?:\d|\.\d)|null$|true$|false$|yes$|no$|on$|off$|~$|\.inf$|\.nan$)/i.test(String(v)) ? JSON.stringify(String(v)) : scalar(v);
-  if (Array.isArray(value)) return value.length ? [`${indent}${key}:`, ...value.map(v => `${indent}  - ${emit(v)}`)] : [`${indent}${key}: []`];
+function scalar(value, keepText = true) {
+  const text = String(value);
+  const typed = /^(?:[+-]?(?:\d|\.\d)|null$|true$|false$|yes$|no$|on$|off$|~$|\.inf$|\.nan$)/i.test(text);
+  const syntax = /^[@:]|^-(?:\s|$)|:\s/.test(text);
+  return !(keepText && typed) && !syntax && /^[A-Za-z0-9 _./:@+-]+$/.test(text) && text.trim() === text ? text : JSON.stringify(text);
+}
+
+function frontLines(key, value, indent = '', keepText = true) {
+  const emit = v => scalar(v, keepText);
+  const label = scalar(key);
+  if (Array.isArray(value)) return value.length ? [`${indent}${label}:`, ...value.map(v => `${indent}  - ${emit(v)}`)] : [`${indent}${label}: []`];
   if (plain(value)) {
-    const lines = [`${indent}${key}:`];
+    const lines = [`${indent}${label}:`];
     for (const [child, childValue] of Object.entries(value)) lines.push(...frontLines(child, childValue, `${indent}  `, keepText));
     return lines;
   }
-  return [`${indent}${key}: ${emit(value)}`];
+  return [`${indent}${label}: ${emit(value)}`];
 }
 
 function slugParts(key) {
@@ -137,7 +150,7 @@ export function toNotes(items, { source, importedAt, manifest = {}, hashKey = ha
     used.add(folded);
   }
   const notes = candidates.map(({ item, path }) => {
-    const lines = ['---', `kind: source`, ...frontLines('title', item.title), ...frontLines('description', item.title), ...frontLines('source', source.name), 'label: from a source', 'status: unchecked', ...frontLines('imported', importedAt)];
+    const lines = ['---', `kind: source`, ...frontLines('title', item.title), ...frontLines('description', item.title), ...frontLines('source', source.name), 'label: from a source', 'status: unchecked', ...frontLines('imported', importedAt, '', false)];
     if (item.url) lines.push(...frontLines('url', item.url));
     if (item.tags.length) lines.push(...frontLines('tags', item.tags));
     if (item.created) lines.push(...frontLines('created', item.created));
@@ -158,7 +171,21 @@ function parseFrontMatter(text, sourcePath) {
     const match = /^([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$/.exec(line);
     if (!match) return { fields: {}, body: text, warning: `${sourcePath}: front matter could not be read and was kept in the card.` };
     const [, key, value] = match;
-    fields[key] = key === 'tags' ? value.replace(/^\[|\]$/g, '').split(',').map(v => v.trim()).filter(Boolean) : value.replace(/^(["'])(.*)\1$/, '$2');
+    const unquote = text => text.replace(/^(["'])(.*)\1$/, '$2');
+    if (key === 'tags') {
+      const tags = [];
+      const rawTags = value.replace(/^\[|\]$/g, '');
+      let start = 0;
+      for (let i = 0; i <= rawTags.length; i++) if (i === rawTags.length || rawTags[i] === ',') {
+        const tag = unquote(rawTags.slice(start, i).trim());
+        if (tag) {
+          if (tags.length === 50 || tag.length > 100) fail(`Item "${sourcePath}" has invalid tags.`);
+          tags.push(tag);
+        }
+        start = i + 1;
+      }
+      fields[key] = tags;
+    } else fields[key] = unquote(value);
   }
   return { fields, body: text.slice(end + 5), warning: null };
 }
@@ -166,13 +193,9 @@ function parseFrontMatter(text, sourcePath) {
 export function recallSource() {
   return { id: 'recall', name: 'Recall', read(files) {
     const items = [], skipped = [], warnings = [];
-    let total = 0;
-    const count = files.filter(file => /\.md$/i.test(file.path)).length;
-    if (count > limits.cards) fail(`Refusing ${count} files. The card limit is ${limits.cards}.`);
+    checkFiles(files);
     for (const file of files) {
       const bytes = Buffer.byteLength(file.text);
-      total += bytes;
-      if (total > limits.totalBytes) fail(`Refusing export larger than ${limits.totalBytes} bytes.`);
       if (!file.path.toLowerCase().endsWith('.md')) { skipped.push({ sourcePath: file.path, reason: 'not a Markdown card' }); continue; }
       if (bytes > limits.cardBytes) { skipped.push({ sourcePath: file.path, reason: `card is ${bytes} bytes; limit is ${limits.cardBytes}` }); continue; }
       const parsed = parseFrontMatter(file.text, file.path);

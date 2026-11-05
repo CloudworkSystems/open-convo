@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { checkSource, sources as registeredSources, toNotes, validateSource } from './sources.mjs';
+import { checkSource, limits, sources as registeredSources, toNotes, validateSource } from './sources.mjs';
 
 const digest = text => createHash('sha256').update(text).digest('hex');
 const sourceDigest = text => digest(text.replace(/^imported: .*$/m, 'imported:'));
@@ -38,24 +38,53 @@ function mkdirSafe(dir, root) {
   if (!fs.realpathSync(current).startsWith(fs.realpathSync(absoluteRoot) + path.sep) && current !== absoluteRoot) throw new Error(`Refusing destination outside "${absoluteRoot}".`);
 }
 
-function readExport(root) {
+function readExport(root, readNonMarkdown = false) {
   const stat = fs.lstatSync(root);
   if (!stat.isDirectory()) {
     if (root.toLowerCase().endsWith('.zip')) throw new Error('Unzip the export first, then point --in at the folder.');
     throw new Error(`"${root}" is not a folder. Point --in at an unzipped readable folder.`);
   }
-  const files = [];
+  const entries = [], skipped = [];
+  let total = 0, count = 0;
   function walk(dir, prefix = '') {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       if (entry.name.startsWith('.')) continue;
       const full = path.join(dir, entry.name), relative = prefix ? `${prefix}/${entry.name}` : entry.name;
-      if (entry.isSymbolicLink()) { files.push({ path: relative, text: '', symlink: true }); continue; }
+      if (entry.isSymbolicLink()) { skipped.push({ sourcePath: relative, reason: 'symbolic links are not read' }); continue; }
       if (entry.isDirectory()) walk(full, relative);
-      else if (entry.isFile()) files.push({ path: relative, text: fs.readFileSync(full, 'utf8') });
+      else if (entry.isFile()) {
+        const info = fs.lstatSync(full);
+        if (info.isSymbolicLink()) { skipped.push({ sourcePath: relative, reason: 'symbolic links are not read' }); continue; }
+        if (!info.isFile()) throw new Error(`File "${relative}" changed during the import. Try again.`);
+        total += info.size;
+        if (total > limits.totalBytes) throw new Error(`Refusing export larger than ${limits.totalBytes} bytes.`);
+        const markdown = /\.md$/i.test(relative);
+        if (markdown && ++count > limits.cards) throw new Error(`Refusing ${count} files. The card limit is ${limits.cards}.`);
+        if (info.size > limits.cardBytes && (markdown || readNonMarkdown)) skipped.push({ sourcePath: relative, reason: `card is ${info.size} bytes; limit is ${limits.cardBytes}` });
+        else entries.push({ path: relative, full, size: info.size, markdown });
+      }
     }
   }
   walk(root);
-  return files;
+  // No content is read until the complete count and byte total have passed.
+  const files = entries.map(entry => {
+    if (!entry.markdown && !readNonMarkdown) return { path: entry.path, text: '' };
+    const fd = fs.openSync(entry.full, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+    try {
+      const current = fs.fstatSync(fd);
+      if (!current.isFile() || current.size !== entry.size) throw new Error(`File "${entry.path}" changed during the import. Try again.`);
+      const content = Buffer.alloc(current.size);
+      let offset = 0;
+      while (offset < content.length) {
+        const read = fs.readSync(fd, content, offset, content.length - offset, offset);
+        if (!read) throw new Error(`File "${entry.path}" changed during the import. Try again.`);
+        offset += read;
+      }
+      if (fs.fstatSync(fd).size !== entry.size) throw new Error(`File "${entry.path}" changed during the import. Try again.`);
+      return { path: entry.path, text: content.toString('utf8') };
+    } finally { fs.closeSync(fd); }
+  });
+  return { files, skipped };
 }
 
 function publishLock(lock, data) {
@@ -98,12 +127,10 @@ export function runImport(argv, options = {}) {
   if (!source) throw new Error(`Unknown source "${args.source}".`);
   validateSource(source);
   const input = path.resolve(args.in), atlas = path.resolve(args.atlas);
-  let files;
-  try { files = readExport(input); } catch (e) { if (e.code === 'EACCES') throw new Error(`Could not read "${input}". Check that it was unzipped and is readable.`); throw e; }
-  const symlinks = files.filter(f => f.symlink).map(f => ({ sourcePath: f.path, reason: 'symbolic links are not read' }));
-  files = files.filter(f => !f.symlink);
+  let files, skipped;
+  try { ({ files, skipped } = readExport(input, source.id !== 'recall')); } catch (e) { if (e.code === 'EACCES') throw new Error(`Could not read "${input}". Check that it was unzipped and is readable.`); throw e; }
   const result = checkSource(source, files);
-  result.skipped.push(...symlinks);
+  result.skipped.push(...skipped);
   if (!result.items.length) return { cards: 0, notes: 0, skipped: result.skipped, warnings: result.warnings, messages: ["This folder has no Recall cards. In Recall's web app, open Settings, choose Export, unzip the download, then run this again on that folder."] };
   const importedAt = args.importedat || new Date().toISOString();
   const sourceRoot = path.join(atlas, 'sources', source.id), manifestFile = path.join(sourceRoot, '.import-manifest.json');

@@ -26,6 +26,9 @@ Add a source object to the small list in `src/sources.mjs`: `{ id, name, read(fi
 - Simple front matter means one `key: value` per line. Tags may be comma-separated inside brackets. Front matter outside that shape stays in the body and produces a warning.
 - Scalar front-matter values are preserved as text. Unknown values are written under the source id.
 - Unknown values that resemble numbers, dates, null or booleans are quoted under the source id so they remain text, including leading zeroes such as `"001"`.
+- The same text-preserving quoting applies to titles, descriptions, source names, URLs, tags, created dates, and nested source fields. Quoted Recall tags lose only their surrounding export quotes before being written as text.
+- The command scans file sizes and the Markdown count before reading any export content. Oversized cards are listed without being read. Recall attachments are listed without reading their content, but their sizes count toward the export total. Files that change size between the scan and the read are refused with a retry message. Reads allocate only the checked file size.
+- Source readers receive files only after count and total checks. Recall tags are read one at a time, stopping before storing a 51st tag or a tag longer than 100 characters.
 - `checkSource` gives readers read-only file records sharing their original text strings. It checks repeatability with a SHA-256 comparison fed in small chunks, without cloning the export text or serializing the full result.
 - Slug collisions, paths differing only by letter case, and reserved `INDEX.md` names receive a stable hash suffix.
 - Existing folders keep their permissions. New import folders use mode `0700`; new notes use `0600`.
