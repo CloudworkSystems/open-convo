@@ -194,6 +194,20 @@ struct ClaudeLocalChecksUnitTests {
                 #expect(ClaudeSettingsScan.globalConfig(["env": [name: value]]) == override, "\(name)=\(value)")
             }
         }
+        // The model-menu names (step 5 live trial): passed over in user
+        // settings only, which reach `auth status` alone; still overrides
+        // wherever the run reads.
+        for name in ClaudeSettingsScan.userSettingsMenuOnlyEnvironmentNames.sorted() {
+            #expect(name.hasPrefix("ANTHROPIC_CUSTOM_MODEL_OPTION"), "\(name)")
+            #expect(ClaudeSettingsScan.userSettings(["env": [name: "invented-model"]]) == nil, "\(name) in user settings")
+            #expect(ClaudeSettingsScan.settings(["env": [name: "invented-model"]]) == override, "\(name) managed")
+            #expect(ClaudeSettingsScan.globalConfig(["env": [name: "invented-model"]]) == override, "\(name) global config")
+        }
+        #expect(ClaudeSettingsScan.userSettings(["env": ["ANTHROPIC_CUSTOM_MODEL_OPTION": "invented-model",
+                                                         "ANTHROPIC_BASE_URL": "https://invented.example"]]) == override,
+                "a menu name never hides a real override beside it")
+        #expect(ClaudeSettingsScan.userSettings(["env": ["ANTHROPIC_CUSTOM_MODEL_OPTION_EXTRA": "invented"]]) == override,
+                "only the three exact names")
         // Where the run reads (managed, ~/.claude.json): an allow-list
         // (Codex F3-2). Traffic-off names pass; any other name is unresolved.
         for name in ClaudeSettingsScan.runAllowedEnvironmentNames {
