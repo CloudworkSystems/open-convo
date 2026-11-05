@@ -224,31 +224,111 @@ export function toNotes(items, { source, importedAt, manifest = Object.create(nu
   return { notes, warnings };
 }
 
+function decodeValue(text) {
+  const quote = text[0];
+  if (quote !== '"' && quote !== "'") return text;
+  let decoded = '';
+  const escapes = new Map([['0', '\0'], ['a', '\x07'], ['b', '\b'], ['t', '\t'], ['n', '\n'], ['v', '\v'], ['f', '\f'], ['r', '\r'], ['e', '\x1b'], [' ', ' '], ['"', '"'], ['/', '/'], ['\\', '\\'], ['N', '\u0085'], ['_', '\u00a0'], ['L', '\u2028'], ['P', '\u2029']]);
+  for (let i = 1; i < text.length; i++) {
+    const character = text[i];
+    if (character === quote) {
+      if (quote === "'" && text[i + 1] === "'") { decoded += "'"; i++; continue; }
+      return i === text.length - 1 ? decoded : null;
+    }
+    if (quote === '"' && character === '\\') {
+      const escape = text[++i];
+      if (escapes.has(escape)) decoded += escapes.get(escape);
+      else if (['x', 'u', 'U'].includes(escape)) {
+        const length = escape === 'x' ? 2 : escape === 'u' ? 4 : 8;
+        const hex = text.slice(i + 1, i + 1 + length);
+        if (hex.length !== length || !/^[0-9a-f]+$/i.test(hex)) return null;
+        const point = Number.parseInt(hex, 16);
+        if (point > 0x10ffff || point >= 0xd800 && point <= 0xdfff) return null;
+        decoded += String.fromCodePoint(point);
+        i += length;
+      } else return null;
+    } else decoded += character;
+  }
+  return null;
+}
+
+function addTag(tags, raw, sourcePath) {
+  const tag = decodeValue(raw.trim());
+  if (tag === null) return false;
+  if (tag) {
+    if (tags.length === 50 || tag.length > 100) fail(`Item "${sourcePath}" has invalid tags.`);
+    tags.push(tag);
+  }
+  return true;
+}
+
+function flowTags(value, sourcePath) {
+  if (value.startsWith('[')) {
+    if (!value.endsWith(']')) return null;
+    value = value.slice(1, -1);
+  }
+  const tags = [];
+  let cursor = 0;
+  while (cursor < value.length) {
+    while (/\s/.test(value[cursor] || '') && cursor < value.length) cursor++;
+    const start = cursor, quote = value[cursor];
+    if (quote === '"' || quote === "'") {
+      cursor++;
+      let closed = false;
+      while (cursor < value.length) {
+        if (quote === '"' && value[cursor] === '\\') { cursor += 2; continue; }
+        if (value[cursor] === quote) {
+          if (quote === "'" && value[cursor + 1] === "'") { cursor += 2; continue; }
+          cursor++; closed = true; break;
+        }
+        cursor++;
+      }
+      if (!closed) return null;
+      while (/\s/.test(value[cursor] || '') && cursor < value.length) cursor++;
+      if (cursor < value.length && value[cursor] !== ',') return null;
+    } else {
+      if (value[cursor] === '[' || value[cursor] === '{') return null;
+      while (cursor < value.length && value[cursor] !== ',') cursor++;
+    }
+    if (!addTag(tags, value.slice(start, cursor), sourcePath)) return null;
+    cursor++;
+  }
+  return tags;
+}
+
 function parseFrontMatter(text, sourcePath) {
   if (!text.startsWith('---\n')) return { fields: dataMap(), body: text, warning: null };
   const end = text.indexOf('\n---\n', 4);
   if (end < 0) return { fields: dataMap(), body: text, warning: `${sourcePath}: front matter could not be read and was kept in the card.` };
   const raw = text.slice(4, end);
   const fields = dataMap();
-  for (const line of raw.split('\n')) {
+  const unreadable = () => ({ fields: dataMap(), body: text, warning: `${sourcePath}: front matter could not be read and was kept in the card.` });
+  const lines = raw.split('\n');
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
     const match = /^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$/.exec(line);
     if (!match) return { fields: dataMap(), body: text, warning: `${sourcePath}: front matter could not be read and was kept in the card.` };
     const [, key, value] = match;
-    const unquote = text => text.replace(/^(["'])(.*)\1$/, '$2');
     if (key === 'tags') {
-      const tags = [];
-      const rawTags = value.replace(/^\[|\]$/g, '');
-      let start = 0;
-      for (let i = 0; i <= rawTags.length; i++) if (i === rawTags.length || rawTags[i] === ',') {
-        const tag = unquote(rawTags.slice(start, i).trim());
-        if (tag) {
-          if (tags.length === 50 || tag.length > 100) fail(`Item "${sourcePath}" has invalid tags.`);
-          tags.push(tag);
+      if (value) {
+        const tags = flowTags(value, sourcePath);
+        if (tags === null) return unreadable();
+        fields[key] = tags;
+      } else {
+        const tags = [];
+        while (index + 1 < lines.length) {
+          const block = /^[ \t]*-[ \t]+(.*)$/.exec(lines[index + 1]);
+          if (!block) break;
+          if (!addTag(tags, block[1], sourcePath)) return unreadable();
+          index++;
         }
-        start = i + 1;
+        fields[key] = tags;
       }
-      fields[key] = tags;
-    } else fields[key] = unquote(value);
+    } else {
+      const decoded = decodeValue(value);
+      if (decoded === null) return unreadable();
+      fields[key] = decoded;
+    }
   }
   return { fields, body: text.slice(end + 5), warning: null };
 }
