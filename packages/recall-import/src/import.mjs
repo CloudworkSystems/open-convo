@@ -411,9 +411,9 @@ export function runImport(argv, options = {}) {
   if (!result.items.length && readState(manifestFile) === null && readState(journalFile) === null) return { cards: 0, notes: 0, skipped: result.skipped, warnings: result.warnings, messages, paths: [], changes: [] };
   const changes = [];
   const report = converted => ({ cards: result.items.length, notes: converted.notes.length, skipped: result.skipped, warnings: [...result.warnings, ...converted.warnings], messages, paths: converted.notes.map(({ key, path: notePath }) => ({ key, path: notePath })), changes });
-  const addChange = (key, notePath, action) => {
+  const addChange = (key, notePath, action, reason) => {
     changes.push({ key, path: notePath, action });
-    const detail = action === 'removed' ? `no longer in ${source.name}; kept.` : action === 'kept' ? 'kept, edited since the last import.' : `${action}.`;
+    const detail = reason || (action === 'removed' ? `no longer in ${source.name}; kept.` : action === 'kept' ? 'kept, edited since the last import.' : `${action}.`);
     messages.push(`${notePath}: ${detail}`);
   };
   const convert = manifest => {
@@ -427,14 +427,16 @@ export function runImport(argv, options = {}) {
     const destination = path.join(atlas, note.path), old = ownValue(manifest.entries, note.key), pending = ownValue(manifest.pending, note.key);
     const content = readState(destination, null), exists = content !== null, diskHash = exists ? digest(content) : null;
     const owned = !exists || diskHash === old?.fullHash || diskHash === pending?.fullHash;
-    const action = !owned ? 'kept' : old?.sourceHash === sourceDigest(note.text) && diskHash === old.fullHash ? 'unchanged' : exists ? 'updated' : 'created';
-    return { destination, diskHash, action };
+    const ownerRemoved = !exists && !!old;
+    const reason = ownerRemoved ? 'kept as you left it: you removed or moved this note.' : undefined;
+    const action = ownerRemoved || !owned ? 'kept' : old?.sourceHash === sourceDigest(note.text) && diskHash === old.fullHash ? 'unchanged' : exists ? 'updated' : 'created';
+    return { destination, diskHash, action, reason };
   };
   if (!args.write) {
     const { manifest } = preflight;
     reconcilePending(manifest, atlas, sourceRoot, inspect, messages, source, result.items);
     const converted = convert(manifest);
-    for (const note of converted.notes) addChange(note.key, note.path, classify(note, manifest).action);
+    for (const note of converted.notes) { const { action, reason } = classify(note, manifest); addChange(note.key, note.path, action, reason); }
     return report(converted);
   }
   // Classify all target notes before any write, not one note at a time after
@@ -465,9 +467,9 @@ export function runImport(argv, options = {}) {
     if (recovering || !fs.existsSync(manifestFile)) compact();
     const converted = convert(manifest);
     for (const note of converted.notes) {
-      const { destination, diskHash, action } = classify(note, manifest);
+      const { destination, diskHash, action, reason } = classify(note, manifest);
       mkdirSafe(path.dirname(destination), atlas);
-      if (action === 'kept' || action === 'unchanged') { addChange(note.key, note.path, action); continue; }
+      if (action === 'kept' || action === 'unchanged') { addChange(note.key, note.path, action, reason); continue; }
       manifest.pending[note.key] = { path: note.path, fullHash: digest(note.text), sourceHash: sourceDigest(note.text) };
       record(note.key, ownValue(manifest.pending, note.key));
       const temporary = shortTemp(destination, 'note'), temp = temporary.file;

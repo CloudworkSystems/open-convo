@@ -489,7 +489,8 @@ function markdownCodeMask(text) {
     }
     // Publish the same container-stripped line to every line-start consumer.
     // Convert the consumed structural columns back to original character offsets.
-    const raw = match[0].replace(/\r?\n$/, '').replace(match.index === 0 ? /^\uFEFF/ : /$^/, '');
+    const unterminated = match[0].replace(/\r?\n$/, '');
+    const raw = match.index === 0 ? unterminated.replace(/^\uFEFF/, '') : unterminated;
     const consumed = columns(raw).length - line.length;
     let column = 0, offset = 0;
     while (offset < raw.length && column < consumed) {
