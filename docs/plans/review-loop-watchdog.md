@@ -200,3 +200,15 @@ failure cases:
   already play that part, and builders gaming tests isn't what fails here.
 - **Halting on speed** (rounds per hour). The round limit already stops an
   overnight loop like #303's within its first half hour.
+
+## Carried To The Build (Codex Round 3 On)
+
+Requirements for the code pull request, carried from this plan's review
+under "Plans stop after two Codex rounds":
+
+- A `loop-resume` comment counts only when its whole edit history, read
+  the way `ownerAcceptance` reads `owner-accepts-findings` (GraphQL
+  `userContentEdits`, every editor the owner, fail closed when the
+  history can't be read), shows only the owner's account. Tests cover an
+  owner comment edited by another account and an unreadable history
+  ([thread](https://github.com/CloudworkSystems/open-convo/pull/307#discussion_r4486447466)).
