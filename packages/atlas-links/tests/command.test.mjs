@@ -262,6 +262,65 @@ test('a crash after one write still lets the next run repair the skipped link', 
   }
 });
 
+test('a partial write is journaled before the rename so the next run can finish', async () => {
+  const dir = tempDir();
+  try {
+    writeNote(dir, 'old/a.md', 'See [c](../c.md) and [d](../d.md).\n');
+    writeNote(dir, 'c.md', '# Cee\n');
+    writeNote(dir, 'd.md', '# Dee\n');
+    writeNote(dir, 'z.md', 'See [a](old/a.md).\n');
+    assert.equal((await capture(['--dir', dir, '--record'])).code, 0);
+    move(dir, 'old/a.md', 'archive/a.md');
+    move(dir, 'c.md', 'plots/c.md');
+    move(dir, 'd.md', 'plots/d.md');
+    const input = new PassThrough();
+    let out = '';
+    const pending = run(['--dir', dir, '--write', '--pause-before-write'], {
+      stdin: input,
+      stdout: text => { out += text; },
+      stderr: text => { out += text; },
+      crashAfterWrites: 1,
+    });
+    assert.match(out, /Paused before writing/);
+    rmSync(path.join(dir, 'plots', 'd.md'));
+    input.end('\n');
+    await assert.rejects(() => pending, /Stopped before the snapshot/);
+    const written = readFileSync(path.join(dir, 'archive', 'a.md'));
+    assert.match(written.toString('utf8'), /\.\.\/plots\/c\.md/);
+    assert.match(written.toString('utf8'), /\.\.\/d\.md/);
+    const journal = JSON.parse(readFileSync(path.join(dir, '.atlas-links', 'journal.json'), 'utf8'));
+    const entry = journal.notes.find(item => item.path === 'archive/a.md');
+    assert.equal(entry.after, createHash('sha256').update(written).digest('hex'));
+    assert.notEqual(entry.before, entry.after);
+    const second = await capture(['--dir', dir, '--write']);
+    assert.equal(second.code, 0, second.err);
+    assert.match(readNote(dir, 'z.md'), /archive\/a\.md/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a note with a byte-order mark is read and written with that mark', async () => {
+  const dir = tempDir();
+  try {
+    writeFileSync(
+      path.join(dir, 'a.md'),
+      Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('See [b](b.md).\n')]),
+    );
+    writeNote(dir, 'b.md', '# Bee\n');
+    const recorded = await capture(['--dir', dir, '--record']);
+    assert.equal(recorded.code, 0, recorded.err);
+    move(dir, 'b.md', 'nest/b.md');
+    const wrote = await capture(['--dir', dir, '--write']);
+    assert.equal(wrote.code, 0, wrote.err);
+    const bytes = readFileSync(path.join(dir, 'a.md'));
+    assert.deepEqual([...bytes.subarray(0, 3)], [0xef, 0xbb, 0xbf]);
+    assert.match(bytes.toString('utf8'), /nest\/b\.md/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('a stale or empty lock is cleared, and a live reclaim lock is not', async () => {
   const dir = tempDir();
   try {

@@ -182,7 +182,8 @@ function toNotePath(root, full) {
 function decodeNote(bytes, notePath) {
   let text;
   try {
-    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    // ignoreBOM keeps a leading EF BB BF in the text, so writing it back matches the file.
+    text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
   } catch {
     fail(`Refusing "${notePath}" because it is not valid UTF-8.`);
   }
@@ -814,6 +815,17 @@ async function runWrite(root, args, scanned, snapshot, journal, io, stdout) {
         }
       }
       continue;
+    }
+    const actualAfter = sha256Text(text);
+    const entry = planned.find(note => note.path === item.path);
+    if (entry && entry.after !== actualAfter) {
+      entry.after = actualAfter;
+      try {
+        saveJson(root, JOURNAL, journalJson(planned));
+      } catch (error) {
+        try { unlinkSync(tmp); } catch { /* already gone */ }
+        throw error;
+      }
     }
     try {
       renameSync(tmp, target);
