@@ -110,7 +110,7 @@ function restore(state, op) {
   withinTrashWindow(item, op.now);
   const forgotten = state.log.findLast(record => record.type === 'forget' && record.entryId === item.id);
   mutateWithSizeCheck(state, () => { state.trash.splice(state.trash.indexOf(item), 1); const restored = structuredClone(item); delete restored.forgottenAt; addEntry(state, restored, forgotten?.entryIndex); });
-  log(state, op, { entryId: item.id, text: item.text });
+  log(state, op, { entryId: item.id, text: item.text, reverses: forgotten?.id });
   return findEntry(state, item.id);
 }
 
@@ -145,31 +145,25 @@ function undo(state, op) {
   const target = state.log.find((record) => record.id === op.opId);
   if (!target) throw new Error(`Operation '${op.opId}' was not found.`);
   if (!["keep", "correct", "forget", "share", "move", "allowCloud"].includes(target.type) || target.purged) throw new Error(`Operation '${op.opId}' cannot be undone.`);
-  const reversed = new Set(state.log.filter(record => record.type === 'undo' && !record.purged).map(record => record.targetId));
-  if (reversed.has(target.id)) throw new Error(`Operation '${op.opId}' has already been undone.`);
-  const later = state.log.slice(state.log.indexOf(target) + 1).find((record) => record.type !== 'undo' && !reversed.has(record.id) && dependsOn(record, target));
-  if (later) throw new Error(`Operation '${op.opId}' cannot be undone because operation '${later.id}' depends on it.`);
-  const previousLocation = target.type === 'move' ? target.before : target.type === 'forget' ? findTrash(state, target.entryId) : findEntry(state, target.entryId);
-  try { mutateWithSizeCheck(state, () => {
-    if (target.type === "keep") { const entry = findEntry(state, target.entryId); removeEntry(state, entry.id); state.proposed.splice(target.candidateIndex ?? state.proposed.length, 0, structuredClone(entry.candidate)); }
-    if (target.type === "correct") { const entry = findEntry(state, target.entryId); entry.text = target.oldText; entry.history.pop(); }
-    if (target.type === "forget") { const item = findTrash(state, target.entryId); withinTrashWindow(item, op.now); state.trash.splice(state.trash.indexOf(item), 1); const restored = structuredClone(item); delete restored.forgottenAt; addEntry(state, restored, target.entryIndex); }
-    if (target.type === "share") { const entry = findEntry(state, target.entryId); entry.shares = entry.shares.filter((id) => id !== target.space); }
-    if (target.type === "move") { const entry = findEntry(state, target.entryId); removeEntry(state, entry.id); const removedShare = target.before.shares?.find(space => space === entry.space); if (removedShare) entry.shares.splice(target.before.shares.indexOf(removedShare), 0, removedShare); entry.space = target.before.space; entry.subject = target.before.subject; addEntry(state, entry, target.before.entryIndex); }
-    if (target.type === "allowCloud") findEntry(state, target.entryId).cloud = target.beforeCloud ?? false;
-  }); } catch (error) {
-    if (/subject is full|index is full/.test(error.message)) {
-      const dependency = state.log.slice(state.log.indexOf(target) + 1).findLast(record => {
-        if (reversed.has(record.id)) return false;
-        if (!record.entryId || record.entryId === target.entryId || !['keep', 'correct', 'move', 'restore', 'undo'].includes(record.type)) return false;
-        let entry; try { entry = findEntry(state, record.entryId); } catch { return false; }
-        return entry.space === previousLocation.space && (/index is full/.test(error.message) || entry.subject === previousLocation.subject);
-      });
-      if (dependency) throw new Error(`Operation '${op.opId}' cannot be undone because operation '${dependency.id}' depends on it: ${error.message}`);
-    }
-    throw error;
+  const reversed = reversedOperations(state);
+  if (reversed.has(target.id)) {
+    const reversal = state.log.find(record => record.reverses === target.id || record.targetId === target.id);
+    throw new Error(`Operation '${op.opId}' has already been ${reversal?.type === 'restore' ? 'reversed by restore' : 'undone'}.`);
   }
-  log(state, op, { entryId: target.entryId, targetId: target.id });
+  const candidate = cloneState(state);
+  reverseRecord(candidate, target, op.now);
+  candidate.log.push({ id: op.id, type: 'undo', targetId: target.id });
+  const dependency = undoDependency(state, candidate, target, reversed);
+  if (dependency) {
+    let sizeMessage = ''; try { checkSizes(candidate); } catch (error) { sizeMessage = `: ${error.message}`; }
+    throw new Error(`Operation '${op.opId}' cannot be undone because operation '${dependency.id}' depends on it${sizeMessage}.`);
+  }
+  validateState(candidate);
+  checkSizes(candidate);
+  state.subjects = candidate.subjects;
+  state.proposed = candidate.proposed;
+  state.trash = candidate.trash;
+  log(state, op, { entryId: target.entryId, targetId: target.id, reverses: target.id });
   return { undone: target.id };
 }
 
@@ -258,22 +252,93 @@ function redactLogText(record, texts) {
     if (entry.candidate && texts.has(entry.candidate.text)) delete entry.candidate.text;
   }
   redactEntry(record.snapshot);
+  if (record.effect) redactEntry(record.effect.values);
 }
-function dependsOn(record, target) {
-  if (!target.entryId || record.entryId !== target.entryId) return false;
-  if (target.type === 'keep') return true;
-  const effective = record;
-  if (effective.type === 'forget') return true;
-  if (target.type === 'forget') return ['restore', 'forget'].includes(effective.type);
-  if (target.type === 'correct') return effective.type === 'correct';
-  if (target.type === 'allowCloud') return effective.type === 'allowCloud';
-  if (target.type === 'move') return ['move', 'share'].includes(effective.type);
-  if (target.type === 'share') return ['share', 'move'].includes(effective.type) && effective.space === target.space;
-  return false;
+// One dependency rule: a later effect blocks Undo only while it still holds
+// and the proposed reversal would invalidate it (including shared capacity).
+function undoDependency(state, candidate, target, reversed) {
+  const live = state.log.slice(state.log.indexOf(target) + 1).filter(record => !record.purged && !reversed.has(record.id) && effectHolds(state, record));
+  const broken = live.find(record => !record.effect.resourceOnly && !effectHolds(candidate, record));
+  if (broken) return broken;
+  if (sizeExcess(candidate) > 0) return live.findLast(record => {
+    if (record.entryId === target.entryId) return false;
+    const without = cloneState(candidate);
+    removeEntry(without, record.entryId);
+    return sizeExcess(without) < sizeExcess(candidate);
+  });
+}
+function entity(state, id) {
+  for (const subjects of Object.values(state.subjects)) for (const entries of Object.values(subjects)) {
+    const entry = entries.find(entry => entry.id === id); if (entry) return { status: 'kept', entry };
+  }
+  const trash = state.trash.find(entry => entry.id === id);
+  if (trash) return { status: 'trash', entry: trash };
+  const proposed = state.proposed.find(entry => entry.id === id);
+  return { status: proposed ? 'proposed' : 'absent', entry: proposed };
+}
+function effectHolds(state, record) {
+  if (!record.effect) return false;
+  const { status, entry } = entity(state, record.entryId);
+  const effect = record.effect;
+  return !(effect.requires ?? []).some(id => reversedOperations(state).has(id)) && status === effect.status && Object.entries(effect.values).every(([key, value]) => JSON.stringify(entry?.[key]) === JSON.stringify(value)) &&
+    (effect.contains ?? []).every(space => entry?.shares?.includes(space)) && (effect.excludes ?? []).every(space => !entry?.shares?.includes(space));
+}
+function reversedOperations(state) {
+  return new Set(state.log.filter(record => !record.purged).map(record => record.reverses ?? record.targetId).filter(Boolean));
+}
+function describeEffect(state, record) {
+  const { status, entry } = entity(state, record.entryId);
+  const fields = { keep: [], correct: ['text', 'history'], forget: ['text', 'history', 'cloud', 'space', 'subject', 'shares'], restore: [], share: ['space'], move: ['space', 'subject'], allowCloud: ['cloud'], undo: [] };
+  if (!Object.hasOwn(fields, record.type)) return undefined;
+  const effect = { status, values: Object.fromEntries(fields[record.type].map(key => [key, structuredClone(entry[key])])) };
+  if (record.type === 'share') effect.contains = [record.space];
+  if (record.type === 'undo') effect.resourceOnly = true;
+  if (record.type === 'move') {
+    effect.excludes = [entry.space];
+    if (record.before.shares.includes(entry.space)) {
+      const grant = state.log.findLast(r => r.entryId === record.entryId && r.type === 'share' && r.space === entry.space && !reversedOperations(state).has(r.id));
+      if (grant) effect.requires = [grant.id];
+    }
+  }
+  return effect;
+}
+function sizeExcess(state) {
+  let excess = 0;
+  for (const space of state.spaces) {
+    const subjects = own(state.subjects, space.id) ?? Object.create(null);
+    excess += Math.max(0, Buffer.byteLength(renderIndex(space.id, subjects)) - LIMIT);
+    for (const [subject, entries] of Object.entries(subjects)) excess += Math.max(0, Buffer.byteLength(renderSubject(subject, entries)) - LIMIT);
+  }
+  return excess;
+}
+function reverseRecord(state, target, now) {
+  const current = entity(state, target.entryId);
+  const entry = current.entry;
+  if (target.type === 'forget') {
+    if (current.status !== 'trash') throw new Error(`Operation '${target.id}' has already been reversed by restore.`);
+    withinTrashWindow(entry, now);
+    state.trash.splice(state.trash.indexOf(entry), 1);
+    delete entry.forgottenAt; addEntry(state, entry, target.entryIndex); return;
+  }
+  if (!entry) throw new Error(`Memory '${target.entryId}' was not found.`);
+  if (target.type === 'keep') {
+    removeEntry(state, entry.id); state.trash = state.trash.filter(item => item.id !== entry.id);
+    state.proposed.splice(target.candidateIndex ?? state.proposed.length, 0, structuredClone(entry.candidate));
+  }
+  if (target.type === 'correct') { entry.text = target.oldText; entry.history.pop(); }
+  if (target.type === 'share') entry.shares = entry.shares.filter(space => space !== target.space);
+  if (target.type === 'move') {
+    if (current.status === 'kept') removeEntry(state, entry.id);
+    const removedShare = target.before.shares?.find(space => space === entry.space);
+    if (removedShare) entry.shares.splice(target.before.shares.indexOf(removedShare), 0, removedShare);
+    entry.space = target.before.space; entry.subject = target.before.subject;
+    if (current.status === 'kept') addEntry(state, entry, target.before.entryIndex);
+  }
+  if (target.type === 'allowCloud') entry.cloud = target.beforeCloud ?? false;
 }
 function removeEntry(state, id) { for (const subjects of Object.values(state.subjects)) for (const entries of Object.values(subjects)) { const i = entries.findIndex((x) => x.id === id); if (i >= 0) { entries.splice(i, 1); return; } } }
 function withinTrashWindow(item, now) { if (Date.parse(now) - Date.parse(item.forgottenAt) > 30 * DAY) throw new Error("This memory's 30 days in Trash are over."); }
-function log(state, op, detail) { state.log.push({ id: op.id, type: op.type, now: op.now, actor: op.actor, ...structuredClone(detail) }); }
+function log(state, op, detail) { const record = { id: op.id, type: op.type, now: op.now, actor: op.actor, ...structuredClone(detail) }; const effect = describeEffect(state, record); if (effect) record.effect = effect; state.log.push(record); }
 function mutateWithSizeCheck(state, change) { const before = structuredClone(state); change(); try { checkSizes(state); } catch (error) { Object.keys(state).forEach((key) => delete state[key]); Object.assign(state, before); throw error; } }
 function checkSizes(state) { for (const space of state.spaces) { const subjects = own(state.subjects, space.id) ?? Object.create(null); for (const subject of Object.keys(subjects)) if (Buffer.byteLength(renderSubject(subject, own(subjects, subject))) > LIMIT) throw new Error("This subject is full. Split it or correct an older entry."); if (Buffer.byteLength(renderIndex(space.id, subjects)) > LIMIT) throw new Error(`Space '${space.id}' index is full. Use fewer subjects.`); } }
 function renderSubject(subject, entries) { return `# ${subject}\n` + [...entries].sort((a,b) => a.id.localeCompare(b.id)).map((e) => `- [${e.id}] ${e.text} (${labelText(e.label)})`).join("\n") + "\n"; }

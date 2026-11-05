@@ -53,6 +53,84 @@ test('P1 undo allowCloud succeeds after a later correction', () => {
 });
 function unchangedRefusal(s, type, data, pattern) { const before = JSON.stringify(s); assert.throws(() => op(s, type, data), pattern); assert.equal(JSON.stringify(s), before); }
 
+test('P1 restored memory can undo its earlier cloud grant', () => {
+  const granted = step(keep(), 'allowCloud', { entryId: 'note' });
+  const forgotten = step(granted, 'forget', { entryId: 'note' });
+  const restored = step(forgotten, 'restore', { entryId: 'note' });
+  const undone = step(restored, 'undo', { opId: granted.log.at(-1).id });
+  assert.deepEqual(visible(undone, 'personal', true), []);
+  assert.equal(visible(undone).length, 1);
+});
+
+test('Undo lifecycle matrix: 216 operation pairs and lifecycle states', async t => {
+  const targetKinds = ['keep', 'correct', 'forget', 'share', 'move', 'allowCloud'];
+  const laterKinds = [...targetKinds, 'restore', 'purge', 'undo'];
+  let count = 0;
+  for (const targetKind of targetKinds) for (const laterKind of laterKinds) for (const same of [true, false]) for (const reversed of [false, true]) {
+    count++;
+    await t.test(`${targetKind} / ${laterKind} / ${same ? 'same entry' : 'other entry'} / ${reversed ? 'reversal' : 'in effect'}`, () => {
+      let s = base(); s.spaces.push({ id: 'archive', name: 'Invented Archive', kind: 'family' });
+      s = keep(proposal(s, 'other'), 'other', 'other-subject');
+      s = proposal(s);
+      if (targetKind !== 'keep') s = keep(s);
+      s = step(s, targetKind, { entryId: 'note', candidateId: 'note', label, subject: 'covers', space: ['share', 'move'].includes(targetKind) ? 'studio' : 'personal', text: 'Invented target text.' });
+      const targetId = s.log.at(-1).id;
+      const beforeLater = structuredClone(s);
+      const entryId = same ? 'note' : 'other';
+      let targetRestored = false;
+      if (laterKind === 'keep') {
+        if (same) {
+          if (!s.trash.some(e => e.id === entryId)) s = step(s, 'forget', { entryId });
+          s = step(s, 'purge', { now: '2041-01-01T00:00:00Z' });
+          s = keep(proposal(s, entryId, 'Invented new lifecycle.'), entryId);
+        } else s = keep(proposal(s, 'new-note'), 'new-note', 'new-subject');
+      } else if (laterKind === 'restore' || laterKind === 'purge') {
+        if (!s.trash.some(e => e.id === entryId)) s = step(s, 'forget', { entryId });
+        s = step(s, laterKind, { entryId, ...(laterKind === 'purge' ? { now: '2041-01-01T00:00:00Z' } : {}) });
+        targetRestored = same && targetKind === 'forget' && laterKind === 'restore';
+      } else {
+        if (s.trash.some(e => e.id === entryId)) { s = step(s, 'restore', { entryId }); targetRestored = same && targetKind === 'forget'; }
+        if (laterKind === 'undo') {
+          s = step(s, 'correct', { entryId, text: 'Invented temporary correction.' });
+          s = step(s, 'undo', { opId: s.log.at(-1).id });
+        } else s = step(s, laterKind, { entryId, text: 'Invented later text.', space: 'archive' });
+      }
+      let laterId = s.log.at(-1).id;
+      if (reversed) {
+        if (laterKind === 'purge' || laterKind === 'undo') unchangedRefusal(s, 'undo', { opId: laterId }, /cannot be undone/);
+        else if (laterKind === 'forget') { s = step(s, 'restore', { entryId }); if (same && targetKind === 'forget') targetRestored = true; }
+        else if (laterKind === 'restore') s = step(s, 'forget', { entryId });
+        else s = step(s, 'undo', { opId: laterId });
+      }
+      let blocked = false;
+      if (same && laterKind !== 'keep') {
+        if (laterKind === 'purge' || targetRestored) blocked = true;
+        else if (laterKind === 'restore') blocked = reversed || targetKind === 'keep';
+        else if (laterKind === 'forget') blocked = !reversed || targetKind === 'keep';
+        else if (!reversed) blocked = targetKind === 'keep' && laterKind !== 'undo' || targetKind === 'correct' && laterKind === 'correct' || targetKind === 'move' && ['move', 'share'].includes(laterKind) || targetKind === 'allowCloud' && laterKind === 'allowCloud';
+      }
+      if (s.log.find(r => r.id === targetId).purged) blocked = true;
+      if (blocked) unchangedRefusal(s, 'undo', { opId: targetId }, /depends on it|cannot be undone|reversed by restore/);
+      else {
+        const undone = step(s, 'undo', { opId: targetId });
+        if (targetKind === 'keep') assert.ok(undone.proposed.some(e => e.id === 'note'));
+        if (targetKind === 'allowCloud') assert.equal(entityForTest(undone, 'note').entry.cloud, false);
+        if (!same || laterKind === 'keep') {
+          const restoredTarget = entityForTest(undone, 'note');
+          if (targetKind === 'forget') assert.equal(restoredTarget.status, 'kept');
+          else if (targetKind !== 'keep') assert.equal(restoredTarget.entry.id, 'note');
+        }
+      }
+      assert.ok(beforeLater.log.some(r => r.id === targetId));
+    });
+  }
+  assert.equal(count, 216);
+});
+function entityForTest(s, id) {
+  const kept = s.spaces.flatMap(space => visible(s, space.id)).find(e => e.id === id);
+  return kept ? { status: 'kept', entry: kept } : { status: 'trash', entry: s.trash.find(e => e.id === id) };
+}
+
 test('P1 purge preserves unrelated metadata matching expired text', () => {
   for (const text of ['person', 'op-0', 'propose', now, 'other', 'studio']) {
     let s = keep(proposal(base(), 'other', 'Invented unrelated text.'), 'other');
@@ -196,7 +274,8 @@ test('Undo audit: dependency matrix for every undoable kind and later operation'
     const changed = step(before, targetType, { entryId: 'note', candidateId: 'note', subject: 'covers', space: 'personal', label, ...targets[targetType] });
     const targetId = changed.log.at(-1).id;
     const later = step(changed, laterType, { entryId: 'note', ...laterOps[laterType] });
-    if (blocked[targetType].includes(laterType)) unchangedRefusal(later, 'undo', { opId: targetId }, new RegExp(`operation '${later.log.at(-1).id}' depends on it`));
+    if (targetType === 'forget' && laterType === 'restore') unchangedRefusal(later, 'undo', { opId: targetId }, /already been reversed by restore/);
+    else if (blocked[targetType].includes(laterType)) unchangedRefusal(later, 'undo', { opId: targetId }, new RegExp(`operation '${later.log.at(-1).id}' depends on it`));
     else {
       const undone = step(later, 'undo', { opId: targetId });
       const expected = step(before, laterType, { entryId: 'note', ...laterOps[laterType] });
