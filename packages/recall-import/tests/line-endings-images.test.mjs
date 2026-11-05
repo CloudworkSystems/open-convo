@@ -110,6 +110,15 @@ for (const [name, body] of exclusions) test(`Image exclusion table: ${name} keep
   for (const text of [body, body.replaceAll('\n', '\r\n')]) assert.equal(read(text).body, text);
 });
 
+test('Image exclusion comment end table: "--!>" never shortens a protected comment', () => {
+  for (const body of [
+    `<!-- ${excludedImage} --!>\n\nInvented text after.\n`,
+    `Invented text <!-- ${excludedImage} --!> more invented text.\n`,
+    `Invented text <!-- early --!> ${excludedImage} --> more invented text.\n`,
+    `<!--\nearly --!>\n${excludedImage}\n-->\n`
+  ]) for (const text of [body, body.replaceAll('\n', '\r\n')]) assert.equal(read(text).body, text, text);
+});
+
 test('Image exclusion mixed table: real images after every HTML block end still convert', () => {
   for (const [name, prefix] of exclusions.filter(([name]) => name.startsWith('HTML'))) {
     const image = '![real](https://example.invalid/real.png)';

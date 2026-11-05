@@ -383,18 +383,20 @@ function markdownCodeMask(text) {
     const blank = /^[ \t]*$/.test(line);
     if (html && html.blank && blank) html = null;
     if (!fence && !html) {
-      if (/^ {0,3}<(?:pre|script|style|textarea)(?=[ \t>]|$)/i.test(line)) html = { end: /<\/(?:pre|script|style|textarea)[ \t]*>/i };
-      else if (/^ {0,3}<!--/.test(line)) html = { end: /-->/ };
-      else if (/^ {0,3}<\?/.test(line)) html = { end: /\?>/ };
-      else if (/^ {0,3}<![A-Z]/.test(line)) html = { end: />/ };
-      else if (/^ {0,3}<!\[CDATA\[/.test(line)) html = { end: /\]\]>/ };
+      // End conditions are plain string searches, exactly as CommonMark names them, so a protected
+      // region never ends earlier than the spec says. CommonMark ends a comment block only at "-->".
+      if (/^ {0,3}<(?:pre|script|style|textarea)(?=[ \t>]|$)/i.test(line)) html = { end: ['</pre>', '</script>', '</style>', '</textarea>'], fold: true };
+      else if (/^ {0,3}<!--/.test(line)) html = { end: ['-->'] };
+      else if (/^ {0,3}<\?/.test(line)) html = { end: ['?>'] };
+      else if (/^ {0,3}<![A-Z]/.test(line)) html = { end: ['>'] };
+      else if (/^ {0,3}<!\[CDATA\[/.test(line)) html = { end: [']]>'] };
       else if (blockTag.test(line)) html = { blank: true, tags: true };
       else if (!paragraph && tagAtStart.test(line)) html = { blank: true, tags: true };
     }
     if (html) {
       mask.fill(1, match.index, match.index + match[0].length);
       if (html.tags) markTags(match.index, match.index + match[0].length);
-      if (html.end?.test(line)) html = null;
+      if (html.end && html.end.some(marker => (html.fold ? line.toLowerCase() : line).includes(marker))) html = null;
       paragraph = false;
       continue;
     }
@@ -415,8 +417,12 @@ function markdownCodeMask(text) {
     if (!mask[i] && text[i] === '<' && !escapedAt(text, i)) {
       const rest = text.slice(i);
       let end = -1;
-      for (const [start, close] of [['<!--', '-->'], ['<?', '?>'], ['<![CDATA[', ']]>']]) {
-        if (rest.startsWith(start)) { const found = text.indexOf(close, i + start.length); if (found >= 0) end = found + close.length; break; }
+      // An inline comment ends at "-->". If there is none, an HTML-style "--!>" end is accepted so
+      // the text stays protected; this only ever adds protection, never shortens it.
+      for (const [start, ...closes] of [['<!--', '-->', '--!>'], ['<?', '?>'], ['<![CDATA[', ']]>']]) {
+        if (!rest.startsWith(start)) continue;
+        for (const close of closes) { const found = text.indexOf(close, i + start.length); if (found >= 0) { end = found + close.length; break; } }
+        break;
       }
       if (end < 0) {
         const declaration = /^<![A-Z][^>]*>/.exec(rest);
