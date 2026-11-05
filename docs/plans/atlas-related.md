@@ -68,8 +68,10 @@ in, and later sit beside each note in the Desk.
    digit. Words of one character, words made only of digits, and a fixed
    English stop-word list in the package are left out. Fenced code, inline
    code, link targets in every form atlas-index reads (the part in `(...)`
-   of a markdown link, and the name in `[[name]]`, `[[name#anchor]]` or
-   `[[name|label]]`, where only a `label` is read) and front matter other than `description:` and `name:` are not read, so two
+   of a markdown link; and inside any `[[...]]` wiki link, everything
+   before the first `|`, so the name and any `#anchor` in `[[name]]`,
+   `[[name#anchor]]`, `[[name|label]]` and `[[name#anchor|label]]` are
+   left out and only a `label` is read) and front matter other than `description:` and `name:` are not read, so two
    notes aren't related just because they link to the same file. Word
    stems aren't joined ("seeds" and "seed" are different words).
 2. **Unusual words count most.** Each note becomes a list of word weights:
@@ -157,8 +159,9 @@ questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
 4. File name and about-line words count twice, and the about line matches
    the label atlas-index's `buildAtlas` gives every sample note in its
    generated folder index (test-only import, labels unescaped).
-5. Fenced code, inline code, link targets (markdown and `[[...]]`, two
-   notes linking to the same target score zero) and other front matter are
+5. Fenced code, inline code, link targets (markdown and every `[[...]]`
+   form, including `[[name#anchor|label]]`; two notes linking to the same
+   target or section score zero) and other front matter are
    not read; `description:` and `name:` are.
 6. `MAP.md` and generated indexes never appear and don't change any score;
    a hand-made `INDEX.md` can appear.
