@@ -314,6 +314,27 @@ test('an append that would make the ledger unreadable is not saved', async () =>
   }
 });
 
+test('an unreadable head file keeps its permission error', async () => {
+  const { dir, remove } = tempDir();
+  const ledger = join(dir, 'ledger.json');
+  const head = `${ledger}.head`;
+  try {
+    const media = join(dir, 'meadow.mov');
+    writeFileSync(media, 'sample\n');
+    assert.equal((await run(['record', media, '--title', 'Meadow', '--ledger', ledger])).code, 0);
+    const before = readFileSync(ledger);
+    chmodSync(head, 0o000);
+    const checked = await run(['verify', '--ledger', ledger]);
+    assert.equal(checked.code, 1);
+    assert.match(checked.io.errors(), new RegExp(`Can't read ${head.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}: permission denied`));
+    assert.doesNotMatch(`${checked.io.errors()}${checked.io.text()}`, /head file can't be read/);
+    assert.deepEqual(readFileSync(ledger), before);
+  } finally {
+    try { chmodSync(head, 0o600); } catch { /* the head may already be readable */ }
+    remove();
+  }
+});
+
 test('refuses a missing ledger path, a symlink, and a file it cannot read', async () => {
   const { dir, remove } = tempDir();
   try {

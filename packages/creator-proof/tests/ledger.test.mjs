@@ -67,6 +67,20 @@ test('two originals get ids, sequence, chain and a fixed hash', () => {
   assert.equal(third[2].originalId, 'orig-0123456789ab-3');
 });
 
+test('a null entry is reported instead of crashing the check', () => {
+  let ledger = record([], meadow(), T1, null);
+  ledger = record(ledger, {
+    title: 'Lantern talk',
+    fileName: 'lantern.mov',
+    fileSha256: HASH_B,
+  }, T2, { seq: 1, entryHash: ledger[0].entryHash });
+  const damaged = [null, ledger[1]];
+  const result = verifyLedger(damaged, { expectedHead: { seq: 2, entryHash: ledger[1].entryHash } });
+  assert.equal(result.ok, false);
+  assert.match(result.problems[0].message, /Ledger entry 1 was changed after it was recorded/);
+  assert.ok(result.problems.every((item) => typeof item.message === 'string'));
+});
+
 test('an amendment is appended and current facts keep their times', () => {
   let ledger = record([], meadow(), T1, null);
   const before = structuredClone(ledger);

@@ -115,7 +115,11 @@ function checkEntryShape(entry, index) {
 
 function checkHashAndLink(entry, index, entries) {
   const seq = index + 1;
-  const expectedPrev = index === 0 ? ZERO_HASH : entries[index - 1].entryHash;
+  const previous = index === 0 ? null : entries[index - 1];
+  if (index > 0 && (!isPlainObject(previous) || typeof previous.entryHash !== 'string')) {
+    return problem(seq, 'changed', `Ledger entry ${seq} was changed after it was recorded.`);
+  }
+  const expectedPrev = index === 0 ? ZERO_HASH : previous.entryHash;
   let digest;
   try {
     digest = hashEntry(entry);

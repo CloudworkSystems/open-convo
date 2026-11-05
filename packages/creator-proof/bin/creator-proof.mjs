@@ -434,7 +434,9 @@ function readHead(headPath) {
   try {
     raw = readLimited(headPath, SIDE_FILE_BYTES, 'read');
   } catch (error) {
-    if (error instanceof ProofError && /is a link/.test(error.message)) throw error;
+    if (error instanceof ProofError && (/is a link/.test(error.message) || /permission denied/.test(error.message))) {
+      throw error;
+    }
     return { exists: true, valid: false, value: null };
   }
   let parsed;
