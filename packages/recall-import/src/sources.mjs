@@ -357,15 +357,47 @@ function escapedAt(text, offset) {
   return slashes % 2 === 1;
 }
 
-// Keep offsets into the original Markdown: code is never removed or normalized.
+// Keep offsets into the original Markdown. Mark block regions first, then
+// scan inline constructs in order so opaque HTML cannot open a code span.
+// Value 2 marks an actual HTML img tag: preserve it, but add the expiry notice.
 // Fences use their opening character and length; inline spans need a matching
 // backtick run of exactly the same length (and may cross line endings).
 function markdownCodeMask(text) {
   const mask = new Uint8Array(text.length);
-  let fence = null;
+  let fence = null, html = null, paragraph = false;
+  const blockTags = 'address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul';
+  const blockTag = new RegExp(`^ {0,3}</?(?:${blockTags})(?=[ \t/>]|$)`, 'i');
+  // CommonMark tag grammar, including quoted attributes whose contents are opaque.
+  const tag = /<\/?[A-Za-z][A-Za-z0-9-]*(?:[ \t\r\n]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t\r\n]*=[ \t\r\n]*(?:"[^"]*"|'[^']*'|[^ \t\r\n"'=<>`]+))?)*[ \t\r\n]*\/?>/;
+  const tagAtStart = new RegExp('^ {0,3}' + tag.source + '[ \t]*$');
+  function markTags(start, end) {
+    const region = text.slice(start, end);
+    for (const match of region.matchAll(new RegExp(tag.source, 'g'))) {
+      const at = start + match.index;
+      if (/^<img(?:[\s/>]|$)/i.test(match[0])) mask[at] = 2;
+    }
+  }
   for (const match of text.matchAll(/[^\n]*(?:\n|$)/g)) {
     let line = match[0].replace(/\r?\n$/, '');
     if (match.index === 0 && line.startsWith('\uFEFF')) line = line.slice(1);
+    const blank = /^[ \t]*$/.test(line);
+    if (html && html.blank && blank) html = null;
+    if (!fence && !html) {
+      if (/^ {0,3}<(?:pre|script|style|textarea)(?=[ \t>]|$)/i.test(line)) html = { end: /<\/(?:pre|script|style|textarea)[ \t]*>/i };
+      else if (/^ {0,3}<!--/.test(line)) html = { end: /-->/ };
+      else if (/^ {0,3}<\?/.test(line)) html = { end: /\?>/ };
+      else if (/^ {0,3}<![A-Z]/.test(line)) html = { end: />/ };
+      else if (/^ {0,3}<!\[CDATA\[/.test(line)) html = { end: /\]\]>/ };
+      else if (blockTag.test(line)) html = { blank: true, tags: true };
+      else if (!paragraph && tagAtStart.test(line)) html = { blank: true, tags: true };
+    }
+    if (html) {
+      mask.fill(1, match.index, match.index + match[0].length);
+      if (html.tags) markTags(match.index, match.index + match[0].length);
+      if (html.end?.test(line)) html = null;
+      paragraph = false;
+      continue;
+    }
     if (fence) {
       mask.fill(1, match.index, match.index + match[0].length);
       const close = /^ {0,3}(`+|~+)[ \t]*$/.exec(line);
@@ -377,8 +409,29 @@ function markdownCodeMask(text) {
       fence = open[1];
       mask.fill(1, match.index, match.index + match[0].length);
     } else if (/^(?: {4}| {0,3}\t)/.test(line)) mask.fill(1, match.index, match.index + match[0].length);
+    paragraph = !blank && !open && !mask[match.index];
   }
   for (let i = 0; i < text.length;) {
+    if (!mask[i] && text[i] === '<' && !escapedAt(text, i)) {
+      const rest = text.slice(i);
+      let end = -1;
+      for (const [start, close] of [['<!--', '-->'], ['<?', '?>'], ['<![CDATA[', ']]>']]) {
+        if (rest.startsWith(start)) { const found = text.indexOf(close, i + start.length); if (found >= 0) end = found + close.length; break; }
+      }
+      if (end < 0) {
+        const declaration = /^<![A-Z][^>]*>/.exec(rest);
+        const raw = new RegExp('^' + tag.source).exec(rest);
+        const autolink = /^<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\x00-\x20]*|[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)>/.exec(rest);
+        const matched = declaration || raw || autolink;
+        if (matched) end = i + matched[0].length;
+      }
+      if (end >= 0) {
+        mask.fill(1, i, end);
+        if (/^<img(?:[\s/>]|$)/i.test(rest)) mask[i] = 2;
+        i = end; continue;
+      }
+    }
+
     if (mask[i] || text[i] !== '`' || escapedAt(text, i)) { i++; continue; }
     let end = i + 1;
     while (text[end] === '`') end++;
@@ -473,7 +526,7 @@ function plainImageLinks(text, code) {
     const end = bracketEnd(text, start);
     if (end < 0 || text[end + 1] !== ':') continue;
     const cursor = linkSpace(text, end + 2);
-    if (cursor < 0 || code[cursor]) continue;
+    if (cursor < 0 || (code[cursor] && text[cursor] !== '<')) continue;
     const destination = destinationAt(text, cursor);
     const label = referenceLabel(text.slice(start + 1, end));
     if (label && !references.has(label)) references.set(label, destination ? destination.url : null);
@@ -481,7 +534,7 @@ function plainImageLinks(text, code) {
   const chunks = [];
   let previous = 0, converted = false, uncertain = false;
   for (let i = 0; i < text.length; i++) {
-    if (text[i] === '<' && !code[i] && !escapedAt(text, i) && /^<img(?:[\s/>]|$)/i.test(text.slice(i))) {
+    if (text[i] === '<' && (!code[i] || code[i] === 2) && !escapedAt(text, i) && /^<img(?:[\s/>]|$)/i.test(text.slice(i))) {
       // HTML attribute grammars and srcset may carry multiple destinations.
       // Preserve the tag and warn rather than guessing which bytes to rewrite.
       uncertain = true;

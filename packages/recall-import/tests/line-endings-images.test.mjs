@@ -83,3 +83,66 @@ test('Image class sweep: all table forms remain byte-identical inside CRLF code'
   }
   for (const body of ['`![x](https://example.invalid/a (caption))`', '    <img src="https://example.invalid/a">\r\n', '\t![x](https://example.invalid/a (caption))\r\n']) assert.equal(read(body).body, body);
 });
+
+const excludedImage = '![hidden](https://example.invalid/hidden.png)';
+const exclusions = [
+  ['HTML 1 pre', `<pre>\n${excludedImage}\n</pre>\n`],
+  ['HTML 1 script', `<script>\n${excludedImage}\n</script>\n`],
+  ['HTML 1 style', `<style>\n${excludedImage}\n</style>\n`],
+  ['HTML 1 textarea', `<textarea>\n${excludedImage}\n</textarea>\n`],
+  ['HTML 2 comment', `<!--\n${excludedImage}\n-->\n`],
+  ['HTML 3 processing instruction', `<?invented\n${excludedImage}\n?>\n`],
+  ['HTML 4 declaration', `<!INVENTED\n${excludedImage}\n>\n`],
+  ['HTML 5 CDATA', `<![CDATA[\n${excludedImage}\n]]>\n`],
+  ['HTML 6 block tag', `<div>\n${excludedImage}\n</div>\n\n`],
+  ['HTML 7 generic tag', `<invented data-x='value'>\n${excludedImage}\n</invented>\n\n`],
+  ['inline raw tag attributes', `Text <invented value='${excludedImage}'> after\n`],
+  ['inline comment', `Text <!-- ${excludedImage} --> after\n`],
+  ['autolink', `<https://example.invalid/${excludedImage}>\n`],
+  ['escaped brackets', String.raw`!\[hidden](https://example.invalid/hidden.png)`],
+  ['escaped exclamation', String.raw`\![hidden](https://example.invalid/hidden.png)`],
+  ['backtick fence', '```md\n' + excludedImage + '\n```\n'],
+  ['tilde fence', '~~~\n' + excludedImage + '\n~~~\n'],
+  ['indented code', '    ' + excludedImage + '\n'],
+  ...[1, 2, 4, 9].map(n => [`inline code ${n} backticks`, '`'.repeat(n) + excludedImage + '`'.repeat(n)])
+];
+for (const [name, body] of exclusions) test(`Image exclusion table: ${name} keeps every byte`, () => {
+  for (const text of [body, body.replaceAll('\n', '\r\n')]) assert.equal(read(text).body, text);
+});
+
+test('Image exclusion mixed table: real images after every HTML block end still convert', () => {
+  for (const [name, prefix] of exclusions.filter(([name]) => name.startsWith('HTML'))) {
+    const image = '![real](https://example.invalid/real.png)';
+    const result = read(prefix + image).body;
+    assert.ok(result.startsWith(prefix + image.slice(1)), name + ': ' + result);
+    assert.equal(result.split(notice).length, 2);
+  }
+});
+
+test('Image exclusion unterminated table: HTML blocks continue through EOF', () => {
+  for (const start of ['<pre>', '<script>', '<style>', '<textarea>', '<!--', '<?invented', '<!INVENTED', '<![CDATA[', '<div>', '<invented>']) {
+    const body = start + '\n' + excludedImage + '\n';
+    assert.equal(read(body).body, body, start);
+  }
+});
+
+test('Image exclusion precedence table: opaque comments and raw blocks do not open code or references', () => {
+  for (const body of [
+    `<!-- \` -->\n${excludedImage}\n\``,
+    `<pre>\n\`\`\`\n</pre>\n${excludedImage}`,
+    `<!--\n[hidden]: https://example.invalid/hidden.png\n-->\n![hidden]`,
+    `<pre>\n[hidden]: https://example.invalid/hidden.png\n</pre>\n![hidden]`
+  ]) {
+    const result = read(body).body;
+    if (body.includes(excludedImage)) { assert.ok(result.includes(excludedImage.slice(1))); assert.ok(result.includes(notice)); }
+    else assert.equal(result, body);
+  }
+});
+
+test('Image exclusion HTML img table: preserve attributes but warn without rewriting their Markdown', () => {
+  for (const body of [
+    `<img src="https://example.invalid/real.png" alt="${excludedImage}">`,
+    `Text <img src='https://example.invalid/real.png' alt='${excludedImage}'> after`,
+    `<div>\n<img src="https://example.invalid/real.png" alt="${excludedImage}">\n</div>\n`
+  ]) { const result = read(body).body; assert.ok(result.startsWith(body)); assert.equal(result.split(notice).length, 2); }
+});
