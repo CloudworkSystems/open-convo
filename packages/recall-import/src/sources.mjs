@@ -8,6 +8,9 @@ const fail = message => { throw new Error(message); };
 const hash = value => createHash('sha256').update(value).digest('hex');
 const dataMap = value => Object.assign(Object.create(null), value);
 const ownValue = (record, key) => Object.hasOwn(record, key) ? record[key] : undefined;
+class CardInputError extends Error {}
+const cardError = message => { throw new CardInputError(message); };
+const titleSegments = new Intl.Segmenter('und', { granularity: 'grapheme' });
 
 export function validateSource(source) {
   if (!plain(source) || typeof source.id !== 'string' || !ID.test(source.id)) fail(`Refusing source id "${source?.id ?? ''}". Use 1 to 64 lowercase letters, digits or hyphens, starting with a letter.`);
@@ -256,8 +259,10 @@ function decodeValue(text) {
 function addTag(tags, raw, sourcePath) {
   const tag = decodeValue(raw.trim());
   if (tag === null) return false;
+  if (raw.trim() && !tag.trim()) cardError(`Item "${sourcePath}" has invalid tags: tags must contain text.`);
   if (tag) {
-    if (tags.length === 50 || tag.length > 100) fail(`Item "${sourcePath}" has invalid tags.`);
+    if (tags.length === 50) cardError(`Item "${sourcePath}" has invalid tags: the limit is 50 tags.`);
+    if (tag.length > 100) cardError(`Item "${sourcePath}" has invalid tags: each tag must be at most 100 UTF-16 units.`);
     tags.push(tag);
   }
   return true;
@@ -535,14 +540,38 @@ export function recallSource() {
       const bytes = Buffer.byteLength(file.text);
       if (!file.path.toLowerCase().endsWith('.md')) { skipped.push({ sourcePath: file.path, reason: 'not a Markdown card' }); continue; }
       if (bytes > limits.cardBytes) { skipped.push({ sourcePath: file.path, reason: `card is ${bytes} bytes; limit is ${limits.cardBytes}` }); continue; }
+      try {
       const parsed = parseFrontMatter(file.text, file.path);
       if (parsed.warning) warnings.push(parsed.warning);
       const fields = parsed.fields;
       const { heading, body } = readMarkdown(parsed.body);
-      const title = fields.title || heading || file.path.split('/').at(-1).replace(/\.md$/i, '');
+      let title;
+      if (Object.hasOwn(fields, 'title')) {
+        title = fields.title;
+        if (!title.trim() || title.length > 200) cardError(`Card "${file.path}" has an explicit title outside the limit of 1 to 200 UTF-16 units. Shorten or fill in its title and import again.`);
+      } else {
+        const derived = heading || file.path.split('/').at(-1).replace(/\.md$/i, '');
+        title = derived;
+        if (derived.length > 200) {
+          title = '';
+          for (const { segment } of titleSegments.segment(derived)) {
+            if (title.length + segment.length > 200) break;
+            title += segment;
+          }
+          warnings.push(`${file.path}: the ${heading ? 'heading' : 'filename'} title was shortened to at most 200 UTF-16 units without splitting a character. The body was kept as written.`);
+        }
+        if (!title.trim()) {
+          title = 'Untitled card';
+          warnings.push(`${file.path}: the derived title had no usable text; the saved title is "Untitled card". The body was kept as written.`);
+        }
+      }
       const extra = dataMap();
       for (const [key, value] of Object.entries(fields)) if (!['title', 'url', 'source', 'tags', 'created', 'date'].includes(key)) extra[key] = value;
       items.push({ key: file.path, title, body, url: fields.url || fields.source || null, tags: fields.tags || [], created: fields.created || fields.date || null, sourcePath: file.path, extra });
+      } catch (error) {
+        if (!(error instanceof CardInputError)) throw error;
+        skipped.push({ sourcePath: file.path, reason: error.message });
+      }
     }
     return { items, skipped, warnings };
   }};

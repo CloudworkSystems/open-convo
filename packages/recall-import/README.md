@@ -49,6 +49,28 @@ Sources may also supply `emptyGuidance`, a nonempty text message explaining what
 - The printed `unlock` command accepts only an absolute `.import.lock.reclaim` path. It refuses locks from another computer, unreadable lock records, and locks naming a running process. It removes a recovery lock only after confirming its process no longer exists on this computer.
 - The command tests overlap imports at explicit hooks during note replacement and lock recovery. The second import attempts to run while the first still holds its lock. No child processes or network connections are used.
 
+## Odd cards and reader bugs
+
+Recall owns the conversion of export text into contract items. A filename or heading is a derived title: it is shortened to the existing 200 UTF-16-unit limit at a whole Unicode grapheme boundary, with a file warning. Astral characters use two units; a combining sequence stays together. A derived title with no usable text becomes `Untitled card` with a warning. The body is unchanged. Explicit invalid titles and invalid tags skip only their card, with the file and reason listed. An unsupported front-matter shape still follows the plan: preserve it in the body and warn.
+
+**The line between card input and a reader bug:** Recall catches only recognized card-value errors. `checkSource` and `toNotes` never repair a source author's malformed result. Wrong field types, unsafe or duplicate keys, invalid result shapes, invalid extra values, and nondeterministic output remain errors that stop the import. Aggregate export limits also stop the whole import, as the plan requires.
+
+| Limit or contract check | Handling |
+| --- | --- |
+| Title: nonblank, at most 200 UTF-16 units | Shorten derived filename/heading titles with a warning. Skip an invalid explicit title. Invalid author-produced titles are reader errors. |
+| Tags: 0–50 tags, each nonblank and at most 100 UTF-16 units | Skip the offending Recall card, for both flow and block lists. Invalid author-produced tags are reader errors. |
+| Input card: 1 MiB | Skip that card before parsing, or before reading content in the command. |
+| Export: 20,000 Markdown cards and 512 MiB total input bytes | Refuse the whole export before writes. The command checks before content reads. Source output over 20,000 items is a reader error. |
+| URL and created: required nullable strings | No separate length cap. Recall input is limited by 1 MiB per card. Wrong author-produced types are reader errors. |
+| Body: required string | No separate output-body cap. Recall input is limited by 1 MiB per card; an appended image notice can make output slightly larger. Wrong author-produced types are reader errors. |
+| Extra data: optional plain object containing finite JSON values, without cycles | No separate numeric size/depth cap. Recall produces flat string fields within the input-card limit. Unsupported nested YAML stays in the body with a warning. Invalid author-produced data is a reader error. |
+| Input files: relative paths and text; items: unique safe relative keys and a sourcePath | Unsafe paths, duplicate keys, missing fields, or wrong author-produced types are reader errors. Keys disallow absolute paths, backslashes, controls, empty/dot segments, and hidden segments. |
+| Output file/folder component: 255 UTF-8 bytes | Shorten new generated components with stable hashes. Keep valid manifest paths. Reserved `INDEX.md` names and case-insensitive collisions get hash suffixes, trying 8, 16, then 64 hex digits. An unresolved collision refuses the import. |
+| Source id: 1–64 lowercase letters/digits/hyphens, starting with a letter | Reader configuration error. Source name must be nonblank text; optional emptyGuidance must be nonblank text. Neither has a numeric length cap. |
+| Result: items, skipped, and warnings arrays | Every item field is required except extra. Skipped entries require a safe sourcePath and nonblank reason; warnings require nonblank text naming a file. Invalid author-produced records are reader errors. |
+| Repeatability: identical input must give identical output | Reader error if the comparison differs. |
+| Conversion time: importedAt must be supplied as nonempty text | Caller error if absent; the command supplies it. |
+
 ## Not included
 
 There is no Recall API or account connection, sync back to Recall, page or image fetching, AI summary or tagging, schedule, memory move, or Desk view.

@@ -76,6 +76,6 @@ test('Quoted parser sweep: backslash parity and doubled quotes do not end flow v
 test('Quoted parser sweep: block tags support no indentation and retain count and length limits', () => {
   assert.deepEqual(read("tags:\n- 'one, two'\n- \"three\"").items[0].tags, ['one, two', 'three']);
   assert.equal(read('tags:\n' + Array(50).fill('  - "one, two"').join('\n')).items[0].tags.length, 50);
-  assert.throws(() => read('tags:\n' + Array(51).fill('  - "one, two"').join('\n')), /invalid tags/);
-  assert.throws(() => read('tags:\n  - "' + 'x'.repeat(101) + '"'), /invalid tags/);
+  assert.match(read('tags:\n' + Array(51).fill('  - "one, two"').join('\n')).skipped[0].reason, /invalid tags/);
+  assert.match(read('tags:\n  - "' + 'x'.repeat(101) + '"').skipped[0].reason, /invalid tags/);
 });

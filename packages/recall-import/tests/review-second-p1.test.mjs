@@ -93,7 +93,7 @@ test('Sweep: tag count and length are checked before buffering a tag list', () =
   String.prototype.split = function(separator, ...rest) { if (separator === ',') throw Error('Tag list buffered before checking limits'); return split.call(this, separator, ...rest); };
   try {
     const source = recallSource();
-    for (const tags of [Array(51).fill('tag').join(','), 'x'.repeat(101)]) assert.throws(() => checkSource(source, [{ path: 'one.md', text: `---\ntags: [${tags}]\n---\nBody` }]), /invalid tags/);
+    for (const tags of [Array(51).fill('tag').join(','), 'x'.repeat(101)]) assert.match(checkSource(source, [{ path: 'one.md', text: `---\ntags: [${tags}]\n---\nBody` }]).skipped[0].reason, /invalid tags/);
     assert.equal(checkSource(source, [{ path: 'one.md', text: `---\ntags: [${Array(50).fill('tag').join(',')}]\n---\nBody` }]).items[0].tags.length, 50);
   } finally { String.prototype.split = split; }
 });
