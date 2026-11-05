@@ -790,6 +790,22 @@ function notice(stdout, stderr, json, text) {
   emit(json ? stderr : stdout, `${text}\n`);
 }
 
+function recoveryBefore(journal, notePath, currentHash) {
+  if (!journal || currentHash === undefined) return currentHash;
+  const entries = journal.notes.filter(entry => entry.path.normalize('NFC') === notePath.normalize('NFC'));
+  let hash = currentHash;
+  let before = currentHash;
+  const seen = new Set();
+  while (hash && !seen.has(hash)) {
+    seen.add(hash);
+    const entry = entries.find(item => item.after === hash);
+    if (!entry || entry.before === hash) break;
+    before = entry.before;
+    hash = entry.before;
+  }
+  return before;
+}
+
 async function runWrite(root, args, scanned, snapshot, journal, io, stdout) {
   const hashes = hashByPath(scanned);
   const aliased = aliasSnapshot(snapshot, journal, hashes);
@@ -806,17 +822,17 @@ async function runWrite(root, args, scanned, snapshot, journal, io, stdout) {
   }
   const planned = result.writes.map(item => ({
     path: item.path,
-    before: sha256Bytes(scanned.bytes.get(item.path)),
+    before: recoveryBefore(journal, item.path, sha256Bytes(scanned.bytes.get(item.path))),
     after: sha256Text(item.text),
   }));
-  // A note finished by an earlier interrupted run is not in this plan. Keep its
-  // journal entry so a second interruption can still prove that move.
-  const plannedKeys = new Set(planned.map(item => item.path.normalize('NFC')));
+  // Keep entries whose file already matches, including a partial repair of a
+  // note this run will write again. The new entry still starts at the original
+  // before-hash, so a later interruption can reach the snapshot.
   const carried = [];
   if (journal) {
     for (const entry of journal.notes) {
-      if (plannedKeys.has(entry.path.normalize('NFC'))) continue;
       if (hashes.get(entry.path) !== entry.after) continue;
+      if (planned.some(item => item.path === entry.path && item.before === entry.before && item.after === entry.after)) continue;
       carried.push({ path: entry.path, before: entry.before, after: entry.after });
     }
   }

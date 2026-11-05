@@ -334,6 +334,51 @@ test('a second interruption still repairs a link to a note the first run finishe
   }
 });
 
+test('a second repair of the same note keeps the original snapshot hash', async () => {
+  const dir = tempDir();
+  try {
+    writeNote(dir, 'old/a.md', 'See [c](../c.md) and [d](../d.md).\n');
+    writeNote(dir, 'c.md', '# Cee\n');
+    writeNote(dir, 'd.md', '# Dee\n');
+    writeNote(dir, 'z.md', 'See [a](old/a.md).\n');
+    assert.equal((await capture(['--dir', dir, '--record'])).code, 0);
+    move(dir, 'old/a.md', 'archive/a.md');
+    move(dir, 'c.md', 'plots/c.md');
+    move(dir, 'd.md', 'plots/d.md');
+    const original = createHash('sha256').update(readFileSync(path.join(dir, 'archive', 'a.md'))).digest('hex');
+    const dBytes = readFileSync(path.join(dir, 'plots', 'd.md'));
+    const input = new PassThrough();
+    let out = '';
+    const first = run(['--dir', dir, '--write', '--pause-before-write'], {
+      stdin: input,
+      stdout: text => { out += text; },
+      stderr: text => { out += text; },
+      crashAfterWrites: 1,
+    });
+    assert.match(out, /Paused before writing/);
+    rmSync(path.join(dir, 'plots', 'd.md'));
+    input.end('\n');
+    await assert.rejects(() => first, /Stopped before the snapshot/);
+    assert.match(readNote(dir, 'archive/a.md'), /\.\.\/d\.md/);
+    writeFileSync(path.join(dir, 'plots', 'd.md'), dBytes);
+    await assert.rejects(
+      () => run(['--dir', dir, '--write'], { crashAfterWrites: 1, stdout() {}, stderr() {} }),
+      /Stopped before the snapshot/,
+    );
+    const finalBytes = readFileSync(path.join(dir, 'archive', 'a.md'));
+    assert.match(finalBytes.toString('utf8'), /plots\/d\.md/);
+    const journal = JSON.parse(readFileSync(path.join(dir, '.atlas-links', 'journal.json'), 'utf8'));
+    const bridged = journal.notes.find(item => item.path === 'archive/a.md' && item.before === original);
+    assert.equal(bridged.after, createHash('sha256').update(finalBytes).digest('hex'));
+    assert.match(readNote(dir, 'z.md'), /\(old\/a\.md\)/);
+    const third = await capture(['--dir', dir, '--write']);
+    assert.equal(third.code, 0, third.err);
+    assert.match(readNote(dir, 'z.md'), /archive\/a\.md/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('an untouched note edited during the pause is the hash stored in the snapshot', async () => {
   const dir = tempDir();
   try {
