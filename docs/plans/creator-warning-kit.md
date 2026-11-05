@@ -190,6 +190,14 @@ package's invented sample, nothing real committed):
    donation link to the links file first".
 6. Run it on an empty ledger and see "Record at least one original first:".
 7. Run it again with the same `--out` and see the refusal to overwrite.
+8. Change the creator name in a copy of the links file to "Urgent River
+   Lane" and see the calm-words refusal name the piece and the rule, with
+   nothing written.
+9. Delete the handle from one entry in a copy of the impostors file, then
+   put a word where a number belongs in a copy of the limits file, and see
+   each message name the file and the entry.
+10. Point `--impostors` at a copy he can't read (permissions removed) and
+    see the file named with nothing written.
 
 He confirms each message says what to do next.
 
