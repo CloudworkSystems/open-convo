@@ -138,13 +138,17 @@ watchdog breaks, the gate behaves exactly as it does today.
   from code pull requests, deciding halt and lift from the reviews,
   comments, labels and timeline, and writing the comment.
 - `.github/scripts/codex-approved.mjs`: calls it for each pull request it
-  evaluates, then adds or removes the label and writes the comment.
+  evaluates, then adds or removes the label and writes the comment. Before
+  its first add in a run, it makes sure the label `needs-owner: review-loop`
+  exists in the repository (`GET /labels/<name>`, and `POST /labels` on a
+  404), so a halt never fails on a missing label.
 - `.github/scripts/owner-queue.mjs`: the "Stuck in review" section.
 - `.github/scripts/tests/review-loop.test.mjs` (new): each halt condition,
   each lift (including a label removed by someone other than the owner),
   the reset after a lift, plan versus code limits, the owner's own pull
-  requests, a push while halted, and an unreadable timeline (no halt, no
-  lift, an error in the log).
+  requests, a push while halted, an unreadable timeline (no halt, no
+  lift, an error in the log), and a repository without the label yet (it
+  is created, then added).
 - `docs/agent-process.md`: a new bullet, "A pull request stuck in review
   stops", next to "Plans stop after two Codex rounds".
 - `docs/scheduled-tasks/pr-keeper.md`: skip pushes, relays and restarts on
