@@ -65,14 +65,15 @@ function publishLock(lock, data) {
 }
 function alive(info) { if (!info) return false; if (info.host !== os.hostname()) return true; if (!Number.isInteger(info.pid)) return false; try { process.kill(info.pid, 0); return true; } catch (e) { return e.code !== 'ESRCH'; } }
 function lockInfo(file) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } }
-function takeLock(lock, messages) {
+function takeLock(lock, messages, options) {
   const reclaim = `${lock}.reclaim`;
-  if (fs.existsSync(reclaim)) throw new Error(`Another command is recovering; try again in a moment. Reclaim lock: ${reclaim}. To remove it after checking its process is gone: node src/import.mjs unlock "${reclaim}"`);
+  if (fs.existsSync(reclaim)) throw new Error(`Another command is recovering; try again in a moment. Reclaim lock: ${reclaim}. To remove it after checking its process is gone: node "${fileURLToPath(import.meta.url)}" unlock "${reclaim}"`);
   try { publishLock(lock, { pid: process.pid, host: os.hostname() }); return; } catch (e) { if (e.code !== 'EEXIST') throw e; }
   const stale = lockInfo(lock);
   if (alive(stale)) throw new Error('Another import is running for this source. Try again when it finishes.');
   try { publishLock(reclaim, { pid: process.pid, host: os.hostname() }); } catch (e) { if (e.code === 'EEXIST') throw new Error('Another command is recovering; try again in a moment.'); throw e; }
   try {
+    options.afterReclaimLock?.();
     const again = lockInfo(lock);
     if (JSON.stringify(again) !== JSON.stringify(stale)) throw new Error('Another import is running for this source. Try again when it finishes.');
     fs.rmSync(lock);
@@ -82,6 +83,16 @@ function takeLock(lock, messages) {
 }
 
 export function runImport(argv, options = {}) {
+  if (argv[0] === 'unlock') {
+    const reclaim = argv[1];
+    if (argv.length !== 2 || !path.isAbsolute(reclaim || '') || !reclaim.endsWith('/.import.lock.reclaim')) throw new Error('Use unlock with the absolute reclaim-lock path printed by the command.');
+    const info = lockInfo(reclaim);
+    if (!info || info.host !== os.hostname() || !Number.isInteger(info.pid) || alive(info)) throw new Error(`Cannot unlock "${reclaim}": its process is running or cannot be confirmed gone.`);
+    const before = fs.readFileSync(reclaim, 'utf8');
+    if (before !== JSON.stringify(info)) throw new Error('Recovery lock changed. Try again.');
+    fs.unlinkSync(reclaim);
+    return { cards: 0, notes: 0, skipped: [], warnings: [], messages: [`Removed recovery lock "${reclaim}".`] };
+  }
   const args = parseArgs(argv), sourceList = options.sources || registeredSources;
   const source = sourceList.find(item => item.id === args.source);
   if (!source) throw new Error(`Unknown source "${args.source}".`);
@@ -101,12 +112,28 @@ export function runImport(argv, options = {}) {
     const converted = toNotes(result.items, { source, importedAt });
     return { cards: result.items.length, notes: converted.notes.length, skipped: result.skipped, warnings: [...result.warnings, ...converted.warnings], messages };
   }
+  // Inspect the complete destination tree before creating any import files.
+  const preview = toNotes(result.items, { source, importedAt });
+  const inspect = target => {
+    let current = atlas;
+    for (const segment of ['', ...path.relative(atlas, target).split(path.sep).filter(Boolean)]) {
+      if (segment) current = path.join(current, segment);
+      let stat;
+      try { stat = fs.lstatSync(current); } catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+      if (stat.isSymbolicLink()) throw new Error(`Refusing write through non-folder "${current}".`);
+    }
+  };
+  for (const note of preview.notes) inspect(path.join(atlas, note.path));
+  inspect(manifestFile);
+  inspect(path.join(sourceRoot, '.import.lock'));
+  inspect(path.join(sourceRoot, '.import.lock.reclaim'));
   mkdirSafe(sourceRoot, atlas);
   const lock = path.join(sourceRoot, '.import.lock');
-  takeLock(lock, messages);
+  takeLock(lock, messages, options);
   try {
     const manifest = safeJson(manifestFile); manifest.entries ||= {}; manifest.pending ||= {};
-    const converted = toNotes(result.items, { source, importedAt, manifest: manifest.entries, hashKey: options.hashKey });
+    const converted = toNotes(result.items, { source, importedAt, manifest: { ...manifest.pending, ...manifest.entries }, hashKey: options.hashKey });
+    for (const note of converted.notes) inspect(path.join(atlas, note.path));
     const currentKeys = new Set(result.items.map(i => i.key));
     for (const [key, old] of Object.entries(manifest.entries)) if (!currentKeys.has(key)) messages.push(`${old.path}: no longer in ${source.name}; kept.`);
     for (const note of converted.notes) {

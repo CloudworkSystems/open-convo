@@ -28,6 +28,8 @@ Add a source object to the small list in `src/sources.mjs`: `{ id, name, read(fi
 - Slug collisions, paths differing only by letter case, and reserved `INDEX.md` names receive a stable hash suffix.
 - Existing folders keep their permissions. New import folders use mode `0700`; new notes use `0600`.
 - A source has one writer at a time. A dead same-computer lock is recovered. A recovery lock requires the printed manual command after its process is confirmed gone.
+- The printed `unlock` command accepts only an absolute `.import.lock.reclaim` path. It refuses locks from another computer, unreadable lock records, and locks naming a running process. It removes a recovery lock only after confirming its process no longer exists on this computer.
+- The command tests overlap imports at explicit hooks during note replacement and lock recovery. The second import attempts to run while the first still holds its lock. No child processes or network connections are used.
 
 ## Not included
 

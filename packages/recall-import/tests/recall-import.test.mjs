@@ -79,7 +79,7 @@ test('command dry run and fixed imported time use an invented registered source'
   assert.match(text, /source: Different Name/);
 });
 
-test('re-import leaves unchanged, replaces changed, protects edits and keeps removed and unrelated files', () => {
+test('Plan 7 and Carried 7: re-import leaves unchanged, replaces changed, protects edits and keeps removed and unrelated files', () => {
   const root = temp(), input = path.join(root, 'input'), atlas = path.join(root, 'atlas'); fs.mkdirSync(input);
   write(input, 'one.md', '# One\n\nFirst\n'); write(input, 'gone.md', '# Gone\n');
   runImport(args(input, atlas, ['--write']));
@@ -91,6 +91,7 @@ test('re-import leaves unchanged, replaces changed, protects edits and keeps rem
   write(input, 'one.md', '# One\n\nChanged\n'); fs.rmSync(path.join(input, 'gone.md'));
   const unrelated = write(path.join(atlas, 'sources/recall'), 'unrelated.md', 'owner file');
   const third = runImport(args(input, atlas, ['--write']));
+  assert.ok(third.messages.some(message => message.includes('no longer in Recall')));
   assert.match(fs.readFileSync(one, 'utf8'), /Changed/); assert.ok(fs.existsSync(gone)); assert.equal(fs.readFileSync(unrelated, 'utf8'), 'owner file');
   fs.writeFileSync(one, fs.readFileSync(one, 'utf8').replace(`imported: ${fixed}`, 'imported: owner-edit'));
   write(input, 'one.md', '# One\n\nChanged again\n');
@@ -98,7 +99,7 @@ test('re-import leaves unchanged, replaces changed, protects edits and keeps rem
   assert.match(fs.readFileSync(one, 'utf8'), /owner-edit/); assert.ok(fourth.messages.some(m => m.includes('kept, edited')));
 });
 
-test('last check protects a note edited just before rename and removes temporary file', () => {
+test('Plan 12: last check protects a note edited just before rename and removes temporary file', () => {
   const root = temp(), input = path.join(root, 'input'), atlas = path.join(root, 'atlas'); fs.mkdirSync(input); write(input, 'one.md', '# One\n');
   runImport(args(input, atlas, ['--write'])); write(input, 'one.md', '# One\nChanged\n');
   const report = runImport(args(input, atlas, ['--write']), { beforeRename: ({ destination }) => fs.appendFileSync(destination, '\nOwner edit\n') });
@@ -107,7 +108,7 @@ test('last check protects a note edited just before rename and removes temporary
   assert.equal(fs.readdirSync(path.join(atlas, 'sources/recall')).some(name => name.includes('.tmp-')), false);
 });
 
-test('interrupted rename is owned on retry even when the card changes', () => {
+test('Carried 5: interrupted rename is owned on retry even when the card changes', () => {
   const root = temp(), input = path.join(root, 'input'), atlas = path.join(root, 'atlas'); fs.mkdirSync(input); write(input, 'one.md', '# One\nFirst\n');
   assert.throws(() => runImport(args(input, atlas, ['--write']), { afterRename: () => { throw new Error('invented interruption'); } }), /interruption/);
   write(input, 'one.md', '# One\nSecond\n');
@@ -153,7 +154,7 @@ test('active and recovery locks refuse a second writer', () => {
   assert.throws(() => runImport(args(input, atlas, ['--write'])), /Another command is recovering/);
 });
 
-test('library source has no file system, network, child process or clock access', () => {
+test('Plan 11: library source has no file system, network, child process or clock access', () => {
   const text = fs.readFileSync(new URL('../src/sources.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(text, /node:(?:fs|http|https|net|tls|child_process)/);
   assert.doesNotMatch(text, /Date\s*\.|new Date/);

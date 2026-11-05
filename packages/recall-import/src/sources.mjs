@@ -76,7 +76,7 @@ export function toNotes(items, { source, importedAt, manifest = {}, hashKey = ha
   const candidates = items.map(item => {
     const kept = manifest[item.key]?.path;
     const path = kept || `${base}${slugParts(item.key).join('/')}.md`;
-    if (!path.startsWith(base) || path.includes('/../')) fail(`Refusing path for key "${item.key}" because it leaves ${base}.`);
+    if (!path.startsWith(base) || !validKey(path) || !path.endsWith('.md')) fail(`Refusing path for key "${item.key}" because it leaves ${base}.`);
     return { item, path };
   });
   const groups = new Map();
@@ -91,6 +91,7 @@ export function toNotes(items, { source, importedAt, manifest = {}, hashKey = ha
   for (const group of groups.values()) if (group.length > 1) for (const entry of group) entry.needsSuffix = true;
   const used = new Set(Object.values(manifest).map(v => v.path?.toLowerCase()).filter(Boolean));
   for (const entry of candidates) {
+    if (!manifest[entry.item.key]?.path && used.has(entry.path.toLowerCase())) entry.needsSuffix = true;
     if (entry.needsSuffix && !manifest[entry.item.key]?.path) {
       const digest = hashKey(entry.item.key);
       let found;
@@ -113,7 +114,7 @@ export function toNotes(items, { source, importedAt, manifest = {}, hashKey = ha
     if (item.created) lines.push(...frontLines('created', item.created));
     if (item.extra && Object.keys(item.extra).length) lines.push(...frontLines(source.id, item.extra));
     lines.push('---', '', item.body);
-    return { key: item.key, path, text: lines.join('\n').replace(/\n?$/, '\n') };
+    return { key: item.key, path, text: lines.slice(0, -1).join('\n') + '\n' + item.body };
   });
   return { notes, warnings };
 }
@@ -137,7 +138,8 @@ export function recallSource() {
   return { id: 'recall', name: 'Recall', read(files) {
     const items = [], skipped = [], warnings = [];
     let total = 0;
-    if (files.length > limits.cards) fail(`Refusing ${files.length} files. The card limit is ${limits.cards}.`);
+    const count = files.filter(file => /\.md$/i.test(file.path)).length;
+    if (count > limits.cards) fail(`Refusing ${count} files. The card limit is ${limits.cards}.`);
     for (const file of files) {
       const bytes = Buffer.byteLength(file.text);
       total += bytes;
@@ -151,7 +153,7 @@ export function recallSource() {
       const title = fields.title || heading || file.path.split('/').at(-1).replace(/\.md$/i, '');
       const extra = Object.fromEntries(Object.entries(fields).filter(([key]) => !['title', 'url', 'source', 'tags', 'created', 'date'].includes(key)));
       let body = parsed.body;
-      if (/!\[[^\]]*\]\(https?:\/\//i.test(body)) body = `${body.replace(/\n?$/, '\n')}\nImages in this card were not imported. Their links may stop working.\n`;
+      if (/!\[[^\]]*\]\(https?:\/\//i.test(body)) body = `${body.replace(/!\[([^\]]*)\]\((https?:\/\/[^)]*)\)/gi, '[$1]($2)').replace(/\n?$/, '\n')}\nImages in this card were not imported. Their links may stop working.\n`;
       items.push({ key: file.path, title, body, url: fields.url || fields.source || null, tags: fields.tags || [], created: fields.created || fields.date || null, sourcePath: file.path, extra });
     }
     return { items, skipped, warnings };
