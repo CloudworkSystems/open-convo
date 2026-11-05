@@ -8,6 +8,8 @@ import { checkSource, limits, sources as registeredSources, toNotes, validateSou
 
 const digest = text => createHash('sha256').update(text).digest('hex');
 const sourceDigest = text => digest(text.replace(/^imported: .*$/m, 'imported:'));
+const dataMap = value => Object.assign(Object.create(null), value);
+const ownValue = (record, key) => Object.hasOwn(record, key) ? record[key] : undefined;
 const safeJson = file => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return { version: 1, entries: {}, pending: {} }; } };
 const writeAtomic = (file, text, mode = 0o600) => { const temp = `${file}.tmp-${process.pid}-${Math.random().toString(16).slice(2)}`; fs.writeFileSync(temp, text, { mode }); fs.renameSync(temp, file); };
 
@@ -171,7 +173,9 @@ export function runImport(argv, options = {}) {
   };
   const record = (key, entry) => fs.appendFileSync(journalFile, `${JSON.stringify({ key, entry })}\n`, { mode: 0o600 });
   try {
-    manifest = safeJson(manifestFile); manifest.entries ||= {}; manifest.pending ||= {};
+    manifest = safeJson(manifestFile);
+    manifest.entries = dataMap(ownValue(manifest, 'entries'));
+    manifest.pending = dataMap(ownValue(manifest, 'pending'));
     const recovering = fs.existsSync(journalFile);
     if (recovering) {
       const journal = fs.readFileSync(journalFile, 'utf8');
@@ -194,26 +198,26 @@ export function runImport(argv, options = {}) {
       const destination = path.join(sourceRoot, relative);
       inspect(destination);
       const diskHash = fs.existsSync(destination) ? digest(fs.readFileSync(destination)) : null;
-      const old = manifest.entries[key];
+      const old = ownValue(manifest.entries, key);
       if (diskHash === pending.fullHash || !old) manifest.entries[key] = pending;
       if (diskHash !== null && diskHash !== pending.fullHash && diskHash !== old?.fullHash) messages.push(`${pending.path}: kept, edited since the last import.`);
       delete manifest.pending[key];
     }
     // Checkpoint a recovered journal once, then start a fresh append sequence.
     if (recovering || !fs.existsSync(manifestFile)) compact();
-    const converted = toNotes(result.items, { source, importedAt, manifest: { ...manifest.pending, ...manifest.entries }, hashKey: options.hashKey });
+    const converted = toNotes(result.items, { source, importedAt, manifest: Object.assign(dataMap(manifest.pending), manifest.entries), hashKey: options.hashKey });
     for (const note of converted.notes) inspect(path.join(atlas, note.path));
     const currentKeys = new Set(result.items.map(i => i.key));
     for (const [key, old] of Object.entries(manifest.entries)) if (!currentKeys.has(key)) messages.push(`${old.path}: no longer in ${source.name}; kept.`);
     for (const note of converted.notes) {
-      const destination = path.join(atlas, note.path), old = manifest.entries[note.key], pending = manifest.pending[note.key];
+      const destination = path.join(atlas, note.path), old = ownValue(manifest.entries, note.key), pending = ownValue(manifest.pending, note.key);
       mkdirSafe(path.dirname(destination), atlas);
       const exists = fs.existsSync(destination), diskHash = exists ? digest(fs.readFileSync(destination)) : null;
       const owned = !exists || diskHash === old?.fullHash || diskHash === pending?.fullHash;
       if (!owned) { messages.push(`${note.path}: kept, edited since the last import.`); continue; }
       if (old?.sourceHash === sourceDigest(note.text) && diskHash === old.fullHash) { messages.push(`${note.path}: unchanged.`); continue; }
       manifest.pending[note.key] = { path: note.path, fullHash: digest(note.text), sourceHash: sourceDigest(note.text) };
-      record(note.key, manifest.pending[note.key]);
+      record(note.key, ownValue(manifest.pending, note.key));
       const temp = `${destination}.tmp-${process.pid}`;
       fs.writeFileSync(temp, note.text, { mode: 0o600 });
       options.beforeRename?.({ note, destination, temp });
@@ -221,7 +225,7 @@ export function runImport(argv, options = {}) {
       if (latest !== diskHash) { fs.rmSync(temp, { force: true }); delete manifest.pending[note.key]; record(note.key, null); messages.push(`${note.path}: kept, edited since the last import.`); continue; }
       fs.renameSync(temp, destination);
       options.afterRename?.({ note, destination });
-      manifest.entries[note.key] = manifest.pending[note.key]; delete manifest.pending[note.key];
+      manifest.entries[note.key] = ownValue(manifest.pending, note.key); delete manifest.pending[note.key];
     }
     compact();
     return { cards: result.items.length, notes: converted.notes.length, skipped: result.skipped, warnings: [...result.warnings, ...converted.warnings], messages };

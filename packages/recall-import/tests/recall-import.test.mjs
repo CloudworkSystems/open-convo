@@ -22,7 +22,7 @@ test('Recall reads invented cards and writes deterministic Atlas notes', () => {
   const result = checkSource(recallSource(), files);
   assert.deepEqual(result.items.map(item => item.title), ['Front Title', 'Heading Title', 'filename']);
   assert.deepEqual(result.items[0].tags, ['one', 'two']);
-  assert.deepEqual(result.items[0].extra, { unknown: 'kept' });
+  assert.deepEqual({ ...result.items[0].extra }, { unknown: 'kept' });
   assert.match(result.items[1].body, /Images in this card were not imported/);
   assert.deepEqual(result.skipped, [{ sourcePath: 'asset.bin', reason: 'not a Markdown card' }]);
   const converted = toNotes(result.items, { source: recallSource(), importedAt: fixed });

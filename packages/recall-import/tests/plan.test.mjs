@@ -43,7 +43,7 @@ test('Plan 2: front matter, heading and filename precedence and malformed preser
   const result = checkSource(source, [{ path: 'file.md', text: raw }, { path: 'heading.md', text: '# Heading\n' }, { path: 'filename.md', text: 'body' }, { path: 'bad.md', text: '---\nbad\n---\nbody' }]);
   assert.deepEqual(result.items.map(i => i.title), ['Metadata', 'Heading', 'filename', 'bad']);
   assert.equal(result.items[0].url, 'https://example.invalid/a'); assert.equal(result.items[0].created, 'first');
-  assert.deepEqual(result.items[0].tags, ['a', 'b']); assert.deepEqual(result.items[0].extra, { custom: 'retained' });
+  assert.deepEqual(result.items[0].tags, ['a', 'b']); assert.deepEqual({ ...result.items[0].extra }, { custom: 'retained' });
   assert.equal(result.items[3].body, '---\nbad\n---\nbody'); assert.match(result.warnings[0], /bad.md/);
 });
 

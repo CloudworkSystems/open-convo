@@ -6,6 +6,8 @@ const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
 const plain = value => value !== null && typeof value === 'object' && [Object.prototype, null].includes(Object.getPrototypeOf(value));
 const fail = message => { throw new Error(message); };
 const hash = value => createHash('sha256').update(value).digest('hex');
+const dataMap = value => Object.assign(Object.create(null), value);
+const ownValue = (record, key) => Object.hasOwn(record, key) ? record[key] : undefined;
 
 export function validateSource(source) {
   if (!plain(source) || typeof source.id !== 'string' || !ID.test(source.id)) fail(`Refusing source id "${source?.id ?? ''}". Use 1 to 64 lowercase letters, digits or hyphens, starting with a letter.`);
@@ -146,13 +148,14 @@ function slugParts(key) {
 
 function addSuffix(path, suffix) { return path.replace(/\.md$/, `-${suffix}.md`); }
 
-export function toNotes(items, { source, importedAt, manifest = {}, hashKey = hash } = {}) {
+export function toNotes(items, { source, importedAt, manifest = Object.create(null), hashKey = hash } = {}) {
   validateSource(source);
+  manifest = dataMap(manifest);
   if (typeof importedAt !== 'string' || !importedAt) fail('importedAt must be supplied.');
   validateResult(source, { items, skipped: [], warnings: [] });
   const base = `sources/${source.id}/`;
   const candidates = items.map(item => {
-    const kept = manifest[item.key]?.path;
+    const kept = ownValue(manifest, item.key)?.path;
     const path = kept || `${base}${slugParts(item.key).join('/')}.md`;
     if (!path.startsWith(base) || !validKey(path) || !path.endsWith('.md')) fail(`Refusing path for key "${item.key}" because it leaves ${base}.`);
     return { item, path };
@@ -169,8 +172,8 @@ export function toNotes(items, { source, importedAt, manifest = {}, hashKey = ha
   for (const group of groups.values()) if (group.length > 1) for (const entry of group) entry.needsSuffix = true;
   const used = new Set(Object.values(manifest).map(v => v.path?.toLowerCase()).filter(Boolean));
   for (const entry of candidates) {
-    if (!manifest[entry.item.key]?.path && used.has(entry.path.toLowerCase())) entry.needsSuffix = true;
-    if (entry.needsSuffix && !manifest[entry.item.key]?.path) {
+    if (!ownValue(manifest, entry.item.key)?.path && used.has(entry.path.toLowerCase())) entry.needsSuffix = true;
+    if (entry.needsSuffix && !ownValue(manifest, entry.item.key)?.path) {
       const digest = hashKey(entry.item.key);
       let found;
       for (const length of [8, 16, 64]) {
@@ -182,7 +185,7 @@ export function toNotes(items, { source, importedAt, manifest = {}, hashKey = ha
       warnings.push(`Card "${entry.item.key}" uses "${entry.path}" because its first path was reserved or collided.`);
     }
     const folded = entry.path.toLowerCase();
-    if (used.has(folded) && manifest[entry.item.key]?.path?.toLowerCase() !== folded) fail(`Refusing repeated output path "${entry.path}".`);
+    if (used.has(folded) && ownValue(manifest, entry.item.key)?.path?.toLowerCase() !== folded) fail(`Refusing repeated output path "${entry.path}".`);
     used.add(folded);
   }
   const notes = candidates.map(({ item, path }) => {
@@ -200,14 +203,14 @@ export function toNotes(items, { source, importedAt, manifest = {}, hashKey = ha
 }
 
 function parseFrontMatter(text, sourcePath) {
-  if (!text.startsWith('---\n')) return { fields: {}, body: text, warning: null };
+  if (!text.startsWith('---\n')) return { fields: dataMap(), body: text, warning: null };
   const end = text.indexOf('\n---\n', 4);
-  if (end < 0) return { fields: {}, body: text, warning: `${sourcePath}: front matter could not be read and was kept in the card.` };
+  if (end < 0) return { fields: dataMap(), body: text, warning: `${sourcePath}: front matter could not be read and was kept in the card.` };
   const raw = text.slice(4, end);
-  const fields = {};
+  const fields = dataMap();
   for (const line of raw.split('\n')) {
-    const match = /^([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$/.exec(line);
-    if (!match) return { fields: {}, body: text, warning: `${sourcePath}: front matter could not be read and was kept in the card.` };
+    const match = /^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$/.exec(line);
+    if (!match) return { fields: dataMap(), body: text, warning: `${sourcePath}: front matter could not be read and was kept in the card.` };
     const [, key, value] = match;
     const unquote = text => text.replace(/^(["'])(.*)\1$/, '$2');
     if (key === 'tags') {
@@ -390,7 +393,8 @@ export function recallSource() {
       const fields = parsed.fields;
       const { heading, body } = readMarkdown(parsed.body);
       const title = fields.title || heading || file.path.split('/').at(-1).replace(/\.md$/i, '');
-      const extra = Object.fromEntries(Object.entries(fields).filter(([key]) => !['title', 'url', 'source', 'tags', 'created', 'date'].includes(key)));
+      const extra = dataMap();
+      for (const [key, value] of Object.entries(fields)) if (!['title', 'url', 'source', 'tags', 'created', 'date'].includes(key)) extra[key] = value;
       items.push({ key: file.path, title, body, url: fields.url || fields.source || null, tags: fields.tags || [], created: fields.created || fields.date || null, sourcePath: file.path, extra });
     }
     return { items, skipped, warnings };
