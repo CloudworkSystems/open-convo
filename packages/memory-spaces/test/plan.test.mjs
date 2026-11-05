@@ -14,6 +14,43 @@ const step = (s, type, data) => op(s, type, data).state;
 function proposal(s = base(), id = 'note', text = 'Invented blue cover.') { return step(s, 'propose', { actor: 'helper', candidate: { id, text } }); }
 function keep(s = proposal(), id = 'note', subject = 'covers', space = 'personal') { return step(s, 'keep', { candidateId: id, subject, space, label }); }
 const visible = (s, space = 'personal', cloud = false) => read(s, { space, cloud });
+
+test('P1 inherited ID properties cannot crash or lose memory', () => {
+  for (const space of ['constructor', 'personal']) for (const subject of ['constructor', 'covers']) {
+    let s = emptyState([{ id: space, name: 'Invented space', kind: 'personal' }]);
+    s = keep(proposal(s), 'note', subject, space);
+    assert.equal(visible(s, space)[0].text, 'Invented blue cover.');
+    assert.ok(Object.hasOwn(s.subjects, space));
+    assert.ok(Object.hasOwn(s.subjects[space], subject));
+    assert.ok(renderWrites(s).some(w => w.path === `${space}/${subject}.md` && w.text.includes('Invented blue cover.')));
+    s = JSON.parse(JSON.stringify(s));
+    s = step(s, 'correct', { entryId: 'note', text: 'Invented correction.' });
+    assert.equal(visible(s, space)[0].text, 'Invented correction.');
+  }
+  for (const id of ['__proto__', 'toString']) {
+    unchangedRefusal(proposal(), 'keep', { candidateId: 'note', space: 'personal', subject: id, label }, /Subject id/);
+    const s = base(); s.spaces[0].id = id;
+    assert.throws(() => renderWrites(s), /Space id/);
+  }
+});
+
+test('P1 undo allowCloud succeeds after a later correction', () => {
+  let s = step(keep(), 'allowCloud', { entryId: 'note' });
+  const authorization = s.log.at(-1).id;
+  s = step(s, 'correct', { entryId: 'note', text: 'Invented later correction.' });
+  s = step(s, 'undo', { opId: authorization });
+  assert.deepEqual(visible(s, 'personal', true), []);
+  assert.equal(visible(s)[0].text, 'Invented later correction.');
+  assert.equal(s.subjects.personal.covers[0].history.length, 1);
+  const k = keep();
+  const authorized = step(k, 'allowCloud', { entryId: 'note' });
+  const repeated = step(authorized, 'allowCloud', { entryId: 'note' });
+  unchangedRefusal(repeated, 'undo', { opId: authorized.log.at(-1).id }, /depends/);
+  const correction = step(k, 'correct', { entryId: 'note', text: 'Independent invented correction.' });
+  const cloudAfterCorrection = step(correction, 'allowCloud', { entryId: 'note' });
+  const undoneCorrection = step(cloudAfterCorrection, 'undo', { opId: correction.log.at(-1).id });
+  assert.equal(visible(undoneCorrection, 'personal', true)[0].text, 'Invented blue cover.');
+});
 function unchangedRefusal(s, type, data, pattern) { const before = JSON.stringify(s); assert.throws(() => op(s, type, data), pattern); assert.equal(JSON.stringify(s), before); }
 
 test('Plan 1: candidates, keep, separation, skip', () => {

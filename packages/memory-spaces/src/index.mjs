@@ -4,11 +4,11 @@ const kinds = new Set(["personal", "business", "family"]);
 const personOnly = new Set(["keep", "skip", "correct", "forget", "restore", "undo", "share", "move", "allowCloud", "purge"]);
 
 export function emptyState(spaces = [{ id: "personal", name: "Personal", kind: "personal" }]) {
-  return { spaces: structuredClone(spaces), subjects: {}, proposed: [], trash: [], log: [] };
+  return { spaces: structuredClone(spaces), subjects: Object.create(null), proposed: [], trash: [], log: [] };
 }
 
 export function applyOperation(input, operation) {
-  const state = structuredClone(input);
+  const state = cloneState(input);
   validateState(state);
   const op = structuredClone(operation);
   requireText(op.id, "Operation id");
@@ -37,7 +37,7 @@ export function applyOperation(input, operation) {
 }
 
 export function read(input, options) {
-  const state = structuredClone(input);
+  const state = cloneState(input);
   validateState(state);
   requireSpace(state, options.space);
   const entries = [];
@@ -141,7 +141,7 @@ function undo(state, op) {
   const target = state.log.find((record) => record.id === op.opId);
   if (!target) throw new Error(`Operation '${op.opId}' was not found.`);
   if (!["keep", "correct", "forget", "share", "move", "allowCloud"].includes(target.type) || target.purged) throw new Error(`Operation '${op.opId}' cannot be undone.`);
-  const later = state.log.slice(state.log.indexOf(target) + 1).find((record) => target.entryId && record.entryId === target.entryId && record.type !== "read");
+  const later = state.log.slice(state.log.indexOf(target) + 1).find((record) => dependsOn(record, target, state.log));
   if (later) throw new Error(`Operation '${op.opId}' cannot be undone because operation '${later.id}' depends on it.`);
   mutateWithSizeCheck(state, () => {
     if (target.type === "keep") { const entry = findEntry(state, target.entryId); removeEntry(state, entry.id); state.proposed.push(structuredClone(entry.candidate)); }
@@ -216,19 +216,45 @@ function findAny(state, id) { return state.proposed.find((x) => x.id === id) ?? 
 function takeCandidate(state, id, remove) { const item = state.proposed.find((x) => x.id === id); if (!item) throw new Error(`Candidate '${id}' was not found.`); if (remove) state.proposed.splice(state.proposed.indexOf(item), 1); return item; }
 function findEntry(state, id) { for (const subjects of Object.values(state.subjects)) for (const entries of Object.values(subjects)) { const item = entries.find((x) => x.id === id); if (item) return item; } throw new Error(`Memory '${id}' was not found.`); }
 function findTrash(state, id) { const item = state.trash.find((x) => x.id === id); if (!item) throw new Error(`Memory '${id}' was not found in Trash.`); return item; }
-function addEntry(state, entry) { state.subjects[entry.space] ??= {}; state.subjects[entry.space][entry.subject] ??= []; state.subjects[entry.space][entry.subject].push(entry); }
+function own(object, key) { return Object.hasOwn(object, key) ? object[key] : undefined; }
+function cloneState(input) {
+  const state = structuredClone(input);
+  state.subjects = Object.assign(Object.create(null), state.subjects);
+  for (const [space, subjects] of Object.entries(state.subjects)) state.subjects[space] = Object.assign(Object.create(null), subjects);
+  return state;
+}
+function addEntry(state, entry) {
+  if (!Object.hasOwn(state.subjects, entry.space)) state.subjects[entry.space] = Object.create(null);
+  const subjects = own(state.subjects, entry.space);
+  if (!Object.hasOwn(subjects, entry.subject)) subjects[entry.subject] = [];
+  own(subjects, entry.subject).push(entry);
+}
+function dependsOn(record, target, records) {
+  if (!target.entryId || record.entryId !== target.entryId) return false;
+  if (record.targetId === target.id) return true;
+  if (target.type === 'keep') return true;
+  const effective = record.type === 'undo' ? records.find(r => r.id === record.targetId) : record;
+  if (!effective) return false;
+  if (effective.type === 'forget') return true;
+  if (target.type === 'forget') return ['restore', 'forget'].includes(effective.type);
+  if (target.type === 'correct') return effective.type === 'correct';
+  if (target.type === 'allowCloud') return effective.type === 'allowCloud';
+  if (target.type === 'move') return effective.type === 'move';
+  if (target.type === 'share') return effective.type === 'share' && effective.space === target.space;
+  return false;
+}
 function removeEntry(state, id) { for (const subjects of Object.values(state.subjects)) for (const entries of Object.values(subjects)) { const i = entries.findIndex((x) => x.id === id); if (i >= 0) { entries.splice(i, 1); return; } } }
 function withinTrashWindow(item, now) { if (Date.parse(now) - Date.parse(item.forgottenAt) > 30 * DAY) throw new Error("This memory's 30 days in Trash are over."); }
 function log(state, op, detail) { state.log.push({ id: op.id, type: op.type, now: op.now, actor: op.actor, ...structuredClone(detail) }); }
 function mutateWithSizeCheck(state, change) { const before = structuredClone(state); change(); try { checkSizes(state); } catch (error) { Object.keys(state).forEach((key) => delete state[key]); Object.assign(state, before); throw error; } }
-function checkSizes(state) { for (const space of state.spaces) { const subjects = state.subjects[space.id] ?? {}; for (const subject of Object.keys(subjects)) if (Buffer.byteLength(renderSubject(subject, subjects[subject])) > LIMIT) throw new Error("This subject is full. Split it or correct an older entry."); if (Buffer.byteLength(renderIndex(space.id, subjects)) > LIMIT) throw new Error(`Space '${space.id}' index is full. Use fewer subjects.`); } }
+function checkSizes(state) { for (const space of state.spaces) { const subjects = own(state.subjects, space.id) ?? Object.create(null); for (const subject of Object.keys(subjects)) if (Buffer.byteLength(renderSubject(subject, own(subjects, subject))) > LIMIT) throw new Error("This subject is full. Split it or correct an older entry."); if (Buffer.byteLength(renderIndex(space.id, subjects)) > LIMIT) throw new Error(`Space '${space.id}' index is full. Use fewer subjects.`); } }
 function renderSubject(subject, entries) { return `# ${subject}\n` + [...entries].sort((a,b) => a.id.localeCompare(b.id)).map((e) => `- [${e.id}] ${e.text} (${labelText(e.label)})`).join("\n") + "\n"; }
 function labelText(label) { return label.kind === "owner said" ? `${label.kind}, ${label.date}` : label.kind === "agent's reading, kept" ? `${label.kind}, ${label.agent}` : `${label.kind}, ${label.link}`; }
 function renderIndex(space, subjects) { return "<!-- Generated. Do not edit. -->\n" + Object.keys(subjects).sort().map((subject) => `- ${subject}.md: # ${subject}`).join("\n") + (Object.keys(subjects).length ? "\n" : ""); }
 export function renderWrites(state) {
   validateState(state); checkSizes(state);
   const writes = [];
-  for (const space of state.spaces) { const subjects = state.subjects[space.id] ?? {}; writes.push({ path: `${space.id}/INDEX.md`, text: renderIndex(space.id, subjects) }); for (const subject of Object.keys(subjects).sort()) writes.push({ path: `${space.id}/${subject}.md`, text: renderSubject(subject, subjects[subject]) }); }
+  for (const space of state.spaces) { const subjects = own(state.subjects, space.id) ?? Object.create(null); writes.push({ path: `${space.id}/INDEX.md`, text: renderIndex(space.id, subjects) }); for (const subject of Object.keys(subjects).sort()) writes.push({ path: `${space.id}/${subject}.md`, text: renderSubject(subject, own(subjects, subject)) }); }
   writes.push({ path: ".proposed/candidates.json", text: JSON.stringify(state.proposed, null, 2) + "\n" });
   writes.push({ path: ".trash/trash.json", text: JSON.stringify(state.trash, null, 2) + "\n" });
   writes.push({ path: ".log/log.jsonl", text: state.log.map((x) => JSON.stringify(x)).join("\n") + (state.log.length ? "\n" : "") });

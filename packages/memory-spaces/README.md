@@ -20,6 +20,9 @@ Other verbs are `propose`, `keep`, `skip`, `correct`, `forget`, `restore`, `undo
 
 ## Edge cases
 
+- Space and subject dictionaries use null prototypes and own-property lookups, including after loading ordinary JSON objects. `constructor` is a valid id. `__proto__` and `toString` are refused by the existing lowercase id rules.
+- Undo checks the field changed by each operation. A correction and cloud permission are independent, so either may be undone after the other. Later changes to the same field, forgetting the entry, or undoing the target itself block undo. Keeping an entry must still precede every later operation on that entry.
+
 - Thirty days means exactly 30 times 24 hours from `forgottenAt`; restore is allowed at the exact limit and refused after it.
 - A repeated operation id is refused rather than replayed.
 - Sharing exposes the source entry in another space without making a second entry; undo removes that exposure.
