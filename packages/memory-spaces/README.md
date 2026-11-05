@@ -20,6 +20,9 @@ Other verbs are `propose`, `keep`, `skip`, `correct`, `forget`, `restore`, `undo
 
 ## Edge cases
 
+- An operation already reversed by Undo does not block earlier Undo operations. Undo records remain in the audit log, but are not forward dependencies. A second Undo of the same operation is refused explicitly. Capacity checks also skip reversed forward operations.
+- Purge always redacts records about an expired entry, including operations that were undone. Collision cleanup in unrelated records touches only `text`, `oldText`, and memory-text fields in snapshots, correction histories and candidate copies. IDs, actors, operation kinds, dates, labels and space names remain intact even when they equal forgotten text.
+
 - Space and subject dictionaries use null prototypes and own-property lookups, including after loading ordinary JSON objects. `constructor` is a valid id. `__proto__` and `toString` are refused by the existing lowercase id rules.
 - Undo checks the field changed by each operation. A correction and cloud permission are independent, so either may be undone after the other. Later changes to the same field, forgetting the entry, or undoing the target itself block undo. Keeping an entry must still precede every later operation on that entry.
 - Each cloud grant records its prior cloud value. Undo restores that value, so undoing a repeated grant preserves an earlier grant, as the plan's reversal rule requires.

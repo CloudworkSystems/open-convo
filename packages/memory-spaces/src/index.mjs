@@ -145,7 +145,9 @@ function undo(state, op) {
   const target = state.log.find((record) => record.id === op.opId);
   if (!target) throw new Error(`Operation '${op.opId}' was not found.`);
   if (!["keep", "correct", "forget", "share", "move", "allowCloud"].includes(target.type) || target.purged) throw new Error(`Operation '${op.opId}' cannot be undone.`);
-  const later = state.log.slice(state.log.indexOf(target) + 1).find((record) => dependsOn(record, target, state.log));
+  const reversed = new Set(state.log.filter(record => record.type === 'undo' && !record.purged).map(record => record.targetId));
+  if (reversed.has(target.id)) throw new Error(`Operation '${op.opId}' has already been undone.`);
+  const later = state.log.slice(state.log.indexOf(target) + 1).find((record) => record.type !== 'undo' && !reversed.has(record.id) && dependsOn(record, target));
   if (later) throw new Error(`Operation '${op.opId}' cannot be undone because operation '${later.id}' depends on it.`);
   const previousLocation = target.type === 'move' ? target.before : target.type === 'forget' ? findTrash(state, target.entryId) : findEntry(state, target.entryId);
   try { mutateWithSizeCheck(state, () => {
@@ -158,6 +160,7 @@ function undo(state, op) {
   }); } catch (error) {
     if (/subject is full|index is full/.test(error.message)) {
       const dependency = state.log.slice(state.log.indexOf(target) + 1).findLast(record => {
+        if (reversed.has(record.id)) return false;
         if (!record.entryId || record.entryId === target.entryId || !['keep', 'correct', 'move', 'restore', 'undo'].includes(record.type)) return false;
         let entry; try { entry = findEntry(state, record.entryId); } catch { return false; }
         return entry.space === previousLocation.space && (/index is full/.test(error.message) || entry.subject === previousLocation.subject);
@@ -179,7 +182,7 @@ function purge(state, op) {
   for (const record of state.log) if (ids.has(record.entryId) || ids.has(record.candidateId)) {
     for (const key of Object.keys(record)) if (!["id", "type", "now", "actor"].includes(key)) delete record[key];
     record.purged = true;
-  } else for (const key of Object.keys(record)) if (typeof record[key] === "string" && texts.has(record[key])) delete record[key];
+  } else redactLogText(record, texts);
   log(state, op, { purgedIds: [...ids] });
   return { purged: [...ids] };
 }
@@ -245,12 +248,21 @@ function addEntry(state, entry, index) {
   const entries = own(subjects, entry.subject);
   entries.splice(index ?? entries.length, 0, entry);
 }
-function dependsOn(record, target, records) {
+function redactLogText(record, texts) {
+  // Only these schema fields contain memory text. IDs, actors, dates and labels are metadata.
+  for (const key of ['text', 'oldText']) if (texts.has(record[key])) delete record[key];
+  function redactEntry(entry) {
+    if (!entry || typeof entry !== 'object') return;
+    if (texts.has(entry.text)) delete entry.text;
+    for (const version of entry.history ?? []) if (texts.has(version.text)) delete version.text;
+    if (entry.candidate && texts.has(entry.candidate.text)) delete entry.candidate.text;
+  }
+  redactEntry(record.snapshot);
+}
+function dependsOn(record, target) {
   if (!target.entryId || record.entryId !== target.entryId) return false;
-  if (record.targetId === target.id) return true;
   if (target.type === 'keep') return true;
-  const effective = record.type === 'undo' ? records.find(r => r.id === record.targetId) : record;
-  if (!effective) return false;
+  const effective = record;
   if (effective.type === 'forget') return true;
   if (target.type === 'forget') return ['restore', 'forget'].includes(effective.type);
   if (target.type === 'correct') return effective.type === 'correct';

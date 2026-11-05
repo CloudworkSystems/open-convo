@@ -53,6 +53,76 @@ test('P1 undo allowCloud succeeds after a later correction', () => {
 });
 function unchangedRefusal(s, type, data, pattern) { const before = JSON.stringify(s); assert.throws(() => op(s, type, data), pattern); assert.equal(JSON.stringify(s), before); }
 
+test('P1 purge preserves unrelated metadata matching expired text', () => {
+  for (const text of ['person', 'op-0', 'propose', now, 'other', 'studio']) {
+    let s = keep(proposal(base(), 'other', 'Invented unrelated text.'), 'other');
+    s = keep(proposal(s, 'expired', text), 'expired');
+    s = step(s, 'forget', { entryId: 'expired' });
+    const unrelated = structuredClone(s.log.filter(r => r.entryId === 'other' || r.candidateId === 'other'));
+    const purged = op(s, 'purge', { now: '2041-01-01T00:00:00Z' });
+    for (const record of unrelated) assert.deepEqual(purged.state.log.find(r => r.id === record.id), record, text);
+    assert.deepEqual(purged.state.trash, []);
+  }
+});
+
+test('P1 undone newer cloud grant does not block undo of older grant', () => {
+  const first = step(keep(), 'allowCloud', { entryId: 'note' });
+  const second = step(first, 'allowCloud', { entryId: 'note' });
+  let s = step(second, 'undo', { opId: second.log.at(-1).id });
+  s = step(s, 'undo', { opId: first.log.at(-1).id });
+  assert.deepEqual(visible(s, 'personal', true), []);
+});
+
+test('Undo sweep: reversed dependents are ignored for every operation kind', () => {
+  for (const type of ['keep', 'correct', 'forget', 'share', 'move', 'allowCloud']) {
+    let before = keep();
+    const data = { entryId: 'note', text: 'Invented changed text.', space: 'studio' };
+    const target = type === 'keep' ? before : step(before, type, data);
+    const targetId = target.log.at(-1).id;
+    if (type === 'forget') {
+      const undone = step(target, 'undo', { opId: targetId });
+      assert.deepEqual(visible(undone), visible(before));
+      unchangedRefusal(undone, 'undo', { opId: targetId }, /already been undone/);
+      continue;
+    }
+    const dependent = step(target, 'forget', { entryId: 'note' });
+    const reversed = step(dependent, 'undo', { opId: dependent.log.at(-1).id });
+    const undone = step(reversed, 'undo', { opId: targetId });
+    if (type === 'keep') assert.deepEqual(visible(undone), []);
+    else assert.deepEqual(visible(undone), visible(before));
+    unchangedRefusal(undone, 'undo', { opId: targetId }, /already been undone/);
+  }
+});
+
+test('Purge sweep: text fields are redacted in unrelated snapshots without metadata loss', () => {
+  let s = keep(proposal(base(), 'other', 'Shared invented phrase.'), 'other');
+  s = step(s, 'correct', { entryId: 'other', text: 'Unrelated current phrase.' });
+  s = step(s, 'forget', { entryId: 'other', now: '2040-02-01T00:00:00Z' });
+  s = keep(proposal(s, 'expired', 'Shared invented phrase.'), 'expired');
+  s = step(s, 'forget', { entryId: 'expired' });
+  const out = op(s, 'purge', { now: '2040-02-02T00:00:00Z' });
+  for (const record of out.state.log.filter(r => r.entryId === 'other' || r.candidateId === 'other')) {
+    assert.equal(JSON.stringify(record).includes('Shared invented phrase.'), false);
+    assert.ok(['person', 'helper'].includes(record.actor));
+    assert.ok(record.id);
+  }
+});
+
+test('Undo sweep: correction move share chains unwind in reverse order', () => {
+  for (const kind of ['correct', 'move']) {
+    let s = keep(); const before = visible(s);
+    const first = step(s, kind, { entryId: 'note', text: 'Invented first revision.', space: 'studio' });
+    const second = step(first, kind, { entryId: 'note', text: 'Invented second revision.', space: 'personal' });
+    s = step(second, 'undo', { opId: second.log.at(-1).id });
+    s = step(s, 'undo', { opId: first.log.at(-1).id });
+    assert.deepEqual(visible(s), before);
+  }
+  const moved = step(keep(), 'move', { entryId: 'note', space: 'studio' });
+  const shared = step(moved, 'share', { entryId: 'note', space: 'personal' });
+  const unshared = step(shared, 'undo', { opId: shared.log.at(-1).id });
+  assert.equal(visible(step(unshared, 'undo', { opId: moved.log.at(-1).id }))[0].space, 'personal');
+});
+
 test('P1 undo move names a later share back to its original space', () => {
   const moved = step(keep(), 'move', { entryId: 'note', space: 'studio' });
   const shared = step(moved, 'share', { entryId: 'note', space: 'personal' });
