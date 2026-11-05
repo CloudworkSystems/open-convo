@@ -174,6 +174,8 @@ function addSuffix(notePath, suffix) {
   return notePath.slice(0, slash + 1) + utf8Prefix(stem, 255 - Buffer.byteLength(tail)) + tail;
 }
 
+const pathIdentity = value => value.normalize('NFC').toLowerCase().normalize('NFC');
+
 export function toNotes(items, options = {}) {
   optionObject(options, 'toNotes', ['source', 'importedAt', 'manifest', 'hashKey']);
   let { source, importedAt, manifest = Object.create(null), hashKey = hash } = options;
@@ -182,8 +184,12 @@ export function toNotes(items, options = {}) {
   checkHashKey(hashKey);
   if (manifest === null || typeof manifest !== 'object' || Array.isArray(manifest)) fail('manifest: expected an object mapping source keys to saved note records.');
   manifest = dataMap(manifest);
+  const savedPaths = new Map();
   for (const [key, entry] of Object.entries(manifest)) {
     if (!validKey(key) || !plain(entry) || typeof entry.path !== 'string' || !entry.path.startsWith(`sources/${source.id}/`) || !validKey(entry.path) || !entry.path.endsWith('.md') || entry.path.split('/').some(part => Buffer.byteLength(part) > 255)) fail(`manifest: expected safe keys and .md paths under sources/${source.id}/; invalid record for "${key}".`);
+    const identity = pathIdentity(entry.path);
+    if (savedPaths.has(identity)) fail(`Manifest integrity error: records "${savedPaths.get(identity)}" and "${key}" share saved path "${entry.path}" after case and Unicode normalization.`);
+    savedPaths.set(identity, key);
   }
   validateResult(source, { items, skipped: [], warnings: [] });
   const base = `sources/${source.id}/`;
@@ -196,7 +202,7 @@ export function toNotes(items, options = {}) {
   });
   const groups = new Map();
   for (const entry of candidates) {
-    const folded = entry.path.toLowerCase();
+    const folded = pathIdentity(entry.path);
     const reserved = entry.path.split('/').at(-1).toLowerCase() === 'index.md';
     if (!groups.has(folded)) groups.set(folded, []);
     groups.get(folded).push(entry);
@@ -204,23 +210,23 @@ export function toNotes(items, options = {}) {
   }
   const warnings = [];
   for (const group of groups.values()) if (group.length > 1) for (const entry of group) entry.needsSuffix = true;
-  const used = new Set(Object.values(manifest).map(v => v.path?.toLowerCase()).filter(Boolean));
+  const used = new Set(Object.values(manifest).map(v => v.path && pathIdentity(v.path)).filter(Boolean));
   for (const entry of candidates) {
-    if (!ownValue(manifest, entry.item.key)?.path && used.has(entry.path.toLowerCase())) entry.needsSuffix = true;
+    if (!ownValue(manifest, entry.item.key)?.path && used.has(pathIdentity(entry.path))) entry.needsSuffix = true;
     if (entry.needsSuffix && !ownValue(manifest, entry.item.key)?.path) {
       const digest = hashKey(entry.item.key);
       if (typeof digest !== 'string' || !/^[0-9a-f]{64}$(?![\s\S])/i.test(digest)) fail('hashKey: expected 64 hexadecimal characters for every source key.');
       let found;
       for (const length of [8, 16, 64]) {
         const next = addSuffix(entry.path, digest.slice(0, length));
-        if (!used.has(next.toLowerCase())) { found = next; break; }
+        if (!used.has(pathIdentity(next))) { found = next; break; }
       }
       if (!found) fail(`Could not make a unique path for key "${entry.item.key}".`);
       entry.path = found;
       warnings.push(`Card "${entry.item.key}" uses "${entry.path}" because its first path was reserved or collided.`);
     }
-    const folded = entry.path.toLowerCase();
-    if (used.has(folded) && ownValue(manifest, entry.item.key)?.path?.toLowerCase() !== folded) fail(`Refusing repeated output path "${entry.path}".`);
+    const folded = pathIdentity(entry.path);
+    if (used.has(folded) && (ownValue(manifest, entry.item.key)?.path && pathIdentity(ownValue(manifest, entry.item.key).path)) !== folded) fail(`Refusing repeated output path "${entry.path}".`);
     used.add(folded);
   }
   const notes = candidates.map(({ item, path }) => {
@@ -234,6 +240,12 @@ export function toNotes(items, options = {}) {
     lines.push('---', '', item.body);
     return { key: item.key, path, text: lines.slice(0, -1).join('\n') + '\n' + item.body };
   });
+  const finalPaths = new Map();
+  for (const note of notes) {
+    const identity = pathIdentity(note.path);
+    if (finalPaths.has(identity)) fail(`Refusing repeated output path "${note.path}" for records "${finalPaths.get(identity)}" and "${note.key}".`);
+    finalPaths.set(identity, note.key);
+  }
   return { notes, warnings };
 }
 
@@ -364,7 +376,7 @@ function escapedAt(text, offset) {
 // backtick run of exactly the same length (and may cross line endings).
 function markdownCodeMask(text) {
   const mask = new Uint8Array(text.length);
-  let fence = null, html = null, paragraph = false;
+  let fence = null, html = null, paragraph = false, container = '', listPadding = 0, referenceContinuation = false;
   const blockTags = 'address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul';
   const blockTag = new RegExp(`^ {0,3}</?(?:${blockTags})(?=[ \t/>]|$)`, 'i');
   // CommonMark tag grammar, including quoted attributes whose contents are opaque.
@@ -380,6 +392,18 @@ function markdownCodeMask(text) {
   for (const match of text.matchAll(/[^\n]*(?:\n|$)/g)) {
     let line = match[0].replace(/\r?\n$/, '');
     if (match.index === 0 && line.startsWith('\uFEFF')) line = line.slice(1);
+    // Remove container markers for block recognition, retaining original offsets for masks.
+    let quoteDepth = 0;
+    while (/^ {0,3}>/.test(line)) { line = line.replace(/^ {0,3}>[ \t]?/, ''); quoteDepth++; }
+    const list = /^ {0,3}(?:[-+*]|\d{1,9}[.)])(?:[ \t]+|$)/.exec(line);
+    const sameQuote = container.startsWith(`${quoteDepth}:`);
+    let inList = false;
+    if (list) { listPadding = list[0].length; line = line.slice(listPadding); inList = true; }
+    else if (sameQuote && listPadding && line.startsWith(' '.repeat(listPadding))) { line = line.slice(listPadding); inList = true; }
+    else listPadding = 0;
+    const nextContainer = `${quoteDepth}:${inList ? 'list' : ''}`;
+    if (nextContainer !== container || list) { paragraph = false; fence = null; html = null; referenceContinuation = false; }
+    container = nextContainer;
     const blank = /^[ \t]*$/.test(line);
     if (html && html.blank && blank) html = null;
     if (!fence && !html) {
@@ -411,7 +435,13 @@ function markdownCodeMask(text) {
       fence = open[1];
       mask.fill(1, match.index, match.index + match[0].length);
     } else if (/^(?: {4}| {0,3}\t)/.test(line)) mask.fill(1, match.index, match.index + match[0].length);
-    paragraph = !blank && !open && !mask[match.index];
+    const heading = /^ {0,3}#{1,6}(?:[ \t]|$)/.test(line);
+    const setext = paragraph && /^ {0,3}(?:=+|-+)[ \t]*$/.test(line);
+    const thematic = /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}|(?:-[ \t]*){3,})$/.test(line);
+    const definition = !paragraph && /^ {0,3}\[(?:\\.|[^\]\\])+\]:[ \t]*/.exec(line);
+    const continuation = referenceContinuation && /^(?: {0,3})(?:<[^>]+>|[^ \t]+)(?:[ \t].*)?$/.test(line);
+    referenceContinuation = !!definition && !line.slice(definition[0].length).trim();
+    paragraph = !blank && !open && !mask[match.index] && !heading && !setext && !thematic && !definition && !continuation;
   }
   for (let i = 0; i < text.length;) {
     if (!mask[i] && text[i] === '<' && !escapedAt(text, i)) {

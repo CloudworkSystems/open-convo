@@ -63,8 +63,8 @@ function validateManifest(manifest, file, sourceRoot) {
   const paths = new Map();
   for (const records of [manifest.entries, manifest.pending]) for (const [key, entry] of Object.entries(records)) {
     validateEntry(entry, key, file, sourceRoot);
-    const folded = entry.path.toLowerCase();
-    if (paths.has(folded) && paths.get(folded) !== key || ownValue(manifest.entries, key) && ownValue(manifest.entries, key).path !== entry.path) throw stateError(file, 'conflicting note paths');
+    const folded = entry.path.normalize('NFC').toLowerCase().normalize('NFC');
+    if (paths.has(folded) && paths.get(folded) !== key || ownValue(manifest.entries, key) && ownValue(manifest.entries, key).path !== entry.path) throw stateError(file, `conflicting saved paths for records "${paths.get(folded) ?? key}" and "${key}" after case and Unicode normalization`);
     paths.set(folded, key);
   }
   return manifest;

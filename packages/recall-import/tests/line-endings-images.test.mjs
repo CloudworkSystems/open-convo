@@ -155,3 +155,36 @@ test('Image exclusion HTML img table: preserve attributes but warn without rewri
     `<div>\n<img src="https://example.invalid/real.png" alt="${excludedImage}">\n</div>\n`
   ]) { const result = read(body).body; assert.ok(result.startsWith(body)); assert.equal(result.split(notice).length, 2); }
 });
+
+const precedingBlocks = [
+  ['ATX heading', '# Heading\n'], ['ATX heading without space', '###\n'],
+  ['setext heading equals', 'Heading\n===\n'], ['setext heading hyphens', 'Heading\n---\n'],
+  ['thematic break stars', '* * *\n'], ['thematic break underscores', '___\n'], ['thematic break hyphens', '---\n'],
+  ['fenced code', '```\ntext\n```\n'], ['indented code', '    text\n'],
+  ['HTML block', '<!-- comment -->\n'], ['blank line', 'Paragraph\n\n'],
+  ['reference definition', '[label]: https://example.invalid/page\n'],
+  ['reference definition with title', '[label]: https://example.invalid/page "Title"\n'],
+  ['reference definition multiline', '[label]:\n  <https://example.invalid/page>\n'],
+  ['finished list container', '- List item\n'], ['finished quote container', '> Quoted paragraph\n']
+];
+test('Paragraph tracker block table: every completed block permits a type-7 HTML block', () => {
+  for (const [name, prefix] of precedingBlocks) {
+    const text = prefix + '<invented>\n' + excludedImage + '\n</invented>\n';
+    assert.equal(read(text).body, text, name);
+  }
+});
+test('Paragraph tracker container table: new list items and quotes start independent paragraphs', () => {
+  for (const text of [
+    `Paragraph\n> <invented>\n> ${excludedImage}\n> </invented>\n`,
+    `Paragraph\n- <invented>\n  ${excludedImage}\n  </invented>\n`,
+    `- Previous paragraph\n- <invented>\n  ${excludedImage}\n  </invented>\n`,
+    `> # Heading\n> <invented>\n> ${excludedImage}\n> </invented>\n`
+  ]) assert.equal(read(text).body, text);
+});
+test('Paragraph tracker continuation table: generic tags cannot interrupt an open paragraph', () => {
+  for (const prefix of ['Paragraph\n', '> Paragraph\n> ', '- Paragraph\n  ']) {
+    const container = prefix.startsWith('>') ? '> ' : prefix.startsWith('-') ? '  ' : '';
+    const text = prefix + '<invented>\n' + container + excludedImage + '\n';
+    assert.ok(read(text).body.startsWith(text.replace(excludedImage, excludedImage.slice(1))));
+  }
+});
