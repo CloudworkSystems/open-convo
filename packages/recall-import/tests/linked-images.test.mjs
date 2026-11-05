@@ -12,7 +12,7 @@ const images = [
 ];
 for (const [innerName, image, defs] of images) for (const form of ['inline', 'full reference', 'collapsed reference', 'shortcut reference']) {
   test(`Linked image table: ${form} wrapping ${innerName}`, () => {
-    const label = image.replace(/[\[\]]/g, '\\$&');
+    const label = image.replace(/[\\[\]]/g, '\\$&');
     const suffix = form === 'inline' ? `(<${pageURL}> "Page title")` : form === 'full reference' ? '[page]' : form === 'collapsed reference' ? '[]' : '';
     const outerDef = form === 'inline' ? '' : `\n\n[${form === 'full reference' ? 'page' : label}]: <${pageURL}> "Page title"`;
     const result = read(`[${image}]${suffix}${defs}${outerDef}`);
