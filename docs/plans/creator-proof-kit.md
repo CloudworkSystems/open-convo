@@ -1,6 +1,6 @@
 # Creator Proof Kit (PRD)
 
-Status: Approved (Nov 5): the owner chose "Yes, all four" in the Claude thread "Draft next plans for outside builders" on November 5, 2026.
+Status: In progress (Nov 5): the owner chose "Yes, all four" in the Claude thread "Draft next plans for outside builders" on November 5, 2026; building from issue #295.
 
 Written November 4, 2026 by a Claude session (project "261024 OC Steering",
 thread "Draft next plans for outside builders"). Session name:
