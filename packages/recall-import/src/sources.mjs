@@ -112,6 +112,13 @@ function scalar(value, keepText = true) {
   return !(keepText && typed) && !syntax && /^[A-Za-z0-9 _./:@+-]+$/.test(text) && text.trim() === text ? text : JSON.stringify(text);
 }
 
+// Atlas reads simple key/value lines, stripping only their outer quotes.
+// Unlike the other metadata serializer, this must never insert JSON escapes.
+function atlasScalar(text) {
+  const encoded = scalar(text);
+  return encoded.startsWith('"') ? `"${text}"` : encoded;
+}
+
 function frontLines(key, value, indent = '', keepText = true) {
   const emit = v => scalar(v, keepText);
   const label = scalar(key);
@@ -171,7 +178,9 @@ export function toNotes(items, { source, importedAt, manifest = {}, hashKey = ha
     used.add(folded);
   }
   const notes = candidates.map(({ item, path }) => {
-    const lines = ['---', `kind: source`, ...frontLines('title', item.title), ...frontLines('description', item.title), ...frontLines('source', source.name), 'label: from a source', 'status: unchecked', ...frontLines('imported', importedAt, '', false)];
+    const title = item.title.replace(/[\t\r\n\u2028\u2029]/g, ' ');
+    if (title !== item.title) warnings.push(`${item.sourcePath}: tabs or line breaks in the title were replaced with a space in the saved title and description so Atlas can read them.`);
+    const lines = ['---', `kind: source`, `title: ${atlasScalar(title)}`, `description: ${atlasScalar(title)}`, ...frontLines('source', source.name), 'label: from a source', 'status: unchecked', ...frontLines('imported', importedAt, '', false)];
     if (item.url) lines.push(...frontLines('url', item.url));
     if (item.tags.length) lines.push(...frontLines('tags', item.tags));
     if (item.created) lines.push(...frontLines('created', item.created));

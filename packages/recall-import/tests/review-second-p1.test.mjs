@@ -51,7 +51,10 @@ test('Second P1 2: every source scalar uses string-preserving quotes', () => {
     const item = { key: 'one.md', title: value, body: '', url: value, tags: [value], created: value, sourcePath: 'one.md', extra: { nested: { field: value }, list: [value] } };
     const note = toNotes([item], { source, importedAt: '2026-11-05T12:00:00.000Z' }).notes[0].text;
     for (const field of ['title', 'description', 'source', 'url', 'created']) {
-      assert.equal(new RegExp(`^${field}: (.+)$`, 'm').exec(note)?.[1], JSON.stringify(value), field + ': ' + value);
+      const expected = ['title', 'description'].includes(field) ? value.replace(/[\t\r\n\u2028\u2029]/g, ' ') : value;
+      const encoded = new RegExp(`^${field}: (.+)$`, 'm').exec(note)?.[1];
+      if (['title', 'description'].includes(field) && expected !== value) assert.equal(encoded, expected);
+      else assert.equal(encoded, JSON.stringify(value), field + ': ' + value);
     }
     assert.ok(note.includes(`  - ${JSON.stringify(value)}\n`));
     assert.ok(note.includes(`    field: ${JSON.stringify(value)}\n`));
