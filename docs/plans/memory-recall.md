@@ -81,8 +81,11 @@ function:
    byte for byte.
 3. **Age comes from the label or the log.** `ageDays` is whole days from
    the entry's last change to `now`. The last change is the `now` of the
-   latest log record that kept, corrected, moved or restored that entry,
-   or the `owner said` label's date if that is later. If neither exists,
+   latest log record that kept, corrected, moved or restored that entry
+   and is still in effect, or the `owner said` label's date if that is
+   later. A record that a later `undo` reversed doesn't count, so a
+   correction made today and then undone leaves the entry as old as its
+   text really is. If neither exists,
    `ageDays` is `null`. The library reads only those records' times and
    entry ids from the log, never their text.
 4. **Recheck old facts that name something.** `recheck` is true when
@@ -151,7 +154,9 @@ answers the five questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
 4. Same inputs, same output byte for byte, across two runs and after a
    JSON round trip of the state.
 5. Age: from the log, from a later `owner said` date, and `null` when
-   neither exists; a `correct` resets the age.
+   neither exists; a `correct` resets the age; a `correct` that is then
+   undone doesn't, so an old price corrected and undone today is still
+   flagged `recheck`.
 6. Recheck: each kind of changeable thing at 31 days is flagged, the same
    text at 30 days isn't, and plain text at 300 days isn't.
 7. Approval claims: each listed phrase is flagged; "not approved yet" is
