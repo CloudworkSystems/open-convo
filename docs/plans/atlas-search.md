@@ -178,6 +178,14 @@ wiki:
 
 He confirms each message says what to do next.
 
+## Carried To The Build
+
+Codex findings from the plan review's later rounds, which the code pull
+request must meet (docs/agent-process.md "Plans stop after two Codex
+rounds"):
+
+- A note matched only by its file name or about line (no searched content line holds a query word, or the note is empty) is still returned, with `line: null` and `lineNumber: null`. The command shows "(matched by its title)" in place of a line, never an unrelated first line. Tests cover an empty `seed-potatoes.md` and a note whose only match is its file name ([thread](https://github.com/CloudworkSystems/open-convo/pull/303#discussion_r4479814048)).
+
 ## Out Of Scope For This Slice
 
 - Any model, embedding or "smart" ranking; spelling correction; word
