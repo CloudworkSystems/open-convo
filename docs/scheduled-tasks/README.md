@@ -11,6 +11,8 @@ request. Nobody pastes prompts into the task, and no copy drifts out of date
 | Open Convo PR keeper | Hourly at :10 | [pr-keeper.md](pr-keeper.md) |
 | Open Convo daily needs-you list (cloud) | 7:52 AM Eastern | [daily-list.md](daily-list.md) |
 | Open Convo security sweep (weekly) | Mondays 6:37 AM Eastern | [security-sweep.md](security-sweep.md) |
+| Open Convo: review Codex-built PRs + flag stuck PRs (the PR steward) | 8:41 AM and 5:41 PM Eastern | [pr-steward.md](pr-steward.md) |
+| Open Convo project status (hourly) | Hourly at :40 | [project-status.md](project-status.md) |
 
 ## Rules
 

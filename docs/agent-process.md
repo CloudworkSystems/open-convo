@@ -122,8 +122,10 @@ reads from and writes to `CloudworkSystems/open-convo`.
     off, with a comment saying why.
   - A green "Ready to merge" button means no conflicts, not approval. Pull
     requests waiting on the owner's approval go on the "Needs the owner" list
-    (issue #52, which the `owner-queue` workflow rewrites every hour), and the
-    8 AM message sends him that list. Claude messages him in chat only for
+    (issue #114, which the `owner-queue` workflow rewrites every hour and on
+    pull request events), and the 8 AM message sends him that list. Issue
+    #52, with the same title, is a frozen copy from October 22 that now holds
+    only the scheduled tasks' own comments. Claude messages him in chat only for
     urgent or blocked items (owner decision, October 21).
 - **Independent reviews (owner decisions, October 23 and 26, 2026; called
   "Gemini reviews" in older plans).** No agent is the independent review of
@@ -191,7 +193,7 @@ reads from and writes to `CloudworkSystems/open-convo`.
     even when a plan allows it ends the block with
     `risk-escalate: <one-line reason>`. The coordinator then keeps
     auto-merge off and adds the label `needs-owner: risk-escalate`, which
-    lists the pull request on issue #52, until the owner approves the head
+    lists the pull request on issue #114, until the owner approves the head
     commit after that comment; then the coordinator removes the label (the
     workflow never touches it). On a pull request opened from the owner's
     account, the work is reopened from `cloudwork-bot`, carrying the
@@ -288,7 +290,7 @@ request itself, so the owner doesn't have to carry messages:
   On a pull request that touches a protected path, that update comes before
   the owner is asked to approve, since an update dismisses his approval. If
   one does dismiss it, the `owner-queue` workflow lists the pull request on
-  issue #52 again.
+  issue #114 again.
 - The PR keeper also relays review findings so work keeps moving while the
   owner and his Mac are away. When Codex has left findings on the latest
   commit of a GrokBot pull request and no fix has followed 20 minutes later,
@@ -350,7 +352,8 @@ they win.
   protected path needs no independent review, since no agent wrote it. Once
   `tests` and `codex-approved` pass, the keeper switches auto-merge on.
   Major-version updates, and any that touch a protected path such as
-  `.github/`, go on the owner's list on issue #52.
+  `.github/`, wait for the owner's approval; the `owner-queue` workflow
+  lists the ones that touch a protected path on issue #114.
 - **Claude-built findings at night.** When Codex findings on the latest
   commit of a Claude-built pull request have had no push and no reply from
   its builder for 2 hours, the keeper fixes them on that pull request's
