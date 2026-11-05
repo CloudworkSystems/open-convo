@@ -110,7 +110,8 @@ Only these, read on every run:
   when removing a label is awkward on his phone).
 - The owner's `owner-accepts-findings <full head sha>` for the head. The
   gate passes as it does today, and the label comes off.
-- Codex reviews the head with no findings. The loop ended on its own.
+- Codex is clean on the head, in any form the gate counts as clean
+  (including its 👍 reaction). The loop ended on its own.
 - The pull request closes or merges.
 
 A lift resets the count: the next halt comes only after another full limit
@@ -136,7 +137,12 @@ watchdog breaks, the gate behaves exactly as it does today.
 - `.github/scripts/review-loop.mjs` (new): pure functions for counting
   rounds (shared with `codex-triage.mjs` rather than copied), telling plan
   from code pull requests, deciding halt and lift from the reviews,
-  comments, labels and timeline, and writing the comment.
+  comments, reactions, labels and timeline, and writing the comment.
+  Whether Codex is clean on the head comes from the gate's own
+  `evaluateCodexSignal` in `codex-signal.mjs`, never a second reading, so
+  every clean form the gate accepts (including the summary comment plus
+  Codex's 👍 reaction) lifts a halt and resets the count, and the tests
+  cover each of those forms.
 - `.github/scripts/codex-approved.mjs`: calls it for each pull request it
   evaluates, then adds or removes the label and writes the comment. Before
   its first add in a run, it makes sure the label `needs-owner: review-loop`
