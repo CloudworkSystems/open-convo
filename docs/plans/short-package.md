@@ -182,7 +182,7 @@ On the owner's Mac, in True Convo Test or a plain terminal:
    folder without the marker, a missing card, an unwritable folder and an
    over-long hook each print what this plan says.
 
-## Requirements Carried To The Build (Codex Round 3)
+## Requirements Carried To The Build (Codex Rounds 3 And 4)
 
 Plans stop after two Codex rounds (AGENTS.md "Keeping Finished Work
 Moving"), so later findings are copied here for the code pull request.
@@ -194,6 +194,15 @@ Moving"), so later findings are copied here for the code pull request.
   ("wordsPerSecond is 0; use your speaking pace, for example 2.5."), so a
   hand-edited card can't let an over-long script pass, make negative times
   or leave the caption splitter stuck.
+- **A stopped build can always be cleaned up, and the marker never ends up
+  in the package** (Codex round 4). The command makes a marked staging
+  folder beside `--out` (random name, holding the marker that names
+  `--out`), writes the package files into a clean folder inside it, renames
+  that inner folder to `--out`, and only then removes the empty staging
+  folder with its marker. A stop at any point leaves either a marked staging
+  folder, which the next build of the same `--out` removes, or a finished
+  `--out` with exactly the package's files. Tests stop the build after each
+  step.
 
 ## Not In This Plan
 
