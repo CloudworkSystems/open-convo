@@ -146,9 +146,11 @@ export function decideReviewLoop({ pr, defaultBranch, files = [], filesComplete 
     addLabel = false;
     changed = true;
   };
-  const halt = (reason) => {
+  const halt = (reason, at = now) => {
     state.halted = true;
-    state.haltedAt = iso(now);
+    // A halt from a label counts from the label, so a loop-resume the owner
+    // posted after it still lifts even if this run sees both at once.
+    state.haltedAt = iso(at);
     state.haltedHead = headSha;
     state.haltReason = reason;
     state.pushed = [];
@@ -177,7 +179,7 @@ export function decideReviewLoop({ pr, defaultBranch, files = [], filesComplete 
     const added = lastLabelEvent(timeline, 'labeled');
     const fresh = added && time(added.created_at) > time(state.liftedAt);
     if (fresh && added.actor?.login === OWNER_LOGIN) {
-      halt('the owner added the label');
+      halt('the owner added the label', time(added.created_at));
     } else if (fresh && added.actor?.login === ACTIONS_LOGIN) {
       // The watchdog's own label from a run whose comment didn't get written.
       // Step 3 decides afresh whether the halt still holds; if not, it comes off.

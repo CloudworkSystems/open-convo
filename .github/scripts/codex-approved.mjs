@@ -206,12 +206,39 @@ async function reviewLoop({ number, pr, files, complete, comments, reviews, reac
   }
   if (decision.error) { console.error(`#${number}: review loop watchdog: ${decision.error}`); return; }
   if (decision.skip) return;
-  const work = decision.addLabel || decision.removeLabel || decision.comment || (decision.extraCommentIds ?? []).length;
+  const hasWork = (d) => d.addLabel || d.removeLabel || d.comment || (d.extraCommentIds ?? []).length;
+  if (hasWork(decision)) {
+    // The hourly run and a per-PR run can overlap, so the data may have moved
+    // since it was read (a clean review, the owner's word). Decide again from
+    // a fresh read just before writing, and write only that decision.
+    decision = await freshReviewLoopDecision({ number, defaultBranch: input.defaultBranch, files, complete, dismissals });
+    if (!decision) return;
+  }
   const reloadComments = () => gh.all(`${base}/issues/${number}/comments`).then(withEditHistory);
-  if (work) await applyReviewLoop({ gh, repoBase: base, number, decision, labelCache, reloadComments });
+  if (hasWork(decision)) await applyReviewLoop({ gh, repoBase: base, number, decision, labelCache, reloadComments });
   console.log(`#${number}: review loop ${decision.log}`);
 }
 const labelCache = { ready: false };
+
+// The watchdog's decision from data read now: the pull request, its comments,
+// reviews, reactions and timeline. Returns null if it can't decide this run.
+async function freshReviewLoopDecision({ number, defaultBranch, files, complete, dismissals }) {
+  const pr = await gh.get(`${base}/pulls/${number}`);
+  const [comments, reviews, reactions] = await Promise.all([
+    gh.all(`${base}/issues/${number}/comments`).then(withEditHistory),
+    gh.all(`${base}/pulls/${number}/reviews`),
+    gh.all(`${base}/issues/${number}/reactions`),
+  ]);
+  const input = { pr, defaultBranch, files, filesComplete: complete, labels: (pr.labels ?? []).map((l) => l.name), comments, reviews, reactions, dismissals };
+  let decision = decideReviewLoop(input);
+  if (decision.needsTimeline) {
+    let timeline = null;
+    try { timeline = await gh.all(`${base}/issues/${number}/timeline`); } catch { /* unreadable: decided below */ }
+    decision = decideReviewLoop({ ...input, timeline });
+  }
+  if (decision.error) { console.error(`#${number}: review loop watchdog: ${decision.error}`); return null; }
+  return decision.skip ? null : decision;
+}
 
 const fromEvent = pullNumbersFromEvent();
 const numbers = fromEvent ?? (await gh.all(`${base}/pulls?state=open`)).map((p) => p.number);

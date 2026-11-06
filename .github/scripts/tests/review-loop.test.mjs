@@ -305,6 +305,16 @@ test('a duplicate watchdog comment left by a failed cleanup is deleted on a late
   assert.deepEqual(calls.filter(([m]) => m === 'DELETE').map(([, p]) => p), ['/repos/o/r/issues/comments/77']);
 });
 
+test('loop-resume after the owner\'s label lifts, even when one run sees both', () => {
+  const timeline = [{ event: 'labeled', label: { name: LABEL }, actor: { login: OWNER_LOGIN }, created_at: at(600) }];
+  const d = decide({ comments: [ownerComment('loop-resume', 610)], labels: [LABEL], reviews: roundsOf(3), timeline });
+  const state = JSON.parse(d.comment.match(/review-loop:v1 (\{.*\}) -->/)[1]);
+  assert.equal(state.haltedAt, at(600));
+  const next = decide({ comments: [stateComment(state, { created_at: at(620) }), ownerComment('loop-resume', 610)], labels: [LABEL], reviews: roundsOf(3), timeline });
+  assert.equal(next.halted, false);
+  assert.equal(next.removeLabel, true);
+});
+
 test('a lift cancels a label put back earlier in the same run', () => {
   // Someone else removed the label, and the owner then commented loop-resume.
   const comments = [stateComment(haltedState()), ownerComment('loop-resume', 700)];
