@@ -183,8 +183,10 @@ The rest of the "Any server we run" controls in
   chooses.
 - Restore uses three owner-only MCP tools, called by the README's
   `import` command under the owner's own Access sign-in:
-  `begin_import()` (refused unless the mailbox has no notes and no
-  agents), `import_note({ note })` (one note per call, so each call fits
+  `begin_import({ agents })` (refused unless the mailbox has no notes and
+  no agents; it recreates the exported agent list first, so the notes'
+  names exist; an agent whose Access token was made on another account
+  needs a new token, and the README says so), `import_note({ note })` (one note per call, so each call fits
   under the 16 KB request cap; ids and times are kept, `from` and `to`
   must be names in the imported agent list) and `finish_import({ count })`
   (refused unless the count matches; until it succeeds, agents are
@@ -321,7 +323,8 @@ for part 1 (part 3 adds the Desk's own answers):
     forced failure returns the plain message with no stack trace; the logs
     of a full test run contain no note text and no header values.
 13. Backup and restore: a full mailbox (1,000 notes of 8 KB) exports in
-    pages and restores into a fresh mailbox through `begin_import`,
+    pages and restores into a fresh mailbox, agent list included, through
+    `begin_import({ agents })`,
     `import_note` and `finish_import` with every call under 16 KB; the
     result matches. `begin_import` on a mailbox with notes, a wrong
     `finish_import` count, and import calls from a non-owner are refused.
