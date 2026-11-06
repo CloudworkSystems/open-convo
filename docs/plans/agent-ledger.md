@@ -106,10 +106,13 @@ caller, if the ledger outgrows files.
 
 1. **Who wrote it is stamped by the door, never by the entry.** The library
    takes the writer from the caller that opened it (the host, which knows
-   which agent it is talking to), never from the entry's text or fields. An
-   entry whose body names another writer is refused ("This entry claims to
-   be from someone else"). No agent can write as another agent, and no agent
-   can write as the person.
+   which agent it is talking to), never from anything the agent sends. The
+   check is on structure, not wording: an entry that carries its own
+   `writer`, `trust`, `onBehalfOf` or any other identity field is refused
+   ("This entry claims to be from someone else"). Text that only mentions
+   another agent or the person ("Waiting on Robin's review") is ordinary
+   and allowed, since naming who you are waiting on is half the point. No
+   agent can write as another agent, and no agent can write as the person.
 2. **Nothing is rewritten.** Entries are appended and hash-chained (SHA-256
    over canonical JSON, the previous entry's hash included). A mistake is
    fixed by a new `answer` entry that corrects it.
@@ -143,12 +146,23 @@ caller, if the ledger outgrows files.
    the host adds one note saying the limit was hit, not one per refusal.
 9. **Safe restart.** Each write carries a writer-chosen `clientId`. The same
    writer sending the same `clientId` again gets the entry it already wrote
-   back, so an agent that crashes and retries never posts twice.
-10. **No secrets, no private records.** Text is capped at 2,000 characters
-    and refused when it carries something that looks like a key or token
-    (for example a private key header or a common token prefix). Links are
-    stored as plain text and never followed. The README says plainly what
-    must never go in an entry.
+   back, so an agent that crashes and retries never posts twice. The record
+   of used `clientId`s (writer, `clientId`, sequence number) is kept in the
+   protected state with the head and count, not only in the entries, so it
+   survives damage and a reset: a retry after a reset is answered "This was
+   already posted before the ledger was reset" and never appended again.
+   Ids are kept for 7 days by `recordedAt`; a retry of an older id is
+   refused ("Too old to retry; post it again with a new id") rather than
+   appended, so the record stays small and the promise holds.
+10. **No secrets, no private records.** Every string the agent sends is
+    checked, not only the text: `text` (at most 2,000 characters), each of
+    at most 5 `links` (at most 500 characters each), `about` and `clientId`
+    (at most 200 each). Any of them that carries something shaped like a key
+    or token (for example a private key header or a common token prefix)
+    refuses the whole entry. A link must be a plain `https://` address with
+    no user name, password, query or fragment, since those are where access
+    tokens ride in a link. Links are stored as plain text and never
+    followed. The README says plainly what must never go in an entry.
 11. **Damage stops writes, not reads.** A missing, edited or reordered entry,
     a broken chain, a symlink, or a ledger whose head and count don't match
     the protected state refuses every write until the person resets it.
@@ -156,6 +170,18 @@ caller, if the ledger outgrows files.
     head and count are kept through the same compare-and-swap store the
     approval ledger uses, outside the ledger folder, with the same stated
     limit: a file store can't stop someone restoring an old copy of both.
+12. **A cut-off write recovers by itself.** An append changes two files,
+    the segment and the protected state, and a crash can land between
+    them. So each append is a small journaled commit under the lock: first
+    a journal file in the ledger folder naming the old head, the new
+    entry's hash and the new count; then the segment, through a temporary
+    file and a rename; then the protected state, by compare and swap; then
+    the journal is removed. On the next open or write, a journal left
+    behind is finished, never treated as damage: if the segment already
+    holds the entry the journal names, the protected state is moved
+    forward to it; if it doesn't, the journal is dropped and the ledger
+    stays at the old head. Only a mismatch the journal can't explain counts
+    as damage (rule 11).
 
 ### An Entry
 
@@ -243,7 +269,8 @@ writes only inside `dir` and to `storePath` (outside `dir`), with mode
 `0600` for new files. Writes go through an in-process queue plus a lock file
 opened with `O_EXCL`, and entries go into segment files of at most 1,000
 entries, each written through a temporary file and a rename, so a write
-never rewrites the whole ledger.
+never rewrites the whole ledger. Each append is the journaled commit of
+rule 12.
 
 ### The Command
 
@@ -255,20 +282,26 @@ never rewrites the whole ledger.
 invented writers fixed in the code ("Builder Robin", trusted; "Visitor
 Sam", foreign; "Paused Lee", paused). It works only on a folder it created
 itself, marked `SAMPLE-ONLY`, and takes no writer, entry text or registry
-from the command line.
+from the command line. Its `crash` verb leaves a write cut off after the journal or after
+the segment, as a crash would, for the trial's interruption check.
 
 ### Tests (One Command, `npm test`, Invented Data Only)
 
 1. Two writers post; each reader's `since` returns only new entries it may
    see, and its cursor never moves another reader's.
-2. An entry naming another writer, an unknown writer, and a write as the
-   person are refused.
+2. An entry carrying its own `writer`, `trust` or `onBehalfOf` field, an
+   unknown writer, and a write as the person are refused, while an entry
+   whose text says "Waiting on Robin's review" is accepted.
 3. A paused writer is refused; its earlier entries are still read, marked.
 4. A foreign writer's entries carry the foreign, unconfirmed mark, and a
    foreign reader with no grant reads nothing.
-5. The same `clientId` twice gives one entry.
+5. The same `clientId` twice gives one entry, including after the entry's
+   segment is damaged and `reset()` runs; an id older than 7 days is
+   refused, never appended.
 6. The 61st entry in an hour is refused, and only one limit note is added.
-7. Text over 2,000 characters, and text shaped like a key, are refused.
+7. Text over 2,000 characters, and a key-shaped string in `text`, a link,
+   `about` or `clientId`, are refused; so are a sixth link, a link over 500
+   characters, and a link with a user name, password, query or fragment.
 8. An edited, deleted or reordered entry, a symlink, and an older copy of
    the ledger folder (store kept current) each stop writes with a reason,
    while reads return the checked part with a warning; `reset()` recovers.
@@ -276,7 +309,11 @@ from the command line.
    an unbroken chain.
 10. No registry change can come from an entry: an entry asking for access
     changes nothing.
-11. The library reads no clock, opens no network, uses no `child_process`,
+11. **Interruption at each step.** A crash simulated after the journal is
+    written, after the segment is renamed, and after the protected state is
+    swapped each reopens cleanly at either the old head or the new one,
+    never as damage, and accepts the next write.
+12. The library reads no clock, opens no network, uses no `child_process`,
     and imports nothing from `packages/approval-ledger/` (a test checks the
     source).
 
@@ -286,8 +323,9 @@ Slice 1's command is a screen the owner may see, so it answers the five
 questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
 
 1. **No connection.** Doesn't apply: the ledger is local files only.
-2. **Interrupted.** A write is a temporary file plus a rename under the
-   lock, so a cut-off write leaves the last whole ledger. A lock left by a
+2. **Interrupted.** A write is a journaled commit under the lock (rule
+   12), so a cut-off write reopens at the last whole ledger, or finishes,
+   without a reset and without a message. A lock left by a
    crash makes writes refuse with "Another agent is writing to the ledger.
    If nothing is running, remove <path>." It is never removed by itself.
 3. **Empty or first run.** An empty folder is an empty ledger: `since`
@@ -311,14 +349,18 @@ throwaway folders the README sets up:
 1. An empty ledger says "Nothing new from your agents."
 2. "Builder Robin" posts a need and "Visitor Sam" answers; Robin's read
    shows the answer, marked foreign.
-3. An entry claiming to be from Robin, sent as Sam, is refused with "This
-   entry claims to be from someone else".
+3. An entry sent as Sam that sets its own writer to Robin is refused with
+   "This entry claims to be from someone else", and Sam's entry "Waiting on
+   Robin's review" goes through.
 4. "Paused Lee" is refused with "This agent is paused", and Lee's earlier
    entry still shows, marked.
 5. A left-behind lock gives the plain lock message naming the path and is
    still there afterwards.
 6. An edited ledger file shows the "changed outside True Convo" message,
    reads still work, and reset recovers.
+7. A write the sample driver cuts off partway (its `crash` verb, which
+   stops after the journal or after the segment) reopens with no message
+   and no reset, and the next post goes through.
 
 He confirms each message tells him what to do next. Then slice 1 is Built,
 and this plan stays In progress until the later slices are planned or
