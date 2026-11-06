@@ -3379,3 +3379,19 @@ owner with the approval and confirmation each case names
 (`ClaudeVectorPageCaseTests`). The tools refusal is proved in PR 3c against the real supervisor
 and the fake CLI, with and without earlier turns. Every one of these passes
 before PR 4b turns anything on.
+
+### 21.7 Section 5's override rule: model-menu names in user settings (November 5)
+
+This adds to section 5's override rule, and it doesn't replace any line of
+it. Where they differ, this rule applies. In user settings
+(`~/.claude/settings.json`), which reach only the network-blocked
+`auth status` probe and never the run (`--restricted`), exactly three `env`
+names are passed over: `ANTHROPIC_CUSTOM_MODEL_OPTION`,
+`ANTHROPIC_CUSTOM_MODEL_OPTION_NAME` and
+`ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION`. They only add an entry to
+Claude Code's own model menu. Every other `ANTHROPIC_` name there is still an override, and so is
+any other override beside them. In every source the run reads (managed,
+server-managed and `~/.claude.json`), the three names stay overrides. The
+reason and the owner's yes are in docs/plans/claude-code-adapter.md,
+"Revision, November 5". A new pinned CLI version is re-read for these names
+before it is pinned.

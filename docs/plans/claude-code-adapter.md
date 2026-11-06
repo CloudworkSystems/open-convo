@@ -330,3 +330,35 @@ So, replacing those two lines where they differ:
   unavailable.
 - A new pinned CLI version needs its start values recorded and this check
   run again before they are pinned.
+
+## Revision, November 5: Model-Menu Settings In User Settings
+
+Section 5 of the contract counts any `ANTHROPIC_` name in any settings
+source's `env` as a provider override, whatever its value. In step 5's live
+trial on the owner's Mac (2026-11-05, True Convo Test built from 79be95d),
+Claude stayed unavailable for that reason
+(`result=provider-override step=sources source=user-settings`). The owner's
+`~/.claude/settings.json` holds three names that only add an entry to Claude
+Code's own model menu: `ANTHROPIC_CUSTOM_MODEL_OPTION`,
+`ANTHROPIC_CUSTOM_MODEL_OPTION_NAME` and
+`ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION`. With them set aside, the check
+passed and the run worked.
+
+User settings reach only the network-blocked `auth status` probe, never the
+run (the run passes `--restricted`), and a model-menu entry changes no
+provider, key, base URL or login for that probe.
+
+The owner's yes: on November 6, 2026 at 14:52 UTC, in the Claude thread
+"Build the Claude Code adapter", the owner chose "Yes, allow those three" on
+the card asking "Allow your three Claude Code model-menu settings, in that
+settings file only?" (reviewed head
+9c7fd547d9a2659f59e48dea0d7c16d18e66a7d5, the commit before this line).
+
+So, adding to section 5's override rule where it differs:
+
+- **In user settings only**, exactly those three names are passed over.
+  Every other `ANTHROPIC_` name there is still an override, and so is any
+  other name beside them.
+- **Anywhere the run reads** (managed, server-managed and `~/.claude.json`),
+  those three names stay overrides, like every other `ANTHROPIC_` name.
+- A new pinned CLI version is re-read for these names before it is pinned.

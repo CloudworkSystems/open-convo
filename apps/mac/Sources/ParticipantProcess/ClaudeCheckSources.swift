@@ -280,6 +280,16 @@ enum ClaudeSettingsScan {
     /// must not add to it.
     static let runAllowedEnvironmentNames: Set<String> = ["DISABLE_TELEMETRY", "DO_NOT_TRACK", "DISABLE_ERROR_REPORTING",
                                                           "DISABLE_GROWTHBOOK", "DISABLE_UPDATES"]
+    /// `env` names in user settings that only add an entry to Claude Code's
+    /// own model menu (the step 5 live trial, November 5: the owner's
+    /// settings held them, and the checks refused Claude). User settings
+    /// reach only `auth status`, never the run, and a menu entry changes no
+    /// provider, key, base URL or login there, so these three are passed
+    /// over in user settings only. Anywhere the run reads, they stay
+    /// overrides like every other `ANTHROPIC_` name.
+    static let userSettingsMenuOnlyEnvironmentNames: Set<String> = [
+        "ANTHROPIC_CUSTOM_MODEL_OPTION", "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME", "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION"
+    ]
 
     /// Who a source applies to. `.managed` (managed, server-managed and
     /// policy sources) and `.globalConfig` also apply to the run, so an
@@ -384,6 +394,7 @@ enum ClaudeSettingsScan {
         guard let entries = value as? [String: Any] else { return .unresolved(.unsupported) }
         var restricted = false
         for name in entries.keys.sorted() {
+            if scope == .authStatusOnly, userSettingsMenuOnlyEnvironmentNames.contains(name) { continue }
             if isProviderEnvironmentName(name) { return .override(.override) }
             if let fixed = CLIEnvironmentRule.fixed.first(where: { $0.name == name }) {
                 if entries[name] as? String != fixed.value { restricted = true }
