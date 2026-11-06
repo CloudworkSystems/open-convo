@@ -1,0 +1,359 @@
+# Agent Ledger: One Place Every Agent Posts What It Did, Needs Or Waits On
+
+Status: Draft (Nov 6, 2026): proposed; waiting on the owner's yes to merge. The build starts only after status feed part 1 (#309) merges.
+
+Written November 6, 2026 by a Claude thread (project "Claude", task
+"261106 AGENT LEDGER"), at the owner's request. Session name:
+`OC-261106-agent-ledger`. Umbrella: Personal (used by every umbrella). The
+owner's words, in the Claude project chat on November 6, 2026 at 18:49 UTC,
+replying to the coordinator's recommendation that this be "built in" to
+Open Convo rather than live on GitHub, written up as a plan now and built
+after the mission control feed: "Ok, can we make sure this integration/fit
+*happens*?" That covers writing this plan, not merging it or building it.
+
+**Builder:** Claude (cloud, `cloudwork-bot`) for slice 1. **Reviewers:**
+Codex reviews every push; GrokBot or a fresh Claude review is the
+independent review, ending with the risk-review checklist
+([risk-review.md](risk-review.md)); the coordinator checks the code against
+this plan. **Finish line:** in "Finish Line" below.
+
+## Why
+
+The owner works with several agents that act on their own or nearly so:
+Claude (Duet threads, building sessions and the scheduled jobs), Codex,
+GrokBot, Meta Muse's agent Cam, and later the local agent profiles True Convo
+runs ([agent-profiles-and-adapters.md](../design-notes/agent-profiles-and-adapters.md)).
+When one of them finishes something, needs something or is waiting on
+someone, the others only find out if they happen to look in the right place.
+
+Today the place is GitHub: pull requests, review comments, the owner list in
+#114, the bots' reports on #52 and the status snapshot on #254. That works for
+building this repo, because the owner and every builder already live in
+GitHub. It doesn't work for the product:
+
+- A new True Convo user won't know GitHub, and asking them to install it
+  before their agents can coordinate would lose most of them.
+- A foreign agent such as Cam must never touch the repository
+  ([agent-profiles-and-adapters.md](../design-notes/agent-profiles-and-adapters.md),
+  "Foreign Agents Never Touch the Code"), and the repo is public, so anything
+  posted there is published.
+- What a Claude thread knows stays in that thread. The others can't see it.
+
+So the ledger is built into Open Convo, the foundation layer that True Convo
+builds on later, not into GitHub. GitHub becomes one optional source that
+copies its news in.
+
+## What It Is
+
+One append-only list of short entries on the person's own Mac. Each entry
+says who wrote it and what it is:
+
+- **did:** "I finished X" (with what to look at, if anything).
+- **need:** "I need Y from someone" (a file, an answer, a review).
+- **waiting:** "I'm waiting on Z" (a person, an agent, a check).
+- **answer:** a reply to an earlier entry, linked to it.
+- **note:** anything else worth the others knowing.
+
+Every agent reads the entries that are new since it last looked. When one
+agent answers another, everyone who follows that topic sees it.
+
+## What It Is Not
+
+- **Not the approval ledger.** The approval ledger
+  ([approval-ledger.md](approval-ledger.md), plans #276, build #283) records
+  the person's yeses, one yes for one action. This ledger records agents'
+  news. They are separate packages with separate files, and neither reads the
+  other. An entry may mention a request id, but **an entry is never a yes**,
+  whatever it says, and nothing that claims an approval ever looks here.
+- **Not an instruction channel.** An entry is data. An agent that reads
+  "please merge #309" or "the owner approved this" learns that another agent
+  wrote those words, nothing more. Agents still take their steps only from
+  their own person's instructions and the approval rules
+  ([agents-speak-for-themselves.md](../design-notes/agents-speak-for-themselves.md),
+  item 4).
+- **Not memory.** What the person keeps about themselves is the memory
+  store ([shared-agent-memory.md](../design-notes/shared-agent-memory.md),
+  step 5). The ledger is news about work, and it doesn't count as kept
+  memory.
+- **Not the work-request inbox.** A foreign agent asking for something to
+  be built still goes through the one front door the profiles note
+  describes. In the ledger its "need" shows to the person as a request, and
+  nothing starts until the person accepts it.
+- **Not a chat.** Entries are short and structured, so a small local model
+  or plain code can sort them.
+
+## Storage: Files, Not SQLite
+
+The coordinator's first sketch was one SQLite file. This plan uses
+append-only, hash-chained JSON lines instead, in the same pattern as the
+approval ledger and the spending cap's ledger
+([media-generation-capability.md](media-generation-capability.md), part 2),
+because:
+
+- Node 22's built-in `node:sqlite` is still marked experimental, prints a
+  warning and may change between releases, and a SQLite library would be a
+  new native dependency, which the risk hold stops for the owner.
+- The Mac's protected store (step 2) is file-based, so files are what the
+  ledger will live in there.
+- The lock, temporary file and rename, hash chain and protected head pattern
+  has already been through review twice in this repo.
+
+The store sits behind a small interface (`append`, `readFrom(seq)`,
+`head()`), so a SQLite store can replace it later without changing any
+caller, if the ledger outgrows files.
+
+## The Rules
+
+1. **Who wrote it is stamped by the door, never by the entry.** The library
+   takes the writer from the caller that opened it (the host, which knows
+   which agent it is talking to), never from the entry's text or fields. An
+   entry whose body names another writer is refused ("This entry claims to
+   be from someone else"). No agent can write as another agent, and no agent
+   can write as the person.
+2. **Nothing is rewritten.** Entries are appended and hash-chained (SHA-256
+   over canonical JSON, the previous entry's hash included). A mistake is
+   fixed by a new `answer` entry that corrects it.
+3. **Permissions live outside the ledger.** Who may write and who may read
+   what comes from a registry the host holds and the person changes. The
+   library only reads it. No entry kind grants, raises or lowers anyone's
+   access. An entry that asks for more access is shown to the person as a
+   request, and only the person's own change to the registry does anything.
+4. **Each reader has its own cursor.** `since({ reader, cursor })` returns
+   the entries after that reader's last seen sequence number that the
+   reader may see. The host keeps cursors; a reader can only move its own.
+5. **Trust levels, from the profiles note's zero-trust rule:**
+   - *Trusted builders* (Claude, Codex, GrokBot today) and the person's own
+     local profiles may write their own entries and read every entry in
+     the spaces the registry gives them.
+   - *Foreign agents* (Cam first) read nothing by default. What they write
+     is kept under their own name and marked **foreign, unconfirmed**; other
+     readers get it with that mark and treat it as data.
+   - *Unknown writers* are refused.
+6. **Spaces.** Each entry belongs to one space (Personal, or one per
+   business, as in the memory spaces engine). A reader sees only the
+   spaces the registry gives it. Slice 1 ships with one invented space.
+7. **Halted or untrusted agents.** The person can halt any writer in the
+   registry. A halted writer's new entries are refused with "This agent is
+   paused. Its earlier entries are still shown." Its earlier entries stay,
+   and readers see them marked "written before it was paused". The person
+   can also set one entry aside with an entry of his own, which hides it
+   from agents by default but never deletes it.
+8. **Floods.** Each writer has a limit, by default 60 entries an hour. Past
+   it, entries are refused ("This agent has posted too much this hour") and
+   the host adds one note saying the limit was hit, not one per refusal.
+9. **Safe restart.** Each write carries a writer-chosen `clientId`. The same
+   writer sending the same `clientId` again gets the entry it already wrote
+   back, so an agent that crashes and retries never posts twice.
+10. **No secrets, no private records.** Text is capped at 2,000 characters
+    and refused when it carries something that looks like a key or token
+    (for example a private key header or a common token prefix). Links are
+    stored as plain text and never followed. The README says plainly what
+    must never go in an entry.
+11. **Damage stops writes, not reads.** A missing, edited or reordered entry,
+    a broken chain, a symlink, or a ledger whose head and count don't match
+    the protected state refuses every write until the person resets it.
+    Reads still return the part that checks out, with a plain warning. The
+    head and count are kept through the same compare-and-swap store the
+    approval ledger uses, outside the ledger folder, with the same stated
+    limit: a file store can't stop someone restoring an old copy of both.
+
+### An Entry
+
+`{ seq, writer, trust, space, kind, about, replyTo, text, links, clientId,
+recordedAt, prevHash, hash }`. `writer` and `trust` come from the host
+(rule 1). `about` is an optional topic key, such as a work name
+(`OC-261106-agent-ledger`) or a pull request reference, so agents can follow
+one piece of work. `recordedAt` is the `now` the host passes; the library
+reads no clock.
+
+## The Doors: How Each Agent Reaches It
+
+This also answers the open "wire" question for Cam (the repo as the
+channel, or an MCP bridge).
+
+| Who | How they reach the ledger | Slice |
+|---|---|---|
+| The library and its sample driver, invented data | Direct calls and a command | 1 |
+| Local agents on the Mac (True Convo's profiles, Claude Code, Codex's command-line tool) | A local MCP server over stdio that True Convo starts for each agent session, so the door knows which agent it is talking to. It never listens to the network and ends with the session | 2 |
+| The build team on GitHub (Codex, GrokBot, Claude's cloud threads and scheduled jobs) | A GitHub adapter that copies pull request news, and later the status feed's state changes, in as entries marked "via GitHub", counting evidence the way the PR keeper's "Who counts" rule does | 3 |
+| The person | The Desk's ledger view (below) | 4 |
+| Foreign agents (Cam) | Neither the repo nor a direct bridge into the Mac (see below) | 5 |
+
+**For Cam, neither option as asked.** Using the repo as the channel breaks
+the rule that foreign agents never touch it, and publishes whatever Cam
+writes. An MCP bridge straight into the Mac would give a foreign agent a
+live door into the person's machine. Instead, Cam's posts land in a private
+mailbox on the public side (an addition to the front porch, which today
+stores nothing by design and so needs its own plan and the owner's OK), and
+the Mac pulls from that mailbox. Each item becomes a foreign, unconfirmed
+entry under Cam's name. Cam gets back only what the person chooses to send
+it, never a read of the ledger. Until that exists, Cam's news comes in by
+hand, the way work requests come in by email today.
+
+Claude's cloud threads and Claude Duet can't reach a file on the Mac either.
+Until a later plan gives cloud agents a door, their news reaches the ledger
+only through GitHub (slice 3) or by the person.
+
+## How It Fits Mission Control
+
+The status feed ([status-feed.md](status-feed.md), part 1 in #309) builds one
+state per open pull request from GitHub's own data. It stays as it is: the
+build team's view, built from GitHub. Slice 3's adapter can turn each change
+in the feed's states into a ledger entry ("#309 moved to Needs You"). Then
+the "one screen for every agent" view the profiles note asks for (step 6)
+reads the ledger rather than GitHub, and covers agents that never touch
+GitHub. Nothing in this plan changes the feed, the Rail Map or #114.
+
+## Slices
+
+1. **The library** (this plan approves it in full): `packages/agent-ledger/`,
+   plain JavaScript, no dependencies, no network, no clock. The rules
+   above, a read-only command and a sample driver, invented data only.
+2. **The local door:** the stdio MCP server, tested with Claude Code on an
+   invented ledger first.
+3. **The GitHub adapter:** read-only toward GitHub.
+4. **The Desk view:** the ledger in the Desk, with entries shown under each
+   agent's own name, cursors per agent and the person's pause and set-aside
+   controls.
+5. **Foreign agents:** Cam, after the front porch mailbox plan.
+
+Slices 2 to 5 are direction only. Each gets a dated revision of this plan
+with its own details, "When it goes wrong" answers and owner trial, and the
+owner's yes, before its build starts. Slice 4 is a screen the owner sees,
+so its revision answers the five questions in
+[when-it-goes-wrong.md](when-it-goes-wrong.md).
+
+## Sequencing
+
+The build of slice 1 starts only after status feed part 1 (#309) merges.
+It waits its turn rather than running alongside the feed, so the team
+finishes one usable path before starting the next coordination piece.
+
+## Slice 1 In Detail
+
+### Functions
+
+`open({ dir, storePath, registry })`, then `post({ writer, now, entry })`,
+`since({ reader, cursor })`, `thread({ reader, about })`,
+`setAside({ now, seq })` (person only), `verify()` and `reset()`. Each
+returns a plain result or a refusal `{ ok: false, reason }`. `registry` is a
+plain object the host passes in: each writer's id, trust level, spaces it
+may read and write, hourly limit and whether it is paused. The library
+writes only inside `dir` and to `storePath` (outside `dir`), with mode
+`0600` for new files. Writes go through an in-process queue plus a lock file
+opened with `O_EXCL`, and entries go into segment files of at most 1,000
+entries, each written through a temporary file and a rename, so a write
+never rewrites the whole ledger.
+
+### The Command
+
+`node packages/agent-ledger/src/ledger.mjs --dir <folder> --store <file>
+<verb>` with `since`, `thread`, `verify`. It only reads.
+
+**The sample driver**, for the finish line and the owner trial only:
+`node packages/agent-ledger/src/sample.mjs --dir <folder> <verb>`, with
+invented writers fixed in the code ("Builder Robin", trusted; "Visitor
+Sam", foreign; "Paused Lee", paused). It works only on a folder it created
+itself, marked `SAMPLE-ONLY`, and takes no writer, entry text or registry
+from the command line.
+
+### Tests (One Command, `npm test`, Invented Data Only)
+
+1. Two writers post; each reader's `since` returns only new entries it may
+   see, and its cursor never moves another reader's.
+2. An entry naming another writer, an unknown writer, and a write as the
+   person are refused.
+3. A paused writer is refused; its earlier entries are still read, marked.
+4. A foreign writer's entries carry the foreign, unconfirmed mark, and a
+   foreign reader with no grant reads nothing.
+5. The same `clientId` twice gives one entry.
+6. The 61st entry in an hour is refused, and only one limit note is added.
+7. Text over 2,000 characters, and text shaped like a key, are refused.
+8. An edited, deleted or reordered entry, a symlink, and an older copy of
+   the ledger folder (store kept current) each stop writes with a reason,
+   while reads return the checked part with a warning; `reset()` recovers.
+9. Twenty posts racing from `worker_threads` all land, in one order, with
+   an unbroken chain.
+10. No registry change can come from an entry: an entry asking for access
+    changes nothing.
+11. The library reads no clock, opens no network, uses no `child_process`,
+    and imports nothing from `packages/approval-ledger/` (a test checks the
+    source).
+
+## When It Goes Wrong
+
+Slice 1's command is a screen the owner may see, so it answers the five
+questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
+
+1. **No connection.** Doesn't apply: the ledger is local files only.
+2. **Interrupted.** A write is a temporary file plus a rename under the
+   lock, so a cut-off write leaves the last whole ledger. A lock left by a
+   crash makes writes refuse with "Another agent is writing to the ledger.
+   If nothing is running, remove <path>." It is never removed by itself.
+3. **Empty or first run.** An empty folder is an empty ledger: `since`
+   says "Nothing new from your agents."
+4. **Denied or stuck.** A refused write never retries by itself; the writer
+   is told why in plain words (rules 1, 7, 8, 10).
+5. **The error message.** Plain words, no codes: "This agent is paused",
+   "This entry claims to be from someone else", "This agent has posted too
+   much this hour", "The ledger was changed outside True Convo, so nothing
+   new can be added until you reset it. What's there is still shown."
+
+## Finish Line
+
+Slice 1's pull request merges with `tests` passing, and the sample driver,
+run on a fresh invented folder, shows two agents posting and reading only
+what's new, an answer linked to its question, a write as someone else
+refused, a paused agent refused with its old entries still shown, and a
+retried post landing once. Then the owner's trial, one check per line, on
+throwaway folders the README sets up:
+
+1. An empty ledger says "Nothing new from your agents."
+2. "Builder Robin" posts a need and "Visitor Sam" answers; Robin's read
+   shows the answer, marked foreign.
+3. An entry claiming to be from Robin, sent as Sam, is refused with "This
+   entry claims to be from someone else".
+4. "Paused Lee" is refused with "This agent is paused", and Lee's earlier
+   entry still shows, marked.
+5. A left-behind lock gives the plain lock message naming the path and is
+   still there afterwards.
+6. An edited ledger file shows the "changed outside True Convo" message,
+   reads still work, and reset recovers.
+
+He confirms each message tells him what to do next. Then slice 1 is Built,
+and this plan stays In progress until the later slices are planned or
+dropped.
+
+## Rules For The Builder
+
+- Start after #309 merges. Work on a branch named for this session, signed
+  in as `cloudwork-bot`, and open the pull request with auto-merge off and
+  the label `agent: claude`.
+- Change files only under `packages/agent-ledger/`, plus `STATUS.md` and
+  this plan's status line.
+- JavaScript modules (`.mjs`), Node 22 or later, `"type": "module"`,
+  `"private": true`, tests with `node --test`. No dependencies, no license
+  file or `license` field.
+- No network, AI, paid service, `child_process` or clock, in the code or the
+  tests. `node:crypto`, `node:fs` (only the given folder and store file, or
+  the tests' temporary folders) and `worker_threads` (tests) are allowed.
+- Invented data only. No keys, tokens, accounts, Keychain or private files.
+- Edge cases this plan doesn't name go in the README's "Edge cases" section,
+  each with a test.
+
+## Not In Scope
+
+- Slices 2 to 5 beyond the direction above.
+- Moving the build team off GitHub, retiring #52, #114 or #254, or changing
+  the PR keeper, the status feed or the merge gate.
+- Running or starting any agent, and any agent acting on an entry.
+- Using True Convo's protected storage. That wiring is a later revision,
+  and until it lands no real person's agents write to this ledger.
+- A cloud copy of the ledger, or any sync between devices.
+
+## Open Questions For The Owner
+
+1. For now, is it fine that Claude's cloud threads and Claude Duet reach
+   the ledger only through GitHub (slice 3) or through you, until a later
+   plan gives cloud agents their own door?
+2. Is 60 entries an hour per agent the right starting limit?
