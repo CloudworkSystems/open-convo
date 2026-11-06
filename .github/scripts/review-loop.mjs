@@ -57,8 +57,10 @@ export function readState(comments = []) {
       } catch { return null; }
     })
     .filter(Boolean)
-    .sort((a, b) => time(a.comment.created_at) - time(b.comment.created_at));
-  return trusted.at(-1) ?? null;
+    .sort((a, b) => time(a.comment.created_at) - time(b.comment.created_at) || (a.comment.id ?? 0) - (b.comment.id ?? 0));
+  // The oldest trusted comment is the one record. Two runs that overlap may
+  // each post one; applyReviewLoop then folds the newer into the oldest.
+  return trusted[0] ?? null;
 }
 
 /** The newest `labeled` or `unlabeled` timeline event for the watchdog's label. */
@@ -136,6 +138,8 @@ export function decideReviewLoop({ pr, defaultBranch, files = [], filesComplete 
     state.pushedBeforeLift = state.pushed;
     state.pushed = [];
     removeLabel = labelOn;
+    // A lift wins over a label put back earlier in this run.
+    addLabel = false;
     changed = true;
   };
   const halt = (reason) => {
@@ -334,14 +338,29 @@ export async function ensureLabel({ gh, repoBase, cache = {} }) {
  * Lifting: the comment first, then the label. A run that fails halfway
  * leaves what the next run needs to finish the other half.
  */
-export async function applyReviewLoop({ gh, repoBase, number, decision, labelCache = {} }) {
+export async function applyReviewLoop({ gh, repoBase, number, decision, labelCache = {}, reloadComments = null }) {
   if (decision.addLabel) {
     await ensureLabel({ gh, repoBase, cache: labelCache });
     await gh.post(`${repoBase}/issues/${number}/labels`, { labels: [LABEL] });
   }
   if (decision.comment) {
-    if (decision.existingCommentId) await gh.patch(`${repoBase}/issues/comments/${decision.existingCommentId}`, { body: decision.comment });
-    else await gh.post(`${repoBase}/issues/${number}/comments`, { body: decision.comment });
+    let target = decision.existingCommentId;
+    // Another run may have posted the record since this one read the comments.
+    if (!target && reloadComments) target = readState(await reloadComments())?.comment?.id ?? null;
+    if (target) {
+      await gh.patch(`${repoBase}/issues/comments/${target}`, { body: decision.comment });
+    } else {
+      const posted = await gh.post(`${repoBase}/issues/${number}/comments`, { body: decision.comment });
+      // Two overlapping runs can both post. The oldest record stays; a newer
+      // one of ours is folded into it and deleted, so one comment remains.
+      if (reloadComments && posted?.id != null) {
+        const record = readState(await reloadComments())?.comment;
+        if (record?.id != null && record.id !== posted.id) {
+          await gh.patch(`${repoBase}/issues/comments/${record.id}`, { body: decision.comment });
+          await gh.delete(`${repoBase}/issues/comments/${posted.id}`);
+        }
+      }
+    }
   }
   if (decision.removeLabel) {
     try {

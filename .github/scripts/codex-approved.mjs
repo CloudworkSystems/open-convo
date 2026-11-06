@@ -206,7 +206,8 @@ async function reviewLoop({ number, pr, files, complete, comments, reviews, reac
   }
   if (decision.error) { console.error(`#${number}: review loop watchdog: ${decision.error}`); return; }
   if (decision.skip) return;
-  await applyReviewLoop({ gh, repoBase: base, number, decision, labelCache });
+  const reloadComments = () => gh.all(`${base}/issues/${number}/comments`).then(withEditHistory);
+  await applyReviewLoop({ gh, repoBase: base, number, decision, labelCache, reloadComments });
   console.log(`#${number}: review loop ${decision.log}`);
 }
 const labelCache = { ready: false };

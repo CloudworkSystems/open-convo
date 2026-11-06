@@ -272,6 +272,32 @@ test('lifting writes the comment before taking the label off', async () => {
   assert.deepEqual(calls.map(([m, p]) => `${m} ${p}`), ['PATCH /repos/o/r/issues/comments/55', `DELETE /repos/o/r/issues/7/labels/${encodeURIComponent(LABEL)}`]);
 });
 
+test('two overlapping runs end with one watchdog comment, the oldest', async () => {
+  const { gh, calls } = fakeGitHub({ labelExists: true });
+  gh.post = async (path, body) => { calls.push(['POST', path, body]); return { id: 77 }; };
+  // The other run's comment (id 55) landed before ours (id 77).
+  let reads = 0;
+  const reloadComments = async () => (reads++ === 0 ? [] : [stateComment(haltedState(), { id: 55, created_at: at(1) }), stateComment(haltedState(), { id: 77, created_at: at(2) })]);
+  await applyReviewLoop({ gh, repoBase: '/repos/o/r', number: 7, decision: { addLabel: false, removeLabel: false, comment: 'c', existingCommentId: null }, reloadComments });
+  assert.deepEqual(calls.map(([m, p]) => `${m} ${p}`), ['POST /repos/o/r/issues/7/comments', 'PATCH /repos/o/r/issues/comments/55', 'DELETE /repos/o/r/issues/comments/77']);
+});
+
+test('a record another run posted since the read is updated, not duplicated', async () => {
+  const { gh, calls } = fakeGitHub({ labelExists: true });
+  const reloadComments = async () => [stateComment(haltedState(), { id: 55 })];
+  await applyReviewLoop({ gh, repoBase: '/repos/o/r', number: 7, decision: { addLabel: false, removeLabel: false, comment: 'c', existingCommentId: null }, reloadComments });
+  assert.deepEqual(calls.map(([m, p]) => `${m} ${p}`), ['PATCH /repos/o/r/issues/comments/55']);
+});
+
+test('a lift cancels a label put back earlier in the same run', () => {
+  // Someone else removed the label, and the owner then commented loop-resume.
+  const comments = [stateComment(haltedState()), ownerComment('loop-resume', 700)];
+  const timeline = [{ event: 'unlabeled', label: { name: LABEL }, actor: { login: 'someone' }, created_at: at(600) }];
+  const d = decide({ comments, labels: [], reviews: roundsOf(CODE_LIMIT), timeline });
+  assert.equal(d.halted, false);
+  assert.equal(d.addLabel, false);
+});
+
 test('ensureLabel reads once per run and passes other errors on', async () => {
   const { gh, calls } = fakeGitHub({ labelExists: true });
   const cache = {};
