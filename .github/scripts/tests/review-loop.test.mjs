@@ -197,6 +197,12 @@ test('the owner\'s accept line for the head lifts', () => {
   assert.match(d.comment, /accepted the findings/);
 });
 
+test('an accept line for a head Codex has not reviewed yet keeps the halt', () => {
+  const comments = [stateComment(haltedState({ haltedHead: sha(42) })), ownerComment(`owner-accepts-findings ${HEAD}`, 600)];
+  const d = decide({ comments, labels: [LABEL], reviews: roundsOf(CODE_LIMIT, { head: sha(42) }), timeline: [] });
+  assert.equal(d.halted, true);
+});
+
 test('Codex clean on the head lifts, in each form the gate counts', () => {
   const reviews = roundsOf(CODE_LIMIT, { head: sha(42) });
   const comments = [stateComment(haltedState({ haltedHead: sha(42) }))];

@@ -194,11 +194,14 @@ export function decideReviewLoop({ pr, defaultBranch, files = [], filesComplete 
   // owner's accept line is checked on its own below, so it's left out here.
   const codexClean = evaluateCodexSignal({ headSha, prAuthor: null, comments, reviews, reactions, dismissals, now }).approved;
   const accepted = ownerAcceptance({ headSha, prAuthor: pr.user?.login, comments });
+  // The accept line lifts a halt only once the gate itself counts it, which
+  // needs Codex to have reviewed (or hung on) this exact head.
+  const acceptCounts = accepted && evaluateCodexSignal({ headSha, prAuthor: pr.user?.login, comments, reviews, reactions, dismissals, now }).approved;
 
   // 2. A halt lifts on the owner's word or a clean head.
   if (state.halted) {
     const resumed = ownerResume({ comments, after: time(state.haltedAt) });
-    if (accepted) lift('the owner accepted the findings on the head', now);
+    if (acceptCounts) lift('the owner accepted the findings on the head', now);
     else if (resumed) lift(`the owner commented ${RESUME_WORD}`, resumed);
     else if (codexClean) lift('Codex came back clean on the head', now);
   }
