@@ -182,23 +182,28 @@ caller, if the ledger outgrows files.
     head and count are kept through the same compare-and-swap store the
     approval ledger uses, outside the ledger folder, with the same stated
     limit: a file store can't stop someone restoring an old copy of both.
-12. **A cut-off write recovers by itself.** An append changes two files,
+12. **A cut-off write recovers by itself.** An append changes two places,
     the segment and the protected state, and a crash can land between
-    them. So each append is a small journaled commit under the lock: first
-    a journal file in the ledger folder naming the old head, the new
-    entry's hash and the new count; then the segment, through a temporary
-    file and a rename; then the protected state, by compare and swap; then
-    the journal is removed. On the next open or write, a journal left
-    behind is finished, never treated as damage: if the segment already
-    holds the entry the journal names, the protected state is moved
-    forward to it; if it doesn't, the journal is dropped and the ledger
-    stays at the old head. Only a mismatch the journal can't explain counts
-    as damage (rule 11).
+    them. So each append is a small two-step commit under the lock, and its
+    intent is kept in the protected state, never in the ledger folder,
+    because anything that can edit the folder could otherwise write a
+    matching note and get a forged entry accepted. First the protected
+    state is swapped (compare and swap) from `{ head, count }` to
+    `{ head, count, pending: { hash, count } }`, naming the new entry's
+    hash; then the segment is written, through a temporary file and a
+    rename; then the protected state is swapped to the new head and count
+    with no `pending`. On the next open or write, a `pending` left behind
+    is finished, never treated as damage: if the segment's last entry is
+    exactly the one `pending` names, chained to the recorded head, the
+    protected state moves forward to it; if the segment ends at the
+    recorded head, `pending` is cleared and the ledger stays there. Any
+    other state, including an entry in the folder that `pending` doesn't
+    name, is damage (rule 11).
 13. **A crashed writer's lock is taken over safely.** A crash also leaves
     the lock file behind, so the lock records the process id that holds it.
     The next writer that finds a lock checks that process on this Mac
     (`process.kill(pid, 0)`, which sends nothing): if it is gone, the
-    writer takes the lock over, finishes or drops the journal (rule 12) and
+    writer takes the lock over, finishes or clears the pending commit (rule 12) and
     writes. If that process is still running, or the lock can't be read,
     writes refuse with "Another agent is writing to the ledger. If nothing
     is running, remove <path>." and the lock is left alone. This differs
@@ -292,7 +297,7 @@ writes only inside `dir` and to `storePath` (outside `dir`), with mode
 `0600` for new files. Writes go through an in-process queue plus a lock file
 opened with `O_EXCL`, and entries go into segment files of at most 1,000
 entries, each written through a temporary file and a rename, so a write
-never rewrites the whole ledger. Each append is the journaled commit of
+never rewrites the whole ledger. Each append is the two-step commit of
 rule 12.
 
 ### The Command
@@ -305,7 +310,7 @@ rule 12.
 invented writers fixed in the code ("Builder Robin", trusted; "Visitor
 Sam", foreign; "Paused Lee", paused). It works only on a folder it created
 itself, marked `SAMPLE-ONLY`, and takes no writer, entry text or registry
-from the command line. Its `crash` verb leaves a write cut off after the journal or after
+from the command line. Its `crash` verb leaves a write cut off after the pending record or after
 the segment, lock included, and exits, as a crash would. Its `lock` verb
 holds the lock and waits until it is stopped, for the trial's check of a
 writer that is still running.
@@ -338,13 +343,15 @@ writer that is still running.
    an unbroken chain.
 10. No registry change can come from an entry: an entry asking for access
     changes nothing.
-11. **Interruption at each step.** A crash simulated after the journal is
-    written, after the segment is renamed, and after the protected state is
+11. **Interruption at each step.** A crash simulated after the pending
+    record is written, after the segment is renamed, and after the protected state is
     swapped each reopens cleanly at either the old head or the new one,
     never as damage, and accepts the next write, with the crashed writer's
     lock still in place. A lock naming a process that isn't running is
     taken over; a lock naming a running process refuses with the plain
-    message and stays.
+    message and stays. An entry added to the folder by hand, with a valid hash, is
+    damage whether or not a `pending` record exists, unless it is exactly
+    the entry `pending` names.
 12. The library reads no clock, opens no network, uses no `child_process`,
     and imports nothing from `packages/approval-ledger/` (a test checks the
     source).
@@ -355,7 +362,7 @@ Slice 1's command is a screen the owner may see, so it answers the five
 questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
 
 1. **No connection.** Doesn't apply: the ledger is local files only.
-2. **Interrupted.** A write is a journaled commit under the lock (rule
+2. **Interrupted.** A write is a two-step commit under the lock (rule
    12), so a cut-off write reopens at the last whole ledger, or finishes,
    without a reset and without a message. A lock left by a crashed writer
    is taken over once its process is gone (rule 13). Only a lock whose
@@ -394,7 +401,7 @@ throwaway folders the README sets up:
 6. An edited ledger file shows the "changed outside True Convo" message,
    reads still work, and reset recovers.
 7. A write the sample driver cuts off partway (its `crash` verb, which
-   stops after the journal or after the segment) reopens with no message
+   stops after the pending record or after the segment) reopens with no message
    and no reset, and the next post goes through.
 
 He confirms each message tells him what to do next. Then slice 1 is Built,
