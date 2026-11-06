@@ -85,13 +85,17 @@ A small file the person owns and can read: `style-card.json`.
 - `validateScript(script, card)` works out the timing in code, never from
   the model's own count: words divided by `wordsPerSecond`. It refuses a
   script whose hook or total runs over the card's limits, a platform copy
-  over that platform's `maxChars`, a platform the card doesn't list, or any
-  banned phrase, and names each problem in plain words.
+  over that platform's `maxChars`, a platform the card doesn't list, a
+  platform the card lists with no copy, a platform with more than one copy,
+  or any banned phrase, and names each problem in plain words. So a script
+  that passes has exactly one draft for each platform on the card.
 
 ### 3. The Short Package
 
-`buildPackage(script, card, { createdAt, sourceSha256 })` returns a list of
-`{ name, text }` files. The command writes them to one new folder.
+`buildPackage(script, card, { createdAt, sourceSha256, model })` returns a
+list of `{ name, text }` files, `model` being optional. It runs
+`validateScript` first and refuses a script that fails. The command writes
+the files to one new folder exactly as returned, never adding to them.
 
 | File | What it holds |
 |---|---|
@@ -99,7 +103,7 @@ A small file the person owns and can read: `style-card.json`.
 | `captions.draft.srt` | Captions split by the card's `maxWordsPerLine` and `maxLines`, timed from the word count. The name says draft, because the times are estimates until the person records |
 | `shot-list.md` | Each beat with its on-screen and B-roll notes, for the person (or their editor) to match clips by hand |
 | `posts.md` | The drafted text for each platform on the card, each marked "draft, not posted" |
-| `receipt.json` | `createdAt`, the style card's `version`, `sourceSha256`, the model name if the person gives one, and the SHA-256 of every other file. No source text |
+| `receipt.json` | `createdAt`, the style card's `version`, `sourceSha256`, the `model` option when the person gives one, and the SHA-256 of every other file. No source text |
 
 - The command: `node packages/short-package/src/cli.mjs build --script
   <file> --card <file> --source <file> --out <folder> [--model <name>]`.
