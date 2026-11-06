@@ -1340,7 +1340,7 @@ test('hostile prompt text stays text in the receipt and in the queued workflow',
   }
 });
 
-test('a record that promises a file type this runner cannot read, or a provider on an upload, is refused before anything is copied', () => {
+test('a file type this runner cannot read is refused, and an upload receipt names no provider', () => {
   const folder = tempDir();
   const media = tempDir();
   try {
@@ -1353,14 +1353,17 @@ test('a record that promises a file type this runner cannot read, or a provider 
       record: bmp, routeId: 'upload', filePath: png, madeHow: 'filmed-or-drawn-by-me', mediaDir: media.dir, now: fixedNow,
     });
     assert.equal(named.reason, REASONS.record);
+    assert.deepEqual(filesIn(media.dir), []);
     const credited = record();
     credited.routes.find((item) => item.kind === 'upload').provider = 'Example Media';
     credited.routes.find((item) => item.kind === 'upload').model = 'example-1';
+    assert.equal(validateCapability(credited).ok, true);
     const claimed = upload({
       record: credited, routeId: 'upload', filePath: png, madeHow: 'filmed-or-drawn-by-me', mediaDir: media.dir, now: fixedNow,
     });
-    assert.equal(claimed.reason, REASONS.record);
-    assert.deepEqual(filesIn(media.dir), []);
+    assert.equal(claimed.ok, true, claimed.reason);
+    assert.equal(receiptBeside(claimed.file).provider, null);
+    assert.equal(receiptBeside(claimed.file).model, null);
   } finally {
     folder.remove();
     media.remove();

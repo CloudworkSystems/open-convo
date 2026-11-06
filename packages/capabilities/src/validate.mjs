@@ -240,13 +240,9 @@ function routes(value, fail) {
     if (route.kind === 'upload') uploads += 1;
 
     // Who runs it. An upload is the person's own file, so it names nobody.
-    if (route.kind === 'upload') {
-      if (has(route, 'provider')) fail(`${q}.provider`, 'an upload names no provider');
-      if (has(route, 'model')) fail(`${q}.model`, 'an upload names no model');
-    } else {
-      text(route, 'provider', q, fail, { required: true, max: 80 });
-      text(route, 'model', q, fail, { required: true, max: 120 });
-    }
+    const needsProvider = route.kind !== 'upload';
+    text(route, 'provider', q, fail, { required: needsProvider, max: 80 });
+    text(route, 'model', q, fail, { required: needsProvider, max: 120 });
 
     // Every outside host it contacts.
     if (required(route, 'hosts', q, fail)) {

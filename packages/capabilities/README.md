@@ -60,7 +60,7 @@ pass silently and nothing like an "always allow" switch can be slipped in.
 | `id` | Required, unique in the record, hyphenated like `id`. |
 | `kind` | Required: `upload`, `local`, `own_key` or `sign_in`. |
 | `title` | Optional text. |
-| `provider`, `model` | Required for every kind except `upload`. An upload names neither. |
+| `provider`, `model` | Required for every kind except `upload`. |
 | `hosts` | Required list of every outside host, each written as its https origin (`https://api.example.com`: lower case, no port, path, wildcard or IP address), each once. Empty for `upload` and `local`; at least one for `own_key` and `sign_in`. |
 | `leaves_machine` | Required plain words on exactly what is sent. Exactly `nothing` for `upload` and `local`; never `nothing` for the others. |
 | `cost` | `"free"` for `upload` and `local`. For the others: `unit` (`per_run`, `per_second`, `per_image` or `per_credit`), `price`, `source` (an https link), `checked` (date) and `max_per_run`, plus an optional `note`. |
@@ -487,8 +487,8 @@ Each of these is covered in `tests/media.test.mjs`.
   when its DocType is `webm`. A DocType of `matroska` is its own video type.
 - The local prompt has to be the record's string input. An enum or other
   prompt field is refused, and a prompt longer than that string's limit is
-  refused before anything is sent. An upload route that names a provider
-  or a model is refused the same way. An upload receipt leaves both empty.
+  refused before anything is sent. An upload receipt leaves provider and
+  model empty.
   The saved file and the receipt are private to the account that saved them.
 - "Filmed or drawn by me" with no marker has no `ai_label`. The same answer
   on `trainedAlgorithmicMedia` or `compositeWithTrainedAlgorithmicMedia`,

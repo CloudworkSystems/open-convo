@@ -1,6 +1,6 @@
 # Status
 
-Updated November 4, 2026. The short version of where the build is. The full
+Updated November 2, 2026. The short version of where the build is. The full
 plan is in [PLAN.md](PLAN.md).
 
 ## Now
@@ -99,8 +99,7 @@ Plan:
 [docs/plans/media-generation-capability.md](docs/plans/media-generation-capability.md)
 (#256). Part 1, merged (#258): the `capability.json` contract and validator
 in `packages/capabilities`. Part 2, built and in review (#269): the signed
-cap and ledger (GrokBot team C). Part 3, built and in review (#290):
-`make_media` upload and local routes (GrokBot team C).
+cap and ledger (GrokBot team C). Next: part 3, `make_media`.
 
 **Site Engine, standalone first slice**, built by an outside builder (GrokBot
 builds, Codex reviews). Plan:
@@ -153,6 +152,8 @@ reviews. Plan approved (merged as #127 on October 24):
 
 **PR history spreadsheet** (all work; owner asked October 29), Claude builds; one row per pull request (builder, dates, areas, Codex rounds and findings, outside review), rebuilt each morning by `.github/workflows/pr-history.yml` onto its own branch, `pr-history-data`, never `main`. The owner's Google Sheet reads its CSV with `IMPORTDATA`; the JSON copy shares the Rail Map's pull fields for Canvas and Atlas. Merged November 1 (#185).
 
+**Status feed** (all work; the Rail Map's Pending view and a plain board), Claude builds, GrokBot or a fresh Claude reviews; plan approved (#285, Nov 4) with the owner's four answers written in (`docs/plans/status-feed.md`); not built yet: one state per open pull request (Blocked, Returned, Needs You, Under Way, Checked, Unknown), computed in code from GitHub's own data onto its own branch, `status-feed-data`, then shown as a Pending tab on the Rail Map and as text for the phone inside #114. Nothing from the creator's "mission control" is installed or copied.
+
 **Skin check** (Personal, new Health module), Claude builds, GrokBot or a fresh Claude reviews; plan approved (`docs/plans/skin-check.md`). Slice 1, the standalone engine in `packages/skin-check/`, is built; the iPhone source joins the iPhone app on the parallel sync line, and the Desk view follows.
 
 **Time mirror** (Personal, the observability layer's first slice; owner asked October 29 to start it ahead of the core order), Codex team A builds the library and then a Claude building session the Mac command (owner's pick, November 1), GrokBot or a fresh Claude reviews; plan approved by the owner on October 29 (`docs/plans/time-mirror.md`): RescueTime daily totals drawn as habit-grid heat maps on the Mac, nothing new leaving the device.
@@ -170,6 +171,14 @@ reviews. Plan approved (merged as #127 on October 24):
 **Approval ledger** (Personal, prime agent step 3's first piece), Codex team B builds, GrokBot or a fresh Claude reviews; plan approved by the owner on November 3 (`docs/plans/approval-ledger.md`); build issue to open: the host's hash-chained record of each yes, claimed exactly once before an action starts, as a standalone package in `packages/approval-ledger/`.
 
 **Notes checklist import** (Family and Home, day-one checklists), GrokBot team A builds, Codex reviews and the coordinator checks it against the plan; plan approved by the owner on November 3 (`docs/plans/notes-checklist-import.md`); build issue to open: turns a checklist copied out of Apple Notes as plain text into a household list file, as a standalone package in `packages/notes-import/`, with no network, clock or guessing.
+
+**Recall import** (Personal, the owner's Recall knowledge base into the Atlas wiki), Codex team A builds, GrokBot or a fresh Claude reviews; plan approved November 5, building from issue #296 (`docs/plans/recall-import.md`); built in `packages/recall-import/` and in review as #299: reads Recall's unzipped Markdown export into Atlas source notes behind a documented knowledge source slot (the owner's native-slot rule), as a standalone package in `packages/recall-import/`, with no network, AI or account access.
+
+**Memory spaces engine** (Personal, the rules of PLAN.md step 5), Codex team B builds, GrokBot or a fresh Claude reviews; plan approved November 5, building from issue #297 (`docs/plans/memory-spaces-engine.md`): propose, keep, correct, forget (30-day Trash) and Undo in separate spaces, only by the person, as a standalone package in `packages/memory-spaces/`, with a sample-only driver and no storage, app or AI.
+
+**Atlas link repair** (Personal, the Atlas wiki), GrokBot team A builds, Codex reviews and the coordinator checks it against the plan; plan approved November 5, building from issue #294 (`docs/plans/atlas-link-repair.md`): repairs links broken by a note moved to another folder (or a letter-case change) when exactly one note still carries the name, lists every other broken link for the owner, dry run by default, as a standalone package in `packages/atlas-links/`.
+
+**Creator proof kit** (Creators, the first public-facing project's first slice), GrokBot team B builds, Codex reviews and the coordinator checks it against the plan; plan approved November 5, building from issue #295 (`docs/plans/creator-proof-kit.md`): a hash-chained local ledger of a creator's original posts, a filled-in report pack for stolen videos, impersonation and fake fundraisers, and a self-contained "real links" page for fans; nothing is fetched, sent or published.
 
 **Public website (trueconvo.com)**, Claude builds, Codex reviews; a home page (with two Desk preview screenshots) and a plain-language privacy policy in `site/`, published by `.github/workflows/pages.yml` from `main` (#153, October 25). For Meta's developer early-access application and regular visitors. The owner turned on Pages and set the custom domain, and the site is published at trueconvo.com (latest deploy October 26).
 
