@@ -199,17 +199,28 @@ caller, if the ledger outgrows files.
     recorded head, `pending` is cleared and the ledger stays there. Any
     other state, including an entry in the folder that `pending` doesn't
     name, is damage (rule 11).
-13. **A crashed writer's lock is taken over safely.** A crash also leaves
-    the lock file behind, so the lock records the process id that holds it.
-    The next writer that finds a lock checks that process on this Mac
-    (`process.kill(pid, 0)`, which sends nothing): if it is gone, the
-    writer takes the lock over, finishes or clears the pending commit (rule 12) and
-    writes. If that process is still running, or the lock can't be read,
-    writes refuse with "Another agent is writing to the ledger. If nothing
-    is running, remove <path>." and the lock is left alone. This differs
-    from the approval ledger, which never takes a lock over, because a
-    stuck news list blocks every agent while a stuck yes blocks one
-    action, and the check only ever takes over a lock whose owner is gone.
+13. **Writers take turns; a crashed writer's lock is taken over.** The
+    lock records the process id that holds it.
+    - *A healthy holder:* a writer that finds the lock held by a process
+      that is still running waits its turn: it tries again up to 50 times,
+      100 milliseconds apart (paused with `Atomics.wait`, so no clock is
+      read). Simultaneous posts from different threads and processes all
+      land, one after another. Only a lock still held after those tries
+      refuses, with "Another agent is writing to the ledger. If nothing is
+      running, remove <path>.", and the lock is left alone. The refused
+      post can be sent again with the same `clientId` (rule 9), so nothing
+      is lost or doubled.
+    - *A crashed holder:* if the process the lock names is gone on this Mac
+      (`process.kill(pid, 0)`, which sends nothing), the writer takes the
+      lock over, finishes or clears the pending commit (rule 12) and
+      writes. Taking over is itself one atomic step: the writer renames the
+      stale lock to a name of its own and then creates a new lock with
+      `O_EXCL`, so when two writers find the same stale lock only one gets
+      it and the other waits its turn. A lock that can't be read is never
+      taken over.
+    - This differs from the approval ledger, which never takes a lock
+      over, because a stuck news list blocks every agent while a stuck yes
+      blocks one action, and only a lock whose owner is gone is taken.
 
 ### An Entry
 
@@ -340,7 +351,9 @@ writer that is still running.
    the ledger folder (store kept current) each stop writes with a reason,
    while reads return the checked part with a warning; `reset()` recovers.
 9. Twenty posts racing from `worker_threads` all land, in one order, with
-   an unbroken chain.
+   an unbroken chain, each waiting its turn rather than being refused; a
+   lock held past the 50 tries refuses with the plain message; and two
+   writers finding the same stale lock end with one holder.
 10. No registry change can come from an entry: an entry asking for access
     changes nothing.
 11. **Interruption at each step.** A crash simulated after the pending
@@ -348,8 +361,8 @@ writer that is still running.
     swapped each reopens cleanly at either the old head or the new one,
     never as damage, and accepts the next write, with the crashed writer's
     lock still in place. A lock naming a process that isn't running is
-    taken over; a lock naming a running process refuses with the plain
-    message and stays. An entry added to the folder by hand, with a valid hash, is
+    taken over; a lock a running process keeps past the 50 tries refuses
+    with the plain message and stays. An entry added to the folder by hand, with a valid hash, is
     damage whether or not a `pending` record exists, unless it is exactly
     the entry `pending` names.
 12. The library reads no clock, opens no network, uses no `child_process`,
@@ -365,12 +378,15 @@ questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
 2. **Interrupted.** A write is a two-step commit under the lock (rule
    12), so a cut-off write reopens at the last whole ledger, or finishes,
    without a reset and without a message. A lock left by a crashed writer
-   is taken over once its process is gone (rule 13). Only a lock whose
-   process still runs, or can't be read, makes writes refuse with "Another
-   agent is writing to the ledger. If nothing is running, remove <path>."
+   is taken over once its process is gone (rule 13), and a writer that
+   meets a busy lock waits its turn. Only a lock still held by a running
+   process after 50 tries, or one that can't be read, makes writes refuse
+   with "Another agent is writing to the ledger. If nothing is running,
+   remove <path>."
 3. **Empty or first run.** An empty folder is an empty ledger: `since`
    says "Nothing new from your agents."
-4. **Denied or stuck.** A refused write never retries by itself; the writer
+4. **Denied or stuck.** Apart from waiting its turn at the lock, a refused
+   write never retries by itself; the writer
    is told why in plain words (rules 1, 7, 8, 10).
 5. **The error message.** Plain words, no codes: "This agent is paused",
    "This entry claims to be from someone else", "This agent has posted too
