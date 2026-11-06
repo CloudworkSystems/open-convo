@@ -174,6 +174,14 @@ export function silenceStands(line, { headCommittedAt, keeperCheckedAt, codexRev
   return true;
 }
 
+/**
+ * Whether a waiting line still speaks for the head: the keeper wrote it about
+ * the commit it saw, so a push after its check makes the line stale.
+ */
+export function waitingStands(line, { headCommittedAt, keeperCheckedAt }) {
+  return time(headCommittedAt) <= time(keeperCheckedAt);
+}
+
 // ------------------------------------------------------------ Codex
 
 /** Codex reviews that leave findings, minus those the owner's account dismissed. */
@@ -306,6 +314,7 @@ const builderName = (builder) => ({ 'agent: claude': 'Claude builder', 'agent: c
  * @param {object} f
  * @param {boolean} f.draft
  * @param {boolean} f.conflict mergeable_state is "dirty"
+ * @param {boolean} f.mergeUnknown GitHub hasn't worked out yet whether it conflicts
  * @param {string} f.builder 'agent: claude' | 'agent: codex' | 'agent: grokbot' | 'Dependabot' | 'none'
  * @param {'success'|'failure'|'pending'|null} f.tests the `tests` check on the head
  * @param {'success'|'pending'|'failure'|null} f.codexApproved the `codex-approved` status on the head
@@ -354,7 +363,7 @@ export function stateOf(f) {
   // the review's findings are answered.
   const answered = Boolean(f.autoMerge || (f.waiting ?? []).some((w) => ['coordinator', 'independent reviewer'].includes(w.whose)));
 
-  const checked = !f.draft && !f.conflict && f.tests === 'success' && f.codexApproved === 'success'
+  const checked = !f.draft && !f.conflict && !f.mergeUnknown && f.tests === 'success' && f.codexApproved === 'success'
     && !approvalNeeded && !riskHeld && !escalationPending && !escalationLabelLeft && !waitingYou && !waitingOthers
     && (!f.reviewNeeded || (f.review && f.review.checklist && (reviewOpen.length === 0 || answered)))
     && (!f.planCheckNeeded || (f.planCheck && f.planCheck.verdict === 'passed' && f.planCheck.checklist));
@@ -400,6 +409,7 @@ export function stateOf(f) {
   if (escalationLabelLeft) return out('Under Way', 'You approved it after the escalation; the label is still on.', 'The coordinator removes the label', 'coordinator');
   if (waitingOthers) return out('Under Way', `The PR keeper lists it: ${waitingOthers.text}`, waitingOthers.next, waitingOthers.whose);
   if (f.tests !== 'success') return out('Under Way', 'Tests are still running on the latest commit.', 'Tests finish', 'tests');
+  if (f.mergeUnknown) return out('Under Way', 'GitHub is still checking whether it conflicts with main.', 'GitHub finishes the check', 'GitHub');
   if (f.codexApproved !== 'success') {
     if (f.judgeDue) return out('Under Way', 'Only minor Codex findings are left; the triage judge rates them.', 'The triage judge rates the findings', 'triage judge');
     if (!f.codexReviewedHead) return out('Under Way', 'Codex hasn\'t reviewed the latest commit yet.', 'Codex reviews it', 'Codex');

@@ -20,7 +20,7 @@ import { parseCodeowners, protectedFiles } from './codeowners.mjs';
 import { RISK_ESCALATE_LABEL } from './risk-check.mjs';
 import {
   DEPENDABOT_LOGIN, KEEPER_ISSUE, JUDGE_WINDOW_MS,
-  keeperComment, parseKeeper, silenceStands, codexFindingReviews, loopRounds,
+  keeperComment, parseKeeper, silenceStands, waitingStands, codexFindingReviews, loopRounds,
   reviewedCommit, sameChanges, countedReview, escalationAt, planCheck,
   ownerApprovalStands, ownerApprovedAfter, stateOf, buildFeed, unchangedSince,
 } from './status-feed-rules.mjs';
@@ -167,6 +167,8 @@ async function rowFor(number, { defaultBranch, keeper }) {
   const result = stateOf({
     draft: pr.draft,
     conflict: pr.mergeable_state === 'dirty',
+    // GitHub answers "unknown" (and mergeable null) while it is still working it out.
+    mergeUnknown: pr.mergeable === null || pr.mergeable_state === 'unknown',
     builder,
     tests: testsState(runs),
     codexApproved: status.statuses?.find((s) => s.context === 'codex-approved')?.state ?? null,
@@ -188,7 +190,7 @@ async function rowFor(number, { defaultBranch, keeper }) {
     escalationApproved: escalated && ownerApprovedAfter(reviews, escalatedAt, headSha),
     autoMerge: Boolean(pr.auto_merge),
     silent,
-    waiting: keeper.waiting.filter((line) => line.number === number),
+    waiting: keeper.waiting.filter((line) => line.number === number && waitingStands(line, { headCommittedAt, keeperCheckedAt: keeper.checkedAt })),
   });
   return {
     number,

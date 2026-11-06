@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   STATES, LOOP_ROUNDS,
   namesCommit, isReviewForm, hasChecklist, hasEscalation, findingSeverities, planCheckVerdict,
-  keeperComment, parseKeeper, silenceStands, loopRounds, reviewedCommit, sameChanges,
+  keeperComment, parseKeeper, silenceStands, waitingStands, loopRounds, reviewedCommit, sameChanges,
   countedReview, escalationAt, planCheck, ownerApprovalStands, ownerApprovedAfter,
   stateOf, buildFeed, feedIsStale, unchangedSince, easternDay,
 } from '../status-feed-rules.mjs';
@@ -335,6 +335,19 @@ test('findings the keeper has judged answered (auto-merge on, or waiting on the 
 test('Checked also needs a ready pull request with no conflicts', () => {
   assert.notEqual(state({ draft: true }), 'Checked');
   assert.notEqual(state({ conflict: true }), 'Checked');
+});
+
+test('a pull request GitHub hasn\'t checked for conflicts yet waits, never Checked', () => {
+  const r = stateOf(ready({ mergeUnknown: true }));
+  assert.equal(r.state, 'Under Way');
+  assert.equal(r.whose, 'GitHub');
+});
+
+test('a keeper waiting line goes stale once the head moves on after its check', () => {
+  const at = { keeperCheckedAt: '2026-11-06T14:00:00Z' };
+  assert.equal(waitingStands({ number: 9 }, { ...at, headCommittedAt: '2026-11-06T13:00:00Z' }), true);
+  assert.equal(waitingStands({ number: 9 }, { ...at, headCommittedAt: '2026-11-06T15:00:00Z' }), false);
+  assert.equal(waitingStands({ number: 9 }, { keeperCheckedAt: null, headCommittedAt: '2026-11-06T15:00:00Z' }), false);
 });
 
 // ------------------------------------------------------------ requirement 7: silence lines
