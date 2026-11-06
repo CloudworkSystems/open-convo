@@ -151,18 +151,30 @@ caller, if the ledger outgrows files.
    protected state with the head and count, not only in the entries, so it
    survives damage and a reset: a retry after a reset is answered "This was
    already posted before the ledger was reset" and never appended again.
-   Ids are kept for 7 days by `recordedAt`; a retry of an older id is
-   refused ("Too old to retry; post it again with a new id") rather than
-   appended, so the record stays small and the promise holds.
+   Each `clientId` carries the day the agent first tried to post it, as
+   `YYYYMMDD-<up to 64 letters, digits or dashes>` in UTC, so its age can
+   be read from the id itself and never depends on a record that may be
+   gone. An id dated after the host's `now`, or more than 7 days before it,
+   is refused ("Too old to retry; post it again with a new id"), never
+   appended. The record keeps every id dated within the last 8 days, so
+   any id young enough to be accepted is always still in it, and older
+   records are dropped safely.
 10. **No secrets, no private records.** Every string the agent sends is
     checked, not only the text: `text` (at most 2,000 characters), each of
     at most 5 `links` (at most 500 characters each), `about` and `clientId`
     (at most 200 each). Any of them that carries something shaped like a key
     or token (for example a private key header or a common token prefix)
-    refuses the whole entry. A link must be a plain `https://` address with
-    no user name, password, query or fragment, since those are where access
-    tokens ride in a link. Links are stored as plain text and never
-    followed. The README says plainly what must never go in an entry.
+    refuses the whole entry. Links are not free web addresses, because a
+    sign-in, reset, invitation or download link can carry its access token
+    anywhere, the path included, where no detector can tell it from a
+    normal address. In slice 1 a link is only one of three fixed shapes: a
+    pull request or issue on GitHub (`https://github.com/<owner>/<repo>/pull/<n>`
+    or `/issues/<n>`, nothing after the number), another entry's sequence
+    number, or a work name like `OC-261106-agent-ledger`. Anything else is
+    refused ("Links can only point to a pull request, an issue, an entry or
+    a work name"). A later slice adds a shape only in its own revision.
+    Links are stored as plain text and never followed. The README says
+    plainly what must never go in an entry.
 11. **Damage stops writes, not reads.** A missing, edited or reordered entry,
     a broken chain, a symlink, or a ledger whose head and count don't match
     the protected state refuses every write until the person resets it.
@@ -182,6 +194,17 @@ caller, if the ledger outgrows files.
     forward to it; if it doesn't, the journal is dropped and the ledger
     stays at the old head. Only a mismatch the journal can't explain counts
     as damage (rule 11).
+13. **A crashed writer's lock is taken over safely.** A crash also leaves
+    the lock file behind, so the lock records the process id that holds it.
+    The next writer that finds a lock checks that process on this Mac
+    (`process.kill(pid, 0)`, which sends nothing): if it is gone, the
+    writer takes the lock over, finishes or drops the journal (rule 12) and
+    writes. If that process is still running, or the lock can't be read,
+    writes refuse with "Another agent is writing to the ledger. If nothing
+    is running, remove <path>." and the lock is left alone. This differs
+    from the approval ledger, which never takes a lock over, because a
+    stuck news list blocks every agent while a stuck yes blocks one
+    action, and the check only ever takes over a lock whose owner is gone.
 
 ### An Entry
 
@@ -283,7 +306,9 @@ invented writers fixed in the code ("Builder Robin", trusted; "Visitor
 Sam", foreign; "Paused Lee", paused). It works only on a folder it created
 itself, marked `SAMPLE-ONLY`, and takes no writer, entry text or registry
 from the command line. Its `crash` verb leaves a write cut off after the journal or after
-the segment, as a crash would, for the trial's interruption check.
+the segment, lock included, and exits, as a crash would. Its `lock` verb
+holds the lock and waits until it is stopped, for the trial's check of a
+writer that is still running.
 
 ### Tests (One Command, `npm test`, Invented Data Only)
 
@@ -296,12 +321,16 @@ the segment, as a crash would, for the trial's interruption check.
 4. A foreign writer's entries carry the foreign, unconfirmed mark, and a
    foreign reader with no grant reads nothing.
 5. The same `clientId` twice gives one entry, including after the entry's
-   segment is damaged and `reset()` runs; an id older than 7 days is
-   refused, never appended.
+   segment is damaged and `reset()` runs; an id dated more than 7 days
+   before `now`, or after it, or not in the dated form, is refused and
+   never appended, also right after a reset and after its record was
+   dropped.
 6. The 61st entry in an hour is refused, and only one limit note is added.
 7. Text over 2,000 characters, and a key-shaped string in `text`, a link,
-   `about` or `clientId`, are refused; so are a sixth link, a link over 500
-   characters, and a link with a user name, password, query or fragment.
+   `about` or `clientId`, are refused; so are a sixth link, any web address
+   that isn't a GitHub pull request or issue in the fixed shape (a sign-in
+   link with a token in its path included), and a pull request link with
+   anything after its number.
 8. An edited, deleted or reordered entry, a symlink, and an older copy of
    the ledger folder (store kept current) each stop writes with a reason,
    while reads return the checked part with a warning; `reset()` recovers.
@@ -312,7 +341,10 @@ the segment, as a crash would, for the trial's interruption check.
 11. **Interruption at each step.** A crash simulated after the journal is
     written, after the segment is renamed, and after the protected state is
     swapped each reopens cleanly at either the old head or the new one,
-    never as damage, and accepts the next write.
+    never as damage, and accepts the next write, with the crashed writer's
+    lock still in place. A lock naming a process that isn't running is
+    taken over; a lock naming a running process refuses with the plain
+    message and stays.
 12. The library reads no clock, opens no network, uses no `child_process`,
     and imports nothing from `packages/approval-ledger/` (a test checks the
     source).
@@ -325,9 +357,10 @@ questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
 1. **No connection.** Doesn't apply: the ledger is local files only.
 2. **Interrupted.** A write is a journaled commit under the lock (rule
    12), so a cut-off write reopens at the last whole ledger, or finishes,
-   without a reset and without a message. A lock left by a
-   crash makes writes refuse with "Another agent is writing to the ledger.
-   If nothing is running, remove <path>." It is never removed by itself.
+   without a reset and without a message. A lock left by a crashed writer
+   is taken over once its process is gone (rule 13). Only a lock whose
+   process still runs, or can't be read, makes writes refuse with "Another
+   agent is writing to the ledger. If nothing is running, remove <path>."
 3. **Empty or first run.** An empty folder is an empty ledger: `since`
    says "Nothing new from your agents."
 4. **Denied or stuck.** A refused write never retries by itself; the writer
@@ -354,8 +387,10 @@ throwaway folders the README sets up:
    Robin's review" goes through.
 4. "Paused Lee" is refused with "This agent is paused", and Lee's earlier
    entry still shows, marked.
-5. A left-behind lock gives the plain lock message naming the path and is
-   still there afterwards.
+5. A lock left by the sample's `crash` verb (whose process has ended) is
+   taken over by the next post with no message, while a lock the sample's
+   `lock` verb holds with a running process gives the plain lock message
+   naming the path and is still there afterwards.
 6. An edited ledger file shows the "changed outside True Convo" message,
    reads still work, and reset recovers.
 7. A write the sample driver cuts off partway (its `crash` verb, which
