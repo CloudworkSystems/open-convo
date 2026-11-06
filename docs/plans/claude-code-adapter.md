@@ -348,7 +348,11 @@ User settings reach only the network-blocked `auth status` probe, never the
 run (the run passes `--restricted`), and a model-menu entry changes no
 provider, key, base URL or login for that probe.
 
-The owner's yes: OWNER-YES-PENDING
+The owner's yes: on November 6, 2026 at 14:52 UTC, in the Claude thread
+"Build the Claude Code adapter", the owner chose "Yes, allow those three" on
+the card asking "Allow your three Claude Code model-menu settings, in that
+settings file only?" (reviewed head
+9c7fd547d9a2659f59e48dea0d7c16d18e66a7d5, the commit before this line).
 
 So, adding to section 5's override rule where it differs:
 
