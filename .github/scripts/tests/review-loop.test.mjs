@@ -82,6 +82,12 @@ test('the head with no Codex review yet still halts when the newest review had f
   assert.equal(decide({ reviews }).halted, true);
 });
 
+test('no halt when a delayed review of an older commit lands after the head was reviewed', () => {
+  // The head has a finding-bearing review, then an older commit's review finishes later.
+  const reviews = [...roundsOf(CODE_LIMIT), review(sha(3), 900)];
+  assert.equal(decide({ reviews }).halted, false);
+});
+
 test('no halt when the newest Codex review has no live findings', () => {
   const approvedOnHead = [...roundsOf(CODE_LIMIT, { head: sha(42) }), review(HEAD, 900, { state: 'APPROVED' })];
   assert.equal(decide({ reviews: approvedOnHead }).halted, false);

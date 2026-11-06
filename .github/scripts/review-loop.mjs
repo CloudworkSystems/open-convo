@@ -226,9 +226,11 @@ export function decideReviewLoop({ pr, defaultBranch, files = [], filesComplete 
  */
 export function newestHasFindings({ headSha, reviews = [], dismissals = [] } = {}) {
   const codexReviews = reviews.filter((r) => r?.user?.login === CODEX_LOGIN);
-  const onHead = codexReviews.filter((r) => r.commit_id === headSha);
-  const newest = newestCodexReview(onHead.length ? onHead : codexReviews);
+  const newest = newestCodexReview(codexReviews);
   if (!newest) return false;
+  // The newest review is of an older commit (reviews finished out of order)
+  // while the head has a review already: not the plan's case, so no halt.
+  if (newest.commit_id !== headSha && codexReviews.some((r) => r.commit_id === headSha)) return false;
   return codexFindingReviews([newest], dismissals).length === 1;
 }
 
