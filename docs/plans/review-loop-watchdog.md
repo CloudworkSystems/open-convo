@@ -1,7 +1,7 @@
 # Review Loop Watchdog: Stop A Pull Request That Keeps Cycling
 
-Status: Merged (Nov 6). Building: the code pull request is from the thread
-"Sum up the shared YouTube video", on the owner's yes of November 6.
+Status: In progress (Nov 6): plan merged (#307); the code pull request is
+being built in thread "Sum up the shared YouTube video".
 
 Written November 5, 2026 at the owner's request ("Yes", to "Should I write
 the watchdog plan and open it as a pull request?"), after comparing Cole

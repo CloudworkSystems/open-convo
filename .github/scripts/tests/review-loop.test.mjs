@@ -82,6 +82,17 @@ test('the head with no Codex review yet still halts when the newest review had f
   assert.equal(decide({ reviews }).halted, true);
 });
 
+test('no halt when the newest Codex review has no live findings', () => {
+  const approvedOnHead = [...roundsOf(CODE_LIMIT, { head: sha(42) }), review(HEAD, 900, { state: 'APPROVED' })];
+  assert.equal(decide({ reviews: approvedOnHead }).halted, false);
+  const dismissedOnHead = [...roundsOf(CODE_LIMIT, { head: sha(42) }), review(HEAD, 900, { id: 4242, state: 'DISMISSED' })];
+  const byOwner = [{ event: 'review_dismissed', dismissed_review: { review_id: 4242 }, actor: { login: OWNER_LOGIN } }];
+  assert.equal(decide({ reviews: dismissedOnHead, dismissals: byOwner }).halted, false);
+  // Unreviewed head after an approval of an older commit: no halt either.
+  const approvedOlder = [...roundsOf(CODE_LIMIT, { head: sha(42) }), review(sha(43), 900, { state: 'APPROVED' })];
+  assert.equal(decide({ reviews: approvedOlder }).halted, false);
+});
+
 test('a halt needs the timeline, and an unreadable one changes nothing', () => {
   const comments = [stateComment(haltedState())];
   assert.equal(decide({ comments, labels: [LABEL] }).needsTimeline, true);

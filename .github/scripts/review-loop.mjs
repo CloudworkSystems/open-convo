@@ -195,7 +195,7 @@ export function decideReviewLoop({ pr, defaultBranch, files = [], filesComplete 
   // 3. Otherwise, halt a pull request that reached its limit.
   if (!state.halted && !lifted) {
     const eligible = !pr.draft && pr.base?.ref === defaultBranch && pr.user?.login && pr.user.login !== OWNER_LOGIN;
-    if (eligible && !codexClean && !accepted && rounds >= limit) halt(`${rounds} Codex rounds with findings`);
+    if (eligible && !codexClean && !accepted && newestHasFindings({ headSha, reviews, dismissals }) && rounds >= limit) halt(`${rounds} Codex rounds with findings`);
   }
 
   state.rounds = state.halted ? Math.max(rounds, state.rounds ?? 0) : rounds;
@@ -217,6 +217,19 @@ export function decideReviewLoop({ pr, defaultBranch, files = [], filesComplete 
     limit,
     log: state.halted ? `halted (${state.haltReason})` : lifted ? `lifted (${lifted})` : `${rounds}/${limit} rounds`,
   };
+}
+
+/**
+ * The plan's third condition: Codex's newest review of the head has findings,
+ * or the head has no Codex review yet and the newest review of any commit
+ * had findings. An approval, or a review the owner dismissed, has none.
+ */
+export function newestHasFindings({ headSha, reviews = [], dismissals = [] } = {}) {
+  const codexReviews = reviews.filter((r) => r?.user?.login === CODEX_LOGIN);
+  const onHead = codexReviews.filter((r) => r.commit_id === headSha);
+  const newest = newestCodexReview(onHead.length ? onHead : codexReviews);
+  if (!newest) return false;
+  return codexFindingReviews([newest], dismissals).length === 1;
 }
 
 function newestCodexReview(reviews) {
