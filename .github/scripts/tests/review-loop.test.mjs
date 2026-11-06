@@ -159,6 +159,19 @@ test('the watchdog\'s own label from a run whose comment failed is finished', ()
   assert.ok(d.comment);
 });
 
+test('the watchdog\'s own leftover label comes off when the halt no longer holds', () => {
+  const timeline = [{ event: 'labeled', label: { name: LABEL }, actor: { login: ACTIONS_LOGIN }, created_at: at(600) }];
+  // Codex approved the head since the label went on.
+  const approved = decide({ labels: [LABEL], reviews: [...roundsOf(CODE_LIMIT, { head: sha(42) }), review(HEAD, 900, { state: 'APPROVED' })], timeline });
+  assert.equal(approved.halted, false);
+  assert.equal(approved.removeLabel, true);
+  assert.equal(approved.addLabel, false);
+  // The pull request became a draft.
+  const draft = decide({ pr: pr({ draft: true }), labels: [LABEL], reviews: roundsOf(CODE_LIMIT), timeline });
+  assert.equal(draft.halted, false);
+  assert.equal(draft.removeLabel, true);
+});
+
 test('the owner\'s loop-resume lifts, but only his, unedited by others, after the halt', () => {
   const base = [stateComment(haltedState())];
   const timeline = [];
@@ -208,6 +221,14 @@ test('a push while halted is recorded once', () => {
   const state = JSON.parse(d.comment.match(/review-loop:v1 (\{.*\}) -->/)[1]);
   assert.equal(decide({ comments: [stateComment(state)], labels: [LABEL], reviews: roundsOf(CODE_LIMIT), timeline: [] }).comment, null);
   assert.equal(haltSummary([stateComment(state)]).pushed, 1);
+});
+
+test('a push while halted stays on record when Codex is clean on it in the same run', () => {
+  const comments = [stateComment(haltedState({ haltedHead: sha(42) }))];
+  const d = decide({ comments: [...comments, summary(HEAD, at(900))], labels: [LABEL], reviews: roundsOf(CODE_LIMIT, { head: sha(42) }), timeline: [] });
+  assert.equal(d.halted, false);
+  assert.equal(d.removeLabel, true);
+  assert.match(d.comment, new RegExp(`Pushed while halted:\\*\\* \`${HEAD.slice(0, 7)}\` \\(before this lift\\)`));
 });
 
 test('a state comment edited by anyone but GitHub Actions is ignored', () => {

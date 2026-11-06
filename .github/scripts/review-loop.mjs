@@ -117,6 +117,7 @@ export function decideReviewLoop({ pr, defaultBranch, files = [], filesComplete 
   let removeLabel = false;
   let changed = false;
   let lifted = null;
+  let orphanLabel = false;
 
   // Who added or removed the label comes only from GitHub's timeline. Without
   // it: no halt and no lift this run.
@@ -131,6 +132,8 @@ export function decideReviewLoop({ pr, defaultBranch, files = [], filesComplete 
     state.since = iso(Math.max(at || now, time(state.since)));
     state.liftedAt = iso(now);
     state.liftReason = reason;
+    // Pushes made during the halt stay on record in the lifted comment.
+    state.pushedBeforeLift = state.pushed;
     state.pushed = [];
     removeLabel = labelOn;
     changed = true;
@@ -141,9 +144,16 @@ export function decideReviewLoop({ pr, defaultBranch, files = [], filesComplete 
     state.haltedHead = headSha;
     state.haltReason = reason;
     state.pushed = [];
+    state.pushedBeforeLift = [];
     addLabel = !labelOn;
     changed = true;
   };
+
+  // A push while halted is recorded first, so a lift in the same run keeps it.
+  if (state.halted && headSha !== state.haltedHead && !state.pushed.includes(headSha)) {
+    state.pushed.push(headSha);
+    changed = true;
+  }
 
   // 1. Line the label up with the recorded state.
   if (state.halted && !labelOn) {
@@ -162,7 +172,8 @@ export function decideReviewLoop({ pr, defaultBranch, files = [], filesComplete 
       halt('the owner added the label');
     } else if (fresh && added.actor?.login === ACTIONS_LOGIN) {
       // The watchdog's own label from a run whose comment didn't get written.
-      halt('the watchdog added the label on an earlier run');
+      // Step 3 decides afresh whether the halt still holds; if not, it comes off.
+      orphanLabel = true;
     } else if (fresh) {
       removeLabel = true;
       notes.push(`The label was added by ${added.actor?.login ?? 'someone the timeline does not name'}, not the owner, so it was taken off.`);
@@ -186,16 +197,17 @@ export function decideReviewLoop({ pr, defaultBranch, files = [], filesComplete 
     if (accepted) lift('the owner accepted the findings on the head', now);
     else if (resumed) lift(`the owner commented ${RESUME_WORD}`, resumed);
     else if (codexClean) lift('Codex came back clean on the head', now);
-    else if (headSha !== state.haltedHead && !state.pushed.includes(headSha)) {
-      state.pushed.push(headSha);
-      changed = true;
-    }
   }
 
   // 3. Otherwise, halt a pull request that reached its limit.
   if (!state.halted && !lifted) {
     const eligible = !pr.draft && pr.base?.ref === defaultBranch && pr.user?.login && pr.user.login !== OWNER_LOGIN;
     if (eligible && !codexClean && !accepted && newestHasFindings({ headSha, reviews, dismissals }) && rounds >= limit) halt(`${rounds} Codex rounds with findings`);
+    if (orphanLabel && !state.halted) {
+      removeLabel = true;
+      notes.push('A label left by an earlier watchdog run was taken off: the halt no longer holds.');
+      changed = Boolean(prior);
+    }
   }
 
   state.rounds = state.halted ? Math.max(rounds, state.rounds ?? 0) : rounds;
@@ -273,6 +285,9 @@ export function commentBody({ pr, state, notes = [], lifted = null, newest = nul
       '',
       `The count starts again. The watchdog halts this pull request again only after another ${state.limit} Codex rounds with findings.`,
     );
+    if (Array.isArray(state.pushedBeforeLift) && state.pushedBeforeLift.length) {
+      lines.push('', `**Pushed while halted:** ${state.pushedBeforeLift.map((sha) => `\`${sha.slice(0, 7)}\``).join(', ')} (before this lift)`);
+    }
   }
   if (notes.length) lines.push('', ...notes);
   lines.push('', `<!-- ${MARKER} ${JSON.stringify(state)} -->`);
