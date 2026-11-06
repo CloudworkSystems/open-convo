@@ -198,7 +198,7 @@ The rest of the "Any server we run" controls in
   names exist; an agent whose Access token was made on another account
   needs a new token, and the README says so), `import_note({ note })` (one note per call, so each call fits
   under the 16 KB request cap; ids and times are kept, `from` and `to`
-  must be names in the imported agent list) and `finish_import({ count })`
+  must each be `owner` or a name in the imported agent list) and `finish_import({ count })`
   (refused unless the count matches; until it succeeds, agents are
   refused with "This mailbox is being restored. Try again soon."). Owner
   import calls are exempt from the per-minute call limit, and only
