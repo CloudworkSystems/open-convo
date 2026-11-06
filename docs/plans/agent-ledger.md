@@ -210,14 +210,21 @@ caller, if the ledger outgrows files.
       running, remove <path>.", and the lock is left alone. The refused
       post can be sent again with the same `clientId` (rule 9), so nothing
       is lost or doubled.
-    - *A crashed holder:* if the process the lock names is gone on this Mac
-      (`process.kill(pid, 0)`, which sends nothing), the writer takes the
-      lock over, finishes or clears the pending commit (rule 12) and
-      writes. Taking over is itself one atomic step: the writer renames the
-      stale lock to a name of its own and then creates a new lock with
-      `O_EXCL`, so when two writers find the same stale lock only one gets
-      it and the other waits its turn. A lock that can't be read is never
-      taken over.
+    - *A crashed holder:* each lock also holds a random token written when
+      it was made. If the process the lock names is gone on this Mac
+      (`process.kill(pid, 0)`, which sends nothing), a writer may take the
+      lock over, but only through a claim on that one lock: it creates
+      `takeover-<token>` with `O_EXCL`, so only one writer can ever claim a
+      given stale lock. The claimant then reads the lock again and goes on
+      only if it still holds the same token; it removes it, creates its own
+      lock with `O_EXCL`, and then removes its claim. A writer that loses
+      the claim, or finds a different token on the second read, takes
+      nothing over and waits its turn. The lock is never renamed or moved,
+      so a late claimant can never touch a live writer's lock: only the one
+      holder of `takeover-<token>` removes a lock with that token, and that
+      lock's own holder is gone. A lock that can't be read is never taken
+      over, and a claim left by a writer that crashed mid-takeover leaves
+      the stale lock in place, which then gives the plain lock message.
     - This differs from the approval ledger, which never takes a lock
       over, because a stuck news list blocks every agent while a stuck yes
       blocks one action, and only a lock whose owner is gone is taken.
@@ -352,8 +359,10 @@ writer that is still running.
    while reads return the checked part with a warning; `reset()` recovers.
 9. Twenty posts racing from `worker_threads` all land, in one order, with
    an unbroken chain, each waiting its turn rather than being refused; a
-   lock held past the 50 tries refuses with the plain message; and two
-   writers finding the same stale lock end with one holder.
+   lock held past the 50 tries refuses with the plain message; and many
+   writers finding the same stale lock at once end with exactly one
+   holder, including a writer that claims late, after the first has
+   already made its new lock (it must leave that lock alone).
 10. No registry change can come from an entry: an entry asking for access
     changes nothing.
 11. **Interruption at each step.** A crash simulated after the pending
