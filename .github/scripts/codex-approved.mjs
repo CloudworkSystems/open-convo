@@ -211,7 +211,7 @@ async function reviewLoop({ number, pr, files, complete, comments, reviews, reac
     // The hourly run and a per-PR run can overlap, so the data may have moved
     // since it was read (a clean review, the owner's word). Decide again from
     // a fresh read just before writing, and write only that decision.
-    decision = await freshReviewLoopDecision({ number, defaultBranch: input.defaultBranch, files, complete, dismissals });
+    decision = await freshReviewLoopDecision({ number, defaultBranch: input.defaultBranch, dismissals });
     if (!decision) return;
   }
   const reloadComments = () => gh.all(`${base}/issues/${number}/comments`).then(withEditHistory);
@@ -221,15 +221,18 @@ async function reviewLoop({ number, pr, files, complete, comments, reviews, reac
 const labelCache = { ready: false };
 
 // The watchdog's decision from data read now: the pull request, its comments,
-// reviews, reactions and timeline. Returns null if it can't decide this run.
-async function freshReviewLoopDecision({ number, defaultBranch, files, complete, dismissals }) {
+// reviews, reactions, files and timeline. Returns null if it can't decide this run.
+async function freshReviewLoopDecision({ number, defaultBranch, dismissals }) {
   const pr = await gh.get(`${base}/pulls/${number}`);
-  const [comments, reviews, reactions] = await Promise.all([
+  const [comments, reviews, reactions, changed] = await Promise.all([
     gh.all(`${base}/issues/${number}/comments`).then(withEditHistory),
     gh.all(`${base}/pulls/${number}/reviews`),
     gh.all(`${base}/issues/${number}/reactions`),
+    gh.all(`${base}/pulls/${number}/files`),
   ]);
-  const input = { pr, defaultBranch, files, filesComplete: complete, labels: (pr.labels ?? []).map((l) => l.name), comments, reviews, reactions, dismissals };
+  // The files too: a push since the first read can turn a plan into code.
+  const files = changed.flatMap((f) => [f.filename, f.previous_filename].filter(Boolean));
+  const input = { pr, defaultBranch, files, filesComplete: changed.length >= pr.changed_files, labels: (pr.labels ?? []).map((l) => l.name), comments, reviews, reactions, dismissals };
   let decision = decideReviewLoop(input);
   if (decision.needsTimeline) {
     let timeline = null;
