@@ -192,13 +192,20 @@ caller, if the ledger outgrows files.
     `{ head, count, pending: { hash, count } }`, naming the new entry's
     hash; then the segment is written, through a temporary file and a
     rename; then the protected state is swapped to the new head and count
-    with no `pending`. On the next open or write, a `pending` left behind
-    is finished, never treated as damage: if the segment's last entry is
-    exactly the one `pending` names, chained to the recorded head, the
-    protected state moves forward to it; if the segment ends at the
-    recorded head, `pending` is cleared and the ledger stays there. Any
-    other state, including an entry in the folder that `pending` doesn't
-    name, is damage (rule 11).
+    with no `pending`. A `pending` left behind is finished only by a
+    writer that holds the lock (rule 13), at its next write, never by
+    opening the ledger or by a read, because a `pending` seen without the
+    lock may belong to a healthy writer that is mid-save. The writer
+    holding the lock finishes it, never treating it as damage: if the
+    segment's last entry is exactly the one `pending` names, chained to
+    the recorded head, the protected state moves forward to it; if the
+    segment ends at the recorded head, `pending` is cleared and the ledger
+    stays there. Any other state, including an entry in the folder that
+    `pending` doesn't name, is damage (rule 11). `open()`, `since()`,
+    `thread()`, `verify()` and the read-only command never write to the
+    protected state or take the lock. When they see a `pending`, they read
+    up to the recorded head, plus the named entry if the segment already
+    ends with it, and say "a save is in progress", not damage.
 13. **Writers take turns; a crashed writer's lock is taken over.** The
     lock records the process id that holds it.
     - *A healthy holder:* a writer that finds the lock held by a process
@@ -374,7 +381,13 @@ writer that is still running.
     with the plain message and stays. An entry added to the folder by hand, with a valid hash, is
     damage whether or not a `pending` record exists, unless it is exactly
     the entry `pending` names.
-12. The library reads no clock, opens no network, uses no `child_process`,
+12. **Reading during a save.** With a writer stopped between writing
+    `pending` and renaming the segment, and again between the rename and
+    the final swap, `open()`, `since()`, `verify()` and the read-only
+    command each report a save in progress, change neither the protected
+    state nor the lock, and the stopped writer then finishes its swap and
+    its entry lands with no damage reported.
+13. The library reads no clock, opens no network, uses no `child_process`,
     and imports nothing from `packages/approval-ledger/` (a test checks the
     source).
 
@@ -385,8 +398,9 @@ questions in [when-it-goes-wrong.md](when-it-goes-wrong.md):
 
 1. **No connection.** Doesn't apply: the ledger is local files only.
 2. **Interrupted.** A write is a two-step commit under the lock (rule
-   12), so a cut-off write reopens at the last whole ledger, or finishes,
-   without a reset and without a message. A lock left by a crashed writer
+   12), so the next writer to take the lock finishes a cut-off write or
+   rolls it back, without a reset. Until then a read shows the last whole
+   ledger and says "a save is in progress", never damage. A lock left by a crashed writer
    is taken over once its process is gone (rule 13), and a writer that
    meets a busy lock waits its turn. Only a lock still held by a running
    process after 50 tries, or one that can't be read, makes writes refuse
@@ -426,8 +440,9 @@ throwaway folders the README sets up:
 6. An edited ledger file shows the "changed outside True Convo" message,
    reads still work, and reset recovers.
 7. A write the sample driver cuts off partway (its `crash` verb, which
-   stops after the pending record or after the segment) reopens with no message
-   and no reset, and the next post goes through.
+   stops after the pending record or after the segment) reads as "a save
+   is in progress", never as damage, needs no reset, and the next post
+   finishes or rolls back the cut-off write and goes through.
 
 He confirms each message tells him what to do next. Then slice 1 is Built,
 and this plan stays In progress until the later slices are planned or
