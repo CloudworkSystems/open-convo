@@ -10,6 +10,7 @@
 
 import { client, repoFromEnv } from './github.mjs';
 import { parseCodeowners, protectedFiles } from './codeowners.mjs';
+import { RISK_LABELS } from './risk-check.mjs';
 
 const TITLE = 'Needs the owner';
 const MARKER = '<!-- owner-queue -->';
@@ -21,8 +22,6 @@ const repoInfo = await gh.get(base);
 const ownerLogin = repoInfo.owner.login;
 const codeowners = await gh.get(`${base}/contents/.github/CODEOWNERS?ref=${repoInfo.default_branch}`);
 const rules = parseCodeowners(Buffer.from(codeowners.content, 'base64').toString('utf8'));
-
-const RISK_LABELS = ['needs-owner: risk', 'needs-owner: risk-escalate'];
 
 const rows = [];
 const riskRows = [];
