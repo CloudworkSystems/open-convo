@@ -45,7 +45,12 @@ export function roundsSince({ reviews = [], dismissals = [], since = 0 } = {}) {
 
 /** The watchdog's trusted comment and the state it records, or null. */
 export function readState(comments = []) {
-  const trusted = comments
+  return trustedStates(comments)[0] ?? null;
+}
+
+/** Every trusted watchdog comment, oldest first. Only the first is the record. */
+export function trustedStates(comments = []) {
+  return comments
     .filter((c) => c?.user?.login === ACTIONS_LOGIN && (c.body ?? '').includes(MARKER))
     .filter((c) => c.edit_history !== undefined && editedOnlyBy(c, isActionsEditor))
     .map((c) => {
@@ -59,8 +64,7 @@ export function readState(comments = []) {
     .filter(Boolean)
     .sort((a, b) => time(a.comment.created_at) - time(b.comment.created_at) || (a.comment.id ?? 0) - (b.comment.id ?? 0));
   // The oldest trusted comment is the one record. Two runs that overlap may
-  // each post one; applyReviewLoop then folds the newer into the oldest.
-  return trusted[0] ?? null;
+  // each post one; every later run deletes the extras until none is left.
 }
 
 /** The newest `labeled` or `unlabeled` timeline event for the watchdog's label. */
@@ -232,6 +236,8 @@ export function decideReviewLoop({ pr, defaultBranch, files = [], filesComplete 
     removeLabel,
     comment,
     existingCommentId: prior?.comment?.id ?? null,
+    // Duplicates left by overlapping runs, deleted on every run until gone.
+    extraCommentIds: trustedStates(comments).slice(1).map((t) => t.comment.id).filter((id) => id != null),
     rounds: state.rounds,
     limit,
     log: state.halted ? `halted (${state.haltReason})` : lifted ? `lifted (${lifted})` : `${rounds}/${limit} rounds`,
@@ -363,6 +369,13 @@ export async function applyReviewLoop({ gh, repoBase, number, decision, labelCac
           await gh.delete(`${repoBase}/issues/comments/${posted.id}`);
         }
       }
+    }
+  }
+  for (const id of decision.extraCommentIds ?? []) {
+    try {
+      await gh.delete(`${repoBase}/issues/comments/${id}`);
+    } catch (error) {
+      if (!/ failed: 404 /.test(error.message ?? '')) throw error;
     }
   }
   if (decision.removeLabel) {

@@ -295,6 +295,16 @@ test('a record another run posted since the read is updated, not duplicated', as
   assert.deepEqual(calls.map(([m, p]) => `${m} ${p}`), ['PATCH /repos/o/r/issues/comments/55']);
 });
 
+test('a duplicate watchdog comment left by a failed cleanup is deleted on a later run', async () => {
+  const comments = [stateComment(haltedState(), { id: 55, created_at: at(1) }), stateComment(haltedState(), { id: 77, created_at: at(2) })];
+  const d = decide({ comments, labels: [LABEL], reviews: roundsOf(CODE_LIMIT), timeline: [] });
+  assert.equal(d.existingCommentId, 55);
+  assert.deepEqual(d.extraCommentIds, [77]);
+  const { gh, calls } = fakeGitHub({ labelExists: true });
+  await applyReviewLoop({ gh, repoBase: '/repos/o/r', number: 7, decision: d });
+  assert.deepEqual(calls.filter(([m]) => m === 'DELETE').map(([, p]) => p), ['/repos/o/r/issues/comments/77']);
+});
+
 test('a lift cancels a label put back earlier in the same run', () => {
   // Someone else removed the label, and the owner then commented loop-resume.
   const comments = [stateComment(haltedState()), ownerComment('loop-resume', 700)];
