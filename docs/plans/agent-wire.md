@@ -137,11 +137,15 @@ Over MCP (Streamable HTTP at `POST /mcp`):
   `answer_note({ id, body })` (a reply addressed to the note's sender),
   `clear_notes({ ids })`, `add_agent({ identity, agent, mayWriteTo, role })`,
   `switch_agent({ agent, on })`, `remove_agent({ agent })`,
-  `list_agents()` and `export_notes()` (see "Backup And Restore").
+  `list_agents()`, `list_drafts()`, `send_draft({ draftId })` and the
+  backup tools (see "Backup And Restore").
 - For the `assistant` role (Claude, acting for the owner): `list_notes`
-  and `answer_note` only, never the agent-list tools or `clear_notes`.
-  `answer_note` from Claude is sent only after the owner's yes to that
-  reply (Safety rule 3).
+  and `draft_reply({ id, body })` only. A draft is never delivered: it
+  waits until the owner sends it with `send_draft` under his own Access
+  sign-in, and the mailbox checks that the caller is the owner identity,
+  not the assistant. So Claude can't send anything to a foreign agent by
+  mistake or because a note told it to (Safety rule 3). No agent-list
+  tools, no `clear_notes`, no `answer_note`.
 
 No other routes, apart from a `GET /` that says what the service is and
 returns no notes.
@@ -172,11 +176,21 @@ The rest of the "Any server we run" controls in
 
 ### Backup And Restore
 
-- `export_notes()` (owner only) returns every note and the agent list as
-  one JSON file, with no secrets in it (the mailbox holds none). The owner
-  keeps it where he chooses.
-- `import_notes` is a command in the README that loads an export into a
-  fresh, empty mailbox only; it refuses a mailbox that already has notes.
+- `export_notes({ after? })` (owner only) returns notes in pages of up to
+  100, plus the agent list, so a full mailbox is exported in a few calls.
+  The README's `export` command stitches the pages into one JSON file with
+  no secrets in it (the mailbox holds none). The owner keeps it where he
+  chooses.
+- Restore uses three owner-only MCP tools, called by the README's
+  `import` command under the owner's own Access sign-in:
+  `begin_import()` (refused unless the mailbox has no notes and no
+  agents), `import_note({ note })` (one note per call, so each call fits
+  under the 16 KB request cap; ids and times are kept, `from` and `to`
+  must be names in the imported agent list) and `finish_import({ count })`
+  (refused unless the count matches; until it succeeds, agents are
+  refused with "This mailbox is being restored. Try again soon."). Owner
+  import calls are exempt from the per-minute call limit, and only
+  between `begin_import` and `finish_import`.
 - The restore is tested in part 1 (export, new mailbox, import, same notes
   and agents) and tried once for real in part 2 before going live.
 
@@ -218,7 +232,9 @@ These hold in every part. Breaking one is a stop-and-report event.
    conversations never go in.
 3. **Replies leave only on the owner's yes.** Claude may draft a reply to
    a note, but a reply to a foreign agent is a message sent outside the
-   project, so it is sent only after the owner says yes to that reply.
+   project, so it is sent only after the owner says yes to that reply. The
+   mailbox enforces this: Claude's role can only make drafts, and only the
+   owner's own sign-in can send one (see "MCP Tools").
 4. **Each agent sees only its own notes.** An agent can read only
    notes addressed to it and write only to names the owner allowed.
 5. **Training off.** Contributor mode stays off in Muse (the owner's
@@ -304,10 +320,15 @@ for part 1 (part 3 adds the Desk's own answers):
 12. Headers, errors and logs: every answer carries the security headers; a
     forced failure returns the plain message with no stack trace; the logs
     of a full test run contain no note text and no header values.
-13. Backup and restore: export, import into a fresh mailbox and compare;
-    import into a mailbox that has notes is refused.
-14. The `assistant` role can list and answer, and is refused on every
-    agent-list tool and on `clear_notes`.
+13. Backup and restore: a full mailbox (1,000 notes of 8 KB) exports in
+    pages and restores into a fresh mailbox through `begin_import`,
+    `import_note` and `finish_import` with every call under 16 KB; the
+    result matches. `begin_import` on a mailbox with notes, a wrong
+    `finish_import` count, and import calls from a non-owner are refused.
+14. The `assistant` role can list notes and make drafts; a draft reaches
+    no agent until the owner calls `send_draft`; `send_draft`,
+    `answer_note`, `clear_notes` and every agent-list tool are refused for
+    the assistant, whatever the request body says.
 
 **Owner trial checks** (part 2, with the owner present, on invented notes):
 Cam leaves a note and it shows up for him; his reply reaches Cam and only
