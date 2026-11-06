@@ -195,8 +195,7 @@ export function codexFindingReviews(reviews = [], dismissals = []) {
  * How many Codex rounds in a row, on different commits and counting back
  * from its newest review, each raised a P0 or P1. A review counts as raising
  * one when one of its own finding comments carries a P0 or P1 badge.
- * Rounds are 0 when Codex is clean on a head it left no findings on: the
- * loop is over.
+ * Rounds are 0 once Codex's signal is clean on the head: the loop is over.
  */
 export function loopRounds({ headSha, reviews = [], reviewComments = [], dismissals = [], codexCleanOnHead = false }) {
   const finding = codexFindingReviews(reviews, dismissals);
@@ -206,8 +205,9 @@ export function loopRounds({ headSha, reviews = [], reviewComments = [], dismiss
   const commits = new Map();
   for (const r of finding) commits.set(r.commit_id, Math.max(commits.get(r.commit_id) ?? 0, time(r.submitted_at)));
   const order = [...commits.entries()].sort((a, b) => b[1] - a[1]).map(([sha]) => sha);
-  if (!order.length) return 0;
-  if (order[0] !== headSha && codexCleanOnHead) return 0;
+  // Codex clean on the head (later than any finding on it, or the owner
+  // accepted what is left) ends the loop, whichever commit it reviewed last.
+  if (!order.length || codexCleanOnHead) return 0;
   let rounds = 0;
   for (const sha of order) {
     if (!finding.some((r) => r.commit_id === sha && severe(r))) break;

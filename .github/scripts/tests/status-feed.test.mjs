@@ -195,6 +195,8 @@ test('loop rounds count consecutive Codex rounds with a P0 or P1, newest first',
   assert.equal(loopRounds({ headSha: shas[3], reviews, reviewComments: broken }), 1);
   // Codex clean on a newer head ends the loop.
   assert.equal(loopRounds({ headSha: '5'.repeat(40), reviews, reviewComments: severe, codexCleanOnHead: true }), 0);
+  // A clean Codex round on the same head as its last P1 ends the loop too.
+  assert.equal(loopRounds({ headSha: shas[3], reviews, reviewComments: severe, codexCleanOnHead: true }), 0);
   // Replies and other accounts' comments don't count.
   assert.equal(loopRounds({ headSha: shas[3], reviews, reviewComments: [{ ...codexFinding(4, 0), in_reply_to_id: 9 }, { ...codexFinding(3, 0), user: OUTSIDER }] }), 0);
 });
