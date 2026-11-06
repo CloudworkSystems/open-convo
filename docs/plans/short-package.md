@@ -182,6 +182,19 @@ On the owner's Mac, in True Convo Test or a plain terminal:
    folder without the marker, a missing card, an unwritable folder and an
    over-long hook each print what this plan says.
 
+## Requirements Carried To The Build (Codex Round 3)
+
+Plans stop after two Codex rounds (AGENTS.md "Keeping Finished Work
+Moving"), so later findings are copied here for the code pull request.
+
+- **Style card numbers must make sense.** `validateStyleCard` refuses a
+  `wordsPerSecond`, `maxSeconds` or `hookSeconds` that isn't a finite number
+  above zero, and a `maxWordsPerLine`, `maxLines` or platform `maxChars`
+  that isn't a whole number of at least 1. It names the field and the value
+  ("wordsPerSecond is 0; use your speaking pace, for example 2.5."), so a
+  hand-edited card can't let an over-long script pass, make negative times
+  or leave the caption splitter stuck.
+
 ## Not In This Plan
 
 - Driving Adobe Premiere, DaVinci Resolve or any other editor. The bridges
