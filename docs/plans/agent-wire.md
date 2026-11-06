@@ -99,7 +99,12 @@ mailbox makes and stores no keys of its own.
 - **One Access service token per agent.** The owner makes it in his
   Cloudflare dashboard, with an expiry (default 90 days), and gives it to
   that agent's connector once. Revoking it in Access cuts the agent off at
-  once; it also expires by itself.
+  once; it also expires by itself. **Strict service-token mode must be
+  on** for the owner's Zero Trust organization (it can be off on
+  organizations made before October 5, 2026), so a service-token caller
+  never gets an Access session cookie that would outlive a revoked token.
+  Part 2 checks the setting before going live, and the README says so in
+  its setup steps.
 - **The owner signs in through Access as himself** (his own identity, for
   example a one-time code to his email), never with a shared key. Agents
   never handle his sign-in (AGENTS.md "Limits").
@@ -307,7 +312,9 @@ for part 1 (part 3 adds the Desk's own answers):
 **Owner trial checks** (part 2, with the owner present, on invented notes):
 Cam leaves a note and it shows up for him; his reply reaches Cam and only
 Cam; he switches Cam off and Cam's next call is refused with the plain
-message, and the same after revoking Cam's token in Access; an export
+message; separately, with Cam switched on in the mailbox and after Cam has
+already made a call, he revokes Cam's token in Access and Cam's next call
+is refused (strict mode on, no lingering session); an export
 restores into a fresh mailbox with the same notes; a note asking for something to be built shows up as a note,
 and nothing starts; an empty mailbox says "No notes yet." He confirms each
 message tells him what to do next.
