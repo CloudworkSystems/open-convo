@@ -34,15 +34,16 @@ const riskRows = [];
 const stuckRows = [];
 const autoMerge = [];
 for (const pr of await gh.all(`${base}/pulls?state=open`)) {
-  if (pr.draft) continue;
-  if (pr.auto_merge) autoMerge.push(pr.number);
-  const risk = (pr.labels ?? []).map((l) => l.name).filter((name) => RISK_LABELS.includes(name));
-  if (risk.length) riskRows.push(`| [#${pr.number}](${pr.html_url}) ${pr.title.replace(/\|/g, '/')} | ${risk.map((name) => `\`${name}\``).join(', ')} |`);
+  // A halted pull request stays listed while it is open, draft or not.
   if ((pr.labels ?? []).some((l) => l.name === LOOP_LABEL)) {
     const summary = haltSummary(await gh.all(`${base}/issues/${pr.number}/comments`));
     const rounds = summary?.rounds != null ? `${summary.rounds}${summary.limit != null ? ` (limit ${summary.limit})` : ''}` : 'see the pull request';
     stuckRows.push(`| [#${pr.number}](${pr.html_url}) ${pr.title.replace(/\|/g, '/')} | ${rounds} |`);
   }
+  if (pr.draft) continue;
+  if (pr.auto_merge) autoMerge.push(pr.number);
+  const risk = (pr.labels ?? []).map((l) => l.name).filter((name) => RISK_LABELS.includes(name));
+  if (risk.length) riskRows.push(`| [#${pr.number}](${pr.html_url}) ${pr.title.replace(/\|/g, '/')} | ${risk.map((name) => `\`${name}\``).join(', ')} |`);
   const files = (await gh.all(`${base}/pulls/${pr.number}/files`)).flatMap((f) => [f.filename, f.previous_filename].filter(Boolean));
   const hits = protectedFiles(rules, files);
   if (hits.length === 0) continue;
