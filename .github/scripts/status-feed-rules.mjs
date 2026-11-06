@@ -267,9 +267,13 @@ export function countedReview({ comments, reviews, headSha, sameAs = null }) {
   return { at: found.at, severities: findingSeverities(found.body), checklist: hasChecklist(found.body), escalation: hasEscalation(found.body) };
 }
 
-/** The time of the newest cloudwork-bot review of the head with a `risk-escalate` line, or 0. */
+/**
+ * The time of the newest cloudwork-bot text naming the head with a
+ * `risk-escalate` line, or 0. Any form counts (a review, a plan check), as
+ * the keeper's step F holds on the line in any cloudwork-bot review of the head.
+ */
 export function escalationAt({ comments, reviews, headSha }) {
-  const hits = botTexts({ comments, reviews }).filter((t) => isReviewForm(t.body) && namesCommit(t.body, headSha) && hasEscalation(t.body));
+  const hits = botTexts({ comments, reviews }).filter((t) => namesCommit(t.body, headSha) && hasEscalation(t.body));
   return hits.length ? hits.at(-1).at : 0;
 }
 
@@ -335,6 +339,7 @@ const builderName = (builder) => ({ 'agent: claude': 'Claude builder', 'agent: c
  * @param {boolean} f.escalated a risk-escalate label, or a risk-escalate line in a review of the head
  * @param {boolean} f.escalationApproved the owner approved the head after that review
  * @param {boolean} f.autoMerge auto-merge is on
+ * @param {boolean} f.autoMergeAfterReview auto-merge was last switched on after the head commit and the counted review
  * @param {Array} f.silent the keeper's "silent on" lines that still stand
  * @param {Array} f.waiting the keeper's waiting lines for this pull request
  * @returns {{state: string, rule: string, next: string, whose: string, approvalNeeded: boolean, loop: number}}
@@ -360,8 +365,10 @@ export function stateOf(f) {
   // The keeper judges whether each finding was fixed or answered on the pull
   // request (step F). It switches auto-merge on, or lists the pull request as
   // waiting on the coordinator, only once they all are, so either one means
-  // the review's findings are answered.
-  const answered = Boolean(f.autoMerge || (f.waiting ?? []).some((w) => ['coordinator', 'independent reviewer'].includes(w.whose)));
+  // the review's findings are answered. Auto-merge counts only when it was
+  // switched on after the head commit and the review: GitHub can leave it on
+  // across a push, and then it says nothing about the new review.
+  const answered = Boolean((f.autoMerge && f.autoMergeAfterReview) || (f.waiting ?? []).some((w) => ['coordinator', 'independent reviewer'].includes(w.whose)));
 
   const checked = !f.draft && !f.conflict && !f.mergeUnknown && f.tests === 'success' && f.codexApproved === 'success'
     && !approvalNeeded && !riskHeld && !escalationPending && !escalationLabelLeft && !waitingYou && !waitingOthers

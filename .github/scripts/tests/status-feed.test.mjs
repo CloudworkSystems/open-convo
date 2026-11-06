@@ -250,6 +250,12 @@ test('an escalation holds for the owner until he approves the head after it, the
   assert.equal(ownerApprovedAfter([...after, ownerReview('CHANGES_REQUESTED', HEAD, '2026-11-06T12:00:00Z')], at, HEAD), false);
 });
 
+test('an escalation line in any cloudwork-bot text naming the head counts, a plan check included', () => {
+  const plan = comment(BOT, `Plan check (PR keeper) of ${HEAD.slice(0, 7)}: passed\nrisk-escalate: new outside host\n${CHECKLIST}`);
+  assert.ok(escalationAt({ comments: [plan], reviews: [], headSha: HEAD }) > 0);
+  assert.equal(escalationAt({ comments: [{ ...plan, user: OUTSIDER }], reviews: [], headSha: HEAD }), 0);
+});
+
 test('an escalation line holds even before the label is added', () => {
   assert.ok(hasEscalation('- `risk-escalate: reads the address book`'));
   assert.ok(!hasEscalation('no escalation here'));
@@ -329,7 +335,9 @@ test('step F: each condition, missing alone, keeps the row from Checked', () => 
 
 test('findings the keeper has judged answered (auto-merge on, or waiting on the coordinator) don\'t send it back', () => {
   const review = { at: 1, severities: [2], checklist: true };
-  assert.equal(state({ review, autoMerge: true }), 'Checked');
+  assert.equal(state({ review, autoMerge: true, autoMergeAfterReview: true }), 'Checked');
+  // Auto-merge left on from before a push says nothing about the new review.
+  assert.equal(state({ review, autoMerge: true, autoMergeAfterReview: false }), 'Returned');
   const waiting = [{ number: 1, state: 'Under Way', text: 'rules change waiting on the coordinator', next: 'x', whose: 'coordinator' }];
   assert.equal(state({ review, waiting }), 'Under Way');
 });

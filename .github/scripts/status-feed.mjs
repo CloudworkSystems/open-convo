@@ -158,9 +158,18 @@ async function rowFor(number, { defaultBranch, keeper }) {
       }
     }
   }
-  const escalatedAt = escalationAt({ comments, reviews, headSha });
+  const escalatedAt = Math.max(escalationAt({ comments, reviews, headSha }), review?.escalation ? review.at : 0);
   const escalated = labels.includes(RISK_ESCALATE_LABEL) || escalatedAt > 0 || Boolean(review?.escalation);
   const headCommittedAt = commits.at(-1)?.commit?.committer?.date ?? null;
+  // When auto-merge was last switched on: read only when it is on and the
+  // review has open findings, the one case where it matters.
+  let autoMergeAfterReview = false;
+  if (pr.auto_merge && review?.severities.some((s) => s <= 2)) {
+    const events = await gh.all(`${base}/issues/${number}/timeline`);
+    const enabled = events.filter((e) => e.event === 'auto_merge_enabled').map((e) => Date.parse(e.created_at) || 0);
+    const at = enabled.length ? Math.max(...enabled) : 0;
+    autoMergeAfterReview = at > review.at && at > (Date.parse(headCommittedAt ?? '') || 0);
+  }
   const silent = keeper.silent.filter((line) => line.number === number
     && silenceStands(line, { headCommittedAt, keeperCheckedAt: keeper.checkedAt, codexReviewedHead: codexFindingsOnHead || codex.approved, review }));
 
@@ -189,6 +198,7 @@ async function rowFor(number, { defaultBranch, keeper }) {
     escalated,
     escalationApproved: escalated && ownerApprovedAfter(reviews, escalatedAt, headSha),
     autoMerge: Boolean(pr.auto_merge),
+    autoMergeAfterReview,
     silent,
     waiting: keeper.waiting.filter((line) => line.number === number && waitingStands(line, { headCommittedAt, keeperCheckedAt: keeper.checkedAt })),
   });
