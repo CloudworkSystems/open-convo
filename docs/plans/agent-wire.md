@@ -178,7 +178,11 @@ The rest of the "Any server we run" controls in
   value or an address. A test reads the log output.
 - **Backup with a tested restore** (below).
 - **An OWASP ZAP scan against staging before launch** (part 2), as the
-  front porch's deploy does.
+  front porch's deploy does, but signed in: staging gets its own Access
+  service token and its own invented agent, the scan sends that token on
+  every request, and the scan fails unless the mailbox itself answered
+  (its own headers and answers, not Access's sign-in or denial page). The
+  staging token is revoked after the scan.
 
 ### Backup And Restore
 
@@ -346,8 +350,16 @@ message; separately, with Cam switched on in the mailbox and after Cam has
 already made a call, he revokes Cam's token in Access and Cam's next call
 is refused (strict mode on, no lingering session); an export
 restores into a fresh mailbox with the same notes; a note asking for something to be built shows up as a note,
-and nothing starts; an empty mailbox says "No notes yet." He confirms each
-message tells him what to do next.
+and nothing starts; an empty mailbox says "No notes yet." and one with no
+agents says "No agents can write to this mailbox yet."; the 61st note in
+an hour shows the "Too many notes for now" message; a staging mailbox with
+its cap set to 3 shows the "This mailbox is full" message on the fourth
+note; with the network off, the Desk view (or, before part 3, the owner's
+own connector) shows its no-connection message and nothing is half-saved;
+a note sent while the connection is cut mid-call is either there whole or
+not there at all when he lists notes; and a restore in progress refuses
+agents with the "being restored" message. He confirms each message tells
+him what to do next.
 
 ## Out Of Scope
 
