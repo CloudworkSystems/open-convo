@@ -124,7 +124,13 @@ mailbox makes and stores no keys of its own.
   reports; the fallback is the MCP standard sign-in (OAuth) through
   Cloudflare's own OAuth provider library for Workers, with short-lived,
   revocable tokens and the owner approving each agent on a page behind
-  Access. That fallback adds a dependency, so it needs the owner's yes.
+  Access. That fallback replaces the whole-Worker Access gate (OAuth
+  clients must reach the metadata, authorization and token routes before
+  they have a token), so Access would then guard only the owner's pages
+  and tools, and the MCP route would check the library's tokens instead.
+  It adds a dependency and changes the sign-in design, so it is written as
+  a dated revision of this plan and needs the owner's yes before it is
+  built.
 
 ### MCP Tools
 
