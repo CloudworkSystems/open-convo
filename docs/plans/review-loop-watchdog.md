@@ -1,6 +1,7 @@
 # Review Loop Watchdog: Stop A Pull Request That Keeps Cycling
 
-Status: Draft (Nov 5): proposed; waiting on the owner's yes to merge.
+Status: Merged (Nov 6). Building: the code pull request is from the thread
+"Sum up the shared YouTube video", on the owner's yes of November 6.
 
 Written November 5, 2026 at the owner's request ("Yes", to "Should I write
 the watchdog plan and open it as a pull request?"), after comparing Cole
@@ -120,6 +121,8 @@ Only these, read on every run:
 
 A lift resets the count: the next halt comes only after another full limit
 of rounds after the lifting event.
+A pull request that never halted has nothing to reset, so its count runs
+from its first Codex round (a clean head still blocks any halt).
 
 ## Where It Runs
 

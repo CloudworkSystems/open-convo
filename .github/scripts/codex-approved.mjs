@@ -14,6 +14,7 @@ import { client, repoFromEnv } from './github.mjs';
 import { evaluateCodexSignal, CODEX_LOGIN, OWNER_LOGIN } from './codex-signal.mjs';
 import { parseCodeowners, ownerOpenedBlock, withOwnerOpenedHold } from './codeowners.mjs';
 import { applyRiskHold, readAllowlist, withRiskHold } from './risk-check.mjs';
+import { decideReviewLoop, applyReviewLoop } from './review-loop.mjs';
 import { triageEligibility, triagePasses, alreadyClaimed, claimComment, releasedComment, judgeFindings, verdictComment, ACTIONS_LOGIN } from './codex-triage.mjs';
 
 const CONTEXT = 'codex-approved';
@@ -171,16 +172,44 @@ async function check(number, mayJudge) {
   const current = await gh.get(`${base}/commits/${pr.head.sha}/status`);
   const existing = current.statuses.find((s) => s.context === CONTEXT);
   const description = [...reason].filter((ch) => ch.codePointAt(0) <= 0xffff).join('').slice(0, 140);
-  if (existing && existing.state === state && existing.description === description) return;
+  if (!existing || existing.state !== state || existing.description !== description) {
+    await gh.post(`${base}/statuses/${pr.head.sha}`, {
+      state,
+      context: CONTEXT,
+      // GitHub refuses 4-byte characters (most emoji) in status descriptions.
+      description,
+    });
+    console.log(`#${number} ${pr.head.sha.slice(0, 7)}: ${state} (${reason})`);
+  }
 
-  await gh.post(`${base}/statuses/${pr.head.sha}`, {
-    state,
-    context: CONTEXT,
-    // GitHub refuses 4-byte characters (most emoji) in status descriptions.
-    description,
-  });
-  console.log(`#${number} ${pr.head.sha.slice(0, 7)}: ${state} (${reason})`);
+  // The review loop watchdog, after the status is posted and apart from it:
+  // it never changes the status, and its errors only reach the log.
+  try {
+    await reviewLoop({ number, pr, files, complete, comments, reviews, reactions, dismissals });
+  } catch (error) {
+    console.error(`#${number}: review loop watchdog: ${error.message}`);
+  }
 }
+
+// Halts a pull request stuck in a Codex review loop (docs/plans/review-loop-watchdog.md).
+async function reviewLoop({ number, pr, files, complete, comments, reviews, reactions, dismissals }) {
+  const input = { pr, defaultBranch: await defaultRef(), files, filesComplete: complete, labels: (pr.labels ?? []).map((l) => l.name), comments, reviews, reactions, dismissals };
+  let decision = decideReviewLoop(input);
+  if (decision.needsTimeline) {
+    let timeline = null;
+    try {
+      timeline = await gh.all(`${base}/issues/${number}/timeline`);
+    } catch (error) {
+      console.error(`#${number}: review loop watchdog could not read the timeline: ${error.message}`);
+    }
+    decision = decideReviewLoop({ ...input, timeline });
+  }
+  if (decision.error) { console.error(`#${number}: review loop watchdog: ${decision.error}`); return; }
+  if (decision.skip) return;
+  await applyReviewLoop({ gh, repoBase: base, number, decision, labelCache });
+  console.log(`#${number}: review loop ${decision.log}`);
+}
+const labelCache = { ready: false };
 
 const fromEvent = pullNumbersFromEvent();
 const numbers = fromEvent ?? (await gh.all(`${base}/pulls?state=open`)).map((p) => p.number);
