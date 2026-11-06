@@ -31,9 +31,13 @@ rule here: cutting long videos into shorts failed twice for its guest, and
 what worked was a script written for the short, recorded fresh, then
 packaged with captions and post text for each platform.
 
-None of that needs a paid tool or an outside service. A model the person
-already has writes the words; plain code checks them, lays them out and
-writes standard files that every editing app opens. That keeps this slice
+None of that needs a paid tool, and the package itself contacts no
+service. A model the person already has writes the words; plain code checks
+them, lays them out and writes standard files that every editing app opens.
+Whatever the person gives that model goes wherever that model runs: a cloud
+model such as Claude receives the source text, and a local model keeps it on
+the machine. The plan says so wherever it matters (the skill and the owner
+trial below). That keeps this slice
 inside the October 22 rule for joining the core (PLAN.md "What joins the
 core"): it runs on the person's own model at almost no cost.
 
@@ -53,12 +57,14 @@ A small file the person owns and can read: `style-card.json`.
   2.5); `captions` (`position`, `maxWordsPerLine`, `maxLines`, `style`, a
   free-text note such as "yellow, centered"); `layout` (a free-text note
   such as "talking head below, screen above"); `brollRule` (free text);
-  `platforms` (a list of `{ name, maxChars, hashtags, notes }`);
-  `bannedPhrases`; `signOff`.
+  `platforms` (a list of `{ name, maxChars, hashtags, notes }`, names
+  unique, compared ignoring letter case); `bannedPhrases`; `signOff`.
 - `validateStyleCard(card)` returns `{ ok, errors }` the same way
   `validateCapability` does (every problem at once, a path for each, no
   I/O). Unknown fields are refused, so nothing like an "always post" switch
-  can be slipped in.
+  can be slipped in. A platform named twice is refused ("LinkedIn is on the
+  card twice; keep one."), so each platform has one limit. Script copy is
+  matched to the card's platforms by name, ignoring letter case.
 - Platform limits are the person's own numbers, written on the card with
   the date they checked them. The package never hard-codes a platform's
   limit, because those change.
@@ -79,7 +85,11 @@ A small file the person owns and can read: `style-card.json`.
   `broll` are short notes, never file paths or links.
 - The skill writes a script made for a short, not a cut-down of the
   source, and keeps the hook within `hookSeconds` at the card's pace.
-- The skill runs on whatever model the person chose. It never runs
+- The skill runs on whatever model the person chose, and that model reads
+  the source. The skill's `capability.json` and `SKILL.md` say in plain
+  words that a cloud model's provider receives the source text and a local
+  model keeps it on the machine, so the person can pick a local model for a
+  private source. The skill never runs
   anything, posts anything or calls any service; `actions_needing_approval`
   lists "publish or post anything" and "spend money".
 - `validateScript(script, card)` works out the timing in code, never from
@@ -110,10 +120,17 @@ the files to one new folder exactly as returned, never adding to them.
   It hashes the source but never copies it into the package.
 - It refuses an `--out` folder that already exists, writes to a temporary
   folder beside it and renames when every file is written, so a stopped run
-  leaves no half package.
+  leaves no half package. The temporary folder has a random part in its name
+  and holds a marker file naming the `--out` it was made for. The command
+  only ever removes a temporary folder that carries its marker for that same
+  `--out`; any other leftover is left alone and named.
 - `node packages/short-package/src/cli.mjs check <folder>` recomputes the
-  hashes in `receipt.json` and says which files changed since the package
-  was built.
+  hashes in `receipt.json` and says which of the other files changed since
+  the package was built, or are missing or new. It can't tell whether
+  `receipt.json` itself was edited, and says so in its output ("This checks
+  the other files against the receipt. It can't check the receipt itself.").
+  This is a check for accidental changes, not proof against tampering, the
+  same limit the creator proof kit states for its ledger.
 - A sample run uses an invented creator, an invented source and an invented
   card in `packages/short-package/samples/`. No real transcript, session
   record, post or personal detail goes in the repo.
@@ -126,9 +143,11 @@ command prints.
 1. **No connection.** Doesn't apply: nothing in the package uses the
    network. The skill needs whatever model the person chose; if that model
    isn't there, the package is never asked to build.
-2. **Interrupted.** A stopped build leaves only the temporary folder, which
-   the next build of the same `--out` removes before it starts, and says so.
-   The finished folder appears only when it is complete.
+2. **Interrupted.** A stopped build leaves only its marked temporary
+   folder, which the next build of the same `--out` removes before it
+   starts, and says so. A leftover without that marker is never removed:
+   the command names it and asks the person to move it. The finished folder
+   appears only when it is complete.
 3. **Empty or first run.** With no style card, the command says "No style
    card yet. Copy samples/style-card.json, change it to fit your shorts, and
    pass it with --card." and stops.
@@ -145,18 +164,23 @@ On the owner's Mac, in True Convo Test or a plain terminal:
 1. The sample run builds the invented creator's package, and `check` says
    every file matches.
 2. The owner copies the sample card and changes it to his own shorts.
-3. With Claude (or another model he picks), the skill writes one script
-   from one of his own sources, for example an episode outline from his
-   session-archive video series. The source stays on his Mac.
+3. With a model he picks, the skill writes one script from one of his own
+   sources, for example an episode outline from his session-archive video
+   series. The skill's own words tell him, before he gives it the source,
+   that a cloud model such as Claude receives the source text and a local
+   model keeps it on his Mac.
 4. `validateScript` passes it, or names a problem he agrees with.
 5. The package builds; `script.md` reads well enough to record from; the
    draft captions import into the editing app he uses; the post drafts fit
    his card.
-6. He edits one file and `check` names it.
-7. Nothing was posted, uploaded or sent anywhere (he checks his accounts).
-8. Each "When it goes wrong" answer above: a stopped build, a missing card,
-   an unwritable folder and an over-long hook each print what this plan
-   says.
+6. He edits one file other than the receipt and `check` names it; `check`
+   also prints that it can't check the receipt itself.
+7. The package sent nothing anywhere, and nothing was posted (he checks his
+   accounts). The only thing that left his Mac is what he gave the model,
+   and only if he chose a cloud model.
+8. Each "When it goes wrong" answer above: a stopped build, a leftover
+   folder without the marker, a missing card, an unwritable folder and an
+   over-long hook each print what this plan says.
 
 ## Not In This Plan
 
