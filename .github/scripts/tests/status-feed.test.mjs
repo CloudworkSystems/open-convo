@@ -439,6 +439,12 @@ test('the triage window: Under Way while the judge has it, Returned after', () =
   assert.equal(state({ ...pending, judgeDue: false }), 'Returned');
 });
 
+test('the triage window: a later clean Codex round on the head ends the wait', () => {
+  const r = stateOf(ready({ codexApproved: 'pending', codexCleanOnHead: true, codexFindingsOnHead: true, judgeDue: true }));
+  assert.equal(r.state, 'Under Way');
+  assert.equal(r.whose, 'codex-approved');
+});
+
 // ------------------------------------------------------------ reading review text
 
 test('findings are the lines before the checklist that start with a priority', () => {

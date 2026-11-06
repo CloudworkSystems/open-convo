@@ -141,7 +141,8 @@ async function rowFor(number, { defaultBranch, keeper }) {
   const codexFindingsOnHead = codexFindings.some((r) => r.commit_id === headSha);
   const eligibility = triageEligibility({ headSha, prAuthor, fromFork: pr.head?.repo?.full_name !== pr.base?.repo?.full_name, reviews, reviewComments, dismissals });
   const verdict = eligibility.eligible ? latestVerdict({ headSha, findings: eligibility.findings, comments }) : null;
-  const judgeDue = eligibility.eligible && !verdict && now - eligibility.lastFinding < JUDGE_WINDOW_MS;
+  // A later clean Codex round on the head ends the judge's wait.
+  const judgeDue = !codex.approved && eligibility.eligible && !verdict && now - eligibility.lastFinding < JUDGE_WINDOW_MS;
   const judgeSaidReal = Boolean(verdict?.verdict?.verdicts?.some((v) => v.verdict === 'real'));
 
   // The independent review: of the head, or of an earlier commit whose

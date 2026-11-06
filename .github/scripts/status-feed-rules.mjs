@@ -418,7 +418,7 @@ export function stateOf(f) {
   if (f.tests !== 'success') return out('Under Way', 'Tests are still running on the latest commit.', 'Tests finish', 'tests');
   if (f.mergeUnknown) return out('Under Way', 'GitHub is still checking whether it conflicts with main.', 'GitHub finishes the check', 'GitHub');
   if (f.codexApproved !== 'success') {
-    if (f.judgeDue) return out('Under Way', 'Only minor Codex findings are left; the triage judge rates them.', 'The triage judge rates the findings', 'triage judge');
+    if (f.judgeDue && !f.codexCleanOnHead) return out('Under Way', 'Only minor Codex findings are left; the triage judge rates them.', 'The triage judge rates the findings', 'triage judge');
     if (!f.codexReviewedHead) return out('Under Way', 'Codex hasn\'t reviewed the latest commit yet.', 'Codex reviews it', 'Codex');
     if (f.codexCleanOnHead) return out('Under Way', 'Codex is clean; the codex-approved check hasn\'t caught up yet.', 'The codex-approved check runs again', 'codex-approved');
   }
