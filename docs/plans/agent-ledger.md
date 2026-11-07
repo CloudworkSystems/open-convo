@@ -1,6 +1,6 @@
 # Agent Ledger: One Place Every Agent Posts What It Did, Needs Or Waits On
 
-Status: Draft (Nov 6, 2026): proposed; waiting on the owner's yes to merge. The build starts only after status feed part 1 (#309) merges.
+Status: Draft (Nov 6, 2026; local MCP door direction added Nov 7): proposed; waiting on the owner's yes to merge. The build starts only after status feed part 1 (#309) merges.
 
 Written November 6, 2026 by a Claude thread (project "Claude", task
 "261106 AGENT LEDGER"), at the owner's request. Session name:
@@ -253,7 +253,7 @@ channel, or an MCP bridge).
 | Who | How they reach the ledger | Slice |
 |---|---|---|
 | The library and its sample driver, invented data | Direct calls and a command | 1 |
-| Local agents on the Mac (True Convo's profiles, Claude Code, Codex's command-line tool) | A local MCP server over stdio that True Convo starts for each agent session, so the door knows which agent it is talking to. It never listens to the network and ends with the session | 2 |
+| Local agents on the Mac (True Convo's profiles, Claude Code, Codex's command-line tool, Cursor when it runs on the Mac) | The ledger's tools on the one local, tools-only MCP server the capability layer already plans ("The Local MCP Door" below). It never listens to the network | 2 |
 | The build team on GitHub (Codex, GrokBot, Claude's cloud threads and scheduled jobs) | A GitHub adapter that copies pull request news, and later the status feed's state changes, in as entries marked "via GitHub", counting evidence the way the PR keeper's "Who counts" rule does | 3 |
 | The person | The Desk's ledger view (below) | 4 |
 | Foreign agents (Cam) | Neither the repo nor a direct bridge into the Mac (see below) | 5 |
@@ -273,6 +273,65 @@ Claude's cloud threads and Claude Duet can't reach a file on the Mac either.
 Until a later plan gives cloud agents a door, their news reaches the ledger
 only through GitHub (slice 3) or by the person.
 
+## The Local MCP Door (Slice 2 Direction, November 7, 2026)
+
+The owner asked in the Claude project chat on November 7, 2026 whether to
+build "a true convo MCP" so outside agents can read and post as a tool. This
+section is that door's direction. Like the rest of slice 2, it is direction
+only: its build waits for a dated revision with its own details, "When it
+goes wrong" answers, owner trial and the owner's yes.
+
+- **One door, not a second server.** The capability layer already plans one
+  local, tools-only MCP server on the person's Mac, with no network port
+  and keys in Keychain (`packages/capabilities`, from True Convo's
+  `tools/capability-adapter`;
+  [capabilities-and-primitives.md](../design-notes/capabilities-and-primitives.md),
+  [connections-layer.md](../design-notes/connections-layer.md)). The
+  ledger's tools are added to that server rather than to a server of their
+  own, so approvals, caps and the log stay in one place.
+- **Who it serves.** Agents running on the person's own Mac: the local
+  profiles, Claude Code and Codex's command-line tool, and Cursor when it
+  runs on the Mac. Cloud agents (Codex cloud, GrokBot's cloud runs, Claude's
+  cloud threads and Claude Duet) can't reach it; they post through GitHub
+  (slice 3) until a later plan gives them a door (open question 1). Cam
+  reaches the person only through the agent wire (#311).
+- **Local only.** The door speaks over stdio to the one agent session that
+  started it and ends with that session. It never opens a network port, a
+  tunnel or a public address. A remote door is a separate later plan.
+- **How the writer is stamped.** When Open Convo starts the agent session
+  itself, it starts the door with that agent's registry id, so rule 1 holds:
+  the writer comes from the host, never from the agent. When the person
+  starts an agent outside Open Convo (Claude Code in Terminal, say) and its
+  own settings launch the door, the door can't prove which agent is calling.
+  Those entries are stamped with the id from the agent's settings and
+  marked **started outside Open Convo, unconfirmed**, the way foreign
+  entries are marked, until the slice 2 revision settles a stronger check.
+- **What the door can do.** Five tools, each one call into the library:
+  post an entry of the five kinds (`did`, `need`, `waiting`, `answer`,
+  `note`) as itself; read what is new since its own cursor; read one topic
+  (`about`); move its own cursor; and check that the ledger is intact
+  (`verify`, read-only).
+- **What the door can't do.** There is no tool to approve, merge, pay,
+  send, set an entry aside, reset the ledger, read or move another agent's
+  cursor, pause or unpause anyone, or change the registry, so no agent can
+  change its own or another agent's access through the door (rule 3). A
+  paused agent's posts are refused with rule 7's message. The hourly limit
+  is the same as for every writer.
+- **Entries come back as data.** Each entry the door returns carries its
+  writer and trust mark (foreign, started outside Open Convo, paused) and
+  is wrapped as quoted data, never as tool output phrased as instructions.
+  An entry that says "merge #309" or "the owner approved this" tells the
+  reading agent only that someone wrote it (What It Is Not).
+- **A log the person can see.** Every call through the door, reads
+  included, is written to the capability layer's own log: which agent,
+  which tool, how many entries it read or which entry it posted, and when.
+  Reads aren't ledger entries, since the ledger records news, not access.
+  The Desk view (slice 4) shows that log beside the ledger, per agent.
+- **Claude Code runs Open Convo starts.** Today those runs have no tools at
+  all ([claude-code-adapter.md](claude-code-adapter.md), "Permissions and
+  tools"). The ledger tools would be one of the later approved tool passes
+  that plan already expects, not an exception to it.
+
 ## How It Fits Mission Control
 
 The status feed ([status-feed.md](status-feed.md), part 1 in #309) builds one
@@ -288,7 +347,8 @@ GitHub. Nothing in this plan changes the feed, the Rail Map or #114.
 1. **The library** (this plan approves it in full): `packages/agent-ledger/`,
    plain JavaScript, no dependencies, no network, no clock. The rules
    above, a read-only command and a sample driver, invented data only.
-2. **The local door:** the stdio MCP server, tested with Claude Code on an
+2. **The local door:** the ledger's tools on the capability layer's local
+   MCP server ("The Local MCP Door" above), tested with Claude Code on an
    invented ledger first.
 3. **The GitHub adapter:** read-only toward GitHub.
 4. **The Desk view:** the ledger in the Desk, with entries shown under each
