@@ -262,9 +262,9 @@ channel, or an MCP bridge).
 the rule that foreign agents never touch it, and publishes whatever Cam
 writes. An MCP bridge straight into the Mac would give a foreign agent a
 live door into the person's machine. Instead, Cam's posts land in a private
-mailbox on the public side (an addition to the front porch, which today
-stores nothing by design and so needs its own plan and the owner's OK), and
-the Mac pulls from that mailbox. Each item becomes a foreign, unconfirmed
+mailbox that the person runs, the agent wire, which has its own plan
+(#311, `docs/plans/agent-wire.md`) and the owner's decision, and the Mac
+pulls from that mailbox. This plan doesn't repeat or change that design. Each item becomes a foreign, unconfirmed
 entry under Cam's name. Cam gets back only what the person chooses to send
 it, never a read of the ledger. Until that exists, Cam's news comes in by
 hand, the way work requests come in by email today.
@@ -294,7 +294,7 @@ GitHub. Nothing in this plan changes the feed, the Rail Map or #114.
 4. **The Desk view:** the ledger in the Desk, with entries shown under each
    agent's own name, cursors per agent and the person's pause and set-aside
    controls.
-5. **Foreign agents:** Cam, after the front porch mailbox plan.
+5. **Foreign agents:** Cam, after the agent wire (#311) is built.
 
 Slices 2 to 5 are direction only. Each gets a dated revision of this plan
 with its own details, "When it goes wrong" answers and owner trial, and the
