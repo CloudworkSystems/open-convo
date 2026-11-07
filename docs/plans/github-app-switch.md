@@ -41,7 +41,7 @@ Two problems, one cause:
    account, so the one-free-machine-account limit doesn't apply, and the
    owner approves its pull requests as he approves the bot's today.
 2. **Local-first work.** Claude, Codex and GrokBot's builders do their
-   building, reviewing and fixing in the repo on the owner's Mac. Only
+   building, reviewing and fixing in the repo on the owner's Mac Studio. Only
    finished work goes to GitHub.
 3. **One paced door out.** A push steward on the Mac is the only process that
    writes to GitHub, within a shared cap.
@@ -120,7 +120,45 @@ dodging a suspension).
 
 ## 2. Local-First Work On The Mac
 
-The owner's Mac is always on and kept awake.
+### Two Macs, Two Jobs (Owner Decision, November 7, 2026)
+
+The owner chose this split ("Yes, split it that way", Nov 7, 06:28 UTC,
+main chat):
+
+- **Mac Studio: the owner's desk and the main agent setup.** The owner works here,
+  talks to agents, reviews their work and approves it. Everything in the
+  rest of this section runs here: the Remote Control server, Claude
+  Desktop's local scheduled tasks, the Codex CLI, GrokBot's builders, the
+  agent ledger and the push steward with the app key. It is always on and
+  kept awake.
+- **Mac Mini: the agents' own machine.** Always on, with no display or
+  keyboard; the owner never sits at it and reaches it only through Screen
+  Sharing from the Studio. It has two jobs:
+  1. **Experiments.** Software-factory-style trials (long unattended agent
+     runs, new harnesses, new models) happen here, away from the real work.
+     The Mini holds no app key and no 1Password service account, so nothing
+     it runs can push, comment or merge. An experiment worth keeping is
+     handed to the Studio as a patch or branch and goes through the normal
+     path there: local review, the push steward, GitHub's gate.
+  2. **A backup copy of open-convo that updates itself.** A local scheduled
+     job on the Mini fetches every branch and tag from GitHub into a bare
+     mirror once an hour. The repo is public, so this needs no sign-in and
+     no key, and a suspended or lost account can't stop it. If GitHub ever
+     locks the owner out, the mirror holds every branch up to the last
+     hour and can be pushed to any other host. Work on the Studio that
+     isn't pushed yet is not in this mirror; covering it means the Studio
+     also sends its branches to the Mini over the home network, which needs
+     Remote Login (SSH) switched on on the Mini, key-only and reachable
+     from the home network only. That second part waits for the owner's yes.
+
+What the split changes: a crash or runaway experiment on the Mini can't
+touch the real work or the app key, and the Studio's load stays on the work
+the owner is watching. What it doesn't change: the Studio is still the one
+machine the real agents run on, so "What Gets Worse" below still applies to
+it, and the Mini's backup doesn't keep the agents working if the Studio is
+down.
+
+The rest of this section describes the Studio.
 
 - **Claude:** Claude Code's Remote Control runs Claude sessions on the Mac
   while the owner talks to them from claude.ai or the Claude app. It makes
@@ -199,11 +237,16 @@ On top of the watchdog's round limits:
 
 ## 4. Security
 
-- No inbound ports or tunnels into the Mac: Remote Control and the push
-  steward only make outgoing connections.
-- The Mac holds the work, the app key (through the service account) and the
-  running agents. FileVault stays on and the screen locks when the owner is
-  away. The service account stays limited to the "True Convo AI" vault.
+- No inbound ports or tunnels into either Mac from the internet: Remote
+  Control, the push steward and the Mini's backup job only make outgoing
+  connections.
+- The Studio holds the work, the app key (through the service account) and
+  the running agents. FileVault stays on and the screen locks when the owner
+  is away. The service account stays limited to the "True Convo AI" vault.
+- The Mini holds no app key, no 1Password service account and no GitHub
+  sign-in. Screen Sharing on it is reachable from the home network only,
+  never forwarded to the internet. Experiments that need other sign-ins get
+  their own, kept on the Mini, never the Studio's.
 - The app's reach stays one repo, Write-level, no workflows, no settings,
   one-hour tokens. Deleting the key on GitHub cuts it off at once.
 - Remote Control keeps session transcripts on Anthropic's servers, as cloud
@@ -211,14 +254,19 @@ On top of the watchdog's round limits:
 
 ## 5. What Gets Worse
 
-- **One machine runs everything.** A restart, power cut or network outage
+- **The Studio runs everything.** A restart, power cut or network outage
   stops every agent. After a restart with FileVault on, nothing runs until
   the owner signs in; then the Remote Control server and Claude Desktop must
   start as login items. A keep-alive script restarts the Remote Control
   server, which exits after about 10 minutes without network.
 - **Shared processor and memory:** fewer lanes at once, especially with
   Swift builds.
-- **Unpushed work is invisible** to anything that reads GitHub.
+- **Unpushed work is invisible** to anything that reads GitHub, and to the
+  Mini's backup until the Studio-to-Mini copy is set up.
+- **The Mini is headless.** After a restart with FileVault on, it waits at
+  the unlock screen and its backup job pauses until it is unlocked.
+- **The backup copy is not a second setup.** If the Studio is down, the
+  agents stop; the Mini keeps the code safe, not the work moving.
 
 ## 6. What Open Convo Users Could Get From This
 
@@ -238,7 +286,8 @@ Each step is its own pull request after the owner's yes for it.
 
 1. **Owner setup (no pull request):** create and install the app, put its
    key in 1Password, check branch protection, check where GrokBot's builders
-   run, start the Remote Control server and Claude Desktop at login.
+   run, start the Remote Control server and Claude Desktop at login on the
+   Studio; on the Mini, turn on Screen Sharing (home network only).
 2. **Accounts pull request** (protected paths): add the app's login next to
    `cloudwork-bot` everywhere comments or authors are trusted, so old and new
    both count during the move; change the scheduled tasks' account check
@@ -250,7 +299,12 @@ Each step is its own pull request after the owner's yes for it.
    for one command), the queue, the pace limits and the local review step.
 4. **Routine moves:** one at a time, PR keeper first, each a change to its
    file in `docs/scheduled-tasks/` and to its routine.
-5. **Cleanup:** revoke the bot's classic tokens; remove `cloudwork-bot` from
+5. **Mini backup (no pull request, owner's yes):** a bare mirror of the
+   public repo on the Mini, fetched hourly by a local scheduled job, with
+   git's reflog kept for every branch so a bad force-push on GitHub doesn't
+   erase the older copy. The Studio-to-Mini copy of unpushed branches comes
+   later, on its own yes, because it needs Remote Login on the Mini.
+6. **Cleanup:** revoke the bot's classic tokens; remove `cloudwork-bot` from
    the trusted lists once nothing posts as it.
 
 ## To Check Before Building
@@ -260,6 +314,8 @@ Each step is its own pull request after the owner's yes for it.
 - Whether Claude Duet threads can be started on the Mac through Remote
   Control by default, or only when started that way.
 - The Codex CLI's local review command (`codex --help`).
+- How the Mini is unlocked after a restart with FileVault on, given that
+  nobody sits at it.
 - Where GrokBot's builders run today (Cursor on the Mac or Cursor's cloud).
 - How GitHub shows open pull requests authored by a suspended account
   (#311, #312), and whether they need reopening under the app.
