@@ -401,7 +401,7 @@ Each step is its own pull request after the owner's yes for it.
 
 ## Not In This Plan
 
-- Gemini review (still not set up), the builders' VM (it gets the app key in
-  exe.dev Integrations if it's ever set up), and per-agent apps (possible
-  later; one app is enough while `agent:` labels and sign-offs show who did
-  what).
+- Gemini review (still not set up), the builders' VM (if it's ever set up, it
+  gets no app key, and its work reaches GitHub through the push steward), and
+  per-agent apps (possible later; one app is enough while `agent:` labels and
+  sign-offs show who did what).
