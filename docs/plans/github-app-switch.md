@@ -325,6 +325,8 @@ Each step is its own pull request after the owner's yes for it.
    out of `cloudwork-bot` and `CloudworkSystems` on the agents' macOS user.
    Until this and the push steward exist, every push from the Studio is a
    command the owner approves in Claude Code, as with #313 and #314.
+   Required (carried from [Codex on #314](https://github.com/CloudworkSystems/open-convo/pull/314#discussion_r4506943499)):
+   suspend the installation before the key swap and keep it suspended until tokens made from the old key have expired, up to an hour, so the app can't write to GitHub during that time.
 3. **Accounts pull request** (protected paths): add the app's login next to
    `cloudwork-bot` everywhere comments or authors are trusted, so old and new
    both count during the move; change the scheduled tasks' account check
