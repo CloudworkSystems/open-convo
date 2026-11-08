@@ -341,6 +341,8 @@ Each step is its own pull request after the owner's yes for it.
    #313 and #314.
    Required (carried from [Codex on #314](https://github.com/CloudworkSystems/open-convo/pull/314#discussion_r4506943499)):
    suspend the installation before the key swap and keep it suspended until tokens made from the old key have expired, up to an hour, so the app can't write to GitHub during that time.
+   Required (carried from [Codex on #314](https://github.com/CloudworkSystems/open-convo/pull/314#discussion_r4507207368)):
+   by the end of this step, the owner's GitHub browser session is out of agents' reach, including their browser tools, through a separate macOS user or by staying signed out while agents run; the owner chooses which at this step.
 5. **Routine moves:** one at a time, PR keeper first, each a change to its
    file in `docs/scheduled-tasks/` and to its routine.
    Required (carried from [Codex on #314](https://github.com/CloudworkSystems/open-convo/pull/314#discussion_r4506809630)):
