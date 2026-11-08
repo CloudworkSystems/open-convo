@@ -3,7 +3,7 @@
 Status: Draft (Nov 7, updated Nov 8): proposed; waiting on the owner's yes to
 merge. Owner setup (Build Order step 1) is done apart from the Mini; see
 "Setup And First Test (Nov 8)". Updated after Codex's review of #314: the
-app key moves out of the agents' reach (Build Order step 2) and the
+app key moves out of the agents' reach (Build Order step 4) and the
 emergency steps now suspend the app first (section 4).
 
 Written November 7, 2026 at the owner's request: "Plan the GitHub App"
@@ -318,26 +318,29 @@ Each step is its own pull request after the owner's yes for it.
    key in 1Password, check branch protection, check where GrokBot's builders
    run, start the Remote Control server and Claude Desktop at login on the
    Studio; on the Mini, turn on Screen Sharing (home network only).
-2. **Key isolation (owner setup, before any agent pushes on its own):**
-   make the push steward's macOS user and its 1Password vault and service
-   account; generate a new app key into that vault and delete the old one
-   (the agents' service account could read the old one); sign `gh` and git
-   out of `cloudwork-bot` and `CloudworkSystems` on the agents' macOS user.
-   Until this and the push steward exist, every push from the Studio is a
-   command the owner approves in Claude Code, as with #313 and #314.
-   Required (carried from [Codex on #314](https://github.com/CloudworkSystems/open-convo/pull/314#discussion_r4506943499)):
-   suspend the installation before the key swap and keep it suspended until tokens made from the old key have expired, up to an hour, so the app can't write to GitHub during that time.
-3. **Accounts pull request** (protected paths): add the app's login next to
+2. **Accounts pull request** (protected paths): add the app's login next to
    `cloudwork-bot` everywhere comments or authors are trusted, so old and new
    both count during the move; change the scheduled tasks' account check
    (an installation token can't call `GET /user`, so the check becomes "this
    is the app's installation on this repo"); update Accounts And Provenance
    and Who Does What; update the tests.
-4. **Push steward pull request:** the token helper (reads the key through
+3. **Push steward pull request:** the token helper (reads the key through
    its own service account, gets a one-hour token, passes it to `gh` and `git`
    for one command), the queue, the pace limits and the local review step.
    Required (carried from [Codex on #314](https://github.com/CloudworkSystems/open-convo/pull/314#discussion_r4506809626)):
    the steward pushes only from its own checkout, which agents can't write to, with hooks and repository config from agents ignored.
+4. **Key isolation (owner setup, before any agent pushes on its own):**
+   make the push steward's macOS user and its 1Password vault and service
+   account; generate a new app key into that vault and delete the old one
+   (the agents' service account could read the old one); sign `gh` and git
+   out of `cloudwork-bot` and `CloudworkSystems` on the agents' macOS user;
+   then start the push steward. It comes after steps 2 and 3 because those
+   pull requests have to be pushed first. Until this step is done, no agent
+   pushes on its own: every push from the Studio is a command the owner
+   approves in Claude Code, reading the key from the shared vault, as with
+   #313 and #314.
+   Required (carried from [Codex on #314](https://github.com/CloudworkSystems/open-convo/pull/314#discussion_r4506943499)):
+   suspend the installation before the key swap and keep it suspended until tokens made from the old key have expired, up to an hour, so the app can't write to GitHub during that time.
 5. **Routine moves:** one at a time, PR keeper first, each a change to its
    file in `docs/scheduled-tasks/` and to its routine.
    Required (carried from [Codex on #314](https://github.com/CloudworkSystems/open-convo/pull/314#discussion_r4506809630)):
@@ -355,7 +358,7 @@ Each step is its own pull request after the owner's yes for it.
 - **App:** "Cloudwork Agents" (App ID 5665711, login `cloudwork-agents[bot]`),
   owned by CloudworkSystems, installed on this repo only, with the
   permissions above. For now its key is in the "True Convo AI" vault and the
-  agents' service account can read it; Build Order step 2 moves it.
+  agents' service account can read it; Build Order step 4 moves it.
 - **Branch protection on `main`:** `tests` and `codex-approved` must come
   from GitHub Actions, and bypassing is off for everyone, so the app can't
   post its own passing checks or skip them.
@@ -371,7 +374,7 @@ Each step is its own pull request after the owner's yes for it.
   request. Codex reviewed it within about 3 minutes, so #313 was skipped
   only because it was a draft. Codex's two P1 findings (agents could reach
   the key; deleting a key doesn't stop tokens already made) are fixed in
-  section 1 "Keys", section 4 and Build Order step 2. Commits pushed with
+  section 1 "Keys", section 4 and Build Order step 4. Commits pushed with
   git are unsigned; `main` doesn't require signed commits today.
 
 ## To Check Before Building
@@ -380,7 +383,7 @@ Each step is its own pull request after the owner's yes for it.
   confirms Codex's automatic review of the app's normal pull requests and its
   answer to `@codex review` posted by the app.)
 - That suspending the installation stops tokens the app already made, as
-  GitHub's documentation says; try it once during Build Order step 2.
+  GitHub's documentation says; try it once during Build Order step 4.
 - Whether Claude Duet threads can be started on the Mac through Remote
   Control by default, or only when started that way.
 - The Codex CLI's local review command (`codex --help`).
