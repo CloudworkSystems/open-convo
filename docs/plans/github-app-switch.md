@@ -345,6 +345,8 @@ Each step is its own pull request after the owner's yes for it.
    file in `docs/scheduled-tasks/` and to its routine.
    Required (carried from [Codex on #314](https://github.com/CloudworkSystems/open-convo/pull/314#discussion_r4506809630)):
    before step 7, project status keeps issue #254 updated, either by moving to the Mac or through a defined handoff to the steward with no inbound connection.
+   Required (carried from [Codex on #314](https://github.com/CloudworkSystems/open-convo/pull/314#discussion_r4507181134)):
+   before the security sweep moves, the owner gives the app read-only access to Dependabot, code scanning and secret scanning alerts, or the sweep gets its own read-only access.
 6. **Mini backup (no pull request, owner's yes):** a bare mirror of the
    public repo on the Mini, fetched hourly by a local scheduled job, with
    git's reflog kept for every branch so a bad force-push on GitHub doesn't
