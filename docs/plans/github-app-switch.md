@@ -1,6 +1,8 @@
 # GitHub App Switch: Agents Work On The Mac, One App Pushes
 
-Status: Draft (Nov 7): proposed; waiting on the owner's yes to merge.
+Status: Draft (Nov 7, updated Nov 8): proposed; waiting on the owner's yes to
+merge. Owner setup (Build Order step 1) is done apart from the Mini; see
+"Setup And First Test (Nov 8)".
 
 Written November 7, 2026 at the owner's request: "Plan the GitHub App"
 (Nov 7, 01:17 UTC, main chat), then "Let's explore the local option"
@@ -307,10 +309,33 @@ Each step is its own pull request after the owner's yes for it.
 6. **Cleanup:** revoke the bot's classic tokens; remove `cloudwork-bot` from
    the trusted lists once nothing posts as it.
 
+## Setup And First Test (Nov 8)
+
+- **App:** "Cloudwork Agents" (App ID 5665711, login `cloudwork-agents[bot]`),
+  owned by CloudworkSystems, installed on this repo only, with the
+  permissions above. Its key is in the "True Convo AI" vault and the
+  agents' service account can read it.
+- **Branch protection on `main`:** `tests` and `codex-approved` must come
+  from GitHub Actions, and bypassing is off for everyone, so the app can't
+  post its own passing checks or skip them.
+- **Studio:** the owner's Claude app serves this folder through Remote
+  Control in worktree mode.
+- **First test (#313, draft, closed unmerged):** from the Studio, Claude read
+  the key through the service account, got a one-hour token, pushed a
+  scratch branch and opened a draft pull request. GitHub showed
+  `cloudwork-agents[bot]` as the pull request and commit author, and `tests`
+  passed. Codex did not review it, so `codex-approved` stayed pending. The
+  key and tokens never appeared on screen or in a file.
+- **Open:** whether Codex skipped #313 because it was a draft or because the
+  author is an app. This plan's own pull request is opened by the app as a
+  normal pull request to find out. Commits pushed with git are unsigned;
+  `main` doesn't require signed commits today.
+
 ## To Check Before Building
 
-- That Codex answers `@codex review` and GrokBot answers `@cursor` review
-  requests posted by an app (one scratch pull request).
+- That Codex reviews a normal (not draft) pull request opened by the app,
+  and answers `@codex review` and GrokBot answers `@cursor` review requests
+  posted by the app.
 - Whether Claude Duet threads can be started on the Mac through Remote
   Control by default, or only when started that way.
 - The Codex CLI's local review command (`codex --help`).
