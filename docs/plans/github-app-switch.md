@@ -2,7 +2,9 @@
 
 Status: Draft (Nov 7, updated Nov 8): proposed; waiting on the owner's yes to
 merge. Owner setup (Build Order step 1) is done apart from the Mini; see
-"Setup And First Test (Nov 8)".
+"Setup And First Test (Nov 8)". Updated after Codex's review of #314: the
+app key moves out of the agents' reach (Build Order step 2) and the
+emergency steps now suspend the app first (section 4).
 
 Written November 7, 2026 at the owner's request: "Plan the GitHub App"
 (Nov 7, 01:17 UTC, main chat), then "Let's explore the local option"
@@ -96,14 +98,21 @@ notes that mention the bot in passing are left to the recycling pass.
 | Workflows | None | As today: no agent edits `.github/workflows/` |
 | Administration, Secrets, Environments, Deployments, Pages | None | No agent changes settings, secrets or deploys |
 
-- **Keys:** the app's private key lives in the "True Convo AI" 1Password
-  vault, read through the agents' service account (docs/decisions.md,
-  October 31 and November 1). The push steward uses it to get an
-  installation token that lasts one hour and reaches only this repo. No
-  token is written to a file or a log. If an Actions workflow ever needs to
-  act as the app, the key goes in a repository secret and the workflow uses
-  `actions/create-github-app-token` pinned to a commit hash. Keys are
-  rotated yearly (GitHub allows two at once), and at once on any doubt.
+- **Keys:** only the push steward can read the app's private key. The key
+  lives in its own 1Password vault, separate from "True Convo AI", and the
+  only thing that can open that vault is a second service account used by
+  the push steward alone. The agents' service account (docs/decisions.md,
+  October 31 and November 1) loses access to the key. The push steward runs
+  as its own macOS user on the Studio, and that second service account's
+  sign-in sits in that user's Keychain, which the agents' macOS user can't
+  read. So an agent can't make its own app token and skip the paced door:
+  its only way to GitHub is to hand work to the push steward's queue. The
+  push steward uses the key to get an installation token that lasts one
+  hour and reaches only this repo. No token is written to a file or a log.
+  If an Actions workflow ever needs to act as the app, the key goes in a
+  repository secret and the workflow uses `actions/create-github-app-token`
+  pinned to a commit hash. Keys are rotated yearly (GitHub allows two at
+  once), and at once on any doubt, using the emergency steps in section 4.
 - **Limits:** for one repo the app gets the same 5,000 requests an hour as a
   user. It gives a safer identity, not more headroom; the pace limits are
   what stop a repeat.
@@ -113,7 +122,8 @@ notes that mention the bot in passing are left to the recycling pass.
 - **Authorship:** pull requests show the app as author. The owner isn't the
   author, so he can approve them and code-owner review works as today.
   Commits keep each tool's own marks. Pushes made with an app token start
-  workflows (only the built-in `GITHUB_TOKEN` doesn't).
+  workflows, unlike pushes made by a workflow with its own built-in
+  credentials.
 
 Not used: linking the owner's Claude account's GitHub to `CloudworkSystems`
 (agents would act as the owner, and he couldn't approve their pull
@@ -242,15 +252,33 @@ On top of the watchdog's round limits:
 - No inbound ports or tunnels into either Mac from the internet: Remote
   Control, the push steward and the Mini's backup job only make outgoing
   connections.
-- The Studio holds the work, the app key (through the service account) and
-  the running agents. FileVault stays on and the screen locks when the owner
-  is away. The service account stays limited to the "True Convo AI" vault.
+- The Studio holds the work and the running agents. The app key is
+  reachable only from the push steward's own macOS user, through its own
+  service account (section 1, "Keys"). FileVault stays on and the screen
+  locks when the owner is away. The agents' service account stays limited
+  to the "True Convo AI" vault, which no longer holds the app key.
+- No user account's GitHub sign-in stays where agents run. `gh` and git's
+  credential store on the agents' macOS user are signed out of
+  `cloudwork-bot` and `CloudworkSystems`; the owner uses GitHub in the
+  browser. Otherwise an agent could skip the push steward by acting as a
+  person.
 - The Mini holds no app key, no 1Password service account and no GitHub
   sign-in. Screen Sharing on it is reachable from the home network only,
   never forwarded to the internet. Experiments that need other sign-ins get
   their own, kept on the Mini, never the Studio's.
 - The app's reach stays one repo, Write-level, no workflows, no settings,
-  one-hour tokens. Deleting the key on GitHub cuts it off at once.
+  one-hour tokens.
+- **If the key or a token may have leaked**, in this order:
+  1. Suspend the app's installation on this repo (CloudworkSystems'
+     settings, GitHub Apps, Cloudwork Agents, Configure, Suspend). GitHub
+     then refuses every token the app already made, at once.
+  2. Generate a new private key on the app's page and delete the old one.
+     Deleting a key alone is not enough: tokens made from it keep working
+     until they expire, up to an hour later.
+  3. Put the new key in the push steward's vault.
+  4. Check the repo's recent pushes, comments and pull requests by the app
+     for anything the owner didn't expect.
+  5. Unsuspend the installation only on the owner's yes.
 - Remote Control keeps session transcripts on Anthropic's servers, as cloud
   sessions do today.
 
@@ -290,31 +318,38 @@ Each step is its own pull request after the owner's yes for it.
    key in 1Password, check branch protection, check where GrokBot's builders
    run, start the Remote Control server and Claude Desktop at login on the
    Studio; on the Mini, turn on Screen Sharing (home network only).
-2. **Accounts pull request** (protected paths): add the app's login next to
+2. **Key isolation (owner setup, before any agent pushes on its own):**
+   make the push steward's macOS user and its 1Password vault and service
+   account; generate a new app key into that vault and delete the old one
+   (the agents' service account could read the old one); sign `gh` and git
+   out of `cloudwork-bot` and `CloudworkSystems` on the agents' macOS user.
+   Until this and the push steward exist, every push from the Studio is a
+   command the owner approves in Claude Code, as with #313 and #314.
+3. **Accounts pull request** (protected paths): add the app's login next to
    `cloudwork-bot` everywhere comments or authors are trusted, so old and new
    both count during the move; change the scheduled tasks' account check
    (an installation token can't call `GET /user`, so the check becomes "this
    is the app's installation on this repo"); update Accounts And Provenance
    and Who Does What; update the tests.
-3. **Push steward pull request:** the token helper (reads the key through
-   the service account, gets a one-hour token, passes it to `gh` and `git`
+4. **Push steward pull request:** the token helper (reads the key through
+   its own service account, gets a one-hour token, passes it to `gh` and `git`
    for one command), the queue, the pace limits and the local review step.
-4. **Routine moves:** one at a time, PR keeper first, each a change to its
+5. **Routine moves:** one at a time, PR keeper first, each a change to its
    file in `docs/scheduled-tasks/` and to its routine.
-5. **Mini backup (no pull request, owner's yes):** a bare mirror of the
+6. **Mini backup (no pull request, owner's yes):** a bare mirror of the
    public repo on the Mini, fetched hourly by a local scheduled job, with
    git's reflog kept for every branch so a bad force-push on GitHub doesn't
    erase the older copy. The Studio-to-Mini copy of unpushed branches comes
    later, on its own yes, because it needs Remote Login on the Mini.
-6. **Cleanup:** revoke the bot's classic tokens; remove `cloudwork-bot` from
+7. **Cleanup:** revoke the bot's classic tokens; remove `cloudwork-bot` from
    the trusted lists once nothing posts as it.
 
 ## Setup And First Test (Nov 8)
 
 - **App:** "Cloudwork Agents" (App ID 5665711, login `cloudwork-agents[bot]`),
   owned by CloudworkSystems, installed on this repo only, with the
-  permissions above. Its key is in the "True Convo AI" vault and the
-  agents' service account can read it.
+  permissions above. For now its key is in the "True Convo AI" vault and the
+  agents' service account can read it; Build Order step 2 moves it.
 - **Branch protection on `main`:** `tests` and `codex-approved` must come
   from GitHub Actions, and bypassing is off for everyone, so the app can't
   post its own passing checks or skip them.
@@ -326,16 +361,20 @@ Each step is its own pull request after the owner's yes for it.
   `cloudwork-agents[bot]` as the pull request and commit author, and `tests`
   passed. Codex did not review it, so `codex-approved` stayed pending. The
   key and tokens never appeared on screen or in a file.
-- **Open:** whether Codex skipped #313 because it was a draft or because the
-  author is an app. This plan's own pull request is opened by the app as a
-  normal pull request to find out. Commits pushed with git are unsigned;
-  `main` doesn't require signed commits today.
+- **Second test (#314, this plan):** opened by the app as a normal pull
+  request. Codex reviewed it within about 3 minutes, so #313 was skipped
+  only because it was a draft. Codex's two P1 findings (agents could reach
+  the key; deleting a key doesn't stop tokens already made) are fixed in
+  section 1 "Keys", section 4 and Build Order step 2. Commits pushed with
+  git are unsigned; `main` doesn't require signed commits today.
 
 ## To Check Before Building
 
-- That Codex reviews a normal (not draft) pull request opened by the app,
-  and answers `@codex review` and GrokBot answers `@cursor` review requests
-  posted by the app.
+- That Codex answers `@codex review` and GrokBot answers `@cursor` review
+  requests posted by the app. (Codex's automatic review of the app's normal
+  pull requests is confirmed by #314.)
+- That suspending the installation stops tokens the app already made, as
+  GitHub's documentation says; try it once during Build Order step 2.
 - Whether Claude Duet threads can be started on the Mac through Remote
   Control by default, or only when started that way.
 - The Codex CLI's local review command (`codex --help`).
