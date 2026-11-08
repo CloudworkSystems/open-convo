@@ -334,8 +334,12 @@ Each step is its own pull request after the owner's yes for it.
 4. **Push steward pull request:** the token helper (reads the key through
    its own service account, gets a one-hour token, passes it to `gh` and `git`
    for one command), the queue, the pace limits and the local review step.
+   Required (carried from [Codex on #314](https://github.com/CloudworkSystems/open-convo/pull/314#discussion_r4506809626)):
+   the steward pushes only from its own checkout, which agents can't write to, with hooks and repository config from agents ignored.
 5. **Routine moves:** one at a time, PR keeper first, each a change to its
    file in `docs/scheduled-tasks/` and to its routine.
+   Required (carried from [Codex on #314](https://github.com/CloudworkSystems/open-convo/pull/314#discussion_r4506809630)):
+   before step 7, project status keeps issue #254 updated, either by moving to the Mac or through a defined handoff to the steward with no inbound connection.
 6. **Mini backup (no pull request, owner's yes):** a bare mirror of the
    public repo on the Mini, fetched hourly by a local scheduled job, with
    git's reflog kept for every branch so a bad force-push on GitHub doesn't
@@ -370,9 +374,9 @@ Each step is its own pull request after the owner's yes for it.
 
 ## To Check Before Building
 
-- That Codex answers `@codex review` and GrokBot answers `@cursor` review
-  requests posted by the app. (Codex's automatic review of the app's normal
-  pull requests is confirmed by #314.)
+- That GrokBot answers `@cursor` review requests posted by the app. (#314
+  confirms Codex's automatic review of the app's normal pull requests and its
+  answer to `@codex review` posted by the app.)
 - That suspending the installation stops tokens the app already made, as
   GitHub's documentation says; try it once during Build Order step 2.
 - Whether Claude Duet threads can be started on the Mac through Remote
