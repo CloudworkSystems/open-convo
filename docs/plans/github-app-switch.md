@@ -352,6 +352,8 @@ Each step is its own pull request after the owner's yes for it.
    later, on its own yes, because it needs Remote Login on the Mini.
 7. **Cleanup:** revoke the bot's classic tokens; remove `cloudwork-bot` from
    the trusted lists once nothing posts as it.
+   Required (carried from [Codex on #314](https://github.com/CloudworkSystems/open-convo/pull/314#discussion_r4507023970)):
+   the owner disconnects the GitHub link on his Claude account and revokes Claude's authorization on `cloudwork-bot`, so a restored bot account gives cloud sessions no way around the steward.
 
 ## Setup And First Test (Nov 8)
 
