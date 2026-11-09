@@ -23,7 +23,7 @@ enum InventedSnapshot {
         return ClaudeCLIFileIdentity(info)
     }
 
-    static func make(inode: UInt64 = 4_242, changed: Int = 1_700_000_000, version: String = "2.1.283",
+    static func make(inode: UInt64 = 4_242, changed: Int = 1_700_000_000, version: String = "2.1.319",
                      plan: ClaudeSubscriptionPlan = .max, account: String = "invented-person@invented.invalid",
                      organization: String? = "invented-organization") -> ClaudeLocalSnapshot {
         ClaudeLocalSnapshot(cliVersion: version, fileIdentity: identity(inode: inode, changed: changed),

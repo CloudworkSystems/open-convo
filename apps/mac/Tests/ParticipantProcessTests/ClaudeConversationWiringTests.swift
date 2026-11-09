@@ -86,22 +86,24 @@ struct ClaudeConversationWiringTests {
         #expect(logs.lines == ["claude.wiring.on "])
     }
 
-    @Test("The app's call checks the values recorded on the owner's Mac: the pinned model, no slash commands or skills, only the built-in agents-md plugin, and no key source")
+    @Test("The app's call checks the values recorded on the owner's Mac: the pinned model, no slash commands or skills, only the three recorded built-in plugins, and no key source")
     @MainActor
     func recordedValues() throws {
         let recorded = ClaudeConversation.recordedInit
         #expect(recorded.model == "claude-sonnet-5-5" && recorded.model == LocalConversationLane.claudePin.model)
         #expect(recorded.slashCommands.isEmpty && recorded.skills.isEmpty)
-        #expect(recorded.plugins == .array([.object(["name": .string("agents-md"), "path": .string("builtin"),
-                                                    "source": .string("agents-md@builtin")])]))
         #expect(recorded.apiKeySource == "none")
         // The reader compares `plugins` as one JSON value, so the line as
         // recorded matches, and any other plugin list does not.
-        let recordedEntry = #"{"name":"agents-md","path":"builtin","source":"agents-md@builtin"}"#
-        #expect(try JSONValue.decode(Data("[\(recordedEntry)]".utf8)) == recorded.plugins, "the recorded line")
-        for other in ["[]", #"[\#(recordedEntry),{"name":"invented-plugin","path":"builtin","source":"invented-plugin@builtin"}]"#,
-                      #"[{"name":"agents-md","path":"/invented/folder","source":"agents-md@builtin"}]"#,
-                      #"[{"name":"agents-md","path":"builtin","source":"agents-md@builtin","extra":true}]"#] {
+        let first = #"{"name":"cc-plugin-agents-md","path":"builtin","source":"cc-plugin-agents-md@builtin"}"#
+        let second = #"{"name":"cc-plugin-privacy","path":"builtin","source":"cc-plugin-privacy@builtin"}"#
+        let third = #"{"name":"cc-plugin-plugin-authoring","path":"builtin","source":"cc-plugin-plugin-authoring@builtin"}"#
+        #expect(try JSONValue.decode(Data("[\(first),\(second),\(third)]".utf8)) == recorded.plugins, "the recorded line")
+        for other in ["[]", "[\(first)]", "[\(first),\(second)]", "[\(third),\(second),\(first)]",
+                      #"[{"name":"agents-md","path":"builtin","source":"agents-md@builtin"}]"#,
+                      #"[\#(first),\#(second),\#(third),{"name":"invented-plugin","path":"builtin","source":"invented-plugin@builtin"}]"#,
+                      #"[{"name":"cc-plugin-agents-md","path":"/invented/folder","source":"cc-plugin-agents-md@builtin"},\#(second),\#(third)]"#,
+                      #"[{"name":"cc-plugin-agents-md","path":"builtin","source":"cc-plugin-agents-md@builtin","extra":true},\#(second),\#(third)]"#] {
             #expect(try JSONValue.decode(Data(other.utf8)) != recorded.plugins, "\(other)")
         }
         let root = try Self.folder()

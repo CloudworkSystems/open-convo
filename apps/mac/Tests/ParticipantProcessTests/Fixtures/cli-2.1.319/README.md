@@ -1,7 +1,7 @@
-# Predicted Claude Code 2.1.283 streams (F1): invented, unconfirmed
+# Predicted Claude Code 2.1.319 streams (F1): invented, unconfirmed
 
 These `.jsonl` files are PREDICTED, not recorded. They come from a read-only
-reading of the installed 2.1.283 program file, which was never run
+reading of the installed 2.1.319 program file, which was never run
 (`docs/reviews/2026-10-11-claude-f1-cli-reading.md`; its corrections at the
 top override its body), plus field names a review checked in the same file's
 bytes (result fields, init key order). They are unconfirmed until the first

@@ -22,7 +22,7 @@ struct ClaudeLocalChecksUnitTests {
         }
         var info = stat()
         info.st_ino = 7
-        let snapshot = ClaudeLocalSnapshot(cliVersion: "2.1.283", fileIdentity: ClaudeCLIFileIdentity(info),
+        let snapshot = ClaudeLocalSnapshot(cliVersion: "2.1.319", fileIdentity: ClaudeCLIFileIdentity(info),
                                            loginKind: .subscription(.pro),
                                            account: ClaudeAccountComparator(email: "invented@example.invalid", organization: nil,
                                                                             key: Array(repeating: 1, count: 32)))
@@ -55,18 +55,18 @@ struct ClaudeLocalChecksUnitTests {
     @Test("--version: exactly one `<x.y.z> (Claude Code)` line with exit 0; anything else is unreadable with a fixed detail")
     func versionReader() {
         func read(_ probe: ClaudeProbeResult) -> ClaudeVersionAnswer { ClaudeCheckAnswers.version(probe, timeout: .timeout) }
-        #expect(read(.exited(0, "2.1.283 (Claude Code)\n")) == .version("2.1.283"))
-        #expect(read(.exited(0, "2.1.283 (Claude Code)")) == .version("2.1.283"))
+        #expect(read(.exited(0, "2.1.319 (Claude Code)\n")) == .version("2.1.319"))
+        #expect(read(.exited(0, "2.1.319 (Claude Code)")) == .version("2.1.319"))
         #expect(read(.exited(0, "2.1.284 (Claude Code)\n")) == .version("2.1.284"))
-        for text in ["2.1.283 (Claude Code)\nCommit: 0\n", "2.1.283\n", "v2.1.283 (Claude Code)\n", "2.1 (Claude Code)\n",
-                     "2.1.283 (Claude Code)\r\n", "2.1.283  (Claude Code)\n", "2.1.283-beta (Claude Code)\n", " 2.1.283 (Claude Code)\n",
-                     "2.1.283 (Claude Code)\n\n", "١.٢.٣ (Claude Code)\n"] {
+        for text in ["2.1.319 (Claude Code)\nCommit: 0\n", "2.1.319\n", "v2.1.319 (Claude Code)\n", "2.1 (Claude Code)\n",
+                     "2.1.319 (Claude Code)\r\n", "2.1.319  (Claude Code)\n", "2.1.319-beta (Claude Code)\n", " 2.1.319 (Claude Code)\n",
+                     "2.1.319 (Claude Code)\n\n", "١.٢.٣ (Claude Code)\n"] {
             #expect(read(.exited(0, text)) == .unreadable(.unparseable), "\(text.debugDescription)")
         }
         #expect(read(ClaudeProbeResult(ending: .exited(0), stdout: Data([0xFF, 0xFE]))) == .unreadable(.unparseable))
         #expect(read(.exited(0, "")) == .unreadable(.emptyOutput))
-        #expect(read(.exited(1, "2.1.283 (Claude Code)\n")) == .unreadable(.exitStatus))
-        #expect(read(ClaudeProbeResult(ending: .exited(9), stdout: Data("2.1.283 (Claude Code)\n".utf8))) == .unreadable(.exitStatus),
+        #expect(read(.exited(1, "2.1.319 (Claude Code)\n")) == .unreadable(.exitStatus))
+        #expect(read(ClaudeProbeResult(ending: .exited(9), stdout: Data("2.1.319 (Claude Code)\n".utf8))) == .unreadable(.exitStatus),
                 "killed by a signal")
         #expect(read(ClaudeProbeResult(ending: .timedOut, stdout: Data())) == .unreadable(.timeout))
         #expect(ClaudeCheckAnswers.version(ClaudeProbeResult(ending: .timedOut, stdout: Data()), timeout: .totalTimeout)
@@ -128,7 +128,7 @@ struct ClaudeLocalChecksUnitTests {
 
         let unknown: [([String: Any], Int32, ClaudeCheckDetail, String)] = [
             (with(["subscriptionType": "invented-plan"]), 0, .unknownPlan, "unknown plan"),
-            // Not yet a code 2.1.283 reports (Codex P1 on #212): an Ultra
+            // Not yet a code 2.1.319 reports (Codex P1 on #212): an Ultra
             // account reads `max`; a display name never passes either.
             (with(["subscriptionType": "ultra"]), 0, .unknownPlan, "the ultra code"),
             (with(["subscriptionType": "Ultra"]), 0, .unknownPlan, "a display name"),

@@ -2,8 +2,9 @@
 
 Status: In progress (Nov 2): scope merged (#75, approved Oct 23); PR 2 through
 PR 4b merged (PR 2 started early on invented chats only, see "Revision,
-October 28"; PR 4b as #228); one built-in plugin allowed, see "Revision,
-November 2".
+October 28"; PR 4b as #228); re-pinned to Claude Code 2.1.319 with its three
+built-in plugins allowed, see "Revision, November 9". Part 2 of the live check
+has not passed yet.
 
 Builder: Claude building sessions. Reviewers: Codex on every pull request,
 plus an independent review (GrokBot with a non-Claude model, or a fresh
@@ -362,3 +363,77 @@ So, adding to section 5's override rule where it differs:
 - **Anywhere the run reads** (managed, server-managed and `~/.claude.json`),
   those three names stay overrides, like every other `ANTHROPIC_` name.
 - A new pinned CLI version is re-read for these names before it is pinned.
+
+## Revision, November 9: Re-Pin To Claude Code 2.1.319
+
+Part 2's first complete attempt (three real runs on invented text, November 9)
+did not pass; [claude-code-owner-trial.md](claude-code-owner-trial.md) has the
+results. Follow-up tests on the owner's Mac, all offline against a listener on
+the Mac with invented text, found why the pin has to move.
+
+**The problem.** Under the app's exact flags and environment, 2.1.283 opens a
+local messaging socket and lists the run as a session other Claude Code
+sessions can see. A message sent from another session on the Mac reached the
+run's next request to the model. That breaks "Nothing else is sent". No flag or
+setting in 2.1.283 turns it off.
+
+**The fix.** Claude Code's changelog for 2.1.290 reads "Fixed `--restricted`
+(and `CLAUDE_CODE_RESTRICTED=1`) sessions opening the cross-session messaging
+socket", and the app already passes `--restricted`. 2.1.310 and 2.1.319 opened
+no socket and wrote no `.key` file under the app's flags. On 2.1.319 the run
+was not listed, a message sent to it by name was refused as not reachable, and
+the message's word never reached a request. The pin is now 2.1.319, the version
+already installed on the owner's Mac.
+
+**What was checked again on 2.1.319** (this section's "new pinned CLI" rules):
+
+- `--version` prints `2.1.319 (Claude Code)`, one line. `--help` lists every
+  flag the app passes, and `--bare`, `--fallback-model` and `--mcp-config` stay
+  unused.
+- Step 0: both messages caught, the invented file's word not found, and 0 of
+  111 long lines of the owner's home `AGENTS.md` found.
+- The start line, network blocked: `slash_commands`, `skills`, `tools` and
+  `mcp_servers` empty, `apiKeySource` `"none"`, and the plugins below.
+- Stream shape: same line order as 2.1.283 with a new `system` line,
+  `ui_invalidate`, before init, which the reader ignores (a new test holds it
+  to that), plus new fields the reader doesn't read. The usage line still comes
+  after `message_stop`, with `overageStatus`.
+- `auth status`: new fields the parser doesn't read, plan code `max` for the
+  owner's account. The gate for server-managed settings still names `team` and
+  `enterprise` in a byte reading, so Pro and Max only stands, and the network
+  block on this probe stays.
+- Setting names: 2.1.319's new names were compared with 2.1.283's.
+  `CLAUDE_CODE_SESSIONS_OAUTH_TOKEN` and `CLAUDE_CODE_MEMORY_API_TOKEN` join the
+  override list. The three model-menu names are still present; their effect was
+  not traced again, and they reach only the network-blocked `auth status`.
+
+**Not checked on 2.1.319.** The older byte readings of project and local
+settings for `auth status` (Codex F3-5) and of how it applies a fetched payload
+(Codex F34-D1) weren't repeated. A real sign-in and real replies are for Part 2.
+The predicted stream fixtures carry the new version number, but they're still
+predicted, not recorded.
+
+**The owner's yes** (decision cards in this building thread, 2026-11-09):
+
+- "Move pin to 2.1.319 (Recommended)", on the question of what the app should
+  do about the pinned version.
+- "Yes, allow exactly these (Recommended)", on allowing exactly
+  `cc-plugin-agents-md`, `cc-plugin-privacy` and `cc-plugin-plugin-authoring`
+  for this pin, still refusing anything else, with the file test repeated in the
+  real app in Part 2.
+- "Narrow exception (Recommended)", on the session record below.
+
+So, replacing the November 2 revision's lines where they differ:
+
+- **Out and Tools refused:** plugins stay out, except those three built-in
+  entries, exactly as recorded and in that order. Any other list stops the run
+  before any text is kept.
+- **Session record:** each 2.1.319 run writes `~/.claude/sessions/<pid>.json`
+  while it runs (its folder, IDs, status and version; no message or reply text
+  in the offline tests). That one file is allowed under check 3 only if it's
+  gone once the run has ended. The rerun must also show it after a force quit;
+  if it stays behind, that's reported as a failure for the owner to decide. A
+  `.key` file, a socket or any other change under `~/.claude` still fails.
+- **New Section 16 check 8:** a run opens no messaging socket and can't be
+  reached from another session.
+

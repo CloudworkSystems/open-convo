@@ -435,7 +435,7 @@ use invented trees only and assert that nothing outside them is touched
 probe's own count of paths outside its folder (Codex F4-1, F34-2). In order:
 
 1. The pinned file (answer 9): exactly
-   `<home>/.local/share/claude/versions/2.1.283`, `<home>` the user
+   `<home>/.local/share/claude/versions/2.1.319`, `<home>` the user
    database's (`getpwuid_r`), never `$HOME`, the environment or the
    `~/.local/bin/claude` link. Each folder from the home down is opened
    without following a link and must be this user's and not writable by
@@ -453,7 +453,7 @@ probe's own count of paths outside its folder (Codex F4-1, F34-2). In order:
    an ACL that lets another user write a folder on the way or the file is
    not checked (answer 18's ACL refusal covers the app's own folders, not
    this path).
-2. `--version` must print exactly `2.1.283 (Claude Code)`, one line, exit 0:
+2. `--version` must print exactly `2.1.319 (Claude Code)`, one line, exit 0:
    another version is `cli-version-mismatch`; any other shape, exit or
    ending is `check-failed`. The CLI answers it before reading any setting,
    so it can start no helper.
@@ -628,8 +628,8 @@ probe's own count of paths outside its folder (Codex F4-1, F34-2). In order:
    login with no `subscriptionType`, and for a `team` or `enterprise` plan
    (detail `plan-not-accepted`, the owner's D1 choice: only Pro and Max
    pass, read by plan code, never by display name; Ultra is Anthropic's
-   October 30, 2026 name for Max 20x, which Claude Code 2.1.283 still
-   reports as `max`); an unknown method or plan (known: `pro`, `max`,
+   October 30, 2026 name for Max 20x, which Claude Code reported as `max`
+   on 2.1.283; 2.1.319 reports `max` for the owner's account too); an unknown method or plan (known: `pro`, `max`,
    `team`, `enterprise`; an `ultra` code is unknown until a newer pinned
    version's reading rechecks it), no account, or any other shape is `check-failed`. Only the plan and the comparator are kept; email,
    organization and the output are dropped in memory.
@@ -1642,7 +1642,7 @@ The pinned binary runs with exactly `-p --safe-mode --restricted
 --disable-slash-commands --tools "" --strict-mcp-config
 --no-session-persistence --output-format stream-json --verbose
 --include-partial-messages --model <pinned>`, never `--bare`,
-`--fallback-model` or `--mcp-config` (all in `claude --help` 2.1.283;
+`--fallback-model` or `--mcp-config` (all in `claude --help` 2.1.319;
 `--strict-mcp-config` with no `--mcp-config` at all is Codex's F0 answer 10).
 Environment: only `HOME`, `USER`, `TMPDIR`, `LANG`/`LC_ALL` from the app's
 own, then fixed values (answer 10) that the app's pass and the supervisor's
@@ -1715,11 +1715,13 @@ byte counts, exit codes and reasons. One live run per app.
 - Init rule: `model` is the pinned model; `tools` and `mcp_servers` empty;
   `slash_commands`, `skills`, `plugins` and `apiKeySource` equal the values
   recorded in section 16's run. Else `failed` `process-error` at sequence 1.
-  Recorded 2026-11-01 on the owner's Mac (CLI 2.1.283, the argv and
+  Recorded 2026-11-09 on the owner's Mac (CLI 2.1.319, the argv and
   environment above, network blocked): `slash_commands` `[]`, `skills` `[]`,
-  `plugins` `[{"name":"agents-md","path":"builtin","source":"agents-md@builtin"}]`,
-  `apiKeySource` `"none"`. `agents-md` is the CLI's built-in, and check 7
-  shows it loads nothing under these flags.
+  `plugins` `[{"name":"cc-plugin-agents-md","path":"builtin","source":"cc-plugin-agents-md@builtin"},{"name":"cc-plugin-privacy","path":"builtin","source":"cc-plugin-privacy@builtin"},{"name":"cc-plugin-plugin-authoring","path":"builtin","source":"cc-plugin-plugin-authoring@builtin"}]`,
+  `apiKeySource` `"none"`. These are the CLI's built-ins, allowed by the owner
+  on 2026-11-09 (the adapter plan's November 9 revision); check 7 shows they let
+  no `AGENTS.md` through. A `system` line of another subtype before init is
+  ignored: 2.1.319 prints `ui_invalidate` there.
 - Overflow rule: text is held until a rate-limit message shows
   `overageStatus` `rejected` with `isUsingOverage` and `overageInUse` not
   true. The run fails `paid-overflow` on any other `overageStatus` or a true
@@ -1733,7 +1735,8 @@ byte counts, exit codes and reasons. One live run per app.
   incurred.
 
 Field names come from the 2.1.283 stream schema in the installed binary, not
-from a run.
+from a run. An offline run of 2.1.319 on 2026-11-09 showed the same names the
+reader uses.
 
 Packaging (F2, 2026-10-11): the helper is now bundled and signed in the test
 copy only (`package_app.sh --test-identity`: `Contents/MacOS/ParticipantSupervisor`,
@@ -2244,7 +2247,9 @@ Participants stay unavailable until all pass, on invented text:
 2. `@/tmp/invented-canary` and `/config` in the input stay inert: no canary
    file read, no canary text in the reply.
 3. No new text under `HOME/.claude` (history, projects, paste cache, todos,
-   debug logs).
+   debug logs). The run's own `sessions/<pid>.json` is allowed only if it's gone
+   once the run has ended (the owner's narrow exception, 2026-11-09; the adapter
+   plan's November 9 revision).
 4. `kill -9` of the app mid-run, and during a Stop's wait, leaves no live CLI
    and no supervisor within 10 s (section 11's mechanism and test).
 5. Stop works while a commit is blocked in fsync.
@@ -2253,8 +2258,11 @@ Participants stay unavailable until all pass, on invented text:
    folder, never reaches the request: the canary is absent from what the CLI
    sends. Shown first on 2026-11-02 outside the app with the same argv and
    environment and requests caught on a local port (canary absent, the
-   built-in logging that project memory is off); repeated in the app in
-   PR 5.
+   built-in logging that project memory is off), and on 2026-11-09 on 2.1.319;
+   repeated in the app in PR 5.
+8. The run opens no messaging socket and writes no `sessions/<pid>.*.key`, and
+   another Claude Code session can't reach it: its message is refused and never
+   reaches a request (2.1.283 failed this; shown offline on 2.1.319, 2026-11-09).
 
 ## 17. Owner confirmation that paid usage is off (approved direction; built inactive in plan F4, awaiting review)
 
@@ -3344,7 +3352,7 @@ no tools). What native writes to stdin, in UTF-8, before closing it:
 
 The owner chose option 1 on October 29, 2026: `claude auth status` runs
 with macOS blocking all its network use, and only Pro and Max plans pass
-(Ultra, Anthropic's October 30 name for Max 20x, reports `max` in 2.1.283
+(Ultra, Anthropic's October 30 name for Max 20x, reported `max` in 2.1.283
 and passes as Max; an `ultra` code stays unknown, `check-failed`, until a
 newer pinned version's reading rechecks it).
 Section 5 step 4 says how (built in the adapter's PR 3b, still inactive:

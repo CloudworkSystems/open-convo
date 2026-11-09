@@ -159,7 +159,7 @@ struct ClaudeCheckRun: Sendable {
         case .clear: break
         }
 
-        // 4. `auth status`, which 2.1.283 lets fetch server-managed settings
+        // 4. `auth status`, which the pinned CLI lets fetch server-managed settings
         // (and arm a helper they carry) before any inspection can see them:
         // in production only with its network blocked (the owner's D1
         // decision, Codex F34-D1).
