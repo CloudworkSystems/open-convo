@@ -26,12 +26,12 @@ import Foundation
 // after forking any child, moves itself into its parent's group (the
 // supervisor's) with `setpgid` and records the result in `moved.json`.
 //
-// Predicted Claude Code 2.1.283 modes (F1; `Predicted.swift` says where the
+// Predicted Claude Code 2.1.319 modes (F1; `Predicted.swift` says where the
 // shapes come from: a read-only reading, never a run). Chosen the same way,
 // by the scenario beside the fake and the arguments the real CLI would get:
 // - `--version`, `-v` or `-V` (optionally then `--verbose`): the line
 //   `<version> (Claude Code)`, `version` from the scenario (default
-//   "2.1.283"), with `--verbose` an invented `Commit:` line; exit 0.
+//   "2.1.319"), with `--verbose` an invented `Commit:` line; exit 0.
 // - `auth status` (optionally `--json`): the scenario's `authStatus`, one of
 //   "subscription", "signed-out", "console", "api-key-env", "bedrock",
 //   "vertex", "garbled" or "slow" (the subscription answer after `slowMs`,
@@ -50,7 +50,7 @@ import Foundation
 //   start, which step 4 runs with the network blocked.
 // - For section 5's checks (F3), more invented variants: `authStatus`
 //   "console-login", "api-key-helper", "oauth-token", "gateway",
-//   "pro", "ultra", "team", "enterprise" (a plan login on that plan; "ultra" is a code 2.1.283 never reports), "unknown-plan", "unknown-method", "no-account", "logged-in-exit-1",
+//   "pro", "ultra", "team", "enterprise" (a plan login on that plan; "ultra" is a code 2.1.319 never reports), "unknown-plan", "unknown-method", "no-account", "logged-in-exit-1",
 //   "logged-in-number", "empty" and "oversized", with the scenario's
 //   `configDirectory` if it has one; `versionMode` "garbled",
 //   "empty", "oversized", "exit-2" or "slow" (after `versionSlowMs`, default

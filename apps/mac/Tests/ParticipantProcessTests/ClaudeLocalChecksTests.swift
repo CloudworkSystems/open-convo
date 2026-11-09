@@ -905,7 +905,7 @@ extension ProcessSuites {
             let tree = try InventedClaudeTree()
             defer { tree.clean() }
             for gate in [ClaudeAuthStatusGate.production, .runForTests] {
-                // `subscription` is `max`, which Claude Code 2.1.283 reports
+                // `subscription` is `max`, which Claude Code 2.1.319 reports
                 // for an Ultra account too (the owner's reading, October 30).
                 for plan in ["pro", "subscription"] {
                     try tree.setScenario(["authStatus": plan])

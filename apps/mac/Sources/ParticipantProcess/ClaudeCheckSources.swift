@@ -23,7 +23,7 @@ import ParticipantSupervisorCore
 //   `auth status` runs without that flag, so its helpers and its `env`
 //   apply to that probe.
 // - Project and local settings, for `auth status` (the F3 review's byte
-//   reading of 2.1.283, Codex F3-5; never run): project settings come from
+//   reading of 2.1.283, Codex F3-5, never run; not read again for 2.1.319): project settings come from
 //   its working folder, which is new and empty, so there are none. Local
 //   settings come from `<root>/.claude/settings.local.json`, `<root>` the
 //   canonical git root of that folder when it is not the folder itself or
@@ -255,6 +255,7 @@ enum ClaudeSettingsScan {
         "ANTHROPIC_AWS_BASE_URL", "ANTHROPIC_GOOGLE_CLOUD_BASE_URL", "ANTHROPIC_BEDROCK_MANTLE_BASE_URL",
         "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_FOUNDRY_API_KEY", "ANTHROPIC_FOUNDRY_AUTH_TOKEN",
         "ANTHROPIC_AWS_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR",
+        "CLAUDE_CODE_SESSIONS_OAUTH_TOKEN", "CLAUDE_CODE_MEMORY_API_TOKEN",
         "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR", "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST", "CLAUDE_CODE_HOST_CREDS_FILE",
         "ANTHROPIC_CUSTOM_HEADERS", "ANTHROPIC_UNIX_SOCKET", "CLAUDE_CODE_CLIENT_DATA_URL"
     ]
