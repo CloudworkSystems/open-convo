@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import type { ConversationRun, ConversationRunPhase, ParticipantStopReason } from '../domain/conversation-run-types';
 import type { ConversationRunStatus, ParticipantCleanupState } from '../adapters/participant-runtime';
 import { isConversationRunClosed } from '../domain/conversation-runs';
-import { CLAUDE_DESTINATION, isOffMacClaude } from '../domain/claude-participant';
+import { CLAUDE_DESTINATION, claudeRunOutcome, isOffMacClaude, REOPENED_CUT_OFF, REOPENED_NO_TEXT } from '../domain/claude-participant';
 import { isLocalParticipant, localModelName, localRunOutcome, localRunStarted } from '../domain/local-participant';
 import { agentReaction } from '../domain/shared-reactions';
 import { emojiName, loadEmoji } from './EmojiPicker';
@@ -27,6 +27,8 @@ export interface RunTranscriptProps {
   /** The latest reply in the conversation keeps its actions visible. */
   latest?: boolean;
   onStop: () => void;
+  /** Reopened after the app was killed mid-reply, with no recorded ending yet. */
+  cutOff?: boolean;
 }
 
 const phaseLabels: Record<ConversationRunPhase, string> = {
@@ -75,7 +77,7 @@ function localCleanupLine(state: ParticipantCleanupState, acknowledged: boolean,
 }
 
 /** Presentation only: provider text stays literal and save failure never prevents Stop. */
-export function RunTranscript({ run, savedSequence, savedOutput, stopState, canStop = true, cleanupState = 'none', runtimeStatus, checkpointPending = false, saving, error, latest = false, onStop }: RunTranscriptProps) {
+export function RunTranscript({ run, savedSequence, savedOutput, stopState, canStop = true, cleanupState = 'none', runtimeStatus, checkpointPending = false, saving, error, latest = false, onStop, cutOff = false }: RunTranscriptProps) {
   const statusId = useId();
   const pendingLabelId = useId();
   const statusTarget = useRef<HTMLParagraphElement>(null);
@@ -107,10 +109,12 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
   // A local run has no provider to cancel: Stop ends its request on this Mac
   // (contract section 20.4), so its endings are worded plainly.
   const localOutcome = local ? localRunOutcome(run) : undefined;
-  const phase = localOutcome ? localOutcome : run.closure?.kind === 'unknown' ? 'Closed with outcome unknown'
+  const claudeOutcome = claudeRunOutcome(run);
+  const phase = localOutcome ? localOutcome : claudeOutcome ? claudeOutcome : run.closure?.kind === 'unknown' ? 'Closed with outcome unknown'
     : run.closure?.kind === 'interrupted' ? 'Run ended with incomplete response'
     : terminal ? run.phase === 'stopped' || run.phase === 'failed' ? terminalLabel(run.phase, run.reason, run.participant.executionHost) : phaseLabels[run.phase]
     : stopState === 'confirmed' ? local ? 'Stopped on this Mac. The reply so far is kept.' : 'Response stopped · provider cancellation unconfirmed'
+    : cutOff ? REOPENED_CUT_OFF
     : runtimeStatus === 'unknown' || runtimeStatus === 'disposed' || runtimeStatus === 'unavailable' || runtimeStatus === 'mismatched' ? runtimeLabels[runtimeStatus]
     : stopState === 'requesting' ? 'Stop requested · awaiting confirmation'
     : stopState === 'unknown' ? 'Stop outcome unknown'
@@ -149,7 +153,7 @@ export function RunTranscript({ run, savedSequence, savedOutput, stopState, canS
     : cleanupState === 'unowned' ? 'The host no longer has a safe process handle. It cannot retry Stop for this response. Check the participant session directly; do not assume it has stopped.'
     : !canStop && stopState !== 'requesting' ? 'Local cleanup is not confirmed. Reconnect the original participant to check this response; do not assume it has stopped.'
     : 'The participant reported an end, but local cleanup is not confirmed. Retry Stop or check this run before sending another message.';
-  const emptyOutput = closed || run.phase === 'unknown' || runtimeStatus === 'unknown' || runtimeStatus === 'disposed' || runtimeStatus === 'unavailable' || runtimeStatus === 'mismatched'
+  const emptyOutput = cutOff ? REOPENED_NO_TEXT : closed || run.phase === 'unknown' || runtimeStatus === 'unknown' || runtimeStatus === 'disposed' || runtimeStatus === 'unavailable' || runtimeStatus === 'mismatched'
     ? 'No response text is available.' : terminal ? 'No response text was received.' : 'Waiting for response text.';
 
   return (

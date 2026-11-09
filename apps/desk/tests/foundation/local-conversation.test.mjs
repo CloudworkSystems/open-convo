@@ -697,3 +697,27 @@ test('Stop ends a Claude reply and offers Retry, which only refills the message 
     f.check();
   } finally { await f.close(); }
 });
+
+test('a Claude reply cut off by a force quit reopens as cut off with its text, and Retry comes only after Close as unknown (Claude Code owner trial, run 3)', async () => {
+  const restored = {
+    earlier: ['25000000-0000-4000-8000-000000000001', '25000000-0000-4000-8000-000000000002', '25000000-0000-4000-8000-000000000003'],
+    cut: ['25000000-0000-4000-8000-000000000011', '25000000-0000-4000-8000-000000000012', '25000000-0000-4000-8000-000000000013'],
+  };
+  const f = await fixture({ availability: withClaude, choice: offMac, offerClaude: true, restored });
+  try {
+    const { page } = f;
+    const cut = page.locator(`[data-run-id="${restored.cut[0]}"]`);
+    await expect(cut).toContainText('Invented partial reply');
+    await expect(cut.getByRole('status')).toHaveText('Reply cut off. The text so far is kept.');
+    await expect(cut).not.toContainText('Run status unknown');
+    await expect(page.getByText('The app closed before this reply finished, and nothing was sent again. To try again, press Close as unknown, then Retry.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Close as unknown', exact: true }).click();
+    await expect(cut).toContainText('Reply cut off. The text so far is kept; the Mac never recorded how it ended.');
+    await expect(cut).not.toContainText('Closed with outcome unknown');
+    await page.getByRole('button', { name: 'Retry', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toHaveValue('Invented question cut off by a crash.');
+    assert.equal((await f.host()).starts.length, 0, 'nothing was sent again, and Retry never sends on its own');
+    f.check();
+  } finally { await f.close(); }
+});

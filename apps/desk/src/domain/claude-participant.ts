@@ -62,3 +62,19 @@ export function canRetryClaudeRun(run: Readonly<ConversationRun>): boolean {
   if (run.closure) return !(run.closure.kind === 'interrupted' && run.closure.terminalEvent.type === 'completed');
   return run.phase === 'stopped' || run.phase === 'failed';
 }
+
+/**
+ * A reply reopened after the app was killed while it was coming in (step 3
+ * check 4; Claude Code owner trial run 3): the Mac kept no record of how it
+ * ended, so it reads as cut off, in the same words a local reply uses.
+ */
+export const REOPENED_CUT_OFF = 'Reply cut off. The text so far is kept.';
+export const REOPENED_CUT_OFF_NOTE = 'The app closed before this reply finished, and nothing was sent again. To try again, press Close as unknown, then Retry.';
+export const REOPENED_NO_TEXT = 'No words had arrived before the app closed.';
+
+/** A closed Claude reply's ending in plain words, as a local one's; undefined otherwise. */
+export function claudeRunOutcome(run: Readonly<ConversationRun>): string | undefined {
+  if (!isOffMacClaude(run.participant) || run.closure?.kind !== 'unknown') return undefined;
+  if (run.lastSequence === 0 && !run.outputChunks.some((chunk) => chunk.length > 0)) return 'Closed before any reply arrived. Use Retry to send this message again.';
+  return 'Reply cut off. The text so far is kept; the Mac never recorded how it ended.';
+}
