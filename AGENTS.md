@@ -124,7 +124,7 @@ auto-merge is off, the PR keeper supplies the missing step (independent
 review, plan check, or a listing on issue #52). It switches auto-merge on
 under the coordinator's conditions. **The one hand merge:** when GitHub
 refuses auto-merge because the pull request is already mergeable, the
-coordinator or keeper merges it as `cloudwork-bot` through the merge API,
+coordinator or keeper merges it as the agents' app or `cloudwork-bot` through the merge API,
 never with an admin bypass. Plans stop after two Codex rounds, with later
 P1s carried to the build. Dependabot patch and minor updates need no
 independent review. The keeper fixes Claude-built findings left for 2 hours.
@@ -150,8 +150,13 @@ these checks only report.
 - `CloudworkSystems` is the owner's account, and only he uses it. No agent,
   scheduled task or app connection acts as it. An agent that finds itself
   signed in as it stops and tells the owner.
-- Every agent that writes to GitHub signs in as `cloudwork-bot`. Codex's app
-  and GitHub Actions workflows keep their own identities.
+- Every agent that writes to GitHub signs in as `cloudwork-bot`, or writes
+  as the agents' GitHub App, Cloudwork Agents (login `cloudwork-agents[bot]`,
+  installed on this repo only). Agents are moving from the bot to the app
+  ([docs/plans/github-app-switch.md](docs/plans/github-app-switch.md)); until
+  the move is done, a comment, review or pull request from either counts
+  wherever this repo trusts agents' work. Codex's app and GitHub Actions
+  workflows keep their own identities.
 - Each pull request has a builder label (`agent: claude`, `agent: grokbot` or
   `agent: codex`). The last line of every comment, review and pull request
   description names the agent and its thread or task.
@@ -229,20 +234,20 @@ judge that isn't there (owner decision, October 25, 2026).
 | Who | Account | Its one job |
 |---|---|---|
 | The owner | `CloudworkSystems` | Decisions, approvals on protected paths, the 8 AM list |
-| Claude coordinator (thread "261012 OC Coordinator") | `cloudwork-bot` | The planning session in plans and earlier decisions: checks outside builders' pull requests against their plans, switches on auto-merge once the independent review and any plan check are clean on the latest commit, answers builders' plan questions, keeps this table current |
-| Claude building sessions | `cloudwork-bot` | Build on a named branch; open the pull request with auto-merge off (the coordinator switches it on) |
-| GrokBot teams (Cursor) | `cloudwork-bot` | Each builds one module from its plan and fixes findings on its own pull request; on request, reviews Claude-built and Codex-built pull requests as the independent reviewer |
+| Claude coordinator (thread "261012 OC Coordinator") | `cloudwork-agents[bot]` or `cloudwork-bot` | The planning session in plans and earlier decisions: checks outside builders' pull requests against their plans, switches on auto-merge once the independent review and any plan check are clean on the latest commit, answers builders' plan questions, keeps this table current |
+| Claude building sessions | `cloudwork-agents[bot]` or `cloudwork-bot` | Build on a named branch; open the pull request with auto-merge off (the coordinator switches it on) |
+| GrokBot teams (Cursor) | `cloudwork-agents[bot]` or `cloudwork-bot` | Each builds one module from its plan and fixes findings on its own pull request; on request, reviews Claude-built and Codex-built pull requests as the independent reviewer |
 | Codex | its own app | Reviews every pull request; builds Codex modules |
 | Gemini review | GitHub Actions, once built | Independent reviewer of Codex-built and Claude-built pull requests, alongside GrokBot (advisory for now; not set up yet: the Gemini Code Assist app is gone for individual accounts, see Agent Setup And Silence) |
-| PR steward (scheduled, 8:41 AM and 5:41 PM) | `cloudwork-bot` | Reviews Codex-built pull requests; flags stuck ones in its comment on issue #52 ([instructions](docs/scheduled-tasks/pr-steward.md)) |
-| PR keeper (scheduled, hourly, in the cloud) | `cloudwork-bot` | Keeps pull requests moving: updates auto-merge pull requests that fall behind `main` once they are otherwise ready, restarts a hung Codex review once per commit, relays Codex findings to GrokBot's builders, finishes ready pull requests and fixes stalled Claude-built findings ("Keeping Finished Work Moving"), and reports silent or not-set-up agents in its "Not working" comment on issue #52 |
-| Daily list (scheduled, 7:52 AM) | `cloudwork-bot`, reading only | Sends the owner the "Needs the owner" list (issue #114) and the scheduled tasks' comments on issue #52, including the keeper's "Not working" comment, plus pull requests Codex has gone silent on |
+| PR steward (scheduled, 8:41 AM and 5:41 PM) | `cloudwork-agents[bot]` or `cloudwork-bot` | Reviews Codex-built pull requests; flags stuck ones in its comment on issue #52 ([instructions](docs/scheduled-tasks/pr-steward.md)) |
+| PR keeper (scheduled, hourly, in the cloud) | `cloudwork-agents[bot]` or `cloudwork-bot` | Keeps pull requests moving: updates auto-merge pull requests that fall behind `main` once they are otherwise ready, restarts a hung Codex review once per commit, relays Codex findings to GrokBot's builders, finishes ready pull requests and fixes stalled Claude-built findings ("Keeping Finished Work Moving"), and reports silent or not-set-up agents in its "Not working" comment on issue #52 |
+| Daily list (scheduled, 7:52 AM) | `cloudwork-agents[bot]` or `cloudwork-bot`, reading only | Sends the owner the "Needs the owner" list (issue #114) and the scheduled tasks' comments on issue #52, including the keeper's "Not working" comment, plus pull requests Codex has gone silent on |
 | Open-decision sweep (Claude thread "Nudge on idle open decisions", daily, 7:45 AM) | none; reads the steering project's thread list only | Lists the steering project's threads that have waited on the owner for 2 days or more and nudges him once per wait in that thread; changes nothing else |
 | Nightly Test build (scheduled, 2–6 AM) | none | Rebuilds True Convo Test from `main` on the owner's Mac |
-| Recycling pass (scheduled, Sundays) | `cloudwork-bot` | One pull request proposing fixes for stale docs |
-| Security sweep (scheduled, Mondays, in the cloud) | `cloudwork-bot`, the PR keeper's access (owner decision, November 1, 2026); its only write is its own comment | Runs the weekly self-audit in [docs/plans/security.md](docs/plans/security.md) and rewrites its "Security" comment on issue #52; never changes code, settings or merges |
+| Recycling pass (scheduled, Sundays) | `cloudwork-agents[bot]` or `cloudwork-bot` | One pull request proposing fixes for stale docs |
+| Security sweep (scheduled, Mondays, in the cloud) | `cloudwork-agents[bot]` or `cloudwork-bot`, the PR keeper's access (owner decision, November 1, 2026); its only write is its own comment | Runs the weekly self-audit in [docs/plans/security.md](docs/plans/security.md) and rewrites its "Security" comment on issue #52; never changes code, settings or merges |
 | Sender feed (scheduled, weekly) | the owner's Gmail, read and search only; no GitHub access | Reads only the followed senders' emails and posts drafted lessons and ideas in the owner's private steering project; after the owner picks, a building session opens the lessons pull request ([docs/plans/security.md](docs/plans/security.md) section 5) |
-| Project status (scheduled, hourly at :40, in the cloud) | `cloudwork-bot`; its only write is the body of issue #254 | Rewrites the "Project status" issue other projects read: what is being built, what waits on whom, and recent decisions ([instructions](docs/scheduled-tasks/project-status.md)) |
+| Project status (scheduled, hourly at :40, in the cloud) | `cloudwork-agents[bot]` or `cloudwork-bot`; its only write is the body of issue #254 | Rewrites the "Project status" issue other projects read: what is being built, what waits on whom, and recent decisions ([instructions](docs/scheduled-tasks/project-status.md)) |
 | `owner-queue` workflow | GitHub Actions | Rewrites issue #114, "Needs the owner", every hour and on pull request events |
 
 Work that belongs to another row is forwarded there once, and the owner is

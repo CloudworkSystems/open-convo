@@ -51,10 +51,10 @@ export function protectedFiles(rules, files) {
 export function ownerOpenedBlock({ prAuthor, files = [], rules = [], complete = true }) {
   const owned = rules.some((rule) => rule.owners.some((o) => o.replace(/^@/, '') === prAuthor));
   if (!prAuthor || !owned) return null;
-  if (!complete) return "Opened from the code owner's account and too large to check every file; reopen it from cloudwork-bot";
+  if (!complete) return "Opened from the code owner's account and too large to check every file; reopen it from the agents' app (cloudwork-agents[bot]) or cloudwork-bot";
   const hit = protectedFiles(rules, files);
   if (hit.length === 0) return null;
-  return `Opened from the code owner's account and changes ${hit[0]}; reopen it from cloudwork-bot`;
+  return `Opened from the code owner's account and changes ${hit[0]}; reopen it from the agents' app (cloudwork-agents[bot]) or cloudwork-bot`;
 }
 
 // Applies the hold to the gate's result, whether that came from the Codex

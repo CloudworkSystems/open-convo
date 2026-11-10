@@ -27,8 +27,13 @@ export const MIN_CONFIDENCE = 0.8;
 export const JUDGE_MODEL = 'claude-opus-5-5';
 // The repo is public, so anyone can open a pull request. Only the project's
 // own builders' pull requests may spend the judge's key or put text in front
-// of it: the bot every agent signs in as, and Codex's cloud builds.
-export const JUDGE_AUTHORS = ['cloudwork-bot', CODEX_LOGIN];
+// of it: the agents' GitHub App, the bot every agent signed in as before it
+// (both count while agents move to the app, docs/plans/github-app-switch.md),
+// and Codex's cloud builds.
+export const BOT_LOGIN = 'cloudwork-bot';
+// The app's login as the REST API reports a pull request's author.
+export const APP_LOGIN = 'cloudwork-agents[bot]';
+export const JUDGE_AUTHORS = [APP_LOGIN, BOT_LOGIN, CODEX_LOGIN];
 
 const FINDING_MARKER = 'codex-code-review-finding:v1';
 // Codex's priority badge at the top of each finding: ![P2 Badge](...)
