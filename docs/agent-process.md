@@ -454,8 +454,11 @@ nothing said so. The same rule for True Convo's own agents is in
   `cloudwork-bot`. Only the `[bot]` login is the app; a user account named
   `cloudwork-agents` is someone else. An app token can't read GitHub's
   "who am I" endpoint, so a scheduled task's account check accepts either
-  `cloudwork-bot` or a token whose installation reaches this repo and no
-  other. Two apps keep their own identities: Codex's GitHub
+  `cloudwork-bot` or an app token that the push steward's token helper made
+  in that run with the Cloudwork Agents key (App ID 5665711) for
+  installation 179798275, and whose installation reaches this repo and no
+  other. Reaching only this repo isn't enough on its own: any app installed
+  on this repo alone would pass that. Two apps keep their own identities: Codex's GitHub
   app (`chatgpt-codex-connector[bot]`), which posts its reviews and its cloud
   builds; and the repo's GitHub Actions workflows (such as `owner-queue`,
   and a Gemini review workflow once one is built), which post as
