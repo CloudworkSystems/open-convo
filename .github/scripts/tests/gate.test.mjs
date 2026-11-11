@@ -497,6 +497,7 @@ test('the owner-opened rule leaves ordinary changes and bot pull requests alone'
   const rules = parseCodeowners(readFileSync(new URL('../../CODEOWNERS', import.meta.url), 'utf8'));
   assert.equal(ownerOpenedBlock({ prAuthor: OWNER_LOGIN, files: ['packages/visibility-report/src/a.mjs', 'STATUS.md'], rules }), null);
   assert.equal(ownerOpenedBlock({ prAuthor: 'cloudwork-bot', files: ['AGENTS.md', '.github/CODEOWNERS'], rules }), null);
+  assert.equal(ownerOpenedBlock({ prAuthor: 'cloudwork-agents[bot]', files: ['AGENTS.md', '.github/CODEOWNERS'], rules }), null);
   assert.equal(ownerOpenedBlock({ prAuthor: undefined, files: ['AGENTS.md'], rules }), null);
 });
 
@@ -507,7 +508,9 @@ test('an owner-opened pull request whose file list was cut short waits', () => {
 });
 
 test('the owner-opened hold applies after triage too', () => {
-  const blocked = "Opened from the code owner's account and changes AGENTS.md; reopen it from cloudwork-bot";
+  const rules = parseCodeowners(readFileSync(new URL('../../CODEOWNERS', import.meta.url), 'utf8'));
+  const blocked = ownerOpenedBlock({ prAuthor: OWNER_LOGIN, files: ['docs/agent-process.md'], rules });
+  assert.equal(blocked, "Opened from the code owner's account and changes docs/agent-process.md; reopen it from the agents' app (cloudwork-agents[bot]) or cloudwork-bot");
   const judged = { approved: true, reason: 'Judge rated all 2 remaining Codex finding(s) on 1111111 as nits.' };
   assert.deepEqual(withOwnerOpenedHold(judged, blocked), { approved: false, reason: blocked });
   assert.deepEqual(withOwnerOpenedHold({ approved: true, reason: 'Codex is clean' }, blocked), { approved: false, reason: blocked });
@@ -541,6 +544,11 @@ const nits = (elig, confidence = 0.9) => elig.findings.map((f) => ({ id: f.id, v
 
 test('triage: only the project\'s own builders, on branches in this repo, reach the judge', () => {
   assert.equal(triageEligibility({ ...loop(), prAuthor: CODEX_LOGIN }).eligible, true);
+  // Old and new agent identities both count during the move to the app.
+  assert.equal(triageEligibility({ ...loop(), prAuthor: 'cloudwork-bot' }).eligible, true);
+  assert.equal(triageEligibility({ ...loop(), prAuthor: 'cloudwork-agents[bot]' }).eligible, true);
+  // A user account named like the app is someone else: only the [bot] login is the app.
+  assert.equal(triageEligibility({ ...loop(), prAuthor: 'cloudwork-agents' }).eligible, false);
   assert.equal(triageEligibility({ ...loop(), prAuthor: 'someone-else' }).eligible, false);
   assert.equal(triageEligibility({ ...loop(), fromFork: true }).eligible, false);
   const { fromFork, ...unsaid } = loop();
