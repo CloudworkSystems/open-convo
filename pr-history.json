@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
  "repository": "CloudworkSystems/open-convo",
- "takenAt": "2026-11-11T17:53:41.033Z",
+ "takenAt": "2026-11-12T18:19:18.038Z",
  "pulls": [
   {
    "number": 1,
@@ -8210,7 +8210,7 @@
    "additions": 4223,
    "deletions": 2,
    "areas": "STATUS.md; packages/capabilities",
-   "labels": "agent: grokbot; needs-owner: risk",
+   "labels": "agent: grokbot",
    "codexRounds": 17,
    "codexLatest": "open findings",
    "codexP0": 0,
@@ -8224,7 +8224,7 @@
    "outsideOnHead": "",
    "ownerApproved": "yes",
    "headHash": "94cfe747bc5f0c2221c85ad4234133897af2cb30",
-   "updatedAt": "2026-11-06T20:15:16Z",
+   "updatedAt": "2026-11-11T22:16:56Z",
    "link": "https://github.com/CloudworkSystems/open-convo/pull/290"
   },
   {
@@ -8999,12 +8999,12 @@
    "number": 319,
    "title": "Trust the agents' GitHub App next to cloudwork-bot (app switch step 2)",
    "agent": "claude",
-   "state": "open",
+   "state": "merged",
    "draft": "",
    "branch": "claude/app-accounts-step2",
    "createdAt": "2026-11-10T14:26:05Z",
-   "endedAt": "",
-   "daysOpen": "",
+   "endedAt": "2026-11-11T18:41:43Z",
+   "daysOpen": 1.18,
    "commits": 4,
    "filesChanged": 13,
    "additions": 91,
@@ -9022,9 +9022,9 @@
    "outsideLatest": "",
    "outsideCommit": "",
    "outsideOnHead": "",
-   "ownerApproved": "",
+   "ownerApproved": "yes",
    "headHash": "3812c80c9ae42de225e82bbdc351b9f89657bd68",
-   "updatedAt": "2026-11-10T18:34:23Z",
+   "updatedAt": "2026-11-11T18:41:45Z",
    "link": "https://github.com/CloudworkSystems/open-convo/pull/319"
   }
  ]
