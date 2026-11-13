@@ -153,7 +153,10 @@ Differ".
 2. **Tasks.** When an agent in a session decides something is worth a task,
    that task becomes a card that links back to the session. If the agent
    thought it mattered enough to make a task, it is a card.
-3. **Ideas.** An idea becomes a card in Suggested in one of three ways:
+3. **Ideas.** An idea becomes a card in Suggested in one of four ways:
+   - **Typed by the owner.** The Roadmap has an "Add idea" action. He types
+     a title, and an outcome line if he wants, and gets an idea card with no
+     source link.
    - **From an ideas document.** The first one is the owner's "True Convo
      Ideas: November 13, 2026", a private document outside this repo (a
      claude.ai Artifact), which he named on November 13 as the one he meant.
@@ -255,8 +258,9 @@ Each part is one pull request.
    still projected from the workspace, with its ID and saved placement
    unchanged. Only then does the Roadmap board switch to reading the record.
    Part 3 adds new task cards and removes nothing part 1 kept.
-2. **Idea and hand-made cards.** The "Create Roadmap item" action, and
-   bringing a pasted or exported ideas document in as cards.
+2. **Idea and hand-made cards.** The "Add idea" action, the "Create Roadmap
+   item" action, and bringing a pasted or exported ideas document in as
+   cards.
 3. **Task and idea cards from conversations.** Tasks from the Desk's own
    conversations become cards. So do ideas: the participant records an idea
    card linked to its message, and every message gets "Make this an idea".
@@ -320,6 +324,8 @@ own plan.
   he chooses, on his device. It makes no network call. Entries keep their
   "His idea" or "Suggestion" mark, and a second import of the same text
   creates no duplicate. Tests use an invented document.
+- "Add idea" makes a card of kind idea in Suggested. "Create Roadmap item"
+  makes a card of kind work. A test covers each and checks the kind.
 - An idea card made from a conversation links to its message and can be
   undone from the conversation. The participant records it in the same turn,
   with no extra model call.
@@ -417,7 +423,7 @@ own plan.
 
 - A plan added to `docs/plans/` appears on the Roadmap after the next
   snapshot, with no one adding it by hand.
-- An idea written in the Desk, an idea the participant records in a Desk
+- An idea typed with "Add idea", an idea the participant records in a Desk
   conversation, a message the owner marks "Make this an idea" and a task
   made in a Desk conversation each appear as a card that links back to
   where it came from.
