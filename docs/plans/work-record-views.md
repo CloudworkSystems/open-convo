@@ -423,10 +423,10 @@ own plan.
 
 - A plan added to `docs/plans/` appears on the Roadmap after the next
   snapshot, with no one adding it by hand.
-- An idea typed with "Add idea", an idea the participant records in a Desk
-  conversation, a message the owner marks "Make this an idea" and a task
-  made in a Desk conversation each appear as a card that links back to
-  where it came from.
+- An idea typed with "Add idea" appears as an idea card. An idea the
+  participant records in a Desk conversation, a message the owner marks
+  "Make this an idea" and a task made in a Desk conversation each appear as
+  a card that links back to where it came from.
 - A task Claude creates and an idea Claude records in a session run through
   the adapter each appear as a card linked to that session.
 - A plan card the owner moved stays in his column after the plan's status
