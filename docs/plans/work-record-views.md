@@ -252,7 +252,8 @@ Each part is one pull request.
    ([claude-code-adapter.md](claude-code-adapter.md)) doesn't carry task
    events in its session records today, so this part starts with a dated
    revision to that plan, in its own pull request, that adds them. The
-   cards stay on the owner's device like every other task and idea card.
+   cards stay on the owner's device like every other card that isn't a
+   plan card.
    Part 8 can be built any time after part 3.
 
 A Claude Code session started outside the app (for example in a plain
@@ -300,9 +301,18 @@ own plan.
   must give a Superseded plan card. One test runs the snapshot over this
   repo's real `docs/plans/` and finds a card for every plan and an empty
   "not read as a plan" list.
-- Plan cards are built from files in this repo and may be committed. Task
-  and idea cards made in the Desk hold the owner's private words and stay on
-  his device. They are never committed, logged or sent anywhere.
+- Only two sets of cards may be in the repo: plan cards, which are built
+  from files already in it, and the 13 hand-written cards already committed
+  in `recovery-roadmap.json`. Every other card stays on the owner's device:
+  task cards, idea cards and work cards, whether carried over from an
+  existing Desk work item or made by hand. That covers the whole card (its
+  title, outcome, source link and output links) and everything saved about
+  it (placements, move history, rejections and corrections). None of it is
+  committed, written to a log or sent anywhere.
+- The committed plan snapshot and the on-device cards are stored apart, so
+  writing the snapshot can't include an on-device card. A test builds a
+  record holding all four kinds, writes the snapshot, and finds only plan
+  cards in it.
 - Parts 1 to 6 make no network call beyond the ones the Rail Map snapshot
   already makes, and call no model. Part 7 runs on the local participant
   only. It sends no card text, placement, move history or correction to any
