@@ -289,7 +289,9 @@ Each part is one pull request.
    `text`, `completed`, `stopped` and `failed`. So this part starts with a
    dated revision to that contract, in its own pull request, that adds two
    event types, one for a recorded task and one for a recorded idea. Each
-   carries a title and belongs to the run's reply message. A card is made
+   carries a title, belongs to the run's reply message, and carries an item
+   ID that is unique within the session and never reused. A later event
+   about the same task (renamed, finished) carries the same item ID. A card is made
    only from one of these events. The Desk never reads a reply's text to
    guess that a task or idea was meant. Until a participant sends the
    events, the owner's two message actions are the way cards get made from
@@ -312,8 +314,10 @@ Each part is one pull request.
    ([claude-code-adapter.md](claude-code-adapter.md)) carries neither task
    events nor idea events in its session records today, so this part starts
    with a dated revision to that plan, in its own pull request, that adds
-   both: a task event when Claude creates or finishes a task, and an idea
-   event when Claude records an idea. The
+   both: a task event when Claude creates, renames or finishes a task, and an
+   idea event when Claude records an idea. Every event carries an item ID
+   that is unique within the session and never reused, and every later
+   event about the same task carries the same one. The
    cards stay on the owner's device like every other card that isn't a
    plan card.
    Part 8 can be built any time after part 3.
@@ -376,6 +380,13 @@ own plan.
 - Canvas has no agent suggestion and no "Where We Differ" rows. A test
   moves a Canvas node and finds no row created and no Roadmap or Navigator
   placement changed.
+- A task or idea card from a session is identified by the session and the
+  event's item ID, never by its title. An event with a known item ID updates
+  that card. An event with a new one makes a new card. An event with no item
+  ID is ignored and counted, and makes no card. Tests for parts 3 and 8
+  cover two tasks with the same title (finishing one leaves the other
+  untouched), a task renamed before it is finished (one card, updated), and
+  a create event delivered twice (one card).
 - A card's ID never changes, so a saved placement survives a rename.
 - The change to the record loses no card and no placement. Every card the
   board shows before part 1 (the 13 hand-written ones and every existing
