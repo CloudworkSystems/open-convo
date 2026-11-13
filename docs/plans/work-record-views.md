@@ -76,8 +76,9 @@ A card holds:
 - its kind: **plan**, **task** or **idea**;
 - its source, as a link: the plan file, the session that created the task,
   or the document or conversation the idea came from;
-- its state, read from the source where the source has one (for a plan, its
-  status line);
+- its **source status**, read from the source where the source has one
+  (for a plan, the word in its status line). It is a fact about the source
+  and is shown as a label on the card. It is not the card's Roadmap stage;
 - when it was created and when it was last touched;
 - links to outputs, such as a pull request.
 
@@ -90,9 +91,17 @@ A suggestion never moves a card the owner has placed. A card the owner hasn't
 placed sits where the agent suggests and is marked "suggested" until he moves
 it or accepts it.
 
+A card's **stage** is its Roadmap column: the owner's placement if he has
+placed it, otherwise the suggested one. Source status and stage are two
+separate values. A new snapshot can change a card's source status label and
+the suggested placement. It never changes the owner's placement. When the two
+disagree (the plan file says Approved and he has the card in In progress),
+the card stays where he put it, shows both, and gets a row in "Where We
+Differ".
+
 ## Views Stay In Step
 
-- A change to a card itself (its title, state, kind, links, or retiring and
+- A change to a card itself (its title, source status, kind, links, or retiring and
   restoring it) is one change to the record. Every open view shows it at
   once, with no reload.
 - Each view has a filter: which cards it shows. A card appears in a view
@@ -103,7 +112,9 @@ it or accepts it.
   column doesn't move it between Navigator groups, because the two
   arrangements mean different things (when, and what belongs together).
 - Where two views show the same fact, they show the same value. A Roadmap
-  column is a card's stage, so any view that shows a stage shows that one.
+  column is a card's stage (defined above), so any view that shows a stage
+  shows that one, and any view that shows source status shows the same
+  label.
 - Two windows or tabs of the Desk follow the same rules. If two changes to
   one card collide, the later one is kept and the other window says so.
 
@@ -114,17 +125,29 @@ it or accepts it.
    (<date>): ...`, the format in that folder's rules). The folder's own
    rules files, `AGENTS.md` and `CLAUDE.md`, are never cards. Any other file
    without a valid status line gets no card, and the snapshot names it in a
-   "not read as a plan" list instead of failing or guessing a state. A
-   card's state follows the plan's status line: Draft is Suggested, Approved is Planned, In progress
-   is In progress, Built is Finished, Superseded is retired. A new plan gets
-   its card with no one adding it by hand.
+   "not read as a plan" list instead of failing or guessing a state. The
+   word in the status line is the card's source status. It also sets the
+   suggested placement only: Draft suggests Suggested, Approved suggests
+   Planned, In progress suggests In progress, Built suggests Finished, and
+   Superseded suggests retiring. A new plan gets its card with no one adding
+   it by hand.
 2. **Tasks.** When an agent in a session decides something is worth a task,
    that task becomes a card that links back to the session. If the agent
    thought it mattered enough to make a task, it is a card.
-3. **Ideas.** Every idea becomes a card in Suggested. An ideas document can
-   stay as it is. Each entry in it gets a card that links to its line, and a
-   card made in the Desk can be written back to the document later (open
-   question 1).
+3. **Ideas.** An idea becomes a card in Suggested in one of three ways:
+   - **From an ideas document.** The document can stay as it is. Each entry
+     gets a card that links to its line, and a card made in the Desk can be
+     written back to the document later (open question 1).
+   - **From a conversation, by the agent in it.** When the participant in a
+     Desk conversation recognises an idea, it records an idea card that
+     links to the message, the same way it records a task. The conversation
+     shows a line saying the card was made, with an undo.
+   - **From a conversation, by the owner.** Every message has a "Make this
+     an idea" action.
+
+   The promise is that an idea recorded in one of these ways is a card. No
+   separate model reads through past conversations looking for ideas the
+   participant and the owner both let pass.
 4. **Anything else, by hand.** Any session, file, decision or work item in
    the Desk has a "Create Roadmap item" action that makes a linked card.
 
@@ -137,9 +160,11 @@ So the board doesn't fill with stale cards:
   its source changed.
 - Retired cards leave the columns and go to a **Retired** list in the same
   view. Nothing is deleted. One action brings a card back where it was.
-- A **plan** card retires only when its plan is Superseded.
+- A **plan** card the owner hasn't placed retires only when its plan is
+  Superseded.
 - A card the owner placed himself never retires on its own. It shows a
-  "quiet for 30 days" mark instead.
+  "quiet for 30 days" mark instead, or for a plan card a "superseded"
+  label, and a row in "Where We Differ" offers to retire it.
 
 ## The Owner's Arrangement As A Signal
 
@@ -188,9 +213,11 @@ Each part is one pull request.
    Part 3 adds new task cards and removes nothing part 1 kept.
 2. **Idea and hand-made cards.** The "Create Roadmap item" action, and
    reading an ideas document into cards.
-3. **Task cards.** Tasks from the Desk's own conversations become cards.
-   Tasks from Claude Code sessions follow once the adapter's session records
-   carry them.
+3. **Task and idea cards from conversations.** Tasks from the Desk's own
+   conversations become cards. So do ideas: the participant records an idea
+   card linked to its message, and every message gets "Make this an idea".
+   Tasks and ideas from Claude Code sessions follow once the adapter's
+   session records carry them.
 4. **Retirement.** The Retired list, the 30-day rule and the quiet mark.
 5. **Navigator groups hold cards, and views stay in step.** The owner can
    put cards in his groups, the saved arrangement and move history become
@@ -208,6 +235,13 @@ Each part is one pull request.
   code path writes the owner's value except his own action.
 - A change to a card shows in every open view whose filter includes it,
   without a reload. A browser test proves it with two views open.
+- Source status and stage are separate values. A snapshot never writes the
+  owner's placement. A test moves a plan card to a column that differs from
+  its status mapping, runs a new snapshot, and finds the card where the
+  owner put it, with the differing source status shown.
+- An idea card made from a conversation links to its message and can be
+  undone from the conversation. The participant records it in the same turn,
+  with no extra model call.
 - A card's ID never changes, so a saved placement survives a rename.
 - The change to the record loses no card and no placement. Every card the
   board shows before part 1 (the 13 hand-written ones and every existing
@@ -271,8 +305,12 @@ Each part is one pull request.
 
 - A plan added to `docs/plans/` appears on the Roadmap after the next
   snapshot, with no one adding it by hand.
-- An idea written in the Desk and a task made in a Desk conversation each
-  appear as a card that links back to where it came from.
+- An idea written in the Desk, an idea the participant records in a Desk
+  conversation, a message the owner marks "Make this an idea" and a task
+  made in a Desk conversation each appear as a card that links back to
+  where it came from.
+- A plan card the owner moved stays in his column after the plan's status
+  line changes, and shows the new source status.
 - The owner drags a card on the Roadmap and puts the same card in a
   Navigator group. Both survive a reload, and the card's title and state are
   the same in both views.
