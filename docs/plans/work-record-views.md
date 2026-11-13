@@ -205,8 +205,12 @@ placements and reasons.
 
 ## Where We Differ
 
-A **Where we differ** list, reachable from both views, has one row for each
-card where the owner's placement and the agent's suggestion disagree. A row
+A **Where we differ** list, reachable from every view, has one row for each
+card in each view where the owner's placement and the agent's suggestion
+disagree. A card that disagrees on the Roadmap and in the Navigator has two
+rows, each naming its view. A row's actions and its saved rejection apply
+to that view's placement only and never touch the card's placement in
+another view. A row
 says what he chose, what the agent suggests and why in one line, for example
 "You have this in progress, but it depends on a plan that isn't approved."
 
@@ -292,8 +296,11 @@ own plan.
   carried-over cards, existing Desk work items and hand-made cards are kind
   work. Kind filters in every view include work, and a test proves no
   carried-over or hand-made card is dropped or given another kind.
-- Keep mine and Tell it why save a rejection (card, suggested placement,
-  rule or reason) and remove the row. The same suggestion never reopens it.
+- Rows and rejections are keyed by card and view. Acting on a card's
+  Roadmap row leaves its Navigator placement, suggestion and row unchanged,
+  and the reverse. A test covers one card that disagrees in both views.
+- Keep mine and Tell it why save a rejection (card, view, suggested
+  placement, rule or reason) and remove the row. The same suggestion never reopens it.
   A different placement or a different rule or reason may. Take the
   suggestion saves the move as the owner's. Tests cover all three actions
   and the reopen rule.
@@ -348,6 +355,11 @@ own plan.
   what is left out, and the owner's approval of that plan.
 - Retiring never deletes. Restore puts a card back in its last column and
   position.
+- Until the Desk's protected storage has passed its owner trial, nothing in
+  this plan asks the owner to put real task, idea or work text into the
+  Desk, and no part removes or weakens the Desk's "invented data only"
+  notice. Importing the real ideas document and capturing tasks from real
+  sessions (part 8) are used on real material only after that.
 - Tests and samples use invented data only.
 
 ## Not In Scope
@@ -409,8 +421,18 @@ own plan.
   action.
 - Where we differ lists a card he placed against a rule, with a plain
   reason, and each of its three actions does what it says.
-- **Owner trial:** he uses the Roadmap, Navigator and Canvas on real work
-  for a week, says which helped most, and each behavior in "When It Goes Wrong" is checked once.
+- **Owner trial, in two steps.**
+  1. **On invented data,** which is all the installed Desk may hold today
+     (STATUS.md: "Until the owner's trial passes, the installed Desk is for
+     invented data only"). He tries the Roadmap, Navigator and Canvas with
+     sample cards, and each behavior in "When It Goes Wrong" is checked
+     once. This step can run as soon as the parts are built.
+  2. **On real work,** for a week, after which he says which view helped
+     most. This step waits until the Desk's protected storage has passed its
+     own owner trial and STATUS.md no longer limits the Desk to invented
+     data. This plan adds no storage and doesn't lift that limit.
+
+  The plan's status becomes Built only after step 2.
 
 ## Open Questions For The Owner
 
