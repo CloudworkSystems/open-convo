@@ -344,6 +344,31 @@ terminal) is not read by the adapter, so its tasks are not captured. The
 owner can still add a card for it by hand. Covering those sessions needs its
 own plan.
 
+### What Produces The Events (Parts 3 And 8)
+
+Both participants are plain text in and text out, and the Claude Code
+adapter allows no tools ([claude-code-adapter.md](claude-code-adapter.md),
+"In And Out"). That stays. The signal is a **record block**: a short block
+in one fixed, documented format that the participant may put at the end of a
+reply, with one line per task or idea giving its item ID, its kind, its title
+and, for a task, its status.
+
+The code that already receives the reply (native for the local participant,
+the adapter for Claude) reads only that block. It checks every line against
+the format, sends one event per valid line, and removes the block from the
+reply the owner sees. Text outside the block never makes an event, whatever
+it says.
+
+The participant learns the format from a fixed instruction added to what it
+is sent. For Claude, that instruction is part of the context shown to the
+owner before Send, like the rest. Each revision (the contract's in part 3,
+the adapter plan's in part 8) sets the exact format and the instruction's
+wording, and each needs the owner's yes.
+
+The promise is that a valid record block becomes cards. Whether a model
+writes one for a given reply is up to the model, and the owner's message
+actions cover what it leaves out.
+
 ## Requirements For The Code Pull Requests
 
 - One record. No view stores a card's title, state or source on its own.
@@ -381,6 +406,15 @@ own plan.
 - An idea card made from a conversation links to its message and can be
   undone from the conversation. The participant records it in the same turn,
   with no extra model call.
+- Task and idea events are produced only by parsing a record block at the
+  end of a reply, in parts 3 and 8 alike. No tool is added to either
+  participant, and nothing is inferred from other reply text. A line that
+  doesn't match the format makes no event and is counted. The block never
+  shows in the reply the owner reads. The instruction that teaches the
+  format is fixed text, and for Claude it is included in what the owner
+  sees before Send. Tests cover a valid block, a block with one bad line
+  (the good lines still count), a reply that discusses the format without a
+  real block, and a block that is cut off mid-line.
 - A participant's task or idea becomes a card only from the contract's
   task and idea events, added by the contract revision that opens part 3.
   Tests cover both: a run that sends the event gets one card linked to its
