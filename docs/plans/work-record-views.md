@@ -73,7 +73,10 @@ A card holds:
 
 - an ID that never changes;
 - a title and a one-line outcome;
-- its kind: **plan**, **task** or **idea**;
+- its kind: **plan**, **task**, **idea** or **work**. Work is every card
+  that is none of the first three: the 13 hand-written cards carried over in
+  part 1, the Desk's existing work items, and cards made by hand with
+  "Create Roadmap item";
 - its source, as a link: the plan file, the session that created the task,
   or the document or conversation the idea came from;
 - its **source status**, read from the source where the source has one
@@ -158,6 +161,7 @@ So the board doesn't fill with stale cards:
 - A **task** or **idea** card nobody has touched for 30 days is retired
   (open question 2). Touching means the owner moved, opened or edited it, or
   its source changed.
+- A **work** card follows the task and idea rule.
 - Retired cards leave the columns and go to a **Retired** list in the same
   view. Nothing is deleted. One action brings a card back where it was.
 - A **plan** card the owner hasn't placed retires only when its plan is
@@ -187,10 +191,21 @@ card where the owner's placement and the agent's suggestion disagree. A row
 says what he chose, what the agent suggests and why in one line, for example
 "You have this in progress, but it depends on a plan that isn't approved."
 
-Each row has three actions: **Keep mine**, **Take the suggestion** and
-**Tell it why**. A reason he gives is saved as a correction the agents read
-next time. This is how they learn from him. It uses the Desk's existing
-memory records and adds no new store.
+Each row has three actions:
+
+- **Keep mine** saves a rejection of that suggestion: the card, the
+  placement suggested and the rule or reason behind it. The row leaves the
+  list and his placement stays.
+- **Take the suggestion** moves the card to the suggested placement and
+  saves the move as his own. The row leaves the list.
+- **Tell it why** does what Keep mine does and also saves his reason as a
+  correction the agents read next time. This is how they learn from him. It
+  uses the Desk's existing memory records and adds no new store.
+
+A rejected suggestion doesn't come back. A row for that card opens again
+only when the suggestion is materially new (a different placement, or the
+same placement for a different rule or reason) or when he moves the card
+again and the new placement disagrees with a suggestion he hasn't rejected.
 
 The first version makes its suggestions from fixed rules only: dependencies
 between cards, plan status, pull request state and how long a card has been
@@ -235,6 +250,15 @@ Each part is one pull request.
   code path writes the owner's value except his own action.
 - A change to a card shows in every open view whose filter includes it,
   without a reload. A browser test proves it with two views open.
+- Every card has exactly one kind: plan, task, idea or work. The 13
+  carried-over cards, existing Desk work items and hand-made cards are kind
+  work. Kind filters in every view include work, and a test proves no
+  carried-over or hand-made card is dropped or given another kind.
+- Keep mine and Tell it why save a rejection (card, suggested placement,
+  rule or reason) and remove the row. The same suggestion never reopens it.
+  A different placement or a different rule or reason may. Take the
+  suggestion saves the move as the owner's. Tests cover all three actions
+  and the reopen rule.
 - Source status and stage are separate values. A snapshot never writes the
   owner's placement. A test moves a plan card to a column that differs from
   its status mapping, runs a new snapshot, and finds the card where the
