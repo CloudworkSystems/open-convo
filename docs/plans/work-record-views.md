@@ -189,13 +189,17 @@ So the board doesn't fill with stale cards:
   (open question 2). Touching means the owner moved, opened or edited it, or
   its source changed.
 - A **work** card follows the task and idea rule.
-- Retired cards leave the columns and go to a **Retired** list in the same
-  view. Nothing is deleted. One action brings a card back where it was.
+- Retiring is a change to the card itself, not to one view. A retired card
+  leaves the Roadmap columns, the Navigator groups and the Canvas together
+  and goes to one **Retired** list, reachable from every view. Nothing is
+  deleted. One action brings it back, and it returns to the placement it
+  had in each view.
 - A **plan** card the owner hasn't placed retires only when its plan is
   Superseded.
 - A card the owner placed himself never retires on its own. It shows a
   "quiet for 30 days" mark instead, or for a plan card a "superseded"
-  label, and a row in "Where We Differ" offers to retire it.
+  label, and "Where We Differ" offers to retire it in a card-level row
+  (see "Retire offers" there).
 
 ## The Owner's Arrangement As A Signal
 
@@ -233,6 +237,18 @@ Each row has three actions:
 - **Tell it why** does what Keep mine does and also saves his reason as a
   correction the agents read next time. This is how they learn from him. It
   uses the Desk's existing memory records and adds no new store.
+
+**Retire offers** are a second kind of row, about the card and not about a
+view. There is at most one per card. It says why ("quiet for 30 days", or
+"its plan was superseded") and has two actions:
+
+- **Retire** retires the card in the record, so it leaves every view at
+  once and can be restored from the Retired list.
+- **Keep** saves a rejection keyed by the card and the reason, and removes
+  the row. No placement changes in any view. The offer returns only for a
+  new reason, or after another full 30 quiet days.
+
+Placement rows never retire a card, and a retire offer never moves one.
 
 A rejected suggestion doesn't come back. A row for that card opens again
 only when the suggestion is materially new (a different placement, or the
@@ -373,8 +389,14 @@ own plan.
   it cards. Using an off-device participant for this reasoning is out of
   this plan. It would need its own plan that lists exactly what is sent and
   what is left out, and the owner's approval of that plan.
-- Retiring never deletes. Restore puts a card back in its last column and
-  position.
+- Retiring never deletes. Restore puts a card back in its last placement in
+  every view.
+- Retiring is record-level. A retire offer is one card-level row, separate
+  from the per-view placement rows. A test takes a retire offer on a card
+  placed in the Roadmap and the Navigator and shown on the Canvas, finds it
+  gone from all three and in the Retired list, restores it, and finds each
+  view's placement as it was. A second test chooses Keep and finds no
+  placement changed and no repeat offer for the same reason.
 - Until the Desk's protected storage has passed its owner trial, nothing in
   this plan asks the owner to put real task, idea or work text into the
   Desk, and no part removes or weakens the Desk's "invented data only"
