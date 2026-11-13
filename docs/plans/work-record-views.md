@@ -102,6 +102,19 @@ A suggestion never moves a card the owner has placed. A card the owner hasn't
 placed sits where the agent suggests and is marked "suggested" until he moves
 it or accepts it.
 
+Every card has a suggested Roadmap column from the moment it exists, so no
+card is ever without a stage. The starting suggestion is fixed by kind:
+
+- **plan:** from its status line, as set out in "What Becomes A Card";
+- **idea:** Suggested;
+- **task:** Planned while its status is open, and Finished once its status
+  is done;
+- **work:** Suggested for a card made with "Create Roadmap item". A card
+  carried over in part 1 keeps the column and position it already had, as
+  the owner's placement where he had moved it.
+
+If no rule gives a column, the suggestion is Suggested.
+
 A card's **stage** is its Roadmap column: the owner's placement if he has
 placed it, otherwise the suggested one. Source status and stage are two
 separate values. A new snapshot can change a card's source status label and
@@ -290,8 +303,11 @@ Each part is one pull request.
    dated revision to that contract, in its own pull request, that adds two
    event types, one for a recorded task and one for a recorded idea. Each
    carries a title, belongs to the run's reply message, and carries an item
-   ID that is unique within the session and never reused. A later event
-   about the same task (renamed, finished) carries the same item ID. A card is made
+   ID that is unique within the session and never reused. Every task event
+   also carries the task's resulting status, `open` or `done`. A later
+   event about the same task carries the same item ID with the title and
+   status as they now are, so a rename is the same ID and status with a new
+   title, and finishing is the same ID with status `done`. A card is made
    only from one of these events. The Desk never reads a reply's text to
    guess that a task or idea was meant. Until a participant sends the
    events, the owner's two message actions are the way cards get made from
@@ -317,7 +333,8 @@ Each part is one pull request.
    both: a task event when Claude creates, renames or finishes a task, and an
    idea event when Claude records an idea. Every event carries an item ID
    that is unique within the session and never reused, and every later
-   event about the same task carries the same one. The
+   event about the same task carries the same one. Every task event carries
+   the task's resulting status, `open` or `done`, and its current title. The
    cards stay on the owner's device like every other card that isn't a
    plan card.
    Part 8 can be built any time after part 3.
@@ -387,6 +404,17 @@ own plan.
   cover two tasks with the same title (finishing one leaves the other
   untouched), a task renamed before it is finished (one card, updated), and
   a create event delivered twice (one card).
+- Every task event states the resulting status, `open` or `done`. The card's
+  source status comes only from that field, never from the title or from
+  the order of events. A task event without a valid status is ignored and
+  counted. Tests cover a rename (title changes, status stays open, the card
+  stays in its column) and a finish (status becomes done, the suggested
+  column becomes Finished, and a card the owner placed doesn't move).
+- Every new card has a starting suggested column by its kind, as listed in
+  "One Record, Several Views". A test creates one card of each kind by each
+  route (plan snapshot, "Add idea", document import, message action,
+  participant event, adapter event, "Create Roadmap item") and finds each
+  one in a Roadmap column.
 - A card's ID never changes, so a saved placement survives a rename.
 - The change to the record loses no card and no placement. Every card the
   board shows before part 1 (the 13 hand-written ones and every existing
