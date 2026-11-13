@@ -41,6 +41,8 @@ arrangement says:
   **what belongs together and what matters**. This is his intent.
 
 Cloudwork Canvas and Cloudwork Atlas are further views of the same record.
+This plan connects the three views that exist (Roadmap, Navigator and
+Canvas). Atlas is only a placeholder today, so it joins when it is built.
 All the views stay in step: a change made in one shows in every other view
 whose filter includes that card.
 
@@ -54,7 +56,8 @@ his corrections.
 |---|---|---|
 | Roadmap board (Desk) | Built. Five columns: Suggested, Planned, In progress, Review & try, Finished. Cards can be dragged. Placement is saved in the browser. Cards come from one hand-written file plus the Desk's own work items. | Cards come from the work record. The hand-written file's 13 cards become the record's first cards. |
 | Nexus Navigator (Desk) | Built on sample data: domains, folders, pins, rename. | Groups can hold work-record cards as well as sessions, and the arrangement is saved as a signal. |
-| Canvas and Atlas (Desk) | Built as Nexus views on sample data. The thin knowledge view reading real session records is a later step in PLAN.md. | They read the same record and follow the "Views Stay In Step" rules below. This plan adds no new Canvas or Atlas screens. |
+| Canvas (Desk) | Built on sample data: a map of domains, sessions and work items with links between them. | Shows work-record cards as nodes, under the filter in "Views Stay In Step", and follows those rules. |
+| Atlas (Desk) | A "Planned · not connected" placeholder that shows no records. | Nothing in this plan. Atlas is the owner's fourth view of the same record, but it has no screen to connect yet. The plan that builds Atlas must read this record and follow the same rules. |
 | Rail Map (Desk) | Built (#132). Git branches, commits and pull requests. The status feed plan adds a Pending tab. | Unchanged. A card can link to its pull request, and the Rail Map stays the git view. |
 | Thread map (design note) | Direction only. | Unchanged. It keeps the rule this plan follows: the owner's value and the agent's value are stored separately. |
 
@@ -118,6 +121,10 @@ Differ".
   column is a card's stage (defined above), so any view that shows a stage
   shows that one, and any view that shows source status shows the same
   label.
+- Canvas shows every live card (not retired) as a node, linked to the
+  session or work item it came from and to the Navigator group the owner
+  put it in. A card with neither link sits in an "Unplaced" area. Where a
+  node sits on the Canvas is that view's own arrangement.
 - Two windows or tabs of the Desk follow the same rules. If two changes to
   one card collide, the later one is kept and the other window says so.
 
@@ -240,7 +247,7 @@ Each part is one pull request.
 5. **Navigator groups hold cards, and views stay in step.** The owner can
    put cards in his groups, the saved arrangement and move history become
    readable to agents, and the "Views Stay In Step" rules hold across the
-   Roadmap, Navigator, Canvas and Atlas.
+   Roadmap, Navigator and Canvas, with Canvas showing cards as nodes.
 6. **Where we differ.** Suggested placements from fixed rules, the list and
    its three actions.
 7. **Agent reasoning.** The Mac's local participant adds suggestions and
@@ -267,7 +274,12 @@ own plan.
 - The owner's placement and the agent's suggestion are separate values. No
   code path writes the owner's value except his own action.
 - A change to a card shows in every open view whose filter includes it,
-  without a reload. A browser test proves it with two views open.
+  without a reload. A browser test proves it across the Roadmap, Navigator
+  and Canvas: a rename in one shows in the other two, and a retired card
+  leaves the Canvas.
+- The record is read through one interface that takes a filter and reports
+  changes, so a later view such as Atlas can use it without changes to the
+  record.
 - Every card has exactly one kind: plan, task, idea or work. The 13
   carried-over cards, existing Desk work items and hand-made cards are kind
   work. Kind filters in every view include work, and a test proves no
@@ -329,7 +341,9 @@ own plan.
 ## Not In Scope
 
 - Changing the Rail Map or the status feed.
-- New Canvas or Atlas screens, and the thread map. This plan only makes the
+- Atlas. It is a placeholder with no records, so connecting it belongs to
+  the plan that builds it. That plan must read this record.
+- New Canvas screens, and the thread map. This plan only makes the three
   existing views read one record and stay in step.
 - Syncing cards between devices.
 - Tasks from Claude Code sessions started outside the app.
@@ -376,14 +390,15 @@ own plan.
 - The owner drags a card on the Roadmap and puts the same card in a
   Navigator group. Both survive a reload, and the card's title and state are
   the same in both views.
-- With two views open, renaming or retiring a card in one changes it in the
-  other at once.
+- With the Roadmap, Navigator and Canvas open, renaming a card in one
+  changes it in the other two at once, and retiring it removes its Canvas
+  node.
 - A card left alone past the limit moves to Retired and comes back with one
   action.
 - Where we differ lists a card he placed against a rule, with a plain
   reason, and each of its three actions does what it says.
-- **Owner trial:** he uses both views on real work for a week, says which
-  one helped more, and each behavior in "When It Goes Wrong" is checked once.
+- **Owner trial:** he uses the Roadmap, Navigator and Canvas on real work
+  for a week, says which helped most, and each behavior in "When It Goes Wrong" is checked once.
 
 ## Open Questions For The Owner
 
