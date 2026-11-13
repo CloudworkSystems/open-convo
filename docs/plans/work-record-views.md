@@ -88,10 +88,15 @@ A card holds:
 - when it was created and when it was last touched;
 - links to outputs, such as a pull request.
 
-Each view stores, per card and separately:
+The Roadmap and the Navigator each store, per card and separately:
 
 - **the owner's placement** (Roadmap column and position, Navigator group);
 - **the agent's suggested placement**, with a one-line reason.
+
+Canvas stores only where the owner put each node. The agent makes no
+suggestion about Canvas positions, so Canvas has no suggested placement and
+no rows in "Where We Differ". A node the owner hasn't moved is laid out by
+the Canvas's existing automatic layout.
 
 A suggestion never moves a card the owner has placed. A card the owner hasn't
 placed sits where the agent suggests and is marked "suggested" until he moves
@@ -207,8 +212,9 @@ placements and reasons.
 
 A **Where we differ** list, reachable from every view, has one row for each
 card in each view where the owner's placement and the agent's suggestion
-disagree. A card that disagrees on the Roadmap and in the Navigator has two
-rows, each naming its view. A row's actions and its saved rejection apply
+disagree. The views that take part are the Roadmap and the Navigator. Canvas
+doesn't, because it has no suggestions. A card that disagrees on the Roadmap
+and in the Navigator has two rows, each naming its view. A row's actions and its saved rejection apply
 to that view's placement only and never touch the card's placement in
 another view. A row
 says what he chose, what the agent suggests and why in one line, for example
@@ -268,9 +274,11 @@ Each part is one pull request.
    run through the Claude Code adapter becomes a task card linked to that
    session, and an idea it records becomes an idea card, under the same
    rules as part 3. The adapter plan
-   ([claude-code-adapter.md](claude-code-adapter.md)) doesn't carry task
-   events in its session records today, so this part starts with a dated
-   revision to that plan, in its own pull request, that adds them. The
+   ([claude-code-adapter.md](claude-code-adapter.md)) carries neither task
+   events nor idea events in its session records today, so this part starts
+   with a dated revision to that plan, in its own pull request, that adds
+   both: a task event when Claude creates or finishes a task, and an idea
+   event when Claude records an idea. The
    cards stay on the owner's device like every other card that isn't a
    plan card.
    Part 8 can be built any time after part 3.
@@ -315,10 +323,16 @@ own plan.
 - An idea card made from a conversation links to its message and can be
   undone from the conversation. The participant records it in the same turn,
   with no extra model call.
-- Part 8 reads tasks only from the adapter's own session records. It opens
-  no other session files, makes no new model call, and adds no key,
-  permission or outside host. A task the session later marks done updates
-  the card's source status and never the owner's placement.
+- Part 8 reads task events and idea events only from the adapter's own
+  session records. It opens no other session files, makes no new model
+  call, and adds no key, permission or outside host. A task event becomes a
+  task card and an idea event becomes an idea card, each linked to its
+  session. A task the session later marks done updates the card's source
+  status and never the owner's placement. Tests cover both event kinds,
+  with invented session records.
+- Canvas has no agent suggestion and no "Where We Differ" rows. A test
+  moves a Canvas node and finds no row created and no Roadmap or Navigator
+  placement changed.
 - A card's ID never changes, so a saved placement survives a rename.
 - The change to the record loses no card and no placement. Every card the
   board shows before part 1 (the 13 hand-written ones and every existing
@@ -407,8 +421,8 @@ own plan.
   conversation, a message the owner marks "Make this an idea" and a task
   made in a Desk conversation each appear as a card that links back to
   where it came from.
-- A task Claude creates in a session run through the adapter appears as a
-  card linked to that session.
+- A task Claude creates and an idea Claude records in a session run through
+  the adapter each appear as a card linked to that session.
 - A plan card the owner moved stays in his column after the plan's status
   line changes, and shows the new source status.
 - The owner drags a card on the Roadmap and puts the same card in a
