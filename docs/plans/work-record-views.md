@@ -86,7 +86,13 @@ A card holds:
   (for a plan, the word in its status line). It is a fact about the source
   and is shown as a label on the card. It is not the card's Roadmap stage;
 - when it was created and when it was last touched;
-- links to outputs, such as a pull request.
+- links to outputs, such as a pull request;
+- **depends on:** a list of the IDs of cards that must come first. It has
+  two sources only. The 13 carried-over cards keep the `dependsOn` lists
+  they already have in `recovery-roadmap.json`. On any card, the owner can
+  add or remove a "Depends on" link to another card. Nothing else writes
+  this list: no agent, and no reading of titles, plan text or sources. A
+  link to a card that no longer exists is dropped.
 
 The Roadmap and the Navigator each store, per card and separately:
 
@@ -275,8 +281,9 @@ only when the suggestion is materially new (a different placement, or the
 same placement for a different rule or reason) or when he moves the card
 again and the new placement disagrees with a suggestion he hasn't rejected.
 
-The first version makes its suggestions from fixed rules only: dependencies
-between cards, plan status, pull request state and how long a card has been
+The first version makes its suggestions from fixed rules only: the "depends
+on" links between cards (a card is suggested no further along than Planned
+while a card it depends on isn't Finished), plan status, pull request state and how long a card has been
 quiet. An agent adds its own reasoning in a later part, on the Mac's local
 participant only. Card titles, ideas and the owner's corrections are his
 private words, and no part of this plan sends them off his device.
@@ -496,6 +503,12 @@ actions cover what it leaves out.
   task card that was quiet for more than 30 days and a plan card whose plan
   is still Superseded, run the retirement pass again at once, and find both
   still in their columns with no retire offer.
+- The dependency rule in part 6 reads only each card's "depends on" list.
+  Part 1 carries the 13 cards' existing lists over unchanged, and part 6
+  adds the owner's "Depends on" control. A test adds a dependency on an
+  unfinished card and finds the suggestion and its row appear, then removes
+  it and finds them gone. Another test finds no dependency created from a
+  card's title or source text.
 - Retiring is record-level. A retire offer is one card-level row, separate
   from the per-view placement rows. A test takes a retire offer on a card
   placed in the Roadmap and the Navigator and shown on the Canvas, finds it
