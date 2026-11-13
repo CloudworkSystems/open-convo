@@ -207,6 +207,13 @@ So the board doesn't fill with stale cards:
   and goes to one **Retired** list, reachable from every view. Nothing is
   deleted. One action brings it back, and it returns to the placement it
   had in each view.
+- Restoring is the owner's own act, so it counts as touching the card and
+  as placing it. The 30-day count starts again from the restore, and a
+  restored card is treated from then on as one he placed: it never retires
+  on its own again, whatever its source says. A restored plan card whose
+  plan is still Superseded stays, with its "superseded" label. Later he can
+  only be offered retirement, in a retire offer, and not before another
+  full 30 quiet days or a new reason.
 - A **plan** card the owner hasn't placed retires only when its plan is
   Superseded.
 - A card the owner placed himself never retires on its own. It shows a
@@ -485,6 +492,10 @@ actions cover what it leaves out.
   what is left out, and the owner's approval of that plan.
 - Retiring never deletes. Restore puts a card back in its last placement in
   every view.
+- A restored card is never retired automatically again. Tests restore a
+  task card that was quiet for more than 30 days and a plan card whose plan
+  is still Superseded, run the retirement pass again at once, and find both
+  still in their columns with no retire offer.
 - Retiring is record-level. A retire offer is one card-level row, separate
   from the per-view placement rows. A test takes a retire offer on a card
   placed in the Roadmap and the Navigator and shown on the Canvas, finds it
