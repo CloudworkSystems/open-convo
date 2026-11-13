@@ -109,8 +109,13 @@ it or accepts it.
 
 ## What Becomes A Card
 
-1. **Plans.** Every file in `docs/plans/` is one card. Its state follows the
-   plan's status line: Draft is Suggested, Approved is Planned, In progress
+1. **Plans.** Every plan in `docs/plans/` is one card. A plan is a Markdown
+   file there whose first lines carry a valid status line (`Status: <word>
+   (<date>): ...`, the format in that folder's rules). The folder's own
+   rules files, `AGENTS.md` and `CLAUDE.md`, are never cards. Any other file
+   without a valid status line gets no card, and the snapshot names it in a
+   "not read as a plan" list instead of failing or guessing a state. A
+   card's state follows the plan's status line: Draft is Suggested, Approved is Planned, In progress
    is In progress, Built is Finished, Superseded is retired. A new plan gets
    its card with no one adding it by hand.
 2. **Tasks.** When an agent in a session decides something is worth a task,
@@ -164,8 +169,9 @@ memory records and adds no new store.
 
 The first version makes its suggestions from fixed rules only: dependencies
 between cards, plan status, pull request state and how long a card has been
-quiet. An agent adds its own reasoning in a later part, through a participant
-the owner has already allowed (open question 3).
+quiet. An agent adds its own reasoning in a later part, on the Mac's local
+participant only. Card titles, ideas and the owner's corrections are his
+private words, and no part of this plan sends them off his device.
 
 ## Parts
 
@@ -175,7 +181,11 @@ Each part is one pull request.
    Desk, and a snapshot script that reads `docs/plans/` status lines into
    cards the way `rail-map-snapshot.mjs` reads git. The 13 hand-written
    cards move into the record with their IDs and current placement kept.
-   The Roadmap board reads the record.
+   The Desk's existing work items, which the board already shows as cards,
+   keep showing in the same change: each one is carried into the record, or
+   still projected from the workspace, with its ID and saved placement
+   unchanged. Only then does the Roadmap board switch to reading the record.
+   Part 3 adds new task cards and removes nothing part 1 kept.
 2. **Idea and hand-made cards.** The "Create Roadmap item" action, and
    reading an ideas document into cards.
 3. **Task cards.** Tasks from the Desk's own conversations become cards.
@@ -188,8 +198,8 @@ Each part is one pull request.
    Roadmap, Navigator, Canvas and Atlas.
 6. **Where we differ.** Suggested placements from fixed rules, the list and
    its three actions.
-7. **Agent reasoning.** An allowed participant adds suggestions and reads
-   the owner's corrections.
+7. **Agent reasoning.** The Mac's local participant adds suggestions and
+   reads the owner's corrections. Nothing leaves the device.
 
 ## Requirements For The Code Pull Requests
 
@@ -199,14 +209,26 @@ Each part is one pull request.
 - A change to a card shows in every open view whose filter includes it,
   without a reload. A browser test proves it with two views open.
 - A card's ID never changes, so a saved placement survives a rename.
-- Moving the 13 existing cards keeps every saved placement. A test proves it
-  with a saved placement from before the change.
+- The change to the record loses no card and no placement. Every card the
+  board shows before part 1 (the 13 hand-written ones and every existing
+  Desk work item) shows after it, in the same column and position. A test
+  proves it with a saved workspace and a saved placement from before the
+  change that hold both kinds of ID.
+- Plan discovery follows "What Becomes A Card". Tests cover `AGENTS.md`,
+  `CLAUDE.md` and a file with no valid status line: none becomes a card,
+  and the snapshot doesn't fail.
 - Plan cards are built from files in this repo and may be committed. Task
   and idea cards made in the Desk hold the owner's private words and stay on
   his device. They are never committed, logged or sent anywhere.
 - Parts 1 to 6 make no network call beyond the ones the Rail Map snapshot
-  already makes, and call no model. Part 7 uses only a participant path the
-  owner has already allowed, and spends nothing new.
+  already makes, and call no model. Part 7 runs on the local participant
+  only. It sends no card text, placement, move history or correction to any
+  off-device participant or service, and spends nothing. A test proves the
+  part 7 code path can't select an off-device participant.
+- Having a participant allowed for conversations is not permission to send
+  it cards. Using an off-device participant for this reasoning is out of
+  this plan. It would need its own plan that lists exactly what is sent and
+  what is left out, and the owner's approval of that plan.
 - Retiring never deletes. Restore puts a card back in its last column and
   position.
 - Tests and samples use invented data only.
@@ -220,6 +242,7 @@ Each part is one pull request.
 - Importing cards or code from the old Cloudwork Nexus preview.
 - Editing plans from the board. A plan's state changes only in its file.
 - Business or marketing ideas, which stay out of this repo.
+- Sending cards, placements or corrections to an off-device participant.
 
 ## When It Goes Wrong
 
@@ -235,7 +258,7 @@ Each part is one pull request.
    goes there. The Where we differ list says "Nothing to compare yet. Move a
    card to start."
 4. **Denied or stuck.** No part asks for a permission or password. If the
-   participant in part 7 isn't allowed or doesn't answer, the views keep
+   local participant in part 7 isn't installed or doesn't answer, the views keep
    working with the fixed-rule suggestions and say that agent suggestions
    are off.
 5. **The error message.** If the record can't be read, the view says "Your
@@ -271,9 +294,11 @@ Each part is one pull request.
    after the trial.
 2. **Retirement.** Is 30 days untouched the right limit for tasks and
    ideas? Recommended: yes, with cards you placed yourself never retiring.
-3. **Agent reasoning.** Should part 7 run on the Mac's local participant
-   only, or may it use the Claude participant? Recommended: local only until
-   the trial is done.
+3. **Agent reasoning.** This plan keeps part 7 on the Mac's local
+   participant, so your task and idea wording never leaves your device. Is
+   that enough for the trial? If you later want Claude to do this reasoning,
+   that takes a separate plan saying exactly what would be sent, and your
+   approval of it.
 4. **Columns.** Keep the five the board has now (Suggested, Planned, In
    progress, Review & try, Finished)? The old Nexus preview had four, ending
    in Released. Recommended: keep the five.
