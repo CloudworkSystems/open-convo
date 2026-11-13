@@ -124,8 +124,12 @@ Differ".
 ## What Becomes A Card
 
 1. **Plans.** Every plan in `docs/plans/` is one card. A plan is a Markdown
-   file there whose first lines carry a valid status line (`Status: <word>
-   (<date>): ...`, the format in that folder's rules). The folder's own
+   file there whose first lines carry a valid status line (`Status: <state>
+   (<date>): ...`, the format in that folder's rules). The state is one of
+   Draft, Approved, In progress, Built, or Superseded by followed by one or
+   more file names, as in the existing `Superseded by STATUS.md and PLAN.md
+   (Oct 21)`. Everything from "Superseded by" up to the date counts as the
+   Superseded state. The folder's own
    rules files, `AGENTS.md` and `CLAUDE.md`, are never cards. Any other file
    without a valid status line gets no card, and the snapshot names it in a
    "not read as a plan" list instead of failing or guessing a state. The
@@ -291,7 +295,11 @@ own plan.
   change that hold both kinds of ID.
 - Plan discovery follows "What Becomes A Card". Tests cover `AGENTS.md`,
   `CLAUDE.md` and a file with no valid status line: none becomes a card,
-  and the snapshot doesn't fail.
+  and the snapshot doesn't fail. Tests also cover each state, including the
+  multiword `Superseded by STATUS.md and PLAN.md (Oct 21): ...` form, which
+  must give a Superseded plan card. One test runs the snapshot over this
+  repo's real `docs/plans/` and finds a card for every plan and an empty
+  "not read as a plan" list.
 - Plan cards are built from files in this repo and may be committed. Task
   and idea cards made in the Desk hold the owner's private words and stay on
   his device. They are never committed, logged or sent anywhere.
