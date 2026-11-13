@@ -149,9 +149,17 @@ Differ".
    that task becomes a card that links back to the session. If the agent
    thought it mattered enough to make a task, it is a card.
 3. **Ideas.** An idea becomes a card in Suggested in one of three ways:
-   - **From an ideas document.** The document can stay as it is. Each entry
-     gets a card that links to its line, and a card made in the Desk can be
-     written back to the document later (open question 1).
+   - **From an ideas document.** The first one is the owner's "True Convo
+     Ideas: November 13, 2026", a private document outside this repo (a
+     claude.ai Artifact), which he named on November 13 as the one he meant.
+     It stays as it is. The Desk can't open it where it lives, so he brings
+     it in by pasting its text or choosing an exported file. Each numbered
+     entry becomes one idea card that keeps its section heading and its
+     mark: "His idea" or "Suggestion (Claude)". A suggestion card says he
+     hasn't approved it. Bringing the same document in again adds only
+     entries that are new and never duplicates or moves a card. The
+     document's text is his private material: it is never copied into this
+     repo, and its cards stay on his device.
    - **From a conversation, by the agent in it.** When the participant in a
      Desk conversation recognises an idea, it records an idea card that
      links to the message, the same way it records a task. The conversation
@@ -238,7 +246,7 @@ Each part is one pull request.
    unchanged. Only then does the Roadmap board switch to reading the record.
    Part 3 adds new task cards and removes nothing part 1 kept.
 2. **Idea and hand-made cards.** The "Create Roadmap item" action, and
-   reading an ideas document into cards.
+   bringing a pasted or exported ideas document in as cards.
 3. **Task and idea cards from conversations.** Tasks from the Desk's own
    conversations become cards. So do ideas: the participant records an idea
    card linked to its message, and every message gets "Make this an idea".
@@ -293,6 +301,10 @@ own plan.
   owner's placement. A test moves a plan card to a column that differs from
   its status mapping, runs a new snapshot, and finds the card where the
   owner put it, with the differing source status shown.
+- Bringing in an ideas document reads only text the owner pastes or a file
+  he chooses, on his device. It makes no network call. Entries keep their
+  "His idea" or "Suggestion" mark, and a second import of the same text
+  creates no duplicate. Tests use an invented document.
 - An idea card made from a conversation links to its message and can be
   undone from the conversation. The participant records it in the same turn,
   with no extra model call.
@@ -402,11 +414,10 @@ own plan.
 
 ## Open Questions For The Owner
 
-1. **The ideas document.** This repo has `docs/plans/idea-harvest.md`, which
-   is the process for harvesting ideas, but no file that lists ideas. Which
-   document did you mean, and should cards made in the Desk be written back
-   to it? Recommended: read it into cards first, and decide on writing back
-   after the trial.
+1. **The ideas document.** Answered November 13, 2026: it is your "True
+   Convo Ideas: November 13, 2026" document. Still open: should a card made
+   in the Desk be written back to that document? The Desk has no way to
+   write to it today. Recommended: no for now, and decide after the trial.
 2. **Retirement.** Is 30 days untouched the right limit for tasks and
    ideas? Recommended: yes, with cards you placed yourself never retiring.
 3. **Agent reasoning.** This plan keeps part 7 on the Mac's local
