@@ -279,7 +279,22 @@ Each part is one pull request.
    cards.
 3. **Task and idea cards from conversations.** Tasks from the Desk's own
    conversations become cards. So do ideas: the participant records an idea
-   card linked to its message, and every message gets "Make this an idea".
+   card linked to its message, and every message gets "Make this an idea"
+   and "Make this a task".
+
+   A participant can only tell the Desk it recorded something through an
+   event, and the participant contract
+   ([desk-native-participant-contract.md](../desk-native-participant-contract.md),
+   section 8) has none for this today: its event types are `started`,
+   `text`, `completed`, `stopped` and `failed`. So this part starts with a
+   dated revision to that contract, in its own pull request, that adds two
+   event types, one for a recorded task and one for a recorded idea. Each
+   carries a title and belongs to the run's reply message. A card is made
+   only from one of these events. The Desk never reads a reply's text to
+   guess that a task or idea was meant. Until a participant sends the
+   events, the owner's two message actions are the way cards get made from
+   a conversation.
+
    Claude Code sessions are part 8.
 4. **Retirement.** The Retired list, the 30-day rule and the quiet mark.
 5. **Navigator groups hold cards, and views stay in step.** The owner can
@@ -345,6 +360,12 @@ own plan.
 - An idea card made from a conversation links to its message and can be
   undone from the conversation. The participant records it in the same turn,
   with no extra model call.
+- A participant's task or idea becomes a card only from the contract's
+  task and idea events, added by the contract revision that opens part 3.
+  Tests cover both: a run that sends the event gets one card linked to its
+  message, a run whose reply only talks about a task or an idea gets none,
+  and a repeated or malformed event creates no second card and breaks no
+  run.
 - Part 8 reads task events and idea events only from the adapter's own
   session records. It opens no other session files, makes no new model
   call, and adds no key, permission or outside host. A task event becomes a
