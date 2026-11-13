@@ -231,8 +231,7 @@ Each part is one pull request.
 3. **Task and idea cards from conversations.** Tasks from the Desk's own
    conversations become cards. So do ideas: the participant records an idea
    card linked to its message, and every message gets "Make this an idea".
-   Tasks and ideas from Claude Code sessions follow once the adapter's
-   session records carry them.
+   Claude Code sessions are part 8.
 4. **Retirement.** The Retired list, the 30-day rule and the quiet mark.
 5. **Navigator groups hold cards, and views stay in step.** The owner can
    put cards in his groups, the saved arrangement and move history become
@@ -242,6 +241,20 @@ Each part is one pull request.
    its three actions.
 7. **Agent reasoning.** The Mac's local participant adds suggestions and
    reads the owner's corrections. Nothing leaves the device.
+8. **Cards from Claude Code sessions.** A task Claude creates in a session
+   run through the Claude Code adapter becomes a task card linked to that
+   session, and an idea it records becomes an idea card, under the same
+   rules as part 3. The adapter plan
+   ([claude-code-adapter.md](claude-code-adapter.md)) doesn't carry task
+   events in its session records today, so this part starts with a dated
+   revision to that plan, in its own pull request, that adds them. The
+   cards stay on the owner's device like every other task and idea card.
+   Part 8 can be built any time after part 3.
+
+A Claude Code session started outside the app (for example in a plain
+terminal) is not read by the adapter, so its tasks are not captured. The
+owner can still add a card for it by hand. Covering those sessions needs its
+own plan.
 
 ## Requirements For The Code Pull Requests
 
@@ -266,6 +279,10 @@ Each part is one pull request.
 - An idea card made from a conversation links to its message and can be
   undone from the conversation. The participant records it in the same turn,
   with no extra model call.
+- Part 8 reads tasks only from the adapter's own session records. It opens
+  no other session files, makes no new model call, and adds no key,
+  permission or outside host. A task the session later marks done updates
+  the card's source status and never the owner's placement.
 - A card's ID never changes, so a saved placement survives a rename.
 - The change to the record loses no card and no placement. Every card the
   board shows before part 1 (the 13 hand-written ones and every existing
@@ -297,6 +314,7 @@ Each part is one pull request.
 - New Canvas or Atlas screens, and the thread map. This plan only makes the
   existing views read one record and stay in step.
 - Syncing cards between devices.
+- Tasks from Claude Code sessions started outside the app.
 - Importing cards or code from the old Cloudwork Nexus preview.
 - Editing plans from the board. A plan's state changes only in its file.
 - Business or marketing ideas, which stay out of this repo.
@@ -333,6 +351,8 @@ Each part is one pull request.
   conversation, a message the owner marks "Make this an idea" and a task
   made in a Desk conversation each appear as a card that links back to
   where it came from.
+- A task Claude creates in a session run through the adapter appears as a
+  card linked to that session.
 - A plan card the owner moved stays in his column after the plan's status
   line changes, and shows the new source status.
 - The owner drags a card on the Roadmap and puts the same card in a
