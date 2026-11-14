@@ -421,6 +421,21 @@ Each part is one pull request.
    lines per run and characters per line), and counts what it dropped.
    Text outside the block is never used. A run with no valid line shows
    "No agent suggestions this time", and the fixed-rule suggestions stay.
+   **Which suggestion wins.** A card has one suggested placement per view,
+   and it is worked out the same way every time, in this order. First the
+   fixed rules give their answer. On the Roadmap the local model may then
+   replace that answer only within what the fixed rules allow: it can never
+   move a card past Planned while a card it depends on isn't Finished, and
+   it can't override a plan card's status line or a linked pull request's
+   state. If its placement breaks one of those, the fixed answer stays and
+   the model's line is dropped and counted. Where no fixed rule speaks (for
+   a Navigator group, or a card with no dependency, status or pull request)
+   the model's placement is the suggestion. The model's answer is saved
+   with the facts it was given, and it stays until those facts change or a
+   later reasoning run replaces it, so a rules pass alone never flips a
+   suggestion back and forth. The reason line always says which source the
+   suggestion came from.
+
    This part starts with a dated revision to the participant contract, in
    its own pull request, that defines the reasoning run, the block's exact
    format and its limits. That revision needs the owner's yes.
@@ -616,6 +631,12 @@ actions cover what it leaves out.
   (dropped), a block over the limits (extra lines dropped), free text that
   suggests something with no block (nothing created), and a run with no
   valid line (the message shows and the fixed-rule suggestions remain).
+- Suggestions compose in a fixed order: fixed rules first, then the local
+  model only inside what they allow. Tests cover a model placement that
+  would pass an unfinished dependency (dropped, the fixed answer stays), one
+  that contradicts a plan's status line or a linked pull request (dropped),
+  one where no fixed rule speaks (used), and two rules passes in a row with
+  no new facts (the suggestion and its row don't change).
 - A pull request link is made and removed only with the card's "Link pull
   request" control, built in part 6. A browser test links a card to an
   open pull request through that control and finds the Review & try
