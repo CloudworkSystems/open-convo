@@ -26,3 +26,10 @@ export {
   memoryStore,
   fileStore,
 } from './cap/index.mjs';
+
+export {
+  listRoutes,
+  upload,
+  runLocal,
+  remainingMs,
+} from './media/index.mjs';
