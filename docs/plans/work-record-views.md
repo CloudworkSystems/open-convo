@@ -87,12 +87,16 @@ A card holds:
   and is shown as a label on the card. It is not the card's Roadmap stage;
 - when it was created and when it was last touched;
 - links to outputs, such as a pull request;
-- **depends on:** a list of the IDs of cards that must come first. It has
-  two sources only. The 13 carried-over cards keep the `dependsOn` lists
-  they already have in `recovery-roadmap.json`. On any card, the owner can
-  add or remove a "Depends on" link to another card. Nothing else writes
-  this list: no agent, and no reading of titles, plan text or sources. A
-  link to a card that no longer exists is dropped.
+- **depends on:** a list of the IDs of cards that must come first. This is
+  the causal link between pieces of work: this one can't sensibly start or
+  finish until that one is done. The list is written in three ways only.
+  The 13 carried-over cards keep the `dependsOn` lists they already have in
+  `recovery-roadmap.json`. On any card, the owner can add or remove a
+  "Depends on" link to another card. And the owner can accept a link the
+  agent proposed (see "Asking The Owner What He Meant"). Nothing else
+  writes this list: an agent's proposal is not a link until he accepts it,
+  and nothing is read out of titles, plan text or sources. A link to a card
+  that no longer exists is dropped.
 
 The Roadmap and the Navigator each store, per card and separately:
 
@@ -288,6 +292,45 @@ quiet. An agent adds its own reasoning in a later part, on the Mac's local
 participant only. Card titles, ideas and the owner's corrections are his
 private words, and no part of this plan sends them off his device.
 
+## Asking The Owner What He Meant
+
+The owner's direction (November 14, 2026): when something he did looks odd
+or unexpected to the agent, the agent should ask what he meant by offering
+possible readings and letting him pick, and "depends on" is the causal link
+it should be reasoning about. This plan builds the asking. It doesn't yet
+build the agent asking less as it gets better at guessing (see the end of
+this section).
+
+- **Readings to pick from.** When a rule in part 6, or the agent in part 7,
+  finds one of his moves unexpected, the row in "Where We Differ" doesn't
+  only say "we differ". It offers up to three short readings of what he may
+  have meant, most likely first, plus "Something else", which opens the
+  "Tell it why" box. For example, for a card moved to In progress while a
+  card it depends on isn't finished: "The other card is done in practice",
+  "This one doesn't really depend on it" or "I'm starting early on
+  purpose". Picking a reading resolves the row as Keep mine does and saves
+  the reading as a correction. Picking "This one doesn't really depend on
+  it" also removes that link, because that is what he said.
+- **Proposed links.** The agent may propose that one card depends on
+  another, with a one-line reason. A proposal shows on the card as a dashed
+  "proposed" link and as a row with **Accept** and **Dismiss**. Accept adds
+  the link to the card's "depends on" list. Dismiss saves a rejection, and
+  the same pair isn't proposed again. A proposed link has no effect on any
+  suggestion until it is accepted. Part 6 proposes none, since fixed rules
+  have nothing to go on. Part 7's local participant proposes them.
+- **Keeping score.** For each kind of question (a placement, a retire
+  offer, a proposed link, a set of readings), the Desk counts how often the
+  agent's first reading or proposal was the one he chose. He can see the
+  counts. They stay on his device.
+
+**Not built here: asking less.** The owner's fuller idea is progressive
+trust: the more often the agent reads him correctly on one kind of task,
+the less it needs to ask before acting on similar ones. In this plan the
+score changes nothing. The agent asks every time and never acts on a
+guess. Turning the score into permission changes when an agent may act
+without asking him, so it gets its own design note and plan, built on the
+counts this plan collects.
+
 ## Parts
 
 Each part is one pull request.
@@ -334,9 +377,10 @@ Each part is one pull request.
    readable to agents, and the "Views Stay In Step" rules hold across the
    Roadmap, Navigator and Canvas, with Canvas showing cards as nodes.
 6. **Where we differ.** Suggested placements from fixed rules, the list and
-   its three actions.
-7. **Agent reasoning.** The Mac's local participant adds suggestions and
-   reads the owner's corrections. Nothing leaves the device.
+   its three actions, the readings to pick from, and the score.
+7. **Agent reasoning.** The Mac's local participant adds suggestions,
+   readings and proposed "depends on" links, and reads the owner's
+   corrections. Nothing leaves the device.
 8. **Cards from Claude Code sessions.** A task Claude creates in a session
    run through the Claude Code adapter becomes a task card linked to that
    session, and an idea it records becomes an idea card, under the same
@@ -503,6 +547,17 @@ actions cover what it leaves out.
   task card that was quiet for more than 30 days and a plan card whose plan
   is still Superseded, run the retirement pass again at once, and find both
   still in their columns with no retire offer.
+- A proposed "depends on" link is stored apart from the card's list and
+  joins it only on the owner's Accept. Until then no rule or suggestion
+  uses it. A dismissed pair is not proposed again. Tests cover accept,
+  dismiss and a proposal left unanswered.
+- A row offers at most three readings plus "Something else". Picking one
+  resolves the row and saves the reading as a correction, and only the
+  "doesn't really depend on it" reading changes a card (it removes that one
+  link). A test covers each.
+- The score is counted on the device and shown to the owner. No code path
+  uses it to skip a question, pick a reading for him or act without asking.
+  A test sets a perfect score and finds the agent still asks.
 - The dependency rule in part 6 reads only each card's "depends on" list.
   Part 1 carries the 13 cards' existing lists over unchanged, and part 6
   adds the owner's "Depends on" control. A test adds a dependency on an
@@ -535,6 +590,8 @@ actions cover what it leaves out.
 - Editing plans from the board. A plan's state changes only in its file.
 - Business or marketing ideas, which stay out of this repo.
 - Sending cards, placements or corrections to an off-device participant.
+- Progressive trust: the agent asking less, or acting without asking, as
+  its score rises. That needs its own design note and plan.
 
 ## When It Goes Wrong
 
