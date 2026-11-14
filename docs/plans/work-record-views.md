@@ -296,7 +296,11 @@ participant only. Card titles, ideas and the owner's corrections are his
 private words, and no part of this plan sends them off his device.
 
 **The pull request rule.** A card's output links can include pull requests
-in this repository, each stored as its number. Their state comes from one
+in this repository, each stored as its number. The owner adds or removes
+one with a "Link pull request" control on the card, which lists the pull
+requests in the Rail Map snapshot to pick from and also takes a number.
+That control is the only way a link is made. Nothing is read out of a
+title or branch name. Their state comes from one
 place only: the `pulls` list in the Rail Map snapshot the Desk already
 reads, where each pull request is `open`, `merged` or `closed`. The Desk
 makes no call to GitHub for this. For a task or work card with at least one
@@ -399,10 +403,27 @@ Each part is one pull request.
    readable to agents, and the "Views Stay In Step" rules hold across the
    Roadmap, Navigator and Canvas, with Canvas showing cards as nodes.
 6. **Where we differ.** Suggested placements from fixed rules, the list and
-   its three actions, the readings to pick from, and the score.
+   its three actions, the readings to pick from, the score, and the card's
+   "Depends on" and "Link pull request" controls.
 7. **Agent reasoning.** The Mac's local participant adds suggestions,
    readings and proposed "depends on" links, and reads the owner's
    corrections. Nothing leaves the device.
+
+   The participant only returns text, so its results come back the way
+   task and idea events do: in a **reasoning block**, one fixed, documented
+   format with one line per result. There are three line types. A
+   placement line gives a card ID, the view (Roadmap or Navigator), the
+   suggested placement and a reason. A readings line gives a card ID, the
+   view and up to three readings. A link line gives a card ID, the ID of
+   the card it may depend on and a reason. The Desk reads only that block.
+   It drops any line that doesn't match the format, names a card or
+   placement that doesn't exist, or goes past the limits (a set number of
+   lines per run and characters per line), and counts what it dropped.
+   Text outside the block is never used. A run with no valid line shows
+   "No agent suggestions this time", and the fixed-rule suggestions stay.
+   This part starts with a dated revision to the participant contract, in
+   its own pull request, that defines the reasoning run, the block's exact
+   format and its limits. That revision needs the owner's yes.
 8. **Cards from Claude Code sessions.** A task Claude creates in a session
    run through the Claude Code adapter becomes a task card linked to that
    session, and an idea it records becomes an idea card, under the same
@@ -588,6 +609,17 @@ actions cover what it leaves out.
 - The score is counted on the device and shown to the owner. No code path
   uses it to skip a question, pick a reading for him or act without asking.
   A test sets a perfect score and finds the agent still asks.
+- Part 7's results come only from a reasoning block, as set by the contract
+  revision that opens that part. Tests cover each of the three line types
+  becoming its result in the Desk (a suggested placement, a set of
+  readings, a proposed link), a line naming a card that doesn't exist
+  (dropped), a block over the limits (extra lines dropped), free text that
+  suggests something with no block (nothing created), and a run with no
+  valid line (the message shows and the fixed-rule suggestions remain).
+- A pull request link is made and removed only with the card's "Link pull
+  request" control, built in part 6. A browser test links a card to an
+  open pull request through that control and finds the Review & try
+  suggestion, then removes the link and finds it gone.
 - The pull request rule reads state only from the Rail Map snapshot's
   `pulls` list and follows the mapping in "Where We Differ". Tests cover a
   card with an open pull request, one whose only pull request is merged,
