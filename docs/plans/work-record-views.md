@@ -287,10 +287,29 @@ again and the new placement disagrees with a suggestion he hasn't rejected.
 
 The first version makes its suggestions from fixed rules only: the "depends
 on" links between cards (a card is suggested no further along than Planned
-while a card it depends on isn't Finished), plan status, pull request state and how long a card has been
-quiet. An agent adds its own reasoning in a later part, on the Mac's local
+while a card it depends on isn't Finished), plan status, pull request state
+(below) and how long a card has been quiet. An agent adds its own reasoning in a later part, on the Mac's local
 participant only. Card titles, ideas and the owner's corrections are his
 private words, and no part of this plan sends them off his device.
+
+**The pull request rule.** A card's output links can include pull requests
+in this repository, each stored as its number. Their state comes from one
+place only: the `pulls` list in the Rail Map snapshot the Desk already
+reads, where each pull request is `open`, `merged` or `closed`. The Desk
+makes no call to GitHub for this. For a task or work card with at least one
+linked pull request found in the snapshot:
+
+- any linked pull request is open: the suggestion is Review & try;
+- none is open and at least one is merged: the suggestion is Finished;
+- every linked one is closed without merging: this rule suggests nothing.
+
+A linked pull request that isn't in the snapshot is left out of the count,
+and a card with none found gets nothing from this rule. The rule never
+applies to plan cards, whose suggestion comes from the status line, or to
+idea cards. Where this rule and the dependency rule disagree, the
+dependency rule wins and the reason names both. The reason line gives the
+pull request number and the snapshot's time, so an old snapshot is visible
+as old.
 
 ## Asking The Owner What He Meant
 
@@ -558,6 +577,13 @@ actions cover what it leaves out.
 - The score is counted on the device and shown to the owner. No code path
   uses it to skip a question, pick a reading for him or act without asking.
   A test sets a perfect score and finds the agent still asks.
+- The pull request rule reads state only from the Rail Map snapshot's
+  `pulls` list and follows the mapping in "Where We Differ". Tests cover a
+  card with an open pull request, one whose only pull request is merged,
+  one with a merged and an open one (Review & try), one closed unmerged
+  (no suggestion), a number missing from the snapshot (no suggestion), a
+  plan card with a linked pull request (rule not applied), and a card the
+  dependency rule holds back (dependency wins).
 - The dependency rule in part 6 reads only each card's "depends on" list.
   Part 1 carries the 13 cards' existing lists over unchanged, and part 6
   adds the owner's "Depends on" control. A test adds a dependency on an
