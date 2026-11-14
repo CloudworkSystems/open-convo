@@ -14,6 +14,7 @@ import { client, repoFromEnv } from './github.mjs';
 import { evaluateCodexSignal, CODEX_LOGIN, OWNER_LOGIN } from './codex-signal.mjs';
 import { parseCodeowners, ownerOpenedBlock, withOwnerOpenedHold } from './codeowners.mjs';
 import { applyRiskHold, readAllowlist, withRiskHold } from './risk-check.mjs';
+import { decideReviewLoop, applyReviewLoop } from './review-loop.mjs';
 import { triageEligibility, triagePasses, alreadyClaimed, claimComment, releasedComment, judgeFindings, verdictComment, ACTIONS_LOGIN } from './codex-triage.mjs';
 
 const CONTEXT = 'codex-approved';
@@ -129,6 +130,15 @@ async function triage({ number, pr, comments, reviews, dismissals, reason, mayJu
   return { approved: false, reason };
 }
 
+// Who dismissed a Codex review. Fetched only when one is dismissed; if the
+// timeline can't be read, the dismissed review keeps blocking.
+async function readDismissals(number, reviews) {
+  const dismissed = reviews.some((r) => r.user?.login === CODEX_LOGIN && r.state === 'DISMISSED');
+  return dismissed
+    ? (await gh.all(`${base}/issues/${number}/events`)).filter((e) => e.event === 'review_dismissed')
+    : [];
+}
+
 let allowlist;
 async function check(number, mayJudge) {
   const pr = await gh.get(`${base}/pulls/${number}`);
@@ -138,12 +148,7 @@ async function check(number, mayJudge) {
     gh.all(`${base}/pulls/${number}/reviews`),
     gh.all(`${base}/issues/${number}/reactions`),
   ]);
-  // Who dismissed a Codex review. Fetched only when one is dismissed; if the
-  // timeline can't be read, the dismissed review keeps blocking.
-  const dismissed = reviews.some((r) => r.user?.login === CODEX_LOGIN && r.state === 'DISMISSED');
-  const dismissals = dismissed
-    ? (await gh.all(`${base}/issues/${number}/events`)).filter((e) => e.event === 'review_dismissed')
-    : [];
+  const dismissals = await readDismissals(number, reviews);
   // A pull request the owner opened skips GitHub's code-owner review, so it
   // waits here instead whenever it changes a protected file. Checked before
   // triage, so no judge call is paid for a pull request that has to wait anyway.
@@ -171,15 +176,78 @@ async function check(number, mayJudge) {
   const current = await gh.get(`${base}/commits/${pr.head.sha}/status`);
   const existing = current.statuses.find((s) => s.context === CONTEXT);
   const description = [...reason].filter((ch) => ch.codePointAt(0) <= 0xffff).join('').slice(0, 140);
-  if (existing && existing.state === state && existing.description === description) return;
+  if (!existing || existing.state !== state || existing.description !== description) {
+    await gh.post(`${base}/statuses/${pr.head.sha}`, {
+      state,
+      context: CONTEXT,
+      // GitHub refuses 4-byte characters (most emoji) in status descriptions.
+      description,
+    });
+    console.log(`#${number} ${pr.head.sha.slice(0, 7)}: ${state} (${reason})`);
+  }
 
-  await gh.post(`${base}/statuses/${pr.head.sha}`, {
-    state,
-    context: CONTEXT,
-    // GitHub refuses 4-byte characters (most emoji) in status descriptions.
-    description,
-  });
-  console.log(`#${number} ${pr.head.sha.slice(0, 7)}: ${state} (${reason})`);
+  // The review loop watchdog, after the status is posted and apart from it:
+  // it never changes the status, and its errors only reach the log.
+  try {
+    await reviewLoop({ number, pr, files, complete, comments, reviews, reactions, dismissals });
+  } catch (error) {
+    console.error(`#${number}: review loop watchdog: ${error.message}`);
+  }
+}
+
+// Halts a pull request stuck in a Codex review loop (docs/plans/review-loop-watchdog.md).
+async function reviewLoop({ number, pr, files, complete, comments, reviews, reactions, dismissals }) {
+  const input = { pr, defaultBranch: await defaultRef(), files, filesComplete: complete, labels: (pr.labels ?? []).map((l) => l.name), comments, reviews, reactions, dismissals };
+  let decision = decideReviewLoop(input);
+  if (decision.needsTimeline) {
+    let timeline = null;
+    try {
+      timeline = await gh.all(`${base}/issues/${number}/timeline`);
+    } catch (error) {
+      console.error(`#${number}: review loop watchdog could not read the timeline: ${error.message}`);
+    }
+    decision = decideReviewLoop({ ...input, timeline });
+  }
+  if (decision.error) { console.error(`#${number}: review loop watchdog: ${decision.error}`); return; }
+  if (decision.skip) return;
+  const hasWork = (d) => d.addLabel || d.removeLabel || d.comment || (d.extraCommentIds ?? []).length;
+  if (hasWork(decision)) {
+    // The hourly run and a per-PR run can overlap, so the data may have moved
+    // since it was read (a clean review, the owner's word). Decide again from
+    // a fresh read just before writing, and write only that decision.
+    decision = await freshReviewLoopDecision({ number, defaultBranch: input.defaultBranch });
+    if (!decision) return;
+  }
+  const reloadComments = () => gh.all(`${base}/issues/${number}/comments`).then(withEditHistory);
+  if (hasWork(decision)) await applyReviewLoop({ gh, repoBase: base, number, decision, labelCache, reloadComments });
+  console.log(`#${number}: review loop ${decision.log}`);
+}
+const labelCache = { ready: false };
+
+// The watchdog's decision from data read now: the pull request, its comments,
+// reviews, dismissals, reactions, files and timeline. Returns null if it can't decide this run.
+async function freshReviewLoopDecision({ number, defaultBranch }) {
+  const pr = await gh.get(`${base}/pulls/${number}`);
+  const [comments, reviews, reactions, changed] = await Promise.all([
+    gh.all(`${base}/issues/${number}/comments`).then(withEditHistory),
+    gh.all(`${base}/pulls/${number}/reviews`),
+    gh.all(`${base}/issues/${number}/reactions`),
+    gh.all(`${base}/pulls/${number}/files`),
+  ]);
+  // Dismissals read again with the reviews, so a review the owner dismissed
+  // between the two reads isn't counted as a live finding.
+  const dismissals = await readDismissals(number, reviews);
+  // The files too: a push since the first read can turn a plan into code.
+  const files = changed.flatMap((f) => [f.filename, f.previous_filename].filter(Boolean));
+  const input = { pr, defaultBranch, files, filesComplete: changed.length >= pr.changed_files, labels: (pr.labels ?? []).map((l) => l.name), comments, reviews, reactions, dismissals };
+  let decision = decideReviewLoop(input);
+  if (decision.needsTimeline) {
+    let timeline = null;
+    try { timeline = await gh.all(`${base}/issues/${number}/timeline`); } catch { /* unreadable: decided below */ }
+    decision = decideReviewLoop({ ...input, timeline });
+  }
+  if (decision.error) { console.error(`#${number}: review loop watchdog: ${decision.error}`); return null; }
+  return decision.skip ? null : decision;
 }
 
 const fromEvent = pullNumbersFromEvent();

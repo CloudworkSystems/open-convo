@@ -104,6 +104,24 @@ himself; agents never post it ("Review Loop" in
 [agent-process.md](agent-process.md)). A new push makes the shown line
 stale, so show a fresh one.
 
+## When A Pull Request Is Stuck In Review
+
+A pull request with the label `needs-owner: review-loop` has been halted by
+the review loop watchdog
+([review-loop-watchdog.md](plans/review-loop-watchdog.md)). Don't push to
+it, relay findings, restart Codex or ask for reviews on it until the halt
+lifts, and don't hand it to a builder.
+
+When the owner asks about it, read the watchdog's comment on the pull request
+(from `github-actions[bot]`, marked `review-loop:v1`): it says how many rounds
+there have been, links the newest Codex review, and lists any push made while
+halted. Put his three choices to him in plain words, with your
+recommendation: accept the findings (show him the exact accept line for the
+current head, as in "When P2s Need The Owner"), narrow what the pull request
+promises, or split it. Once he picks narrowing or splitting, tell the
+building thread what he said; for narrowing, he removes the label or
+comments `loop-resume` himself so the builder can push.
+
 ## Status Updates To The Owner
 
 - Lead with what needs him, then what moved.

@@ -350,6 +350,21 @@ they win.
   head should come back clean; if it raises the carried P1 again, the owner's
   accept line is the way through. Carrying needs no new yes from the owner. A P1 showing that
   the plan's goal or limits are wrong is still fixed in the plan itself.
+- **A pull request stuck in review stops.** When Codex has left findings on
+  6 commits of a plan pull request or 8 of a code pull request, counted since
+  its last lift, and its head isn't clean, the `codex-approved` workflow adds
+  the label `needs-owner: review-loop`, writes one comment with the owner's
+  three choices (accept the findings, narrow it, or split it) and lists it
+  under "Stuck in review" on issue #114. Pull requests the owner opened are
+  never halted. Until the halt lifts, no agent pushes to that pull request,
+  relays findings to it, restarts Codex on it or posts `@codex review` or
+  `@cursor` on it; builders may still answer review threads in words. The
+  halt lifts when the owner removes the label (the watchdog puts back a label
+  anyone else removed), comments `loop-resume`, posts his accept line for the
+  head, or Codex comes back clean on the head, and the count then starts
+  again. A push while halted is noted in the watchdog's comment, and the PR
+  keeper reports it. The watchdog never changes the `codex-approved` status
+  ([review-loop-watchdog.md](plans/review-loop-watchdog.md)).
 - **Dependabot updates.** A Dependabot patch or minor update that touches no
   protected path needs no independent review, since no agent wrote it. Once
   `tests` and `codex-approved` pass, the keeper switches auto-merge on.
