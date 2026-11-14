@@ -1,6 +1,6 @@
 # Work Record: One Set Of Cards, Shown In Every Cloudwork Nexus View
 
-Status: Draft (Nov 13, 2026): proposed, not approved. Nothing here is built.
+Status: Approved (Nov 14, 2026): approved on the owner's yes of November 14, 2026, with his answers to the four open questions (see the end). Not built, and not yet placed in PLAN.md's build order.
 
 Written November 13, 2026 by a Claude building session on the owner's Mac. The
 owner asked for it in that session: every plan, every task a session creates
@@ -208,6 +208,9 @@ Differ".
 
 So the board doesn't fill with stale cards:
 
+- The quiet limit is a setting the owner can change (his answer to
+  question 2). It starts at 30 days. Wherever this plan says "30 days", it
+  means the limit as he has set it.
 - A **task** or **idea** card nobody has touched for 30 days is retired
   (open question 2). Touching means the owner moved, opened or edited it, or
   its source changed.
@@ -551,6 +554,8 @@ actions cover what it leaves out.
   writing the snapshot can't include an on-device card. A test builds a
   record holding all four kinds, writes the snapshot, and finds only plan
   cards in it.
+- Part 7 uses only the Desk's existing local participant. It calls no Apple
+  Intelligence or Siri interface.
 - Parts 1 to 6 make no network call beyond the ones the Rail Map snapshot
   already makes, and call no model. Part 7 runs on the local participant
   only. It sends no card text, placement, move history or correction to any
@@ -560,6 +565,12 @@ actions cover what it leaves out.
   it cards. Using an off-device participant for this reasoning is out of
   this plan. It would need its own plan that lists exactly what is sent and
   what is left out, and the owner's approval of that plan.
+- The quiet limit is one owner setting, kept on the device, starting at 30
+  days, allowed from 1 to 365 days, plus "never retire". Changing it never
+  retires a card at once: cards already past a shortened limit get a
+  retire offer and wait for his choice. A test shortens the limit and finds
+  offers and no automatic retirement, and another sets "never" and finds
+  neither.
 - Retiring never deletes. Restore puts a card back in its last placement in
   every view.
 - A restored card is never retired automatically again. Tests restore a
@@ -679,17 +690,29 @@ actions cover what it leaves out.
 
 ## Open Questions For The Owner
 
-1. **The ideas document.** Answered November 13, 2026: it is your "True
-   Convo Ideas: November 13, 2026" document. Still open: should a card made
-   in the Desk be written back to that document? The Desk has no way to
-   write to it today. Recommended: no for now, and decide after the trial.
+All four were answered by the owner on November 14, 2026, in the Claude
+Code session on his Mac that wrote this plan. Asked for his yes to merge
+and his answers, he wrote: "Yes, merge it, and take your recommendations?"
+and then answered each one. His words are quoted below.
+
+1. **The ideas document.** It is his "True Convo Ideas: November 13, 2026"
+   document (answered November 13). Should a card made in the Desk be
+   written back to it? **Answer: "no for now".** Decide again after the
+   trial.
 2. **Retirement.** Is 30 days untouched the right limit for tasks and
-   ideas? Recommended: yes, with cards you placed yourself never retiring.
-3. **Agent reasoning.** This plan keeps part 7 on the Mac's local
-   participant, so your task and idea wording never leaves your device. Is
-   that enough for the trial? If you later want Claude to do this reasoning,
-   that takes a separate plan saying exactly what would be sent, and your
-   approval of it.
+   ideas? **Answer: "Yes, but this is a setting that should be
+   'tuneable'".** The limit is now an owner setting that starts at 30 days
+   ("Cards That Retire").
+3. **Agent reasoning.** Is the Mac's local participant alone enough for
+   part 7? **Answer: "I agree, make's sense, I didn't want any Siri or
+   Apple intelligence involved if possible, for this particular aspect."**
+   So part 7 uses the local participant the Desk has today (a model run
+   through Ollama on his Mac). It uses no Apple Intelligence, no Siri and
+   no off-device model. Changing any of that takes a separate plan and his
+   approval.
 4. **Columns.** Keep the five the board has now (Suggested, Planned, In
-   progress, Review & try, Finished)? The old Nexus preview had four, ending
-   in Released. Recommended: keep the five.
+   progress, Review & try, Finished)? **Answer: "agree."**
+
+Still to settle, outside this approval: whether every Navigator session
+becomes a task card and how folders show on the Roadmap. It will come as a
+dated revision to this plan.
