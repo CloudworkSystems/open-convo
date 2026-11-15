@@ -1,8 +1,9 @@
 # Step 3: The Owner's Trial
 
-Status: In progress (Nov 2): first trial run done. Ten checks passed; quit
-mid-reply (8) failed. The F11 fix is built (see "F11 Fix Built" below);
-waiting on a re-check of check 8.
+Status: In progress (Nov 5): check 8 passed on the re-check with the F11
+fix, quitting from the menu and with Command-Q. One run quitting with
+`osascript` (the way the first trial quit) is left; then step 3 is done.
+F12 (wording) and the findings below stay open as follow-ups.
 
 The last part of step 3 (PR 5). The scripted proof checks the local route
 with a fake Ollama and a test store. This trial checks the real True Convo
@@ -181,3 +182,30 @@ Re-check: check 8 on a fresh True Convo Test build, quitting both from the
 menu and with `osascript -e 'tell application "True Convo Test" to quit'`.
 The run log should show `desk.terminate.save-wait outcome=saved` before
 `desk.closed`.
+
+### Re-check of Check 8 (November 5, 2026)
+
+Build: True Convo Test from commit 79be95d. Relayed by Claude in thread
+"Build the Claude Code adapter".
+
+Check 8 passed twice, once quitting from the menu bar menu and once with
+Command-Q. Both take the menu's Quit path. The `osascript` quit, which is
+how the first trial quit when F11 happened, reaches the app as an outside
+request and still needs its own run. Each time the reply reopened as "Stopped on this Mac. The reply
+so far is kept.", with all the words. The Mac's log showed, for both quits:
+`desk.terminate.participants owed=true limit=17s`, then
+`desk.terminate.save-wait outcome=saved waited=0.1s`, then `desk.closed`.
+
+New findings:
+
+- **F15. The quit question says the reply will be lost when it won't be.**
+  Quitting from the menu while a reply is coming in asks "You have unsaved
+  changes in the Desk. Quitting now loses them." with Keep and Quit and
+  Lose Changes. After Quit and Lose Changes the reply so far is saved, as
+  above, so the wording is wrong for a reply that is still coming in.
+- **F16. Retry only refills the message box.** On a stopped reply, Retry
+  puts the message back in the box and waits for Send, as this checklist
+  says (check 11). The owner asked whether Retry should send it again at
+  once. That's his call: it changes the rule that nothing is sent again
+  without his own Send.
+

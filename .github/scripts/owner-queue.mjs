@@ -4,6 +4,10 @@
 // `needs-owner: risk-escalate`, docs/plans/risk-review.md). The owner pins
 // the issue once.
 //
+// It also lists pull requests the review loop watchdog halted (label
+// `needs-owner: review-loop`, docs/plans/review-loop-watchdog.md) under
+// "Stuck in review", with their round count.
+//
 // It also keeps one hidden line in the issue, listing the open pull requests
 // with auto-merge on. The PR keeper reads that line to decide which pull
 // requests to update from main: its GitHub tools can't see auto-merge.
@@ -11,6 +15,7 @@
 import { client, repoFromEnv } from './github.mjs';
 import { parseCodeowners, protectedFiles } from './codeowners.mjs';
 import { RISK_LABELS } from './risk-check.mjs';
+import { LABEL as LOOP_LABEL, haltSummary } from './review-loop.mjs';
 
 const TITLE = 'Needs the owner';
 const MARKER = '<!-- owner-queue -->';
@@ -25,8 +30,15 @@ const rules = parseCodeowners(Buffer.from(codeowners.content, 'base64').toString
 
 const rows = [];
 const riskRows = [];
+const stuckRows = [];
 const autoMerge = [];
 for (const pr of await gh.all(`${base}/pulls?state=open`)) {
+  // A halted pull request stays listed while it is open, draft or not.
+  if ((pr.labels ?? []).some((l) => l.name === LOOP_LABEL)) {
+    const summary = haltSummary(await gh.all(`${base}/issues/${pr.number}/comments`));
+    const rounds = summary?.rounds != null ? `${summary.rounds}${summary.limit != null ? ` (limit ${summary.limit})` : ''}` : 'see the pull request';
+    stuckRows.push(`| [#${pr.number}](${pr.html_url}) ${pr.title.replace(/\|/g, '/')} | ${rounds} |`);
+  }
   if (pr.draft) continue;
   if (pr.auto_merge) autoMerge.push(pr.number);
   const risk = (pr.labels ?? []).map((l) => l.name).filter((name) => RISK_LABELS.includes(name));
@@ -60,6 +72,14 @@ const body = [
     ? ['| Pull request | Why |', '| --- | --- |', ...riskRows].join('\n')
     : 'None.',
   '',
+  '### Stuck in review',
+  '',
+  'Pull requests halted after too many Codex rounds with findings. Read the watchdog\'s comment on each, then accept the findings, tell the building thread how to narrow or split it, or remove the label to let it go on.',
+  '',
+  stuckRows.length
+    ? ['| Pull request | Codex rounds |', '| --- | --- |', ...stuckRows].join('\n')
+    : 'None.',
+  '',
   `<!-- auto-merge-on: ${autoMerge.sort((a, b) => a - b).join(',')} -->`,
 ].join('\n');
 
@@ -70,5 +90,5 @@ if (!existing) {
   console.log(`Created #${created.number}`);
 } else if (existing.body !== body) {
   await gh.patch(`${base}/issues/${existing.number}`, { body });
-  console.log(`Updated #${existing.number}: ${rows.length} waiting, ${riskRows.length} risk`);
+  console.log(`Updated #${existing.number}: ${rows.length} waiting, ${riskRows.length} risk, ${stuckRows.length} stuck`);
 }

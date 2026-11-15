@@ -98,7 +98,10 @@ like a review. The feed counts evidence the same way the PR keeper's "Who
 counts" rule does (`docs/scheduled-tasks/pr-keeper.md`): an independent,
 delta or fresh Claude review, a plan check and the keeper's own comment only
 from `cloudwork-bot`, in one of the forms step D recognizes, naming the
-latest commit; an owner's approval or accept line only from
+latest commit, plus a GrokBot review from `cursor[bot]` under the keeper's
+exception (it ends "— GrokBot review", names the latest commit by its short
+or full sha, and follows a `cloudwork-bot` "@cursor Independent review
+request for" comment naming that same commit); an owner's approval or accept line only from
 `CloudworkSystems`; Codex only from `chatgpt-codex-connector[bot]`. Anything
 else is ignored, however it is worded.
 
@@ -167,9 +170,14 @@ code pull requests build them and their tests cover them:
 1. An independent review counts toward Checked only when the keeper's step D
    would count it: author `cloudwork-bot`, ending "— GrokBot review" or
    beginning "Independent review" or "Delta review" (a fresh Claude review
-   included), and naming the latest commit. A clean-looking review from any
-   other account never makes a row Checked. Tests include an outsider's
-   clean review on the latest commit.
+   included), and naming the latest commit; or author `cursor[bot]` under the
+   keeper's "Who counts" exception (ending "— GrokBot review", naming the
+   latest commit by its short or full sha, after a `cloudwork-bot` "@cursor
+   Independent review request for" comment naming that same commit). A
+   clean-looking review from any other account never makes a row Checked.
+   Tests include an outsider's clean review on the latest commit, a
+   `cursor[bot]` review with no matching request, and a `cursor[bot]` review
+   naming the full sha after a request naming the short one (counts).
 2. A `needs-owner: risk-escalate` label makes a row Needs You only until
    `CloudworkSystems` approves the latest commit after the escalating
    review. After that approval the row is Under Way, waiting on the

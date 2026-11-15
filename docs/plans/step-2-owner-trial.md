@@ -1,8 +1,8 @@
 # Step 2: The Owner's Trial
 
-Status: In progress (Nov 2): first trial run done. The Desk passed; Archive
-History was blocked by a bug. Fixes for F1 to F3 are built (see "Fixes Built"
-below); waiting on the short re-check.
+Status: In progress (Nov 5): re-check done. F1 to F3 are fixed. Archive
+History opens, but every dictation's text in it is empty (F13), so the
+check that it shows the test dictation can't pass yet.
 
 The last part of step 2 (PR 5). The scripted proof checks the stores in a
 test folder; this trial checks the real True Convo Test app on your Mac.
@@ -135,3 +135,33 @@ Built by Claude in thread "Fix trial issues so Patrick can dogfood".
 
 Re-check: the two short checks in "Roles for the remaining work" above, on
 a fresh True Convo Test build.
+
+### Re-check (November 5, 2026)
+
+Build: True Convo Test from commit 79be95d, the `main` with the fixes,
+installed on November 3. Relayed by Claude in thread "Build the Claude Code
+adapter".
+
+| Check | Result |
+| --- | --- |
+| F1. Confirm the recovery key | Passed. The boxes were big and easy to see |
+| F2 and F3. Menu bar menu and Archive History | Passed. The menu opened with no stuck Keychain prompt, and Archive History opened |
+| Archive History shows the test dictation | **Failed** (F13) |
+
+New findings:
+
+- **F13. Every dictation's text in Archive History is empty.** Each row
+  since October 30 reads "(empty)", the October 31 trial dictations too,
+  and so does a new dictation made during the re-check. The rows are read
+  without error, so the saved text itself is empty. The sealed transcript
+  files are all about the same small size. Not caused by the F1 to F3
+  fixes. Archive History is also hard to find: it sits under Expert Tools,
+  Archive & Harvest.
+- **F14. Dictation into the Desk's chat box doesn't work.** Dictating with
+  the pill while the Desk's message box had focus put no text there. After
+  macOS asked for a permission when he clicked outside the Desk, dictation
+  elsewhere seemed to work as usual. Related: issues #162 and #263.
+
+Step 2 stays open until F13 is fixed and the test dictation shows in
+Archive History.
+

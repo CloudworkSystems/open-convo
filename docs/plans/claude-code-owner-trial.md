@@ -1,7 +1,8 @@
 # Claude Code Adapter: The Live Check And The Owner's Trial
 
-Status: Draft (Nov 2): written for PR 5 of
-[claude-code-adapter.md](claude-code-adapter.md); nothing in it has run yet.
+Status: In progress (Nov 9): written for PR 5 of
+[claude-code-adapter.md](claude-code-adapter.md); Part 2's first attempt did not
+pass (see "Results So Far") and it reruns on Claude Code 2.1.319.
 
 Builder: the Claude building session ("Build the Claude Code adapter").
 Reviewers: Codex, plus the independent review. Finish line: every check in
@@ -75,7 +76,7 @@ it received. So checks 2 and 7 are proven by catching what Claude Code sends
 in step 0.
 
 **Before you start.** The session checks that the pinned Claude Code file
-(2.1.283) is still in place; if an update removed it, it stops. It puts an
+(2.1.319) is still in place; if an update removed it, it stops. It puts an
 invented `AGENTS.md` in True Convo Test's invented-data folder,
 `~/Library/Application Support/com.trueconvo.voice-cursor.test/desk-invented-proof/`,
 which is above the folder each run works in
@@ -97,19 +98,28 @@ one Finder step.
    your home `AGENTS.md`'s text (matched on this Mac only, never copied
    out). This repeats the November 2 proof in the app's own folders. If any
    canary shows up, the trial stops before any live run.
+0a. **No way in from other sessions** (check 8; no live request). In the same
+   offline setup, the session starts a run, looks for a messaging socket and a
+   `.key` file, and tries to send that run a made-up word from its own session.
+   The run must have neither, the send must be refused, and the word must not
+   reach the listener. If not, the trial stops before any live run.
 0b. **Hand over to the watch script.** The session starts the script, then
    stops Remote Control. Once no Remote Control process is left, the script
    takes its first list of names and times under `~/.claude`, and from then
-   on watches every half second. The session tells you in this thread when
+   on gets macOS file events for that folder and checks processes every half
+   second. The session tells you in this thread when
    it's your turn.
 
-1. **First run** (checks 1, 3 and 7). Open the Desk, start a new
-   conversation, pick "Claude · … · Anthropic (not on this Mac)" (the
-   model is Sonnet 5.5, your October 29 choice), and send: "I run an
-   invented bakery called Maple Crumb. Suggest one name for a new muffin."
-   Approve Anthropic when asked, then confirm paid usage is off when asked
-   (check claude.ai Settings > Usage first). While the reply arrives, the
-   script records:
+1. **First run** (checks 1, 3 and 7). Open the Desk and start a new
+   conversation. Type the message first, since the picker stays off until the
+   box holds real text: "I run an invented bakery called Maple Crumb. Suggest
+   one name for a new muffin." Then pick "Claude · … · Anthropic (not on this
+   Mac)" (the model is Sonnet 5.5, your October 29 choice). The app doesn't
+   prompt at Send, so use the Desk window's own rows first: **Approve Anthropic
+   once…** if it isn't approved yet (this stays saved), then check claude.ai
+   Settings > Usage and press **Confirm paid usage is off…** (needed in each
+   launch). Check that no other run is listed at the top of the window, then
+   press Send. While the reply is being written, the script records:
    - Claude Code's arguments and environment from the process list, matched
      on the Mac against the contract's section 11: the variable names, and
      the values of the fixed ones only (never HOME, USER and the like), with
@@ -121,9 +131,10 @@ one Finder step.
      line matches the recorded values and a usage message shows paid usage
      is off, so a finished reply proves both (check 1's init and rate-limit
      parts).
-   - Any new or changed path under `~/.claude` is a failure of check 3.
-     Nothing is excused: the script runs only while no Claude Code but the
-     app's is running.
+   - Any new or changed path under `~/.claude` is a failure of check 3, with
+     one exception (your narrow yes, November 9): the run's own
+     `sessions/<pid>.json`, if it's gone once the run has ended. A `.key` file
+     fails. The script runs only while no Claude Code but the app's is running.
    - The reply holds no canary word (a second sign for check 7, after step
      0).
 2. **Inert input** (check 2). In the same conversation, send exactly:
@@ -131,13 +142,16 @@ one Finder step.
    should answer about Maple Crumb, with no canary word and no settings
    screen (step 0 already showed the file's text isn't sent). Still nothing
    new under `~/.claude`.
-3. **Kill the app mid-reply** (check 4). Send: "Write a long story about a
-   muffin that travels the world." While it is still arriving, open
-   Activity Monitor, select True Convo Test (check that its name says Test,
-   not the real True Convo), and choose Force Quit from the stop button.
-   Within 10 seconds the script should find no Claude Code and no
-   supervisor left. Reopen the app: the reply is marked cut off with the
-   text so far, and nothing was sent again.
+3. **Kill the app mid-reply** (check 4). Open Activity Monitor first and select
+   True Convo Test (check that its name says Test, not the real True Convo).
+   Send: "Write a long story about a muffin that travels the world." The app
+   holds a reply's text until a usage line shows paid usage is off, and that line
+   came at the end of the reply in the November 9 runs. So nothing shows while
+   Claude writes, for about 25 seconds. Force quit during that wait, from the
+   stop button. Within 10 seconds the script should find no Claude Code and no
+   supervisor left. Reopen the app: the reply is marked cut off, with any text
+   it had (possibly none), and nothing was sent again. Also tell the session
+   whether `sessions/<pid>.json` was left behind.
 
    The other half of check 4, a kill during a Stop's wait, is proven with a
    fake Claude Code that ignores Stop, which a live run can't do on demand:
@@ -150,14 +164,36 @@ Remote Control again. The script stops watching the moment it sees any
 Claude Code that isn't the app's, so it can't mistake the session's own
 files for the app's; every change it recorded before then counts. If it
 stops before you've finished run 3, check 3 is unproven and Part 2 is done
-again. Its half-second looks could miss something that appears and goes
-between two looks; that's accepted because Claude Code has no tools here and
-the start check fails closed, but it means this check is strong evidence,
+again. Its half-second process checks could miss something that appears and
+goes between two looks; that's accepted because Claude Code has no tools here
+and the start check fails closed, but it means this check is strong evidence,
 not complete proof. The session reads the script's results (differences and
 found/not found only), then deletes the canary files, the scratch folder,
 the script and its notes, and stops Remote Control. If any check fails,
 Claude stays out of daily use until it is fixed and the whole of Part 2
 passes again.
+
+## Results So Far
+
+**November 9, first complete attempt, on 2.1.283: did not pass.** Three real
+runs on invented text, with paid usage confirmed off.
+
+| Check | Result |
+|---|---|
+| Arguments, environment, process group | Passed on all three runs |
+| `@file` and `/config` stay inert (run 2) | Passed, as the owner saw it |
+| 3: nothing new under `~/.claude` | Failed: each run wrote `sessions/<pid>.json` and a `.key` file, both gone when it ended |
+| 4: force quit mid-reply | Unproven: the force quit came after the reply had finished |
+| 8: no way in from other sessions | Failed in the offline follow-up test on 2.1.283, which led to the re-pin |
+
+What the owner found, for later fixes: the model picker stays off until the box
+holds real text; a blocked Send said "once the current reply has ended" when the
+reply was an unfinished run from November 5 in another conversation, which had
+blocked every conversation for four days and took Check or Close as unknown to
+clear. A reply appearing all at once is by design: its text is held until the
+usage line, under the overflow rule.
+
+The whole of Part 2 runs again on 2.1.319.
 
 ## Part 3: Your Checklist
 
@@ -166,19 +202,20 @@ down anything that surprises you. Labels may differ a little from what you
 see; note it and carry on.
 
 1. **The picker.** "Claude · … · Anthropic (not on this Mac)" is listed next to your local models.
-2. **Approve Anthropic.** In a fresh install's first Claude send, the app
-   asks you to approve Anthropic and shows what leaves. (Done in Part 2 if
-   that was the first send; it shows as approved now.)
-3. **Paid usage.** It asks you to confirm paid usage is off. Check claude.ai
-   first.
+2. **Approve Anthropic.** The Desk window's **Approve Anthropic once…** row
+   shows what leaves. (It stays approved until you withdraw it, so it shows as
+   approved now.)
+3. **Paid usage.** The row **Confirm paid usage is off…** asks you to confirm.
+   Check claude.ai first. Send stays blocked until you do.
 4. **It remembers.** Send: "What muffin name did you suggest?" The answer
    matches the earlier suggestion.
 5. **Switching models.** Start a new conversation with a local model, send
    one invented message, then pick Claude. Before you send, the line above
    the message box says how many earlier turns will go to Anthropic.
-6. **Stop, quit and retry.** Press Stop during a long reply (it stays,
-   marked stopped). Quit from the menu during a reply (marked stopped, text
-   kept). Force quit during a reply (marked cut off, not sent again). On the
+6. **Stop, quit and retry.** The reply's text is held until the usage line, so
+   a reply stopped early may have no text to keep. Press Stop during a long reply
+   (it stays, marked stopped). Quit from the menu during a reply (marked stopped,
+   any text kept). Force quit during a reply (marked cut off, not sent again). On the
    cut-off reply, close the unfinished reply, press Retry: the message comes
    back into the box unsent, and only your Send starts a new reply.
 7. **Lock the screen.** Lock and unlock your Mac. The paid-usage

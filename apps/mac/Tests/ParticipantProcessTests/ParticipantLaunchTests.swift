@@ -22,7 +22,7 @@ struct ParticipantLaunchTests {
         #expect(!arguments.contains("--bare"))
         #expect(!arguments.contains("--fallback-model"))
         #expect(!arguments.contains("--mcp-config"), "no MCP configuration at all, not even an empty one")
-        #expect(ParticipantCommandLine.pinnedCLIVersion == "2.1.283")
+        #expect(ParticipantCommandLine.pinnedCLIVersion == "2.1.319")
         #expect(CLICommandLineRule.isPinned(arguments))
     }
 

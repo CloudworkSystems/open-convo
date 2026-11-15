@@ -23,7 +23,7 @@ import ParticipantSupervisorCore
 //   `auth status` runs without that flag, so its helpers and its `env`
 //   apply to that probe.
 // - Project and local settings, for `auth status` (the F3 review's byte
-//   reading of 2.1.283, Codex F3-5; never run): project settings come from
+//   reading of 2.1.283, Codex F3-5, never run; not read again for 2.1.319): project settings come from
 //   its working folder, which is new and empty, so there are none. Local
 //   settings come from `<root>/.claude/settings.local.json`, `<root>` the
 //   canonical git root of that folder when it is not the folder itself or
@@ -255,6 +255,7 @@ enum ClaudeSettingsScan {
         "ANTHROPIC_AWS_BASE_URL", "ANTHROPIC_GOOGLE_CLOUD_BASE_URL", "ANTHROPIC_BEDROCK_MANTLE_BASE_URL",
         "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_FOUNDRY_API_KEY", "ANTHROPIC_FOUNDRY_AUTH_TOKEN",
         "ANTHROPIC_AWS_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR",
+        "CLAUDE_CODE_SESSIONS_OAUTH_TOKEN", "CLAUDE_CODE_MEMORY_API_TOKEN",
         "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR", "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST", "CLAUDE_CODE_HOST_CREDS_FILE",
         "ANTHROPIC_CUSTOM_HEADERS", "ANTHROPIC_UNIX_SOCKET", "CLAUDE_CODE_CLIENT_DATA_URL"
     ]
@@ -280,6 +281,16 @@ enum ClaudeSettingsScan {
     /// must not add to it.
     static let runAllowedEnvironmentNames: Set<String> = ["DISABLE_TELEMETRY", "DO_NOT_TRACK", "DISABLE_ERROR_REPORTING",
                                                           "DISABLE_GROWTHBOOK", "DISABLE_UPDATES"]
+    /// `env` names in user settings that only add an entry to Claude Code's
+    /// own model menu (the step 5 live trial, November 5: the owner's
+    /// settings held them, and the checks refused Claude). User settings
+    /// reach only `auth status`, never the run, and a menu entry changes no
+    /// provider, key, base URL or login there, so these three are passed
+    /// over in user settings only. Anywhere the run reads, they stay
+    /// overrides like every other `ANTHROPIC_` name.
+    static let userSettingsMenuOnlyEnvironmentNames: Set<String> = [
+        "ANTHROPIC_CUSTOM_MODEL_OPTION", "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME", "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION"
+    ]
 
     /// Who a source applies to. `.managed` (managed, server-managed and
     /// policy sources) and `.globalConfig` also apply to the run, so an
@@ -384,6 +395,7 @@ enum ClaudeSettingsScan {
         guard let entries = value as? [String: Any] else { return .unresolved(.unsupported) }
         var restricted = false
         for name in entries.keys.sorted() {
+            if scope == .authStatusOnly, userSettingsMenuOnlyEnvironmentNames.contains(name) { continue }
             if isProviderEnvironmentName(name) { return .override(.override) }
             if let fixed = CLIEnvironmentRule.fixed.first(where: { $0.name == name }) {
                 if entries[name] as? String != fixed.value { restricted = true }

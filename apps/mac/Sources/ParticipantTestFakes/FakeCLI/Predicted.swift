@@ -1,6 +1,6 @@
 import Foundation
 
-// Claude Code 2.1.283 output as PREDICTED by a read-only reading of the
+// Claude Code 2.1.319 output as PREDICTED by a read-only reading of the
 // installed program file (docs/reviews/2026-10-11-claude-f1-cli-reading.md;
 // its corrections at the top override its body). Never a run: the program
 // was not executed, so every shape here is unconfirmed until the first
@@ -19,10 +19,10 @@ import Foundation
 // the traffic switch. The fake prints these stream lines only under exactly
 // that argv and environment (`PredictedInvocation`). With
 // `--model invented-pinned-model` they are
-// byte-identical to Tests/ParticipantProcessTests/Fixtures/cli-2.1.283/<stream>.jsonl
+// byte-identical to Tests/ParticipantProcessTests/Fixtures/cli-2.1.319/<stream>.jsonl
 // (StreamConformanceTests keeps the two equal).
 enum Predicted {
-    static let version = "2.1.283"
+    static let version = "2.1.319"
     /// The model the goldens carry; a run echoes its own `--model` instead.
     static let goldenModel = "invented-pinned-model"
     static let session = "00000000-0000-4000-8000-00000000f100"
