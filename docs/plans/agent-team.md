@@ -1,6 +1,6 @@
 # Agent Team: One Screen, A Task Board, Agents That Wake Each Other, And Steering You Can See
 
-Status: Draft (Nov 7, 2026, updated Nov 8): proposed; waiting on the owner's yes. Nothing is built or installed. Meant for `docs/plans/agent-team.md`, opened through the Cloudwork Agents app from the Mac Studio, the way the GitHub app switch plan (#314) was.
+Status: Draft (Nov 7, 2026, updated Nov 8 and Nov 15): proposed; waiting on the owner's yes. Nothing is built or installed. Meant for `docs/plans/agent-team.md`, opened through the Cloudwork Agents app from the Mac Studio, the way the GitHub app switch plan (#314) was.
 
 Written November 7, 2026 by a Claude thread (project "Claude", task "261107 HERDR COMPARISON"), from the owner's picks while reading the Herdr comparison (`herdr-vs-open-convo.md`, the same folder). Session name: `OC-261107-agent-team`. Umbrella: Personal (used by every umbrella). The owner's words, in the Claude project chat on November 7, 2026:
 
@@ -246,3 +246,4 @@ Slice 1 is done when: the library and its sample driver are merged; `npm test` p
 3. **The Pantheon:** should "Pantheon" be the name of the team tree in the app? It isn't written down anywhere in the repo yet.
 4. **Stale claims:** is 2 hours without a sign of life the right time before a claimed card shows under Needs You?
 5. **Usage limits:** do you want a heads-up, or an automatic pause, when one agent passes a daily cost you set? Not in this plan until you say.
+6. **Skill sets per profile:** should a profile carry its own list of skills, and should Open Convo offer reusable skill-set templates (for example one for design, one for SEO) that a profile can start from? This plan would add only the basic idea that a profile names its skills. The owner's own domain templates, such as the Pantheon's domain leads, would stay in his True Convo, built on Open Convo. Added November 15, 2026 on the owner's "yes" in Claude Duet (07:40 UTC) to "Should I add skill sets per profile to the agent team plan as an open question?"
