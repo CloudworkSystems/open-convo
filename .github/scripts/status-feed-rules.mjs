@@ -17,6 +17,7 @@
 
 import { CODEX_LOGIN, OWNER_LOGIN, dismissedByOwner } from './codex-signal.mjs';
 import { RISK_LABEL, RISK_ESCALATE_LABEL } from './risk-check.mjs';
+import { LABEL as LOOP_HALT_LABEL } from './review-loop.mjs';
 
 export const BOT_LOGIN = 'cloudwork-bot';
 export const DEPENDABOT_LOGIN = 'dependabot[bot]';
@@ -381,9 +382,15 @@ export function stateOf(f) {
 
   // The review-loop flag (revision, November 4): Needs You ahead of Returned
   // and Under Way, unless everything Checked asks for is there.
-  if (loop) {
+  // The review-loop watchdog's halt label counts as the flag too: no agent
+  // pushes until the owner lifts it (docs/plans/review-loop-watchdog.md).
+  const halted = labels.includes(LOOP_HALT_LABEL);
+  if (loop || halted) {
     if (checked) return checkedOut();
-    return out('Needs You', `Codex raised a new P0 or P1 on each of the last ${loop} commits.`, 'Your call: accept the findings or narrow the plan', 'you');
+    const why = loop
+      ? `Codex raised a new P0 or P1 on each of the last ${loop} commits.`
+      : 'The review-loop watchdog stopped it: no agent pushes until you lift the halt.';
+    return out('Needs You', why, 'Your call: accept the findings or narrow the plan', 'you');
   }
 
   // 2. Returned: the builder owes the next move.

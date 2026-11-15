@@ -10,6 +10,7 @@ import {
   stateOf, buildFeed, feedIsStale, unchangedSince, easternDay,
 } from '../status-feed-rules.mjs';
 import { RISK_LABEL, RISK_ESCALATE_LABEL, RISK_LABELS } from '../risk-check.mjs';
+import { LABEL as HALT_LABEL } from '../review-loop.mjs';
 
 const HEAD = 'a1b2c3d'.padEnd(40, '0');
 const OLD = 'e4f5a6b'.padEnd(40, '1');
@@ -174,6 +175,15 @@ test('a review loop with everything Checked asks for is Checked', () => {
   const r = stateOf(ready({ loopRounds: 5 }));
   assert.equal(r.state, 'Checked');
   assert.equal(r.loop, 5);
+});
+
+test("the review-loop watchdog's halt label is the loop flag too", () => {
+  const r = stateOf(ready({ labels: [HALT_LABEL], tests: 'failure' }));
+  assert.equal(r.state, 'Needs You');
+  assert.match(r.rule, /watchdog stopped it/);
+  assert.equal(r.whose, 'you');
+  assert.equal(state({ labels: [HALT_LABEL], silent: [{ number: 1, agent: 'Codex', text: 'Codex silent' }] }), 'Blocked');
+  assert.equal(stateOf(ready({ labels: [HALT_LABEL] })).state, 'Checked');
 });
 
 test('fewer rounds than the flag needs leave the row to the other rules', () => {
