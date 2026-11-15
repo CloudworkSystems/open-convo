@@ -75,7 +75,7 @@ test('request reader refuses redirects, caps responses, and times out', async ()
 
 const BASE = 'http://127.0.0.1:5600/next';
 
-test('request timeout remains active after headers while the response body stalls', async () => {
+test('request timeout remains active after headers while the response body stalls', { timeout: 5000 }, async t => {
   let sentHeaders = false;
   const server = createServer((_request, response) => {
     sentHeaders = true;
@@ -87,10 +87,31 @@ test('request timeout remains active after headers while the response body stall
   try {
     const local = new URL('http://127.0.0.1/');
     local.port = String(server.address().port);
-    const localFetch = (_url, options) => fetch(local.href, options);
-    await assert.rejects(makeFetchJson(localFetch, 100)('/api/0/buckets/'), /longer than 10 seconds/);
+    // The timeout is fired by hand once the headers are in, so a slow runner
+    // can never let it fire before the request reaches the server.
+    let headersIn;
+    const gotHeaders = new Promise(resolve => { headersIn = resolve; });
+    const localFetch = async (_url, options) => {
+      const response = await fetch(local.href, options);
+      headersIn();
+      return response;
+    };
+    // A real timer, taken before mocking, fails the test if the timeout
+    // never fires once the body has started, instead of hanging it.
+    const realSetTimeout = globalThis.setTimeout;
+    const neverFired = new Promise((_resolve, reject) => {
+      realSetTimeout(() => reject(new Error('The timeout did not fire after the headers.')), 2000).unref();
+    });
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const pending = makeFetchJson(localFetch, 100)('/api/0/buckets/');
+    await gotHeaders;
     assert.equal(sentHeaders, true);
+    // Let the reader get past its fetch and wait on the stalled body first.
+    await new Promise(resolve => setImmediate(resolve));
+    t.mock.timers.tick(100);
+    await assert.rejects(Promise.race([pending, neverFired]), /longer than 10 seconds/);
   } finally {
+    t.mock.timers.reset();
     server.closeAllConnections();
     await new Promise(resolve => server.close(resolve));
   }
