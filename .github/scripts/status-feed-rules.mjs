@@ -10,16 +10,23 @@
 //
 // Evidence counts the way the PR keeper's "Who counts" rule counts it
 // (docs/scheduled-tasks/pr-keeper.md): reviews, plan checks and the keeper's
-// own comment only from cloudwork-bot, the owner's approvals only from
-// CloudworkSystems, Codex only from its own app. Where these rules and the
+// own comment only from an agent account (cloudwork-bot or the agents' app),
+// a GrokBot review from cursor[bot] only under the keeper's exception, the
+// owner's approvals only from CloudworkSystems, Codex only from its own app. Where these rules and the
 // keeper's steps D to F disagree about whether a pull request is ready, the
 // keeper's file wins and this file is the bug.
 
 import { CODEX_LOGIN, OWNER_LOGIN, dismissedByOwner } from './codex-signal.mjs';
 import { RISK_LABEL, RISK_ESCALATE_LABEL } from './risk-check.mjs';
+import { APP_LOGIN } from './codex-triage.mjs';
 import { LABEL as LOOP_HALT_LABEL } from './review-loop.mjs';
 
 export const BOT_LOGIN = 'cloudwork-bot';
+// Agents write as cloudwork-bot or as the agents' app; both count until the
+// move to the app is done (AGENTS.md, "Accounts And Provenance").
+export const AGENT_LOGINS = [BOT_LOGIN, APP_LOGIN];
+// GrokBot's reviews post from Cursor's own app account (pr-keeper.md, "Who counts").
+export const CURSOR_LOGIN = 'cursor[bot]';
 export const DEPENDABOT_LOGIN = 'dependabot[bot]';
 export const KEEPER_ISSUE = 52;
 export const STATES = ['Blocked', 'Returned', 'Needs You', 'Under Way', 'Checked', 'Unknown'];
@@ -34,7 +41,9 @@ export const COMPARE_FILE_LIMIT = 300;
 
 const time = (value) => Date.parse(value ?? '') || 0;
 const short = (sha) => (sha ?? '').slice(0, 7);
-const byBot = (item) => item?.user?.login === BOT_LOGIN;
+const byBot = (item) => AGENT_LOGINS.includes(item?.user?.login);
+const byCursor = (item) => item?.user?.login === CURSOR_LOGIN;
+const REVIEW_REQUEST = /^\s*@cursor Independent review request for\b/;
 const isCodex = (user) => Boolean(user) && user.login === CODEX_LOGIN;
 const PRIORITY = /!\[P(\d) Badge\]/;
 
@@ -47,7 +56,7 @@ export function namesCommit(body, sha) {
 }
 
 /**
- * True when a cloudwork-bot text has the form step D counts as an independent
+ * True when a agent account's text has the form step D counts as an independent
  * review: it ends with "— GrokBot review", or begins (after any heading marks)
  * "Independent review" or "Delta review". A fresh Claude review begins
  * "Independent review" too.
@@ -126,7 +135,7 @@ const WAITING = [
 ];
 
 /**
- * The keeper's latest "Not working" comment on #52: cloudwork-bot's comment
+ * The keeper's latest "Not working" comment on #52: an agent account's comment
  * that starts "## Not working" and carries "— PR keeper (scheduled)". The
  * keeper updates its oldest one in place, so that one is read.
  */
@@ -219,12 +228,32 @@ export function loopRounds({ headSha, reviews = [], reviewComments = [], dismiss
 
 // ------------------------------------------------------------ independent review and plan check
 
-/** Every cloudwork-bot comment and review body, with its time. */
-function botTexts({ comments = [], reviews = [] }) {
-  return [
-    ...comments.filter(byBot).map((c) => ({ body: c.body ?? '', at: time(c.created_at) })),
-    ...reviews.filter(byBot).map((r) => ({ body: r.body ?? '', at: time(r.submitted_at) })),
-  ].sort((a, b) => a.at - b.at);
+const textsBy = (who, { comments = [], reviews = [] }) => [
+  ...comments.filter(who).map((c) => ({ body: c.body ?? '', at: time(c.created_at) })),
+  ...reviews.filter(who).map((r) => ({ body: r.body ?? '', at: time(r.submitted_at) })),
+].sort((a, b) => a.at - b.at);
+
+/** Every agent account's comment and review body, with its time. */
+function botTexts(items) {
+  return textsBy(byBot, items);
+}
+
+/**
+ * Every review that can count, oldest first, each with `countsFor(sha)`. An
+ * agent account's review counts for any commit it names. A cursor[bot] post
+ * counts for a commit only when it ends with "— GrokBot review", names that
+ * commit, and came after an agent account's comment that begins "@cursor
+ * Independent review request for" and names the same commit (pr-keeper.md,
+ * "Who counts"; the plan's requirement 6).
+ */
+function reviewTexts(items) {
+  const agents = botTexts(items);
+  const requests = agents.filter((t) => REVIEW_REQUEST.test(t.body));
+  const fromAgents = agents.filter((t) => isReviewForm(t.body)).map((t) => ({ ...t, countsFor: (sha) => namesCommit(t.body, sha) }));
+  const fromCursor = textsBy(byCursor, items)
+    .filter((t) => /—\s*GrokBot review$/.test(t.body.trim()))
+    .map((t) => ({ ...t, countsFor: (sha) => namesCommit(t.body, sha) && requests.some((q) => q.at < t.at && namesCommit(q.body, sha)) }));
+  return [...fromAgents, ...fromCursor].sort((a, b) => a.at - b.at);
 }
 
 /**
@@ -232,11 +261,11 @@ function botTexts({ comments = [], reviews = [] }) {
  * (step D's R), or null. Only a sha among the pull request's own commits counts.
  */
 export function reviewedCommit({ comments, reviews, commits = [] }) {
-  const reviewsFound = botTexts({ comments, reviews }).filter((t) => isReviewForm(t.body));
+  const reviewsFound = reviewTexts({ comments, reviews });
   for (const t of reviewsFound.reverse()) {
     for (const token of t.body.match(/\b[0-9a-f]{7,40}\b/gi) ?? []) {
       const hit = commits.find((c) => c.sha.toLowerCase().startsWith(token.toLowerCase()));
-      if (hit) return hit.sha;
+      if (hit && t.countsFor(hit.sha)) return hit.sha;
     }
   }
   return null;
@@ -255,23 +284,23 @@ export function sameChanges(filesA, filesB) {
 }
 
 /**
- * The independent review that counts for the head: the newest cloudwork-bot
+ * The independent review that counts for the head: the newest agent account's
  * review naming the head, or else, when `sameAs` is a commit whose changes
  * are the head's (step D's SAME), the newest one naming that commit.
  * Returns { at, severities, checklist, escalation } or null.
  */
 export function countedReview({ comments, reviews, headSha, sameAs = null }) {
-  const texts = botTexts({ comments, reviews }).filter((t) => isReviewForm(t.body));
-  const pick = (sha) => texts.filter((t) => namesCommit(t.body, sha)).at(-1);
+  const texts = reviewTexts({ comments, reviews });
+  const pick = (sha) => texts.filter((t) => t.countsFor(sha)).at(-1);
   const found = pick(headSha) ?? (sameAs ? pick(sameAs) : undefined);
   if (!found) return null;
   return { at: found.at, severities: findingSeverities(found.body), checklist: hasChecklist(found.body), escalation: hasEscalation(found.body) };
 }
 
 /**
- * The time of the newest cloudwork-bot text naming the head with a
+ * The time of the newest agent account's text naming the head with a
  * `risk-escalate` line, or 0. Any form counts (a review, a plan check), as
- * the keeper's step F holds on the line in any cloudwork-bot review of the head.
+ * the keeper's step F holds on the line in any agent account's review of the head.
  */
 export function escalationAt({ comments, reviews, headSha }) {
   const hits = botTexts({ comments, reviews }).filter((t) => namesCommit(t.body, headSha) && hasEscalation(t.body));
@@ -413,7 +442,7 @@ export function stateOf(f) {
     const rule = f.openedByOwner
       ? 'It changes protected files and was opened from your account, so GitHub won\'t let you approve it.'
       : 'It changes protected files and needs your approval.';
-    return out('Needs You', rule, f.openedByOwner ? 'Reopen it from cloudwork-bot, then approve it' : 'Your approval on GitHub', 'you');
+    return out('Needs You', rule, f.openedByOwner ? "Reopen it from the agents' app (cloudwork-agents[bot]) or cloudwork-bot, then approve it" : 'Your approval on GitHub', 'you');
   }
   if (riskHeld) return out('Needs You', 'Risk hold: it adds an outside host, a dependency, a Mac permission or a key name.', 'Read the risk comment, then approve the latest commit', 'you');
   if (escalationPending) return out('Needs You', 'A reviewer escalated a risk for you to see.', 'Read the escalation, then approve the latest commit', 'you');

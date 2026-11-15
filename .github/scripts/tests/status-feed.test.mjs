@@ -224,6 +224,35 @@ test('only cloudwork-bot reviews in the keeper\'s form, naming the head, count',
   assert.equal(countedReview({ comments: [comment(BOT, `Looks good for ${HEAD}`)], reviews: [], headSha: HEAD }), null);
 });
 
+test("the agents' app counts like cloudwork-bot, for reviews and the keeper's report", () => {
+  const APP = { login: 'cloudwork-agents[bot]' };
+  assert.ok(countedReview({ comments: [comment(APP, reviewBody(HEAD))], reviews: [], headSha: HEAD }));
+  assert.ok(planCheck({ comments: [comment(APP, `Plan check (coordinator) of ${HEAD}: passed\n\n${CHECKLIST}`)], reviews: [], headSha: HEAD }));
+  assert.ok(escalationAt({ comments: [comment(APP, `Notes on ${HEAD}\nrisk-escalate: a new host`)], reviews: [], headSha: HEAD }) > 0);
+  assert.ok(keeperComment([{ user: APP, body: KEEPER, created_at: '2026-11-06T14:00:00Z' }]));
+});
+
+test('a cursor[bot] GrokBot review counts only after a matching agent request for that commit', () => {
+  const CURSOR = { login: 'cursor[bot]' };
+  const request = (user, sha, at) => comment(user, `@cursor Independent review request for ${sha.slice(0, 7)}: please review this pull request.`, at);
+  const grok = comment(CURSOR, reviewBody(HEAD), '2026-11-06T11:00:00Z');
+  // No request: never a review.
+  assert.equal(countedReview({ comments: [grok], reviews: [], headSha: HEAD }), null);
+  // A request from an agent account for the head, before the review: counts.
+  assert.ok(countedReview({ comments: [request(BOT, HEAD, '2026-11-06T10:00:00Z'), grok], reviews: [], headSha: HEAD }));
+  // A request for another commit, from an outsider, or after the review: doesn't.
+  assert.equal(countedReview({ comments: [request(BOT, OLD, '2026-11-06T10:00:00Z'), grok], reviews: [], headSha: HEAD }), null);
+  assert.equal(countedReview({ comments: [request(OUTSIDER, HEAD, '2026-11-06T10:00:00Z'), grok], reviews: [], headSha: HEAD }), null);
+  assert.equal(countedReview({ comments: [grok, request(BOT, HEAD, '2026-11-06T12:00:00Z')], reviews: [], headSha: HEAD }), null);
+  // A cursor[bot] post without the GrokBot ending never counts, even when requested.
+  const plain = comment(CURSOR, `Independent review of ${HEAD}: clean\n\n${CHECKLIST}`, '2026-11-06T11:00:00Z');
+  assert.equal(countedReview({ comments: [request(BOT, HEAD, '2026-11-06T10:00:00Z'), plain], reviews: [], headSha: HEAD }), null);
+  // reviewedCommit only finds a requested one too.
+  const commits = [{ sha: OLD }, { sha: HEAD }];
+  assert.equal(reviewedCommit({ comments: [grok], reviews: [], commits }), null);
+  assert.equal(reviewedCommit({ comments: [request(BOT, HEAD, '2026-11-06T10:00:00Z'), grok], reviews: [], commits }), HEAD);
+});
+
 test('review forms: GrokBot ending, Independent or Delta review opening after heading marks', () => {
   assert.ok(isReviewForm('Findings...\n— GrokBot review'));
   assert.ok(isReviewForm('## Independent review (fresh Claude, PR keeper) of x'));
