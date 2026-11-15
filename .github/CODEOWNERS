@@ -14,6 +14,9 @@
 /docs/scheduled-tasks/ @CloudworkSystems
 # Claude Code settings and the guard hook that enforces the hard rules.
 /.claude/ @CloudworkSystems
+# The push gate, where the limits on agents' GitHub writes live (docs/plans/push-gate.md).
+/packages/push-gate/ @CloudworkSystems
+/scripts/push-gate/ @CloudworkSystems
 
 # Decisions. Plans in docs/plans/ are approved by the owner's yes in a
 # Claude thread instead (AGENTS.md "Plans merge on the owner's yes").

@@ -469,7 +469,7 @@ nothing said so. The same rule for True Convo's own agents is in
   `cloudwork-bot`. Only the `[bot]` login is the app; a user account named
   `cloudwork-agents` is someone else. An app token can't read GitHub's
   "who am I" endpoint, so a scheduled task's account check accepts either
-  `cloudwork-bot` or an app token that the push steward's token helper made
+  `cloudwork-bot` or an app token that the push gate's token helper made
   in that run with the Cloudwork Agents key (App ID 5665711) for
   installation 179798275 (until the helper is built, a command the owner
   approved in that run that made it the same way), and whose installation reaches this repo and no

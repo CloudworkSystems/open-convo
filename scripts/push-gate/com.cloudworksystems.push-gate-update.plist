@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Updates the gate's own copy of main every day at 6 AM, so the gate runs
+  only code that has merged (docs/plans/push-gate.md, "Its own copy, its own
+  code"). NOT INSTALLED. The owner installs it at Build Order step 4; see
+  SETUP.md. Replace GATE_HOME with the gate user's home folder first.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.cloudworksystems.push-gate-update</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>GATE_HOME/open-convo/scripts/push-gate/update-own-copy.sh</string>
+    <string>GATE_HOME/open-convo</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>6</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>GATE_HOME/push-gate/update.log</string>
+  <key>StandardErrorPath</key>
+  <string>GATE_HOME/push-gate/update.log</string>
+</dict>
+</plist>

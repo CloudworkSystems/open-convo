@@ -15,7 +15,7 @@ independent review (a fresh Claude review stands in after 60 minutes); the
 build pull requests that follow touch `.github/`, `docs/agent-process.md`
 and `docs/scheduled-tasks/`, so the owner approves those on GitHub. **Finish
 line:** every agent that writes to GitHub does so as the app or through the
-Mac's push steward; no agent signs in as a user account; the bot's classic
+Mac's push gate; no agent signs in as a user account; the bot's classic
 tokens are revoked; and one full week passes with the pace limits below
 never exceeded.
 
@@ -47,7 +47,7 @@ Two problems, one cause:
 2. **Local-first work.** Claude, Codex and GrokBot's builders do their
    building, reviewing and fixing in the repo on the owner's Mac Studio. Only
    finished work goes to GitHub.
-3. **One paced door out.** A push steward on the Mac is the only process that
+3. **One paced door out.** A push gate on the Mac is the only process that
    writes to GitHub, within a shared cap.
 4. **GitHub stays the gate and the backup.** `tests`, `codex-approved`,
    code-owner approvals, Codex's review app, issues #52, #114 and #254, and
@@ -98,16 +98,16 @@ notes that mention the bot in passing are left to the recycling pass.
 | Workflows | None | As today: no agent edits `.github/workflows/` |
 | Administration, Secrets, Environments, Deployments, Pages | None | No agent changes settings, secrets or deploys |
 
-- **Keys:** only the push steward can read the app's private key. The key
+- **Keys:** only the push gate can read the app's private key. The key
   lives in its own 1Password vault, separate from "True Convo AI", and the
   only thing that can open that vault is a second service account used by
-  the push steward alone. The agents' service account (docs/decisions.md,
-  October 31 and November 1) loses access to the key. The push steward runs
+  the push gate alone. The agents' service account (docs/decisions.md,
+  October 31 and November 1) loses access to the key. The push gate runs
   as its own macOS user on the Studio, and that second service account's
   sign-in sits in that user's Keychain, which the agents' macOS user can't
   read. So an agent can't make its own app token and skip the paced door:
-  its only way to GitHub is to hand work to the push steward's queue. The
-  push steward uses the key to get an installation token that lasts one
+  its only way to GitHub is to hand work to the push gate's queue. The
+  push gate uses the key to get an installation token that lasts one
   hour and reaches only this repo. No token is written to a file or a log.
   If an Actions workflow ever needs to act as the app, the key goes in a
   repository secret and the workflow uses `actions/create-github-app-token`
@@ -141,7 +141,7 @@ main chat):
   talks to agents, reviews their work and approves it. Everything in the
   rest of this section runs here: the Remote Control server, Claude
   Desktop's local scheduled tasks, the Codex CLI, GrokBot's builders, the
-  agent ledger and the push steward with the app key. It is always on and
+  agent ledger and the push gate with the app key. It is always on and
   kept awake.
 - **Mac Mini: the agents' own machine.** Always on, with no display or
   keyboard; the owner never sits at it and reaches it only through Screen
@@ -151,7 +151,7 @@ main chat):
      The Mini holds no app key and no 1Password service account, so nothing
      it runs can push, comment or merge. An experiment worth keeping is
      handed to the Studio as a patch or branch and goes through the normal
-     path there: local review, the push steward, GitHub's gate.
+     path there: local review, the push gate, GitHub's gate.
   2. **A backup copy of open-convo that updates itself.** A local scheduled
      job on the Mini fetches every branch and tag from GitHub into a bare
      mirror once an hour. The repo is public, so this needs no sign-in and
@@ -179,14 +179,14 @@ The rest of this section describes the Studio.
   `claude remote-control` process in worktree mode, so parallel sessions
   each get their own worktree. This also solves cloud Claude's problem:
   claude.ai's GitHub link is always a person, so a cloud session can't use
-  the app; a session on the Mac uses the app through the push steward.
+  the app; a session on the Mac uses the app through the push gate.
 - **Codex:** the local Codex CLI keeps building on the Mac
   ([coordinator-playbook.md](../coordinator-playbook.md) "Running The Local
   Codex CLI"). Codex's cloud builds stop being used for this repo.
 - **GrokBot:** its builders work in Cursor on the Mac against the local
   repo. Cursor's cloud agents only see GitHub, so they stop being used for
   this repo if that's where they run today (to check).
-- **The push steward:** one process on the Mac is the only writer to
+- **The push gate:** one process on the Mac is the only writer to
   GitHub. It reads the ready-to-push queue, pushes the branch, opens the
   pull request with its `agent:` label and sign-off line, posts the comments
   other agents hand it, and copies GitHub results back into the queue.
@@ -199,7 +199,7 @@ The rest of this section describes the Studio.
    security checklist. Fixes loop here, under the watchdog's limits
    ([review-loop-watchdog.md](review-loop-watchdog.md): 6 rounds for a plan,
    8 for code), counted locally the same way.
-2. **On GitHub, once.** The push steward pushes the finished branch. Codex's
+2. **On GitHub, once.** The push gate pushes the finished branch. Codex's
    GitHub review and `tests` run as now. Findings go back to the Mac and
    return as one batched push.
 
@@ -213,10 +213,10 @@ catch-up run after a sleep.
 
 - **Move to the Mac:** PR keeper, PR steward, recycling pass, security sweep
   (it can then also check the app key's age and the service account's
-  reach). Their GitHub writes go through the push steward.
+  reach). Their GitHub writes go through the push gate.
 - **May stay in the cloud, read-only:** daily list and project status. The
   repo is public, so reading needs no sign-in. Their writes go through the
-  push steward, or project status moves into the agent ledger.
+  push gate, or project status moves into the agent ledger.
 - Each move is a change to `docs/scheduled-tasks/` and to the routine
   itself, both with the owner's yes.
 
@@ -225,10 +225,10 @@ catch-up run after a sleep.
 The agent ledger ([PR #312](https://github.com/CloudworkSystems/open-convo/pull/312),
 unmerged) is a local, append-only list on the Mac with each entry stamped by
 its writer. Here it carries: claims ("working on branch X"), "ready for
-local review" and its result, "ready to push" (the push steward's queue), and
+local review" and its result, "ready to push" (the push gate's queue), and
 what happened on GitHub. An entry is never a yes; approvals stay where they
 are, and the approval ledger stays separate. Until the ledger is built, the
-queue is a plain file the push steward reads.
+queue is a plain file the push gate reads.
 
 ## 3. Pace Limits
 
@@ -239,7 +239,7 @@ On top of the watchdog's round limits:
 - **No pushes between 11 PM and 6 AM ET** unless the owner asked for that
   job.
 - **About 60 GitHub writes an hour for all agents together** (pushes,
-  comments, reviews, merges), enforced by the push steward. GitHub's
+  comments, reviews, merges), enforced by the push gate. GitHub's
   guidance caps content-creating requests at roughly 80 a minute and 500 an
   hour; staying well under keeps the activity ordinary.
 - **Stop at once** on a "secondary rate limit", 403 or 429 reply, and report
@@ -250,17 +250,17 @@ On top of the watchdog's round limits:
 ## 4. Security
 
 - No inbound ports or tunnels into either Mac from the internet: Remote
-  Control, the push steward and the Mini's backup job only make outgoing
+  Control, the push gate and the Mini's backup job only make outgoing
   connections.
 - The Studio holds the work and the running agents. The app key is
-  reachable only from the push steward's own macOS user, through its own
+  reachable only from the push gate's own macOS user, through its own
   service account (section 1, "Keys"). FileVault stays on and the screen
   locks when the owner is away. The agents' service account stays limited
   to the "True Convo AI" vault, which no longer holds the app key.
 - No user account's GitHub sign-in stays where agents run. `gh` and git's
   credential store on the agents' macOS user are signed out of
   `cloudwork-bot` and `CloudworkSystems`; the owner uses GitHub in the
-  browser. Otherwise an agent could skip the push steward by acting as a
+  browser. Otherwise an agent could skip the push gate by acting as a
   person.
 - The Mini holds no app key, no 1Password service account and no GitHub
   sign-in. Screen Sharing on it is reachable from the home network only,
@@ -275,7 +275,7 @@ On top of the watchdog's round limits:
   2. Generate a new private key on the app's page and delete the old one.
      Deleting a key alone is not enough: tokens made from it keep working
      until they expire, up to an hour later.
-  3. Put the new key in the push steward's vault.
+  3. Put the new key in the push gate's vault.
   4. Check the repo's recent pushes, comments and pull requests by the app
      for anything the owner didn't expect.
   5. Unsuspend the installation only on the owner's yes.
@@ -324,17 +324,17 @@ Each step is its own pull request after the owner's yes for it.
    (an installation token can't call `GET /user`, so the check becomes "this
    is the app's installation on this repo"); update Accounts And Provenance
    and Who Does What; update the tests.
-3. **Push steward pull request:** the token helper (reads the key through
+3. **Push gate pull request:** the token helper (reads the key through
    its own service account, gets a one-hour token, passes it to `gh` and `git`
    for one command), the queue, the pace limits and the local review step.
    Required (carried from [Codex on #314](https://github.com/CloudworkSystems/open-convo/pull/314#discussion_r4506809626)):
    the steward pushes only from its own checkout, which agents can't write to, with hooks and repository config from agents ignored.
 4. **Key isolation (owner setup, before any agent pushes on its own):**
-   make the push steward's macOS user and its 1Password vault and service
+   make the push gate's macOS user and its 1Password vault and service
    account; generate a new app key into that vault and delete the old one
    (the agents' service account could read the old one); sign `gh` and git
    out of `cloudwork-bot` and `CloudworkSystems` on the agents' macOS user;
-   then start the push steward. It comes after steps 2 and 3 because those
+   then start the push gate. It comes after steps 2 and 3 because those
    pull requests have to be pushed first. Until this step is done, no agent
    pushes on its own: every push from the Studio is a command the owner
    approves in Claude Code, reading the key from the shared vault, as with
@@ -402,6 +402,6 @@ Each step is its own pull request after the owner's yes for it.
 ## Not In This Plan
 
 - Gemini review (still not set up), the builders' VM (if it's ever set up, it
-  gets no app key, and its work reaches GitHub through the push steward), and
+  gets no app key, and its work reaches GitHub through the push gate), and
   per-agent apps (possible later; one app is enough while `agent:` labels and
   sign-offs show who did what).

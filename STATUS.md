@@ -218,7 +218,9 @@ the owner's account.
 November 10 ([GitHub app switch](docs/plans/github-app-switch.md), Build
 Order step 2, in review): the gate, the rules and the scheduled tasks trust
 the agents' app, `cloudwork-agents[bot]`, next to `cloudwork-bot`, and the
-tasks' account check accepts the app's token. The push steward is step 3.
+tasks' account check accepts the app's token. The push gate is step 3.
+November 15: the push gate's code pull request is open (Build Order step 3
+of the app switch); the attended trial comes after it merges.
 October 20 fix (OC-261020-gate-package-tests): `tests` now also runs
 `npm test` for every other folder in `packages/` that a pull request changes
 (Site Engine, household lists, and new ones such as the habit grid), found
