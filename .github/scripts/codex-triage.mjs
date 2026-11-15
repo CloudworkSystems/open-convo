@@ -51,6 +51,16 @@ export function findingPriority(body) {
 }
 
 /**
+ * Codex's reviews that count as rounds with findings: its own, not an
+ * approval, and not dismissed by the owner. The review loop watchdog
+ * (review-loop.mjs) counts rounds with this too, so both agree.
+ */
+export function codexFindingReviews(reviews = [], dismissals = []) {
+  return reviews.filter((r) => isCodex(r.user) && r.state !== 'APPROVED')
+    .filter((r) => r.state !== 'DISMISSED' || !dismissedByOwner(r, dismissals));
+}
+
+/**
  * Whether the judge may be asked about this pull request's head, and which
  * findings it would rate.
  *
@@ -73,8 +83,7 @@ export function triageEligibility({ headSha, prAuthor, fromFork = true, reviews 
   if (fromFork !== false) return no('Opened from a fork.');
   if (!JUDGE_AUTHORS.includes(prAuthor)) return no('Not opened by one of the project\'s builders.');
 
-  const findingReviews = reviews.filter((r) => isCodex(r.user) && r.state !== 'APPROVED')
-    .filter((r) => r.state !== 'DISMISSED' || !dismissedByOwner(r, dismissals));
+  const findingReviews = codexFindingReviews(reviews, dismissals);
   const rounds = new Set(findingReviews.map((r) => r.commit_id)).size;
   const onHead = findingReviews.filter((r) => r.commit_id === headSha);
   if (!onHead.length) return no('No Codex findings on the head.', { rounds });

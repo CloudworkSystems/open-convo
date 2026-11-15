@@ -126,7 +126,10 @@ under the coordinator's conditions. **The one hand merge:** when GitHub
 refuses auto-merge because the pull request is already mergeable, the
 coordinator or keeper merges it as the agents' app or `cloudwork-bot` through the merge API,
 never with an admin bypass. Plans stop after two Codex rounds, with later
-P1s carried to the build. Dependabot patch and minor updates need no
+P1s carried to the build. A pull request stuck in review (6 Codex rounds
+with findings for a plan, 8 for code) is halted with the label
+`needs-owner: review-loop` until the owner accepts, narrows or splits it, and
+no agent pushes to it meanwhile. Dependabot patch and minor updates need no
 independent review. The keeper fixes Claude-built findings left for 2 hours.
 
 ### Agent Setup And Silence
