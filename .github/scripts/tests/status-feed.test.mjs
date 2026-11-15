@@ -11,6 +11,7 @@ import {
 } from '../status-feed-rules.mjs';
 import { RISK_LABEL, RISK_ESCALATE_LABEL, RISK_LABELS } from '../risk-check.mjs';
 import { LABEL as HALT_LABEL } from '../review-loop.mjs';
+import { cleanRoundTimes } from '../codex-signal.mjs';
 
 const HEAD = 'a1b2c3d'.padEnd(40, '0');
 const OLD = 'e4f5a6b'.padEnd(40, '1');
@@ -209,6 +210,23 @@ test('loop rounds count consecutive Codex rounds with a P0 or P1, newest first',
   assert.equal(loopRounds({ headSha: shas[3], reviews, reviewComments: severe, codexCleanOnHead: true }), 0);
   // Replies and other accounts' comments don't count.
   assert.equal(loopRounds({ headSha: shas[3], reviews, reviewComments: [{ ...codexFinding(4, 0), in_reply_to_id: 9 }, { ...codexFinding(3, 0), user: OUTSIDER }] }), 0);
+});
+
+test('a clean Codex round on an earlier commit resets the loop count', () => {
+  const [a, b, c, d] = ['1', '2', '3', '4'].map((x) => x.repeat(40));
+  const reviews = [codexReview(1, a, '2026-11-01T10:00:00Z'), codexReview(2, b, '2026-11-02T10:00:00Z'),
+    codexReview(3, c, '2026-11-04T10:00:00Z'), codexReview(4, d, '2026-11-05T10:00:00Z')];
+  const severe = [1, 2, 3, 4].map((id) => codexFinding(id, 1));
+  assert.equal(loopRounds({ headSha: d, reviews, reviewComments: severe }), 4);
+  // Codex came back clean on B on Nov 3, between B's and C's findings: only C and D count.
+  const cleanComment = { user: CODEX, body: "Codex Review: Didn't find any major issues.\n\n**Reviewed commit:** `2222222`", created_at: '2026-11-03T10:00:00Z' };
+  assert.equal(loopRounds({ headSha: d, reviews, reviewComments: severe, cleanTimes: cleanRoundTimes({ comments: [cleanComment] }) }), 2);
+  // Codex's 👍 works the same way; another account's 👍 or clean words never do.
+  const thumb = (user) => ({ user, content: '+1', created_at: '2026-11-03T10:00:00Z' });
+  assert.equal(loopRounds({ headSha: d, reviews, reviewComments: severe, cleanTimes: cleanRoundTimes({ reactions: [thumb(CODEX)] }) }), 2);
+  assert.equal(loopRounds({ headSha: d, reviews, reviewComments: severe, cleanTimes: cleanRoundTimes({ reactions: [thumb(OUTSIDER)], comments: [{ ...cleanComment, user: OUTSIDER }] }) }), 4);
+  // A clean round before every finding changes nothing.
+  assert.equal(loopRounds({ headSha: d, reviews, reviewComments: severe, cleanTimes: [Date.parse('2026-10-31T10:00:00Z')] }), 4);
 });
 
 // ------------------------------------------------------------ requirement 1: who counts
@@ -433,6 +451,16 @@ test('the keeper\'s comment: only cloudwork-bot\'s, oldest one, with its pull re
   assert.deepEqual(parseKeeper(null), { checkedAt: null, silent: [], waiting: [] });
 });
 
+test("during the app switch, the keeper's comment is the active account's oldest", () => {
+  const APP = { login: 'cloudwork-agents[bot]' };
+  const oldBot = { user: BOT, body: KEEPER, created_at: '2026-11-01T00:00:00Z', updated_at: '2026-11-10T00:00:00Z' };
+  const app = { user: APP, body: KEEPER, created_at: '2026-11-12T00:00:00Z', updated_at: '2026-11-15T09:00:00Z' };
+  const appExtra = { user: APP, body: KEEPER, created_at: '2026-11-13T00:00:00Z' };
+  assert.equal(keeperComment([oldBot, app, appExtra]), app);
+  // Before the app writes, the bot's comment is still read.
+  assert.equal(keeperComment([oldBot]), oldBot);
+});
+
 test('a silence line stands only while the silence is unresolved', () => {
   const checked = { headCommittedAt: '2026-11-06T10:00:00Z', keeperCheckedAt: '2026-11-06T14:00:00Z', codexReviewedHead: false, review: null };
   const codex = { number: 11, agent: 'Codex' };
@@ -490,6 +518,17 @@ test('findings are the lines before the checklist that start with a priority', (
   const body = `Independent review of ${HEAD}:\n\n- **P2** a missing guard\n1. P1: wrong total\n### P3 wording\nNo P1 or P2 findings beyond these.\n\n${CHECKLIST.replace('1. No.', '1. P0? No.')}`;
   assert.deepEqual(findingSeverities(body), [1, 2, 3]);
   assert.deepEqual(findingSeverities(reviewBody(HEAD)), []);
+});
+
+test('inline finding forms count, so a review naming open findings never reads as clean', () => {
+  assert.deepEqual(findingSeverities(`Independent review of ${HEAD}. Two P1 findings.\n\n${CHECKLIST}\n— GrokBot review`), [1]);
+  assert.deepEqual(findingSeverities(`Independent re-review of ${HEAD}. No new findings. One P1 was fixed, but one P2 remains open.\n\n${CHECKLIST}`), [2]);
+  assert.deepEqual(findingSeverities(`Independent review of ${HEAD}: not clean yet.\n\n${CHECKLIST}`), [2]);
+  // Fixed findings and "no P0 or P1" stay clean.
+  assert.deepEqual(findingSeverities(`Independent re-review of ${HEAD}: clean. Both P1s are fixed. No new findings.\n\n${CHECKLIST}`), []);
+  // A green pull request whose review names an open P1 inline is Returned, not Checked.
+  const review = countedReview({ comments: [comment(BOT, `Independent review of ${HEAD}. Two P1 findings.\n\n${CHECKLIST}`)], reviews: [], headSha: HEAD });
+  assert.equal(state({ review }), 'Returned');
 });
 
 // ------------------------------------------------------------ the feed

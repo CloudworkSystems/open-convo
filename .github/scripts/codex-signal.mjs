@@ -111,6 +111,22 @@ export function ownerAcceptance({ headSha, prAuthor, comments = [] }) {
 
 const fromCodex = (comment) => isCodex(comment.user) && editedOnlyByCodex(comment);
 
+/**
+ * When Codex finished a round clean, on any commit: its clean-result
+ * comments (from Codex alone, as signal 1 reads them) and its 👍 on the pull
+ * request. Times in milliseconds, oldest first. The status feed's loop count
+ * stops at the newest one, so a clean round always resets the sequence.
+ */
+export function cleanRoundTimes({ comments = [], reactions = [] } = {}) {
+  const clean = comments
+    .filter((c) => fromCodex(c) && CLEAN_PHRASE.test(c.body ?? ''))
+    .map((c) => time(c.created_at));
+  const thumbs = reactions
+    .filter((r) => isCodex(r.user) && r.content === '+1')
+    .map((r) => time(r.created_at));
+  return [...clean, ...thumbs].filter(Boolean).sort((a, b) => a - b);
+}
+
 // The commit a completed code review in Codex's review state names, if any.
 function reviewStateSha(body) {
   const m = (body ?? '').match(REVIEW_STATE);

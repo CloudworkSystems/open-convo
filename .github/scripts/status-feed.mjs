@@ -14,7 +14,7 @@
 
 import { readFileSync } from 'node:fs';
 import { client, repoFromEnv } from './github.mjs';
-import { evaluateCodexSignal, CODEX_LOGIN, OWNER_LOGIN } from './codex-signal.mjs';
+import { evaluateCodexSignal, cleanRoundTimes, CODEX_LOGIN, OWNER_LOGIN } from './codex-signal.mjs';
 import { triageEligibility, latestVerdict, ACTIONS_LOGIN } from './codex-triage.mjs';
 import { parseCodeowners, protectedFiles } from './codeowners.mjs';
 import { RISK_ESCALATE_LABEL } from './risk-check.mjs';
@@ -187,7 +187,7 @@ async function rowFor(number, { defaultBranch, keeper }) {
     codexFindingsOnHead,
     judgeDue,
     judgeSaidReal,
-    loopRounds: loopRounds({ headSha, reviews, reviewComments, dismissals, codexCleanOnHead: codex.approved }),
+    loopRounds: loopRounds({ headSha, reviews, reviewComments, dismissals, codexCleanOnHead: codex.approved, cleanTimes: cleanRoundTimes({ comments, reactions }) }),
     reviewNeeded: builder !== 'agent: grokbot' && builder !== 'Dependabot',
     review,
     planCheckNeeded: ['agent: grokbot', 'agent: codex'].includes(builder) && files.some((f) => f.startsWith('packages/')),

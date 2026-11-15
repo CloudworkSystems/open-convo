@@ -20,6 +20,7 @@ import { CODEX_LOGIN, OWNER_LOGIN, dismissedByOwner } from './codex-signal.mjs';
 import { RISK_LABEL, RISK_ESCALATE_LABEL } from './risk-check.mjs';
 import { APP_LOGIN } from './codex-triage.mjs';
 import { LABEL as LOOP_HALT_LABEL } from './review-loop.mjs';
+import { openSeverities } from './pr-history.mjs';
 
 export const BOT_LOGIN = 'cloudwork-bot';
 // Agents write as cloudwork-bot or as the agents' app; both count until the
@@ -99,14 +100,19 @@ export function hasEscalation(body) {
  * The severities of the findings a review lists, most severe first: each
  * line before the checklist block whose first word, after any list mark,
  * number or bold, is P0, P1, P2 or P3. "No P1 or P2 findings" and
- * "clean, no P0 or P1" list none.
+ * "clean, no P0 or P1" list none. The inline forms the outside-review
+ * reader already treats as open findings ("Two P1 findings", "one P2
+ * remains open", "not clean"; openSeverities in pr-history.mjs) count too,
+ * so a review in either form never reads as clean.
  */
 export function findingSeverities(body) {
+  const part = findingsPart(body);
   const out = [];
-  for (const line of findingsPart(body).split('\n')) {
+  for (const line of part.split('\n')) {
     const m = line.match(/^\s*(?:[-*+]\s+|\d+[.)]\s+|#+\s+)*(?:\*\*|__)?\[?P([0-3])\b/);
     if (m) out.push(Number(m[1]));
   }
+  for (const s of openSeverities(part)) if (!out.includes(s)) out.push(s);
   return out.sort((a, b) => a - b);
 }
 
@@ -137,12 +143,20 @@ const WAITING = [
 /**
  * The keeper's latest "Not working" comment on #52: an agent account's comment
  * that starts "## Not working" and carries "— PR keeper (scheduled)". The
- * keeper updates its oldest one in place, so that one is read.
+ * keeper updates its oldest one in place, so that one is read. While agents
+ * move from cloudwork-bot to the agents' app, each account may have its
+ * own; the account that wrote or edited one most recently is the keeper's
+ * current identity, and its oldest comment is read.
  */
 export function keeperComment(comments = []) {
-  return comments
-    .filter((c) => byBot(c) && /^\s*## Not working/.test(c.body ?? '') && (c.body ?? '').includes('— PR keeper (scheduled)'))
-    .sort((a, b) => time(a.created_at) - time(b.created_at))[0] ?? null;
+  const all = comments
+    .filter((c) => byBot(c) && /^\s*## Not working/.test(c.body ?? '') && (c.body ?? '').includes('— PR keeper (scheduled)'));
+  if (!all.length) return null;
+  const touched = (c) => Math.max(time(c.created_at), time(c.updated_at));
+  const active = all.reduce((a, b) => (touched(b) > touched(a) ? b : a)).user.login;
+  return all
+    .filter((c) => c.user.login === active)
+    .sort((a, b) => time(a.created_at) - time(b.created_at))[0];
 }
 
 /**
@@ -206,9 +220,13 @@ export function codexFindingReviews(reviews = [], dismissals = []) {
  * from its newest review, each raised a P0 or P1. A review counts as raising
  * one when one of its own finding comments carries a P0 or P1 badge.
  * Rounds are 0 once Codex's signal is clean on the head: the loop is over.
+ * A clean round on an earlier commit (`cleanTimes`, see cleanRoundTimes in
+ * codex-signal.mjs) ends the sequence too: only rounds after the newest one
+ * count.
  */
-export function loopRounds({ headSha, reviews = [], reviewComments = [], dismissals = [], codexCleanOnHead = false }) {
-  const finding = codexFindingReviews(reviews, dismissals);
+export function loopRounds({ headSha, reviews = [], reviewComments = [], dismissals = [], codexCleanOnHead = false, cleanTimes = [] }) {
+  const lastClean = Math.max(0, ...cleanTimes);
+  const finding = codexFindingReviews(reviews, dismissals).filter((r) => time(r.submitted_at) > lastClean);
   const severe = (review) => reviewComments.some((c) => c.pull_request_review_id === review.id && !c.in_reply_to_id && isCodex(c.user)
     && (() => { const m = (c.body ?? '').match(PRIORITY); return m && Number(m[1]) <= 1; })());
   // Each commit's latest review time, newest first.
