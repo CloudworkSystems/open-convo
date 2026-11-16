@@ -206,13 +206,33 @@ export function createStore({ home, shared }) {
   /**
    * Adds one line to the write log: time, kind, branch or pull request,
    * result. Never a token, never the text of a comment. Lines older than 30
-   * days are dropped.
+   * days are dropped. Returns what names the line (time, kind, target), so
+   * `settleWrite` can fill in its outcome later.
    */
   function logWrite({ kind, target, result }, nowMs) {
     mkdirSync(workDir, { recursive: true, mode: 0o700 });
     const kept = readLog().filter((line) => Date.parse(line.time) >= nowMs - LIMITS.logDays * DAY);
-    kept.push({ time: new Date(nowMs).toISOString(), kind, target, result });
+    const entry = { time: new Date(nowMs).toISOString(), kind, target };
+    kept.push({ ...entry, result });
     writeAtomic(logPath, kept.map((line) => JSON.stringify(line)).join('\n') + '\n', 0o600);
+    return entry;
+  }
+
+  /**
+   * Fills in the outcome of a write that was logged before it was sent. The
+   * line stays one line: only its result changes, and only while it is still
+   * open (one of `from`).
+   */
+  function settleWrite(entry, result, from = ['started']) {
+    const lines = readLog();
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
+      const line = lines[i];
+      if (line.time === entry.time && line.kind === entry.kind && line.target === entry.target && from.includes(line.result)) {
+        line.result = result;
+        writeAtomic(logPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 0o600);
+        return;
+      }
+    }
   }
 
   /** Times of the writes made in the last hour. */
@@ -282,6 +302,7 @@ export function createStore({ home, shared }) {
     saveState,
     readLog,
     logWrite,
+    settleWrite,
     recentWriteTimes,
     allow,
     isAllowed,

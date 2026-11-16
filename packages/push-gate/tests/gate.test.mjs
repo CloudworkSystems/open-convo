@@ -328,3 +328,124 @@ test("three tokens that can't be revoked within an hour stop every write until r
   await world.run({ restart: true });
   assert.equal(world.result('u-4').state, 'done');
 });
+
+test('a push GitHub accepted whose answer was lost is counted once in the write log, not zero or twice', async (t) => {
+  const { runCommand } = await import('../src/git.mjs');
+  const { createStore } = await import('../src/store.mjs');
+  const world = await makeWorld(t);
+  const counted = () => createStore({ home: world.home, shared: world.shared }).recentWriteTimes(world.now()).length;
+  const pushes = () => world.log().filter((line) => line.kind === 'push');
+
+  // The connection drops after GitHub has taken the push.
+  const dropped = world.commit('claude/lost-answer');
+  world.pushRequest('lost-1', 'claude/lost-answer', dropped, { pullRequest: undefined });
+  const dropAfterPush = async (command, args, options) => {
+    const out = await runCommand(command, args, options);
+    return args.includes('push') ? { code: 128, stdout: '', stderr: "fatal: unable to access 'invented': Failed to connect to 127.0.0.1" } : out;
+  };
+  await world.run({ run: dropAfterPush });
+  assert.equal(world.onGitHub('claude/lost-answer'), dropped);
+  assert.deepEqual(pushes().map((line) => line.result), ['no connection']);
+  assert.equal(counted(), 1, 'it counts toward the hourly cap while its outcome is unknown');
+  await world.run();
+  assert.equal(world.result('lost-1').state, 'done');
+  assert.deepEqual(pushes().map((line) => [line.target, line.result]), [['claude/lost-answer', 'done']]);
+  assert.equal(counted(), 1);
+  assert.equal(world.fake.pushes, 1);
+
+  // The run dies after GitHub has taken the push, before anything could be written down.
+  const crashed = world.commit('claude/lost-run');
+  world.pushRequest('lost-2', 'claude/lost-run', crashed, { pullRequest: undefined });
+  const dieAfterPush = async (command, args, options) => {
+    const out = await runCommand(command, args, options);
+    if (args.includes('push')) throw new Error('invented crash');
+    return out;
+  };
+  await assert.rejects(world.run({ run: dieAfterPush }), /invented crash/);
+  assert.deepEqual(pushes().map((line) => line.result), ['done', 'started']);
+  assert.equal(counted(), 2);
+  await world.run();
+  assert.equal(world.result('lost-2').state, 'done');
+  assert.deepEqual(pushes().map((line) => [line.target, line.result]), [
+    ['claude/lost-answer', 'done'],
+    ['claude/lost-run', 'done'],
+  ]);
+  assert.equal(counted(), 2);
+  assert.equal(world.fake.pushes, 2);
+});
+
+test('a comment GitHub accepted whose answer was lost is counted once in the write log, not zero or twice', async (t) => {
+  const { createStore } = await import('../src/store.mjs');
+  const world = await makeWorld(t);
+  const counted = () => createStore({ home: world.home, shared: world.shared }).recentWriteTimes(world.now()).length;
+  const posts = () => world.log().filter((line) => line.kind === 'comment');
+  const afterPosting = (fail) => async (url, options) => {
+    const response = await fetch(url, options);
+    if (options.method === 'POST' && url.endsWith('/issues/52/comments')) fail();
+    return response;
+  };
+
+  // The connection drops after GitHub has taken the comment.
+  world.commentRequest('lost-comment', { issue: 52 });
+  await world.run({
+    fetchImpl: afterPosting(() => {
+      throw new TypeError('fetch failed');
+    }),
+  });
+  assert.equal(world.fake.comments.length, 1);
+  assert.equal(world.result('lost-comment').state, 'waiting');
+  assert.deepEqual(posts().map((line) => line.result), ['no connection']);
+  assert.equal(counted(), 1);
+  await world.run();
+  assert.equal(world.result('lost-comment').state, 'done');
+  assert.deepEqual(posts().map((line) => [line.target, line.result]), [['#52', 'done']]);
+  assert.equal(counted(), 1);
+  assert.equal(world.fake.comments.length, 1);
+
+  // The run dies after GitHub has taken the comment.
+  world.clock.ms += MINUTE;
+  world.commentRequest('lost-comment-2', { issue: 52 });
+  await assert.rejects(
+    world.run({
+      fetchImpl: afterPosting(() => {
+        throw new Error('invented crash');
+      }),
+    }),
+    /invented crash/,
+  );
+  assert.deepEqual(posts().map((line) => line.result), ['done', 'started']);
+  assert.equal(counted(), 2);
+  await world.run();
+  assert.equal(world.result('lost-comment-2').state, 'done');
+  assert.deepEqual(posts().map((line) => line.result), ['done', 'done']);
+  assert.equal(counted(), 2);
+  assert.equal(world.fake.comments.length, 2);
+});
+
+test('a write GitHub accepted before a crash counts toward the hourly cap on the next run', async (t) => {
+  const world = await makeWorld(t);
+  for (let i = 1; i <= 59; i += 1) world.commentRequest(`a-${String(i).padStart(2, '0')}`, { issue: 52 });
+  await world.run();
+  world.clock.ms += MINUTE;
+  world.commentRequest('b-60', { issue: 52 });
+  await assert.rejects(
+    world.run({
+      fetchImpl: async (url, options) => {
+        const response = await fetch(url, options);
+        if (options.method === 'POST' && url.endsWith('/issues/52/comments')) throw new Error('invented crash');
+        return response;
+      },
+    }),
+    /invented crash/,
+  );
+  assert.equal(world.fake.comments.length, 60);
+
+  // The 60th write was never answered, but it is counted: the 61st waits.
+  world.commentRequest('b-61', { issue: 52 });
+  await world.run();
+  assert.equal(world.result('b-60').state, 'done');
+  assert.equal(world.result('b-61').state, 'waiting');
+  assert.match(world.result('b-61').sentence, /^Waiting: the agents have made about 60 writes to GitHub in the last hour\./);
+  assert.equal(world.fake.comments.length, 60);
+  assert.equal(world.log().length, 60);
+});

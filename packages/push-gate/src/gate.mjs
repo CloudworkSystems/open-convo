@@ -135,17 +135,40 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
     const wait = (id, sentence, until) => result(id, { state: 'waiting', sentence, ...(until ? { until: new Date(until).toISOString() } : {}) });
 
     // One write to GitHub: counted, and logged whatever happens.
-    async function write(kind, target, work) {
+    // The line is written, and counted toward the hourly cap, before the
+    // write is sent, and its outcome is filled in afterward. So a write
+    // GitHub accepted just before a crash or a dropped connection is still
+    // counted. `item` remembers the line, so a later run that finds the
+    // write on GitHub marks that same line done (`foundOnGitHub`).
+    async function write(kind, target, work, item) {
+      const entry = store.logWrite({ kind, target, result: 'started' }, now());
+      if (item) {
+        item.lastWrite = entry;
+        store.saveWorking(item);
+      }
       try {
         const value = await work();
-        store.logWrite({ kind, target, result: 'done' }, now());
+        store.settleWrite(entry, 'done');
+        if (item) delete item.lastWrite;
         return value;
       } catch (error) {
-        const outcome =
-          error instanceof NoConnection ? 'no connection' : error instanceof RateLimited ? 'rate limited' : error instanceof SignInFailed ? 'sign-in failed' : error instanceof GitHubRefused ? `refused (${error.status})` : 'failed';
-        store.logWrite({ kind, target, result: outcome }, now());
+        if (error instanceof NoConnection) {
+          // GitHub may have accepted it: the line stays counted, and the next run looks.
+          store.settleWrite(entry, 'no connection');
+        } else if (error instanceof RateLimited || error instanceof SignInFailed || error instanceof GitHubRefused) {
+          store.settleWrite(entry, error instanceof RateLimited ? 'rate limited' : error instanceof SignInFailed ? 'sign-in failed' : `refused (${error.status})`);
+          if (item) delete item.lastWrite;
+        }
+        // Anything else is an interrupted run: the line stays "started".
         throw error;
       }
+    }
+
+    // A write left open by an interrupted run turned out to be on GitHub.
+    function foundOnGitHub(item, kind) {
+      if (item.lastWrite?.kind !== kind) return;
+      store.settleWrite(item.lastWrite, 'done', ['started', 'no connection']);
+      delete item.lastWrite;
     }
 
     if (restart && state.stopped) {
@@ -299,7 +322,9 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
         wait(id, `Waiting: quiet hours, 11 PM to 6 AM New York time. It goes at ${sayTime(quiet)}, or sooner if the owner runs push-gate allow ${id}.`, quiet);
         continue;
       }
-      const cap = capUntil(store.recentWriteTimes(now()), now(), writesNeeded(request));
+      // A request finishing an interrupted write already has that write's line
+      // in the log, counted, so it doesn't need room for it a second time.
+      const cap = capUntil(store.recentWriteTimes(now()), now(), writesNeeded(request) - (one.item?.lastWrite ? 1 : 0));
       if (cap) {
         wait(id, `Waiting: the agents have made about ${LIMITS.writesPerHour} writes to GitHub in the last hour. It goes after ${sayTime(cap)}.`, cap);
         continue;
@@ -403,7 +428,9 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
             store.saveWorking(item);
             state.lastPush[branch] = item.pushingAt;
             store.saveState(state);
-            await write('push', branch, () => git.push(commit, branch, token));
+            await write('push', branch, () => git.push(commit, branch, token), item);
+          } else {
+            foundOnGitHub(item, 'push');
           }
           item.step = 'pushed';
           store.saveWorking(item);
@@ -412,13 +439,17 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
           const found = await session.call('GET', `${REPO_PATH}/pulls?state=open&head=${encodeURIComponent(`${OWNER}:${branch}`)}&per_page=5`, token);
           let pull = (found.data ?? []).find((pr) => pr.head?.ref === branch) ?? null;
           let unrecorded = false;
+          if (pull) foundOnGitHub(item, 'pull request');
           if (!pull && request.pullRequest) {
             const body = withReviewLine(request.pullRequest.body, request.review, `${AGENTS[request.agent]}, ${request.thread}`);
             const why = checkText(body, { ...request, what: 'pull request description' });
             if (why) throw new CheckFailed(why);
             pull = (
-              await write('pull request', branch, () =>
-                session.call('POST', `${REPO_PATH}/pulls`, token, { title: request.pullRequest.title, head: branch, base: 'main', body, draft: false }),
+              await write(
+                'pull request',
+                branch,
+                () => session.call('POST', `${REPO_PATH}/pulls`, token, { title: request.pullRequest.title, head: branch, base: 'main', body, draft: false }),
+                item,
               )
             ).data;
             item.step = 'opened';
@@ -429,13 +460,14 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
             const body = withReviewLine(pull.body, request.review, `${AGENTS[request.agent]}, ${request.thread}`);
             if (body.length >= LIMITS.textChars) unrecorded = true;
             else if (body !== pull.body) {
-              await write('description', `#${pull.number}`, () => session.call('PATCH', `${REPO_PATH}/pulls/${pull.number}`, token, { body }));
-            }
+              await write('description', `#${pull.number}`, () => session.call('PATCH', `${REPO_PATH}/pulls/${pull.number}`, token, { body }), item);
+            } else foundOnGitHub(item, 'description');
           }
           if (pull && request.pullRequest) {
             const label = `agent: ${request.agent}`;
             const has = (pull.labels ?? []).some((l) => l.name === label);
-            if (!has) await write('label', `#${pull.number}`, () => session.call('POST', `${REPO_PATH}/issues/${pull.number}/labels`, token, { labels: [label] }));
+            if (has) foundOnGitHub(item, 'label');
+            else await write('label', `#${pull.number}`, () => session.call('POST', `${REPO_PATH}/issues/${pull.number}/labels`, token, { labels: [label] }), item);
           }
           return pull
             ? {
@@ -487,7 +519,9 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
           item.postingAt = now();
           store.saveWorking(item);
           const path = request.kind === 'reply' ? `${REPO_PATH}/pulls/${number}/comments/${request.inReplyTo}/replies` : `${REPO_PATH}/issues/${number}/comments`;
-          posted = (await write(what, `#${number}`, () => session.call('POST', path, token, { body: request.body }))).data;
+          posted = (await write(what, `#${number}`, () => session.call('POST', path, token, { body: request.body }), item)).data;
+        } else {
+          foundOnGitHub(item, what);
         }
         return { sentence: `Done: the ${what} is on #${number} (${posted?.html_url ?? `${what} ${posted?.id ?? ''}`.trim()}).`, [onPull ? 'pullRequest' : 'issue']: { number }, url: posted?.html_url };
       });
