@@ -449,3 +449,21 @@ test('a write GitHub accepted before a crash counts toward the hourly cap on the
   assert.equal(world.fake.comments.length, 60);
   assert.equal(world.log().length, 60);
 });
+
+test("another run's lock keeps this run out, but not for more than 30 minutes", async (t) => {
+  const { mkdirSync, writeFileSync } = await import('node:fs');
+  const world = await makeWorld(t);
+  world.commentRequest('locked', { issue: 52 });
+  // A lock held by a process that is alive and is not this one.
+  mkdirSync(`${world.home}/work`, { recursive: true });
+  writeFileSync(`${world.home}/work/lock`, JSON.stringify({ pid: process.ppid, at: world.now() }));
+
+  const { lines } = await world.run();
+  assert.deepEqual(lines, ['Another push gate run is going. This one did nothing.']);
+  assert.equal(world.result('locked'), null);
+
+  // The same lock half an hour on is left over from a run that died.
+  world.clock.ms += 30 * MINUTE;
+  await world.run();
+  assert.equal(world.result('locked').state, 'done');
+});

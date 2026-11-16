@@ -206,3 +206,35 @@ test('a bundle of 50 MB or more is refused', async (t) => {
   assertRefused(world, 'huge-1', /its bundle is 50 MB or more/);
   assert.equal(world.fake.tokens.size, 0);
 });
+
+test('a description with no room left for the local review record is refused before anything is pushed', async (t) => {
+  const world = await makeWorld(t);
+  const commit = world.commit('claude/long-body');
+  // Under 60,000 characters as written, over once the gate adds its review line.
+  const signOff = world.signOff();
+  const body = `${'x'.repeat(59990 - signOff.length - 2)}\n\n${signOff}`;
+  assert.ok(body.length < 60000);
+  world.pushRequest('long-body', 'claude/long-body', commit, { pullRequest: { title: 'Invented', body } });
+
+  await world.run();
+
+  assertRefused(world, 'long-body', /its pull request description leaves no room for the local review record under 60000 characters/);
+  assert.equal(world.onGitHub('claude/long-body'), null);
+  assert.equal(world.fake.pushes, 0);
+  assert.equal(world.fake.tokens.size, 0);
+});
+
+test('when GitHub turns down the pull request after the push went up, the refusal says the commit is on the branch', async (t) => {
+  const world = await makeWorld(t);
+  const commit = world.commit('claude/pr-refused');
+  world.pushRequest('pr-refused', 'claude/pr-refused', commit);
+  world.fake.failNext((method, path) => method === 'POST' && path.endsWith('/pulls'), 422, { body: { message: 'Validation Failed', errors: [{ message: 'A pull request already exists' }] } });
+
+  await world.run();
+
+  assert.equal(world.onGitHub('claude/pr-refused'), commit);
+  assert.equal(
+    world.result('pr-refused').sentence,
+    `Request "pr-refused" was refused: its commit ${commit.slice(0, 12)} is on branch claude/pr-refused, but the step after the push was turned down (GitHub answered "Validation Failed A pull request already exists"), so send a new request for what is left.`,
+  );
+});

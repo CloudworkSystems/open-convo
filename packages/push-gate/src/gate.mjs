@@ -117,6 +117,8 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
         state.pausedAt = now();
         state.pausedUntil = Math.max(state.pausedUntil, now() + Math.max(waitMs, LIMITS.rateLimitPauseMs));
         state.noteOwed = true;
+        state.noteStartedAt = 0;
+        state.noteWrite = null;
         store.saveState(state);
       },
     });
@@ -146,7 +148,7 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
     // The hourly cap is checked here too, right before every write, whatever
     // led to it: a retry after a lost answer, or the gate's own note on #52.
     // So no write can be the 61st in an hour.
-    async function write(kind, target, work, item) {
+    async function write(kind, target, work, item, onLogged) {
       const full = capUntil(store.recentWriteTimes(now()), now(), 1);
       if (full) {
         // An interrupted write that wasn't on GitHub after all keeps its line
@@ -158,6 +160,7 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
         throw new CapReached(full);
       }
       const entry = store.logWrite({ kind, target, result: 'started' }, now());
+      onLogged?.(entry);
       if (item) {
         item.lastWrite = entry;
         store.saveWorking(item);
@@ -294,6 +297,8 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
         state.pausedAt = now();
         state.pausedUntil = Math.max(state.pausedUntil, now() + Math.max(error.waitMs, LIMITS.rateLimitPauseMs));
         state.noteOwed = true;
+        state.noteStartedAt = 0;
+        state.noteWrite = null;
         store.saveState(state);
         holdAll(rest, `Waiting: GitHub asked the push gate to slow down. Writes start again ${sayTime(state.pausedUntil)}.`, state.pausedUntil);
         return true;
@@ -311,8 +316,16 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
         if (stop) state.stopped = { reason: `GitHub refused ${LIMITS.refusalsBeforeStop} requests within an hour`, at: new Date(now()).toISOString() };
         store.saveState(state);
         if (id) {
+          // If the request's commit is already up, the refusal says so: only what came after it was turned down.
+          const sent = items.find((one) => idOf(one) === id)?.item;
+          const pushed = sent?.request.kind === 'push' && ['pushed', 'opened'].includes(sent.step);
           store.finishWorking(id);
-          refuse(id, `${scrub(error.message)}, so change the request to fit and send a new one`);
+          refuse(
+            id,
+            pushed
+              ? `its commit ${short(sent.request.commit)} is on branch ${sent.request.branch}, but the step after the push was turned down (${scrub(error.message)}), so send a new request for what is left`
+              : `${scrub(error.message)}, so change the request to fit and send a new one`,
+          );
         }
         if (stop) {
           holdAll(rest.filter((one) => idOf(one) !== id), `Waiting: the push gate has stopped every write because ${state.stopped.reason}. The owner needs to restart it.`);
@@ -324,12 +337,31 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
 
     // ---- The one note on #52 once writes resume after a rate-limit stop.
     if (state.noteOwed && !quietUntil(now())) {
-      const body = `The push gate stopped every write ${sayTime(state.pausedAt)} because GitHub answered with a rate limit. Writes started again ${sayTime(now())}.\n\nPush gate, on the Studio`;
+      const opening = `The push gate stopped every write ${sayTime(state.pausedAt)} because GitHub answered with a rate limit.`;
+      const body = `${opening} Writes started again ${sayTime(now())}.\n\nPush gate, on the Studio`;
+      const listPath = `${REPO_PATH}/issues/${REPORT_ISSUE}/comments`;
       try {
-        await session.withToken({ issues: 'write' }, (token) =>
-          write('note', `#${REPORT_ISSUE}`, () => session.call('POST', `${REPO_PATH}/issues/${REPORT_ISSUE}/comments`, token, { body })),
-        );
+        await session.withToken({ issues: 'write' }, async (token) => {
+          // An earlier run may have posted it and lost the answer, or died
+          // right after: look before posting, so there is one note, not two.
+          if (state.noteStartedAt) {
+            const since = new Date(state.noteStartedAt - 60000).toISOString();
+            const recent = (await session.call('GET', `${listPath}?since=${encodeURIComponent(since)}&per_page=100`, token)).data ?? [];
+            if (recent.some((c) => c.user?.login === APP_LOGIN && typeof c.body === 'string' && c.body.startsWith(opening))) {
+              if (state.noteWrite) store.settleWrite(state.noteWrite, 'done', ['started', 'no connection']);
+              return;
+            }
+          }
+          state.noteStartedAt = now();
+          store.saveState(state);
+          await write('note', `#${REPORT_ISSUE}`, () => session.call('POST', listPath, token, { body }), null, (entry) => {
+            state.noteWrite = entry;
+            store.saveState(state);
+          });
+        });
         state.noteOwed = false;
+        state.noteStartedAt = 0;
+        state.noteWrite = null;
         store.saveState(state);
       } catch (error) {
         // With the hourly cap used up, the note stays owed for a later run.
@@ -461,6 +493,15 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
           }
         }
 
+        // The description as it will be sent, with the review record added, is
+        // checked before anything goes to GitHub, so a request is never
+        // refused for it after its commit is already up.
+        const newBody = request.pullRequest ? withReviewLine(request.pullRequest.body, request.review, `${AGENTS[request.agent]}, ${request.thread}`) : null;
+        if (newBody !== null) {
+          const why = checkText(newBody, { ...request, what: 'pull request description' });
+          if (why) throw new CheckFailed(newBody.length >= LIMITS.textChars ? `its pull request description leaves no room for the local review record under ${LIMITS.textChars} characters, so shorten it by a few lines` : why);
+        }
+
         // An interrupted push that isn't on GitHub, with a newer request for
         // the branch waiting, is not sent again: the newer one goes instead.
         if (onGitHub !== commit && replacedBy.has(id)) throw new CheckFailed(replacedSentence(replacedBy.get(id)));
@@ -488,9 +529,7 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
           let unrecorded = false;
           if (pull) foundOnGitHub(item, 'pull request');
           if (!pull && request.pullRequest) {
-            const body = withReviewLine(request.pullRequest.body, request.review, `${AGENTS[request.agent]}, ${request.thread}`);
-            const why = checkText(body, { ...request, what: 'pull request description' });
-            if (why) throw new CheckFailed(why);
+            const body = newBody;
             pull = (
               await write(
                 'pull request',

@@ -272,7 +272,11 @@ export function createStore({ home, shared }) {
             alive = false;
           }
         }
-        if (alive && held.pid !== process.pid) return false;
+        // A lock is only honored for 30 minutes. After a crash the process
+        // number can be handed to some other program, which would otherwise
+        // keep the gate out for good.
+        const fresh = Number.isFinite(held?.at) && Math.abs(nowMs - held.at) < 30 * 60 * 1000;
+        if (alive && fresh && held.pid !== process.pid) return false;
         rmSync(lockPath, { force: true });
       }
     }

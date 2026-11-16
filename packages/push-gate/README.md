@@ -117,7 +117,9 @@ and what to change, and is never retried as it is.
 - About 60 writes an hour for all agents together. Over that, requests wait.
 - A rate-limit answer from GitHub (429, or "secondary rate limit") stops
   every write for the wait GitHub names or an hour, whichever is longer.
-  One note goes on issue #52 once writes resume.
+  One note goes on issue #52 once writes resume. A 403 during a push that
+  git passes on with no reason can't be told from a rate limit, so it is
+  treated as one.
 - A sign-in failure (401) stops every write until the owner restarts the
   gate with `run-once --restart`.
 - Any other refusal from GitHub (403, 404, 422) refuses that one request

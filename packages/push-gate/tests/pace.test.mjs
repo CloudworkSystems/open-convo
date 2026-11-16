@@ -631,3 +631,57 @@ test('plan test 9: an interrupted push that never reached GitHub is replaced by 
   assert.equal(world.onGitHub(branch), second);
   assert.equal(world.fake.pushes, 1);
 });
+
+for (const [what, lose] of [
+  ['its answer is lost', () => new TypeError('fetch failed')],
+  ['the run dies', () => new Error('invented crash')],
+]) {
+  test(`plan test 12: the note on #52 is posted once even when ${what} right after GitHub takes it`, async (t) => {
+    const world = await makeWorld(t);
+    const start = world.now();
+    world.commentRequest('held', { issue: 52 });
+    world.fake.failNext(ISSUE_COMMENTS, 429, { headers: { 'retry-after': '60' } });
+    await world.run();
+
+    // Writes resume: GitHub takes the note, and then things go wrong.
+    world.clock.ms = start + HOUR;
+    const afterNote = async (url, options) => {
+      const response = await fetch(url, options);
+      if (options.method === 'POST' && url.endsWith('/issues/52/comments') && String(options.body).includes('The push gate stopped every write')) throw lose();
+      return response;
+    };
+    await world.run({ fetchImpl: afterNote }).catch((error) => assert.match(error.message, /invented crash/));
+    assert.equal(notes(world).length, 1);
+
+    // The next runs find the note there and don't post it again.
+    world.clock.ms += MINUTE;
+    await world.run();
+    world.commentRequest('later', { issue: 52 });
+    await world.run();
+    assert.equal(notes(world).length, 1);
+    assert.equal(world.result('held').state, 'done');
+    assert.equal(world.result('later').state, 'done');
+    assert.deepEqual(world.log().filter((line) => line.kind === 'note').map((line) => line.result), ['done']);
+  });
+}
+
+test("plan test 12: a note that never reached GitHub is posted on the next run", async (t) => {
+  const world = await makeWorld(t);
+  const start = world.now();
+  world.commentRequest('held', { issue: 52 });
+  world.fake.failNext(ISSUE_COMMENTS, 429, { headers: { 'retry-after': '60' } });
+  await world.run();
+
+  world.clock.ms = start + HOUR;
+  const beforeNote = async (url, options) => {
+    if (options.method === 'POST' && url.endsWith('/issues/52/comments')) throw new TypeError('fetch failed');
+    return fetch(url, options);
+  };
+  await world.run({ fetchImpl: beforeNote });
+  assert.equal(notes(world).length, 0);
+
+  world.clock.ms += MINUTE;
+  await world.run();
+  assert.equal(notes(world).length, 1);
+  assert.equal(world.result('held').state, 'done');
+});
