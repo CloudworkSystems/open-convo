@@ -1,9 +1,8 @@
 # Agent Wire: A Mailbox For Outside Agents (PRD)
 
 Status: Approved (Nov 16, 2026): the owner said yes to this plan and to
-Cam holding one mailbox token (decision card, thread "Plan the agent wire
-mailbox"). Not started: part 1 waits until his decision is recorded in
-`docs/decisions.md` and a builder lane is free.
+Cam holding one mailbox token, recorded in `docs/decisions.md`. Not
+started: part 1 waits for a free builder lane.
 
 Written November 6, 2026 by a Claude session (project "261024 OC Steering",
 thread "Plan the agent wire mailbox"), from the owner's "Agent Wire Plan"
@@ -440,3 +439,28 @@ deployed on the owner's account behind Access with his OK, after a clean
 ZAP scan of staging and a tried restore, and the owner trial checks
 pass, part 3 shows notes in the Desk inbox, and the one-week trial ends
 with the owner's call on what to change. Then the status becomes Built.
+
+## Revision, November 16, 2026: The Owner Decision Is Recorded
+
+The text above stays as approved in #311. This section records what
+changed afterwards, and it governs where the two differ.
+
+- The owner's decision is now recorded in
+  [docs/decisions.md](../decisions.md) under November 16, 2026, from his
+  yes that day ("Yes, plan and Cam's token", thread "Plan the agent wire
+  mailbox"). The section "Owner Decision Needed First" holds his draft as
+  first written; the recorded entry governs.
+- The token exception is for Cam only. Cam may hold one mailbox token that
+  reaches only the mailbox and only Cam's own notes, expires, and can be
+  switched off by the owner at once. A token for any other foreign agent
+  needs the owner's own yes, recorded in the decisions file, before that
+  token is made. Where the plan above says "each foreign agent" or
+  "per-agent" about who may hold a token, read it with this limit. How
+  sign-in works (one Cloudflare Access service token per agent) is
+  unchanged.
+- Safety rule 2's "if the owner's decision allows it" is settled: the
+  decision allows Cam's token.
+- "Cam's token" is no longer an open question.
+- The wait in "Owner Decision Needed First" ends when the pull request
+  that records the decision merges. Part 1 may start after that, on the
+  first free builder lane.
