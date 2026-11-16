@@ -717,3 +717,40 @@ test('plan test 12: a rate limit on the cleanup of the pause note starts a new p
   assert.equal(new Set(notes(world).map((c) => c.body.split(' because ')[0])).size, 2);
   assert.equal(world.result('waiting-out').state, 'done');
 });
+
+test('plan test 12: requests naming pull requests that are not there count as refusals, and three in an hour stop every write', async (t) => {
+  const world = await makeWorld(t);
+  world.commentRequest('missing-1', { pull: 9001 });
+  world.request('missing-2', { kind: 'reply', agent: 'claude', thread: world.thread, pull: 9002, inReplyTo: 7001, body: `Answered.\n\n${world.signOff()}` });
+  world.commentRequest('missing-3', { pull: 9003 });
+  world.commentRequest('behind', { issue: 52 });
+
+  await world.run();
+
+  // Each keeps its plain sentence.
+  assert.equal(world.result('missing-1').sentence, 'Request "missing-1" was refused: #9001 isn\'t a pull request on GitHub, so name an open pull request.');
+  assert.equal(world.result('missing-2').sentence, 'Request "missing-2" was refused: #9002 isn\'t a pull request on GitHub, so name an open pull request.');
+  assert.equal(world.result('missing-3').state, 'refused');
+  // And the third stops every write until the owner restarts the gate.
+  assert.equal(world.result('behind').state, 'waiting');
+  assert.equal(world.result('behind').sentence, 'Waiting: the push gate has stopped every write because GitHub refused 3 requests within an hour. The owner needs to restart it.');
+  assert.deepEqual(world.fake.writes, []);
+
+  await world.run({ restart: true });
+  assert.equal(world.result('behind').state, 'done');
+});
+
+test('plan test 12: a closed pull request is refused by the gate itself and does not count as a refusal from GitHub', async (t) => {
+  const world = await makeWorld(t);
+  for (const id of ['closed-1', 'closed-2', 'closed-3']) {
+    const pull = world.openPull(`claude/${id}`);
+    world.fake.pulls.at(-1).state = 'closed';
+    world.commentRequest(id, { pull });
+  }
+  world.commentRequest('after', { issue: 52 });
+
+  await world.run();
+
+  for (const id of ['closed-1', 'closed-2', 'closed-3']) assert.match(world.result(id).sentence, /isn't open, so name an open pull request\.$/);
+  assert.equal(world.result('after').state, 'done');
+});

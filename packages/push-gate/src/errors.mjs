@@ -28,9 +28,11 @@ export class SignInFailed extends Error {}
 
 /** GitHub refused this one request (403, 404, 422). `reason` is GitHub's, in plain words. */
 export class GitHubRefused extends Error {
-  constructor(reason, status) {
+  /** `why`, when given, is the whole clause for the refusal sentence: what is wrong and what to change. */
+  constructor(reason, status, why) {
     super(reason);
     this.status = status;
+    this.why = why;
   }
 }
 

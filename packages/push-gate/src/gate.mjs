@@ -347,7 +347,7 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
             id,
             pushed
               ? `its commit ${short(sent.request.commit)} is on branch ${sent.request.branch}, but the step after the push was turned down (${scrub(error.message)}), so send a new request for what is left`
-              : `${scrub(error.message)}, so change the request to fit and send a new one`,
+              : error.why ?? `${scrub(error.message)}, so change the request to fit and send a new one`,
           );
         }
         if (stop) {
@@ -628,7 +628,11 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
           try {
             pull = (await session.call('GET', `${REPO_PATH}/pulls/${number}`, token)).data;
           } catch (error) {
-            if (error instanceof GitHubRefused && error.status === 404) throw new CheckFailed(`#${number} isn't a pull request, so name an open pull request`);
+            // GitHub's own refusal: it keeps its plain sentence and still counts
+            // toward the three refusals in an hour that stop every write.
+            if (error instanceof GitHubRefused && error.status === 404) {
+              throw new GitHubRefused(error.message, 404, `#${number} isn't a pull request on GitHub, so name an open pull request`);
+            }
             throw error;
           }
           if (pull?.state !== 'open') throw new CheckFailed(`pull request #${number} isn't open, so name an open pull request`);
