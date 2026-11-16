@@ -260,7 +260,7 @@ test('plan test 12: two refusals an hour apart do not stop the gate, and a refus
   const world = await makeWorld(t);
   const commit = world.commit('claude/refused-push');
   world.pushRequest('p-refused', 'claude/refused-push', commit);
-  world.fake.failNext((method) => method === 'PUSH', 403);
+  world.fake.failNext((method) => method === 'PUSH-START', 403, { body: { message: 'Permission to CloudworkSystems/open-convo.git denied to cloudwork-agents[bot].' } });
   await world.run();
   assert.equal(world.result('p-refused').state, 'refused');
   assert.match(world.result('p-refused').sentence, /^Request "p-refused" was refused: GitHub turned the push down/);
@@ -383,4 +383,154 @@ test('plan test 12: a rate limit on the revoke of the reach-check token stops th
   assert.equal(world.result('early').state, 'done');
   assert.equal(world.fake.comments.filter((c) => !c.body.startsWith('The push gate stopped')).length, 1);
   assert.equal(notes(world).length, 1);
+});
+
+test("plan test 12: a git push answered with a secondary-rate-limit 403 stops every write, as an API answer does", async (t) => {
+  const world = await makeWorld(t);
+  const start = world.now();
+  const commit = world.commit('claude/limited-push');
+  world.pushRequest('limited-push', 'claude/limited-push', commit);
+  world.commentRequest('behind-it', { issue: 52 });
+  world.fake.failNext((method) => method === 'PUSH-START', 403, { body: { message: 'You have exceeded a secondary rate limit. Please wait a few minutes before you try again.' } });
+
+  await world.run();
+
+  // Not a refusal of that one request: every write waits at least an hour.
+  for (const id of ['limited-push', 'behind-it']) {
+    assert.equal(world.result(id).state, 'waiting', id);
+    assert.match(world.result(id).sentence, /^Waiting: GitHub asked the push gate to slow down\. Writes start again /);
+    assert.equal(world.result(id).until, iso(start + HOUR));
+  }
+  assert.equal(world.onGitHub('claude/limited-push'), null);
+  assert.deepEqual(world.log().map((line) => [line.kind, line.result]), [['push', 'rate limited']]);
+
+  world.clock.ms = start + HOUR - 1000;
+  const calls = world.fake.requests.length;
+  await world.run();
+  assert.equal(world.fake.requests.length, calls);
+  assert.deepEqual(world.fake.writes, []);
+
+  world.clock.ms = start + HOUR;
+  await world.run();
+  assert.equal(world.result('limited-push').state, 'done');
+  assert.equal(world.result('behind-it').state, 'done');
+  assert.equal(world.onGitHub('claude/limited-push'), commit);
+  assert.equal(notes(world).length, 1);
+});
+
+test('plan test 12: git answers that name a rate limit pause the gate, and a plain 403 is still one refusal', async (t) => {
+  const { createGit, runCommand } = await import('../src/git.mjs');
+  const { GitHubRefused, RateLimited } = await import('../src/errors.mjs');
+  const world = await makeWorld(t);
+  const answering = (stderr) =>
+    createGit({
+      dir: `${world.dir}/unit-checkout`,
+      gitUrl: world.fake.gitUrl,
+      run: (command, args, options) => (args.some((arg) => ['push', 'fetch', 'ls-remote'].includes(arg)) ? Promise.resolve({ code: 128, stdout: '', stderr }) : runCommand(command, args, options)),
+    });
+  const sha = 'a'.repeat(40);
+  const limited = [
+    "remote: You have exceeded a secondary rate limit. Please wait a few minutes before you try again.\nfatal: unable to access 'invented': The requested URL returned error: 403",
+    "remote: API rate limit exceeded for installation.\nfatal: unable to access 'invented': The requested URL returned error: 403",
+    "fatal: unable to access 'invented': The requested URL returned error: 429",
+  ];
+  for (const stderr of limited) {
+    const git = answering(stderr);
+    await git.ensureRepo();
+    await assert.rejects(git.push(sha, 'claude/invented', 'an-invented-token'), RateLimited, stderr);
+    await assert.rejects(git.fetchMain(), RateLimited, stderr);
+    await assert.rejects(git.remoteBranch('claude/invented'), RateLimited, stderr);
+  }
+  const plain = answering("remote: Permission to invented denied.\nfatal: unable to access 'invented': The requested URL returned error: 403");
+  await assert.rejects(plain.push(sha, 'claude/invented', 'an-invented-token'), GitHubRefused);
+  // A 403 with no words from GitHub can't be told from a rate limit, so it pauses too.
+  const bare = answering('error: RPC failed; HTTP 403 curl 22 The requested URL returned error: 403\nfatal: the remote end hung up unexpectedly');
+  await assert.rejects(bare.push(sha, 'claude/invented', 'an-invented-token'), RateLimited);
+});
+
+test('plan test 11: the retry of a write whose answer was lost is never the 61st write in an hour', async (t) => {
+  const world = await makeWorld(t);
+  const start = world.now();
+  for (let i = 1; i <= 59; i += 1) world.commentRequest(`a-${String(i).padStart(2, '0')}`, { issue: 52 });
+  await world.run();
+  assert.equal(world.fake.comments.length, 59);
+
+  // The 60th write is logged, then the run dies before GitHub gets it.
+  world.clock.ms = start + MINUTE;
+  world.commentRequest('b-60', { issue: 52 });
+  await assert.rejects(
+    world.run({
+      fetchImpl: async (url, options) => {
+        if (options.method === 'POST' && url.endsWith('/issues/52/comments')) throw new Error('invented crash');
+        return fetch(url, options);
+      },
+    }),
+    /invented crash/,
+  );
+  assert.equal(world.fake.comments.length, 59);
+  assert.equal(world.log().length, 60);
+
+  // The next run looks, finds the comment isn't on GitHub, and may not send it again yet:
+  // its lost attempt already used the hour's last place.
+  world.clock.ms = start + 2 * MINUTE;
+  await world.run();
+  assert.equal(world.result('b-60').state, 'waiting');
+  assert.match(world.result('b-60').sentence, /^Waiting: the agents have made about 60 writes to GitHub in the last hour\./);
+  assert.equal(world.result('b-60').until, iso(start + HOUR));
+  assert.equal(world.fake.comments.length, 59);
+  assert.equal(world.log().length, 60);
+  const writesSent = world.fake.writes.length;
+  world.clock.ms = start + HOUR - 1000;
+  await world.run();
+  assert.equal(world.fake.writes.length, writesSent);
+
+  // Once the first hour's writes are an hour old, it goes, and is posted once.
+  world.clock.ms = start + HOUR;
+  await world.run();
+  assert.equal(world.result('b-60').state, 'done');
+  assert.equal(world.fake.comments.length, 60);
+  for (let at = start; at <= world.now(); at += MINUTE) {
+    const inHour = world.log().filter((line) => Date.parse(line.time) > at - HOUR && Date.parse(line.time) <= at).length;
+    assert.ok(inHour <= 60, `${inHour} writes in the hour ending ${iso(at)}`);
+  }
+});
+
+test("plan test 11: the gate's own note on #52 waits when the hourly cap is used up", async (t) => {
+  const { createStore } = await import('../src/store.mjs');
+  const world = await makeWorld(t);
+  const start = world.now();
+  world.commentRequest('first', { issue: 52 });
+  world.fake.failNext(ISSUE_COMMENTS, 429, { headers: { 'retry-after': '60' } });
+  await world.run();
+  // While it is paused, the log fills up (as writes logged by an earlier run would).
+  const store = createStore({ home: world.home, shared: world.shared });
+  for (let i = 0; i < 60; i += 1) store.logWrite({ kind: 'comment', target: '#52', result: 'done' }, start + 30 * MINUTE);
+
+  world.clock.ms = start + HOUR;
+  await world.run();
+  assert.equal(notes(world).length, 0);
+  assert.equal(world.result('first').state, 'waiting');
+  assert.deepEqual(world.fake.writes, []);
+
+  world.clock.ms = start + 91 * MINUTE;
+  await world.run();
+  assert.equal(notes(world).length, 1);
+  assert.equal(world.result('first').state, 'done');
+});
+
+test('plan test 12: a 403 during the upload of a push, which git reports with no reason, pauses every write', async (t) => {
+  const world = await makeWorld(t);
+  const start = world.now();
+  const commit = world.commit('claude/bare-403');
+  world.pushRequest('bare-403', 'claude/bare-403', commit);
+  world.fake.failNext((method) => method === 'PUSH', 403);
+
+  await world.run();
+
+  assert.equal(world.result('bare-403').state, 'waiting');
+  assert.equal(world.result('bare-403').until, iso(start + HOUR));
+  world.clock.ms = start + HOUR;
+  await world.run();
+  assert.equal(world.result('bare-403').state, 'done');
+  assert.equal(world.onGitHub('claude/bare-403'), commit);
 });

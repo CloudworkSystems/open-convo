@@ -9,7 +9,7 @@
 import { AGENTS, API_BASE, APP_LOGIN, FULL_NAME, GIT_URL, HOUR, LIMITS, OWNER, REPORT_ISSUE } from './constants.mjs';
 import { createSession } from './app-token.mjs';
 import { checkRequest, checkText, REQUEST_ID } from './checks.mjs';
-import { CheckFailed, GitHubRefused, KeyUnavailable, NoConnection, RateLimited, SignInFailed, WrongReach, scrub } from './errors.mjs';
+import { CapReached, CheckFailed, GitHubRefused, KeyUnavailable, NoConnection, RateLimited, SignInFailed, WrongReach, scrub } from './errors.mjs';
 import { createGit, runCommand } from './git.mjs';
 import { capUntil, pushGapUntil, quietUntil, sayTime } from './pace.mjs';
 import { createStore } from './store.mjs';
@@ -23,6 +23,7 @@ const CONNECTION_SENTENCE = "Waiting: GitHub can't be reached. The gate tries ag
 
 const unrevokedLine = (expiresAt) =>
   `A token could not be revoked and works until ${sayTime(Date.parse(expiresAt))}. The owner can end it now by suspending the app's installation.`;
+const capSentence = (until) => `Waiting: the agents have made about ${LIMITS.writesPerHour} writes to GitHub in the last hour. It goes after ${sayTime(until)}.`;
 const refusedSentence = (id, why) => `Request "${id}" was refused: ${why}.`;
 const short = (sha) => sha.slice(0, 12);
 
@@ -140,7 +141,21 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
     // GitHub accepted just before a crash or a dropped connection is still
     // counted. `item` remembers the line, so a later run that finds the
     // write on GitHub marks that same line done (`foundOnGitHub`).
+    //
+    // The hourly cap is checked here too, right before every write, whatever
+    // led to it: a retry after a lost answer, or the gate's own note on #52.
+    // So no write can be the 61st in an hour.
     async function write(kind, target, work, item) {
+      const full = capUntil(store.recentWriteTimes(now()), now(), 1);
+      if (full) {
+        // An interrupted write that wasn't on GitHub after all keeps its line
+        // in the log, counted. The retry waits for room like any other write.
+        if (item?.lastWrite) {
+          delete item.lastWrite;
+          store.saveWorking(item);
+        }
+        throw new CapReached(full);
+      }
       const entry = store.logWrite({ kind, target, result: 'started' }, now());
       if (item) {
         item.lastWrite = entry;
@@ -295,7 +310,8 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
         state.noteOwed = false;
         store.saveState(state);
       } catch (error) {
-        if (settle(error, null, items)) return { handled, lines };
+        // With the hourly cap used up, the note stays owed for a later run.
+        if (!(error instanceof CapReached) && settle(error, null, items)) return { handled, lines };
       }
     }
 
@@ -322,11 +338,12 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
         wait(id, `Waiting: quiet hours, 11 PM to 6 AM New York time. It goes at ${sayTime(quiet)}, or sooner if the owner runs push-gate allow ${id}.`, quiet);
         continue;
       }
-      // A request finishing an interrupted write already has that write's line
-      // in the log, counted, so it doesn't need room for it a second time.
-      const cap = capUntil(store.recentWriteTimes(now()), now(), writesNeeded(request) - (one.item?.lastWrite ? 1 : 0));
+      // A request with an interrupted write first has to look whether GitHub
+      // has it, which sends nothing. If it doesn't, the retry meets the cap
+      // in write(), so it is never counted as room already used.
+      const cap = one.item?.lastWrite ? null : capUntil(store.recentWriteTimes(now()), now(), writesNeeded(request));
       if (cap) {
-        wait(id, `Waiting: the agents have made about ${LIMITS.writesPerHour} writes to GitHub in the last hour. It goes after ${sayTime(cap)}.`, cap);
+        wait(id, capSentence(cap), cap);
         continue;
       }
       // A request whose own push already went up (a run was interrupted after
@@ -371,6 +388,10 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
           store.finishWorking(id);
           refuse(id, error.message);
           handled += 1;
+          continue;
+        }
+        if (error instanceof CapReached) {
+          wait(id, capSentence(error.until), error.until);
           continue;
         }
         const stop = settle(error, id, rest);

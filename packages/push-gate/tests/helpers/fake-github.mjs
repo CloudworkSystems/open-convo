@@ -51,13 +51,15 @@ export async function startFakeGitHub({ publicKey, gitRoot, now = Date.now }) {
         res.writeHead(401, { 'www-authenticate': 'Basic realm="fake"' });
         return res.end();
       }
+      // 'PUSH-START' fails the push's first request, where git shows GitHub's words;
+      // 'PUSH' fails the upload itself, where git shows only the status.
+      const failure = fake.failures.find((f) => f.times > 0 && f.match(req.method === 'POST' ? 'PUSH' : 'PUSH-START', pathInfo));
+      if (failure) {
+        failure.times -= 1;
+        res.writeHead(failure.status, { 'content-type': 'text/plain' });
+        return res.end(failure.body?.message ?? '');
+      }
       if (req.method === 'POST') {
-        const failure = fake.failures.find((f) => f.times > 0 && f.match('PUSH', pathInfo));
-        if (failure) {
-          failure.times -= 1;
-          res.writeHead(failure.status);
-          return res.end();
-        }
         fake.pushes += 1;
         fake.pushPasswords.push(password);
         fake.writes.push('PUSH');

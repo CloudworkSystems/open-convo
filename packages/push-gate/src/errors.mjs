@@ -15,6 +15,14 @@ export class RateLimited extends Error {
   }
 }
 
+/** The hourly cap on writes is used up. The request waits until `until`. */
+export class CapReached extends Error {
+  constructor(until) {
+    super('the hourly cap on writes is used up');
+    this.until = until;
+  }
+}
+
 /** GitHub answered 401. Every write stops until the owner restarts the gate. */
 export class SignInFailed extends Error {}
 

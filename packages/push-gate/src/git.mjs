@@ -67,7 +67,16 @@ export function createGit({ dir, gitUrl = GIT_URL, run = runCommand }) {
   // What a failed fetch, ls-remote or push to GitHub means.
   function remoteFailure(stderr, secrets, what) {
     const text = scrub(stderr, secrets);
-    if (/returned error: 429/i.test(text)) return new RateLimited('GitHub asked for a pause', LIMITS.rateLimitPauseMs);
+    // A rate limit: a 429, or a 403 whose text names one (GitHub's "secondary
+    // rate limit"), the same way an API answer is read in app-token.mjs.
+    // Git only passes on GitHub's words for some answers. A 403 that comes
+    // with no words at all can't be told from a rate limit, so it is treated
+    // as one: pausing for an hour is the safe reading. A 403 with GitHub's
+    // reason (such as "Permission denied") stays a refusal of that request.
+    const forbidden = /returned error: 403/i.test(text);
+    if (/returned error: 429/i.test(text) || (forbidden && (/rate limit/i.test(text) || !/^remote: \S/m.test(stderr)))) {
+      return new RateLimited('GitHub asked for a pause', LIMITS.rateLimitPauseMs);
+    }
     if (/returned error: 401|authentication failed|could not read (username|password)|terminal prompts disabled/i.test(text)) return new SignInFailed("GitHub didn't accept the app's sign-in");
     if (/returned error: 5\d\d/i.test(text) || NO_CONNECTION.test(text)) return new NoConnection("GitHub can't be reached");
     const status = Number(/returned error: (\d{3})/i.exec(text)?.[1]) || 422;
