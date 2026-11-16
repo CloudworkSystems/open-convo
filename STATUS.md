@@ -17,7 +17,7 @@ plan is in [PLAN.md](PLAN.md).
 | PR 4b: Dictation archive key under the same recovery key | Merged (#32) |
 | PR 4c: Kept recordings sealed | Merged (#34, #35) |
 | PR 5: Scripted kill-and-reopen proof | Merged (#36) |
-| PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-2-owner-trial.md)) | First run October 31: the Desk passed all five checks and dictations are sealed on disk; Archive History was blocked by a bug. Fixes for F1 to F3 built November 2 (in review); then a short re-check |
+| PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-2-owner-trial.md)) | First run October 31: the Desk passed all five checks and dictations are sealed on disk; Archive History was blocked by a bug. F1 to F3 fixed (#270) and passed the November 5 re-check, but every dictation's text in Archive History is empty (F13), and dictation into the Desk's chat box doesn't work (F14) |
 
 Until the owner's trial passes, the installed Desk is for invented data only.
 
@@ -36,7 +36,7 @@ invented chats only, while the step 2 trial is pending. Scope:
 | PR 4b: Turn on the local route in the Mac app (True Convo Test only), default `qwen3:8b` | Merged (#61) |
 | PR 4c: Fake-Ollama host cases in the shared local vectors (26 cases, both sides) | Merged (#62) |
 | PR 5: Scripted kill-mid-reply proof | Merged (#65) |
-| PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-3-owner-trial.md)) | First run October 31: ten of eleven checks passed; quitting mid-reply loses the text (F11). Fix built November 2 (in review); then a re-check of check 8 |
+| PR 5: Owner's trial in True Convo Test ([checklist](docs/plans/step-3-owner-trial.md)) | Check 8 (quit mid-reply) passed November 5 with the F11 fix (#270), from the menu and with Command-Q; one run quitting with `osascript` left. Follow-ups: F12 and F15 wording, F16 (should Retry send at once? the owner's call) |
 | Trial fixes (Stop, Ollama notice) | Merged (#76) |
 
 **Next build: the Claude Code adapter** (right after step 3; invented
@@ -58,7 +58,7 @@ chats only). Scope:
 | PR 4-proof: the fake-CLI kill proof. A test copy of the app, wired as PR 4b will wire it (the real owner, coordinator, store, launcher and supervisor, with a fake Claude Code), is killed at four exact points mid-reply: no process is left, the next launch keeps exactly the saved text, sends nothing again, asks for a new paid-usage confirmation, and Retry makes exactly one new run; a graceful quit records `stopped`; and a start with either consent gate closed (not approved, not confirmed, approval withdrawn, confirmation ended) spawns nothing. The app itself still refuses every Claude launch | Merged (#223) |
 | PR 4b: Turn it on in True Convo Test (the real app gets nothing). Claude joins the picker; the Desk window gets the "Approve Anthropic once" and paid-usage screens; the lane gets section 17's owner, the open store's approval, the end observers (lock, sleep, logout) from launch, and the 4,096-byte first-trial limit. Until Claude Code's start values (section 16) are recorded, none of it switches on: Claude stays out of the picker and nothing can be sent. To try: picking Claude in a conversation that had local-model turns sends those earlier turns to Anthropic too; the line above the message box says how many | Merged (#228) |
 | PR 4b switch-on: Claude Code's start values recorded on the owner's Mac (network blocked) and pinned, so Claude joins True Convo Test's picker. The one plugin it reports, the built-in `agents-md`, was shown to load no `AGENTS.md` under the app's flags; any other start value still stops the run. Plan and contract revised on the owner's yes (November 2). Nothing is sent until he approves Anthropic and confirms paid usage is off, and the real app gets nothing | Merged (#259) |
-| PR 5: The live check and your trial ([checklist](docs/plans/claude-code-owner-trial.md)): two tests to build first (Stop during a blocked save, and the real quit path; both in review), then one watched live session of three runs on invented text, then your eight checks | Checklist merged (#273); both tests in review |
+| PR 5: The live check and your trial ([checklist](docs/plans/claude-code-owner-trial.md)): two tests to build first (Stop during a blocked save, and the real quit path; both in review), then one watched live session of three runs on invented text, then your eight checks | Checklist merged (#273); both tests merged (#274). Live session November 5: step 0 passed (no canary reached a request); runs 1 to 3 ran, but the watch recorded nothing, so they're redone. The check refused the owner's model-menu settings (fix in review) November 9: the first complete attempt did not pass, and an offline follow-up found another Claude session could add text to a run on 2.1.283. Re-pinned to 2.1.319 with the owner's yes (the adapter plan's November 9 revision). Part 2 runs again; Claude stays out of daily use until it passes. |
 
 ## Done
 
@@ -215,6 +215,10 @@ from Codex's GitHub app and the Actions workflows (AGENTS.md "Accounts And
 Provenance"). Codex reviews pull requests by
 itself, the bot's included (first seen on #120); nobody asks for reviews from
 the owner's account.
+November 10 ([GitHub app switch](docs/plans/github-app-switch.md), Build
+Order step 2, in review): the gate, the rules and the scheduled tasks trust
+the agents' app, `cloudwork-agents[bot]`, next to `cloudwork-bot`, and the
+tasks' account check accepts the app's token. The push steward is step 3.
 October 20 fix (OC-261020-gate-package-tests): `tests` now also runs
 `npm test` for every other folder in `packages/` that a pull request changes
 (Site Engine, household lists, and new ones such as the habit grid), found

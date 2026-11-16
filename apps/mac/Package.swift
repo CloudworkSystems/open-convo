@@ -207,11 +207,11 @@ let package = Package(
                            "ParticipantAppWiring"],
             // Byte copies of the shared participant vectors (apps/desk/tests/fixtures);
             // ParticipantVectorTests, LocalVectorTests and ClaudeVectorTests fail
-            // if a copy ever differs. cli-2.1.283:
-            // invented streams in the shapes PREDICTED for Claude Code 2.1.283
+            // if a copy ever differs. cli-2.1.319:
+            // invented streams in the shapes PREDICTED for Claude Code 2.1.319
             // (F1; its README), which StreamConformanceTests replays.
             resources: [.copy("Fixtures/native-participant-v1.json"), .copy("Fixtures/native-participant-local-v1.json"),
-                        .copy("Fixtures/native-participant-claude-v1.json"), .copy("Fixtures/cli-2.1.283")]
+                        .copy("Fixtures/native-participant-claude-v1.json"), .copy("Fixtures/cli-2.1.319")]
         ),
         // The Desk window for the Mac app (invented data only): its folders,
         // the bundled Desk's location, one Desk session per app run, lock

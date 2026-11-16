@@ -36,15 +36,17 @@ public final class ClaudeConversation {
 
     /// The values Claude Code's first stream line must carry besides the
     /// model and the empty tool lists (section 11's init rule), as recorded
-    /// on the owner's Mac on 2026-11-01 with the pinned CLI, the app's
-    /// flags and the network blocked (section 16's recording). The one
-    /// plugin is the CLI's built-in `agents-md`, shown on 2026-11-02 to load
-    /// no AGENTS.md under those flags (contract section 16); any other
-    /// value at start still stops the run.
+    /// on the owner's Mac on 2026-11-09 with the pinned CLI, the app's
+    /// flags and the network blocked (section 16's recording). The three
+    /// plugins are the CLI's built-ins, shown that day to add nothing to the
+    /// request and to let no AGENTS.md through under those flags (the owner's
+    /// yes, the adapter plan's November 9 revision); any other value at start
+    /// still stops the run.
     nonisolated static let recordedInit = ParticipantInitExpectation(
         model: LocalConversationLane.claudePin.model, slashCommands: [], skills: [],
-        plugins: .array([.object(["name": .string("agents-md"), "path": .string("builtin"),
-                                  "source": .string("agents-md@builtin")])]),
+        plugins: .array(["cc-plugin-agents-md", "cc-plugin-privacy", "cc-plugin-plugin-authoring"].map { name in
+            .object(["name": .string(name), "path": .string("builtin"), "source": .string(name + "@builtin")])
+        }),
         apiKeySource: "none")
 
     init(owner: PaidUsageConfirmationOwner, approvals: CurrentStoreApproval, launcher: any ParticipantLaunching,

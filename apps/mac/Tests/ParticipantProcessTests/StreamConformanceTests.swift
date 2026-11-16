@@ -5,7 +5,7 @@ import Foundation
 import ParticipantSupervisorCore
 import Testing
 
-// F1: the streams PREDICTED for Claude Code 2.1.283 (Fixtures/cli-2.1.283
+// F1: the streams PREDICTED for Claude Code 2.1.319 (Fixtures/cli-2.1.319
 // and its README: a read-only reading of the program file, never a run),
 // replayed through the REAL StreamJSONReader and ParticipantRunCore, and the
 // fake CLI's predicted modes. Each reader test asserts what the reader does
@@ -44,8 +44,8 @@ enum PredictedCLI {
     }
 
     static func data(_ stream: Stream) throws -> Data {
-        guard let folder = Bundle.module.resourceURL?.appendingPathComponent("cli-2.1.283", isDirectory: true) else {
-            throw FixtureError.missing("cli-2.1.283")
+        guard let folder = Bundle.module.resourceURL?.appendingPathComponent("cli-2.1.319", isDirectory: true) else {
+            throw FixtureError.missing("cli-2.1.319")
         }
         let file = folder.appendingPathComponent(stream.rawValue + ".jsonl")
         guard FileManager.default.fileExists(atPath: file.path) else { throw FixtureError.missing(file.lastPathComponent) }
@@ -100,7 +100,7 @@ enum PredictedCLI {
     ]
 }
 
-@Suite("Predicted 2.1.283 streams: what today's reader does with each")
+@Suite("Predicted 2.1.319 streams: what today's reader does with each")
 struct StreamConformanceTests {
     typealias Output = StreamJSONReader.Output
 
@@ -155,6 +155,16 @@ struct StreamConformanceTests {
         #expect(deltas.joined() == PredictedCLI.reply)
         #expect(normal.contains { PredictedCLI.type(of: $0) == "assistant" && $0.contains("\"text\":\"\(PredictedCLI.reply)\"") },
                 "the whole assistant message repeats the deltas")
+    }
+
+    @Test("A system line before init, as 2.1.319 prints, changes nothing: init still passes, text still held until the rate-limit event")
+    func systemLineBeforeInit() throws {
+        let lines = try PredictedCLI.lines(.normal)
+        let early = #"{"type":"system","subtype":"ui_invalidate","event":"invented","session_id":"\#(UUID().uuidString.lowercased())","uuid":"\#(UUID().uuidString.lowercased())"}"#
+        let plain = PredictedCLI.core(lines)
+        let withLine = PredictedCLI.core([early] + lines)
+        #expect(PredictedCLI.summary(withLine.events) == PredictedCLI.summary(plain.events))
+        #expect(PredictedCLI.summary(withLine.events) == ["1 started", "2 text text:\(PredictedCLI.reply)", "3 completed"])
     }
 
     /// The passing event releases the held text into the coalescing buffer;
@@ -452,7 +462,7 @@ struct StreamConformanceTests {
     @Test("Drift outside the seven init-rule fields still completes today")
     func driftOutsideTheRule() throws {
         let changes: [(String, String)] = [
-            (#""claude_code_version":"2.1.283""#, #""claude_code_version":"2.1.284""#),
+            (#""claude_code_version":"2.1.319""#, #""claude_code_version":"2.1.320""#),
             (#""permissionMode":"default""#, #""permissionMode":"invented-mode""#),
             (#""output_style":"default""#, #""output_style":"invented-style""#),
             (#""agents":["invented-agent"]"#, #""agents":[]"#),
@@ -472,9 +482,9 @@ struct StreamConformanceTests {
 }
 
 extension ProcessSuites {
-    /// The fake CLI's predicted 2.1.283 modes (`Predicted.swift`), run as a
+    /// The fake CLI's predicted 2.1.319 modes (`Predicted.swift`), run as a
     /// plain process or behind the real supervisor. Never the real CLI.
-    @Suite("Predicted 2.1.283: the fake CLI's modes")
+    @Suite("Predicted 2.1.319: the fake CLI's modes")
     struct PredictedCLIModes {
         /// One fake invocation outside the supervisor. Its environment is the
         /// final section 11 environment over invented values (the allow-list
@@ -644,7 +654,7 @@ extension ProcessSuites {
             let folder = try Self.folder()
             defer { folder.clean() }
             let line = "\(ParticipantCommandLine.pinnedCLIVersion) (Claude Code)\n"
-            #expect(line == "2.1.283 (Claude Code)\n")
+            #expect(line == "2.1.319 (Claude Code)\n")
             for arguments in [["--version"], ["-v"], ["-V"]] {
                 let fake = try Invocation(folder, arguments)
                 let status = await fake.finish(within: 10)
@@ -669,13 +679,13 @@ extension ProcessSuites {
                 "TMPDIR=\(folder.temporary.path)/", "LANG=en_US.UTF-8"
             ] + Invented.fixedEnvironment))
 
-            let other = try Self.folder(version: "2.1.284")
+            let other = try Self.folder(version: "2.1.320")
             defer { other.clean() }
             let mismatch = try Invocation(other, ["--version"])
             let mismatchStatus = await mismatch.finish(within: 10)
             let mismatchText = String(decoding: await mismatch.stdout(), as: UTF8.self)
             #expect(mismatchStatus == 0)
-            #expect(mismatchText == "2.1.284 (Claude Code)\n")
+            #expect(mismatchText == "2.1.320 (Claude Code)\n")
         }
 
         struct AuthAnswer: Equatable {
@@ -820,7 +830,7 @@ struct RealCLIPathScanTests {
         let ownFile = "Tests/ParticipantProcessTests/StreamConformanceTests.swift"
         // The needles match the real spellings under an invented home.
         for path in paths {
-            let spelled = "/users/invented/" + path.joined(separator: "/") + "/versions/2.1.283"
+            let spelled = "/users/invented/" + path.joined(separator: "/") + "/versions/2.1.319"
             #expect(needles.filter { spelled.contains($0) }.count == 2, "\(path)")
         }
         // And the piece needles catch paths built from pieces (lowercased, as scanned).
@@ -828,7 +838,7 @@ struct RealCLIPathScanTests {
                      #"home.appendingPathComponent(".local").appendingPathComponent("share")"#,
                      #"let folder = "~/.local""#,
                      #"let tail = ".local/share" + "/claude""#,
-                     #"home + "/x" + "/share/claude/versions/2.1.283""#,
+                     #"home + "/x" + "/share/claude/versions/2.1.319""#,
                      #"["bin", "claude"].joined(separator: "/") + "/bin/claude""#]
         for spelling in built {
             #expect(needles.allSatisfy { !spelling.contains($0) }, "only a piece needle: \(spelling)")
@@ -860,8 +870,8 @@ struct RealCLIPathScanTests {
         #expect(scanned.count > 80, "the scan read the tests and fakes: \(scanned.count)")
         for expected in ["Tests/ParticipantProcessTests/StreamConformanceTests.swift",
                          "Tests/ParticipantProcessTests/ProcessTestSupport.swift",
-                         "Tests/ParticipantProcessTests/Fixtures/cli-2.1.283/README.md",
-                         "Tests/ParticipantProcessTests/Fixtures/cli-2.1.283/normal.jsonl",
+                         "Tests/ParticipantProcessTests/Fixtures/cli-2.1.319/README.md",
+                         "Tests/ParticipantProcessTests/Fixtures/cli-2.1.319/normal.jsonl",
                          "Sources/ParticipantTestFakes/FakeCLI/main.swift",
                          "Sources/ParticipantTestFakes/FakeCLI/Predicted.swift"] {
             #expect(scanned.contains(expected), "scanned \(expected)")

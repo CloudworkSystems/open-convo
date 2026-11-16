@@ -27,8 +27,13 @@ export const MIN_CONFIDENCE = 0.8;
 export const JUDGE_MODEL = 'claude-opus-5-5';
 // The repo is public, so anyone can open a pull request. Only the project's
 // own builders' pull requests may spend the judge's key or put text in front
-// of it: the bot every agent signs in as, and Codex's cloud builds.
-export const JUDGE_AUTHORS = ['cloudwork-bot', CODEX_LOGIN];
+// of it: the agents' GitHub App, the bot every agent signed in as before it
+// (both count while agents move to the app, docs/plans/github-app-switch.md),
+// and Codex's cloud builds.
+export const BOT_LOGIN = 'cloudwork-bot';
+// The app's login as the REST API reports a pull request's author.
+export const APP_LOGIN = 'cloudwork-agents[bot]';
+export const JUDGE_AUTHORS = [APP_LOGIN, BOT_LOGIN, CODEX_LOGIN];
 
 const FINDING_MARKER = 'codex-code-review-finding:v1';
 // Codex's priority badge at the top of each finding: ![P2 Badge](...)
@@ -43,6 +48,16 @@ const isActionsEditor = (actor) => Boolean(actor) && actor.__typename === 'Bot' 
 export function findingPriority(body) {
   const m = (body ?? '').match(PRIORITY);
   return m ? Number(m[1]) : null;
+}
+
+/**
+ * Codex's reviews that count as rounds with findings: its own, not an
+ * approval, and not dismissed by the owner. The review loop watchdog
+ * (review-loop.mjs) counts rounds with this too, so both agree.
+ */
+export function codexFindingReviews(reviews = [], dismissals = []) {
+  return reviews.filter((r) => isCodex(r.user) && r.state !== 'APPROVED')
+    .filter((r) => r.state !== 'DISMISSED' || !dismissedByOwner(r, dismissals));
 }
 
 /**
@@ -68,8 +83,7 @@ export function triageEligibility({ headSha, prAuthor, fromFork = true, reviews 
   if (fromFork !== false) return no('Opened from a fork.');
   if (!JUDGE_AUTHORS.includes(prAuthor)) return no('Not opened by one of the project\'s builders.');
 
-  const findingReviews = reviews.filter((r) => isCodex(r.user) && r.state !== 'APPROVED')
-    .filter((r) => r.state !== 'DISMISSED' || !dismissedByOwner(r, dismissals));
+  const findingReviews = codexFindingReviews(reviews, dismissals);
   const rounds = new Set(findingReviews.map((r) => r.commit_id)).size;
   const onHead = findingReviews.filter((r) => r.commit_id === headSha);
   if (!onHead.length) return no('No Codex findings on the head.', { rounds });

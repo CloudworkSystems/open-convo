@@ -420,7 +420,7 @@ test('the hold comment lists hits and says how to clear it', () => {
   assert.match(body, /`src\/a.js:3`: new outside host/);
   assert.match(body, /risk-allowlist\.json/);
   assert.match(body, /next run \(hourly, or on the next comment\)/);
-  assert.match(holdCommentBody({ hits: [hostHit], headSha: HEAD, prAuthor: 'CloudworkSystems' }), /Reopen the work from `cloudwork-bot`/);
+  assert.match(holdCommentBody({ hits: [hostHit], headSha: HEAD, prAuthor: 'CloudworkSystems' }), /Reopen the work from the agents' app \(`cloudwork-agents\[bot\]`\) or `cloudwork-bot`/);
 });
 
 const actions = { login: 'github-actions[bot]', type: 'Bot' };

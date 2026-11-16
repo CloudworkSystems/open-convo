@@ -55,7 +55,7 @@ enum ProcessTestError: Error, CustomStringConvertible {
 }
 
 /// Invented stream-json lines. Field names were checked against the strings
-/// of the installed CLI 2.1.283 binary file (its SDK message schemas), never
+/// of the installed CLI 2.1.319 binary file (its SDK message schemas), never
 /// against a run: `system`/`init` with `model`, `tools`, `mcp_servers`,
 /// `slash_commands`, `skills`, `plugins`, `apiKeySource`; `rate_limit_event`
 /// with `rate_limit_info.overageStatus`, `isUsingOverage`, `overageInUse`;
@@ -152,11 +152,11 @@ struct FakeCLIFolder {
         var leaveGroup = false
         var readStdin = true
         var steps: [[String: Any]] = []
-        /// A predicted 2.1.283 stream, written before `steps` (FakeCLI, F1).
+        /// A predicted 2.1.319 stream, written before `steps` (FakeCLI, F1).
         var stream: String?
         /// The `auth status` variant the fake answers with (F1).
         var authStatus: String?
-        /// The version `--version` reports; the fake defaults to 2.1.283.
+        /// The version `--version` reports; the fake defaults to 2.1.319.
         var version: String?
         /// How long the "slow" `auth status` sleeps; the fake defaults to 6 s.
         var slowMs: Int?

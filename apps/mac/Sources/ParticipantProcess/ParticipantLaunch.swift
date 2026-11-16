@@ -7,7 +7,7 @@ import ParticipantSupervisorCore
 /// itself lives in `CLICommandLineRule`, which the supervisor checks again.
 public enum ParticipantCommandLine {
     /// The CLI version whose `--help` lists every flag below.
-    public static let pinnedCLIVersion = "2.1.283"
+    public static let pinnedCLIVersion = "2.1.319"
 
     /// Exactly the arguments after the binary path. `--bare` and
     /// `--fallback-model` never appear; the model is the build's pin.

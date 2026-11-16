@@ -105,7 +105,7 @@ public struct ClaudeCheckRoots: Sendable, Equatable {
 }
 
 /// Whether and how section 5's step 4 runs `auth status` (Codex F34-D1).
-/// Read only (bytes, never run), Claude Code 2.1.283's `auth status` starts
+/// Read only (bytes, never run; its gate read again on 2.1.319, 2026-11-09), Claude Code 2.1.283's `auth status` starts
 /// a server-managed settings fetch for an eligible account (a Team or
 /// Enterprise plan, an unknown plan, a profile login or a stored key),
 /// applies a new payload in memory for that non-interactive run without
@@ -208,10 +208,10 @@ public enum ClaudeSubscriptionPlan: String, Sendable, CaseIterable {
     /// The plans the checks pass (the owner's D1 decision): the others can
     /// carry server-managed settings. These are `auth status`'s plan codes,
     /// never the plans' display names. On October 30, 2026 Anthropic renamed
-    /// Max 20x to Ultra and Max 5x to Max; Claude Code 2.1.283 still reports
-    /// `max` for an Ultra account (the owner's own reading that day), so
+    /// Max 20x to Ultra and Max 5x to Max; Claude Code still reports
+    /// `max` for the owner's account (his reading that day, on 2.1.283; 2.1.319 on 2026-11-09), so
     /// Ultra passes as `max`. Any other code, `ultra` included, stays
-    /// `check-failed`: 2.1.283 treats a plan it doesn't know as one that
+    /// `check-failed`: 2.1.283 treated a plan it doesn't know as one that
     /// fetches server-managed settings, so a new code passes only with a new
     /// pinned version whose reading rechecks that (Codex P1 on #212).
     static let accepted: Set<ClaudeSubscriptionPlan> = [.pro, .max]
@@ -309,12 +309,12 @@ package typealias ClaudeCheckObserver = @Sendable (ClaudeCheckAccess) -> Void
 
 /// Section 5's checks of the pinned Claude Code, in its order:
 ///
-/// 1. The pinned binary: exactly `<home>/.local/share/claude/versions/2.1.283`
+/// 1. The pinned binary: exactly `<home>/.local/share/claude/versions/2.1.319`
 ///    under the user database's home, every folder on the way this user's,
 ///    reached through no link and writable by no one else, the file a regular
 ///    executable of this user's with no group or other write. Missing:
 ///    `cli-missing`; anything else wrong: `check-failed`.
-/// 2. `--version` must print `2.1.283 (Claude Code)`: another version is
+/// 2. `--version` must print `2.1.319 (Claude Code)`: another version is
 ///    `cli-version-mismatch`. It runs before any settings, auth or network
 ///    work, so it can invoke no helper.
 /// 3. Provider overrides, before `auth status` runs: the probe environment's

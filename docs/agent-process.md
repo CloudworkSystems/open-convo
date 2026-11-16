@@ -49,7 +49,8 @@ reads from and writes to `CloudworkSystems/open-convo`.
   commit; for GrokBot, after its plan check passes. The PR keeper does it
   when nobody has ("Keeping Finished Work Moving" below). Agents never merge
   by hand, apart from that section's one exception. Every agent
-  signs in to GitHub as `cloudwork-bot` (three app exceptions are listed in
+  signs in to GitHub as `cloudwork-bot` or writes as the agents' GitHub App,
+  `cloudwork-agents[bot]` (three app exceptions are listed in
   Accounts And Provenance), so the owner can approve their protected-path
   pull requests. Codex reviews every pull request on
   each push by itself (its open-convo setting covers all pull requests), so
@@ -139,7 +140,7 @@ reads from and writes to `CloudworkSystems/open-convo`.
     request by itself, as above.
   - The first review of the latest commit from GrokBot or Gemini counts.
     The coordinator asks GrokBot with one `@cursor` comment from
-    `cloudwork-bot` per commit, naming the pull request, this section and
+    `cloudwork-agents[bot]` or `cloudwork-bot` per commit, naming the pull request, this section and
     the Review Guidelines, and saying: post one review comment, push
     nothing, change nothing. On a Claude-built pull request the request
     names a non-Claude model. GrokBot's review ends with the line
@@ -196,7 +197,8 @@ reads from and writes to `CloudworkSystems/open-convo`.
     lists the pull request on issue #114, until the owner approves the head
     commit after that comment; then the coordinator removes the label (the
     workflow never touches it). On a pull request opened from the owner's
-    account, the work is reopened from `cloudwork-bot`, carrying the
+    account, the work is reopened from the agents' app or `cloudwork-bot`,
+    carrying the
     escalation over.
   - Each GrokBot review spends Cursor usage; the coordinator asks for one
     per commit, never more.
@@ -335,7 +337,7 @@ they win.
   yes. The coordinator may still do it first.
 - **The one hand merge.** When GitHub refuses to switch on auto-merge because
   the pull request is already mergeable, the coordinator or the keeper merges
-  it as `cloudwork-bot`, under the same conditions, with a plain merge
+  it as the agents' app or `cloudwork-bot`, under the same conditions, with a plain merge
   through GitHub's merge API (never an admin bypass). The branch rules still
   require `tests`, `codex-approved` and the owner's approval on protected
   paths, so this merge passes the same gate auto-merge would have. Nothing
@@ -348,6 +350,21 @@ they win.
   head should come back clean; if it raises the carried P1 again, the owner's
   accept line is the way through. Carrying needs no new yes from the owner. A P1 showing that
   the plan's goal or limits are wrong is still fixed in the plan itself.
+- **A pull request stuck in review stops.** When Codex has left findings on
+  6 commits of a plan pull request or 8 of a code pull request, counted since
+  its last lift, and its head isn't clean, the `codex-approved` workflow adds
+  the label `needs-owner: review-loop`, writes one comment with the owner's
+  three choices (accept the findings, narrow it, or split it) and lists it
+  under "Stuck in review" on issue #114. Pull requests the owner opened are
+  never halted. Until the halt lifts, no agent pushes to that pull request,
+  relays findings to it, restarts Codex on it or posts `@codex review` or
+  `@cursor` on it; builders may still answer review threads in words. The
+  halt lifts when the owner removes the label (the watchdog puts back a label
+  anyone else removed), comments `loop-resume`, posts his accept line for the
+  head, or Codex comes back clean on the head, and the count then starts
+  again. A push while halted is noted in the watchdog's comment, and the PR
+  keeper reports it. The watchdog never changes the `codex-approved` status
+  ([review-loop-watchdog.md](plans/review-loop-watchdog.md)).
 - **Dependabot updates.** A Dependabot patch or minor update that touches no
   protected path needs no independent review, since no agent wrote it. Once
   `tests` and `codex-approved` pass, the keeper switches auto-merge on.
@@ -442,17 +459,44 @@ nothing said so. The same rule for True Convo's own agents is in
   therefore means the owner did it.
 - Every agent that writes to GitHub signs in as `cloudwork-bot`: Claude in
   the cloud and on the Mac, local Codex on the Mac, GrokBot's builders and the
-  Claude scheduled tasks. Two apps keep their own identities: Codex's GitHub
+  Claude scheduled tasks. They are moving to the agents' GitHub App,
+  Cloudwork Agents (login `cloudwork-agents[bot]`, App ID 5665711), owned by
+  `CloudworkSystems` and installed on this repo only
+  ([plans/github-app-switch.md](plans/github-app-switch.md), owner decision,
+  November 10, 2026, for this step). Until the move is done, both count: a
+  comment, review, pull request, commit or push by `cloudwork-agents[bot]`
+  is trusted wherever this file or a scheduled task trusts one by
+  `cloudwork-bot`. Only the `[bot]` login is the app; a user account named
+  `cloudwork-agents` is someone else. An app token can't read GitHub's
+  "who am I" endpoint, so a scheduled task's account check accepts either
+  `cloudwork-bot` or an app token that the push steward's token helper made
+  in that run with the Cloudwork Agents key (App ID 5665711) for
+  installation 179798275 (until the helper is built, a command the owner
+  approved in that run that made it the same way), and whose installation reaches this repo and no
+  other. Reaching only this repo isn't enough on its own: any app installed
+  on this repo alone would pass that. Two apps keep their own identities: Codex's GitHub
   app (`chatgpt-codex-connector[bot]`), which posts its reviews and its cloud
   builds; and the repo's GitHub Actions workflows (such as `owner-queue`,
   and a Gemini review workflow once one is built), which post as
   `github-actions[bot]`. Since October 30 Codex answers a `cloudwork-bot`
-  comment that starts with `@codex review`, but it refuses the bot's other
+  (and, since #314, a `cloudwork-agents[bot]`) comment that starts with `@codex review`, but it refuses the bot's other
   requests ("create a Codex account"), so asking Codex to fix its own pull
   request waits for the owner until the bot has its own Codex access.
+  GrokBot's comments and reviews post from Cursor's app account
+  (`cursor[bot]`), even when a `cloudwork-bot` or `cloudwork-agents[bot]`
+  comment started them. A
+  `cursor[bot]` review counts as GrokBot's independent review of a commit
+  only when it ends with `— GrokBot review`, names that commit by its short
+  or full sha, and follows a `cloudwork-bot` or `cloudwork-agents[bot]`
+  comment on the same pull request
+  that begins "@cursor Independent review request for" and names that same
+  commit by its short or full sha. A short sha (7 or more characters) names a
+  commit when the commit's full sha starts with it. Any other `cursor[bot]`
+  post is never a review.
 - An agent that finds itself signed in as `CloudworkSystems` stops and tells
   the owner instead of acting.
-- Agents share one account, so each marks its own work:
+- Agents share one identity (the bot, or the app while they move to it), so
+  each marks its own work:
   - Each pull request carries a label naming its builder: `agent: claude`,
     `agent: grokbot` or `agent: codex`. The coordinator adds it when a
     builder can't.

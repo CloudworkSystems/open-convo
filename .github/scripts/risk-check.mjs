@@ -660,7 +660,7 @@ export function holdCommentBody({ hits, headSha, prAuthor }) {
     '**To clear it:**',
     '- Builder: add each host, dependency or key name you want accepted for good to `.github/risk-allowlist.json` in this pull request (a protected file, so the owner sees it). Leave an entry out if he should be asked again next time. Permissions and unreadable files are never allowlisted.',
     prAuthor === OWNER_LOGIN
-      ? "- Owner: this pull request was opened from your own account, which GitHub won't let you approve. Reopen the work from `cloudwork-bot` and approve it there."
+      ? "- Owner: this pull request was opened from your own account, which GitHub won't let you approve. Reopen the work from the agents' app (`cloudwork-agents[bot]`) or `cloudwork-bot` and approve it there."
       : "- Owner: approve the pull request's latest commit after reading this comment. An approval given before this comment last changed doesn't count, and your note accepting Codex findings doesn't clear a risk hold.",
     "- `codex-approved` doesn't run on review events, so the hold lifts at its next run (hourly, or on the next comment). A later commit that removes every hit lifts it too.",
   );

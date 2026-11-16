@@ -36,7 +36,7 @@ const isCodex = (user) => Boolean(user) && user.login === CODEX_LOGIN;
 const matchesHead = (short, head) => Boolean(short) && short.length >= 7 && head.toLowerCase().startsWith(short.toLowerCase());
 const time = (value) => Date.parse(value ?? '') || 0;
 const isCodexEditor = (actor) => Boolean(actor) && actor.__typename === 'Bot' && actor.login === CODEX_BOT_LOGIN;
-const isOwnerEditor = (actor) => Boolean(actor) && actor.__typename === 'User' && actor.login === OWNER_LOGIN;
+export const isOwnerEditor = (actor) => Boolean(actor) && actor.__typename === 'User' && actor.login === OWNER_LOGIN;
 
 /**
  * True only if nobody but Codex ever edited this comment.
@@ -75,6 +75,11 @@ export function editedOnlyBy(comment, isEditor) {
 // Markdown is parsed, so there is no way to quote, hide or wrap a note and
 // still have it count: the rule fails closed.
 const ACCEPT_NOTE = /^owner-accepts-findings ([0-9a-f]{40})$/;
+
+/** The exact note the owner posts to accept a head, for messages that show it to him. */
+export function acceptNoteFor(sha) {
+  return `owner-accepts-findings ${sha}`;
+}
 
 /** The note's sha if the whole comment is exactly the note, otherwise null. */
 function acceptedSha(body) {
