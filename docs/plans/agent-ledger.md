@@ -524,6 +524,13 @@ dropped.
 - Invented data only. No keys, tokens, accounts, Keychain or private files.
 - Edge cases this plan doesn't name go in the README's "Edge cases" section,
   each with a test.
+- Carried from Codex's review of November 16, 2026
+  (https://github.com/CloudworkSystems/open-convo/pull/312#discussion_r4586866010):
+  define the person's set-aside (rule 7, `setAside()`) as its own appended
+  entry, never a change to an existing one. Add it to the entry shape and
+  the kinds list, written only by the host for the person and naming the
+  set-aside entry's `seq`. Test that agents don't see the set-aside entry
+  by default, that it stays in the ledger, and that `verify()` still passes.
 
 ## Not In Scope
 
