@@ -73,6 +73,11 @@ export function checkRequest(raw) {
     return { why: 'it names no thread or task, so set "thread" to one line naming yours' };
   }
   const who = { agent, thread: thread.trim() };
+  // The thread name ends up on GitHub (in sign-off lines, and in the one the
+  // gate writes itself for a pull request with no description), so it passes
+  // the same text rules as everything else that goes there.
+  const threadWhy = checkText(who.thread, { ...who, what: 'thread or task name', signOff: false });
+  if (threadWhy) return { why: threadWhy };
 
   if (kind === 'push') {
     const branchWhy = checkBranch(raw.branch);

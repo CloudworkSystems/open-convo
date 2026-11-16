@@ -545,6 +545,12 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
             // review record. That is checked before the push is sent, so no
             // commit goes up without its record.
             const existing = await openPull(token);
+            // A description the gate would write whole (the pull request has
+            // none) passes every text check before the push, like any other.
+            if (existing && !(typeof existing.body === 'string' && existing.body.trim())) {
+              const why = checkText(withReviewLine(existing.body, request.review, signOffLine), { ...request, what: 'pull request description' });
+              if (why) throw new CheckFailed(why);
+            }
             if (existing && withReviewLine(existing.body, request.review, signOffLine).length >= LIMITS.textChars) {
               throw new CheckFailed(
                 `the description of pull request #${existing.number} leaves no room for the local review record under ${LIMITS.textChars} characters, so shorten that description on GitHub and send the request again`,

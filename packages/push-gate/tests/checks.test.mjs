@@ -267,3 +267,44 @@ test('a push to a pull request whose description has no room for the review reco
   assert.equal(world.onGitHub(branch), commit);
   assert.match(world.fake.pulls.at(-1).body, /^Local review: Codex reviewed commit [0-9a-f]{12}, result "clean" \(recorded by the push gate\)\.$/m);
 });
+
+test("plan test 7: a thread or task name passes the same text rules, so the gate's own sign-off line can't carry a mention or a token look-alike", async (t) => {
+  const world = await makeWorld(t);
+  const lookalike = ['gh', 'p_', 'A1b2'.repeat(9)].join('');
+  const bad = {
+    'thread-mention': ['task for @CloudworkSystems', /its thread or task name mentions "@CloudworkSystems"/],
+    'thread-token': [`task ${lookalike}`, /its thread or task name contains what looks like a GitHub token/],
+    'thread-accept': [`owner-accepts-findings ${'a'.repeat(40)}`, /its thread or task name contains the owner's accept line/],
+  };
+  // The case where the gate writes the name itself: a push with no pull request text, to a pull request with no description.
+  for (const [id, [thread]] of Object.entries(bad)) {
+    const branch = `claude/${id}`;
+    world.openPull(branch);
+    world.fake.pulls.at(-1).body = null;
+    const commit = world.commit(branch);
+    world.pushRequest(id, branch, commit, { thread, pullRequest: undefined });
+  }
+  // And in any other request.
+  world.commentRequest('comment-thread-mention', { issue: 52 }, { thread: 'task for @someone', body: 'A comment.\n\nClaude, task for @someone' });
+
+  await world.run();
+
+  for (const [id, [, pattern]] of Object.entries(bad)) {
+    assertRefused(world, id, pattern);
+    assert.equal(world.onGitHub(`claude/${id}`), null);
+  }
+  assertRefused(world, 'comment-thread-mention', /its thread or task name mentions "@someone"/);
+  assert.deepEqual(world.fake.writes, []);
+  assert.equal(world.fake.tokens.size, 0);
+  for (const pull of world.fake.pulls) assert.equal(pull.body, null);
+  assert.equal(world.everythingWritten().includes(lookalike), false);
+
+  // An ordinary name still goes through, and the gate's own line is built from it.
+  const branch = 'claude/thread-fine';
+  world.openPull(branch);
+  world.fake.pulls.at(-1).body = '';
+  world.pushRequest('thread-fine', branch, world.commit(branch), { thread: '261115 PUSH GATE BUILD (codex review)', pullRequest: undefined });
+  await world.run();
+  assert.equal(world.result('thread-fine').state, 'done');
+  assert.match(world.fake.pulls.at(-1).body, /\n\nClaude, 261115 PUSH GATE BUILD \(codex review\)$/);
+});
