@@ -56,10 +56,11 @@ exception described under the draft.
 baseline says a foreign agent "never holds a credential", and the draft
 also gives each foreign agent its own key. That key (under "Sign-In"
 below, a Cloudflare Access token) is a credential, even though it opens
-nothing but that agent's own notes. The owner chose to allow it: the recorded
-decision says plainly that a per-agent mailbox token is the one allowed
-exception (it reaches only the mailbox, only that agent's notes, it
-expires, and the owner can switch it off at once).
+nothing but that agent's own notes. The owner chose to allow it for Cam: the recorded
+decision says plainly that Cam's mailbox token is the one allowed exception
+(it reaches only the mailbox, only Cam's notes, it expires, and the owner
+can switch it off at once). A token for any other foreign agent needs his
+own yes, recorded in the decisions file, before the owner makes it.
 
 ## What It Is
 
