@@ -687,3 +687,33 @@ test("plan test 12: a note that never reached GitHub is posted on the next run",
   assert.equal(notes(world).length, 1);
   assert.equal(world.result('held').state, 'done');
 });
+
+test('plan test 12: a rate limit on the cleanup of the pause note starts a new pause that gets its own note', async (t) => {
+  const world = await makeWorld(t);
+  const start = world.now();
+  world.commentRequest('waiting-out', { issue: 52 });
+  world.fake.failNext(ISSUE_COMMENTS, 429, { headers: { 'retry-after': '60' } });
+  await world.run();
+
+  // Writes resume: the note is posted, and GitHub rate-limits the revoke of the note's token.
+  world.clock.ms = start + HOUR;
+  failRequestRevoke(world, 429, { headers: { 'retry-after': '5400' } });
+  await world.run();
+  assert.equal(notes(world).length, 1);
+  assert.equal(world.result('waiting-out').state, 'waiting');
+  assert.equal(world.result('waiting-out').until, iso(start + HOUR + 90 * MINUTE));
+
+  // Nothing more is sent during the new pause.
+  world.clock.ms = start + 2 * HOUR;
+  const calls = world.fake.requests.length;
+  await world.run();
+  assert.equal(world.fake.requests.length, calls);
+
+  // When it ends, the second pause is reported too, once, and the request goes up.
+  world.clock.ms = start + HOUR + 90 * MINUTE;
+  await world.run();
+  await world.run();
+  assert.equal(notes(world).length, 2);
+  assert.equal(new Set(notes(world).map((c) => c.body.split(' because ')[0])).size, 2);
+  assert.equal(world.result('waiting-out').state, 'done');
+});

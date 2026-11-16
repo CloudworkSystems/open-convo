@@ -132,7 +132,13 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
         value = { ...value, sentence: `${value.sentence} ${unrevokedNote}` };
         unrevokedNote = null;
       }
+      // A final result is saved in three steps that can each be repeated
+      // after a crash: into the working copy, into the result file, and then
+      // the working copy is removed.
+      const final = value.state !== 'waiting';
+      if (final) store.markFinished(id, value);
       store.writeResult(id, value, now());
+      if (final) store.finishWorking(id);
       tell(`${id}: ${value.sentence}`);
     };
     const refuse = (id, why) => result(id, { state: 'refused', sentence: refusedSentence(id, why) });
@@ -199,7 +205,15 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
     store.pruneResults(now());
 
     // ---- What is there to do: unfinished work first, then the waiting folder.
-    const items = store.listWorking().map((item) => ({ item }));
+    const working = store.listWorking();
+    const workingIds = new Set(working.map((item) => item.id));
+    // A request whose outcome was reached just before a run died only needs
+    // its result file written and its working copy removed.
+    for (const item of working.filter((one) => one.finished)) {
+      result(item.id, item.finished);
+      handled += 1;
+    }
+    const items = working.filter((item) => !item.finished).map((item) => ({ item }));
     const waiting = store.listWaiting();
 
     // A bundle file is removed with its request, unless another waiting
@@ -213,20 +227,31 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
       store.dropWaiting(entry, uses > 1 ? undefined : bundle);
     };
 
+    // Wherever a request leaves the waiting folder with a result, the result
+    // is written first, so a run that dies in between repeats the step
+    // instead of losing the request.
     const valid = [];
     for (const { entry, raw, unreadable } of read) {
+      // A run that died right after taking a request on leaves it in both
+      // places. The working copy is the one that counts; the leftover file is
+      // only removed, so the request is handled once. (A name can't be used
+      // again while the earlier request under it is unfinished.)
+      if (workingIds.has(entry.id)) {
+        drop(entry, raw?.bundle);
+        continue;
+      }
       if (unreadable) {
         // A file still being written is left for the next run.
         if (Date.now() - entry.mtimeMs < 5000) continue;
-        store.dropWaiting(entry);
         refuse(entry.id, "the request file can't be read as a request, so write it again as the README shows");
+        store.dropWaiting(entry);
         handled += 1;
         continue;
       }
       const checked = checkRequest(raw);
       if (checked.why) {
-        drop(entry, raw?.bundle);
         refuse(entry.id, checked.why);
+        drop(entry, raw?.bundle);
         handled += 1;
         continue;
       }
@@ -252,7 +277,6 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
         replacedBy.set(item.id, newest);
         continue;
       }
-      store.finishWorking(item.id);
       refuse(item.id, replacedSentence(newest));
       handled += 1;
       items.splice(i, 1);
@@ -260,8 +284,8 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
     for (const one of valid) {
       const newest = one.request.kind === 'push' ? newestForBranch.get(one.request.branch) : one.entry.id;
       if (newest !== one.entry.id) {
-        drop(one.entry, one.request.bundle);
         refuse(one.entry.id, replacedSentence(newest));
+        drop(one.entry, one.request.bundle);
         handled += 1;
         continue;
       }
@@ -319,7 +343,6 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
           // If the request's commit is already up, the refusal says so: only what came after it was turned down.
           const sent = items.find((one) => idOf(one) === id)?.item;
           const pushed = sent?.request.kind === 'push' && ['pushed', 'opened'].includes(sent.step);
-          store.finishWorking(id);
           refuse(
             id,
             pushed
@@ -340,6 +363,7 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
       const opening = `The push gate stopped every write ${sayTime(state.pausedAt)} because GitHub answered with a rate limit.`;
       const body = `${opening} Writes started again ${sayTime(now())}.\n\nPush gate, on the Studio`;
       const listPath = `${REPO_PATH}/issues/${REPORT_ISSUE}/comments`;
+      const pauseItReports = state.pausedUntil;
       try {
         await session.withToken({ issues: 'write' }, async (token) => {
           // An earlier run may have posted it and lost the answer, or died
@@ -359,10 +383,15 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
             store.saveState(state);
           });
         });
-        state.noteOwed = false;
-        state.noteStartedAt = 0;
-        state.noteWrite = null;
-        store.saveState(state);
+        // Only the note just delivered is cleared. If GitHub rate-limited the
+        // cleanup of this note's token, a new pause has begun and its own
+        // note is owed: that one stays.
+        if (state.pausedUntil === pauseItReports) {
+          state.noteOwed = false;
+          state.noteStartedAt = 0;
+          state.noteWrite = null;
+          store.saveState(state);
+        }
       } catch (error) {
         // With the hourly cap used up, the note stays owed for a later run.
         if (!(error instanceof CapReached) && settle(error, null, items)) return { handled, lines };
@@ -419,13 +448,13 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
         try {
           item = store.take(one.entry, request, now());
         } catch (error) {
-          store.dropWaiting(one.entry, request.bundle);
           refuse(
             id,
             error.message === 'bundle too large'
               ? 'its bundle is 50 MB or more, so split the work into smaller pushes'
               : `its bundle file "${request.bundle}" isn't in the waiting folder as a plain file, so put it beside the request`,
           );
+          store.dropWaiting(one.entry, request.bundle);
           handled += 1;
           continue;
         }
@@ -434,12 +463,10 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
 
       try {
         const done = request.kind === 'push' ? await handlePush(item) : await handlePost(item);
-        store.finishWorking(id);
         result(id, { state: 'done', ...done });
         handled += 1;
       } catch (error) {
         if (error instanceof CheckFailed) {
-          store.finishWorking(id);
           refuse(id, error.message);
           handled += 1;
           continue;

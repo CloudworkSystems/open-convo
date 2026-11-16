@@ -119,6 +119,23 @@ export function createStore({ home, shared }) {
     writeAtomic(join(workingDir, `${item.id}.json`), `${JSON.stringify(item, null, 2)}\n`, 0o600);
   }
 
+  /**
+   * Writes a request's final result into its working copy, before the result
+   * file is written and the working copy removed. A run that dies in between
+   * then finds the outcome there and only finishes the paperwork: the
+   * request is never handled a second time.
+   */
+  function markFinished(id, result) {
+    const path = join(workingDir, `${id}.json`);
+    let item;
+    try {
+      item = JSON.parse(readFileSync(path, 'utf8'));
+    } catch {
+      return;
+    }
+    writeAtomic(path, `${JSON.stringify({ ...item, finished: result }, null, 2)}\n`, 0o600);
+  }
+
   /** Drops a request from the waiting folder (refused before it was taken). */
   function dropWaiting(entry, bundleName) {
     rmSync(entry.path, { force: true });
@@ -296,6 +313,7 @@ export function createStore({ home, shared }) {
     workingBundle,
     take,
     saveWorking,
+    markFinished,
     dropWaiting,
     finishWorking,
     writeResult,

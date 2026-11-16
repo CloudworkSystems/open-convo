@@ -467,3 +467,72 @@ test("another run's lock keeps this run out, but not for more than 30 minutes", 
   await world.run();
   assert.equal(world.result('locked').state, 'done');
 });
+
+test('a request left in both the waiting folder and the working folder by a crash is handled once', async (t) => {
+  const { existsSync, readdirSync: list } = await import('node:fs');
+  const world = await makeWorld(t);
+  const nowhere = { apiBase: 'http://127.0.0.1:1', gitUrl: 'http://127.0.0.1:1/git/open-convo.git' };
+  const pull = world.openPull();
+  world.fake.reviewComments.push({ id: 7001, pull, body: 'An invented finding.', user: { login: 'chatgpt-codex-connector[bot]' } });
+  const commit = world.commit('claude/twice');
+  const makers = {
+    'twice-comment': () => world.commentRequest('twice-comment', { issue: 52 }),
+    'twice-reply': () => world.request('twice-reply', { kind: 'reply', agent: 'claude', thread: world.thread, pull, inReplyTo: 7001, body: `Answered.\n\n${world.signOff()}` }),
+    'twice-push': () => world.pushRequest('twice-push', 'claude/twice', commit),
+  };
+  for (const [id, make] of Object.entries(makers)) {
+    // The gate takes the request on (GitHub can't be reached, so it stays in working)...
+    make();
+    await world.run(nowhere);
+    assert.equal(existsSync(`${world.home}/work/working/${id}.json`), true, id);
+    // ...and, as after a crash between saving the working copy and removing the file, the file is still in the waiting folder.
+    make();
+    await world.run();
+    await world.run();
+    assert.equal(world.result(id).state, 'done', id);
+  }
+
+  assert.equal(world.fake.comments.filter((c) => c.issue === 52).length, 1);
+  assert.equal(world.fake.reviewComments.filter((c) => c.in_reply_to_id === 7001).length, 1);
+  assert.equal(world.fake.pushes, 1);
+  assert.equal(world.fake.pulls.length, 2);
+  for (const id of ['twice-comment', 'twice-reply', 'twice-push']) assert.equal(world.result(id).state, 'done', id);
+  assert.deepEqual(list(world.requests), []);
+  assert.equal(existsSync(`${world.home}/work/working/twice-comment.json`), false);
+});
+
+test('a request whose outcome was reached just before a crash keeps that outcome and is not handled again', async (t) => {
+  const { mkdirSync, readdirSync: list, writeFileSync } = await import('node:fs');
+  const world = await makeWorld(t);
+  // As left by a run that died after reaching each outcome and before writing the result files.
+  mkdirSync(`${world.home}/work/working`, { recursive: true });
+  const leftover = (id, finished) =>
+    writeFileSync(
+      `${world.home}/work/working/${id}.json`,
+      JSON.stringify({ id, request: { kind: 'comment', agent: 'claude', thread: world.thread, target: { issue: 52 }, body: `Posted before.\n\n${world.signOff()}` }, step: 'posting', postingAt: world.now(), takenAt: world.now(), finished }),
+    );
+  leftover('was-done', { state: 'done', sentence: 'Done: the comment is on #52 (invented link).', issue: { number: 52 } });
+  leftover('was-refused', { state: 'refused', sentence: 'Request "was-refused" was refused: GitHub answered "invented", so change the request to fit and send a new one.' });
+
+  await world.run();
+
+  assert.equal(world.result('was-done').sentence, 'Done: the comment is on #52 (invented link).');
+  assert.equal(world.result('was-refused').state, 'refused');
+  assert.deepEqual(list(`${world.home}/work/working`), []);
+  // Nothing was sent, and no token was made.
+  assert.deepEqual(world.fake.requests, []);
+  assert.equal(world.seam.calls, 0);
+});
+
+test('a finished request leaves its outcome in the working copy until the result file is written', async (t) => {
+  const { createStore } = await import('../src/store.mjs');
+  const world = await makeWorld(t);
+  world.commentRequest('ordered', { issue: 52 });
+  const nowhere = { apiBase: 'http://127.0.0.1:1', gitUrl: 'http://127.0.0.1:1/git/open-convo.git' };
+  await world.run(nowhere);
+  const store = createStore({ home: world.home, shared: world.shared });
+  store.markFinished('ordered', { state: 'done', sentence: 'Done: invented.' });
+  assert.deepEqual(store.listWorking()[0].finished, { state: 'done', sentence: 'Done: invented.' });
+  store.markFinished('not-there', { state: 'done', sentence: 'x' });
+  assert.equal(store.listWorking().length, 1);
+});
