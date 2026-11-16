@@ -155,3 +155,27 @@ test("push-gate token says so in one sentence when the key can't be opened", asy
   assert.equal(code, 1);
   assert.deepEqual(shown, ["The push gate can't open its key. The owner needs to check 1Password."]);
 });
+
+test("push-gate token fails and says so when the token can't be revoked after the command", async (t) => {
+  const world = await makeWorld(t);
+  // The check of the installation's reach revokes its own token first; fail the three tries after it.
+  let revokes = 0;
+  world.fake.failNext((method, path) => method === 'DELETE' && path === '/installation/token' && (revokes += 1) > 1, 500, { times: 3 });
+
+  const { code, shown } = await cli(world, ['token', '--', process.execPath, '-e', '0']);
+
+  assert.equal(code, 1);
+  assert.equal(world.fake.liveTokens().length, 1);
+  assert.match(shown.at(-1), /^The token could not be revoked and works until \d{4}-\d{2}-\d{2}T[\d:.]+Z\. The owner can end it now by suspending the app's installation\.$/);
+  assert.equal(shown.join('\n').includes(world.fake.liveTokens()[0]), false);
+});
+
+test('a command that exits without reading its input does not break the run', async () => {
+  const { runCommand } = await import('../src/git.mjs');
+  const outcomes = await Promise.all(Array.from({ length: 20 }, () => runCommand(process.execPath, ['-e', 'process.exit(3)'])));
+  assert.deepEqual([...new Set(outcomes.map((out) => out.code))], [3]);
+  // With input the command never reads, the broken pipe is ignored and the exit code still comes back.
+  const fed = await Promise.all(Array.from({ length: 20 }, () => runCommand(process.execPath, ['-e', 'process.stdin.destroy(); process.exit(4)'], { input: 'x'.repeat(4 * 1024 * 1024) })));
+  assert.deepEqual([...new Set(fed.map((out) => out.code))], [4]);
+  assert.equal((await runCommand(process.execPath, ['-e', 'process.stdin.pipe(process.stdout)'], { input: 'read back' })).stdout, 'read back');
+});

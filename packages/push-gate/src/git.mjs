@@ -19,14 +19,20 @@ import { CheckFailed, GitHubRefused, NoConnection, RateLimited, SignInFailed, sc
 /** Runs a command and collects its output. Tests wrap this to watch the arguments. */
 export function runCommand(command, args, { env, cwd, input } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { env, cwd, stdio: ['pipe', 'pipe', 'pipe'] });
+    // A command with no input gets no input pipe. One with input may exit
+    // before reading it; that broken pipe is ignored, and the command's own
+    // exit code is still what comes back.
+    const child = spawn(command, args, { env, cwd, stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (chunk) => (stdout += chunk));
     child.stderr.on('data', (chunk) => (stderr += chunk));
     child.on('error', reject);
     child.on('close', (code) => resolve({ code, stdout, stderr }));
-    child.stdin.end(input ?? '');
+    if (input !== undefined) {
+      child.stdin.on('error', () => {});
+      child.stdin.end(input);
+    }
   });
 }
 

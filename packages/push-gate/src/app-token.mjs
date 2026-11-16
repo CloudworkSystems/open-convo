@@ -101,7 +101,7 @@ export async function callGitHub({ apiBase = API_BASE, fetchImpl = fetch, now = 
  * app's private key (PEM); on the Mac it reads it through the 1Password
  * service account (scripts/push-gate/mac-seam.mjs), and tests pass a fake.
  */
-export function createSession({ seam, apiBase = API_BASE, fetchImpl = fetch, now = Date.now, say = () => {} }) {
+export function createSession({ seam, apiBase = API_BASE, fetchImpl = fetch, now = Date.now, say = () => {}, onUnrevoked = () => {} }) {
   const net = { apiBase, fetchImpl, now };
   let signed = null;
   let signedUntil = 0;
@@ -124,7 +124,20 @@ export function createSession({ seam, apiBase = API_BASE, fetchImpl = fetch, now
     return signed;
   }
 
-  const revoke = (token) => callGitHub(net, 'DELETE', '/installation/token', token);
+  // Revokes a token, trying three times. A token GitHub no longer accepts
+  // (401) is already dead. If it can't be revoked it stays usable until it
+  // expires, so that is reported through `onUnrevoked`, never passed over.
+  async function revoke(token, expiresAt) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await callGitHub(net, 'DELETE', '/installation/token', token);
+        return;
+      } catch (error) {
+        if (error instanceof SignInFailed) return;
+      }
+    }
+    onUnrevoked(expiresAt ?? new Date(now() + HOUR).toISOString());
+  }
 
   /** Checks, once a run, that the installation reaches exactly this repo. */
   async function checkReach() {
@@ -136,7 +149,7 @@ export function createSession({ seam, apiBase = API_BASE, fetchImpl = fetch, now
     try {
       reach = (await callGitHub(net, 'GET', '/installation/repositories?per_page=2', data.token)).data;
     } finally {
-      await revoke(data.token).catch(() => {});
+      await revoke(data.token, data.expires_at);
     }
     const names = (reach?.repositories ?? []).map((repo) => repo.full_name);
     if (reach?.total_count !== 1 || names.length !== 1 || names[0] !== FULL_NAME) {
@@ -147,7 +160,8 @@ export function createSession({ seam, apiBase = API_BASE, fetchImpl = fetch, now
 
   /**
    * Runs `work(token)` with a token limited to this repo and to
-   * `permissions`, then revokes it. Returns what `work` returns.
+   * `permissions`, then revokes it. Returns what `work` returns. A token
+   * that couldn't be revoked is reported through `onUnrevoked(expiresAt)`.
    */
   async function withToken(permissions, work) {
     await checkReach();
@@ -163,7 +177,7 @@ export function createSession({ seam, apiBase = API_BASE, fetchImpl = fetch, now
       say(handOverLine(data.expires_at ?? new Date(now() + HOUR).toISOString()));
       return await work(token);
     } finally {
-      await revoke(token).catch(() => {});
+      await revoke(token, data.expires_at);
     }
   }
 

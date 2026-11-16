@@ -21,12 +21,16 @@ export const NOTHING_WAITING = 'Nothing waiting.';
 const KEY_SENTENCE = "Waiting: the push gate can't open its key. The owner needs to check 1Password.";
 const CONNECTION_SENTENCE = "Waiting: GitHub can't be reached. The gate tries again on its next run.";
 
+const unrevokedLine = (expiresAt) =>
+  `A token could not be revoked and works until ${sayTime(Date.parse(expiresAt))}. The owner can end it now by suspending the app's installation.`;
 const refusedSentence = (id, why) => `Request "${id}" was refused: ${why}.`;
 const short = (sha) => sha.slice(0, 12);
 
 /** The description with the local review recorded just above the sign-off line. */
-export function withReviewLine(body, review) {
+export function withReviewLine(body, review, signOffLine) {
   const line = `Local review: ${AGENTS[review.reviewer]} reviewed commit ${short(review.commit)}, result "${review.result}" (recorded by the push gate).`;
+  // A pull request with no description gets the record and the sign-off line.
+  if (typeof body !== 'string' || !body.trim()) return `${line}\n\n${signOffLine}`;
   if (REVIEW_LINE.test(body)) return body.replace(REVIEW_LINE, line);
   const lines = body.trimEnd().split('\n');
   const signOff = lines.pop();
@@ -86,11 +90,36 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
 
   async function runLocked() {
     const state = store.loadState();
-    const session = createSession({ seam, apiBase, fetchImpl, now, say: tell });
+    const session = createSession({
+      seam,
+      apiBase,
+      fetchImpl,
+      now,
+      say: tell,
+      // A token that couldn't be revoked is written down and shown until it expires.
+      // It counts as the plan's other refusals do: three in an hour stop every write.
+      onUnrevoked(expiresAt) {
+        state.unrevoked = [...(state.unrevoked ?? []).filter((t) => Date.parse(t) > now()), expiresAt];
+        state.refusals = [...state.refusals.filter((t) => t > now() - HOUR), now()];
+        if (state.refusals.length >= LIMITS.refusalsBeforeStop && !state.stopped) {
+          state.stopped = { reason: `GitHub refused ${LIMITS.refusalsBeforeStop} requests within an hour`, at: new Date(now()).toISOString() };
+        }
+        store.saveState(state);
+        store.logWrite({ kind: 'revoke', target: 'token', result: 'failed' }, now());
+        unrevokedNote = unrevokedLine(expiresAt);
+        tell(unrevokedNote);
+      },
+    });
     const git = createGit({ dir: store.checkoutDir, gitUrl, run });
     let handled = 0;
+    let unrevokedNote = null;
 
     const result = (id, value) => {
+      // A token that couldn't be revoked is said in the result of the request it was made for.
+      if (unrevokedNote && value.state !== 'waiting') {
+        value = { ...value, sentence: `${value.sentence} ${unrevokedNote}` };
+        unrevokedNote = null;
+      }
       store.writeResult(id, value, now());
       tell(`${id}: ${value.sentence}`);
     };
@@ -245,6 +274,11 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
       const id = idOf(one);
       const request = one.item?.request ?? one.request;
       const rest = items.slice(index);
+      // A stop set while the last request was handled (tokens that couldn't be revoked) holds the rest.
+      if (state.stopped) {
+        holdAll(rest, `Waiting: the push gate has stopped every write because ${state.stopped.reason}. The owner needs to restart it.`);
+        return { handled, lines };
+      }
 
       // Pace limits.
       const quiet = quietUntil(now());
@@ -259,7 +293,9 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
       }
       // A request whose own push already went up (a run was interrupted after
       // it) only has its pull request left to finish, so the gap doesn't apply.
-      const alreadyPushed = ['pushed', 'opened'].includes(one.item?.step);
+      // The same goes for a request finishing its own interrupted push.
+      const ownPush = one.item?.step === 'pushing' && state.lastPush[request.branch] === one.item.pushingAt;
+      const alreadyPushed = ['pushed', 'opened'].includes(one.item?.step) || ownPush;
       if (request.kind === 'push' && !alreadyPushed) {
         const gap = pushGapUntil(state.lastPush[request.branch], now());
         if (gap) {
@@ -346,11 +382,15 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
 
         return await session.withToken(permissionsFor(request), async (token) => {
           if (onGitHub !== commit) {
+            // The push's time is saved before the push is sent. If the run dies
+            // or the connection drops after GitHub has accepted it, the 10
+            // minutes for this branch still count from here.
             item.step = 'pushing';
+            item.pushingAt = now();
             store.saveWorking(item);
-            await write('push', branch, () => git.push(commit, branch, token));
-            state.lastPush[branch] = now();
+            state.lastPush[branch] = item.pushingAt;
             store.saveState(state);
+            await write('push', branch, () => git.push(commit, branch, token));
           }
           item.step = 'pushed';
           store.saveWorking(item);
@@ -358,8 +398,9 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
           // The pull request: open it, or record the review on the one already open.
           const found = await session.call('GET', `${REPO_PATH}/pulls?state=open&head=${encodeURIComponent(`${OWNER}:${branch}`)}&per_page=5`, token);
           let pull = (found.data ?? []).find((pr) => pr.head?.ref === branch) ?? null;
+          let unrecorded = false;
           if (!pull && request.pullRequest) {
-            const body = withReviewLine(request.pullRequest.body, request.review);
+            const body = withReviewLine(request.pullRequest.body, request.review, `${AGENTS[request.agent]}, ${request.thread}`);
             const why = checkText(body, { ...request, what: 'pull request description' });
             if (why) throw new CheckFailed(why);
             pull = (
@@ -369,9 +410,12 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
             ).data;
             item.step = 'opened';
             store.saveWorking(item);
-          } else if (pull && typeof pull.body === 'string' && pull.body.trim()) {
-            const body = withReviewLine(pull.body, request.review);
-            if (body !== pull.body && body.length < LIMITS.textChars) {
+          } else if (pull) {
+            // Every push to an open pull request leaves its review record there,
+            // whatever the description held before (even nothing).
+            const body = withReviewLine(pull.body, request.review, `${AGENTS[request.agent]}, ${request.thread}`);
+            if (body.length >= LIMITS.textChars) unrecorded = true;
+            else if (body !== pull.body) {
               await write('description', `#${pull.number}`, () => session.call('PATCH', `${REPO_PATH}/pulls/${pull.number}`, token, { body }));
             }
           }
@@ -381,7 +425,12 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
             if (!has) await write('label', `#${pull.number}`, () => session.call('POST', `${REPO_PATH}/issues/${pull.number}/labels`, token, { labels: [label] }));
           }
           return pull
-            ? { sentence: `Done: commit ${short(commit)} is on branch ${branch}, pull request #${pull.number} (${pull.html_url}).`, commit, branch, pullRequest: { number: pull.number, url: pull.html_url } }
+            ? {
+                sentence: `Done: commit ${short(commit)} is on branch ${branch}, pull request #${pull.number} (${pull.html_url}).${unrecorded ? " Its description is at GitHub's length limit, so the local review record could not be added: shorten the description and push again." : ''}`,
+                commit,
+                branch,
+                pullRequest: { number: pull.number, url: pull.html_url },
+              }
             : { sentence: `Done: commit ${short(commit)} is on branch ${branch}. No pull request was asked for.`, commit, branch };
         });
       } finally {
@@ -434,7 +483,7 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
 }
 
 /** The result of every request, for any agent session to read and pass on. */
-export function status({ home, shared }) {
+export function status({ home, shared, now = Date.now }) {
   const store = createStore({ home, shared });
   const results = store.listResults();
   const known = new Set(results.map((r) => r.id));
@@ -447,6 +496,7 @@ export function status({ home, shared }) {
   for (const r of results.filter((x) => x.state !== 'waiting')) lines.push(`${r.id}: ${r.sentence}`);
   const state = store.loadState();
   if (state.stopped) lines.push(`The push gate has stopped every write because ${state.stopped.reason}. The owner needs to restart it.`);
+  for (const expiresAt of state.unrevoked ?? []) if (Date.parse(expiresAt) > now()) lines.push(unrevokedLine(expiresAt));
   return { lines, results };
 }
 

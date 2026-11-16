@@ -124,9 +124,16 @@ export async function main(argv, { loadSeam, env = process.env, out = (line) => 
     }
     const seam = await loadSeam();
     // The hand-over line goes to the screen, not into the command's output.
-    const session = createSession({ seam, apiBase, fetchImpl, now, say: err });
+    let unrevoked = null;
+    const session = createSession({ seam, apiBase, fetchImpl, now, say: err, onUnrevoked: (expiresAt) => (unrevoked = expiresAt) });
     try {
-      return await session.withToken(permissions, (token) => runWithToken(toRun[0], toRun.slice(1), token, { env, gitUrl, spawnImpl }));
+      const code = await session.withToken(permissions, (token) => runWithToken(toRun[0], toRun.slice(1), token, { env, gitUrl, spawnImpl }));
+      if (unrevoked) {
+        // The command ran, but its token is still alive: say so and fail.
+        err(`The token could not be revoked and works until ${unrevoked}. The owner can end it now by suspending the app's installation.`);
+        return code === 0 ? 1 : code;
+      }
+      return code;
     } catch (error) {
       err(tokenFailure(error));
       return 1;

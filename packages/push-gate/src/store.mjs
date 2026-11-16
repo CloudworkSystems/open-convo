@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import { DAY, HOUR, LIMITS } from './constants.mjs';
 import { REQUEST_ID } from './checks.mjs';
 
-const EMPTY_STATE = { stopped: null, pausedUntil: 0, pausedAt: 0, noteOwed: false, lastPush: {}, refusals: [] };
+const EMPTY_STATE = { stopped: null, pausedUntil: 0, pausedAt: 0, noteOwed: false, lastPush: {}, refusals: [], unrevoked: [] };
 
 function writeAtomic(path, text, mode = 0o644) {
   const tmp = `${path}.tmp-${process.pid}`;

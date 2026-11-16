@@ -211,3 +211,120 @@ test('status lists waiting, done and refused requests for any agent session to r
   assert.ok(lines.some((line) => line.startsWith('s-done: Done: the comment is on #52')));
   assert.ok(lines.some((line) => line.startsWith('s-refused: Request "s-refused" was refused: ')));
 });
+
+test('a push that GitHub accepted before a crash or a dropped connection still starts the 10 minutes for its branch', async (t) => {
+  const { runCommand } = await import('../src/git.mjs');
+  const world = await makeWorld(t);
+  const start = world.now();
+
+  // A crash right after the push: the next request for the branch must still wait.
+  const first = world.commit('claude/timed');
+  world.pushRequest('timed-1', 'claude/timed', first);
+  const dieAfterPush = async (command, args, options) => {
+    const out = await runCommand(command, args, options);
+    if (args.includes('push')) throw new Error('invented crash');
+    return out;
+  };
+  await assert.rejects(world.run({ run: dieAfterPush }), /invented crash/);
+  assert.equal(world.onGitHub('claude/timed'), first);
+  world.clock.ms = start + MINUTE;
+  const second = world.commit('claude/timed', { 'notes.txt': 'a fix\n' });
+  world.pushRequest('timed-2', 'claude/timed', second);
+  await world.run();
+  assert.equal(world.result('timed-1').state, 'done', 'the interrupted request finishes without waiting on its own push');
+  assert.equal(world.result('timed-2').state, 'waiting');
+  assert.equal(world.result('timed-2').until, new Date(start + 10 * MINUTE).toISOString());
+  assert.equal(world.onGitHub('claude/timed'), first);
+  assert.equal(world.fake.pushes, 1);
+
+  // GitHub takes the push, but the command reports a lost connection.
+  const other = world.commit('claude/dropped');
+  world.pushRequest('dropped-1', 'claude/dropped', other);
+  const dropAfterPush = async (command, args, options) => {
+    const out = await runCommand(command, args, options);
+    return args.includes('push') ? { code: 128, stdout: '', stderr: "fatal: unable to access 'invented': Failed to connect to 127.0.0.1" } : out;
+  };
+  await world.run({ run: dropAfterPush });
+  assert.equal(world.result('dropped-1').state, 'waiting');
+  assert.match(world.result('dropped-1').sentence, /^Waiting: GitHub can't be reached\./);
+  const droppedAt = world.now();
+  world.clock.ms += MINUTE;
+  const fix = world.commit('claude/dropped', { 'notes.txt': 'a fix\n' });
+  world.pushRequest('dropped-2', 'claude/dropped', fix);
+  await world.run();
+  assert.equal(world.result('dropped-1').state, 'done');
+  assert.equal(world.result('dropped-2').state, 'waiting');
+  assert.equal(world.result('dropped-2').until, new Date(droppedAt + 10 * MINUTE).toISOString());
+  assert.equal(world.onGitHub('claude/dropped'), other);
+});
+
+test('a push to a pull request with an empty description still leaves the local review record there', async (t) => {
+  const world = await makeWorld(t);
+  for (const [branch, body] of [
+    ['claude/blank-null', null],
+    ['claude/blank-empty', ''],
+    ['claude/blank-spaces', ' \n\n '],
+  ]) {
+    const commit = world.commit(branch);
+    world.openPull(branch);
+    world.fake.pulls.at(-1).body = body;
+    world.pushRequest(branch.slice('claude/'.length), branch, commit, { pullRequest: undefined });
+  }
+
+  await world.run();
+
+  for (const pull of world.fake.pulls) {
+    assert.match(pull.body, /^Local review: Codex reviewed commit [0-9a-f]{12}, result "clean" \(recorded by the push gate\)\.\n\nClaude, test thread 7$/);
+  }
+  assert.equal(world.fake.pulls.length, 3);
+  assert.deepEqual(world.log().filter((line) => line.kind === 'description').map((line) => line.result), ['done', 'done', 'done']);
+});
+
+test("a token that can't be revoked is reported, not passed over", async (t) => {
+  const world = await makeWorld(t);
+  const REVOKE = (method, path) => method === 'DELETE' && path === '/installation/token';
+
+  // One failed try is not a failure: the gate tries again.
+  world.commentRequest('retry', { issue: 52 });
+  world.fake.failNext(REVOKE, 500, { times: 2 });
+  const quiet = await world.run();
+  assert.deepEqual(world.fake.liveTokens(), []);
+  assert.doesNotMatch(quiet.lines.join('\n'), /could not be revoked/);
+
+  // Three failed tries: the request is done, and the live token is said out loud and written down.
+  world.commentRequest('stuck', { issue: 52 });
+  world.fake.failNext((method, path) => REVOKE(method, path) && world.fake.requests.filter((r) => r === 'POST /repos/CloudworkSystems/open-convo/issues/52/comments').length === 2, 500, { times: 3 });
+  const { lines } = await world.run();
+  assert.equal(world.result('stuck').state, 'done');
+  assert.equal(world.fake.liveTokens().length, 1);
+  const said = /^A token could not be revoked and works until November 16(,| at) 11:00 AM EST\. The owner can end it now by suspending the app's installation\.$/;
+  assert.equal(lines.filter((line) => said.test(line)).length, 1);
+  // It is in the request's own result, in one plain sentence.
+  assert.match(world.result('stuck').sentence, /^Done: the comment is on #52 \(.*\)\. A token could not be revoked and works until November 16(,| at) 11:00 AM EST\. The owner can end it now by suspending the app's installation\.$/);
+  assert.deepEqual(world.log().at(-1), { time: new Date(world.now()).toISOString(), kind: 'revoke', target: 'token', result: 'failed' });
+  assert.match(world.status().lines.at(-1), said);
+  assert.equal(world.everythingWritten().includes(world.fake.liveTokens()[0]), false);
+
+  // Once the token has expired, status stops listing it as live; the request's result keeps its sentence.
+  world.clock.ms += 61 * MINUTE;
+  assert.equal(world.status().lines.filter((line) => line.startsWith('A token could not be revoked')).length, 0);
+});
+
+test("three tokens that can't be revoked within an hour stop every write until restart, as refusals do", async (t) => {
+  const world = await makeWorld(t);
+  for (const id of ['u-1', 'u-2', 'u-3', 'u-4']) world.commentRequest(id, { issue: 52 });
+  // Every revoke after the reach check's own fails.
+  let revokes = 0;
+  world.fake.failNext((method, path) => method === 'DELETE' && path === '/installation/token' && (revokes += 1) > 1, 500, { times: 9 });
+
+  await world.run();
+
+  for (const id of ['u-1', 'u-2', 'u-3']) assert.match(world.result(id).sentence, /^Done: .* A token could not be revoked and works until /);
+  assert.equal(world.result('u-4').state, 'waiting');
+  assert.equal(world.result('u-4').sentence, 'Waiting: the push gate has stopped every write because GitHub refused 3 requests within an hour. The owner needs to restart it.');
+  assert.equal(world.fake.comments.length, 3);
+  assert.equal(world.log().filter((line) => line.kind === 'revoke' && line.result === 'failed').length, 3);
+
+  await world.run({ restart: true });
+  assert.equal(world.result('u-4').state, 'done');
+});

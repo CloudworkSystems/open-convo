@@ -82,7 +82,7 @@ export async function makeWorld(t, { startMs = DAYTIME } = {}) {
     thread: 'test thread 7',
     /** Runs the gate once against the fake GitHub. */
     run: (extra = {}) => runOnce({ home, shared, seam, now, apiBase: fake.apiBase, gitUrl: fake.gitUrl, run, ...extra }),
-    status: () => status({ home, shared }),
+    status: () => status({ home, shared, now }),
     /** Makes a commit on `branch` (started from `from`) in the agent's repository. */
     commit(branch, files = { 'notes.txt': `notes for ${branch}\n` }, { from = 'main' } = {}) {
       const exists = git(agent, 'branch', '--list', branch) !== '';
