@@ -1,8 +1,9 @@
 # Agent Wire: A Mailbox For Outside Agents (PRD)
 
-Status: Draft (Nov 6, 2026): proposed, not approved. Nothing is built,
-installed, deployed or connected until the owner says yes to this plan and
-records the owner decision below.
+Status: Approved (Nov 16, 2026): the owner said yes to this plan and to
+Cam holding one mailbox token (decision card, thread "Plan the agent wire
+mailbox"). Not started: part 1 waits until his decision is recorded in
+`docs/decisions.md` and a builder lane is free.
 
 Written November 6, 2026 by a Claude session (project "261024 OC Steering",
 thread "Plan the agent wire mailbox"), from the owner's "Agent Wire Plan"
@@ -37,11 +38,13 @@ without code written for one company.
 
 ## Owner Decision Needed First (Draft, Not Approved)
 
-This plan can't be built until the owner records a decision in
-`docs/decisions.md`. The text below is the owner's own draft, quoted here
-for him to approve, edit or reject. It is **not approved** and is not in
-the decisions file. It goes there only quoted with his yes and the date,
-in a pull request he approves.
+This plan can't be built until the owner's decision is recorded in
+`docs/decisions.md`. The text below is the owner's own draft. On November
+16, 2026 he said yes to the plan and to the token exception described under
+it (thread "Plan the agent wire mailbox"). It still isn't in the decisions
+file: it goes there quoted with that yes and its date, in its own pull
+request that he approves on GitHub, and part 1 doesn't start before that
+merges.
 
 > Owner decision (date): An agent wire may be built: a small MCP mailbox
 > each owner runs themselves, by default on the owner's own Cloudflare
@@ -52,15 +55,15 @@ in a pull request he approves.
 > agents; the Oct 30 foreign-agent rule otherwise stands. Building it
 > follows the normal plan, review and owner-yes path.
 
-**One thing for the owner to settle in that decision.** The zero-trust
+**One thing the decision has to say (the owner's yes, November 16).** The zero-trust
 baseline says a foreign agent "never holds a credential", and the draft
 also gives each foreign agent its own key. That key (under "Sign-In"
 below, a Cloudflare Access token) is a credential, even though it opens
-nothing but that agent's own notes. The decision should say plainly that a
-per-agent mailbox token is the one allowed exception (it reaches only the
-mailbox, only that agent's notes, it expires, and the owner can switch it
-off at once), or the plan has to find another way for Cam to sign in. Part
-1 must not start until the recorded decision answers this.
+nothing but that agent's own notes. The owner chose to allow it: the recorded
+decision says plainly that a per-agent mailbox token is the one allowed
+exception (it reaches only the mailbox, only that agent's notes, it
+expires, and the owner can switch it off at once). Part 1 must not start
+until that decision is recorded.
 
 ## What It Is
 
