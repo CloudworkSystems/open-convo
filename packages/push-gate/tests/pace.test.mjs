@@ -583,8 +583,10 @@ test('plan test 9: a request whose push already went up is finished, not replace
   const first = world.commit(branch);
   world.pushRequest('half-1', branch, first);
   // The run dies after the push is confirmed, before the pull request is opened.
+  // (The first look for an open pull request comes before the push; the second, after it.)
+  let lookups = 0;
   const dieAfterOpeningLookup = async (url, options) => {
-    if (options.method === 'GET' && url.includes('/pulls?')) throw new Error('invented crash');
+    if (options.method === 'GET' && url.includes('/pulls?') && (lookups += 1) === 2) throw new Error('invented crash');
     return fetch(url, options);
   };
   await assert.rejects(world.run({ fetchImpl: dieAfterOpeningLookup, run: runCommand }), /invented crash/);

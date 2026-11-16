@@ -506,8 +506,23 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
         // the branch waiting, is not sent again: the newer one goes instead.
         if (onGitHub !== commit && replacedBy.has(id)) throw new CheckFailed(replacedSentence(replacedBy.get(id)));
 
+        const openPull = async (token) => {
+          const found = await session.call('GET', `${REPO_PATH}/pulls?state=open&head=${encodeURIComponent(`${OWNER}:${branch}`)}&per_page=5`, token);
+          return (found.data ?? []).find((pr) => pr.head?.ref === branch) ?? null;
+        };
+        const signOffLine = `${AGENTS[request.agent]}, ${request.thread}`;
+
         return await session.withToken(permissionsFor(request), async (token) => {
           if (onGitHub !== commit) {
+            // A pull request already open for the branch must have room for the
+            // review record. That is checked before the push is sent, so no
+            // commit goes up without its record.
+            const existing = await openPull(token);
+            if (existing && withReviewLine(existing.body, request.review, signOffLine).length >= LIMITS.textChars) {
+              throw new CheckFailed(
+                `the description of pull request #${existing.number} leaves no room for the local review record under ${LIMITS.textChars} characters, so shorten that description on GitHub and send the request again`,
+              );
+            }
             // The push's time is saved before the push is sent. If the run dies
             // or the connection drops after GitHub has accepted it, the 10
             // minutes for this branch still count from here.
@@ -524,8 +539,7 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
           store.saveWorking(item);
 
           // The pull request: open it, or record the review on the one already open.
-          const found = await session.call('GET', `${REPO_PATH}/pulls?state=open&head=${encodeURIComponent(`${OWNER}:${branch}`)}&per_page=5`, token);
-          let pull = (found.data ?? []).find((pr) => pr.head?.ref === branch) ?? null;
+          let pull = await openPull(token);
           let unrecorded = false;
           if (pull) foundOnGitHub(item, 'pull request');
           if (!pull && request.pullRequest) {
@@ -543,7 +557,10 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
           } else if (pull) {
             // Every push to an open pull request leaves its review record there,
             // whatever the description held before (even nothing).
-            const body = withReviewLine(pull.body, request.review, `${AGENTS[request.agent]}, ${request.thread}`);
+            // (The length was checked before the push. It can only be too long
+            // here if the description grew on GitHub in between, or the commit
+            // was already up when the gate first saw the request.)
+            const body = withReviewLine(pull.body, request.review, signOffLine);
             if (body.length >= LIMITS.textChars) unrecorded = true;
             else if (body !== pull.body) {
               await write('description', `#${pull.number}`, () => session.call('PATCH', `${REPO_PATH}/pulls/${pull.number}`, token, { body }), item);

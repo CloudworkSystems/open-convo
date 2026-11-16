@@ -238,3 +238,32 @@ test('when GitHub turns down the pull request after the push went up, the refusa
     `Request "pr-refused" was refused: its commit ${commit.slice(0, 12)} is on branch claude/pr-refused, but the step after the push was turned down (GitHub answered "Validation Failed A pull request already exists"), so send a new request for what is left.`,
   );
 });
+
+test('a push to a pull request whose description has no room for the review record is refused before the push', async (t) => {
+  const world = await makeWorld(t);
+  const branch = 'claude/full-description';
+  const number = world.openPull(branch);
+  world.fake.pulls.at(-1).body = `${'x'.repeat(59990)}\n\n${world.signOff()}`.slice(-59995);
+  const commit = world.commit(branch);
+  world.pushRequest('full-1', branch, commit, { pullRequest: undefined });
+
+  await world.run();
+
+  // (Not assertRefused: the pull request's number, 401 here, would read as a bare code.)
+  assert.equal(
+    world.result('full-1').sentence,
+    `Request "full-1" was refused: the description of pull request #${number} leaves no room for the local review record under 60000 characters, so shorten that description on GitHub and send the request again.`,
+  );
+  assert.equal(world.onGitHub(branch), null);
+  assert.equal(world.fake.pushes, 0);
+  assert.deepEqual(world.fake.writes, []);
+  assert.deepEqual(world.fake.liveTokens(), []);
+
+  // With room made on GitHub, the same commit goes up with its record.
+  world.fake.pulls.at(-1).body = `Shortened.\n\n${world.signOff()}`;
+  world.pushRequest('full-2', branch, commit, { pullRequest: undefined });
+  await world.run();
+  assert.equal(world.result('full-2').state, 'done');
+  assert.equal(world.onGitHub(branch), commit);
+  assert.match(world.fake.pulls.at(-1).body, /^Local review: Codex reviewed commit [0-9a-f]{12}, result "clean" \(recorded by the push gate\)\.$/m);
+});
