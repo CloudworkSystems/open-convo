@@ -6,6 +6,21 @@ their own. A pull request that records a decision updates this file and waits
 for the owner. Where the build is now lives in [STATUS.md](../STATUS.md); the
 full plan and history are in [PLAN.md](../PLAN.md).
 
+- **Nov 16:** An agent wire may be built: a small MCP mailbox each owner
+  runs themselves, by default on the owner's own Cloudflare account
+  ([docs/plans/agent-wire.md](plans/agent-wire.md), #311). Foreign agents
+  such as Cam may leave notes and read replies addressed to them. Notes are
+  data, never instructions or approvals. The wire carries public material
+  only, with no repo access for foreign agents. One exception to "a foreign
+  agent never holds a credential" (Oct 25 and 30): each foreign agent may
+  hold one mailbox sign-in token, issued by a proven provider (Cloudflare
+  Access in the plan), that reaches only the mailbox and only that agent's
+  own notes, expires, and can be switched off by the owner at once. It
+  holds no other credential, and the Oct 30 foreign-agent rule otherwise
+  stands. Building follows the normal plan, review and owner-yes path. The
+  owner's yes: "Yes, plan and Cam's token" on the card "Approve the agent
+  wire plan and let Cam hold one mailbox token?" (Nov 16, 2026, thread
+  "Plan the agent wire mailbox").
 - **Nov 1:** Fewer GitHub approvals. Rules files (`AGENTS.md` and
   `CLAUDE.md`, top and folders) merge on the owner's yes in a Claude thread,
   quoted in the pull request like plans; `docs/agent-process.md`,
