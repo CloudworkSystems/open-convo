@@ -17,10 +17,11 @@ full plan and history are in [PLAN.md](../PLAN.md).
   plan), that reaches only the mailbox and only Cam's own notes, expires,
   and can be switched off by the owner at once. Cam holds no other
   credential. A token for any other foreign agent needs the owner's own
-  yes, recorded here. The Oct 30 foreign-agent rule otherwise stands. Building follows the normal plan, review and owner-yes path. The
-  owner's yes: "Yes, plan and Cam's token" on the card "Approve the agent
-  wire plan and let Cam hold one mailbox token?" (Nov 16, 2026, thread
-  "Plan the agent wire mailbox").
+  yes, recorded here. The Oct 30 foreign-agent rule otherwise stands.
+  Building follows the normal plan, review and owner-yes path. The owner's
+  yes: "Yes, plan and Cam's token" on the card "Approve the agent wire plan
+  and let Cam hold one mailbox token?" (Nov 16, 2026, thread "Plan the
+  agent wire mailbox").
 - **Nov 1:** Fewer GitHub approvals. Rules files (`AGENTS.md` and
   `CLAUDE.md`, top and folders) merge on the owner's yes in a Claude thread,
   quoted in the pull request like plans; `docs/agent-process.md`,
