@@ -125,17 +125,34 @@ export async function main(argv, { loadSeam, env = process.env, out = (line) => 
     const seam = await loadSeam();
     // The hand-over line goes to the screen, not into the command's output.
     let unrevoked = null;
-    const session = createSession({ seam, apiBase, fetchImpl, now, say: err, onUnrevoked: (expiresAt) => (unrevoked = expiresAt) });
+    let pauseMs = 0;
+    const session = createSession({
+      seam,
+      apiBase,
+      fetchImpl,
+      now,
+      say: err,
+      onUnrevoked: (expiresAt) => (unrevoked = expiresAt),
+      onRevokeRateLimited: (waitMs) => (pauseMs = waitMs),
+    });
+    // A token still alive after the command: say so in one sentence, and fail.
+    const sayUnrevoked = () =>
+      err(
+        pauseMs
+          ? `The token could not be revoked and works until ${unrevoked}, because GitHub asked for a pause (a rate limit), so run nothing more against GitHub for ${Math.ceil(pauseMs / 60000)} minutes.`
+          : `The token could not be revoked and works until ${unrevoked}. The owner can end it now by suspending the app's installation.`,
+      );
     try {
       const code = await session.withToken(permissions, (token) => runWithToken(toRun[0], toRun.slice(1), token, { env, gitUrl, spawnImpl }));
       if (unrevoked) {
-        // The command ran, but its token is still alive: say so and fail.
-        err(`The token could not be revoked and works until ${unrevoked}. The owner can end it now by suspending the app's installation.`);
+        sayUnrevoked();
         return code === 0 ? 1 : code;
       }
       return code;
     } catch (error) {
-      err(tokenFailure(error));
+      if (error instanceof RateLimited) pauseMs ||= error.waitMs;
+      if (unrevoked) sayUnrevoked();
+      else err(tokenFailure(error));
       return 1;
     }
   }

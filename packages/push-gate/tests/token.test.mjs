@@ -179,3 +179,23 @@ test('a command that exits without reading its input does not break the run', as
   assert.deepEqual([...new Set(fed.map((out) => out.code))], [4]);
   assert.equal((await runCommand(process.execPath, ['-e', 'process.stdin.pipe(process.stdout)'], { input: 'read back' })).stdout, 'read back');
 });
+
+for (const [what, status, extra, minutes] of [
+  ['a 429', 429, { headers: { 'retry-after': '7200' } }, 120],
+  ['a "secondary rate limit" 403', 403, { body: { message: 'You have exceeded a secondary rate limit.' } }, 60],
+]) {
+  test(`push-gate token says in one sentence that it couldn't revoke and GitHub asked for a pause, on ${what}`, async (t) => {
+    const world = await makeWorld(t);
+    let revokes = 0;
+    world.fake.failNext((method, path) => method === 'DELETE' && path === '/installation/token' && (revokes += 1) > 1, status, extra);
+
+    const { code, shown } = await cli(world, ['token', '--', process.execPath, '-e', '0']);
+
+    assert.equal(code, 1);
+    assert.equal(revokes, 2, 'the rate-limited revoke is tried once');
+    assert.equal(world.fake.liveTokens().length, 1);
+    assert.equal(shown.length, 2);
+    assert.match(shown[1], new RegExp(`^The token could not be revoked and works until \\d{4}-\\d{2}-\\d{2}T[\\d:.]+Z, because GitHub asked for a pause \\(a rate limit\\), so run nothing more against GitHub for ${minutes} minutes\\.$`));
+    assert.equal(shown.join('\n').includes(world.fake.liveTokens()[0]), false);
+  });
+}

@@ -109,6 +109,14 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
         unrevokedNote = unrevokedLine(expiresAt);
         tell(unrevokedNote);
       },
+      // GitHub answered the revoke with a rate limit: every write stops, as
+      // for a rate limit on any other call, and the note on #52 is owed.
+      onRevokeRateLimited(waitMs) {
+        state.pausedAt = now();
+        state.pausedUntil = Math.max(state.pausedUntil, now() + Math.max(waitMs, LIMITS.rateLimitPauseMs));
+        state.noteOwed = true;
+        store.saveState(state);
+      },
     });
     const git = createGit({ dir: store.checkoutDir, gitUrl, run });
     let handled = 0;
@@ -224,7 +232,7 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
       }
       if (error instanceof RateLimited) {
         state.pausedAt = now();
-        state.pausedUntil = now() + Math.max(error.waitMs, LIMITS.rateLimitPauseMs);
+        state.pausedUntil = Math.max(state.pausedUntil, now() + Math.max(error.waitMs, LIMITS.rateLimitPauseMs));
         state.noteOwed = true;
         store.saveState(state);
         holdAll(rest, `Waiting: GitHub asked the push gate to slow down. Writes start again ${sayTime(state.pausedUntil)}.`, state.pausedUntil);
@@ -277,6 +285,11 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
       // A stop set while the last request was handled (tokens that couldn't be revoked) holds the rest.
       if (state.stopped) {
         holdAll(rest, `Waiting: the push gate has stopped every write because ${state.stopped.reason}. The owner needs to restart it.`);
+        return { handled, lines };
+      }
+      // So does a rate limit GitHub gave when the last request's token was revoked.
+      if (now() < state.pausedUntil) {
+        holdAll(rest, `Waiting: GitHub asked the push gate to slow down. Writes start again ${sayTime(state.pausedUntil)}.`, state.pausedUntil);
         return { handled, lines };
       }
 

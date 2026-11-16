@@ -305,3 +305,82 @@ test('a replaced request that shares its bundle file with the newer one does not
   assert.equal(world.result('shared-2').state, 'done');
   assert.equal(world.onGitHub('claude/shared-bundle'), commit);
 });
+
+const REVOKES = (world) => world.fake.requests.filter((r) => r === 'DELETE /installation/token').length;
+// Fails the revoke of a request's own token (the first revoke of a run is the reach check's).
+function failRequestRevoke(world, status, extra) {
+  let seen = 0;
+  world.fake.failNext((method, path) => method === 'DELETE' && path === '/installation/token' && (seen += 1) > 1, status, extra);
+}
+
+for (const [what, status, extra, waitMs] of [
+  ['a 429 naming a two-hour wait', 429, { headers: { 'retry-after': '7200' }, body: { message: 'Too Many Requests' } }, 2 * HOUR],
+  ['a 429 naming no wait', 429, {}, HOUR],
+  ['a "secondary rate limit" 403', 403, { body: { message: 'You have exceeded a secondary rate limit. Please wait a few minutes before you try again.' } }, HOUR],
+]) {
+  test(`plan test 12: ${what} on the token revoke stops every write, records the token and is not retried`, async (t) => {
+    const world = await makeWorld(t);
+    const start = world.now();
+    for (const id of ['v-1', 'v-2', 'v-3']) world.commentRequest(id, { issue: 52 });
+    failRequestRevoke(world, status, extra);
+
+    await world.run();
+
+    // The first request's comment was already posted. Its result says the token is still alive.
+    assert.equal(world.result('v-1').state, 'done');
+    assert.match(world.result('v-1').sentence, / A token could not be revoked and works until November 16(,| at) 11:00 AM EST\./);
+    // One try at the revoke, not three: the reach check's and this one.
+    assert.equal(REVOKES(world), 2);
+    assert.equal(world.fake.liveTokens().length, 1);
+    assert.deepEqual(world.log().map((line) => [line.kind, line.result]), [
+      ['comment', 'done'],
+      ['revoke', 'failed'],
+    ]);
+    assert.ok(world.status().lines.some((line) => line.startsWith('A token could not be revoked and works until ')));
+    // Every other write waits for the longer of GitHub's wait or an hour.
+    for (const id of ['v-2', 'v-3']) {
+      assert.equal(world.result(id).state, 'waiting');
+      assert.match(world.result(id).sentence, /^Waiting: GitHub asked the push gate to slow down\. Writes start again /);
+      assert.equal(world.result(id).until, iso(start + waitMs));
+    }
+    assert.equal(world.fake.comments.length, 1);
+
+    // During the pause nothing is sent: no write, no token, no further revoke.
+    const calls = world.fake.requests.length;
+    for (const later of [MINUTE, 30 * MINUTE, waitMs - 1000]) {
+      world.clock.ms = start + later;
+      await world.run();
+    }
+    assert.equal(world.fake.requests.length, calls);
+    assert.equal(REVOKES(world), 2);
+
+    // After it, the one note goes on #52 and the rest go up.
+    world.clock.ms = start + waitMs;
+    await world.run();
+    assert.equal(world.result('v-2').state, 'done');
+    assert.equal(world.result('v-3').state, 'done');
+    assert.equal(notes(world).length, 1);
+  });
+}
+
+test('plan test 12: a rate limit on the revoke of the reach-check token stops the run before anything is written', async (t) => {
+  const world = await makeWorld(t);
+  const start = world.now();
+  world.commentRequest('early', { issue: 52 });
+  world.fake.failNext((method, path) => method === 'DELETE' && path === '/installation/token', 429, { headers: { 'retry-after': '5400' } });
+
+  await world.run();
+
+  assert.equal(world.result('early').state, 'waiting');
+  assert.equal(world.result('early').until, iso(start + 90 * MINUTE));
+  assert.deepEqual(world.fake.writes, []);
+  assert.equal(REVOKES(world), 1);
+  assert.equal(world.fake.liveTokens().length, 1);
+  assert.ok(world.status().lines.some((line) => line.startsWith('A token could not be revoked and works until ')));
+
+  world.clock.ms = start + 90 * MINUTE;
+  await world.run();
+  assert.equal(world.result('early').state, 'done');
+  assert.equal(world.fake.comments.filter((c) => !c.body.startsWith('The push gate stopped')).length, 1);
+  assert.equal(notes(world).length, 1);
+});
