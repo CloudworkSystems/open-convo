@@ -4,12 +4,16 @@
   Updates the gate's own copy of main every day at 6 AM, so the gate runs
   only code that has merged (docs/plans/push-gate.md, "Its own copy, its own
   code"). NOT INSTALLED. The owner installs it at Build Order step 4; see
-  SETUP.md. Replace GATE_HOME with the gate user's home folder first.
+  SETUP.md. A system job (/Library/LaunchDaemons) that runs as the gate's user,
+  so it runs with nobody logged in. Replace GATE_HOME with the gate user's
+  home folder and GATE_USER with that user's short name before installing.
 -->
 <plist version="1.0">
 <dict>
   <key>Label</key>
   <string>com.cloudworksystems.push-gate-update</string>
+  <key>UserName</key>
+  <string>GATE_USER</string>
   <key>ProgramArguments</key>
   <array>
     <string>/bin/sh</string>

@@ -4,12 +4,16 @@
   The push gate's background job: one run a minute, under the gate's own
   macOS user (docs/plans/push-gate.md, "Running"). NOT INSTALLED. The owner
   installs it at Build Order step 4 of the app switch; see SETUP.md.
-  Replace GATE_HOME with the gate user's home folder before installing.
+  A system job (/Library/LaunchDaemons) that runs as the gate's user,
+  so it runs with nobody logged in. Replace GATE_HOME with the gate user's
+  home folder and GATE_USER with that user's short name before installing.
 -->
 <plist version="1.0">
 <dict>
   <key>Label</key>
   <string>com.cloudworksystems.push-gate</string>
+  <key>UserName</key>
+  <string>GATE_USER</string>
   <key>ProgramArguments</key>
   <array>
     <string>/usr/local/bin/node</string>

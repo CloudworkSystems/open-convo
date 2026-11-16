@@ -78,14 +78,27 @@ in. The settings file's `signIn` picks one of the plan's two places:
   (mode `0600`), protected by FileVault. Recommended. The gate refuses the
   file if it belongs to another user, is a link, or anyone else can read it.
 - `"signIn": { "keychainService": "<name>" }`: the gate user's Keychain,
-  which needs that user kept signed in in the background.
+  which needs that user kept logged in, and the jobs installed for that
+  login session instead of as system jobs (see the next section).
 
 ## Step 4: The Background Jobs (Owner Installs)
 
+The jobs are system jobs that run as the gate's user, so they keep running
+when nobody is logged in and start again after a restart. (A job in a
+user's own `~/Library/LaunchAgents/` only runs while that user is logged
+in, which is not unattended.)
+
 In both `.plist` files, replace `GATE_HOME` with the gate user's home
-folder and check the path to `node`. Then, signed in as the gate's user,
-copy them to `~/Library/LaunchAgents/` and load them with `launchctl`. The
-exact commands are part of step 4's own steps, given then.
+folder and `GATE_USER` with that user's short name, and check the path to
+`node`. Then, as an administrator, copy them to `/Library/LaunchDaemons/`
+(owned by `root`, mode `0644`) and load them with `sudo launchctl`. The
+`UserName` key in each file makes the job run as the gate's user, never as
+root. The exact commands are part of step 4's own steps, given then.
+
+A system job has no login session, so it can't open the gate user's
+Keychain. With these jobs, use the sign-in file ("The Gate's Sign-In"
+above). The Keychain choice only works if the jobs are instead installed in
+the gate user's `~/Library/LaunchAgents/` and that user stays logged in.
 
 - The gate job runs `push-gate run-once` every 60 seconds. With nothing
   waiting it does nothing and writes nothing.

@@ -534,3 +534,100 @@ test('plan test 12: a 403 during the upload of a push, which git reports with no
   assert.equal(world.result('bare-403').state, 'done');
   assert.equal(world.onGitHub('claude/bare-403'), commit);
 });
+
+test('plan test 9: a newer request also replaces an older one the gate had taken on but not pushed', async (t) => {
+  const world = await makeWorld(t);
+  const branch = 'claude/outage';
+  const nowhere = { apiBase: 'http://127.0.0.1:1', gitUrl: 'http://127.0.0.1:1/git/open-convo.git' };
+
+  // GitHub can't be reached: the first request is taken on and held.
+  const first = world.commit(branch);
+  world.pushRequest('outage-1', branch, first);
+  await world.run(nowhere);
+  assert.equal(world.result('outage-1').state, 'waiting');
+
+  // A fix arrives during the outage, then a second one.
+  world.clock.ms += MINUTE;
+  const second = world.commit(branch, { 'notes.txt': 'a first fix\n' });
+  world.pushRequest('outage-2', branch, second);
+  await world.run(nowhere);
+  assert.equal(world.result('outage-1').state, 'refused');
+  assert.match(world.result('outage-1').sentence, /the newer request "outage-2" for the same branch replaced it/);
+  assert.equal(world.result('outage-2').state, 'waiting');
+  world.clock.ms += MINUTE;
+  const third = world.commit(branch, { 'notes.txt': 'a second fix\n' });
+  world.pushRequest('outage-3', branch, third);
+  // A request for another branch, held the same way, is left alone.
+  const other = world.commit('claude/outage-other');
+  world.pushRequest('outage-other', 'claude/outage-other', other);
+  await world.run(nowhere);
+  assert.equal(world.result('outage-2').state, 'refused');
+  assert.equal(world.result('outage-other').state, 'waiting');
+
+  // When GitHub is back, only the newest commit goes up, as one push.
+  world.clock.ms += MINUTE;
+  await world.run();
+  assert.equal(world.result('outage-3').state, 'done');
+  assert.equal(world.result('outage-other').state, 'done');
+  assert.equal(world.onGitHub(branch), third);
+  assert.equal(world.onGitHub('claude/outage-other'), other);
+  assert.equal(world.fake.pushes, 2);
+  assert.equal(world.fake.pulls.length, 2);
+});
+
+test('plan test 9: a request whose push already went up is finished, not replaced, and the newer one waits its 10 minutes', async (t) => {
+  const { runCommand } = await import('../src/git.mjs');
+  const world = await makeWorld(t);
+  const branch = 'claude/half-done';
+  const start = world.now();
+  const first = world.commit(branch);
+  world.pushRequest('half-1', branch, first);
+  // The run dies after the push is confirmed, before the pull request is opened.
+  const dieAfterOpeningLookup = async (url, options) => {
+    if (options.method === 'GET' && url.includes('/pulls?')) throw new Error('invented crash');
+    return fetch(url, options);
+  };
+  await assert.rejects(world.run({ fetchImpl: dieAfterOpeningLookup, run: runCommand }), /invented crash/);
+  assert.equal(world.onGitHub(branch), first);
+
+  world.clock.ms = start + MINUTE;
+  const second = world.commit(branch, { 'notes.txt': 'a fix\n' });
+  world.pushRequest('half-2', branch, second);
+  await world.run();
+
+  assert.equal(world.result('half-1').state, 'done');
+  assert.equal(world.fake.pulls.length, 1);
+  assert.equal(world.result('half-2').state, 'waiting');
+  assert.equal(world.result('half-2').until, iso(start + 10 * MINUTE));
+  assert.equal(world.onGitHub(branch), first);
+});
+
+test('plan test 9: an interrupted push that never reached GitHub is replaced by a newer request instead of being sent again', async (t) => {
+  const { runCommand } = await import('../src/git.mjs');
+  const world = await makeWorld(t);
+  const branch = 'claude/never-landed';
+  const first = world.commit(branch);
+  world.pushRequest('never-1', branch, first);
+  // The connection drops before GitHub gets the push.
+  const dropBeforePush = (command, args, options) =>
+    args.includes('push') ? Promise.resolve({ code: 128, stdout: '', stderr: "fatal: unable to access 'invented': Failed to connect to 127.0.0.1" }) : runCommand(command, args, options);
+  await world.run({ run: dropBeforePush });
+  assert.equal(world.result('never-1').state, 'waiting');
+  assert.equal(world.onGitHub(branch), null);
+
+  world.clock.ms += MINUTE;
+  const second = world.commit(branch, { 'notes.txt': 'a fix\n' });
+  world.pushRequest('never-2', branch, second);
+  await world.run();
+  assert.equal(world.result('never-1').state, 'refused');
+  assert.match(world.result('never-1').sentence, /the newer request "never-2" for the same branch replaced it/);
+  // The newer one still keeps the 10 minutes from the interrupted try.
+  assert.equal(world.result('never-2').state, 'waiting');
+  assert.equal(world.onGitHub(branch), null);
+
+  world.clock.ms += 10 * MINUTE;
+  await world.run();
+  assert.equal(world.result('never-2').state, 'done');
+  assert.equal(world.onGitHub(branch), second);
+  assert.equal(world.fake.pushes, 1);
+});

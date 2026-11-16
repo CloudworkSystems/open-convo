@@ -24,6 +24,7 @@ const CONNECTION_SENTENCE = "Waiting: GitHub can't be reached. The gate tries ag
 const unrevokedLine = (expiresAt) =>
   `A token could not be revoked and works until ${sayTime(Date.parse(expiresAt))}. The owner can end it now by suspending the app's installation.`;
 const capSentence = (until) => `Waiting: the agents have made about ${LIMITS.writesPerHour} writes to GitHub in the last hour. It goes after ${sayTime(until)}.`;
+const replacedSentence = (newest) => `the newer request "${newest}" for the same branch replaced it, so there is nothing to change`;
 const refusedSentence = (id, why) => `Request "${id}" was refused: ${why}.`;
 const short = (sha) => sha.slice(0, 12);
 
@@ -229,14 +230,35 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
       valid.push({ entry, request: checked.request });
     }
     // A newer push request for a branch replaces an older one still waiting,
-    // so fixes go up as one push.
+    // so fixes go up as one push. "Still waiting" includes a request the gate
+    // had already taken on but whose push hasn't gone up for certain (held by
+    // an outage or by the key): it is older than anything in the waiting folder.
+    const unpushed = (item) => item.request.kind === 'push' && ['taken', 'pushing'].includes(item.step);
     const newestForBranch = new Map();
+    const replacedBy = new Map();
+    for (const { item } of items) if (unpushed(item)) newestForBranch.set(item.request.branch, item.id);
     for (const one of valid) if (one.request.kind === 'push') newestForBranch.set(one.request.branch, one.entry.id);
+    for (let i = items.length - 1; i >= 0; i -= 1) {
+      const { item } = items[i];
+      const newest = unpushed(item) ? newestForBranch.get(item.request.branch) : item.id;
+      if (newest === item.id) continue;
+      if (item.step === 'pushing') {
+        // Its push was interrupted and may be on GitHub. That is looked up
+        // first (handlePush): if it is there the request is finished, and if
+        // not, it is replaced there instead of being sent again.
+        replacedBy.set(item.id, newest);
+        continue;
+      }
+      store.finishWorking(item.id);
+      refuse(item.id, replacedSentence(newest));
+      handled += 1;
+      items.splice(i, 1);
+    }
     for (const one of valid) {
       const newest = one.request.kind === 'push' ? newestForBranch.get(one.request.branch) : one.entry.id;
       if (newest !== one.entry.id) {
         drop(one.entry, one.request.bundle);
-        refuse(one.entry.id, `the newer request "${newest}" for the same branch replaced it, so there is nothing to change`);
+        refuse(one.entry.id, replacedSentence(newest));
         handled += 1;
         continue;
       }
@@ -438,6 +460,10 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
             throw new CheckFailed(`it would replace commits already on branch ${branch} (a force push), so build on the branch as it is on GitHub`);
           }
         }
+
+        // An interrupted push that isn't on GitHub, with a newer request for
+        // the branch waiting, is not sent again: the newer one goes instead.
+        if (onGitHub !== commit && replacedBy.has(id)) throw new CheckFailed(replacedSentence(replacedBy.get(id)));
 
         return await session.withToken(permissionsFor(request), async (token) => {
           if (onGitHub !== commit) {
