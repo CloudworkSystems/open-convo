@@ -394,8 +394,12 @@ one is a stop-and-report event.
 
 - Start only when the coordinator's build issue names this plan, after it
   is Approved and the owner decision above is recorded. Work only in a
-  checkout of this repo, on the branch `OC-261106-agent-wire`, signed in as
-  `cloudwork-bot` (or as Codex's own GitHub app for a cloud task). Open a
+  checkout of this repo, on the branch `OC-261106-agent-wire`, writing to
+  GitHub the way AGENTS.md "Accounts And Provenance" names when the build
+  starts: as `cloudwork-bot`, or through the agents' GitHub App and the
+  push steward once the app switch
+  ([github-app-switch.md](github-app-switch.md)) has moved builders there
+  (or as Codex's own GitHub app for a cloud task). Open a
   pull request into `main` with auto-merge off and the label
   `agent: codex`. Never
   push to `main`, and never switch on auto-merge.
