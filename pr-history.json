@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
  "repository": "CloudworkSystems/open-convo",
- "takenAt": "2026-11-16T20:28:07.379Z",
+ "takenAt": "2026-11-17T19:11:10.711Z",
  "pulls": [
   {
    "number": 1,
@@ -9095,18 +9095,18 @@
    "number": 322,
    "title": "Push gate: the paced door from the Studio to GitHub (app switch step 3)",
    "agent": "claude",
-   "state": "open",
+   "state": "merged",
    "draft": "",
    "branch": "claude/push-gate-build",
    "createdAt": "2026-11-15T18:02:00Z",
-   "endedAt": "",
-   "daysOpen": "",
+   "endedAt": "2026-11-17T05:08:57Z",
+   "daysOpen": 1.46,
    "commits": 11,
    "filesChanged": 37,
    "additions": 4752,
    "deletions": 32,
    "areas": ".github; STATUS.md; docs; docs/plans; docs/scheduled-tasks; packages/push-gate; scripts",
-   "labels": "agent: claude; needs-owner: risk",
+   "labels": "agent: claude",
    "codexRounds": 11,
    "codexLatest": "open findings",
    "codexP0": 0,
@@ -9118,9 +9118,9 @@
    "outsideLatest": "",
    "outsideCommit": "",
    "outsideOnHead": "",
-   "ownerApproved": "",
+   "ownerApproved": "yes",
    "headHash": "5582d076e74c9bd46be0980cd69eac93941ae106",
-   "updatedAt": "2026-11-16T14:24:53Z",
+   "updatedAt": "2026-11-17T05:08:59Z",
    "link": "https://github.com/CloudworkSystems/open-convo/pull/322"
   },
   {
