@@ -1,0 +1,9 @@
+{
+  "//": "Copy to ~/.config/push-gate/settings.json (or the path in PUSH_GATE_SETTINGS) and fill in. Names only: no sign-in, key or token ever goes in this file. Use signIn.keychainService or signIn.file, not both.",
+  "vault": "the 1Password vault's name",
+  "keyItem": "the id of the vault item that holds the app's private key",
+  "signIn": {
+    "keychainService": "the Keychain item's service name that holds the service account's sign-in"
+  },
+  "op": "/usr/local/bin/op"
+}

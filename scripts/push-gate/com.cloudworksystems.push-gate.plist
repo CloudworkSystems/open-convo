@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  The push gate's background job: one run a minute, under the gate's own
+  macOS user (docs/plans/push-gate.md, "Running"). NOT INSTALLED. The owner
+  installs it at Build Order step 4 of the app switch; see SETUP.md.
+  A system job (/Library/LaunchDaemons) that runs as the gate's user,
+  so it runs with nobody logged in. Replace GATE_HOME with the gate user's
+  home folder and GATE_USER with that user's short name before installing.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.cloudworksystems.push-gate</string>
+  <key>UserName</key>
+  <string>GATE_USER</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/node</string>
+    <string>GATE_HOME/open-convo/packages/push-gate/bin/push-gate.mjs</string>
+    <string>run-once</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/usr/bin:/bin</string>
+    <key>PUSH_GATE_HOME</key>
+    <string>GATE_HOME/push-gate</string>
+    <key>PUSH_GATE_SHARED</key>
+    <string>/Users/Shared/push-gate</string>
+    <key>PUSH_GATE_SETTINGS</key>
+    <string>GATE_HOME/.config/push-gate/settings.json</string>
+  </dict>
+  <key>StartInterval</key>
+  <integer>60</integer>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>GATE_HOME/push-gate/run.log</string>
+  <key>StandardErrorPath</key>
+  <string>GATE_HOME/push-gate/run.log</string>
+</dict>
+</plist>
