@@ -14,7 +14,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { GIT_URL } from './constants.mjs';
 import { LIMITS } from './constants.mjs';
-import { CheckFailed, GitHubRefused, NoConnection, RateLimited, SignInFailed, scrub } from './errors.mjs';
+import { CheckFailed, GitHubRefused, LocalFailure, NoConnection, RateLimited, SignInFailed, scrub } from './errors.mjs';
 
 /** Runs a command and collects its output. Tests wrap this to watch the arguments. */
 export function runCommand(command, args, { env, cwd, input } = {}) {
@@ -48,6 +48,10 @@ export function signInHelperSettings(gitUrl) {
 }
 
 const NO_CONNECTION = /could not resolve host|failed to connect|couldn't connect|connection refused|connection timed out|network is unreachable|operation timed out|empty reply from server/i;
+// A connection that dropped partway through a read or a push.
+const DROPPED = /connection reset|connection was (?:reset|aborted)|recv failure|send failure|rpc failed|remote end hung up|unexpected disconnect|early eof|ssl_error|ssl_connect|ssl connect|tls connect|gnutls|http\/2 stream|transfer closed|broken pipe|timed out/i;
+// GitHub's own answer when it has no words and no status to give.
+const ANSWERED = /couldn't find remote ref|repository .*not found|does not appear to be a git repository/i;
 
 export function createGit({ dir, gitUrl = GIT_URL, run = runCommand }) {
   const repo = join(dir, 'repo.git');
@@ -79,10 +83,22 @@ export function createGit({ dir, gitUrl = GIT_URL, run = runCommand }) {
     }
     if (/returned error: 401|authentication failed|could not read (username|password)|terminal prompts disabled/i.test(text)) return new SignInFailed("GitHub didn't accept the app's sign-in");
     if (/returned error: 5\d\d/i.test(text) || NO_CONNECTION.test(text)) return new NoConnection("GitHub can't be reached");
-    const status = Number(/returned error: (\d{3})/i.exec(text)?.[1]) || 422;
+    // What GitHub itself said: its words ("remote: ..."), a rejected line, or a status.
+    const answered = Number(/returned error: (\d{3})/i.exec(text)?.[1]) || Number(/\bHTTP (\d{3})\b/.exec(text)?.[1]) || 0;
     const rejected = /! \[(?:remote )?rejected\][^\n]*?\(([^)]*)\)/.exec(stderr)?.[1];
+    const spoke = rejected !== undefined || /^remote: \S/m.test(stderr);
+    // A connection that dropped during the read or the push (a reset, a
+    // hang-up, a broken TLS session, a 408) is no connection, not a refusal:
+    // the request waits and nothing is lost. A status of GitHub's own
+    // (other than 408) or its words still make it a refusal.
+    if (!spoke && (answered === 408 || (!answered && DROPPED.test(text)))) return new NoConnection("GitHub can't be reached");
     const reason = rejected ? scrub(rejected, secrets) : text.replace(/^.*?(?:fatal|error):\s*/i, '').slice(0, 200);
-    return new GitHubRefused(`GitHub turned ${what} down${reason ? ` ("${reason}")` : ''}`, status);
+    // Nothing from GitHub at all: git failed here, on the gate's own Mac
+    // (a full disk, a folder it can't write). That is not a refusal either.
+    if (!spoke && !answered && !ANSWERED.test(text)) {
+      return new LocalFailure(`git failed on the gate's own Mac during ${what}${reason ? ` ("${reason}")` : ''}`);
+    }
+    return new GitHubRefused(`GitHub turned ${what} down${reason ? ` ("${reason}")` : ''}`, answered || 422);
   }
 
   async function ensureRepo() {

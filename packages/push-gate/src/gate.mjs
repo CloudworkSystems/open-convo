@@ -9,7 +9,7 @@
 import { AGENTS, API_BASE, APP_LOGIN, FULL_NAME, GIT_URL, HOUR, LIMITS, OWNER, REPORT_ISSUE } from './constants.mjs';
 import { createSession } from './app-token.mjs';
 import { checkRequest, checkText, REQUEST_ID } from './checks.mjs';
-import { CapReached, CheckFailed, GitHubRefused, KeyUnavailable, NoConnection, RateLimited, SignInFailed, WrongReach, scrub } from './errors.mjs';
+import { CapReached, CheckFailed, GitHubRefused, KeyUnavailable, LocalFailure, NoConnection, RateLimited, SignInFailed, WrongReach, scrub } from './errors.mjs';
 import { createGit, runCommand } from './git.mjs';
 import { capUntil, pushGapUntil, quietUntil, sayTime } from './pace.mjs';
 import { createStore } from './store.mjs';
@@ -26,7 +26,21 @@ const unrevokedLine = (expiresAt) =>
 const capSentence = (until) => `Waiting: the agents have made about ${LIMITS.writesPerHour} writes to GitHub in the last hour. It goes after ${sayTime(until)}.`;
 const replacedSentence = (newest) => `the newer request "${newest}" for the same branch replaced it, so there is nothing to change`;
 const refusedSentence = (id, why) => `Request "${id}" was refused: ${why}.`;
+const localSentence = (error) => `Waiting: ${scrub(error.message)}. GitHub refused nothing. The owner needs to check the gate's disk and folders, and the gate tries again on its next run.`;
+const failedSentence = (id, error) =>
+  `Failed: the push gate stopped on an unexpected error while handling request "${id}" (${scrub(error?.message ?? 'no reason given').slice(0, 200)}). It looks at GitHub first and tries again on its next run, so tell the owner if this stays.`;
 const short = (sha) => sha.slice(0, 12);
+
+// Every page of a list from GitHub, up to 1,000 entries.
+async function listAll(session, path, token) {
+  const all = [];
+  for (let page = 1; page <= 10; page += 1) {
+    const some = (await session.call('GET', `${path}&per_page=100&page=${page}`, token)).data ?? [];
+    all.push(...some);
+    if (some.length < 100) break;
+  }
+  return all;
+}
 
 /** The description with the local review recorded just above the sign-off line. */
 export function withReviewLine(body, review, signOffLine) {
@@ -135,7 +149,8 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
       // A final result is saved in three steps that can each be repeated
       // after a crash: into the working copy, into the result file, and then
       // the working copy is removed.
-      const final = value.state !== 'waiting';
+      // ("failed" is not final: the request stays in working for the next run.)
+      const final = value.state !== 'waiting' && value.state !== 'failed';
       if (final) store.markFinished(id, value);
       store.writeResult(id, value, now());
       if (final) store.finishWorking(id);
@@ -177,9 +192,9 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
         if (item) delete item.lastWrite;
         return value;
       } catch (error) {
-        if (error instanceof NoConnection) {
+        if (error instanceof NoConnection || error instanceof LocalFailure) {
           // GitHub may have accepted it: the line stays counted, and the next run looks.
-          store.settleWrite(entry, 'no connection');
+          store.settleWrite(entry, error instanceof LocalFailure ? 'local failure' : 'no connection');
         } else if (error instanceof RateLimited || error instanceof SignInFailed || error instanceof GitHubRefused) {
           store.settleWrite(entry, error instanceof RateLimited ? 'rate limited' : error instanceof SignInFailed ? 'sign-in failed' : `refused (${error.status})`);
           if (item) delete item.lastWrite;
@@ -192,7 +207,7 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
     // A write left open by an interrupted run turned out to be on GitHub.
     function foundOnGitHub(item, kind) {
       if (item.lastWrite?.kind !== kind) return;
-      store.settleWrite(item.lastWrite, 'done', ['started', 'no connection']);
+      store.settleWrite(item.lastWrite, 'done', ['started', 'no connection', 'local failure']);
       delete item.lastWrite;
     }
 
@@ -315,6 +330,12 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
       }
       if (error instanceof NoConnection) {
         holdAll(rest, CONNECTION_SENTENCE);
+        return true;
+      }
+      // Git failed on the gate's own Mac: not a refusal from GitHub, so it
+      // counts toward no stop. Every request waits and says why.
+      if (error instanceof LocalFailure) {
+        holdAll(rest, localSentence(error));
         return true;
       }
       if (error instanceof RateLimited) {
@@ -475,7 +496,16 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
           wait(id, capSentence(error.until), error.until);
           continue;
         }
-        const stop = settle(error, id, rest);
+        let stop;
+        try {
+          stop = settle(error, id, rest);
+        } catch (unexpected) {
+          // An error nothing above knows. The request gets a "failed" result,
+          // so push-gate status shows it, and it stays in working: the next
+          // run looks at GitHub first, as after any interrupted run.
+          result(id, { state: 'failed', sentence: failedSentence(id, unexpected) });
+          throw unexpected;
+        }
         if (error instanceof GitHubRefused) handled += 1;
         if (stop) return { handled, lines };
       }
@@ -644,20 +674,32 @@ export async function runOnce({ home, shared, seam, restart = false, say = () =>
           if (pull?.state !== 'open') throw new CheckFailed(`pull request #${number} isn't open, so name an open pull request`);
         }
 
-        // Left in "working" by a crash: look before posting, so nothing is posted twice.
+        // The app's comments with this request's exact text, on this request's
+        // target, since a minute before its post started.
+        const sameText = async () => {
+          const since = new Date(item.postingAt - 60000).toISOString();
+          const recent = await listAll(session, `${listPath}?since=${encodeURIComponent(since)}`, token);
+          return recent.filter((c) => c.user?.login === APP_LOGIN && c.body === request.body && (request.kind !== 'reply' || c.in_reply_to_id === request.inReplyTo));
+        };
+
+        // Left in "working" by a crash: look before posting, so nothing is
+        // posted twice. Only a comment that wasn't there before this request's
+        // own post started counts as its own. An earlier request's comment
+        // with the same text is somebody else's, and this one is still owed.
         let posted = null;
         if (item.step === 'posting') {
-          const since = new Date(item.postingAt - 60000).toISOString();
-          const recent = (await session.call('GET', `${listPath}?since=${encodeURIComponent(since)}&per_page=100`, token)).data ?? [];
-          posted =
-            recent.find(
-              (c) => c.user?.login === APP_LOGIN && c.body === request.body && (request.kind !== 'reply' || c.in_reply_to_id === request.inReplyTo),
-            ) ?? null;
+          const before = new Set(item.before ?? []);
+          posted = (await sameText()).find((c) => !before.has(c.id)) ?? null;
         }
         if (!posted) {
-          item.step = 'posting';
-          item.postingAt = now();
-          store.saveWorking(item);
+          if (item.step !== 'posting') {
+            // Before the first try, the comments already there are written
+            // down. They stay the same through every later try.
+            item.postingAt = now();
+            item.before = (await sameText()).map((c) => c.id);
+            item.step = 'posting';
+            store.saveWorking(item);
+          }
           const path = request.kind === 'reply' ? `${REPO_PATH}/pulls/${number}/comments/${request.inReplyTo}/replies` : `${REPO_PATH}/issues/${number}/comments`;
           posted = (await write(what, `#${number}`, () => session.call('POST', path, token, { body: request.body }), item)).data;
         } else {
@@ -676,11 +718,12 @@ export function status({ home, shared, now = Date.now }) {
   const known = new Set(results.map((r) => r.id));
   const lines = [];
   const fresh = store.listWaiting().filter((entry) => !known.has(entry.id));
-  const waiting = results.filter((r) => r.state === 'waiting');
+  // A "failed" request is still with the gate: it is tried again on the next run.
+  const waiting = results.filter((r) => r.state === 'waiting' || r.state === 'failed');
   if (!waiting.length && !fresh.length) lines.push(NOTHING_WAITING);
   for (const entry of fresh) lines.push(`${entry.id}: Waiting: the gate hasn't looked at it yet. It will on its next run.`);
   for (const r of waiting) lines.push(`${r.id}: ${r.sentence}`);
-  for (const r of results.filter((x) => x.state !== 'waiting')) lines.push(`${r.id}: ${r.sentence}`);
+  for (const r of results.filter((x) => x.state !== 'waiting' && x.state !== 'failed')) lines.push(`${r.id}: ${r.sentence}`);
   const state = store.loadState();
   if (state.stopped) lines.push(`The push gate has stopped every write because ${state.stopped.reason}. The owner needs to restart it.`);
   for (const expiresAt of state.unrevoked ?? []) if (Date.parse(expiresAt) > now()) lines.push(unrevokedLine(expiresAt));
