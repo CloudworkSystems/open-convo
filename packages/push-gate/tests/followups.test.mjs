@@ -306,3 +306,54 @@ test('F1: a transfer that breaks off after an HTTP 200 is no connection for a fe
   assert.equal(world.onGitHub('claude/broken-off'), commit);
   assert.equal(world.fake.pushes, 1);
 });
+
+// Codex on pull request 325, second round: GitHub's progress lines are not GitHub saying no.
+const PROGRESS_THEN_DROP = 'remote: Enumerating objects: 42, done.\nerror: RPC failed; HTTP 200 curl 18 transfer closed';
+
+test("F1: GitHub's progress lines before a transfer breaks off don't make it a refusal, for a fetch and for a push, and four in an hour leave the gate running", async (t) => {
+  const world = await makeWorld(t);
+  const sha = 'a'.repeat(40);
+  const gitAnswering = (stderr) => createGit({ dir: `${world.dir}/unit-checkout`, gitUrl: world.fake.gitUrl, run: answering(world, stderr) });
+  for (const stderr of [
+    PROGRESS_THEN_DROP,
+    'remote: Enumerating objects: 42, done.\nremote: Counting objects: 100% (42/42), done.\nremote: Compressing objects: 100% (30/30), done.\nremote: Total 42 (delta 3), reused 40 (delta 2), pack-reused 0\nerror: RPC failed; curl 56 Recv failure: Connection reset by peer\nfatal: early EOF',
+    'remote: Resolving deltas: 100% (3/3), completed with 2 local objects.\nsend-pack: unexpected disconnect while reading sideband packet\nfatal: the remote end hung up unexpectedly',
+  ]) {
+    const git = gitAnswering(stderr);
+    await git.ensureRepo();
+    await assert.rejects(git.fetchMain(), NoConnection, stderr);
+    await assert.rejects(git.push(sha, 'claude/invented', 'an-invented-token'), NoConnection, stderr);
+  }
+  // Progress lines before git fails on the gate's own Mac: a local failure, not a refusal.
+  await assert.rejects(gitAnswering('remote: Enumerating objects: 42, done.\nfatal: write error: No space left on device').fetchMain(), LocalFailure);
+
+  // GitHub saying no stays a refusal, with or without progress lines before it.
+  for (const stderr of [
+    'remote: Resolving deltas: 100% (3/3), completed with 2 local objects.\n ! [remote rejected] aaaa -> claude/invented (pre-receive hook declined)\nerror: failed to push some refs',
+    'remote: Resolving deltas: 100% (3/3), done.\nremote: error: GH006: Protected branch update failed for refs/heads/claude/invented.\nerror: failed to push some refs',
+    'remote: Enumerating objects: 42, done.\nremote: error: GH013: Repository rule violations found for refs/heads/claude/invented.\nerror: RPC failed; HTTP 200 curl 18 transfer closed',
+    "remote: Permission to invented denied.\nfatal: unable to access 'invented': The requested URL returned error: 403",
+    'remote: Repository not found.\nfatal: repository invented not found',
+  ]) {
+    await assert.rejects(gitAnswering(stderr).push(sha, 'claude/invented', 'an-invented-token'), GitHubRefused, stderr);
+  }
+
+  // Four broken-off reads and four broken-off pushes in an hour: the request waits, the gate keeps running.
+  const commit = world.commit('claude/progress-drop');
+  world.pushRequest('progress-1', 'claude/progress-drop', commit);
+  const pushBreaks = (command, args, options) => (args.includes('push') ? Promise.resolve({ code: 128, stdout: '', stderr: PROGRESS_THEN_DROP }) : runCommand(command, args, options));
+  for (const run of [answering(world, PROGRESS_THEN_DROP), pushBreaks]) {
+    for (let i = 0; i < 4; i += 1) {
+      await world.run({ run });
+      assert.equal(world.result('progress-1').state, 'waiting');
+      assert.match(world.result('progress-1').sentence, /^Waiting: GitHub can't be reached\./);
+      world.clock.ms += MINUTE;
+    }
+  }
+  assert.doesNotMatch(world.status().lines.join('\n'), /stopped every write/);
+
+  await world.run();
+  assert.equal(world.result('progress-1').state, 'done');
+  assert.equal(world.onGitHub('claude/progress-drop'), commit);
+  assert.equal(world.fake.pushes, 1);
+});
