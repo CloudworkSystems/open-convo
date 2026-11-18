@@ -21,7 +21,7 @@ import { RISK_ESCALATE_LABEL } from './risk-check.mjs';
 import {
   DEPENDABOT_LOGIN, KEEPER_ISSUE, JUDGE_WINDOW_MS,
   keeperComment, parseKeeper, silenceStands, waitingStands, codexFindingReviews, loopRounds,
-  reviewedCommit, sameChanges, countedReview, escalationAt, planCheck,
+  reviewedCommit, sameChanges, countedReview, escalationFor, planCheck, answeredByAutoMerge,
   ownerApprovalStands, ownerApprovedAfter, stateOf, buildFeed, unchangedSince,
 } from './status-feed-rules.mjs';
 
@@ -160,17 +160,20 @@ async function rowFor(number, { defaultBranch, keeper }) {
       }
     }
   }
-  const escalatedAt = Math.max(escalationAt({ comments, reviews, headSha }), review?.escalation ? review.at : 0);
+  const escalatedAt = escalationFor({ comments, reviews, headSha, reviewed, review });
   const escalated = labels.includes(RISK_ESCALATE_LABEL) || escalatedAt > 0 || Boolean(review?.escalation);
   const headCommittedAt = commits.at(-1)?.commit?.committer?.date ?? null;
   // When auto-merge was last switched on: read only when it is on and the
-  // review has open findings, the one case where it matters.
+  // review has open findings, the one case where it matters. It answers the
+  // findings only if it came after the review and after the reviewed commit:
+  // the head, or for a reused review (SAME) the commit that review saw, since
+  // an update from main that keeps the changes the same leaves the answers standing.
   let autoMergeAfterReview = false;
   if (pr.auto_merge && review?.severities.some((s) => s <= 2)) {
     const events = await gh.all(`${base}/issues/${number}/timeline`);
     const enabled = events.filter((e) => e.event === 'auto_merge_enabled').map((e) => Date.parse(e.created_at) || 0);
     const at = enabled.length ? Math.max(...enabled) : 0;
-    autoMergeAfterReview = at > review.at && at > (Date.parse(headCommittedAt ?? '') || 0);
+    autoMergeAfterReview = answeredByAutoMerge({ enabledAt: at, reviewAt: review.at, reviewed, headSha, commits });
   }
   const silent = keeper.silent.filter((line) => line.number === number
     && silenceStands(line, { headCommittedAt, keeperCheckedAt: keeper.checkedAt, codexReviewedHead: codexFindingsOnHead || codex.approved, review }));

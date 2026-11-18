@@ -325,6 +325,32 @@ export function escalationAt({ comments, reviews, headSha }) {
   return hits.length ? hits.at(-1).at : 0;
 }
 
+/**
+ * When the head was last escalated, or 0: a `risk-escalate` line in any agent
+ * account's text naming the head, in the counted review, or, for a reused
+ * review (SAME, `reviewed` an earlier commit), in any agent account's text
+ * naming that commit, so an escalation is never lost in an update from main.
+ */
+export function escalationFor({ comments, reviews, headSha, reviewed = null, review = null }) {
+  const reused = reviewed && reviewed !== headSha ? escalationAt({ comments, reviews, headSha: reviewed }) : 0;
+  return Math.max(escalationAt({ comments, reviews, headSha }), reused, review?.escalation ? review.at : 0);
+}
+
+/**
+ * Whether auto-merge, last switched on at `enabledAt` (ms), answers the
+ * counted review's open findings: it must come after that review and after
+ * the commit the review saw. That is the head, or for a reused review (SAME,
+ * `reviewed` an earlier commit) the reviewed commit, since an update from
+ * main that keeps the pull request's own changes leaves the answers standing.
+ * A reviewed commit missing from `commits` counts as the head.
+ */
+export function answeredByAutoMerge({ enabledAt, reviewAt, reviewed, headSha, commits = [] }) {
+  const committedAt = (sha) => time(commits.find((c) => c.sha === sha)?.commit?.committer?.date);
+  const seen = reviewed && reviewed !== headSha && commits.some((c) => c.sha === reviewed) ? reviewed : headSha;
+  const after = seen === headSha ? time(commits.at(-1)?.commit?.committer?.date) : committedAt(seen);
+  return enabledAt > 0 && enabledAt > reviewAt && enabledAt > after;
+}
+
 /** The newest plan check naming the head: { verdict, checklist } or null. */
 export function planCheck({ comments, reviews, headSha }) {
   const found = botTexts({ comments, reviews }).filter((t) => planCheckVerdict(t.body) && namesCommit(t.body, headSha)).at(-1);

@@ -6,7 +6,7 @@ import {
   STATES, LOOP_ROUNDS,
   namesCommit, isReviewForm, hasChecklist, hasEscalation, findingSeverities, planCheckVerdict,
   keeperComment, parseKeeper, silenceStands, waitingStands, loopRounds, reviewedCommit, sameChanges,
-  countedReview, escalationAt, planCheck, ownerApprovalStands, ownerApprovedAfter,
+  countedReview, escalationAt, escalationFor, answeredByAutoMerge, planCheck, ownerApprovalStands, ownerApprovedAfter,
   stateOf, buildFeed, feedIsStale, unchangedSince, easternDay,
 } from '../status-feed-rules.mjs';
 import { RISK_LABEL, RISK_ESCALATE_LABEL, RISK_LABELS } from '../risk-check.mjs';
@@ -260,6 +260,31 @@ test('only cloudwork-bot reviews in the keeper\'s form, naming the head, count',
   assert.ok(countedReview({ comments: [], reviews: [{ user: BOT, body: reviewBody(HEAD), submitted_at: '2026-11-06T10:00:00Z' }], headSha: HEAD }));
   assert.equal(countedReview({ comments: [comment(BOT, reviewBody(OLD))], reviews: [], headSha: HEAD }), null);
   assert.equal(countedReview({ comments: [comment(BOT, `Looks good for ${HEAD}`)], reviews: [], headSha: HEAD }), null);
+});
+
+test('a reused review (SAME) keeps its commit\'s escalations and its answered findings', () => {
+  const R = 'a'.repeat(40);
+  const escalated = comment(BOT, `Notes on ${R}\nrisk-escalate: a new host`, '2026-11-06T10:00:00Z');
+  const later = comment(BOT, reviewBody(R), '2026-11-06T11:00:00Z');
+  const review = countedReview({ comments: [escalated, later], reviews: [], headSha: HEAD, sameAs: R });
+  assert.equal(review.escalation, false);
+  // The earlier escalation of R still holds the head that reuses R's review.
+  assert.ok(escalationFor({ comments: [escalated, later], reviews: [], headSha: HEAD, reviewed: R, review }) > 0);
+  // With no reuse, an escalation of another commit doesn't touch the head.
+  assert.equal(escalationFor({ comments: [escalated], reviews: [], headSha: HEAD }), 0);
+  const commits = [
+    { sha: R, commit: { committer: { date: '2026-11-06T09:00:00Z' } } },
+    { sha: HEAD, commit: { committer: { date: '2026-11-06T13:00:00Z' } } },
+  ];
+  const reviewAt = Date.parse('2026-11-06T11:00:00Z');
+  const enabledAt = Date.parse('2026-11-06T12:00:00Z');
+  // Auto-merge switched on after R's review still answers it once main is merged in.
+  assert.equal(answeredByAutoMerge({ enabledAt, reviewAt, reviewed: R, headSha: HEAD, commits }), true);
+  // A review of the head itself needs auto-merge switched on after the head commit.
+  assert.equal(answeredByAutoMerge({ enabledAt, reviewAt, reviewed: HEAD, headSha: HEAD, commits }), false);
+  // Before the review, or never, doesn't answer it.
+  assert.equal(answeredByAutoMerge({ enabledAt: reviewAt - 1, reviewAt, reviewed: R, headSha: HEAD, commits }), false);
+  assert.equal(answeredByAutoMerge({ enabledAt: 0, reviewAt: 0, reviewed: R, headSha: HEAD, commits }), false);
 });
 
 test("the agents' app counts like cloudwork-bot, for reviews and the keeper's report", () => {
