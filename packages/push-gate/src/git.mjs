@@ -84,7 +84,12 @@ export function createGit({ dir, gitUrl = GIT_URL, run = runCommand }) {
     if (/returned error: 401|authentication failed|could not read (username|password)|terminal prompts disabled/i.test(text)) return new SignInFailed("GitHub didn't accept the app's sign-in");
     if (/returned error: 5\d\d/i.test(text) || NO_CONNECTION.test(text)) return new NoConnection("GitHub can't be reached");
     // What GitHub itself said: its words ("remote: ..."), a rejected line, or a status.
-    const answered = Number(/returned error: (\d{3})/i.exec(text)?.[1]) || Number(/\bHTTP (\d{3})\b/.exec(text)?.[1]) || 0;
+    // Only a status of 400 or more is an answer. Git also names the status
+    // of a transfer that broke off partway ("RPC failed; HTTP 200 curl 18
+    // transfer closed ..."): a status below 400 is not GitHub saying no, so
+    // it counts as no status at all.
+    const named = Number(/returned error: (\d{3})/i.exec(text)?.[1]) || Number(/\bHTTP (\d{3})\b/.exec(text)?.[1]) || 0;
+    const answered = named >= 400 ? named : 0;
     const rejected = /! \[(?:remote )?rejected\][^\n]*?\(([^)]*)\)/.exec(stderr)?.[1];
     const spoke = rejected !== undefined || /^remote: \S/m.test(stderr);
     // A connection that dropped during the read or the push (a reset, a

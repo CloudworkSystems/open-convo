@@ -254,3 +254,55 @@ test('F6: push-gate token --permissions takes only contents, pull_requests and i
   assert.deepEqual([...world.fake.tokens.values()].at(-1).permissions, { contents: 'write', pull_requests: 'write', issues: 'write' });
   assert.deepEqual(world.fake.liveTokens(), []);
 });
+
+// Codex on pull request 325: a transfer that breaks off after GitHub's 200.
+const BROKEN_OFF = [
+  'error: RPC failed; HTTP 200 curl 18 transfer closed with outstanding read data remaining',
+  'error: RPC failed; HTTP 200 curl 18 transfer closed with outstanding read data remaining\nfatal: early EOF',
+  'fatal: early EOF',
+];
+
+test('F1: a transfer that breaks off after an HTTP 200 is no connection for a fetch and for a push, and four in an hour leave the gate running', async (t) => {
+  const world = await makeWorld(t);
+  const sha = 'a'.repeat(40);
+  for (const stderr of BROKEN_OFF) {
+    const git = createGit({ dir: `${world.dir}/unit-checkout`, gitUrl: world.fake.gitUrl, run: answering(world, stderr) });
+    await git.ensureRepo();
+    await assert.rejects(git.fetchMain(), NoConnection, stderr);
+    await assert.rejects(git.push(sha, 'claude/invented', 'an-invented-token'), NoConnection, stderr);
+    await assert.rejects(git.remoteBranch('claude/invented'), NoConnection, stderr);
+  }
+  // A status below 400 with nothing else in it is not GitHub saying no either: git failed here.
+  const local = createGit({ dir: `${world.dir}/unit-checkout`, gitUrl: world.fake.gitUrl, run: answering(world, 'error: RPC failed; HTTP 200 curl 23 Failure writing output to destination') });
+  await assert.rejects(local.fetchMain(), (error) => error instanceof NoConnection || error instanceof LocalFailure);
+  // 408 stays no connection, and other 4xx stay refusals.
+  const late = createGit({ dir: `${world.dir}/unit-checkout`, gitUrl: world.fake.gitUrl, run: answering(world, 'error: RPC failed; HTTP 408 curl 22 The requested URL returned error: 408') });
+  await assert.rejects(late.push(sha, 'claude/invented', 'an-invented-token'), NoConnection);
+  const large = createGit({ dir: `${world.dir}/unit-checkout`, gitUrl: world.fake.gitUrl, run: answering(world, 'error: RPC failed; HTTP 413 curl 22 The requested URL returned error: 413') });
+  await assert.rejects(large.push(sha, 'claude/invented', 'an-invented-token'), GitHubRefused);
+
+  // Four in an hour: the request waits each time, the gate keeps running, and the push then goes up once.
+  const commit = world.commit('claude/broken-off');
+  world.pushRequest('broken-1', 'claude/broken-off', commit);
+  const text = BROKEN_OFF[0];
+  for (let i = 0; i < 4; i += 1) {
+    await world.run({ run: answering(world, text) });
+    assert.equal(world.result('broken-1').state, 'waiting');
+    assert.match(world.result('broken-1').sentence, /^Waiting: GitHub can't be reached\./);
+    world.clock.ms += MINUTE;
+  }
+  // The read works and the push itself breaks off: still no connection.
+  const pushBreaks = (command, args, options) => (args.includes('push') ? Promise.resolve({ code: 128, stdout: '', stderr: text }) : runCommand(command, args, options));
+  for (let i = 0; i < 4; i += 1) {
+    await world.run({ run: pushBreaks });
+    assert.equal(world.result('broken-1').state, 'waiting');
+    assert.match(world.result('broken-1').sentence, /^Waiting: GitHub can't be reached\./);
+    world.clock.ms += MINUTE;
+  }
+  assert.doesNotMatch(world.status().lines.join('\n'), /stopped every write/);
+
+  await world.run();
+  assert.equal(world.result('broken-1').state, 'done');
+  assert.equal(world.onGitHub('claude/broken-off'), commit);
+  assert.equal(world.fake.pushes, 1);
+});
