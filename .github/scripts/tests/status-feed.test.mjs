@@ -245,6 +245,8 @@ test('a clean Codex round on an earlier commit resets the loop count', () => {
   assert.equal(loopRounds({ headSha: d, reviews, reviewComments: severe, cleanTimes: cleanRoundTimes({ comments: [withFindings] }) }), 4);
   const tampered = { ...summaryNow, edit_history: { ...summaryNow.edit_history, userContentEdits: { totalCount: 1, nodes: [{ editor: { __typename: 'User', login: 'someone' }, editedAt: '2026-11-03T10:00:00Z', diff: stateBody(b, false) }] } } };
   assert.equal(loopRounds({ headSha: d, reviews, reviewComments: severe, cleanTimes: cleanRoundTimes({ comments: [tampered] }) }), 4);
+  // A clean signal at the same moment as C's findings doesn't drop C: ties keep the round.
+  assert.equal(loopRounds({ headSha: d, reviews, reviewComments: severe, cleanTimes: [Date.parse('2026-11-04T10:00:00Z')] }), 2);
   // A clean round before every finding changes nothing.
   assert.equal(loopRounds({ headSha: d, reviews, reviewComments: severe, cleanTimes: [Date.parse('2026-10-31T10:00:00Z')] }), 4);
 });

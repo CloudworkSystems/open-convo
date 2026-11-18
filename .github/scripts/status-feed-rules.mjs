@@ -222,11 +222,12 @@ export function codexFindingReviews(reviews = [], dismissals = []) {
  * Rounds are 0 once Codex's signal is clean on the head: the loop is over.
  * A clean round on an earlier commit (`cleanTimes`, see cleanRoundTimes in
  * codex-signal.mjs) ends the sequence too: only rounds after the newest one
- * count.
+ * count. A round at the same moment still counts, as a tie never makes the
+ * gate's signal clean either.
  */
 export function loopRounds({ headSha, reviews = [], reviewComments = [], dismissals = [], codexCleanOnHead = false, cleanTimes = [] }) {
   const lastClean = Math.max(0, ...cleanTimes);
-  const finding = codexFindingReviews(reviews, dismissals).filter((r) => time(r.submitted_at) > lastClean);
+  const finding = codexFindingReviews(reviews, dismissals).filter((r) => time(r.submitted_at) >= lastClean);
   const severe = (review) => reviewComments.some((c) => c.pull_request_review_id === review.id && !c.in_reply_to_id && isCodex(c.user)
     && (() => { const m = (c.body ?? '').match(PRIORITY); return m && Number(m[1]) <= 1; })());
   // Each commit's latest review time, newest first.
