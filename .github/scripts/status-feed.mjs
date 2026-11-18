@@ -46,21 +46,22 @@ function pullNumberFromEvent() {
 }
 
 // Who edited each comment (the REST API only says that a comment changed).
-// The same query codex-approved.mjs uses; that file runs on import, so the
-// query is repeated here rather than shared.
+// The same query codex-approved.mjs uses, plus each revision's body and time
+// (cleanRoundTimes reads Codex's earlier review states from them); that file
+// runs on import, so the query is repeated here rather than shared.
 const EDIT_HISTORY = `query($ids: [ID!]!) {
   nodes(ids: $ids) {
     ... on IssueComment {
       id
       lastEditedAt
       editor { __typename login }
-      userContentEdits(first: 100) { totalCount nodes { deletedAt editor { __typename login } } }
+      userContentEdits(first: 100) { totalCount nodes { deletedAt editedAt diff editor { __typename login } } }
     }
     ... on PullRequestReviewComment {
       id
       lastEditedAt
       editor { __typename login }
-      userContentEdits(first: 100) { totalCount nodes { deletedAt editor { __typename login } } }
+      userContentEdits(first: 100) { totalCount nodes { deletedAt editedAt diff editor { __typename login } } }
     }
   }
 }`;

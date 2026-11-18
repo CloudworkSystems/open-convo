@@ -225,6 +225,26 @@ test('a clean Codex round on an earlier commit resets the loop count', () => {
   const thumb = (user) => ({ user, content: '+1', created_at: '2026-11-03T10:00:00Z' });
   assert.equal(loopRounds({ headSha: d, reviews, reviewComments: severe, cleanTimes: cleanRoundTimes({ reactions: [thumb(CODEX)] }) }), 2);
   assert.equal(loopRounds({ headSha: d, reviews, reviewComments: severe, cleanTimes: cleanRoundTimes({ reactions: [thumb(OUTSIDER)], comments: [{ ...cleanComment, user: OUTSIDER }] }) }), 4);
+  // Codex's summary state saying a review completed with no findings counts too,
+  // both as it stands now and in an earlier Codex revision of the summary.
+  const stateBody = (sha, findings) => `<!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 {"code_review":{"commit_sha":"${sha}","has_any_findings":${findings},"has_unresolved_findings":${findings},"status":"completed"}} -->`;
+  const codexEditor = { __typename: 'Bot', login: 'chatgpt-codex-connector' };
+  const summaryNow = { user: CODEX, body: stateBody(b, false), created_at: '2026-11-01T09:00:00Z', updated_at: '2026-11-03T10:00:00Z',
+    edit_history: { lastEditedAt: '2026-11-03T10:00:00Z', editor: codexEditor, userContentEdits: { totalCount: 1, nodes: [{ editor: codexEditor, editedAt: '2026-11-03T10:00:00Z', diff: stateBody(b, false) }] } } };
+  assert.equal(loopRounds({ headSha: d, reviews, reviewComments: severe, cleanTimes: cleanRoundTimes({ comments: [summaryNow] }) }), 2);
+  const earlierEdits = [
+    { editor: codexEditor, editedAt: '2026-11-05T10:00:00Z', diff: stateBody(d, true) },
+    { editor: codexEditor, editedAt: '2026-11-03T10:00:00Z', diff: stateBody(b, false) },
+    { editor: codexEditor, editedAt: '2026-11-02T10:00:00Z', diff: stateBody(b, true) },
+  ];
+  const summaryLater = { user: CODEX, body: stateBody(d, true), created_at: '2026-11-01T09:00:00Z', updated_at: '2026-11-05T10:00:00Z',
+    edit_history: { lastEditedAt: '2026-11-05T10:00:00Z', editor: codexEditor, userContentEdits: { totalCount: 3, nodes: earlierEdits } } };
+  assert.equal(loopRounds({ headSha: d, reviews, reviewComments: severe, cleanTimes: cleanRoundTimes({ comments: [summaryLater] }) }), 2);
+  // A state with findings, or a summary someone else edited, resets nothing.
+  const withFindings = { ...summaryLater, edit_history: { ...summaryLater.edit_history, userContentEdits: { totalCount: 1, nodes: [earlierEdits[0]] } } };
+  assert.equal(loopRounds({ headSha: d, reviews, reviewComments: severe, cleanTimes: cleanRoundTimes({ comments: [withFindings] }) }), 4);
+  const tampered = { ...summaryNow, edit_history: { ...summaryNow.edit_history, userContentEdits: { totalCount: 1, nodes: [{ editor: { __typename: 'User', login: 'someone' }, editedAt: '2026-11-03T10:00:00Z', diff: stateBody(b, false) }] } } };
+  assert.equal(loopRounds({ headSha: d, reviews, reviewComments: severe, cleanTimes: cleanRoundTimes({ comments: [tampered] }) }), 4);
   // A clean round before every finding changes nothing.
   assert.equal(loopRounds({ headSha: d, reviews, reviewComments: severe, cleanTimes: [Date.parse('2026-10-31T10:00:00Z')] }), 4);
 });
