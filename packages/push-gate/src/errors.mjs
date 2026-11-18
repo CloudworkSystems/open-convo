@@ -36,6 +36,9 @@ export class GitHubRefused extends Error {
   }
 }
 
+/** Git failed on the gate's own Mac (a full disk, a folder it can't write). Nothing was refused by GitHub: requests wait. */
+export class LocalFailure extends Error {}
+
 /** 1Password or the app's key can't be opened. Every request waits. */
 export class KeyUnavailable extends Error {}
 

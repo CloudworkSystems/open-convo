@@ -19,6 +19,7 @@
     <string>/usr/local/bin/node</string>
     <string>GATE_HOME/open-convo/packages/push-gate/bin/push-gate.mjs</string>
     <string>run-once</string>
+    <string>--quiet</string>
   </array>
   <key>EnvironmentVariables</key>
   <dict>

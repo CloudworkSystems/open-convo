@@ -100,8 +100,9 @@ Keychain. With these jobs, use the sign-in file ("The Gate's Sign-In"
 above). The Keychain choice only works if the jobs are instead installed in
 the gate user's `~/Library/LaunchAgents/` and that user stays logged in.
 
-- The gate job runs `push-gate run-once` every 60 seconds. With nothing
-  waiting it does nothing and writes nothing.
+- The gate job runs `push-gate run-once --quiet` every 60 seconds. With
+  nothing waiting it does nothing, prints nothing and writes nothing, so
+  `run.log` only grows when there is work.
 - The update job runs `update-own-copy.sh` at 6 AM by the Mac's clock (the
   Studio is on New York time), forward only, with hooks off.
 

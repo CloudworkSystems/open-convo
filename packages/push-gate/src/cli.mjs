@@ -1,11 +1,12 @@
 // The push gate's command line (docs/plans/push-gate.md):
 //
 //   push-gate token -- <command>   run one command with a one-hour app token
-//   push-gate run-once             handle every waiting request once
+//   push-gate run-once [--quiet]   handle every waiting request once
 //   push-gate status               list each request's result
 //   push-gate allow <request>      let one request through quiet hours
 //
-// `run-once --restart` is the owner's restart after a stop.
+// `run-once --restart` is the owner's restart after a stop. `--quiet` is for
+// the background job: a run with nothing waiting prints nothing.
 
 import { spawn } from 'node:child_process';
 import { homedir } from 'node:os';
@@ -13,12 +14,12 @@ import { join } from 'node:path';
 import { createSession } from './app-token.mjs';
 import { API_BASE, GIT_URL } from './constants.mjs';
 import { KeyUnavailable, NoConnection, RateLimited, SignInFailed, WrongReach, scrub } from './errors.mjs';
-import { allow, runOnce, status } from './gate.mjs';
+import { NOTHING_WAITING, allow, runOnce, status } from './gate.mjs';
 import { signInHelperSettings } from './git.mjs';
 
 const USAGE = `Usage:
   push-gate token [--permissions name:level,...] -- <command> [arguments]
-  push-gate run-once [--restart]
+  push-gate run-once [--restart] [--quiet]
   push-gate status
   push-gate allow <request>
 
@@ -26,7 +27,8 @@ Folders: PUSH_GATE_HOME (default ~/.push-gate) holds the gate's own files;
 PUSH_GATE_SHARED (default <home>/shared) holds requests/ and results/.`;
 
 const DEFAULT_PERMISSIONS = { contents: 'write', pull_requests: 'write', issues: 'write' };
-const PERMISSION_NAMES = ['contents', 'pull_requests', 'issues', 'metadata', 'actions', 'checks', 'statuses'];
+// The permissions the plan lists for the gate's writes (docs/plans/push-gate.md, "The Token Helper").
+const PERMISSION_NAMES = ['contents', 'pull_requests', 'issues'];
 
 function folders(env) {
   const home = env.PUSH_GATE_HOME || join(homedir(), '.push-gate');
@@ -101,13 +103,23 @@ export async function main(argv, { loadSeam, env = process.env, out = (line) => 
   }
 
   if (command === 'run-once') {
-    const unknown = rest.filter((arg) => arg !== '--restart');
+    const unknown = rest.filter((arg) => arg !== '--restart' && arg !== '--quiet');
     if (unknown.length) {
       err(USAGE);
       return 2;
     }
+    // The background job runs every minute. With --quiet an idle run prints
+    // nothing, so its log file isn't written to either.
+    const say = rest.includes('--quiet') ? (line) => line !== NOTHING_WAITING && out(line) : out;
     const seam = await loadSeam();
-    await runOnce({ ...folders(env), seam, restart: rest.includes('--restart'), say: out, now, apiBase, gitUrl, fetchImpl, ...(run ? { run } : {}) });
+    try {
+      await runOnce({ ...folders(env), seam, restart: rest.includes('--restart'), say, now, apiBase, gitUrl, fetchImpl, ...(run ? { run } : {}) });
+    } catch (error) {
+      // An unexpected error: one sentence, never a stack trace. The request it
+      // happened on has a "failed" result (push-gate status shows it).
+      err(`The push gate run stopped on an unexpected error (${scrub(error?.message ?? 'no reason given').slice(0, 200)}). Run push-gate status to see which request it was.`);
+      return 1;
+    }
     return 0;
   }
 

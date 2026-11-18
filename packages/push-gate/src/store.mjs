@@ -23,8 +23,10 @@ function writeAtomic(path, text, mode = 0o644) {
 }
 
 // Reads a file an agent wrote: a plain file (never a link), up to `maxBytes`.
+// Opening never waits: a named pipe would otherwise hold the run until
+// something wrote to it.
 function readPlainFile(path, maxBytes) {
-  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const info = fstatSync(fd);
     if (!info.isFile()) throw new Error('not a plain file');
@@ -61,6 +63,10 @@ export function createStore({ home, shared }) {
       } catch {
         continue;
       }
+      // Only regular files are requests. A named pipe, a folder or a device
+      // with a request's name is passed over. (A link is still refused as
+      // unreadable, so the agent that left it hears about it.)
+      if (!info.isFile() && !info.isSymbolicLink()) continue;
       found.push({ id, path: join(requestsDir, name), mtimeMs: info.mtimeMs });
     }
     return found.sort((a, b) => a.mtimeMs - b.mtimeMs || (a.id < b.id ? -1 : 1));

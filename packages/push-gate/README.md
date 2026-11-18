@@ -33,9 +33,10 @@ node packages/push-gate/bin/push-gate.mjs allow <request>
   App ID 5665711, installation 179798275, CloudworkSystems/open-convo,
   expires <time>". Add `--permissions contents:write,pull_requests:write`
   before `--` to ask for less than the default (contents, pull requests and
-  issues).
+  issues). Those three are the only names it takes.
 - `run-once` handles every waiting request once. `run-once --restart` is the
-  owner's restart after a stop (see "Pace limits").
+  owner's restart after a stop (see "Pace limits"). `run-once --quiet`
+  prints nothing when nothing is waiting (the background job uses it).
 - `status` lists each request's result. It needs no key and changes nothing.
 - `allow <request>` lets one request through quiet hours.
 
@@ -135,18 +136,29 @@ Each request gets `results/<name>.json` with a `state` and one `sentence`:
 - `waiting`: why, and `until` when a time is known.
 - `done`: the commit, and the pull request's number and link.
 - `refused`: what is wrong and what to change.
+- `failed`: the gate stopped on an unexpected error while handling it. The
+  request stays with the gate and is tried again on the next run, after a
+  look at GitHub. `status` lists it with the waiting requests.
 
 ## When it goes wrong
 
 1. **No connection:** requests wait with "Waiting: GitHub can't be reached",
-   and the gate tries again each run.
+   and the gate tries again each run. A connection that drops partway
+   through a read or a push (a reset, a hang-up, a 408) counts as this, not
+   as a refusal. If git fails on the gate's own Mac instead (a full disk),
+   requests wait with a sentence that says so, and no refusal is counted.
 2. **Interrupted:** each request moves from waiting to working to done or
    refused, saved to disk before each step. A request left in working is
    checked against GitHub first (is the branch already at that commit, does
    the pull request or comment already exist), so nothing is pushed or
-   posted twice.
+   posted twice. A comment counts as this request's own only if it wasn't
+   there before the request's post started, so two requests with the same
+   text are both posted.
 3. **Nothing waiting:** a run does nothing and writes nothing, and `status`
-   says "Nothing waiting."
+   says "Nothing waiting." The background job runs `run-once --quiet`, which
+   prints nothing on such a run, so its log file isn't written to either.
+   Only regular files in the requests folder are read: a named pipe or a
+   folder there is passed over.
 4. **Key can't be opened:** every request waits with "Waiting: the push gate
    can't open its key. The owner needs to check 1Password."
 5. **Every refusal** is one sentence naming the request and what to change.
