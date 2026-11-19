@@ -89,13 +89,14 @@ if (options.restored) {
     updatedAt: at, contextRunIds: [], ...extra });
   const earlier = run(options.restored.earlier, 'Invented earlier question.',
     { phase: 'completed', outputChunks: ['Invented earlier answer.'], lastSequence: 3 });
-  const cut = run(options.restored.cut, 'Invented question cut off by a crash.',
-    { phase: 'running', outputChunks: ['Invented partial reply '], lastSequence: 2, contextRunIds: [earlier.runId] });
+  const cut = run(options.restored.cut, 'Invented question cut off by a crash.', options.restored.beforeStarted
+    ? { contextRunIds: [earlier.runId] }
+    : { phase: 'running', outputChunks: ['Invented partial reply '], lastSequence: 2, contextRunIds: [earlier.runId] });
   // A workspace that holds runs is schema 2, as the page saves it.
   stored.schemaVersion = 2;
   stored.capabilities = { mode: 'synthetic', provider: 'runtime-selected', native: 'unavailable' };
   stored.conversationRuns = [earlier, cut];
-  host.runs.set(cut.runId, { runId: cut.runId, sessionId, sequence: 2, events: [], terminal: null, crashed: true });
+  host.runs.set(cut.runId, { runId: cut.runId, sessionId, sequence: options.restored.beforeStarted ? 0 : 2, events: [], terminal: null, crashed: true });
 }
 // A conversation reopened after a normal quit (step 3 trial, F11): the
 // page's saved workspace as the quit left it, and the host's record of each
@@ -694,6 +695,51 @@ test('Stop ends a Claude reply and offers Retry, which only refills the message 
     await page.getByRole('button', { name: 'Retry', exact: true }).click();
     await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toHaveValue('Invented Claude question to stop.');
     assert.equal((await f.host()).starts.length, 1, 'Retry never sends on its own');
+    f.check();
+  } finally { await f.close(); }
+});
+
+test('a Claude reply cut off by a force quit reopens as cut off with its text, and Retry comes only after Close as unknown (Claude Code owner trial, run 3)', async () => {
+  const restored = {
+    earlier: ['25000000-0000-4000-8000-000000000001', '25000000-0000-4000-8000-000000000002', '25000000-0000-4000-8000-000000000003'],
+    cut: ['25000000-0000-4000-8000-000000000011', '25000000-0000-4000-8000-000000000012', '25000000-0000-4000-8000-000000000013'],
+  };
+  const f = await fixture({ availability: withClaude, choice: offMac, offerClaude: true, restored });
+  try {
+    const { page } = f;
+    const cut = page.locator(`[data-run-id="${restored.cut[0]}"]`);
+    await expect(cut).toContainText('Invented partial reply');
+    await expect(cut.getByRole('status')).toHaveText('Reply cut off. The text so far is kept.');
+    await expect(cut).not.toContainText('Run status unknown');
+    await expect(page.getByText('The app closed before this reply finished, and nothing was sent again. To try again, press Close as unknown, then Retry.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Close as unknown', exact: true }).click();
+    await expect(cut).toContainText('Reply cut off. The text so far is kept; the Mac never recorded how it ended.');
+    await expect(cut).not.toContainText('Closed with outcome unknown');
+    await page.getByRole('button', { name: 'Retry', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toHaveValue('Invented question cut off by a crash.');
+    assert.equal((await f.host()).starts.length, 0, 'nothing was sent again, and Retry never sends on its own');
+    f.check();
+  } finally { await f.close(); }
+});
+
+test('a Claude reply killed after Start but before its started event was saved still reopens as cut off (Codex P1 on #330)', async () => {
+  const restored = {
+    earlier: ['27000000-0000-4000-8000-000000000001', '27000000-0000-4000-8000-000000000002', '27000000-0000-4000-8000-000000000003'],
+    cut: ['27000000-0000-4000-8000-000000000011', '27000000-0000-4000-8000-000000000012', '27000000-0000-4000-8000-000000000013'],
+    beforeStarted: true,
+  };
+  const f = await fixture({ availability: withClaude, choice: offMac, offerClaude: true, restored });
+  try {
+    const { page } = f;
+    const cut = page.locator(`[data-run-id="${restored.cut[0]}"]`);
+    await expect(cut.getByRole('status')).toHaveText('Reply cut off. The text so far is kept.');
+    await expect(page.getByText('The app closed before this reply finished, and nothing was sent again. To try again, press Close as unknown, then Retry.')).toBeVisible();
+    await page.getByRole('button', { name: 'Close as unknown', exact: true }).click();
+    await expect(cut).toContainText('Closed before any reply arrived. Use Retry to send this message again.');
+    await page.getByRole('button', { name: 'Retry', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Your message', exact: true })).toHaveValue('Invented question cut off by a crash.');
+    assert.equal((await f.host()).starts.length, 0, 'nothing was sent again');
     f.check();
   } finally { await f.close(); }
 });

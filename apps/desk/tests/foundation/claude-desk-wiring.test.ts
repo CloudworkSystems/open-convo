@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import type { ConversationRun, ParticipantIdentity } from '../../src/domain/conversation-run-types';
 import { createConversationRun } from '../../src/domain/conversation-runs';
 import {
-  canRetryClaudeRun, CLAUDE_DESTINATION, CLAUDE_FIRST_TRIAL_BYTES, claudeChoiceTitle, claudeSendLine, isOffMacClaude, selectClaudeContext,
+  canRetryClaudeRun, CLAUDE_DESTINATION, CLAUDE_FIRST_TRIAL_BYTES, claudeChoiceTitle, claudeRunOutcome, claudeSendLine, isOffMacClaude, selectClaudeContext,
 } from '../../src/domain/claude-participant';
 
 // Claude Code adapter PR 4a: the page's side of an off-Mac Claude run
@@ -74,4 +74,19 @@ test('Retry is offered for a stopped, failed or cut-off Claude reply, never a co
   assert.deepEqual([completed, stopped, failed, crashed].map(canRetryClaudeRun), [false, true, true, true]);
   assert.equal(canRetryClaudeRun({ ...stopped, participant: revision3 }), false);
   assert.equal(canRetryClaudeRun({ ...stopped, participant: local }), false, 'a local reply has its own Retry');
+});
+
+test('a closed-as-unknown Claude reply reads as cut off, or as closed before any reply when no words arrived', () => {
+  const base = { version: 1, runId: 'r', sessionId: 's', userMessageId: 'u', assistantMessageId: 'a', inputChunks: ['Invented.'],
+    createdAt: '2026-11-09T00:00:00.000Z', updatedAt: '2026-11-09T00:00:00.000Z', contextRunIds: [] } as const;
+  const claude = { id: 'claude-code', label: 'Claude', model: 'invented-pinned-model', executionHost: 'anthropic' };
+  const closure = { kind: 'unknown', reason: 'user-closed', at: '2026-11-09T00:00:01.000Z' } as const;
+  assert.equal(claudeRunOutcome({ ...base, participant: claude, outputChunks: ['Invented words'], lastSequence: 2, phase: 'running', closure } as never),
+    'Reply cut off. The text so far is kept; the Mac never recorded how it ended.');
+  assert.equal(claudeRunOutcome({ ...base, participant: claude, outputChunks: [], lastSequence: 0, phase: 'running', closure } as never),
+    'Closed before any reply arrived. Use Retry to send this message again.');
+  assert.equal(claudeRunOutcome({ ...base, participant: claude, outputChunks: [], lastSequence: 1, phase: 'running', closure } as never),
+    'Closed before any reply arrived. Use Retry to send this message again.', 'only the started event arrived: still no reply text');
+  assert.equal(claudeRunOutcome({ ...base, participant: claude, outputChunks: ['x'], lastSequence: 2, phase: 'running' } as never), undefined);
+  assert.equal(claudeRunOutcome({ ...base, participant: { ...claude, executionHost: 'this-mac' }, outputChunks: ['x'], lastSequence: 2, phase: 'running', closure } as never), undefined);
 });

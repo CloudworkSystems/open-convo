@@ -9,7 +9,7 @@ import type { DeskState } from '../domain/types';
 import { RunTranscript } from '../features/RunTranscript';
 import { canRetryLocalRun, isLocalParticipant, localChoiceProblem, localModelName, noLocalChoiceMessage, ollamaChoiceTitle, localStartRefusalMessage,
   selectLocalContext } from '../domain/local-participant';
-import { canRetryClaudeRun, claudeSendLine, isOffMacClaude, selectClaudeContext } from '../domain/claude-participant';
+import { canRetryClaudeRun, claudeSendLine, isOffMacClaude, REOPENED_CUT_OFF_NOTE, selectClaudeContext } from '../domain/claude-participant';
 import { contextRunsFor, reactionsLine, reactionsNoteSendHold } from '../domain/shared-reactions';
 import type { DeskRuntime } from './runtime';
 
@@ -75,6 +75,9 @@ export function useConversationRuns(options: RunWorkspace) {
   const controllers = useRef(new Map<string, ConversationRunController>());
   const runSavesInFlight = useRef(0);
   const restoreAttempts = useRef(new Set<string>());
+  // Runs open with no recorded ending in the first workspace this page
+  // loaded: only these can have been cut off by the app being killed.
+  const reopened = useRef<Set<string> | null>(null);
   const localClosures = useRef(new Map<string, LocalClosure>());
   const checkingSends = useRef(new Set<string>());
   const budget = useRef<{ source: DeskState; captured: DeskState } | null>(null);
@@ -180,6 +183,13 @@ export function useConversationRuns(options: RunWorkspace) {
   }, [options.runtime]);
 
   useLayoutEffect(() => {
+    if (options.state && reopened.current === null) {
+      reopened.current = new Set((options.state.conversationRuns ?? [])
+        // A prepared run counts too: a kill after the Mac accepted Start but
+        // before the started event was saved leaves it prepared (Codex P1 on #330).
+        .filter((run) => (run.phase === 'running' || run.phase === 'prepared') && !isConversationRunClosed(run) && !hasRecordedTerminal(run))
+        .map((run) => run.runId));
+    }
     if (!options.runtime.participant && !options.runtime.participantForRun) return;
     for (const run of options.state?.conversationRuns ?? []) {
       const needsCleanupCheck = incompleteStop(run) || (!!options.runtime.participant?.status || !!options.runtime.participantForRun) && hasRecordedTerminal(run);
@@ -500,6 +510,15 @@ export function useConversationRuns(options: RunWorkspace) {
     const connected = options.runtime.participant?.identity;
     const matches = matchingParticipant(run);
     const uncertain = !closed && (!snapshot || ['unknown', 'unavailable'].includes(snapshot.status));
+    // Owner trials (step 3 check 4, Claude Code run 3): a reply reopened
+    // after a kill reads as cut off, in plain words, until it is closed.
+    // Only once the Mac says nothing is left running (Close as unknown is
+    // offered without a Stop): a page reload over a live run is not one.
+    // Only the current Claude route, the one Retry supports (Codex P2 on #330).
+    // A prepared run needs the Mac's word that it started and is gone: one
+    // never sent reads status idle, so it is not uncertain.
+    const cutOff = uncertain && !!reopened.current?.has(run.runId) && !hasRecordedTerminal(run) && (run.phase === 'running' || !!snapshot)
+      && isOffMacClaude(run.participant) && (snapshot ? snapshot.canCloseAsUnknown : !controller) && (stopped ?? 'idle') === 'idle';
     const obsoleteActionError = closed && snapshot?.error && ['stop-unknown', 'start-unknown', 'start-refused', 'reconcile-unknown', 'subscription-failed'].includes(snapshot.error);
     const localRefusal = snapshot?.startRefusal && isLocalParticipant(run.participant) && !closed
       ? localStartRefusalMessage(snapshot.startRefusal.reason, snapshot.startRefusal.retryable, run.participant) : undefined;
@@ -507,7 +526,7 @@ export function useConversationRuns(options: RunWorkspace) {
       : snapshot?.startRefusal && !snapshot.startRefusal.retryable ? 'This prepared message cannot be started. Its text is kept; check the run or close it locally before preparing another message.' : undefined);
     const oldPinMessage = !closed && !isLocalParticipant(run.participant) && options.runtime.participantForRun && connected && !sameParticipantIdentity(connected, run.participant)
       ? 'This saved run was prepared for a different participant version. Its text is kept and Start is unavailable; you can still check its status or request Stop.' : undefined;
-    const message = local?.error ?? startMessage ?? (!obsoleteActionError && snapshot?.error ? errors[snapshot.error] : undefined) ?? oldPinMessage ?? (uncertain
+    const message = local?.error ?? startMessage ?? (cutOff ? REOPENED_CUT_OFF_NOTE : undefined) ?? (!obsoleteActionError && snapshot?.error ? errors[snapshot.error] : undefined) ?? oldPinMessage ?? (uncertain
       ? controller ? 'This run is not confirmed. Check its status or request Stop. A local closure preserves the recorded prefix without confirming completion.'
         : connected && !matches
           ? `This saved run belongs to ${run.participant.label} using ${run.participant.model} on ${run.participant.executionHost}. The connected participant has a different identity or model. Its saved prefix remains readable; reconnect its original participant or close the run as unknown.`
@@ -524,7 +543,7 @@ export function useConversationRuns(options: RunWorkspace) {
         canStop={snapshot?.canStop ?? false}
         cleanupState={cleanupState}
         checkpointPending={checkpointPending} saving={snapshot?.saving ?? local?.saving ?? false}
-        error={message} latest={run.runId === lastSelectedRunId} onStop={() => void controller?.stop()} />
+        error={message} latest={run.runId === lastSelectedRunId} onStop={() => void controller?.stop()} cutOff={cutOff} />
       {controller && snapshot?.canStart && <button type="button" className="recovery-button" disabled={options.blocked() || cleanupPending() || otherUnconfirmed(run.runId) || !!catalogBlock(run.participant)}
         onClick={(event) => { if (!latest.current.blocked() && !cleanupPending() && !otherUnconfirmed(run.runId) && !catalogBlock(run.participant)) { focusStatus(event.currentTarget); void startPrepared(controller); } }}>Start prepared message</button>}
       {controller && snapshot?.canCheckStatus && <button type="button" className="recovery-button secondary"
