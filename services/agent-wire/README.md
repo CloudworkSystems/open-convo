@@ -185,19 +185,31 @@ part 2 and must also exclude assertions, headers and query strings.
 ## Export and import commands
 
 These are owner-run commands for the later launched service, not actions run
-by part 1. Use the owner's short-lived human Access assertion, never an agent's
-service token or another person's credentials. Supply `WIRE_URL` (the protected
-HTTPS origin) and `OWNER_ASSERTION` in the environment using the owner's
-approved credential handling. Never put either credential in a command line,
-URL, backup, committed file or shell history. Do not print it. Exported notes
-are public material, but choose where to keep the backup yourself.
+by part 1. The owner installs `cloudflared` himself as a separate command-line
+tool. It is not an npm dependency. Use the owner's own human Access sign-in,
+never an agent's service token or another person's credentials.
 
-Use this same command block for export or import, changing only the non-secret
-`MODE` and `FILE` values on its first line. The export command reads all pages
-of at most 100 notes into one JSON file. The import command validates request
-sizes **before** starting, then uses one note per call. It keeps ids and times.
-It never replaces an existing backup file. Run it outside the repository if
-your chosen backup path should not be inside the checkout.
+Replace `<mailbox-origin>` with the protected HTTPS mailbox origin and `<file>`
+with your chosen backup path. From this directory, sign in once for that origin.
+Press Return after entering the command and complete the browser sign-in:
+
+```sh
+cloudflared access login <mailbox-origin>
+```
+
+The script captures the app token from `cloudflared access token` and sends it
+only in the `cf-access-token` request header. It never prints or saves the
+token. Access adds the signed assertion when forwarding to the Worker. If the
+script reports a refused or expired sign-in, run the login command again.
+
+Export reads all pages of at most 100 notes into one JSON file, waiting 6.1
+seconds between pages. Import checks request sizes **before** starting, then
+uses one note per call. The 16 KB restore request limit stays as is, including
+the JSON envelope. Match the script's pre-check to `REQUEST_BYTES` if the
+service uses a non-default setting. Import keeps ids and times. Export never
+replaces an existing backup file and creates it with owner-only permissions.
+Exported notes are public material, but choose where to keep the backup
+yourself. Use an absolute backup path outside the checkout if needed.
 
 Before export, switch off senders, finish any restore and pause owner changes.
 No call performs a mailbox-wide snapshot across all pages. Export does not
@@ -207,80 +219,21 @@ not credentials. Tokens from another Access account will not transfer. The
 owner must issue new approved tokens and match the identities before enabling
 those agents on the new account.
 
-Press Return after entering the complete block. Export prints only its note
-count. Import prints its restored count. Command failures print a fixed message,
-never the assertion. MCP errors separately include a reference code. Keep the backup on any failure.
+Press Return after entering the export command. It prints only its note count:
 
 ```sh
-MODE=export FILE=./agent-wire-backup.json node --input-type=module <<'JS'
-import { readFile, writeFile } from 'node:fs/promises';
-import { isDeepStrictEqual } from 'node:util';
-const { MODE, FILE, WIRE_URL, OWNER_ASSERTION, RESUME } = process.env;
-try {
-  const origin = new URL(WIRE_URL);
-  if (origin.protocol !== 'https:' || origin.pathname !== '/' || origin.search || origin.hash || origin.username || origin.password || !OWNER_ASSERTION) throw Error('Set a protected HTTPS origin and the owner assertion in the environment.');
-  const envelope = (name, args) => JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } });
-  const call = async (name, args = {}) => {
-    const response = await fetch(new URL('/mcp', origin), {
-      method: 'POST', redirect: 'error',
-      headers: { 'content-type': 'application/json', 'Cf-Access-Jwt-Assertion': OWNER_ASSERTION },
-      body: envelope(name, args),
-    });
-    let reply;
-    try { reply = await response.json(); } catch { throw Error('The mailbox did not return JSON. Check its connection and sign-in.'); }
-    const error = reply.error ?? reply.result?.structuredContent?.error;
-    if (!response.ok || error || reply.result?.isError) throw Error((error?.message ?? 'The mailbox refused the request.') + ' ' + (error?.reference ?? ''));
-    if (!reply.result?.structuredContent) throw Error('The mailbox did not return its expected answer.');
-    return reply.result.structuredContent;
-  };
-  if (MODE === 'export') {
-    let after;
-    let agents;
-    const notes = [];
-    do {
-      const page = await call('export_notes', after ? { after } : {});
-      if (agents && !isDeepStrictEqual(agents, page.agents)) throw Error('The agent list changed. Pause changes and export again.');
-      agents = page.agents;
-      notes.push(...page.notes);
-      after = page.after;
-      if (after) await new Promise((resolve) => setTimeout(resolve, 6100));
-    } while (after);
-    await writeFile(FILE, JSON.stringify({ version: 1, agents, notes }, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
-    console.log('Exported ' + notes.length + ' notes.');
-  } else if (MODE === 'import') {
-    const backup = JSON.parse(await readFile(FILE, 'utf8'));
-    if (backup.version !== 1 || !Array.isArray(backup.agents) || !Array.isArray(backup.notes) || new Set(backup.notes.map((n) => n.id)).size !== backup.notes.length) throw Error('Check the backup format and duplicate ids.');
-    // Match this to REQUEST_BYTES if the service uses a non-default setting.
-    for (const text of [envelope('begin_import', { agents: backup.agents }), ...backup.notes.map((note) => envelope('import_note', { note }))]) {
-      if (Buffer.byteLength(text) > 16384) throw Error('A restore request exceeds the configured size limit. Keep the backup.');
-    }
-    let existing = [];
-    if (RESUME === '1') {
-      const page = await call('export_notes');
-      if (!isDeepStrictEqual(page.agents, backup.agents)) throw Error('The restored agent list differs from the backup. Keep both copies.');
-      existing = (await call('list_notes')).notes;
-      for (const note of existing) {
-        if (!isDeepStrictEqual(note, backup.notes.find((n) => n.id === note.id))) throw Error('A stored note differs from the backup. Keep both copies.');
-      }
-    } else await call('begin_import', { agents: backup.agents });
-    const ids = new Set(existing.map((n) => n.id));
-    for (const note of backup.notes) if (!ids.has(note.id)) await call('import_note', { note });
-    const done = await call('finish_import', { count: backup.notes.length });
-    console.log('Restored ' + done.count + ' notes.');
-  } else throw Error('Use MODE=export or MODE=import.');
-} catch (error) {
-  // Network and parse exceptions may include URLs or excerpts. Only our fixed
-  // diagnostic vocabulary and the mailbox's fixed errors are useful here.
-  console.error('Backup command stopped. Keep the backup and check the mailbox connection, sign-in, size limits and restore state.');
-  process.exitCode = 1;
-}
-JS
+node scripts/backup.mjs export <file> <mailbox-origin>
 ```
 
-For import, change the first line to
-`MODE=import FILE=./agent-wire-backup.json node --input-type=module <<'JS'`
-and keep the rest of the block. To continue an interrupted import, add
-`RESUME=1` before `MODE=import`. Resume checks existing notes against the backup
+Or press Return after entering the import command. It prints only its restored count:
+
+```sh
+node scripts/backup.mjs import <file> <mailbox-origin>
+```
+
+Failures print fixed messages, never the token or response contents. Keep the
+backup on any failure. To continue an interrupted import, add `RESUME=1` before
+`node` in the import command. Resume checks existing notes against the backup
 before skipping them. If `finish_import` already succeeded, do not import again.
 There is deliberately no cancel-restore or overwrite tool. A count mismatch
 keeps agents locked out. Resume with the same backup and finish with its exact

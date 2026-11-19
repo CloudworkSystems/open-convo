@@ -1,7 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
+import { mkdtemp, readFile, writeFile, stat, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Duplex } from 'node:stream';
+import { backup, getAccessToken, runBackupCommand } from '../scripts/backup.mjs';
 import worker, { AgentWire } from '../src/worker.js';
 import { createAgentWireServer } from '../src/node-server.js';
 import { MemoryStore, SqlStore } from '../src/storage.js';
@@ -265,6 +269,14 @@ for (const host of ['worker', 'node']) {
     assert.match(source('auth.js'), /fetch\(team \+ '\/cdn-cgi\/access\/certs'/);
     assert.match(source('auth.js'), /redirect: 'error'/);
     assert.ok(!/child_process|node:fs|node:net|node:https|XMLHttpRequest|WebSocket|eval\(|new Function|openai|anthropic|node_modules|front-porch\//i.test(all));
+    const backupSource = readFileSync(new URL('../scripts/backup.mjs', import.meta.url), 'utf8');
+    const processImports = [...backupSource.matchAll(/import\s+(.+?)\s+from\s+['"](?:node:)?child_process['"]/g)];
+    assert.deepEqual(processImports.map((match) => match[1]), ['{ execFile }']);
+    assert.equal((backupSource.match(/child_process/g) ?? []).length, 1);
+    assert.equal((backupSource.match(/\bexecFile\(/g) ?? []).length, 1);
+    assert.ok(!/\bshell\s*:|\b(?:exec|execSync|execFileSync|spawn|spawnSync|fork)\s*\(/.test(backupSource));
+    assert.match(backupSource, /\['access', 'token', '-app=' \+ origin\]/);
+    assert.match(backupSource, /timeout: 15000/);
     for (const name of files) {
       for (const match of source(name).matchAll(/from ['"]([^'"]+)['"]/g)) assert.ok(match[1].startsWith('./') || name === 'node-server.js' && ['node:http', 'node:url'].includes(match[1]));
     }
@@ -528,4 +540,195 @@ test('plan 12: audit logs captured across the entire Worker and Node scenario ru
     assert.ok(['/', '/mcp', 'other'].includes(record.route));
     assert.match(record.agent, /^[a-z][a-z0-9_-]{0,31}$/);
   }
+});
+
+const BACKUP_ORIGIN = 'https://mailbox.example.test';
+const BACKUP_TOKEN = 'invented-client-app-token-never-print';
+const BACKUP_SIGN_IN = 'The Access sign-in was refused or expired. Sign in again with: cloudflared access login <mailbox-origin>';
+const BACKUP_STOPPED = 'Backup command stopped. Keep the backup and check the mailbox connection, sign-in, size limits and restore state.';
+const backupReply = (data) => Response.json({ jsonrpc: '2.0', id: 1, result: { structuredContent: data } });
+
+async function backupFile(t) {
+  const dir = await mkdtemp(join(tmpdir(), 'agent-wire-backup-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  return join(dir, 'invented-backup.json');
+}
+
+function backupOutput(t) {
+  const output = [];
+  t.mock.method(console, 'log', (...args) => output.push(args.join(' ')));
+  t.mock.method(console, 'error', (...args) => output.push(args.join(' ')));
+  t.after(() => assert.ok(!output.join('\n').includes(BACKUP_TOKEN)));
+  return output;
+}
+
+function backupEdge(f, requests = []) {
+  return async (url, init) => {
+    assert.equal(String(url), BACKUP_ORIGIN + '/mcp');
+    assert.equal(init.redirect, 'manual');
+    const headers = new Headers(init.headers);
+    assert.ok(headers.get('cf-access-token') === BACKUP_TOKEN);
+    assert.equal(headers.has('Cf-Access-Jwt-Assertion'), false);
+    requests.push(JSON.parse(init.body).params);
+    // This fake Access edge supplies the signed owner assertion only after
+    // checking the client token. f.send runs the real Worker and AgentWire.
+    headers.delete('cf-access-token');
+    headers.set('Cf-Access-Jwt-Assertion', tokens.owner);
+    return f.send('/mcp', { ...init, headers });
+  };
+}
+
+test('backup: client token header and export/import round-trip through the real Worker behind a fake edge', async (t) => {
+  const file = await backupFile(t);
+  const output = backupOutput(t);
+  const original = await fixture(t, 'worker');
+  const agents = [{ identity: 'service:cam-invented.access', agent: 'cam', role: 'agent', on: false, mayWriteTo: ['owner'] }];
+  const notes = Array.from({ length: 101 }, (_, i) => ({ id: 'invented-' + String(i).padStart(4, '0'), from: 'cam', to: 'owner', subject: 'Invented backup subject', body: 'Invented public note', createdAt: new Date(EPOCH + i).toISOString() }));
+  await original.ok('begin_import', { agents });
+  for (const note of notes) await original.ok('import_note', { note });
+  await original.ok('finish_import', { count: notes.length });
+  original.tick();
+  const waits = [];
+  const exports = [];
+  let tokenCalls = 0;
+  const getToken = async (origin) => { assert.equal(origin, BACKUP_ORIGIN); tokenCalls++; return BACKUP_TOKEN; };
+  assert.equal(await runBackupCommand(['export', file, BACKUP_ORIGIN], {
+    getToken, fetch: backupEdge(original, exports), wait: async (ms) => { waits.push(ms); original.tick(ms); },
+  }), 0);
+  assert.deepEqual(waits, [6100]);
+  assert.deepEqual(exports.map((r) => r.name), ['export_notes', 'export_notes']);
+  assert.deepEqual(exports[1].arguments, { after: notes[99].id });
+  assert.deepEqual(JSON.parse(await readFile(file, 'utf8')), { version: 1, agents, notes });
+  assert.equal((await stat(file)).mode & 0o777, 0o600);
+  assert.ok(!(await readFile(file, 'utf8')).includes(BACKUP_TOKEN));
+  const target = await fixture(t, 'worker');
+  const imports = [];
+  assert.equal(await runBackupCommand(['import', file, BACKUP_ORIGIN], { getToken, fetch: backupEdge(target, imports) }), 0);
+  assert.equal(imports[0].name, 'begin_import');
+  assert.ok(imports.slice(1, -1).every((r) => r.name === 'import_note'));
+  assert.equal(imports.at(-1).name, 'finish_import');
+  assert.deepEqual(imports.at(-1).arguments, { count: notes.length });
+  assert.deepEqual(target.store.all('note'), original.store.all('note'));
+  assert.deepEqual(target.store.all('agent'), original.store.all('agent'));
+  assert.ok(!JSON.stringify([...original.logs, ...target.logs]).includes(BACKUP_TOKEN));
+  assert.equal(target.store.get('meta', 'restore'), undefined);
+  assert.equal(tokenCalls, 2);
+  assert.deepEqual(output, ['Exported 101 notes.', 'Restored 101 notes.']);
+});
+
+test('backup: any 3xx redirect asks the owner to sign in again without following it', async (t) => {
+  const output = backupOutput(t);
+  for (const status of [300, 301, 302, 303, 304, 307, 308, 399]) {
+    assert.equal(await runBackupCommand(['export', 'unused.json', BACKUP_ORIGIN], {
+      getToken: async () => BACKUP_TOKEN,
+      fetch: async (_url, init) => {
+        assert.equal(init.redirect, 'manual');
+        return new Response(null, { status, headers: { location: 'https://login.example.test/' + BACKUP_TOKEN } });
+      },
+    }), 1);
+  }
+  assert.deepEqual(output, Array(8).fill(BACKUP_SIGN_IN));
+});
+
+test('backup: HTML login answers ask the owner to sign in again and never echo the page', async (t) => {
+  const output = backupOutput(t);
+  for (const contentType of ['text/html; charset=utf-8', 'application/xhtml+xml', 'application/json']) {
+    assert.equal(await runBackupCommand(['export', 'unused.json', BACKUP_ORIGIN], {
+      getToken: async () => BACKUP_TOKEN,
+      fetch: async () => new Response('<!doctype html><html>' + BACKUP_TOKEN + '</html>', { headers: { 'content-type': contentType } }),
+    }), 1);
+  }
+  assert.deepEqual(output, Array(3).fill(BACKUP_SIGN_IN));
+});
+
+test('backup: missing cloudflared uses the test-only program override and gives install/sign-in instructions', async (t) => {
+  const file = await backupFile(t);
+  const output = backupOutput(t);
+  const env = { AGENT_WIRE_CLOUDFLARED: join(file, 'program-that-does-not-exist') };
+  let fetched = false;
+  assert.equal(await runBackupCommand(['export', file, BACKUP_ORIGIN], {
+    env, fetch: async () => { fetched = true; throw new Error(BACKUP_TOKEN); },
+  }), 1);
+  assert.equal(fetched, false);
+  assert.deepEqual(output, ["cloudflared isn't installed. Install it, then run: cloudflared access login <mailbox-origin>"]);
+  await assert.rejects(getAccessToken(BACKUP_ORIGIN, { env }), /cloudflared isn't installed/);
+});
+
+test('backup: an expired sign-in or an empty token asks the owner to sign in again', async (t) => {
+  const output = backupOutput(t);
+  for (const getToken of [async () => { throw new Error('expired ' + BACKUP_TOKEN); }, async () => '', async () => '   ']) {
+    assert.equal(await runBackupCommand(['export', 'unused.json', BACKUP_ORIGIN], {
+      getToken, fetch: async () => assert.fail('No request without a token'),
+    }), 1);
+  }
+  assert.deepEqual(output, Array(3).fill(BACKUP_SIGN_IN));
+});
+
+test('backup: network, JSON and mailbox errors never expose the token in messages or console output', async (t) => {
+  const output = backupOutput(t);
+  for (const fetch of [
+    async () => { throw new Error(BACKUP_TOKEN); },
+    async () => new Response('invalid JSON ' + BACKUP_TOKEN),
+    async () => Response.json({ error: { message: BACKUP_TOKEN, reference: BACKUP_TOKEN } }, { status: 403 }),
+  ]) {
+    await assert.rejects(backup('export', 'unused.json', BACKUP_ORIGIN, { getToken: async () => BACKUP_TOKEN, fetch }), { message: BACKUP_STOPPED });
+    assert.equal(await runBackupCommand(['export', 'unused.json', BACKUP_ORIGIN], { getToken: async () => BACKUP_TOKEN, fetch }), 1);
+  }
+  assert.deepEqual(output, Array(3).fill(BACKUP_STOPPED));
+});
+
+test('backup: export refuses an existing file and a changing agent list', async (t) => {
+  const file = await backupFile(t);
+  await writeFile(file, 'Invented existing backup');
+  const options = { getToken: async () => BACKUP_TOKEN, fetch: async () => backupReply({ agents: [], notes: [], after: null }) };
+  await assert.rejects(backup('export', file, BACKUP_ORIGIN, options), { message: BACKUP_STOPPED });
+  assert.equal(await readFile(file, 'utf8'), 'Invented existing backup');
+  let pages = 0;
+  await assert.rejects(backup('export', file, BACKUP_ORIGIN, {
+    ...options, wait: async (ms) => assert.equal(ms, 6100),
+    fetch: async () => backupReply({ agents: pages++ ? [{ agent: 'changed' }] : [], notes: [], after: pages === 1 ? 'invented-cursor' : null }),
+  }), /The agent list changed\. Pause changes and export again\./);
+  assert.equal(await readFile(file, 'utf8'), 'Invented existing backup');
+});
+
+test('backup: import checks the 16 KB size limit and duplicate ids before beginning restore', async (t) => {
+  const file = await backupFile(t);
+  for (const saved of [
+    { version: 1, agents: [], notes: [{ id: 'invented', body: 'x'.repeat(16384) }] },
+    { version: 1, agents: [{ identity: 'x'.repeat(16384) }], notes: [] },
+    { version: 1, agents: [], notes: [{ id: 'duplicate' }, { id: 'duplicate' }] },
+  ]) {
+    await writeFile(file, JSON.stringify(saved));
+    await assert.rejects(backup('import', file, BACKUP_ORIGIN, {
+      getToken: async () => BACKUP_TOKEN, fetch: async () => assert.fail('No requests before the pre-check succeeds'),
+    }), /exceeds the configured size limit|Check the backup format and duplicate ids/);
+  }
+});
+
+test('backup: resume checks existing agents and notes and imports only the remaining notes', async (t) => {
+  const file = await backupFile(t);
+  const output = backupOutput(t);
+  const f = await fixture(t, 'worker');
+  const agents = [{ identity: 'service:cam-invented.access', agent: 'cam', role: 'agent', on: false, mayWriteTo: ['owner'] }];
+  const first = { id: 'invented-1', from: 'cam', to: 'owner', subject: 'Invented subject', body: 'Invented public body', createdAt: new Date(EPOCH).toISOString() };
+  const second = { ...first, id: 'invented-2' };
+  await writeFile(file, JSON.stringify({ version: 1, agents, notes: [first, second] }));
+  await f.ok('begin_import', { agents });
+  await f.ok('import_note', { note: first });
+  const options = { getToken: async () => BACKUP_TOKEN, fetch: backupEdge(f), resume: true };
+  // A differing agent list and a differing stored note each stop resume.
+  await writeFile(file, JSON.stringify({ version: 1, agents: [], notes: [first, second] }));
+  await assert.rejects(backup('import', file, BACKUP_ORIGIN, options), /restored agent list differs/);
+  await writeFile(file, JSON.stringify({ version: 1, agents, notes: [{ ...first, body: 'Different invented body' }, second] }));
+  await assert.rejects(backup('import', file, BACKUP_ORIGIN, options), /stored note differs/);
+  await writeFile(file, JSON.stringify({ version: 1, agents, notes: [first, second] }));
+  f.tick();
+  const requests = [];
+  assert.equal(await runBackupCommand(['import', file, BACKUP_ORIGIN], {
+    env: { RESUME: '1' }, getToken: options.getToken, fetch: backupEdge(f, requests),
+  }), 0);
+  assert.deepEqual(requests.map((r) => r.name), ['export_notes', 'list_notes', 'import_note', 'finish_import']);
+  assert.deepEqual(requests[2].arguments, { note: second });
+  assert.deepEqual(f.store.all('note'), [first, second]);
+  assert.deepEqual(output, ['Restored 2 notes.']);
 });
