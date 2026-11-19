@@ -85,6 +85,8 @@ test('a closed-as-unknown Claude reply reads as cut off, or as closed before any
     'Reply cut off. The text so far is kept; the Mac never recorded how it ended.');
   assert.equal(claudeRunOutcome({ ...base, participant: claude, outputChunks: [], lastSequence: 0, phase: 'running', closure } as never),
     'Closed before any reply arrived. Use Retry to send this message again.');
+  assert.equal(claudeRunOutcome({ ...base, participant: claude, outputChunks: [], lastSequence: 1, phase: 'running', closure } as never),
+    'Closed before any reply arrived. Use Retry to send this message again.', 'only the started event arrived: still no reply text');
   assert.equal(claudeRunOutcome({ ...base, participant: claude, outputChunks: ['x'], lastSequence: 2, phase: 'running' } as never), undefined);
   assert.equal(claudeRunOutcome({ ...base, participant: { ...claude, executionHost: 'this-mac' }, outputChunks: ['x'], lastSequence: 2, phase: 'running', closure } as never), undefined);
 });

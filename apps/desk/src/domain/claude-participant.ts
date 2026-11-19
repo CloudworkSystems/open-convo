@@ -75,6 +75,6 @@ export const REOPENED_NO_TEXT = 'No words had arrived before the app closed.';
 /** A closed Claude reply's ending in plain words, as a local one's; undefined otherwise. */
 export function claudeRunOutcome(run: Readonly<ConversationRun>): string | undefined {
   if (!isOffMacClaude(run.participant) || run.closure?.kind !== 'unknown') return undefined;
-  if (run.lastSequence === 0 && !run.outputChunks.some((chunk) => chunk.length > 0)) return 'Closed before any reply arrived. Use Retry to send this message again.';
+  if (!run.outputChunks.some((chunk) => chunk.length > 0)) return 'Closed before any reply arrived. Use Retry to send this message again.';
   return 'Reply cut off. The text so far is kept; the Mac never recorded how it ended.';
 }

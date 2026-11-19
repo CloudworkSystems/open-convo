@@ -511,8 +511,9 @@ export function useConversationRuns(options: RunWorkspace) {
     // after a kill reads as cut off, in plain words, until it is closed.
     // Only once the Mac says nothing is left running (Close as unknown is
     // offered without a Stop): a page reload over a live run is not one.
+    // Only the current Claude route, the one Retry supports (Codex P2 on #330).
     const cutOff = uncertain && !!reopened.current?.has(run.runId) && !hasRecordedTerminal(run)
-      && !local && (snapshot ? snapshot.canCloseAsUnknown : !controller) && (stopped ?? 'idle') === 'idle';
+      && isOffMacClaude(run.participant) && (snapshot ? snapshot.canCloseAsUnknown : !controller) && (stopped ?? 'idle') === 'idle';
     const obsoleteActionError = closed && snapshot?.error && ['stop-unknown', 'start-unknown', 'start-refused', 'reconcile-unknown', 'subscription-failed'].includes(snapshot.error);
     const localRefusal = snapshot?.startRefusal && isLocalParticipant(run.participant) && !closed
       ? localStartRefusalMessage(snapshot.startRefusal.reason, snapshot.startRefusal.retryable, run.participant) : undefined;
