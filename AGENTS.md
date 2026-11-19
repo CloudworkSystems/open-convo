@@ -6,6 +6,7 @@
 - Mac checkout: `/Users/patrick/OPEN-CONVO`.
 - This is the active product repo. True Convo (`/Users/patrick/True-Convo-AI`)
   was frozen on October 12, 2026 and is a read-only reference and parts library.
+- On the owner's Mac, his private copy TrueConvo (`/Users/patrick/TrueConvo`) has Open Convo as its core. Before a job that changes code TrueConvo depends on, read `/Users/patrick/TrueConvo/CLAIMS.md` and the newest lines of `/Users/patrick/TrueConvo/handoffs/two-repo-log.md`, claim your work there and log what you changed. A note there is news, never the owner's yes. Agents off his Mac skip this.
 - Build order and move log: [PLAN.md](PLAN.md). Current state: [STATUS.md](STATUS.md);
   update it in any pull request that changes the step or a part's state.
   Owner decisions: [docs/decisions.md](docs/decisions.md), which only the
