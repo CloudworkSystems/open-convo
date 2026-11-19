@@ -236,3 +236,33 @@ other app.
 Step 5 is done, and Claude can join invented conversations in True Convo
 Test. Real conversations still wait for steps 2 and 3's trials to pass (the
 plan's safety model, item 7).
+
+## Revision, November 9: Claude Code's Per-Run Sessions Key File
+
+The November 9 rerun on Claude Code 2.1.319 found that every run writes
+one file, `~/.claude/sessions/<pid>.<64 hex>.key` (108 bytes, mode 0600),
+where `<pid>` is that Claude Code process. Claude Code removes it when the
+run ends, including after a force quit of the app. The app's runs wrote no
+other path under `~/.claude`. The app can't prevent the file without moving
+Claude Code's settings folder, which would change where the sign-in is read.
+
+The owner's yes: on November 9, 2026 at 19:39 UTC, in the Claude thread
+"Build the Claude Code adapter", the owner chose "Yes, allow that one
+file" on the card asking "Allow Claude Code's per-run sessions key file
+during the app's Claude runs?"
+
+So, adding to check 3 where it differs:
+
+- Exactly one path is excused per run:
+  `~/.claude/sessions/<pid>.<64 lowercase hex>.key`, where `<pid>` is the
+  process ID of the Claude Code that the app's supervisor started for that
+  run.
+- It must be gone by the time the script finds no Claude Code and no
+  supervisor left. If it's still there, check 3 fails.
+- The script reads only its name, size and times, never its contents.
+- Any other new or changed path under `~/.claude`, including a
+  `sessions/<pid>.json` and a key file whose pid isn't the run's, is still a
+  failure of check 3.
+
+And to run 3: wait until words of the story show on screen before the
+force quit, so that "the text so far" has something in it.
