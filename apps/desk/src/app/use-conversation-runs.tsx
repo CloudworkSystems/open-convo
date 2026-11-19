@@ -185,7 +185,10 @@ export function useConversationRuns(options: RunWorkspace) {
   useLayoutEffect(() => {
     if (options.state && reopened.current === null) {
       reopened.current = new Set((options.state.conversationRuns ?? [])
-        .filter((run) => run.phase === 'running' && !isConversationRunClosed(run) && !hasRecordedTerminal(run)).map((run) => run.runId));
+        // A prepared run counts too: a kill after the Mac accepted Start but
+        // before the started event was saved leaves it prepared (Codex P1 on #330).
+        .filter((run) => (run.phase === 'running' || run.phase === 'prepared') && !isConversationRunClosed(run) && !hasRecordedTerminal(run))
+        .map((run) => run.runId));
     }
     if (!options.runtime.participant && !options.runtime.participantForRun) return;
     for (const run of options.state?.conversationRuns ?? []) {
@@ -512,7 +515,9 @@ export function useConversationRuns(options: RunWorkspace) {
     // Only once the Mac says nothing is left running (Close as unknown is
     // offered without a Stop): a page reload over a live run is not one.
     // Only the current Claude route, the one Retry supports (Codex P2 on #330).
-    const cutOff = uncertain && !!reopened.current?.has(run.runId) && !hasRecordedTerminal(run)
+    // A prepared run needs the Mac's word that it started and is gone: one
+    // never sent reads status idle, so it is not uncertain.
+    const cutOff = uncertain && !!reopened.current?.has(run.runId) && !hasRecordedTerminal(run) && (run.phase === 'running' || !!snapshot)
       && isOffMacClaude(run.participant) && (snapshot ? snapshot.canCloseAsUnknown : !controller) && (stopped ?? 'idle') === 'idle';
     const obsoleteActionError = closed && snapshot?.error && ['stop-unknown', 'start-unknown', 'start-refused', 'reconcile-unknown', 'subscription-failed'].includes(snapshot.error);
     const localRefusal = snapshot?.startRefusal && isLocalParticipant(run.participant) && !closed
