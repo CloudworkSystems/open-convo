@@ -1,8 +1,8 @@
 # Agent Wire: A Mailbox For Outside Agents (PRD)
 
-Status: In progress (Nov 19, 2026): part 1 merged (#327); the Nov 19 revision moves the mailbox to the owner's Mac. The owner said yes to this plan and to
-Cam holding one mailbox token, recorded in `docs/decisions.md`. Not
-started: part 1 waits for a free builder lane.
+Status: In progress (Nov 19, 2026): part 1 merged (#327); the Nov 19
+revision below moves the mailbox to the owner's Mac. Approved Nov 16 with
+Cam's one mailbox token, recorded in `docs/decisions.md`.
 
 Written November 6, 2026 by a Claude session (project "261024 OC Steering",
 thread "Plan the agent wire mailbox"), from the owner's "Agent Wire Plan"
