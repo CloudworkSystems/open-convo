@@ -83,6 +83,13 @@ it can't hold his sign-in itself without loosening the mailbox. Instead:
   "invented data only" rule for anything it saves. Notes are public material
   (agent-wire.md, Safety rule 2), and the Desk keeps none of them.
 
+**After the November 19 revision of agent-wire.md** (the mailbox on the
+owner's Mac): the bridge works the same way, with `AGENT_WIRE_ORIGIN` set to
+the mailbox's outside address. If part 2a's Tailscale door for the owner is
+built, the bridge may use it instead: it then sends no token at all, and
+`cloudflared` isn't needed for the Desk. The build pull request says which
+door it uses, and the tests cover that one.
+
 **Calls stay under the mailbox's limits.** The owner shares the limit of 10
 calls a minute. Opening the page makes at most three calls (`list_notes`,
 `list_drafts`, `list_agents`); there is no automatic polling. **Refresh**
