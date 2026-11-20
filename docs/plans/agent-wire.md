@@ -490,11 +490,13 @@ my Mac, through a tunnel" (thread "Build agent wire parts 2 and 3"). So:
   one Access service token per allowed agent (Cam only, per the November 16
   revision), strict service-token mode on, and the mailbox checking Access's
   signed assertion on every call. Part 1's sign-in code already works this
-  way, so nothing about sign-in is rebuilt. Another owner may put a different
-  doorway in front, as long as it gives the same kind of signed, revocable
-  sign-in; a doorway without one (a plain tunnel or an open router port)
-  would mean building our own sign-in, which security.md section 3 rules
-  out, and needs its own owner decision.
+  way, so nothing about sign-in is rebuilt. Cloudflare Access is the one
+  outside-door sign-in this plan supports, and the mailbox accepts no other.
+  Another owner who wants a different doorway with the same kind of signed,
+  revocable sign-in needs a later plan that adds a sign-in adapter to the
+  mailbox and its own owner decision; this plan doesn't build one. A doorway
+  without such a sign-in (a plain tunnel or an open router port) would mean
+  building our own sign-in, which security.md section 3 rules out.
 - **The owner's own devices use Tailscale.** He already runs Tailscale on
   his Macs and phone. His own calls (the Desk, his own connector) may come
   over his private Tailscale network with `tailscale serve` (never Funnel,
