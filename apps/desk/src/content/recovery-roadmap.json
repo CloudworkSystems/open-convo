@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "title": "Open Convo roadmap",
-  "updatedAt": "2026-10-12",
+  "updatedAt": "2026-11-20",
   "cards": [
     {
       "id": "dictation-audio-default",
@@ -275,6 +275,27 @@
       ],
       "notes": [
         "Selecting Publish does not authorize sending or release."
+      ]
+    },
+    {
+      "id": "asks-name-their-owner",
+      "title": "Tie every ask to the thread that owns it",
+      "track": "Project",
+      "column": "next",
+      "sourceStatus": "Not started. On November 20, 2026 a short \"push\" reply reached the wrong thread, and that thread pushed to a pull request it didn't own.",
+      "outcome": "The owner answers a push, approve or merge ask with a short yes, and it reaches the one thread that owns that work, wherever he types it.",
+      "checks": [
+        "Every ask an agent sends the owner names its pull request and its owning thread, with links.",
+        "The project keeps a record of which thread owns each branch and pull request, and checks it before passing the owner's words to a thread.",
+        "The push gate refuses a push to a branch from anyone but that branch's owner."
+      ],
+      "dependsOn": [],
+      "sources": [
+        "AGENTS.md",
+        "PLAN.md"
+      ],
+      "notes": [
+        "A lesson for True Convo AI too: the owner should never have to route work between agents himself."
       ]
     }
   ]
