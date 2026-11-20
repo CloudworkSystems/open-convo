@@ -57,7 +57,8 @@ it can't hold his sign-in itself without loosening the mailbox. Instead:
   `Start Desk.command` runs), at one same-origin route, for example
   `POST /__wire/mcp`. It answers only requests from the Desk's own page on
   `127.0.0.1` (it checks the `Origin` and `Host` headers and refuses
-  anything else), accepts only a `tools/call` for the five tools above,
+  anything else, which stops web pages but not programs on the Mac; see
+  "Who on the Mac can act as the owner" below), accepts only a `tools/call` for the five tools above,
   checks the arguments against the same shapes the mailbox uses, and
   forwards the call to the mailbox's `POST /mcp`.
 - **The owner's sign-in comes from `cloudflared`,** exactly as the README's
@@ -88,12 +89,41 @@ owner's Mac): the bridge works the same way, with `AGENT_WIRE_ORIGIN` set to
 the mailbox's outside address. If part 2a's Tailscale door for the owner is
 built, the bridge may use it instead: it then sends no token at all, and
 `cloudflared` isn't needed for the Desk. The build pull request says which
-door it uses, and the tests cover that one.
+door it uses, and the tests cover that one. That door is read-only, so
+sending from the Desk always goes through the Cloudflare door under the
+rules below.
+
+**Who on the Mac can act as the owner.** `Origin` and `Host` checks stop
+other web pages, not other programs: any program running as the same macOS
+user can fake those headers, and can also ask `cloudflared` for the owner's
+cached sign-in directly. So the real boundary is the macOS user, as in
+[github-app-switch.md](github-app-switch.md) (Build Order step 4, the
+owner's browser sign-in kept out of agents' reach):
+
+- The owner's `cloudflared` sign-in and the Desk's bridge run only under a
+  macOS user that no agent runs as: Claude Code, the Codex CLI, GrokBot's
+  builders, Remote Control sessions and scheduled tasks all run as another
+  user. The owner names his own user once in the local settings file, and the
+  bridge refuses to start under any other user.
+- **Sending is off until the owner turns it on.** The bridge starts with the
+  read tools only (`list_notes`, `list_drafts`, `list_agents`). It forwards
+  `answer_note` and `send_draft` only after the owner sets
+  `AGENT_WIRE_DESK_SEND=1` in the local settings file himself, at part 2
+  setup, once he has confirmed no agent runs as his macOS user. Until then
+  the page shows replies and drafts, and says "Sending from the Desk is
+  off on this Mac." in place of the Send buttons.
+- If agents do run as his macOS user, the owner's sign-in isn't safe there
+  at all (the same program could use `cloudflared` itself), so part 2 sets
+  up the mailbox sign-in on a separate macOS user before going live.
 
 **Calls stay under the mailbox's limits.** The owner shares the limit of 10
-calls a minute. Opening the page makes at most three calls (`list_notes`,
-`list_drafts`, `list_agents`); there is no automatic polling. **Refresh**
-makes the same three and is unavailable for ten seconds after each use.
+calls in any rolling minute. Opening the page makes three calls
+(`list_notes`, `list_drafts`, `list_agents`); **Refresh** makes two
+(`list_notes`, `list_drafts`) and is unavailable for 30 seconds after the
+page opens or refreshes. So reads use at most five calls in any minute,
+leaving five for sends. The bridge also counts its own calls in a rolling
+minute and refuses an eleventh locally with the mailbox's own limit message,
+without calling the mailbox. There is no automatic polling.
 
 ## Safety
 
@@ -165,13 +195,20 @@ fake `cloudflared` stand in; no test reaches the internet or a real account.
 6. The production build, the hosted preview and the native-proof build
    contain no bridge, and their Mailbox page shows the "only on your own Mac"
    line.
-7. Opening the page makes at most three calls; **Refresh** is unavailable
-   for ten seconds after each use; nothing polls.
+7. Opening the page makes three calls and **Refresh** two; **Refresh** is
+   unavailable for 30 seconds after the page opens or refreshes; refreshing
+   whenever the button is enabled for five minutes never exceeds five read
+   calls in any rolling minute and never gets a limit refusal from the fake
+   mailbox; nothing polls.
 8. Every message under "When It Goes Wrong" appears word for word in its
    case: no address, a bad address, `cloudflared` missing, sign-in refused,
    no connection (last view kept), a send with no answer (send blocked until
    refresh), each mailbox refusal, and an Access or HTML answer.
 9. Leaving the page with unsent reply text asks first.
+10. The bridge refuses to start under a macOS user other than the configured
+    owner user; without `AGENT_WIRE_DESK_SEND=1` it refuses `answer_note` and
+    `send_draft` and the page shows "Sending from the Desk is off on this
+    Mac."; with it, both work only through the confirmation.
 
 ## Owner Trial Checks
 

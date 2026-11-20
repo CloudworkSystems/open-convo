@@ -521,7 +521,11 @@ my Mac, through a tunnel" (thread "Build agent wire parts 2 and 3"). So:
 - **A Tailscale door for the owner.** A second listener on `127.0.0.1`,
   reached only through `tailscale serve`, accepts the owner tools for one
   configured Tailscale login, taken from the identity headers Tailscale
-  adds, and nothing else: no agent or assistant tools, refused if the
+  adds. Those headers name the owner for any program on any of his
+  devices that reaches his Tailscale network, agents included, so this
+  door offers **read-only** owner tools (`list_notes`, `list_drafts`,
+  `list_agents`); anything that sends, clears or changes agents goes only
+  through the Cloudflare door under his own sign-in. Nothing else: no agent or assistant tools, refused if the
   headers are missing, and never reachable through the Cloudflare door
   (each door has its own port, so a header sent through one never counts
   on the other). Because any program on the same Mac could otherwise reach
