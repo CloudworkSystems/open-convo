@@ -2249,7 +2249,9 @@ Participants stay unavailable until all pass, on invented text:
 3. No new text under `HOME/.claude` (history, projects, paste cache, todos,
    debug logs). The run's own `sessions/<pid>.json` is allowed only if it's gone
    once the run has ended (the owner's narrow exception, 2026-11-09; the adapter
-   plan's November 9 revision).
+   plan's November 9 revision). So is the run's own
+   `sessions/<pid>.<64 hex>.key`, on the same terms (the owner's yes, 2026-11-09
+   19:39 UTC; the trial plan's November 9 revision).
 4. `kill -9` of the app mid-run, and during a Stop's wait, leaves no live CLI
    and no supervisor within 10 s (section 11's mechanism and test).
 5. Stop works while a commit is blocked in fsync.

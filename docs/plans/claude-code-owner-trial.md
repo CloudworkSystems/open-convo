@@ -260,9 +260,10 @@ So, adding to check 3 where it differs:
 - It must be gone by the time the script finds no Claude Code and no
   supervisor left. If it's still there, check 3 fails.
 - The script reads only its name, size and times, never its contents.
-- Any other new or changed path under `~/.claude`, including a
-  `sessions/<pid>.json` and a key file whose pid isn't the run's, is still a
-  failure of check 3.
+- Any other new or changed path under `~/.claude`, including a key file
+  whose pid isn't the run's, is still a failure of check 3. The run's own
+  `sessions/<pid>.json` keeps the rule it already had: allowed only if it's
+  gone once the run has ended.
 
 And to step 0a and check 8 (the owner's yes, November 20, 2026 at 07:09
 UTC, in the Claude thread "Build the Claude Code adapter": "Yes, if the

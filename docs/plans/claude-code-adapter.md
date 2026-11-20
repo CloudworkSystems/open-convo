@@ -437,3 +437,22 @@ So, replacing the November 2 revision's lines where they differ:
 - **New Section 16 check 8:** a run opens no messaging socket and can't be
   reached from another session.
 
+## Revision, November 20: The Per-Run Key File
+
+The November 9 rerun showed that every 2.1.319 run also writes
+`~/.claude/sessions/<pid>.<64 hex>.key` and removes it when the run ends.
+The owner allowed that one file twice: under check 3 on November 9, 2026 at
+19:39 UTC ("Yes, allow that one file"), and under check 8 on November 20,
+2026 at 07:09 UTC ("Yes, if the message is refused"), both in the Claude
+thread "Build the Claude Code adapter". So, replacing the November 9
+revision's "A `.key` file ... still fails" where they differ:
+
+- The run's own key file is allowed under check 3 only if it's gone once
+  the run has ended, the same as its `sessions/<pid>.json`.
+- It doesn't fail check 8 by being there. Check 8 still needs another
+  session's message to be refused and never reach a request.
+- A key file whose pid isn't the run's, a socket, or any other change under
+  `~/.claude` still fails.
+
+The exact rules are in the trial plan's "Revision, November 9" and section
+16 of the participant contract.
