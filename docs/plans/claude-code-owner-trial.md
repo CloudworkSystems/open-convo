@@ -236,3 +236,49 @@ other app.
 Step 5 is done, and Claude can join invented conversations in True Convo
 Test. Real conversations still wait for steps 2 and 3's trials to pass (the
 plan's safety model, item 7).
+
+## Revision, November 9: Claude Code's Per-Run Sessions Key File
+
+The November 9 rerun on Claude Code 2.1.319 found that every run writes
+one file, `~/.claude/sessions/<pid>.<64 hex>.key` (108 bytes, mode 0600),
+where `<pid>` is that Claude Code process. Claude Code removes it when the
+run ends, including after a force quit of the app. The app's runs wrote no
+other path under `~/.claude`. The app can't prevent the file without moving
+Claude Code's settings folder, which would change where the sign-in is read.
+
+The owner's yes: on November 9, 2026 at 19:39 UTC, in the Claude thread
+"Build the Claude Code adapter", the owner chose "Yes, allow that one
+file" on the card asking "Allow Claude Code's per-run sessions key file
+during the app's Claude runs?"
+
+So, adding to check 3 where it differs:
+
+- Exactly one path is excused per run:
+  `~/.claude/sessions/<pid>.<64 lowercase hex>.key`, where `<pid>` is the
+  process ID of the Claude Code that the app's supervisor started for that
+  run.
+- It must be gone by the time the script finds no Claude Code and no
+  supervisor left. If it's still there, check 3 fails.
+- The script reads only its name, size and times, never its contents.
+- Any other new or changed path under `~/.claude`, including a key file
+  whose pid isn't the run's, is still a failure of check 3. The run's own
+  `sessions/<pid>.json` keeps the rule it already had: allowed only if it's
+  gone once the run has ended.
+
+And to step 0a and check 8 (the owner's yes, November 20, 2026 at 07:09
+UTC, in the Claude thread "Build the Claude Code adapter": "Yes, if the
+message is refused" on the card asking "Let the key file pass the 'no way
+in from other sessions' check if a test message is still refused?"):
+
+- The run's own key file above doesn't fail step 0a or check 8 by being
+  there. Step 0a still looks for it and records its name, size and times,
+  never its contents.
+- Check 8 passes only if the session's made-up word, sent to that run from
+  another session, is refused and never reaches the listener. A run with a
+  messaging socket still fails, and so does any key file that isn't the
+  run's own.
+- If the send isn't refused, or the word reaches the listener, the trial
+  stops before any live run, as step 0a already says.
+
+Run 3 is unchanged: force quit during the quiet stretch after Send, while
+nothing shows yet.
