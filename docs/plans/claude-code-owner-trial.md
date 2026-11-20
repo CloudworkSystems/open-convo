@@ -264,5 +264,20 @@ So, adding to check 3 where it differs:
   `sessions/<pid>.json` and a key file whose pid isn't the run's, is still a
   failure of check 3.
 
-And to run 3: wait until words of the story show on screen before the
-force quit, so that "the text so far" has something in it.
+And to step 0a and check 8 (the owner's yes, November 20, 2026 at 07:09
+UTC, in the Claude thread "Build the Claude Code adapter": "Yes, if the
+message is refused" on the card asking "Let the key file pass the 'no way
+in from other sessions' check if a test message is still refused?"):
+
+- The run's own key file above doesn't fail step 0a or check 8 by being
+  there. Step 0a still looks for it and records its name, size and times,
+  never its contents.
+- Check 8 passes only if the session's made-up word, sent to that run from
+  another session, is refused and never reaches the listener. A run with a
+  messaging socket still fails, and so does any key file that isn't the
+  run's own.
+- If the send isn't refused, or the word reaches the listener, the trial
+  stops before any live run, as step 0a already says.
+
+Run 3 is unchanged: force quit during the quiet stretch after Send, while
+nothing shows yet.
