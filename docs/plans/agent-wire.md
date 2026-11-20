@@ -554,6 +554,16 @@ staging copy** run on the Mac on its own port, store and tunnel hostname,
 with its own staging token and invented agent, revoked after the scan;
 otherwise as above. Going live still needs his separate OK.
 
+**The owner's sign-in lives apart from the agents.** Any program running as
+the macOS user that holds the owner's `cloudflared` sign-in can ask it for
+his token and act as him through the Cloudflare door (send a draft, answer
+Cam, change the agent list), which would break Safety rule 3. So before
+going live, part 2 sets up the owner's `cloudflared` sign-in (used by the
+backup commands and the Desk) only under a macOS user that no agent runs
+as: not Claude Code, the Codex CLI, GrokBot's builders, Remote Control
+sessions or scheduled tasks. The owner trial confirms that, from the
+agents' user, `cloudflared access token` for the mailbox gives nothing.
+
 **Unchanged:** the notes, tools, limits, server controls, Safety rules,
 When It Goes Wrong answers, owner trial checks and the $0 budget. The Desk
 view (part 3) has its own plan,
