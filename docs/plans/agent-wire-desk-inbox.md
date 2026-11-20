@@ -87,11 +87,13 @@ it can't hold his sign-in itself without loosening the mailbox. Instead:
 **After the November 19 revision of agent-wire.md** (the mailbox on the
 owner's Mac): the bridge works the same way, with `AGENT_WIRE_ORIGIN` set to
 the mailbox's outside address. If part 2a's Tailscale door for the owner is
-built, the bridge may use it instead: it then sends no token at all, and
-`cloudflared` isn't needed for the Desk. The build pull request says which
-door it uses, and the tests cover that one. That door is read-only, so
-sending from the Desk always goes through the Cloudflare door under the
-rules below.
+built, the bridge may use it **for reading only** (it then sends no token for
+those calls). That door is read-only, so `answer_note` and `send_draft`
+always go through the Cloudflare door with the owner's `cloudflared`
+sign-in, under the rules below. If `cloudflared` isn't set up, the page
+reads over Tailscale and shows "Sending from the Desk is off on this Mac."
+in place of the Send buttons. The build pull request says which doors it
+uses, and the tests cover each.
 
 **Who on the Mac can act as the owner.** `Origin` and `Host` checks stop
 other web pages, not other programs: any program running as the same macOS
