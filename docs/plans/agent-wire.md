@@ -513,12 +513,16 @@ my Mac, through a tunnel" (thread "Build agent wire parts 2 and 3"). So:
 - **Notes saved on disk.** Part 1's Node runner keeps notes in memory, so a
   restart loses them. Part 2a gives it a file store under the owner's
   Library folder (not in the repo), with each change written whole: a new
-  copy is written, flushed and then swapped in, so a crash or power cut
-  leaves the last complete copy. It uses Node's own file tools, no new
+  copy is written and flushed, swapped in with a rename, and then the
+  folder that holds it is flushed too (on macOS, `F_FULLFSYNC` where Node
+  offers it, else `fsync` on the folder), so a crash or power cut leaves
+  the last complete copy and the swap itself survives. It uses Node's own file tools, no new
   dependency, and keeps every limit, transaction and test from part 1.
   Its folder and files are readable by the owner's macOS user only. Tests:
   a restart keeps notes, agents and drafts; a write cut off midway leaves
-  the previous copy whole; the file holds no token or header value; the
+  the previous copy whole; a cut-off before the folder flush and one after
+  it each reopen with a complete copy (the old one or the new one, never
+  neither); the file holds no token or header value; the
   part 1 test suite passes against the file store too.
 - **A Tailscale door for the owner.** A second listener on `127.0.0.1`,
   reached only through `tailscale serve`, accepts the owner tools for one
