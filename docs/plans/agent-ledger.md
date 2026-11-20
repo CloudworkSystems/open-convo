@@ -124,6 +124,10 @@ caller, if the ledger outgrows files.
 4. **Each reader has its own cursor.** `since({ reader, cursor })` returns
    the entries after that reader's last seen sequence number that the
    reader may see. The host keeps cursors; a reader can only move its own.
+   Sequence numbers never restart. The protected store keeps the highest
+   number used, through damage and a reset, and the next entry after a
+   reset continues from it. So a cursor from before a reset still sees the
+   first new entry. Slice 1 tests exactly that.
 5. **Trust levels, from the profiles note's zero-trust rule:**
    - *Trusted builders* (Claude, Codex, GrokBot today) and the person's own
      local profiles may write their own entries and read every entry in
