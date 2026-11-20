@@ -1,8 +1,8 @@
 # Agent Wire: A Mailbox For Outside Agents (PRD)
 
-Status: Approved (Nov 16, 2026): the owner said yes to this plan and to
-Cam holding one mailbox token, recorded in `docs/decisions.md`. Not
-started: part 1 waits for a free builder lane.
+Status: In progress (Nov 19, 2026): part 1 merged (#327); the Nov 19
+revision below moves the mailbox to the owner's Mac. Approved Nov 16 with
+Cam's one mailbox token, recorded in `docs/decisions.md`.
 
 Written November 6, 2026 by a Claude session (project "261024 OC Steering",
 thread "Plan the agent wire mailbox"), from the owner's "Agent Wire Plan"
@@ -464,3 +464,113 @@ changed afterwards, and it governs where the two differ.
 - The wait in "Owner Decision Needed First" ends when the pull request
   that records the decision merges. Part 1 may start after that, on the
   first free builder lane.
+
+## Revision, November 19, 2026: The Mailbox Lives On The Owner's Mac
+
+The sections above stay as approved. This section records what changed
+afterwards, and it governs where the two differ.
+
+**The owner's choice.** On November 19, 2026, after part 1 merged (#327),
+the owner asked why the mailbox should depend on Cloudflare when his Mac
+is always on, and said other owners should be able to do the same without
+a third-party host. To "Where should the agent mailbox live?" he chose "On
+my Mac, through a tunnel" (thread "Build agent wire parts 2 and 3"). So:
+
+- **Default home: the owner's own Mac** (the Studio or the Mac mini, both
+  always on; he picks at setup). The mailbox runs under Node, as
+  part 1's runner already does, listening only on `127.0.0.1`. The notes,
+  the code and the storage stay on the Mac. The Cloudflare Worker stays in
+  the code as an option for an owner who wants it; it is no longer the
+  default, and part 2 doesn't deploy it.
+- **The tunnel is only the doorway.** Outside agents such as Cam run on
+  their own company's servers, so they need a public HTTPS address. The Mac
+  opens no port on the router. A free tunnel carries calls in, and the sign-in
+  in front of it stays exactly as approved above: **Cloudflare Tunnel with
+  Cloudflare Access** (Zero Trust free plan) in front of the whole host,
+  one Access service token per allowed agent (Cam only, per the November 16
+  revision), strict service-token mode on, and the mailbox checking Access's
+  signed assertion on every call. Part 1's sign-in code already works this
+  way, so nothing about sign-in is rebuilt. Cloudflare Access is the one
+  outside-door sign-in this plan supports, and the mailbox accepts no other.
+  Another owner who wants a different doorway with the same kind of signed,
+  revocable sign-in needs a later plan that adds a sign-in adapter to the
+  mailbox and its own owner decision; this plan doesn't build one. A doorway
+  without such a sign-in (a plain tunnel or an open router port) would mean
+  building our own sign-in, which security.md section 3 rules out.
+- **The owner's own devices use Tailscale.** He already runs Tailscale on
+  his Macs and phone. His own calls (the Desk, his own connector) may come
+  over his private Tailscale network with `tailscale serve` (never Funnel,
+  which is public), signed in as his Tailscale identity, so they need no
+  Cloudflare at all. Outside agents can't join his Tailscale network, so
+  they come only through the Cloudflare door above. Cloudflare holds no
+  notes and no code; it is only the lock on the outside door.
+- **If the Mac is off or asleep,** agents get their own app's network error
+  and nothing is half-saved (When It Goes Wrong, question 1, unchanged).
+  Part 2 sets the Mac not to sleep while the mailbox runs, with the owner.
+
+**New work, before going live (part 2a, Claude building session):**
+
+- **Notes saved on disk.** Part 1's Node runner keeps notes in memory, so a
+  restart loses them. Part 2a gives it a file store under the owner's
+  Library folder (not in the repo), with each change written whole: a new
+  copy is written and flushed, swapped in with a rename, and then the
+  folder that holds it is flushed too (on macOS, `F_FULLFSYNC` where Node
+  offers it, else `fsync` on the folder), so a crash or power cut leaves
+  the last complete copy and the swap itself survives. It uses Node's own file tools, no new
+  dependency, and keeps every limit, transaction and test from part 1.
+  Its folder and files are readable by the owner's macOS user only. Tests:
+  a restart keeps notes, agents and drafts; a write cut off midway leaves
+  the previous copy whole; a cut-off before the folder flush and one after
+  it each reopen with a complete copy (the old one or the new one, never
+  neither); the file holds no token or header value; the
+  part 1 test suite passes against the file store too.
+- **A Tailscale door for the owner.** A second listener on `127.0.0.1`,
+  reached only through `tailscale serve`, accepts the owner tools for one
+  configured Tailscale login, taken from the identity headers Tailscale
+  adds. Those headers name the owner for any program on any of his
+  devices that reaches his Tailscale network, agents included, so this
+  door offers **read-only** owner tools (`list_notes`, `list_drafts`,
+  `list_agents`); anything that sends, clears or changes agents goes only
+  through the Cloudflare door under his own sign-in. Nothing else: no agent or assistant tools, refused if the
+  headers are missing, and never reachable through the Cloudflare door
+  (each door has its own port, so a header sent through one never counts
+  on the other). Because any program on the same Mac could otherwise reach
+  that listener and fake Tailscale's headers (agents run on the Studio
+  too), the builder must make sure only Tailscale can reach it, for example
+  a socket file that only Tailscale and the mailbox can open. If that can't
+  be done on macOS, the Tailscale door is dropped, the owner uses the
+  Cloudflare door with his own sign-in, and the pull request says so. Tests: the owner's login gets the owner tools; any other
+  login, a missing header, and a call on the Cloudflare port with
+  Tailscale headers are refused. Tailscale is the owner's own tool, not a
+  dependency, and its setup is his step.
+- **Start at login, restart on failure.** A launchd agent for the mailbox and
+  one for the tunnel, set up with the owner present. A service that outlives
+  the session needs his OK (AGENTS.md "Limits"), given at setup.
+- **Backup.** The README's `export` and `import` commands are unchanged.
+  The disk copy is also covered by the Mac's own backup (Time Machine, if
+  he uses it); the tried restore in part 2 uses `export` and `import`.
+
+**Part 2 changes accordingly.** No Worker deploy and no deploy workflow, so
+part 2 no longer touches `.github/`. With the owner present: turn on
+Cloudflare Access and strict mode, run the tunnel to a hostname on one of
+his domains, start the mailbox and tunnel at login, make Cam's service
+token, add the connector in Muse and the wire as a connector for Claude,
+then run the ZAP scan and the tried restore. **The ZAP scan targets a
+staging copy** run on the Mac on its own port, store and tunnel hostname,
+with its own staging token and invented agent, revoked after the scan;
+otherwise as above. Going live still needs his separate OK.
+
+**The owner's sign-in lives apart from the agents.** Any program running as
+the macOS user that holds the owner's `cloudflared` sign-in can ask it for
+his token and act as him through the Cloudflare door (send a draft, answer
+Cam, change the agent list), which would break Safety rule 3. So before
+going live, part 2 sets up the owner's `cloudflared` sign-in (used by the
+backup commands and the Desk) only under a macOS user that no agent runs
+as: not Claude Code, the Codex CLI, GrokBot's builders, Remote Control
+sessions or scheduled tasks. The owner trial confirms that, from the
+agents' user, `cloudflared access token` for the mailbox gives nothing.
+
+**Unchanged:** the notes, tools, limits, server controls, Safety rules,
+When It Goes Wrong answers, owner trial checks and the $0 budget. The Desk
+view (part 3) has its own plan,
+[agent-wire-desk-inbox.md](agent-wire-desk-inbox.md).

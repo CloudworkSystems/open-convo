@@ -94,6 +94,18 @@ again, so it has no public address yet. PR 3, in review: the API docs page
 come attaching api.trueconvo.com, the path-only rate limit, and the owner's
 OK to go live.
 
+**Agent wire** (a mailbox where outside agents such as Cam leave notes for
+the owner and read his replies). Plan:
+[docs/plans/agent-wire.md](docs/plans/agent-wire.md) (#311, decision #323).
+Part 1, merged (#327): the mailbox service, `services/agent-wire/`, built by
+Codex, deploying nothing. November 19: the owner moved its home to his own
+Mac, with Cloudflare Tunnel and Access only as the outside door (#331, the
+dated revision). Next: part 2a (notes saved on disk, a read-only Tailscale
+door, start at login), then part 3, the Desk's Mailbox page
+([docs/plans/agent-wire-desk-inbox.md](docs/plans/agent-wire-desk-inbox.md)),
+both Claude-built. Part 2 (tunnel, Access, Cam's token, the Muse connector)
+needs the owner present. Not live.
+
 **Capability contract, cap and media** (Creator, standalone parts 1 to 3).
 Plan:
 [docs/plans/media-generation-capability.md](docs/plans/media-generation-capability.md)
