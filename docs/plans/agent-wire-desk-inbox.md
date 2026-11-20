@@ -224,6 +224,17 @@ sent" line and the reply is there whole or not at all after a refresh;
 with `cloudflared` signed out, the page tells him the one command to sign
 in; an empty mailbox says "No notes yet."; during a restore the page shows
 the "being restored" line; past the minute limit it shows the limit message.
+Before part 2's address is set up, or on a test copy of
+the Desk settings, he also checks the rest of the promised messages: with
+no mailbox address set, the page says "Add your mailbox address to
+connect."; with `cloudflared` moved out of the way, "Install cloudflared,
+then sign in to your mailbox."; with no agents in a staging mailbox, the
+mailbox's own "No agents can write to this mailbox yet." line; sending a
+Claude draft that was already sent, "That draft is no longer here.";
+pointing the address at a page that isn't the mailbox, "Your mailbox
+didn't answer as expected. Try again, or sign in again."; leaving the page
+with an unsent reply asks first; and with sending not turned on, "Sending
+from the Desk is off on this Mac." shows in place of the Send buttons.
 He confirms each message tells him what to do next.
 
 ## Out Of Scope
