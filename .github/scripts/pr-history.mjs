@@ -33,15 +33,34 @@ const OUTSIDE_OPEN = new RegExp([
   String.raw`\[p[0-2]\]`,
   String.raw`^[#*\s]*p[0-2][.:]`,
 ].join('|'), 'im');
+const OUTSIDE_OPEN_ALL = new RegExp(OUTSIDE_OPEN.source, 'gim');
 const FIXED = /\b(fixed|fixes|resolved|resolves)\b/i;
 const NOT_CLEAN = /\bnot\s+(yet\s+)?clean\b|\bchanges\s+(are\s+)?(needed|required|requested)\b|\bneeds\s+changes\b/i;
 
+// Each clause on its own: "Fixed one P1" and "one P1, fixed" are both
+// fixed, while "one P1 was fixed, but one P2 remains open" is open.
+const clausesOf = (text) => (text ?? '').split(/(?<=\.)\s+|\n+|[;,]\s*|\s+but\s+/i);
+
 export function outsideIsClean(text) {
-  // Each clause on its own: "Fixed one P1" and "one P1, fixed" are both
-  // fixed, while "one P1 was fixed, but one P2 remains open" is open.
-  const clauses = text.split(/(?<=\.)\s+|\n+|[;,]\s*|\s+but\s+/i);
-  const open = clauses.some((clause) => OUTSIDE_OPEN.test(clause) && !FIXED.test(clause));
+  const open = clausesOf(text).some((clause) => OUTSIDE_OPEN.test(clause) && !FIXED.test(clause));
   return OUTSIDE_CLEAN.test(text) && !NOT_CLEAN.test(text) && !open;
+}
+
+/**
+ * The severities (0 to 2) of the open findings an outside review names in
+ * the forms outsideIsClean reads ("Two P1 findings", "one P2 remains open",
+ * "[P2]", "P1." headings), skipping clauses that say they were fixed. A
+ * review that says it is "not clean" or needs changes, with no open finding
+ * named, counts as one open P2, so it never reads as clean.
+ */
+export function openSeverities(text) {
+  const out = [];
+  for (const clause of clausesOf(text)) {
+    if (!OUTSIDE_OPEN.test(clause) || FIXED.test(clause)) continue;
+    for (const m of clause.matchAll(OUTSIDE_OPEN_ALL)) out.push(Number(m[0].match(/p([0-2])/i)[1]));
+  }
+  if (!out.length && NOT_CLEAN.test(text ?? '')) out.push(2);
+  return out.sort((a, b) => a - b);
 }
 
 export const COLUMNS = [

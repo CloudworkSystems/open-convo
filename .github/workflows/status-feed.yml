@@ -1,0 +1,41 @@
+# Writes the status feed (docs/plans/status-feed.md, part 1) to its own
+# branch, status-feed-data. Runs the default branch's copy and never checks
+# out pull request code.
+name: status-feed
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft, closed, labeled, unlabeled, auto_merge_enabled, auto_merge_disabled]
+  schedule:
+    # Also catches reviews, comments and the keeper's report, which fire no
+    # event this workflow listens to. Hourly: every run bills a full Actions minute.
+    - cron: '23 * * * *'
+  workflow_dispatch:
+
+permissions:
+  # Only to write status-feed.json on the status-feed-data branch.
+  contents: write
+  pull-requests: read
+  issues: read
+  statuses: read
+  checks: read
+
+concurrency:
+  group: status-feed
+  cancel-in-progress: false
+
+jobs:
+  status-feed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - run: node .github/scripts/status-feed.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

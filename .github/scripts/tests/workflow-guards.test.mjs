@@ -20,9 +20,10 @@ test('every workflow pins its actions to a commit hash with a version comment', 
 
 test('every pull_request_target workflow checks out only the default branch', () => {
   const targets = readWorkflows(WORKFLOWS).filter((w) => usesPullRequestTarget(w.text));
-  // codex-approved.yml and owner-queue.yml today; the guard must see them.
+  // codex-approved.yml, owner-queue.yml and status-feed.yml today; the guard must see them.
   assert.ok(targets.map((w) => w.name).includes('codex-approved.yml'));
   assert.ok(targets.map((w) => w.name).includes('owner-queue.yml'));
+  assert.ok(targets.map((w) => w.name).includes('status-feed.yml'));
   for (const { name, text } of targets) assert.deepEqual(pullRequestTargetProblems(text), [], name);
 });
 

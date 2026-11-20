@@ -15,6 +15,9 @@ import { createHash } from 'node:crypto';
 import { OWNER_LOGIN, editedOnlyBy } from './codex-signal.mjs';
 
 export const RISK_LABEL = 'needs-owner: risk';
+// A reviewer's `risk-escalate:` line asks the owner to look (risk-review.md).
+export const RISK_ESCALATE_LABEL = 'needs-owner: risk-escalate';
+export const RISK_LABELS = [RISK_LABEL, RISK_ESCALATE_LABEL];
 export const HOLD_MARKER = '<!-- risk-hold:v1 -->';
 export const HOLD_REASON = 'Risk hold: owner approval needed (see comment)';
 export const ALLOWLIST_PATH = '.github/risk-allowlist.json';

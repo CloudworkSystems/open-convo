@@ -111,6 +111,47 @@ export function ownerAcceptance({ headSha, prAuthor, comments = [] }) {
 
 const fromCodex = (comment) => isCodex(comment.user) && editedOnlyByCodex(comment);
 
+// True when a body's Codex review state says a code review completed with no findings.
+function cleanState(body) {
+  const m = (body ?? '').match(REVIEW_STATE);
+  if (!m) return false;
+  try {
+    const code = JSON.parse(m[1])?.code_review;
+    return Boolean(code) && code.status === 'completed' && code.has_any_findings === false;
+  } catch { return false; }
+}
+
+/**
+ * When Codex finished a round clean, on any commit: its clean-result
+ * comments (from Codex alone, as signal 1 reads them), its 👍 on the pull
+ * request, and every time its summary comment's review state said a code
+ * review completed with no findings (signal 2's form). Codex rewrites that
+ * summary in place, so earlier states are read from the comment's edit
+ * history (each Codex revision's `diff` body, timed by `editedAt`) as well
+ * as its current body. Times in milliseconds, oldest first. The status
+ * feed's loop count stops at the newest one, so a clean round always resets
+ * the sequence.
+ */
+export function cleanRoundTimes({ comments = [], reactions = [] } = {}) {
+  const codex = comments.filter(fromCodex);
+  const clean = codex
+    .filter((c) => CLEAN_PHRASE.test(c.body ?? ''))
+    .map((c) => time(c.created_at));
+  const states = codex
+    .filter((c) => (c.body ?? '').includes(SUMMARY_MARKER))
+    .flatMap((c) => {
+      const current = cleanState(c.body) ? [time(c.updated_at ?? c.created_at)] : [];
+      const earlier = (c.edit_history?.userContentEdits?.nodes ?? [])
+        .filter((e) => e && !e.deletedAt && isCodexEditor(e.editor) && cleanState(e.diff))
+        .map((e) => time(e.editedAt));
+      return [...current, ...earlier];
+    });
+  const thumbs = reactions
+    .filter((r) => isCodex(r.user) && r.content === '+1')
+    .map((r) => time(r.created_at));
+  return [...clean, ...states, ...thumbs].filter(Boolean).sort((a, b) => a - b);
+}
+
 // The commit a completed code review in Codex's review state names, if any.
 function reviewStateSha(body) {
   const m = (body ?? '').match(REVIEW_STATE);
