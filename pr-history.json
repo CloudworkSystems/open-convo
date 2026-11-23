@@ -1,7 +1,7 @@
 {
  "schemaVersion": 1,
  "repository": "CloudworkSystems/open-convo",
- "takenAt": "2026-11-21T17:30:40.548Z",
+ "takenAt": "2026-11-23T22:02:31.632Z",
  "pulls": [
   {
    "number": 1,
@@ -8702,9 +8702,9 @@
    "outsideLatest": "",
    "outsideCommit": "",
    "outsideOnHead": "",
-   "ownerApproved": "",
+   "ownerApproved": "yes",
    "headHash": "071a91088e6a52336df30b468af1d9efc1989f0b",
-   "updatedAt": "2026-11-18T07:53:14Z",
+   "updatedAt": "2026-11-23T14:50:58Z",
    "link": "https://github.com/CloudworkSystems/open-convo/pull/309"
   },
   {
@@ -9410,6 +9410,38 @@
    "headHash": "674e014e4da88a3ccb1aadc01d3870a132b03a3e",
    "updatedAt": "2026-11-20T15:05:30Z",
    "link": "https://github.com/CloudworkSystems/open-convo/pull/332"
+  },
+  {
+   "number": 333,
+   "title": "Plan: Gemini API adapter, Gemini joins the conversation on your own key",
+   "agent": "claude",
+   "state": "open",
+   "draft": "",
+   "branch": "claude/gemini-api-adapter-plan",
+   "createdAt": "2026-11-22T18:23:20Z",
+   "endedAt": "",
+   "daysOpen": "",
+   "commits": 1,
+   "filesChanged": 1,
+   "additions": 312,
+   "deletions": 0,
+   "areas": "docs/plans",
+   "labels": "agent: claude; needs-owner: risk",
+   "codexRounds": 1,
+   "codexLatest": "open findings",
+   "codexP0": 0,
+   "codexP1": 2,
+   "codexP2": 0,
+   "codexP3": 0,
+   "outsideReviewer": "",
+   "outsideRounds": 0,
+   "outsideLatest": "",
+   "outsideCommit": "",
+   "outsideOnHead": "",
+   "ownerApproved": "",
+   "headHash": "7d4424dd25cf2ce693617f41a522cc9940d53999",
+   "updatedAt": "2026-11-22T18:26:13Z",
+   "link": "https://github.com/CloudworkSystems/open-convo/pull/333"
   }
  ]
 }
